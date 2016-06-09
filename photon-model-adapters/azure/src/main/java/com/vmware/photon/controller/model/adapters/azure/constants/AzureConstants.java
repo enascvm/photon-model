@@ -23,6 +23,7 @@ public class AzureConstants {
     public static final String AZURE_OSDISK_CACHING = "azureOsDiskCaching";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "azureStorageAccountType";
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "azureStorageAccountName";
+    public static final String AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME = "azureDiagnosticStorageAccountName";
     public static final String AZURE_STORAGE_ACCOUNT_KEY1 = "azureStorageAccountKey1";
     public static final String AZURE_STORAGE_ACCOUNT_KEY2 = "azureStorageAccountKey2";
     public static final String AZURE_VM_SIZE = "azureVMSize";
@@ -87,16 +88,23 @@ public class AzureConstants {
     public static final String METRIC_KEY_COUNT = "Count";
 
     // Azure Metric related Constants
-    public static final String NETWORK_PACKETS_IN = "\\NetworkInterface\\PacketsReceived";
-    public static final String NETWORK_PACKETS_OUT = "\\NetworkInterface\\PacketsTransmitted";
-    public static final String DISK_WRITE_TIME = "\\PhysicalDisk\\AverageWriteTime";
-    public static final String DISK_READ_TIME = "\\PhysicalDisk\\AverageReadTime";
+    public static final String NETWORK_BYTES_IN = "\\NetworkInterface\\BytesReceived";
+    public static final String NETWORK_BYTES_OUT = "\\NetworkInterface\\BytesTransmitted";
+    public static final String DISK_WRITES_PER_SECOND = "\\PhysicalDisk\\WritesPerSecond";
+    public static final String DISK_READS_PER_SECOND = "\\PhysicalDisk\\ReadsPerSecond";
     public static final String CPU_UTILIZATION = "\\Processor\\PercentProcessorTime";
     public static final String MEMORY_AVAILABLE = "\\Memory\\AvailableMemory";
     public static final String MEMORY_USED = "\\Memory\\UsedMemory";
+    public static final String DISK_READ_BYTES_PER_SECOND = "\\PhysicalDisk\\ReadBytesPerSecond";
+    public static final String DISK_WRITE_BYTES_PER_SECOND = "\\PhysicalDisk\\WriteBytesPerSecond";
 
     // Virtual Machine REST constants
     public static final String VM_REST_API_VERSION = "2016-03-30";
     public static final String LIST_VM_URI = BASE_URI_FOR_REST
             + "/subscriptions/{subscriptionId}/providers/Microsoft.Compute/virtualMachines";
+
+    public static final String UNIT_COST = "USD";
+    public static final String UNIT_BYTES = "Bytes";
+    public static final String UNIT_COUNT = "Count";
+    public static final String UNIT_PERCENT = "Percent";
 }

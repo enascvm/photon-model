@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.logging.Level;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -32,13 +33,18 @@ import com.microsoft.azure.management.compute.models.VirtualMachine;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
 import com.microsoft.rest.ServiceResponse;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
+import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -49,7 +55,12 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
 import com.vmware.xenon.common.BasicReusableHostTestCase;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceStats.ServiceStat;
+import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 
 /**
@@ -78,6 +89,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private ComputeState computeHost;
     private ComputeManagementClient computeManagementClient;
     private ResourceManagementClient resourceManagementClient;
+    private String enumeratedComputeLink;
 
     @Before
     public void setUp() throws Exception {
@@ -173,7 +185,37 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // VM count + 1 compute host instance
         count = count + 1;
 
-        ProvisioningUtils.queryComputeInstances(this.host, count);
+        ServiceDocumentQueryResult result = ProvisioningUtils.queryComputeInstances(this.host, count);
+
+        for (String docLink : result.documentLinks) {
+            if (!docLink.equals(this.computeHost.documentSelfLink)
+                    && !docLink.equals(this.vmState.documentSelfLink)) {
+                this.enumeratedComputeLink = docLink;
+                break;
+            }
+        }
+
+        // Test stats for the VM that was just enumerated from Azure.
+        if (this.enumeratedComputeLink != null) {
+            this.host.waitFor("Error waiting for host stats", () -> {
+                try {
+                    issueStatsRequest(this.enumeratedComputeLink);
+                } catch (Throwable t) {
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        // Test stats for the compute host.
+        this.host.waitFor("Error waiting for host stats", () -> {
+            try {
+                issueStatsRequest(this.computeHost.documentSelfLink);
+            } catch (Throwable t) {
+                return false;
+            }
+            return true;
+        });
 
         // delete vm directly on azure
         this.computeManagementClient.getVirtualMachinesOperations()
@@ -243,5 +285,66 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         this.host.log("Initial VM count: %d", count);
         return count;
+    }
+
+    private void issueStatsRequest(String selfLink) throws Throwable {
+        // spin up a stateless service that acts as the parent link to patch back to
+        StatelessService parentService = new StatelessService() {
+            @Override
+            public void handleRequest(Operation op) {
+                if (op.getAction() == Action.PATCH) {
+                    if (!TestAzureEnumerationTask.this.isMock) {
+                        ComputeStatsResponse resp = op.getBody(ComputeStatsResponse.class);
+                        if (resp.statsList.size() != 1) {
+                            TestAzureEnumerationTask.this.host.failIteration(
+                                    new IllegalStateException("response size was incorrect."));
+                            return;
+                        }
+                        if (resp.statsList.get(0).statValues.size() == 0) {
+                            TestAzureEnumerationTask.this.host
+                                    .failIteration(new IllegalStateException(
+                                            "incorrect number of metrics received."));
+                            return;
+                        }
+                        if (!resp.statsList.get(0).computeLink.equals(selfLink)) {
+                            TestAzureEnumerationTask.this.host
+                                    .failIteration(new IllegalStateException(
+                                            "Incorrect resourceReference returned."));
+                            return;
+                        }
+                        // Persist stats on Verification Host for testing the computeHost stats.
+                        URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
+                        for (String key : resp.statsList.get(0).statValues.keySet()) {
+                            ServiceStat stat = resp.statsList.get(0).statValues.get(key);
+                            persistStat(persistStatsUri, key, stat, selfLink);
+                        }
+                    }
+                    TestAzureEnumerationTask.this.host.completeIteration();
+                }
+            }
+        };
+        String servicePath = UUID.randomUUID().toString();
+        Operation startOp = Operation.createPost(UriUtils.buildUri(this.host, servicePath));
+        this.host.startService(startOp, parentService);
+        ComputeStatsRequest statsRequest = new ComputeStatsRequest();
+        statsRequest.resourceReference = UriUtils.buildUri(this.host, selfLink);
+        statsRequest.isMockRequest = this.isMock;
+        statsRequest.taskReference = UriUtils.buildUri(this.host, servicePath);
+        this.host.sendAndWait(Operation.createPatch(UriUtils.buildUri(
+                this.host, AzureUriPaths.AZURE_STATS_ADAPTER))
+                .setBody(statsRequest)
+                .setReferer(this.host.getUri()));
+    }
+
+    private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat, String computeLink) {
+        ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
+        // Set the documentSelfLink to <computeId>-<metricName>
+        stat.documentSelfLink = UriUtils.getLastPathSegment(computeLink) + "-" + metricName;
+        stat.value = serviceStat.latestValue;
+        stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
+        this.host.sendRequest(Operation
+                        .createPost(persistStatsUri)
+                        .setReferer(this.host.getUri())
+                        .setBodyNoCloning(stat));
     }
 }

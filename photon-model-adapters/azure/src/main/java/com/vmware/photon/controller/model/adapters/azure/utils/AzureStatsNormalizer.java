@@ -27,24 +27,36 @@ public class AzureStatsNormalizer {
     static {
         // Map of Azure-specific Units to Photon-Model Units
         Map<String, String> unitMap = new HashMap<>();
+        unitMap.put(AzureConstants.UNIT_COST,
+                PhotonModelConstants.UNIT_COST);
+        unitMap.put(AzureConstants.UNIT_BYTES,
+                PhotonModelConstants.UNIT_BYTES);
+        unitMap.put(AzureConstants.UNIT_COUNT,
+                PhotonModelConstants.UNIT_COUNT);
+        unitMap.put(AzureConstants.UNIT_PERCENT,
+                PhotonModelConstants.UNIT_PERCENT);
         PHOTON_MODEL_UNIT_MAP = Collections.unmodifiableMap(unitMap);
 
         // Map of Azure-specific stat keys to Photon-Model stat keys
         Map<String, String> statMap = new HashMap<>();
-        statMap.put(AzureConstants.NETWORK_PACKETS_IN,
-                PhotonModelConstants.NETWORK_PACKETS_IN_COUNT);
-        statMap.put(AzureConstants.NETWORK_PACKETS_OUT,
-                PhotonModelConstants.NETWORK_PACKETS_OUT_COUNT);
-        statMap.put(AzureConstants.DISK_WRITE_TIME,
-                PhotonModelConstants.DISK_WRITE_TIME_SECONDS);
-        statMap.put(AzureConstants.DISK_READ_TIME,
-                PhotonModelConstants.DISK_READ_TIME_SECONDS);
+        statMap.put(AzureConstants.NETWORK_BYTES_IN,
+                PhotonModelConstants.NETWORK_IN_BYTES);
+        statMap.put(AzureConstants.NETWORK_BYTES_OUT,
+                PhotonModelConstants.NETWORK_OUT_BYTES);
+        statMap.put(AzureConstants.DISK_WRITES_PER_SECOND,
+                PhotonModelConstants.DISK_WRITE_OPS_COUNT);
+        statMap.put(AzureConstants.DISK_READS_PER_SECOND,
+                PhotonModelConstants.DISK_READ_OPS_COUNT);
         statMap.put(AzureConstants.CPU_UTILIZATION,
                 PhotonModelConstants.CPU_UTILIZATION_PERCENT);
         statMap.put(AzureConstants.MEMORY_AVAILABLE,
                 PhotonModelConstants.MEMORY_AVAILABLE_BYTES);
         statMap.put(AzureConstants.MEMORY_USED,
                 PhotonModelConstants.MEMORY_USED_BYTES);
+        statMap.put(AzureConstants.DISK_READ_BYTES_PER_SECOND,
+                PhotonModelConstants.DISK_READ_BYTES);
+        statMap.put(AzureConstants.DISK_WRITE_BYTES_PER_SECOND,
+                PhotonModelConstants.DISK_WRITE_BYTES);
         PHOTON_MODEL_STATS_MAP = Collections.unmodifiableMap(statMap);
     }
 

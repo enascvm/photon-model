@@ -72,6 +72,7 @@ public class DiskService extends StatefulService {
         /**
          * Link to the Storage description associated with the disk.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String storageDescriptionLink;
 
         /**

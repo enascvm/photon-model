@@ -39,7 +39,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -87,11 +86,14 @@ import com.microsoft.azure.management.storage.models.StorageAccountCreateParamet
 import com.microsoft.azure.management.storage.models.StorageAccountKeys;
 import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
+
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
+import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.AzureAllocationContext;
@@ -101,10 +103,12 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+
 import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
-import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceErrorResponse;
@@ -479,7 +483,7 @@ public class AzureInstanceService extends StatelessService {
 
         StorageManagementClient client = getStorageManagementClient(ctx);
 
-        client.getStorageAccountsOperations().beginCreateAsync(ctx.resourceGroup.getName(),
+        client.getStorageAccountsOperations().createAsync(ctx.resourceGroup.getName(),
                 ctx.storageAccountName, storageParameters,
                 new AzureAsyncCallback<StorageAccount>() {
                     @Override
@@ -489,13 +493,46 @@ public class AzureInstanceService extends StatelessService {
 
                     @Override
                     public void onSuccess(ServiceResponse<StorageAccount> result) {
-                        ctx.stage = nextStage;
-                        ctx.storage = result.getBody();
                         logInfo("Successfully created storage account [%s]",
                                 ctx.storageAccountName);
-                        handleAllocation(ctx);
+                        ctx.storage = result.getBody();
+                        StorageDescription storageDescription = new StorageDescription();
+                        storageDescription.name = ctx.storageAccountName;
+                        storageDescription.type = ctx.storage.getAccountType().name();
+                        Operation storageOp = Operation
+                                .createPost(getHost(),
+                                        StorageDescriptionService.FACTORY_LINK)
+                                .setBody(storageDescription)
+                                .setCompletion((o, e) -> {
+                                    if (e != null) {
+                                        logSevere(e.getMessage());
+                                        handleError(ctx, e);
+                                        return;
+                                    }
+                                    StorageDescription resultDesc = o.getBody(StorageDescription.class);
+                                    logInfo("Successfully created the StorageDescription [%s]", resultDesc.name);
+                                    ctx.storageDescription = resultDesc;
+                                    ctx.bootDisk.storageDescriptionLink = resultDesc.documentSelfLink;
+                                    Operation patch = Operation
+                                            .createPatch(UriUtils.buildUri(getHost(),
+                                                    ctx.bootDisk.documentSelfLink))
+                                            .setBody(ctx.bootDisk)
+                                            .setCompletion(((completedOp, failure) -> {
+                                                if (failure != null) {
+                                                    handleError(ctx, failure);
+                                                    return;
+                                                }
+                                                logInfo("Successfully updated boot disk [%s]",
+                                                        ctx.bootDisk.name);
+                                            }));
+                                    sendRequest(patch);
+                                    return;
+                                });
+                        sendRequest(storageOp);
                     }
                 });
+        ctx.stage = nextStage;
+        handleAllocation(ctx);
     }
 
     private void initNetwork(AzureAllocationContext ctx, AzureStages nextStage) {
@@ -786,66 +823,42 @@ public class AzureInstanceService extends StatelessService {
 
                     @Override
                     public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
+                        logInfo("Retrieved the storage account keys for storage account [%s] successfully.",
+                                ctx.storageAccountName);
                         StorageAccountKeys keys = result.getBody();
                         String key1 = keys.getKey1();
                         String key2 = keys.getKey2();
-                        String authCredentialsLink = ctx.bootDisk.authCredentialsLink;
 
-                        AuthCredentialsServiceState diskAuth = new AuthCredentialsServiceState();
-                        Operation operation;
-                        URI authUri;
-                        String authLink;
-                        // PATCH or POST depending whether credentials exists or not.
-                        if (authCredentialsLink == null) {
-                            diskAuth.documentSelfLink = UUID.randomUUID().toString();
-                            authUri = UriUtils
-                                    .buildUri(getHost(), AuthCredentialsService.FACTORY_LINK);
-                            authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
-                                    diskAuth.documentSelfLink);
-                            operation = Operation.createPost(authUri);
-                        } else {
-                            authUri = UriUtils.buildUri(getHost(), authCredentialsLink);
-                            authLink = diskAuth.documentSelfLink;
-                            operation = Operation.createPatch(authUri);
-                        }
-
-                        diskAuth.customProperties = new HashMap<>();
-                        diskAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, key1);
-                        diskAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, key2);
-
-                        sendRequest(operation.setBody(diskAuth)
-                                .setCompletion((o, e) -> {
+                        AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
+                        storageAuth.customProperties = new HashMap<>();
+                        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, key1);
+                        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, key2);
+                        Operation patchStorageDescriptionWithKeys = Operation
+                                .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
+                                .setBody(storageAuth).setCompletion((o, e) -> {
                                     if (e != null) {
                                         handleError(ctx, e);
                                         return;
                                     }
-                                    logInfo("Successfully retrieved keys for storage account [%s]",
-                                            ctx.storageAccountName);
-
-                                    // link the auth state with disk, if not linked.
-                                    if (authCredentialsLink == null) {
-                                        ctx.bootDisk.authCredentialsLink = authLink;
-                                        Operation patch = Operation
-                                                .createPatch(UriUtils.buildUri(getHost(),
-                                                        ctx.bootDisk.documentSelfLink))
-                                                .setBody(ctx.bootDisk)
-                                                .setCompletion(((completedOp, failure) -> {
-                                                    if (failure != null) {
-                                                        handleError(ctx, failure);
-                                                        return;
-                                                    }
-
-                                                    ctx.stage = nextStage;
-                                                    handleAllocation(ctx);
-                                                }));
-                                        sendRequest(patch);
-                                        return;
-                                    }
-
-                                    ctx.stage = nextStage;
-                                    handleAllocation(ctx);
-                                }));
-
+                                    AuthCredentialsServiceState resultAuth = o.getBody(
+                                            AuthCredentialsServiceState.class);
+                                    ctx.storageDescription.authCredentialsLink = resultAuth.documentSelfLink;
+                                    Operation patch = Operation
+                                            .createPatch(UriUtils.buildUri(getHost(),
+                                                    ctx.storageDescription.documentSelfLink))
+                                            .setBody(ctx.storageDescription)
+                                            .setCompletion(((completedOp, failure) -> {
+                                                if (failure != null) {
+                                                    handleError(ctx, failure);
+                                                    return;
+                                                }
+                                                logFine("Patched the storage description successfully.");
+                                                ctx.stage = nextStage;
+                                                handleAllocation(ctx);
+                                            }));
+                                    sendRequest(patch);
+                                });
+                        sendRequest(patchStorageDescriptionWithKeys);
                     }
                 });
     }
@@ -1198,13 +1211,13 @@ public class AzureInstanceService extends StatelessService {
                     new AzureAsyncCallback<List<VirtualMachineImageResource>>() {
 
                         @Override
-                        void onError(Throwable e) {
+                        public void onError(Throwable e) {
                             handleError(ctx, new IllegalStateException(e.getLocalizedMessage()));
                             return;
                         }
 
                         @Override
-                        void onSuccess(ServiceResponse<List<VirtualMachineImageResource>> result) {
+                        public void onSuccess(ServiceResponse<List<VirtualMachineImageResource>> result) {
                             List<VirtualMachineImageResource> resource = result.getBody();
                             if (resource == null || resource.get(0) == null) {
                                 handleError(ctx,
@@ -1236,13 +1249,13 @@ public class AzureInstanceService extends StatelessService {
                 imageReference.getOffer(), imageReference.getSku(), version,
                 new AzureAsyncCallback<VirtualMachineImage>() {
                     @Override
-                    void onError(Throwable e) {
+                    public void onError(Throwable e) {
                         handleError(ctx, new IllegalStateException(e.getLocalizedMessage()));
                         return;
                     }
 
                     @Override
-                    void onSuccess(ServiceResponse<VirtualMachineImage> result) {
+                    public void onSuccess(ServiceResponse<VirtualMachineImage> result) {
                         VirtualMachineImage image = result.getBody();
                         if (image == null || image.getOsDiskImage() == null) {
                             handleError(ctx, new IllegalStateException("OS Disk Image not found."));
@@ -1324,39 +1337,6 @@ public class AzureInstanceService extends StatelessService {
             FileUtils.readFileAndComplete(readFile, jsonPayloadFile);
         } catch (Exception e) {
             handleError(ctx, e);
-        }
-    }
-
-    /**
-     * Operation context aware service callback handler.
-     */
-    private abstract class AzureAsyncCallback<T> extends ServiceCallback<T> {
-        OperationContext opContext;
-
-        public AzureAsyncCallback() {
-            this.opContext = OperationContext.getOperationContext();
-        }
-
-        /**
-         * Invoked when a failure happens during service call.
-         */
-        abstract void onError(Throwable e);
-
-        /**
-         * Invoked when a service call is successful.
-         */
-        abstract void onSuccess(ServiceResponse<T> result);
-
-        @Override
-        public void failure(Throwable t) {
-            OperationContext.restoreOperationContext(this.opContext);
-            onError(t);
-        }
-
-        @Override
-        public void success(ServiceResponse<T> result) {
-            OperationContext.restoreOperationContext(this.opContext);
-            onSuccess(result);
         }
     }
 }

@@ -13,495 +13,307 @@
 
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
-import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.security.InvalidKeyException;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.storage.CloudStorageAccount;
-import com.microsoft.azure.storage.StorageException;
-import com.microsoft.azure.storage.table.CloudTable;
-import com.microsoft.azure.storage.table.CloudTableClient;
-import com.microsoft.azure.storage.table.DynamicTableEntity;
-import com.microsoft.azure.storage.table.EntityProperty;
-import com.microsoft.azure.storage.table.TableQuery;
-import com.microsoft.azure.storage.table.TableQuery.Operators;
-import com.microsoft.azure.storage.table.TableQuery.QueryComparisons;
-
-import org.apache.commons.lang3.StringUtils;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
-import com.vmware.photon.controller.model.adapters.azure.model.stats.AzureMetricRequest;
-import com.vmware.photon.controller.model.adapters.azure.model.stats.AzureMetricResponse;
-import com.vmware.photon.controller.model.adapters.azure.model.stats.Datapoint;
-import com.vmware.photon.controller.model.adapters.azure.model.stats.Location;
-import com.vmware.photon.controller.model.adapters.azure.model.stats.MetricAvailability;
-import com.vmware.photon.controller.model.adapters.azure.model.stats.MetricDefinitions;
-import com.vmware.photon.controller.model.adapters.azure.model.stats.TableInfo;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricService.ResourceMetric;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.OperationContext;
+import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class AzureStatsService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_STATS_ADAPTER;
-    private static final int EXECUTOR_SHUTDOWN_INTERVAL_MINUTES = 5;
-    private static final String STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=http;"
-            + "AccountName=%s;"
-            + "AccountKey=%s";
-    private static final String PARTITION_KEY = "PartitionKey";
-    private static final String COUNTER_NAME_KEY = "CounterName";
-    private static final String TIMESTAMP = "Timestamp";
-    private static final String[] METRIC_NAMES = { AzureConstants.NETWORK_PACKETS_IN,
-            AzureConstants.NETWORK_PACKETS_OUT, AzureConstants.DISK_WRITE_TIME,
-            AzureConstants.DISK_READ_TIME, AzureConstants.CPU_UTILIZATION,
-            AzureConstants.MEMORY_AVAILABLE, AzureConstants.MEMORY_USED };
 
-    private ExecutorService executorService;
-
-    @Override
-    public void handleStart(Operation startPost) {
-        this.executorService = getHost().allocateExecutor(this);
-        super.handleStart(startPost);
-    }
-
-    @Override
-    public void handleStop(Operation delete) {
-        this.executorService.shutdown();
-        awaitTermination(this.executorService);
-        super.handleStop(delete);
-    }
-
-    private void awaitTermination(ExecutorService executor) {
-        try {
-            if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_INTERVAL_MINUTES, TimeUnit.MINUTES)) {
-                logWarning(
-                        "Executor service can't be shutdown for Azure. Trying to shutdown now...");
-                executor.shutdownNow();
-            }
-            logFine("Executor service shutdown for Azure");
-        } catch (InterruptedException e) {
-            logSevere(e);
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            logSevere(e);
-        }
-    }
+    private static final String HYPHEN = "-";
 
     private class AzureStatsDataHolder {
         public ComputeStateWithDescription computeDesc;
-        public ComputeStateWithDescription parentDesc;
-        public DiskState bootDisk;
-        public AuthCredentialsService.AuthCredentialsServiceState bootDiskAuth;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public ComputeStatsRequest statsRequest;
-        public ApplicationTokenCredentials credentials;
-        public ComputeStats statsResponse;
-        public AtomicInteger numResponses = new AtomicInteger(0);
-        public String tableName;
-        public String partitionValue;
-
-        public AzureStatsDataHolder() {
-            this.statsResponse = new ComputeStats();
-            // create a thread safe map to hold stats values for resource
-            this.statsResponse.statValues = new ConcurrentSkipListMap<String, ServiceStat>();
-        }
     }
 
     @Override
-    public void handleRequest(Operation op) {
+    public void handlePatch(Operation op) {
         if (!op.hasBody()) {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
         op.complete();
-        switch (op.getAction()) {
-        case PATCH:
-            ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
+        ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
 
-            if (statsRequest.isMockRequest) {
-                // patch status to parent task
-                AdapterUtils.sendPatchToProvisioningTask(this, statsRequest.taskReference);
-                return;
-            }
-
-            AzureStatsDataHolder statsData = new AzureStatsDataHolder();
-            statsData.statsRequest = statsRequest;
-            getVMDescription(statsData);
-            break;
-        default:
-            super.handleRequest(op);
+        if (statsRequest.isMockRequest) {
+            // patch status to parent task
+            AdapterUtils.sendPatchToProvisioningTask(this, statsRequest.taskReference);
+            return;
         }
+
+        AzureStatsDataHolder statsData = new AzureStatsDataHolder();
+        statsData.statsRequest = statsRequest;
+        getVMDescription(statsData);
+    }
+
+    /**
+     * Returns if the given compute description is a compute host or not.
+     */
+    private boolean isComputeHost(ComputeDescription computeDescription) {
+        List<String> supportedChildren = computeDescription.supportedChildren;
+        return supportedChildren != null && supportedChildren.contains(ComputeType.VM_GUEST.name());
     }
 
     private void getVMDescription(AzureStatsDataHolder statsData) {
         Consumer<Operation> onSuccess = (op) -> {
             statsData.computeDesc = op.getBody(ComputeStateWithDescription.class);
-            getParentVMDescription(statsData);
+            boolean isComputeHost = isComputeHost(statsData.computeDesc.description);
+            // If not a compute host, relay the request to Azure Stats Gatherer
+            // with the task reference intact, so the Gatherer will send the
+            // response directly to the task which called it.
+            if (!isComputeHost) {
+                ComputeStatsRequest statsRequest = statsData.statsRequest;
+                Operation statsOp = Operation.createPatch(
+                        UriUtils.buildUri(getHost(), AzureUriPaths.AZURE_STATS_GATHERER))
+                        .setBody(statsRequest)
+                        .setReferer(getUri());
+                getHost().sendRequest(statsOp);
+                return;
+            }
+
+            // If it's a compute host, get children and send stats request for each.
+            getComputeHostStats(statsData);
         };
         URI computeUri = UriUtils.extendUriWithQuery(statsData.statsRequest.resourceReference,
                 UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString());
         AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(statsData));
     }
 
-    private void getParentVMDescription(AzureStatsDataHolder statsData) {
-        Consumer<Operation> onSuccess = (op) -> {
-            statsData.parentDesc = op.getBody(ComputeStateWithDescription.class);
-            getParentAuth(statsData);
-        };
-        URI computeUri = UriUtils.extendUriWithQuery(
-                UriUtils.buildUri(getHost(), statsData.computeDesc.parentLink),
-                UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString());
-        AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(statsData));
+    /**
+     * Query all the children VM compute of the compute host.
+     */
+    private void getComputeHostStats(AzureStatsDataHolder statsData) {
+        URI queryUri = UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_QUERY_TASKS);
+        QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
+
+        String kind = Utils.buildKind(ComputeService.ComputeState.class);
+        QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
+                ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(kind);
+        querySpec.query.addBooleanClause(kindClause);
+
+        QueryTask.Query parentClause = new QueryTask.Query()
+                .setTermMatchType(MatchType.TERM)
+                .setTermPropertyName(ComputeService.ComputeState.FIELD_NAME_PARENT_LINK)
+                .setTermMatchValue(statsData.computeDesc.documentSelfLink);
+        querySpec.query.addBooleanClause(parentClause);
+
+        // TODO: Handle Pagination - https://jira-hzn.eng.vmware.com/browse/VSYM-1270
+        QueryTask task = QueryTask.create(querySpec).setDirect(true);
+        task.tenantLinks = statsData.computeDesc.tenantLinks;
+        Operation queryOp = Operation
+                .createPost(queryUri)
+                .setBody(task)
+                .setCompletion((o, f) -> handleComputeQueryCompletion(o, f, statsData));
+        sendRequest(queryOp);
     }
 
-    private void getParentAuth(AzureStatsDataHolder statsData) {
-        Consumer<Operation> onSuccess = (op) -> {
-            statsData.parentAuth = op
-                    .getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
-            getBootDisk(statsData);
-        };
-        AdapterUtils.getServiceState(this, statsData.parentDesc.description.authCredentialsLink,
-                onSuccess, getFailureConsumer(statsData));
+    /**
+     * Create a query task for each compute VM and return the operation.
+     */
+    private Operation getStatsQueryTaskOperation(AzureStatsDataHolder statsData, String computeLink) {
+        String computeId = UriUtils.getLastPathSegment(computeLink);
+        URI queryUri = UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_QUERY_TASKS);
+        QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
+
+        String kind = Utils.buildKind(ResourceMetric.class);
+        QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
+                ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(kind);
+        querySpec.query.addBooleanClause(kindClause);
+
+        String selfLinkValue = UriUtils.buildUriPath(
+                ResourceMetricService.FACTORY_LINK,
+                computeId) + UriUtils.URI_WILDCARD_CHAR;
+
+        QueryTask.Query computeClause = new QueryTask.Query()
+                .setTermMatchType(MatchType.WILDCARD)
+                .setTermPropertyName(ComputeService.ComputeState.FIELD_NAME_SELF_LINK)
+                .setTermMatchValue(selfLinkValue);
+        querySpec.query.addBooleanClause(computeClause);
+
+        QueryTask task = QueryTask.create(querySpec).setDirect(true);
+        task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT);
+        task.tenantLinks = statsData.computeDesc.tenantLinks;
+        Operation queryOp = Operation
+                .createPost(queryUri)
+                .setBody(task);
+        return queryOp;
     }
 
-    private void getBootDisk(AzureStatsDataHolder statsData) {
-        Consumer<Operation> onSuccess = (op) -> {
-            statsData.bootDisk = op.getBody(DiskState.class);
-            getBootDiskAuth(statsData);
-        };
-        /*
-         * VSYM-655 - https://jira-hzn.eng.vmware.com/browse/VSYM-655
-         * Until Azure design is finalized, the first and only disk will always be the boot disk.
-         */
-        if (statsData.computeDesc.diskLinks == null ||
-                statsData.computeDesc.diskLinks.isEmpty()) {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference,
-                    new IllegalStateException("No disks found"));
+    /**
+     * Get all the children computes and create a query task for each to query the metrics.
+     */
+    private void handleComputeQueryCompletion(Operation operation, Throwable failure,
+            AzureStatsDataHolder statsData) {
+        if (failure != null) {
+            logSevere(failure.getMessage());
+            sendFailurePatch(statsData, failure);
+            return;
         }
-        AdapterUtils.getServiceState(this, statsData.computeDesc.diskLinks.get(0), onSuccess,
-                getFailureConsumer(statsData));
+
+        QueryTask queryResult = operation.getBody(QueryTask.class);
+        if (queryResult == null || queryResult.results == null) {
+            sendFailurePatch(statsData, new RuntimeException(
+                    String.format("Unexpected query result for '%s'",
+                            operation.getUri())));
+            return;
+        }
+
+        int computeCount = Math.toIntExact(queryResult.results.documentCount);
+
+        // No children found. Send an empty response back.
+        if (computeCount <= 0) {
+            ComputeStatsResponse response = new ComputeStatsResponse();
+            response.taskStage = statsData.statsRequest.nextStage;
+            response.statsList = new ArrayList<>();
+            this.sendRequest(
+                    Operation.createPatch(statsData.statsRequest.taskReference)
+                            .setBody(response));
+            return;
+        }
+
+        // Create multiple operations, one each for a VM compute.
+        List<Operation> statOperations = new ArrayList<>(computeCount);
+        for (String computeLink : queryResult.results.documentLinks) {
+            Operation statsOp = getStatsQueryTaskOperation(statsData, computeLink);
+            statOperations.add(statsOp);
+        }
+
+        OperationJoin.create(statOperations)
+                .setCompletion((ops, failures) -> handleQueryTaskResponseAndConsolidateStats(ops,
+                        failures, statsData))
+                .sendWith(this);
     }
 
-    private void getBootDiskAuth(AzureStatsDataHolder statsData) {
-        Consumer<Operation> onSuccess = (op) -> {
-            statsData.bootDiskAuth = op.getBody(AuthCredentialsServiceState.class);
-            getStats(statsData);
-        };
-        AdapterUtils.getServiceState(this, statsData.bootDisk.authCredentialsLink, onSuccess,
-                getFailureConsumer(statsData));
+    /**
+     * Consolidates all the query task responses into one response and patches back.
+     */
+    private void handleQueryTaskResponseAndConsolidateStats(Map<Long, Operation> ops,
+            Map<Long, Throwable> failures, AzureStatsDataHolder statsData) {
+        try {
+            if (failures != null) {
+                sendFailurePatch(statsData, failures.get(0));
+                return;
+            }
+            List<QueryTask> items = new ArrayList<>(ops.size());
+
+            for (Operation op : ops.values()) {
+                QueryTask queryResult = op.getBody(QueryTask.class);
+                items.add(queryResult);
+            }
+
+            // Aggregate all the responses into a single response
+            ComputeStatsResponse response = aggregateComputeStatsResponses(statsData, items);
+            response.taskStage = statsData.statsRequest.nextStage;
+            this.sendRequest(
+                    Operation.createPatch(statsData.statsRequest.taskReference)
+                            .setBody(response)
+                            .setReferer(getUri()));
+        } catch (Throwable t) {
+            sendFailurePatch(statsData, t);
+        }
     }
 
+    /**
+     * Aggregates stats from all the compute VMs to make up compute Host stats.
+     */
+    private ComputeStatsResponse aggregateComputeStatsResponses(
+            AzureStatsDataHolder statsData, List<QueryTask> items) {
+        int numberOfComputeResponse = items.size();
+        ComputeStats computeStats = new ComputeStats();
+        computeStats.computeLink = statsData.computeDesc.documentSelfLink;
+        computeStats.statValues = new ConcurrentSkipListMap<String, ServiceStat>();
+
+        // Gather all the stats in a single response.
+        for (QueryTask queryResult : items) {
+            if (queryResult.results.documents != null) {
+                for (String key : queryResult.results.documents.keySet()) {
+                    ResourceMetric metric = Utils.fromJson(queryResult.results.documents.get(key),
+                            ResourceMetric.class);
+                    String metricName = getMetricNameFromSelfLink(metric.documentSelfLink);
+                    if (computeStats.statValues.containsKey(metricName)) {
+                        computeStats.statValues
+                                .get(key).latestValue += metric.value;
+                    } else {
+                        ServiceStat stat = new ServiceStat();
+                        stat.latestValue = metric.value;
+                        computeStats.statValues.put(metricName, stat);
+                    }
+                }
+            }
+        }
+
+        // Divide each metric value by the number of computes to get an average value.
+        for (String key : computeStats.statValues.keySet()) {
+            ServiceStat serviceStatValue = computeStats.statValues.get(key);
+            serviceStatValue.unit = PhotonModelConstants.getUnitForMetric(key);
+            serviceStatValue.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+            serviceStatValue.latestValue = serviceStatValue.latestValue / numberOfComputeResponse;
+        }
+
+        ComputeStatsResponse computeStatsResponse = new ComputeStatsResponse();
+        computeStatsResponse.statsList = new ArrayList<>();
+        if (computeStats.statValues.size() > 0) {
+            computeStatsResponse.statsList.add(computeStats);
+        }
+        return computeStatsResponse;
+    }
+
+    /**
+     * Self link is of the type /monitoring/metrics/<computeId>-<metricName>
+     * This method extracts and returns the metric name.
+     * TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1272
+     */
+    private String getMetricNameFromSelfLink(String selfLink) {
+        String metricName = UriUtils.getLastPathSegment(selfLink);
+        return metricName.substring(metricName.lastIndexOf(HYPHEN) + 1);
+    }
+
+    /**
+     * Sends a failure patch back to the caller.
+     */
+    private void sendFailurePatch(AzureStatsDataHolder statsData, Throwable throwable) {
+        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1271
+        AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                statsData.statsRequest.taskReference, throwable);
+    }
+
+    /**
+     * Returns an instance of Consumer to fail the task.
+     */
     private Consumer<Throwable> getFailureConsumer(AzureStatsDataHolder statsData) {
         return ((throwable) -> {
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     statsData.statsRequest.taskReference, throwable);
-        });
-    }
-
-    private void getAzureApplicationTokenCredential(AzureStatsDataHolder statsData) {
-        if (statsData.credentials == null) {
-            try {
-                statsData.credentials = getAzureConfig(statsData.parentAuth);
-            } catch (Exception e) {
-                logSevere(e);
-            }
-        }
-    }
-
-    /**
-     * Configures authentication credential for Azure.
-     */
-    private ApplicationTokenCredentials getAzureConfig(
-            AuthCredentialsService.AuthCredentialsServiceState parentAuth)
-            throws Exception {
-        String clientId = parentAuth.privateKeyId;
-        String clientKey = parentAuth.privateKey;
-        String tenantId = parentAuth.customProperties.get(AzureConstants.AZURE_TENANT_ID);
-
-        return new ApplicationTokenCredentials(clientId, tenantId, clientKey,
-                AzureEnvironment.AZURE);
-    }
-
-    private void getStats(AzureStatsDataHolder statsData) {
-        getAzureApplicationTokenCredential(statsData);
-        try {
-            getMetricDefinitions(statsData);
-        } catch (Exception e) {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, e);
-        }
-    }
-
-    /**
-     * Get the metric definitons from Azure using the Endpoint "/metricDefinitions"
-     * The request and response of the API is as described in
-     * {@link https://msdn.microsoft.com/en-us/library/azure/dn931939.aspx} Insights REST.
-     * @param statsData
-     * @throws URISyntaxException
-     * @throws IOException
-     */
-    private void getMetricDefinitions(AzureStatsDataHolder statsData)
-            throws URISyntaxException, IOException {
-        String azureInstanceId = statsData.computeDesc.id;
-        URI uri = UriUtils.buildUri(new URI(AzureConstants.BASE_URI_FOR_REST), azureInstanceId,
-                AzureConstants.METRIC_DEFINITIONS_ENDPOINT);
-        // Adding a filter to avoid huge data flow on the network
-        /*
-         * VSYM-656: https://jira-hzn.eng.vmware.com/browse/VSYM-656
-         * Remove the filter when Unit of a metric is required.
-         */
-        uri = UriUtils.extendUriWithQuery(uri,
-                AzureConstants.QUERY_PARAM_API_VERSION,
-                AzureConstants.DIAGNOSTIC_SETTING_API_VERSION,
-                AzureConstants.QUERY_PARAM_FILTER, AzureConstants.METRIC_DEFINITIONS_MEMORY_FILTER);
-        Operation operation = Operation.createGet(uri);
-        operation.addRequestHeader(Operation.ACCEPT_HEADER, Operation.MEDIA_TYPE_APPLICATION_JSON);
-        operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                AzureConstants.AUTH_HEADER_BEARER_PREFIX + statsData.credentials.getToken());
-        operation.setCompletion((op, ex) -> {
-            if (ex != null) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        statsData.statsRequest.taskReference, ex);
-            }
-            MetricDefinitions metricDefinitions = op.getBody(MetricDefinitions.class);
-            DateTimeFormatter dateTimeFormatter = DateTimeFormat
-                    .forPattern(AzureConstants.METRIC_TIME_FORMAT);
-            if (metricDefinitions.getValues() != null &&
-                    !metricDefinitions.getValues().isEmpty()) {
-                for (MetricAvailability metricAvailability : metricDefinitions.getValues().get(0)
-                        .getMetricAvailabilities()) {
-                    if (metricAvailability.getTimeGrain()
-                            .equals(AzureConstants.METRIC_TIME_GRAIN_1_MINUTE)) {
-                        Location location = metricAvailability.getLocation();
-                        Date mostRecentTableDate = null;
-                        for (TableInfo tableInfo : location.getTableInfo()) {
-                            Date startDate = dateTimeFormatter.parseDateTime(tableInfo.getStartTime())
-                                    .toDate();
-                            if (mostRecentTableDate == null || startDate.after(mostRecentTableDate)) {
-                                mostRecentTableDate = startDate;
-                                statsData.tableName = tableInfo.getTableName();
-                            }
-                        }
-                        statsData.partitionValue = location.getPartitionKey();
-                    }
-                }
-            }
-            if (!StringUtils.isEmpty(statsData.tableName)) {
-                try {
-                    getMetrics(statsData);
-                } catch (Exception e) {
-                    AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                            statsData.statsRequest.taskReference, e);
-                }
-            } else {
-                // Patch back to the Parent with empty response
-                ComputeStatsResponse respBody = new ComputeStatsResponse();
-                statsData.statsResponse.computeLink = statsData.computeDesc.documentSelfLink;
-                respBody.taskStage = statsData.statsRequest.nextStage;
-                respBody.statsList = new ArrayList<>();
-                this.sendRequest(Operation.createPatch(statsData.statsRequest.taskReference)
-                        .setBody(respBody));
-            }
-        });
-        sendRequest(operation);
-    }
-
-    private void getMetrics(AzureStatsDataHolder statsData)
-            throws InvalidKeyException, URISyntaxException, StorageException {
-        String storageAccountName = statsData.bootDisk.customProperties
-                .get(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME);
-        String storageKey = statsData.bootDiskAuth.customProperties
-                .get(AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1);
-        String storageConnectionString = String.format(STORAGE_CONNECTION_STRING,
-                storageAccountName, storageKey);
-        for (String metricName : METRIC_NAMES) {
-            AzureMetricRequest request = new AzureMetricRequest();
-            request.setStorageConnectionString(storageConnectionString);
-            request.setTableName(statsData.tableName);
-            request.setPartitionValue(statsData.partitionValue);
-            long endTimeMicros = Utils.getNowMicrosUtc();
-            Date timeStamp = new Date(TimeUnit.MICROSECONDS.toMillis(endTimeMicros)
-                    - TimeUnit.MINUTES.toMillis(AzureConstants.METRIC_COLLECTION_PERIOD));
-            request.setTimestamp(timeStamp);
-            request.setMetricName(metricName);
-            AzureMetricsHandler handler = new AzureMetricsHandler(this, statsData);
-            getMetricStatisticsAsync(request, handler);
-        }
-    }
-
-    private class AzureMetricsHandler
-            implements AsyncHandler<AzureMetricRequest, AzureMetricResponse> {
-        private AzureStatsDataHolder statsData;
-        private StatelessService service;
-        private OperationContext opContext;
-
-        public AzureMetricsHandler(StatelessService service, AzureStatsDataHolder statsData) {
-            this.statsData = statsData;
-            this.service = service;
-            this.opContext = OperationContext.getOperationContext();
-        }
-
-        @Override
-        public void onError(Exception exception) {
-            OperationContext.restoreOperationContext(this.opContext);
-            AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                    this.statsData.statsRequest.taskReference, exception);
-        }
-
-        @Override
-        public void onSuccess(AzureMetricRequest request, AzureMetricResponse result) {
-            OperationContext.restoreOperationContext(this.opContext);
-            List<Datapoint> dpList = result.getDatapoints();
-            Double averageSum = 0d;
-            Double count = 0d;
-            if (dpList != null && dpList.size() != 0) {
-                for (Datapoint dp : dpList) {
-                    averageSum += dp.getAverage();
-                    count += dp.getCount();
-                }
-                // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-769
-                ServiceStat stat = new ServiceStat();
-                stat.latestValue = (count == 0 ? 0 : averageSum / count);
-                this.statsData.statsResponse.statValues.put(
-                        AzureStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()), stat);
-            }
-
-            if (this.statsData.numResponses.incrementAndGet() == METRIC_NAMES.length) {
-                ComputeStatsResponse respBody = new ComputeStatsResponse();
-                this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;
-                respBody.taskStage = this.statsData.statsRequest.nextStage;
-                respBody.statsList = new ArrayList<>();
-                respBody.statsList.add(this.statsData.statsResponse);
-                this.service.sendRequest(
-                        Operation.createPatch(this.statsData.statsRequest.taskReference)
-                        .setBody(respBody));
-            }
-        }
-    }
-
-    /**
-     * Uses the executorService to kick of a new Callable,
-     * which in turn patches back to the AsyncHandler that is passed.
-     *
-     * @param request
-     * The request object
-     * @param asyncHandler
-     * The Asynchronous handler that will be called.
-     * @return
-     */
-    public void getMetricStatisticsAsync(
-            final AzureMetricRequest request,
-            final AsyncHandler<AzureMetricRequest, AzureMetricResponse> asyncHandler) {
-        this.executorService.submit(new Runnable() {
-            @Override
-            public void run() {
-                AzureMetricResponse response = new AzureMetricResponse();
-                try {
-                    // Create the table client required to make calls to the table
-                    CloudStorageAccount cloudStorageAccount = CloudStorageAccount
-                            .parse(request.getStorageConnectionString());
-                    CloudTableClient tableClient = cloudStorageAccount.createCloudTableClient();
-
-                    // Get the table reference using the table name
-                    CloudTable table = tableClient.getTableReference(request.getTableName());
-
-                    // Create filters to limit the data
-                    String partitionFilter = TableQuery.generateFilterCondition(
-                            PARTITION_KEY, QueryComparisons.EQUAL, request.getPartitionValue());
-
-                    String timestampFilter = TableQuery.generateFilterCondition(
-                            TIMESTAMP, QueryComparisons.GREATER_THAN_OR_EQUAL,
-                            request.getTimestamp());
-
-                    String partitionAndTimestampFilter = TableQuery.combineFilters(
-                            partitionFilter, Operators.AND, timestampFilter);
-
-                    String counterFilter = TableQuery.generateFilterCondition(COUNTER_NAME_KEY,
-                            QueryComparisons.EQUAL, request.getMetricName());
-
-                    // Combine all the filters
-                    String combinedFilter = TableQuery.combineFilters(
-                            partitionAndTimestampFilter, Operators.AND, counterFilter);
-
-                    // Create the query
-                    TableQuery<DynamicTableEntity> partitionQuery = TableQuery
-                            .from(DynamicTableEntity.class).where(combinedFilter);
-
-                    response.setLabel(request.getMetricName());
-                    List<Datapoint> datapoints = new ArrayList<>();
-                    for (DynamicTableEntity entity : table.execute(partitionQuery)) {
-                        HashMap<String, EntityProperty> properties = entity
-                                .getProperties();
-                        Datapoint dp = new Datapoint();
-                        for (String key : properties.keySet()) {
-                            switch (key) {
-                            case AzureConstants.METRIC_KEY_LAST:
-                                dp.setLast(properties.get(key).getValueAsDoubleObject());
-                                break;
-                            case AzureConstants.METRIC_KEY_MAXIMUM:
-                                dp.setMaximum(properties.get(key).getValueAsDoubleObject());
-                                break;
-                            case AzureConstants.METRIC_KEY_MINIMUM:
-                                dp.setMinimum(properties.get(key).getValueAsDoubleObject());
-                                break;
-                            case AzureConstants.METRIC_KEY_COUNTER_NAME:
-                                dp.setCounterName(properties.get(key).getValueAsString());
-                                break;
-                            case AzureConstants.METRIC_KEY_TIMESTAMP:
-                                dp.setTimestamp(properties.get(key).getValueAsDate());
-                                break;
-                            case AzureConstants.METRIC_KEY_TOTAL:
-                                dp.setTotal(properties.get(key).getValueAsDoubleObject());
-                                break;
-                            case AzureConstants.METRIC_KEY_AVERAGE:
-                                dp.setAverage(properties.get(key).getValueAsDoubleObject());
-                                break;
-                            case AzureConstants.METRIC_KEY_COUNT:
-                                dp.setCount(properties.get(key).getValueAsIntegerObject());
-                                break;
-                            default:
-                                break;
-                            }
-                        }
-                        datapoints.add(dp);
-                    }
-                    response.setDatapoints(datapoints);
-                } catch (Exception ex) {
-                    if (asyncHandler != null) {
-                        asyncHandler.onError(ex);
-                    }
-                }
-                if (asyncHandler != null) {
-                    asyncHandler.onSuccess(request, response);
-                }
-            }
         });
     }
 }

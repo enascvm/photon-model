@@ -15,12 +15,18 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_RESOURCE_GROUP_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_VM_SIZE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VM_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.VM_REST_API_VERSION;
+import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
+import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
@@ -36,6 +42,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -43,11 +50,21 @@ import java.util.regex.Pattern;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.models.ImageReference;
+import com.microsoft.azure.management.storage.StorageManagementClient;
+import com.microsoft.azure.management.storage.StorageManagementClientImpl;
+import com.microsoft.azure.management.storage.models.StorageAccountKeys;
+import com.microsoft.rest.ServiceResponse;
+
+import okhttp3.OkHttpClient;
+
+import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachine;
 import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachineListResult;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
@@ -60,10 +77,12 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -83,6 +102,7 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 public class AzureEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_ENUMERATION_ADAPTER;
     private static final Pattern STORAGE_ACCOUNT_NAME_PATTERN = Pattern.compile("https?://([^.]*)");
+    private static final Pattern RESOURCE_GROUP_NAME_PATTERN = Pattern.compile(".*/resourceGroups/([^/]*)");
 
     private static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT =
             UriPaths.PROPERTY_PREFIX + "AzureEnumerationAdapterService.QUERY_RESULT_LIMIT";
@@ -96,6 +116,21 @@ public class AzureEnumerationAdapterService extends StatelessService {
      */
     private enum EnumerationSubStages {
         LISTVMS, QUERY, UPDATE, CREATE, DELETE, FINISHED
+    }
+
+    private ExecutorService executorService;
+
+    @Override
+    public void handleStart(Operation startPost) {
+        this.executorService = getHost().allocateExecutor(this);
+        super.handleStart(startPost);
+    }
+
+    @Override
+    public void handleStop(Operation delete) {
+        this.executorService.shutdown();
+        awaitTermination(this, this.executorService);
+        super.handleStop(delete);
     }
 
     /**
@@ -120,6 +155,8 @@ public class AzureEnumerationAdapterService extends StatelessService {
 
         // Azure specific fields
         ApplicationTokenCredentials credentials;
+        public OkHttpClient.Builder clientBuilder;
+        public OkHttpClient httpClient;
 
         EnumerationContext(ComputeEnumerateResourceRequest request) {
             this.enumRequest = request;
@@ -167,6 +204,10 @@ public class AzureEnumerationAdapterService extends StatelessService {
                     return;
                 }
             }
+            if (ctx.httpClient == null) {
+                ctx.httpClient = new OkHttpClient();
+                ctx.clientBuilder = ctx.httpClient.newBuilder();
+            }
             ctx.stage = EnumerationStages.ENUMERATE;
             handleEnumerationRequest(ctx);
             break;
@@ -210,6 +251,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
             logInfo("Enumeration finished for %s", getEnumKey(ctx));
             this.ongoingEnumerations.remove(getEnumKey(ctx));
             AdapterUtils.sendPatchToEnumerationTask(this, ctx.enumRequest.taskReference);
+            cleanUpHttpClient(this, ctx.httpClient);
             break;
         case ERROR:
             logWarning("Enumeration error for %s", getEnumKey(ctx));
@@ -591,6 +633,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         rootDisk.customProperties.put(AZURE_OSDISK_CACHING,
                 vm.properties.storageProfile.getOsDisk().getCaching());
         rootDisk.documentSelfLink = computeState.diskLinks.get(0);
+
         // TODO VSYM-630: Discover storage keys for storage account during Azure enumeration
 
         Operation.createPatch(this, rootDisk.documentSelfLink)
@@ -668,15 +711,71 @@ public class AzureEnumerationAdapterService extends StatelessService {
         computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
         computeDescription.instanceAdapterReference = UriUtils
                 .buildUri(getHost(), AzureUriPaths.AZURE_INSTANCE_ADAPTER);
-        // TODO VSYM-848: Add stats adapter reference.
+        computeDescription.statsAdapterReference = UriUtils
+                .buildUri(getHost(), AzureUriPaths.AZURE_STATS_ADAPTER);
         computeDescription.customProperties = new HashMap<>();
         computeDescription.customProperties
                 .put(AZURE_VM_SIZE, virtualMachine.properties.hardwareProfile.getVmSize());
+        String diagnosticStorageAccountName = null;
+        if (virtualMachine.properties.diagnosticsProfile != null) {
+            diagnosticStorageAccountName = getStorageAccountName(virtualMachine.properties.diagnosticsProfile
+                    .getBootDiagnostics().getStorageUri());
+            computeDescription.customProperties.put(AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME,
+                    diagnosticStorageAccountName);
+        }
+        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1268
+        String resourceGroupName = getResourceGroupName(virtualMachine.id);
+        computeDescription.customProperties.put(AZURE_RESOURCE_GROUP_NAME,
+                resourceGroupName);
         computeDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
         Operation compDescOp = Operation
                 .createPost(getHost(), ComputeDescriptionService.FACTORY_LINK)
                 .setBody(computeDescription);
+
+        String storageAuthLink = UUID.randomUUID().toString();
+        getStorageManagementClient(ctx).getStorageAccountsOperations().listKeysAsync(
+                resourceGroupName, diagnosticStorageAccountName,
+                new AzureAsyncCallback<StorageAccountKeys>() {
+
+                    @Override
+                    public void onError(Throwable e) {
+                        logSevere(e.getMessage());
+                        handleError(ctx, e);
+                    }
+
+                    @Override
+                    public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
+                        StorageAccountKeys keys = result.getBody();
+                        String key1 = keys.getKey1();
+                        String key2 = keys.getKey2();
+
+                        AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
+                        storageAuth.documentSelfLink = storageAuthLink;
+                        storageAuth.customProperties = new HashMap<>();
+                        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, key1);
+                        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, key2);
+                        storageAuth.tenantLinks = ctx.computeHostDesc.tenantLinks;
+
+                        Operation storageAuthOp = Operation
+                                .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
+                                .setBody(storageAuth);
+                        sendRequest(storageAuthOp);
+                    }
+                });
+        StorageDescription storageDescription = new StorageDescription();
+        storageDescription.documentSelfLink = UUID.randomUUID().toString();
+        storageDescription.name = diagnosticStorageAccountName;
+        storageDescription.resourcePoolLink = ctx.enumRequest.resourcePoolLink;
+        storageDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
+        storageDescription.authCredentialsLink = UriUtils.buildUriPath(
+                AuthCredentialsService.FACTORY_LINK,
+                storageAuthLink);
+
+        Operation storageOp = Operation
+                .createPost(getHost(),
+                        StorageDescriptionService.FACTORY_LINK)
+                .setBody(storageDescription);
 
         // Create root disk
         DiskState rootDisk = new DiskState();
@@ -684,6 +783,9 @@ public class AzureEnumerationAdapterService extends StatelessService {
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.name = virtualMachine.properties.storageProfile.getOsDisk().getName();
         rootDisk.type = DiskType.HDD;
+        rootDisk.storageDescriptionLink = UriUtils.buildUriPath(
+                StorageDescriptionService.FACTORY_LINK,
+                storageDescription.documentSelfLink);
         ImageReference imageReference = virtualMachine.properties.storageProfile.getImageReference();
         rootDisk.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
         rootDisk.bootOrder = 1;
@@ -694,11 +796,6 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 getStorageAccountName(
                         virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri()));
         rootDisk.tenantLinks = ctx.computeHostDesc.tenantLinks;
-
-        // TODO VSYM-629: Add logic to fetch storage account type for newly discovered VMs on Azure
-        // TODO VSYM-630: Discover storage keys for storage account during Azure enumeration
-        //rootDisk.customProperties
-        //        .put(AZURE_STORAGE_ACCOUNT_TYPE, AccountType.STANDARD_LRS.toValue());
 
         Operation diskOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
                 .setBody(rootDisk);
@@ -724,11 +821,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 .createPost(getHost(), ComputeService.FACTORY_LINK)
                 .setBody(resource);
 
-        OperationSequence
-                .create(authOp)
-                .next(compDescOp)
-                .next(diskOp)
-                .next(resourceOp)
+        OperationJoin.create(authOp, compDescOp, storageOp, diskOp, resourceOp)
                 .setCompletion((ops, exs) -> {
                     if (exs != null) {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
@@ -775,6 +868,19 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 + imageReference.getSku() + ":" + imageReference.getVersion();
     }
 
+    private Retrofit.Builder getRetrofitBuilder() {
+        Retrofit.Builder builder = new Retrofit.Builder();
+        builder.callbackExecutor(this.executorService);
+        return builder;
+    }
+
+    private StorageManagementClient getStorageManagementClient(EnumerationContext ctx) {
+        StorageManagementClient client = new StorageManagementClientImpl(
+                AzureConstants.BASE_URI, ctx.credentials, ctx.clientBuilder,
+                getRetrofitBuilder());
+        client.setSubscriptionId(ctx.parentAuth.userLink);
+        return client;
+    }
     /**
      * Extracts storage account name from the given storage URI.
      */
@@ -783,7 +889,16 @@ public class AzureEnumerationAdapterService extends StatelessService {
         if (matcher.find()) {
             return matcher.group(1);
         }
-
+        logFine("Input storageUri was [%s]", storageUri);
         return storageUri;
+    }
+
+    private String getResourceGroupName(String vmId) {
+        Matcher matcher = RESOURCE_GROUP_NAME_PATTERN.matcher(vmId);
+        if (matcher.find()) {
+            return matcher.group(1).toLowerCase();
+        }
+        logFine("Input VM id was [%s]", vmId);
+        return vmId;
     }
 }

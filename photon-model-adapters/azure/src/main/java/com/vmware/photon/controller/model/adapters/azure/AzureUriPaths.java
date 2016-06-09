@@ -26,6 +26,8 @@ public class AzureUriPaths {
             + "/instance-adapter";
     public static final String AZURE_STATS_ADAPTER = PROVISIONING_AZURE
             + "/stats-adapter";
+    public static final String AZURE_STATS_GATHERER = PROVISIONING_AZURE
+            + "/stats-gatherer";
     public static final String AZURE_ENUMERATION_ADAPTER =
             PROVISIONING_AZURE + "/enumeration-adapter";
 }

@@ -13,6 +13,10 @@
 
 package com.vmware.photon.controller.model.constants;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 public class PhotonModelConstants {
 
     // Photon-Model Metric related Constants
@@ -42,9 +46,42 @@ public class PhotonModelConstants {
     public static final String UNIT_COUNT = "Count";
     public static final String UNIT_BYTES = "Bytes";
     public static final String UNIT_PERCENT = "Percent";
+    public static final String UNIT_SECONDS = "Seconds";
     public static final String UNIT_COST = "USD";
 
     // Photon-Model specific constants
     public static final String API_CALL_COUNT = "APICallCount";
     public static final String SOURCE_TASK_LINK = "SourceTaskLink";
+
+    private static final Map<String, String> METRIC_UNIT_MAP;
+
+    static {
+        // Map of Photon-Model stat keys to their respective units
+        Map<String, String> statMap = new HashMap<>();
+        statMap.put(CPU_UTILIZATION_PERCENT, UNIT_PERCENT);
+        statMap.put(DISK_READ_BYTES, UNIT_BYTES);
+        statMap.put(DISK_WRITE_BYTES, UNIT_BYTES);
+        statMap.put(NETWORK_IN_BYTES, UNIT_BYTES);
+        statMap.put(NETWORK_OUT_BYTES, UNIT_BYTES);
+        statMap.put(CPU_CREDIT_USAGE_COUNT, UNIT_COUNT);
+        statMap.put(CPU_CREDIT_BALANCE_COUNT, UNIT_COUNT);
+        statMap.put(DISK_READ_OPS_COUNT, UNIT_COUNT);
+        statMap.put(DISK_WRITE_OPS_COUNT, UNIT_COUNT);
+        statMap.put(NETWORK_PACKETS_IN_COUNT, UNIT_COUNT);
+        statMap.put(NETWORK_PACKETS_OUT_COUNT, UNIT_COUNT);
+        statMap.put(STATUS_CHECK_FAILED_COUNT, UNIT_COUNT);
+        statMap.put(STATUS_CHECK_FAILED_COUNT_INSTANCE, UNIT_COUNT);
+        statMap.put(STATUS_CHECK_FAILED_COUNT_SYSTEM, UNIT_COUNT);
+        statMap.put(ESTIMATED_CHARGES, UNIT_COST);
+        statMap.put(BURN_RATE_PER_HOUR, UNIT_COST);
+        statMap.put(DISK_WRITE_TIME_SECONDS, UNIT_SECONDS);
+        statMap.put(DISK_READ_TIME_SECONDS, UNIT_SECONDS);
+        statMap.put(MEMORY_AVAILABLE_BYTES, UNIT_BYTES);
+        statMap.put(MEMORY_USED_BYTES, UNIT_BYTES);
+        METRIC_UNIT_MAP = Collections.unmodifiableMap(statMap);
+    }
+
+    public static String getUnitForMetric(String metricName) {
+        return METRIC_UNIT_MAP.get(metricName);
+    }
 }

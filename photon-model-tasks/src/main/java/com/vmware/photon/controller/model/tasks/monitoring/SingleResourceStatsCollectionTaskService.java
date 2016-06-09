@@ -254,6 +254,13 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
                         .setBody(minuteStats));
             }
         }
+        // If there are no stats reported, just finish the task.
+        if (operations.size() == 0) {
+            SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
+            nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+            TaskUtils.sendPatch(this, nextStatePatch);
+            return;
+        }
         OperationJoin operationJoin = OperationJoin
                 .create(operations)
                 .setCompletion(

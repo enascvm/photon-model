@@ -33,6 +33,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureStages;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -49,6 +50,7 @@ public class AzureAllocationContext {
     public ComputeService.ComputeStateWithDescription parent;
     public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
     public AuthCredentialsService.AuthCredentialsServiceState childAuth;
+    public StorageDescription storageDescription;
     public DiskState bootDisk;
     public List<DiskState> childDisks;
     public String vmName;
