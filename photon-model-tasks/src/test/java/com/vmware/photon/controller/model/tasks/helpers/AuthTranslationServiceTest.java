@@ -25,7 +25,6 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -69,7 +68,7 @@ public class AuthTranslationServiceTest extends Suite {
             oauthSecrets.private_key = "not_a_secret";
             oauthSecrets.private_key_id = "0";
             oauthSecrets.type = "service_account";
-            oauthSecrets.environmentName = ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_GCE;
+            oauthSecrets.environmentName = ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_GCP;
 
             this.host.testStart(1);
             Operation op = Operation

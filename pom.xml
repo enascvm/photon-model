@@ -63,6 +63,7 @@
     <module>photon-model-adapters/util</module>
     <module>photon-model-adapters/aws</module>
     <module>photon-model-adapters/azure</module>
+    <module>photon-model-adapters/gcp</module>
     <module>photon-model-adapters/vsphere</module>
   </modules>
 

@@ -54,6 +54,8 @@ public class ComputeDescriptionService extends StatefulService {
         public static final String FIELD_NAME_NAME = "name";
         public static final String ENVIRONMENT_NAME_ON_PREMISE = "On premise";
         public static final String ENVIRONMENT_NAME_VCLOUD_AIR = "VMware vCloud Air";
+        public static final String ENVIRONMENT_NAME_GCP = "Google Cloud Platform";
+        @Deprecated
         public static final String ENVIRONMENT_NAME_GCE = "Google Compute Engine";
         public static final String ENVIRONMENT_NAME_AWS = "Amazon Web Services";
         public static final String ENVIRONMENT_NAME_AZURE = "Microsoft Azure";
@@ -91,6 +93,7 @@ public class ComputeDescriptionService extends StatefulService {
          * The type of the compute instance, as understood by the provider. E.g. the type of
          * instance determines your instance’s CPU capacity, memory, and storage.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String instanceType;
 
         /**

@@ -29,6 +29,12 @@ public enum EnumerationStages {
     PARENTAUTH,
 
     /**
+     * Stage to lookup resource pool for enumeration.
+     * So far it is only used in GCP enumeration adapter.
+     */
+    RESOURCEPOOL,
+
+    /**
      * Stage to get client for enumeration.
      */
     CLIENT,
