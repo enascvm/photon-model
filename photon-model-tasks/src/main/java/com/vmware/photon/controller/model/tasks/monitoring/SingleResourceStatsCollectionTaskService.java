@@ -26,6 +26,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.Comput
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -46,7 +47,7 @@ import com.vmware.xenon.services.common.TaskService.TaskServiceState;
  * data for a set of resources
  *
  */
-public class SingleResourceStatsCollectionTaskService extends TaskService<SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState> {
+public class SingleResourceStatsCollectionTaskService extends TaskService<SingleResourceStatsCollectionTaskState> {
 
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";

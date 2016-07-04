@@ -23,6 +23,7 @@ import java.util.stream.Stream;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
+import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -69,6 +70,12 @@ public class ProvisionContext {
         this.provisioningTaskReference = req.taskReference;
     }
 
+    public ProvisionContext(ComputeStatsRequest statsRequest) {
+        this.instanceRequestType = null;
+        this.computeReference = statsRequest.resourceReference;
+        this.provisioningTaskReference = statsRequest.taskReference;
+    }
+
     /**
      * Populates the given initial context and invoke the onSuccess handler when built. At every step,
      * if failure occurs the ProvisionContext's errorHandler is invoked to cleanup.
@@ -97,7 +104,8 @@ public class ProvisionContext {
 
         // if it is create request and there is template link, fetch the template
         // in all other cases ignore the presence of the template
-        if (templateLink != null && ctx.templateMoRef == null && ctx.instanceRequestType == InstanceRequestType.CREATE) {
+        if (templateLink != null && ctx.templateMoRef == null
+                && ctx.instanceRequestType == InstanceRequestType.CREATE) {
             URI computeUri = UriUtils.buildUri(service.getHost(), templateLink);
 
             AdapterUtils.getServiceState(service, computeUri, op -> {
@@ -131,14 +139,7 @@ public class ProvisionContext {
             return;
         }
 
-        if (ctx.parent == null) {
-            if (ctx.child.parentLink == null) {
-                ctx.fail(new IllegalStateException(
-                        "parentLink is not defined for resource "
-                                + ctx.child.documentSelfLink));
-                return;
-            }
-
+        if (ctx.parent == null && ctx.child.parentLink != null) {
             URI computeUri = UriUtils
                     .extendUriWithQuery(
                             UriUtils.buildUri(service.getHost(), ctx.child.parentLink),
@@ -202,6 +203,9 @@ public class ProvisionContext {
 
             join.sendWith(service);
         }
+
+        // context populated, invoke handler
+        onSuccess.accept(ctx);
     }
 
     /**

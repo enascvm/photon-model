@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import com.vmware.photon.controller.model.adapters.vsphere.stats.VSphereAdapterStatsService;
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -25,6 +26,7 @@ public class VSphereAdapters {
             VSphereAdapterPowerService.SELF_LINK,
             VSphereAdapterSnapshotService.SELF_LINK,
             VSphereAdapterResourceEnumerationService.SELF_LINK,
+            VSphereAdapterStatsService.SELF_LINK,
     };
 
     public static void startServices(ServiceHost host) throws Throwable {
@@ -32,5 +34,6 @@ public class VSphereAdapters {
         host.startService(new VSphereAdapterPowerService());
         host.startService(new VSphereAdapterSnapshotService());
         host.startService(new VSphereAdapterResourceEnumerationService());
+        host.startService(new VSphereAdapterStatsService());
     }
 }

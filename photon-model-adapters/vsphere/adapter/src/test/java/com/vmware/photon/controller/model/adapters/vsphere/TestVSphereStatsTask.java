@@ -18,10 +18,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -32,14 +32,16 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskSchedulerService;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskSchedulerService.StatsCollectionTaskServiceSchedulerState;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  *
  */
-@Ignore("https://jira-hzn.eng.vmware.com/browse/VSYM-933")
-public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
+public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
 
     // fields that are used across method calls, stash them as private fields
     private ResourcePoolState resourcePool;
@@ -49,7 +51,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     private ComputeState computeHost;
 
     @Test
-    public void testRefresh() throws Throwable {
+    public void testCollectStats() throws Throwable {
         // Create a resource pool where the VM will be housed
         this.resourcePool = createResourcePool();
 
@@ -58,12 +60,33 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost();
 
+        // collect data
         doRefresh();
 
-        Thread.sleep(2000);
+        // collect stats for a few instances
+        StatsCollectionTaskServiceSchedulerState task = new StatsCollectionTaskServiceSchedulerState();
+        task.resourcePoolLink = this.resourcePool.documentSelfLink;
 
-        // do a second refresh to test update path
-        doRefresh();
+        TestUtils.doPost(this.host,
+                task,
+                StatsCollectionTaskServiceSchedulerState.class,
+                UriUtils.buildUri(this.host,
+                        StatsCollectionTaskSchedulerService.FACTORY_LINK));
+
+        if (isMock()) {
+            return;
+        }
+
+        // wait up to 5 minutes as first call to perfManager can take a while.
+        host.setTimeoutSeconds(5 * 60);
+        host.waitFor("No stats inserted", () -> {
+            ServiceDocumentQueryResult state = host
+                    .getFactoryState(
+                            UriUtils.buildFactoryUri(TestVSphereStatsTask.this.host,
+                                    ResourceMetricService.class));
+
+            return !state.documentLinks.isEmpty();
+        });
     }
 
     private void doRefresh() throws Throwable {
@@ -118,7 +141,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         computeState.id = UUID.randomUUID().toString();
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
-        computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
+        //computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
         computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
@@ -140,6 +163,9 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         computeDesc.enumerationAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
+
+        computeDesc.statsAdapterReference = UriUtils.buildUri(this.host,
+                VSphereUriPaths.STATS_SERVICE);
 
         computeDesc.zoneId = this.zoneId;
 

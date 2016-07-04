@@ -19,7 +19,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 
-import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.Operation;
@@ -183,7 +182,6 @@ public class ComputeDescriptionService extends StatefulService {
          * URI reference to the adapter used to get the stats info of this
          * host.
          */
-        @Since(032)
         public URI statsAdapterReference;
 
         /**

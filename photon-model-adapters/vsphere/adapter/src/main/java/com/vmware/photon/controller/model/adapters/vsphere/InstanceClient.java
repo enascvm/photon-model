@@ -25,6 +25,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
@@ -558,6 +559,7 @@ public class InstanceClient extends BaseHelper {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, ref)
+                .put(CustomProperties.TYPE, VimNames.TYPE_VM)
                 .put(ComputeProperties.CUSTOM_DISPLAY_NAME, vm.getName());
     }
 

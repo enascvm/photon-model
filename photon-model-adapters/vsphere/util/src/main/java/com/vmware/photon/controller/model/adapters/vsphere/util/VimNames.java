@@ -24,4 +24,5 @@ public class VimNames {
     public static final String TYPE_COMPUTE_RESOURCE = "ComputeResource";
     public static final String TYPE_VAPP = "VirtualApp";
     public static final String TYPE_FOLDER = "Folder";
+    public static final String TYPE_PERFORMANCE_MANAGER = "PerformanceManager";
 }

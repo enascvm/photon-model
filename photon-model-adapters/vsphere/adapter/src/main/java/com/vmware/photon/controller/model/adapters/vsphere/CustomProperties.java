@@ -48,6 +48,11 @@ public class CustomProperties {
      */
     public static final String TEMPLATE = "isTemplate";
 
+    /**
+     * Track the compute type as seen from vsphere. Can be vm, cluster or host.
+     */
+    public static final String TYPE = "computeType";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

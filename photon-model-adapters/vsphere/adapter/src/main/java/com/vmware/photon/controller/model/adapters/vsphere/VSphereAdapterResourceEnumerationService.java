@@ -35,6 +35,7 @@ import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -273,7 +274,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void processFoundObjects(ComputeEnumerateResourceRequest request,
             List<ObjectContent> objects) {
         for (ObjectContent cont : objects) {
-            System.out.println(VimUtils.convertMoRefToString(cont.getObj()));
             if (VimUtils.isVirtualMachine(cont.getObj())) {
                 VmOverlay vm = new VmOverlay(cont);
                 processFoundVm(request, vm);
@@ -304,10 +304,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     private void updateHostSystem(ComputeState oldDocument, ComputeEnumerateResourceRequest request,
             HostSystemOverlay hs) {
-        ComputeState state = createComputeFromResults(request, hs);
+        ComputeState state = createHostSystemFromResults(request, hs);
         state.documentSelfLink = oldDocument.documentSelfLink;
 
-        logFine("Syncing HostSystem %s", oldDocument.documentSelfLink);
+        logInfo("Syncing HostSystem %s", oldDocument.documentSelfLink);
         Operation.createPatch(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .sendWith(this);
@@ -327,10 +327,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setBody(desc)
                 .sendWith(this);
 
-        ComputeState state = createComputeFromResults(request, hs);
+        ComputeState state = createHostSystemFromResults(request, hs);
         state.descriptionLink = desc.documentSelfLink;
 
-        logFine("Found new HostSystem %s", hs.getName());
+        logInfo("Found new HostSystem %s", hs.getName());
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .sendWith(this);
@@ -340,7 +340,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             HostSystemOverlay hs) {
         ComputeDescription res = new ComputeDescription();
         res.documentSelfLink = UriUtils
-                .buildUriPath(ComputeService.FACTORY_LINK, UUID.randomUUID().toString());
+                .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.cpuCount = hs.getCoreCount();
         res.cpuMhzPerCore = hs.getCpuMhz();
         res.totalMemoryBytes = hs.getTotalMemoryBytes();
@@ -348,7 +348,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return res;
     }
 
-    private ComputeState createComputeFromResults(ComputeEnumerateResourceRequest request,
+    private ComputeState createHostSystemFromResults(ComputeEnumerateResourceRequest request,
             HostSystemOverlay hs) {
         ComputeState state = new ComputeState();
         state.id = hs.getHardwareUuid();
@@ -387,7 +387,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             ResourcePoolOverlay rp) {
         ResourcePoolState state = createResourcePoolFromResults(request, rp);
 
-        logFine("Found new ResourcePool %s", rp.getName());
+        logInfo("Found new ResourcePool %s", rp.getName());
         Operation.createPost(this, ResourcePoolService.FACTORY_LINK)
                 .setBody(state)
                 .sendWith(this);
@@ -431,29 +431,29 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         QueryTask task = createVmQueryTask(request.resourceLink(), vm.getInstanceUuid());
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewCompute(request, vm);
+                createNewVm(request, vm);
             } else {
-                updateCompute(result.documentLinks.get(0), request, vm);
+                updateVm(result.documentLinks.get(0), request, vm);
             }
         });
     }
 
-    private void updateCompute(String computeLink, ComputeEnumerateResourceRequest request,
+    private void updateVm(String computeLink, ComputeEnumerateResourceRequest request,
             VmOverlay vm) {
-        ComputeState state = createComputeFromResults(request, vm);
+        ComputeState state = createVmFromResults(request, vm);
         state.documentSelfLink = computeLink;
 
-        logFine("Syncing ComputeState %s", computeLink);
+        logInfo("Syncing VM %s", computeLink);
 
         Operation.createPatch(UriUtils.buildUri(getHost(), computeLink))
                 .setBody(state)
                 .sendWith(this);
     }
 
-    private void createNewCompute(ComputeEnumerateResourceRequest request, VmOverlay vm) {
-        ComputeState state = createComputeFromResults(request, vm);
+    private void createNewVm(ComputeEnumerateResourceRequest request, VmOverlay vm) {
+        ComputeState state = createVmFromResults(request, vm);
 
-        logFine("Found new ComputeState %s", vm.getInstanceUuid());
+        logInfo("Found new VM %s", vm.getInstanceUuid());
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .sendWith(this);
@@ -466,7 +466,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param vm
      * @return
      */
-    private ComputeState createComputeFromResults(ComputeEnumerateResourceRequest request,
+    private ComputeState createVmFromResults(ComputeEnumerateResourceRequest request,
             VmOverlay vm) {
         ComputeState state = new ComputeState();
         state.adapterManagementReference = request.adapterManagementReference;
@@ -481,6 +481,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
                 .put(CustomProperties.TEMPLATE, vm.isTempalte())
+                .put(CustomProperties.TYPE, VimNames.TYPE_VM)
                 .put(ComputeProperties.CUSTOM_DISPLAY_NAME, vm.getName());
         return state;
     }

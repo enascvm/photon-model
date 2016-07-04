@@ -20,6 +20,8 @@ import static org.junit.Assert.fail;
 
 import java.net.URI;
 
+import javax.xml.datatype.XMLGregorianCalendar;
+
 import org.junit.Test;
 
 import com.vmware.vim25.ConnectedIso;
@@ -150,5 +152,13 @@ public class VimUtilsTest {
     public void convertStringToMoRefNulls() {
         assertNull(VimUtils.convertMoRefToString(null));
         assertNull(VimUtils.convertStringToMoRef(null));
+    }
+
+    @Test
+    public void millis2Calendar() {
+        long now = System.currentTimeMillis();
+        XMLGregorianCalendar calendar = VimUtils.convertMillisToXmlCalendar(now);
+
+        assertEquals(now, calendar.toGregorianCalendar().getTimeInMillis());
     }
 }

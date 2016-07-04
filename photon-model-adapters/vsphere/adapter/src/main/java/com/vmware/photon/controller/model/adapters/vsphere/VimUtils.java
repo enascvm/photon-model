@@ -15,6 +15,11 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.lang.reflect.Constructor;
 import java.net.URI;
+import java.util.GregorianCalendar;
+
+import javax.xml.datatype.DatatypeConfigurationException;
+import javax.xml.datatype.DatatypeFactory;
+import javax.xml.datatype.XMLGregorianCalendar;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
@@ -199,5 +204,15 @@ public final class VimUtils {
         }
 
         return VimNames.TYPE_HOST.equals(obj.getType());
+    }
+
+    public static XMLGregorianCalendar convertMillisToXmlCalendar(long timeMillis) {
+        try {
+            GregorianCalendar cal = new GregorianCalendar();
+            cal.setTimeInMillis(timeMillis);
+            return DatatypeFactory.newInstance().newXMLGregorianCalendar(cal);
+        } catch (DatatypeConfigurationException e) {
+            throw new AssertionError(e);
+        }
     }
 }
