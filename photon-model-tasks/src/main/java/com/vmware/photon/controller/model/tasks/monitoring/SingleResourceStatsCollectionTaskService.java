@@ -23,6 +23,7 @@ import java.util.Map.Entry;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.xenon.common.Operation;
@@ -190,7 +191,7 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
             getDescriptions(op, currentState);
             break;
         case UPDATE_STATS:
-            updateStats(op, currentState);
+            updateAndPersistStats(op, currentState);
             break;
         default:
             break;
@@ -234,10 +235,11 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
                         }));
     }
 
-    private void updateStats(Operation op, SingleResourceStatsCollectionTaskState currentState) {
+    private void updateAndPersistStats(Operation op, SingleResourceStatsCollectionTaskState currentState) {
         Collection<Operation> operations = new ArrayList<>();
         for (ComputeStats stats : currentState.statsList) {
             URI statsUri = UriUtils.buildStatsUri(getHost(), stats.computeLink);
+            URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
             for (Entry<String, ServiceStat> entry : stats.statValues.entrySet()) {
                 ServiceStats.ServiceStat minuteStats = new ServiceStats.ServiceStat();
@@ -246,6 +248,8 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
                 minuteStats.unit = entry.getValue().unit;
                 minuteStats.timeSeriesStats = new TimeSeriesStats(numBucketsHourly,
                         bucketSizeMinutes, EnumSet.allOf(AggregationType.class));
+                persistStat(persistStatsUri, entry, currentState.computeLink);
+
                 ServiceStats.ServiceStat hourStats = new ServiceStats.ServiceStat();
                 hourStats.name = new StringBuffer(entry.getKey()).append(HOUR_SUFFIX).toString();
                 hourStats.latestValue = entry.getValue().latestValue;
@@ -271,5 +275,17 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
                             TaskUtils.sendPatch(this, nextStatePatch);
                         });
         operationJoin.sendWith(this);
+    }
+
+    private void persistStat(URI persistStatsUri, Entry<String, ServiceStat> serviceStatEntry, String computeLink) {
+        ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
+        // Set the documentSelfLink to <computeId>-<metricName>
+        stat.documentSelfLink = UriUtils.getLastPathSegment(computeLink) + "-" + serviceStatEntry.getKey();
+        stat.value = serviceStatEntry.getValue().latestValue;
+        stat.timestampMicrosUtc = serviceStatEntry.getValue().sourceTimeMicrosUtc;
+        getHost().sendRequest(Operation
+                        .createPost(persistStatsUri)
+                        .setReferer(getUri())
+                        .setBodyNoCloning(stat));
     }
 }

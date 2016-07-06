@@ -40,7 +40,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -104,11 +103,9 @@ public class AWSStatsService extends StatelessService {
         public AtomicInteger numResponses = new AtomicInteger(0);
         public AmazonCloudWatchAsyncClient statsClient;
         public AmazonCloudWatchAsyncClient billingClient;
-        public URI persistStatsUri;
         public boolean isComputeHost;
 
         public AWSStatsDataHolder() {
-            this.persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
             this.statsResponse = new ComputeStats();
             // create a thread safe map to hold stats values for resource
             this.statsResponse.statValues = new ConcurrentSkipListMap<>();
@@ -218,7 +215,7 @@ public class AWSStatsService extends StatelessService {
 
         for (String metricName : metricNames) {
             GetMetricStatisticsRequest metricRequest = new GetMetricStatisticsRequest();
-            // get one minute averages for the last 10 minutes
+            // get datapoint for the last minute
             metricRequest.setEndTime(new Date(TimeUnit.MICROSECONDS.toMillis(endTimeMicros)));
             metricRequest.setStartTime(new Date(
                     TimeUnit.MICROSECONDS.toMillis(endTimeMicros) -
@@ -324,6 +321,7 @@ public class AWSStatsService extends StatelessService {
                 }
             });
             Double latestAverage = 0D;
+            Date timestamp = null;
             Date currentDate = null;
             Long timeDifference = 0L;
             Double burnRate = 0D;
@@ -339,19 +337,19 @@ public class AWSStatsService extends StatelessService {
                     burnRate = (timeDifference == 0 ? 0
                             : ((dp.getAverage() - latestAverage) / timeDifference));
                     latestAverage = dp.getAverage();
-                    persistStat(this.service, dp,
-                            AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()),
-                            this.statsData);
+                    timestamp = dp.getTimestamp();
                 }
                 ServiceStat stat = new ServiceStat();
                 stat.latestValue = latestAverage;
                 stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp.getTime());
                 this.statsData.statsResponse.statValues
                         .put(AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()), stat);
                 ServiceStat burnRateStat = new ServiceStat();
                 burnRateStat.latestValue = burnRate;
                 burnRateStat.unit = AWSStatsNormalizer
                         .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                burnRateStat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp.getTime());
                 this.statsData.statsResponse.statValues.put(
                         AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.BURN_RATE),
                         burnRateStat);
@@ -396,21 +394,20 @@ public class AWSStatsService extends StatelessService {
                 GetMetricStatisticsResult result) {
             OperationContext.restoreOperationContext(this.opContext);
             List<Datapoint> dpList = result.getDatapoints();
-            Double averageSum = 0d;
-            Double sampleCount = 0d;
+            Double latestAverage = 0d;
+            Date timestamp = null;
             String unit = null;
             if (dpList != null && dpList.size() != 0) {
                 for (Datapoint dp : dpList) {
-                    averageSum += dp.getAverage();
-                    sampleCount += dp.getSampleCount();
+                    latestAverage = dp.getAverage();
                     unit = dp.getUnit();
-                    persistStat(this.service, dp,
-                            AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()),
-                            this.statsData);
+                    timestamp = dp.getTimestamp();
                 }
+
                 ServiceStat stat = new ServiceStat();
-                stat.latestValue = averageSum / sampleCount;
+                stat.latestValue = latestAverage;
                 stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(unit);
+                stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp.getTime());
                 this.statsData.statsResponse.statValues
                         .put(AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()), stat);
             }
@@ -423,6 +420,7 @@ public class AWSStatsService extends StatelessService {
                     // Number of Aggregate metrics + 1 call for cost metric
                     apiCallCountStat.latestValue += 1;
                 }
+                apiCallCountStat.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
                 apiCallCountStat.unit = PhotonModelConstants.UNIT_COUNT;
                 this.statsData.statsResponse.statValues.put(PhotonModelConstants.API_CALL_COUNT,
                         apiCallCountStat);
@@ -437,22 +435,6 @@ public class AWSStatsService extends StatelessService {
                         .setBody(respBody));
             }
         }
-    }
-
-    private void persistStat(StatelessService service, Datapoint datapoint, String metricName,
-            AWSStatsDataHolder statsData) {
-        ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
-        // Set the documentSelfLink to <computeId>-<metricName>
-        stat.documentSelfLink = UriUtils.getLastPathSegment(statsData.computeDesc.documentSelfLink)
-                + "-" + metricName;
-        stat.value = datapoint.getAverage();
-        stat.timestampMicrosUtc = TimeUnit.MILLISECONDS
-                .toMicros(datapoint.getTimestamp().getTime());
-        service.getHost()
-                .sendRequest(Operation
-                        .createPost(statsData.persistStatsUri)
-                        .setReferer(AWSStatsService.SELF_LINK)
-                        .setBodyNoCloning(stat));
     }
 
     /**
