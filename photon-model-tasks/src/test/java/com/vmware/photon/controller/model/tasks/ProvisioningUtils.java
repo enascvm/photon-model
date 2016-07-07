@@ -39,10 +39,10 @@ import com.vmware.xenon.services.common.TaskService.TaskServiceState;
  */
 public class ProvisioningUtils {
 
-    public static int getVMCount(VerificationHost host) throws Throwable {
+    public static int getVMCount(VerificationHost host, URI peerURI) throws Throwable {
         ServiceDocumentQueryResult res;
         res = host.getFactoryState(UriUtils
-                .buildExpandLinksQueryUri(UriUtils.buildUri(host.getUri(),
+                .buildExpandLinksQueryUri(createServiceURI(host, peerURI,
                         ComputeService.FACTORY_LINK)));
         return res.documents.size() - 1;
 
@@ -55,13 +55,13 @@ public class ProvisioningUtils {
     }
 
     public static ServiceDocumentQueryResult queryComputeInstances(VerificationHost host,
-            URI remoteUri, int desiredCount)
+            URI peerURI, int desiredCount)
             throws Throwable {
         Date expiration = host.getTestExpiration();
         ServiceDocumentQueryResult res;
         do {
             res = host.getFactoryState(UriUtils
-                    .buildExpandLinksQueryUri(UriUtils.buildUri(remoteUri,
+                    .buildExpandLinksQueryUri(createServiceURI(host, peerURI,
                             ComputeService.FACTORY_LINK)));
             if (res.documents.size() == desiredCount) {
                 return res;
@@ -72,11 +72,17 @@ public class ProvisioningUtils {
     }
 
     public static ServiceDocumentQueryResult queryDocumentsAndAssertExpectedCount(
-            VerificationHost host,
+            VerificationHost host, int desiredCount, String factoryLink) throws Throwable {
+        return queryDocumentsAndAssertExpectedCount(
+                host, host.getUri(), desiredCount, factoryLink);
+    }
+
+    public static ServiceDocumentQueryResult queryDocumentsAndAssertExpectedCount(
+            VerificationHost host, URI peerURI,
             int desiredCount, String factoryLink) throws Throwable {
         ServiceDocumentQueryResult res;
         res = host.getFactoryState(UriUtils
-                .buildExpandLinksQueryUri(UriUtils.buildUri(host.getUri(),
+                .buildExpandLinksQueryUri(createServiceURI(host, peerURI,
                         factoryLink)));
         if (res.documents.size() == desiredCount) {
             return res;
@@ -86,13 +92,18 @@ public class ProvisioningUtils {
                 + desiredCount + "Found " + res.documents.size());
     }
 
-
     public static Map<String, NetworkState> getNetworkStates(VerificationHost host)
+            throws Throwable {
+        return getNetworkStates(host, null);
+
+    }
+
+    public static Map<String, NetworkState> getNetworkStates(VerificationHost host, URI peerURI)
             throws Throwable {
         Map<String, NetworkState> networkStateMap = new HashMap<String, NetworkState>();
         ServiceDocumentQueryResult res;
         res = host.getFactoryState(UriUtils
-                .buildExpandLinksQueryUri(UriUtils.buildUri(host.getUri(),
+                .buildExpandLinksQueryUri(createServiceURI(host, peerURI,
                         NetworkService.FACTORY_LINK)));
         if (res != null && res.documentCount > 0) {
             for (Object s : res.documents.values()) {
@@ -144,6 +155,18 @@ public class ProvisioningUtils {
         }
 
         throw new TimeoutException("Some tasks never finished");
+    }
+
+    /**
+     * Creates the URI for the service based on the passed in values of the verification host and the peer URI.
+     * If the peerURI value is set, then it is used to create the service URI else the verification host URI
+     * is used to compute the service URI.
+     *
+     */
+    public static URI createServiceURI(VerificationHost host, URI peerURI, String factoryLink) {
+        URI uri = (peerURI != null) ? UriUtils.buildUri(peerURI,
+                factoryLink) : UriUtils.buildUri(host, factoryLink);
+        return uri;
     }
 
 }

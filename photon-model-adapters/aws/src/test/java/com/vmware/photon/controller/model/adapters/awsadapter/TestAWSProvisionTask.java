@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;

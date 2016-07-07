@@ -30,7 +30,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.se
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteAllVMsOnThisEndpoint;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsOnThisEndpoint;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getBaseLineInstanceCount;
@@ -176,7 +176,7 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
                 cleanupEC2ClientResources(this.client);
                 return;
             }
-            deleteAllVMsOnThisEndpoint(this.host, this.isMock,
+            deleteVMsOnThisEndpoint(this.host, this.isMock,
                     this.outComputeHost.documentSelfLink, instancesToCleanUp);
             // Check that all the instances that are required to be deleted are in
             // terminated state on AWS

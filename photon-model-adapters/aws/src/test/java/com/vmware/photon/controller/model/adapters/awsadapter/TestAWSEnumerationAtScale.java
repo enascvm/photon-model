@@ -18,7 +18,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.cl
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createTags;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteAllVMsOnThisEndpoint;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsOnThisEndpoint;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getBaseLineInstanceCount;
@@ -149,7 +149,8 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     }
                     oldIndex = totalDeletedInstances;
                     this.host.log("Deleting %d instances", instanceBatchToDelete.size());
-                    deleteAllVMsOnThisEndpoint(this.host, this.isMock, this.outComputeHost.documentSelfLink,
+                    deleteVMsOnThisEndpoint(this.host, this.isMock,
+                            this.outComputeHost.documentSelfLink,
                             instanceBatchToDelete);
                     // Check that all the instances that are required to be deleted are in
                     // terminated state on AWS

@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
+import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getVMCount;
 
 import java.net.URI;
@@ -338,11 +339,22 @@ public class TestAWSSetupUtils {
      * A utility method that deletes the VMs on the specified endpoint filtered by the instanceIds that are passed in.
      * @throws Throwable
      */
-    public static void deleteAllVMsOnThisEndpoint(VerificationHost host, boolean isMock,
-            String parentComputeLink, List<String> instanceIdsToDelete)
+    public static void deleteVMsOnThisEndpoint(VerificationHost host,boolean isMock,
+            String parentComputeLink, List<String> instanceIdsToDelete) throws Throwable {
+        deleteVMsOnThisEndpoint(host, null, isMock, parentComputeLink, instanceIdsToDelete, null);
+    }
+
+    /**
+     * A utility method that deletes the VMs on the specified endpoint filtered by the instanceIds that are passed in.
+     * It expects peerURI and tenantLinks to be populated.
+     * @throws Throwable
+     */
+    public static void deleteVMsOnThisEndpoint(VerificationHost host, URI peerURI, boolean isMock,
+            String parentComputeLink, List<String> instanceIdsToDelete, List<String> tenantLinks)
             throws Throwable {
         host.testStart(1);
         ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
+        deletionState.tenantLinks = tenantLinks;
 
         // All AWS Compute States AND Ids in (Ids to delete)
         QuerySpecification compositeQuery = new QueryTask.QuerySpecification();
@@ -374,8 +386,7 @@ public class TestAWSSetupUtils {
         deletionState.isMockRequest = isMock;
         host.send(Operation
                 .createPost(
-                        UriUtils.buildUri(host,
-                                ResourceRemovalTaskService.FACTORY_LINK))
+                        createServiceURI(host, peerURI, ResourceRemovalTaskService.FACTORY_LINK))
                 .setBody(deletionState)
                 .setCompletion(host.getCompletion()));
         // Re-setting the test timeout value so that it clean up spawned instances even if it has
@@ -405,12 +416,20 @@ public class TestAWSSetupUtils {
 
     /**
      * Provisions a machine for which the state was created.
-     * @param provisionTask
-     * @throws Throwable
-     * @throws InterruptedException
-     * @throws TimeoutException
      */
-    public static void provisionMachine(VerificationHost host, ComputeState vmState, boolean isMock,
+    public static void provisionMachine(VerificationHost host, ComputeState vmState,
+            boolean isMock,
+            List<String> instancesToCleanUp)
+            throws InterruptedException, TimeoutException, Throwable {
+        provisionMachine(host, null, vmState, isMock, instancesToCleanUp);
+    }
+
+    /**
+     * Provisions a machine for which the state was created.Expects the peerURI for the location
+     * of the service.
+     */
+    public static void provisionMachine(VerificationHost host, URI peerURI, ComputeState vmState,
+            boolean isMock,
             List<String> instancesToCleanUp)
             throws Throwable, InterruptedException, TimeoutException {
         host.log("Provisioning a single virtual machine on AWS.");
@@ -424,7 +443,7 @@ public class TestAWSSetupUtils {
         ProvisionComputeTaskService.ProvisionComputeTaskState outTask = TestUtils.doPost(host,
                 provisionTask,
                 ProvisionComputeTaskState.class,
-                UriUtils.buildUri(host,
+                createServiceURI(host, peerURI,
                         ProvisionComputeTaskService.FACTORY_LINK));
 
         List<URI> uris = new ArrayList<URI>();
@@ -608,49 +627,60 @@ public class TestAWSSetupUtils {
 
     /**
      * Enumerates resources on the AWS endpoint.
-     * @throws Throwable
-     * @throws InterruptedException
-     * @throws TimeoutException
      */
     public static void enumerateResources(VerificationHost host, boolean isMock,
             String resourcePoolLink, String computeHostLinkDescription, String computeHostLink,
             String testCase)
             throws Throwable, InterruptedException, TimeoutException {
+        enumerateResources(host, null, isMock, resourcePoolLink, computeHostLinkDescription,
+                computeHostLink, testCase, null);
+    }
+
+    /**
+     * Enumerates resources on the AWS endpoint. Expects a peerURI and the tenantLinks to be set.
+     */
+    public static void enumerateResources(VerificationHost host, URI peerURI, boolean isMock,
+            String resourcePoolLink, String computeHostLinkDescription, String computeHostLink,
+            String testCase, List<String> tenantLinks)
+            throws Throwable, InterruptedException, TimeoutException {
         // Perform resource enumeration on the AWS end point. Pass the references to the AWS compute
         // host.
         host.log("Performing resource enumeration");
         ResourceEnumerationTaskService.ResourceEnumerationTaskState enumTask = performResourceEnumeration(
-                host, isMock, resourcePoolLink, computeHostLinkDescription, computeHostLink);
+                host, peerURI, isMock, resourcePoolLink, computeHostLinkDescription,
+                computeHostLink,
+                tenantLinks);
         // Wait for the enumeration task to be completed.
         host.waitFor("Error waiting for enumeration task for creation", () -> {
-            return checkEnumerationTaskCompletion(host, enumTask);
+            return checkEnumerationTaskCompletion(host, peerURI, enumTask);
         });
-        host.log("\n==%s==Total Time Spent in Enumeration==\n", testCase + getVMCount(host));
+        host.log("\n==%s==Total Time Spent in Enumeration==\n",
+                testCase + getVMCount(host, peerURI));
         ServiceStats enumerationStats = host.getServiceState(null, ServiceStats.class, UriUtils
-                .buildStatsUri(UriUtils.buildUri(host,
+                .buildStatsUri(createServiceURI(host, peerURI,
                         AWSEnumerationAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(enumerationStats));
         host.log("\n==Total Time Spent in Creation Workflow==\n");
         ServiceStats enumerationCreationStats = host.getServiceState(null, ServiceStats.class,
                 UriUtils
-                        .buildStatsUri(UriUtils.buildUri(host,
+                        .buildStatsUri(createServiceURI(host, peerURI,
                                 AWSEnumerationAndCreationAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(enumerationCreationStats));
         host.log("\n==Time spent in individual creation services==\n");
         ServiceStats computeDescriptionCreationStats = host.getServiceState(null,
                 ServiceStats.class, UriUtils
-                        .buildStatsUri(UriUtils.buildUri(host,
+                        .buildStatsUri(createServiceURI(host, peerURI,
                                 AWSComputeDescriptionCreationAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(computeDescriptionCreationStats));
         ServiceStats computeStateCreationStats = host.getServiceState(null, ServiceStats.class,
                 UriUtils
-                        .buildStatsUri(UriUtils.buildUri(host,
+                        .buildStatsUri(createServiceURI(host, peerURI,
                                 AWSComputeStateCreationAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(computeStateCreationStats));
         host.log("\n==Total Time Spent in Deletion Workflow==\n");
         ServiceStats deletionEnumerationStats = host.getServiceState(null, ServiceStats.class,
                 UriUtils
-                        .buildStatsUri(UriUtils.buildUri(host,
+                        .buildStatsUri(createServiceURI(host, peerURI,
                                 AWSEnumerationAndDeletionAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(deletionEnumerationStats));
     }
@@ -662,9 +692,9 @@ public class TestAWSSetupUtils {
      * @return boolean indicating the completion of the enumeration task.
      * @throws Throwable
      */
-    public static boolean checkEnumerationTaskCompletion(VerificationHost host,
+    public static boolean checkEnumerationTaskCompletion(VerificationHost host, URI peerURI,
             ResourceEnumerationTaskService.ResourceEnumerationTaskState enumTask) throws Throwable {
-        URI[] enumerationUris = { UriUtils.buildUri(host, enumTask.documentSelfLink) };
+        URI[] enumerationUris = { createServiceURI(host, peerURI, enumTask.documentSelfLink) };
         Map<URI, ResourceEnumerationTaskService.ResourceEnumerationTaskState> enumTasks = host
                 .getServiceState(null,
                         ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
@@ -698,8 +728,9 @@ public class TestAWSSetupUtils {
      * @throws TimeoutException
      */
     public static ResourceEnumerationTaskService.ResourceEnumerationTaskState performResourceEnumeration(
-            VerificationHost host, boolean isMock,
-            String resourcePoolLink, String computeDescriptionLink, String parentComputeLink)
+            VerificationHost host, URI peerURI, boolean isMock,
+            String resourcePoolLink, String computeDescriptionLink, String parentComputeLink,
+            List<String> tenantLinks)
             throws Throwable, InterruptedException, TimeoutException {
         // Kick of a Resource Enumeration task to enumerate the instances on the AWS endpoint
         ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskService.ResourceEnumerationTaskState();
@@ -713,16 +744,15 @@ public class TestAWSSetupUtils {
         enumerationTaskState.resourcePoolLink = resourcePoolLink;
         enumerationTaskState.isMockRequest = isMock;
 
+        if (tenantLinks != null) {
+            enumerationTaskState.tenantLinks = tenantLinks;
+        }
+        URI uri = createServiceURI(host, peerURI, ResourceEnumerationTaskService.FACTORY_LINK);
         ResourceEnumerationTaskService.ResourceEnumerationTaskState enumTask = TestUtils.doPost(
-                host,
-                enumerationTaskState,
-                ResourceEnumerationTaskState.class,
-                UriUtils.buildUri(host,
-                        ResourceEnumerationTaskService.FACTORY_LINK));
+                host, enumerationTaskState, ResourceEnumerationTaskState.class, uri);
         return enumTask;
 
     }
-
     /**
      * Deletes instances on the AWS endpoint for the set of instance Ids that are passed in.
      * @param instanceIdsToDelete
