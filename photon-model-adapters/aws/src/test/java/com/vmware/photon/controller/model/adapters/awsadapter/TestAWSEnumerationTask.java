@@ -37,6 +37,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionMachine;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
@@ -116,6 +117,8 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
     public static List<Boolean> provisioningFlags;
     public static List<Boolean> deletionFlags = new ArrayList<Boolean>();
     public boolean isMock = true;
+    public boolean isAwsClientMock = false;
+    public String awsMockEndpointReference = null;
     public BaseLineState baseLineState;
     public static final String TEST_CASE_INITIAL = "Initial Run ";
     public static final String TEST_CASE_ADDITIONAL_VM = "Additional VM ";
@@ -134,6 +137,8 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
     @Before
     public void setUp() throws Exception {
         CommandLineArgumentParser.parseFromProperties(this);
+
+        setAwsClientMockInfo(this.isAwsClientMock, this.awsMockEndpointReference);
         // create credentials
         this.creds = new AuthCredentialsServiceState();
         this.creds.privateKey = this.secretKey;
@@ -177,6 +182,7 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
             // terminated state on AWS
             waitForInstancesToBeTerminated(this.client, this.host, instancesToCleanUp);
             cleanupEC2ClientResources(this.client);
+            setAwsClientMockInfo(false, null);
         } catch (Throwable deleteEx) {
             // just log and move on
             this.host.log(Level.WARNING, "Exception deleting VMs - %s", deleteEx.getMessage());
@@ -235,8 +241,7 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
             validateVPCInformation(vpCId);
             // Count should be 2 NICs per discovered VM
             int totalNetworkInterfaceStateCount = (count6 + this.baseLineState.baselineVMCount) * 2;
-            queryDocumentsAndAssertExpectedCount(this.host, totalNetworkInterfaceStateCount,
-                    NetworkInterfaceService.FACTORY_LINK);
+            validateNetworkInterfaceCount(totalNetworkInterfaceStateCount);
             // One VPC should be discovered in the test.
             queryDocumentsAndAssertExpectedCount(this.host, count1,
                     NetworkService.FACTORY_LINK);
@@ -247,6 +252,7 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
             enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                     TEST_CASE_PURE_UPDATE);
+
             validateTagInformation(VM_UPDATED_NAME);
 
             // Provision an additional VM with a different instance type. It should re-use the
@@ -303,6 +309,10 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
      */
     private void tagProvisionedVM(String id, String vmName, AmazonEC2AsyncClient client2)
             throws Throwable {
+        if (this.isAwsClientMock) {
+            return;
+        }
+
         URI[] computeStateURIs = { UriUtils.buildUri(this.host, this.vmState.documentSelfLink) };
         Map<URI, ComputeState> computeStateMap = this.host
                 .getServiceState(null, ComputeState.class, computeStateURIs);
@@ -318,6 +328,10 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
      * @throws Throwable
      */
     private String validateTagAndNetworkAndComputeDescriptionInformation() throws Throwable {
+        if (this.isAwsClientMock) {
+            return null;
+        }
+
         ComputeState taggedComputeState = validateTagInformation(VM_NAME);
 
         assertEquals(taggedComputeState.descriptionLink, this.computeDescriptionLink);
@@ -345,6 +359,10 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
      * Validates the tag information on a compute state matches an expected virtual machine name.
      */
     private ComputeState validateTagInformation(String vmName) throws Throwable {
+        if (this.isAwsClientMock) {
+            return null;
+        }
+
         URI[] computeStateURIs = { UriUtils.buildUri(this.host, this.vmState.documentSelfLink) };
         Map<URI, ComputeState> computeStateMap = this.host
                 .getServiceState(null, ComputeState.class, computeStateURIs);
@@ -365,6 +383,10 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
      * @throws Throwable
      */
     private void validateVPCInformation(String vpCId) throws Throwable {
+        if (this.isAwsClientMock) {
+            return;
+        }
+
         // Get the network state that maps to this VPCID. Right now the id field of the network
         // state is set to the VPC ID, so querying the network state based on that.
 
@@ -383,6 +405,18 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
     }
 
     /**
+     * Validates the network interface count matches an expected number.
+     */
+    private void validateNetworkInterfaceCount(int totalNetworkInterfaceStateCount) throws Throwable {
+        if (this.isAwsClientMock) {
+            return;
+        }
+
+        queryDocumentsAndAssertExpectedCount(this.host, totalNetworkInterfaceStateCount,
+                NetworkInterfaceService.FACTORY_LINK);
+    }
+
+    /**
      * Creates the state associated with the resource pool, compute host and the VM to be created.
      * @throws Throwable
      */
@@ -391,7 +425,8 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
         this.outPool = createAWSResourcePool(this.host);
 
         // create a compute host for the AWS EC2 VM
-        this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink, this.accessKey, this.secretKey);
+        this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
+                this.accessKey, this.secretKey, this.isAwsClientMock, this.awsMockEndpointReference);
 
         // create a AWS VM compute resource
         this.vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,

@@ -24,6 +24,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getBaseLineInstanceCount;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
@@ -79,6 +80,8 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
     public static final String TEST_CASE_DISCOVER_UPDATES_AT_SCALE = "Discover Updates at Scale ";
     public static final String TEST_CASE_DISCOVER_DELETES_AT_SCALE = "Discover Deletes at Scale ";
     public boolean isMock = true;
+    public boolean isAwsClientMock = false;
+    public String awsMockEndpointReference = null;
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
     public int instanceCountAtScale = 10;
@@ -93,6 +96,8 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
     @Before
     public void setUp() throws Exception {
         CommandLineArgumentParser.parseFromProperties(this);
+
+        setAwsClientMockInfo(this.isAwsClientMock, this.awsMockEndpointReference);
         // create credentials
         this.creds = new AuthCredentialsServiceState();
         this.creds.privateKey = this.secretKey;
@@ -152,6 +157,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                 }
             }
             cleanupEC2ClientResources(this.client);
+            setAwsClientMockInfo(false, null);
         } catch (Throwable deleteEx) {
             // just log and move on
             this.host.log(Level.WARNING, "Exception deleting VMs - %s", deleteEx.getMessage());
@@ -247,6 +253,6 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
 
         // create a compute host for the AWS EC2 VM
         this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink, this.accessKey,
-                this.secretKey);
+                this.secretKey, this.isAwsClientMock, this.awsMockEndpointReference);
     }
 }

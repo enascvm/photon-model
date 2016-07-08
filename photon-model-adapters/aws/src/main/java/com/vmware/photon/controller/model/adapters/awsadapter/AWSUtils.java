@@ -78,6 +78,28 @@ public class AWSUtils {
             2376, 2375, 1 };
     public static final String DEFAULT_ALLOWED_NETWORK = "0.0.0.0/0";
     public static final String DEFAULT_PROTOCOL = "tcp";
+    /**
+     * Flag to use aws-mock, will be set in test files.
+     * Aws-mock is a open-source tool for testing AWS services in a mock EC2 environment.
+     * @see <a href="https://github.com/treelogic-swe/aws-mock">aws-mock</a>
+     */
+    private static boolean IS_AWS_CLIENT_MOCK = false;
+    /**
+     * Mock EC2 endpoint of aws-mock, will be set in test files.
+     */
+    private static String awsMockEndpointReference = null;
+
+    public static void setAwsClientMock(boolean isAwsClientMock) {
+        IS_AWS_CLIENT_MOCK = isAwsClientMock;
+    }
+
+    public static boolean isAwsClientMock() {
+        return IS_AWS_CLIENT_MOCK;
+    }
+
+    public static void setAwsMockEndpointReference(String endpointReference) {
+        awsMockEndpointReference = endpointReference;
+    }
 
     public static AmazonEC2AsyncClient getAsyncClient(
             AuthCredentialsServiceState credentials, String region, ExecutorService executorService) {
@@ -85,6 +107,11 @@ public class AWSUtils {
                 new BasicAWSCredentials(credentials.privateKeyId,
                         credentials.privateKey),
                 executorService);
+
+        if (isAwsClientMock()) {
+            ec2AsyncClient.setEndpoint(awsMockEndpointReference);
+            return ec2AsyncClient;
+        }
 
         ec2AsyncClient.setRegion(Region.getRegion(Regions.fromName(region)));
 
@@ -114,6 +141,10 @@ public class AWSUtils {
      */
     public static void createTags(Collection<String> resources,
             Collection<Tag> tags, AmazonEC2AsyncClient client) {
+        if (isAwsClientMock()) {
+            return;
+        }
+
         CreateTagsRequest req = new CreateTagsRequest()
                 .withResources(resources).withTags(tags);
 
@@ -125,6 +156,10 @@ public class AWSUtils {
      */
     public static void createTags(String resourceID, Map<String, String> tags,
             AmazonEC2AsyncClient client) {
+        if (isAwsClientMock()) {
+            return;
+        }
+
         ArrayList<Tag> awsTags = new ArrayList<>();
         if (tags != null) {
             tags.forEach((k, v) -> {

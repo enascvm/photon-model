@@ -83,7 +83,7 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 
 public class TestAWSSetupUtils {
 
-    public static final String awsEndPoint = "http://ec2.us-east-1.amazonaws.com";
+    public static final String awsEndpointReference = "http://ec2.us-east-1.amazonaws.com";
     public static final String imageId = "ami-0d4cfd66";
     public static final String securityGroup = "aws-security-group";
     public static final String instanceType_t2_micro = "t2.micro";
@@ -134,8 +134,8 @@ public class TestAWSSetupUtils {
     /**
      * Create a compute host description for an AWS instance
      */
-    public static ComputeService.ComputeState createAWSComputeHost(VerificationHost host,
-            String resourcePoolLink, String accessKey, String secretKey)
+    public static ComputeService.ComputeState createAWSComputeHost(VerificationHost host, String resourcePoolLink,
+            String accessKey, String secretKey, boolean isAwsClientMock, String awsMockEndpointReference)
             throws Throwable {
 
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
@@ -177,7 +177,11 @@ public class TestAWSSetupUtils {
                 ComputeDescriptionService.FACTORY_LINK, awshostDescription.id);
         awsComputeHost.resourcePoolLink = resourcePoolLink;
 
-        awsComputeHost.adapterManagementReference = UriUtils.buildUri(awsEndPoint);
+        if (isAwsClientMock) {
+            awsComputeHost.adapterManagementReference = UriUtils.buildUri(awsMockEndpointReference);
+        } else {
+            awsComputeHost.adapterManagementReference = UriUtils.buildUri(awsEndpointReference);
+        }
 
         ComputeService.ComputeState returnState = TestUtils.doPost(host, awsComputeHost,
                 ComputeService.ComputeState.class,
@@ -489,6 +493,18 @@ public class TestAWSSetupUtils {
             return computeInstancesStartedStateWithAcceptedErrorRate(client, host, instanceIds,
                     errorRate);
         });
+    }
+
+    /**
+     * Method that sets basic information in {@link AWSUtils} for aws-mock.
+     * Aws-mock is a open-source tool for testing AWS services in a mock EC2 environment.
+     * @see <a href="https://github.com/treelogic-swe/aws-mock">aws-mock</a>
+     * @param isAwsClientMock flag to use aws-mock
+     * @param awsMockEndpointReference ec2 endpoint of aws-mock
+     */
+    public static void setAwsClientMockInfo(boolean isAwsClientMock, String awsMockEndpointReference) {
+        AWSUtils.setAwsClientMock(isAwsClientMock);
+        AWSUtils.setAwsMockEndpointReference(awsMockEndpointReference);
     }
 
     /**

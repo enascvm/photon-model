@@ -19,6 +19,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.net.URI;
@@ -76,11 +77,14 @@ public class TestAWSProvisionTask {
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
     public boolean isMock = true;
+    public boolean isAwsClientMock = false;
+    public String awsMockEndpointReference = null;
 
     @Before
     public void setUp() throws Exception {
         CommandLineArgumentParser.parseFromProperties(this);
 
+        setAwsClientMockInfo(this.isAwsClientMock, this.awsMockEndpointReference);
         this.host = VerificationHost.create(0);
         try {
             this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(250));
@@ -116,6 +120,8 @@ public class TestAWSProvisionTask {
         this.host.tearDownInProcessPeers();
         this.host.toggleNegativeTestMode(false);
         this.host.tearDown();
+
+        setAwsClientMockInfo(false, null);
     }
 
     // Creates a AWS instance via a provision task.
@@ -127,8 +133,8 @@ public class TestAWSProvisionTask {
 
         // create a compute host for the AWS EC2 VM
         ComputeService.ComputeState outComputeHost = createAWSComputeHost(this.host,
-                outPool.documentSelfLink,
-                        this.accessKey, this.secretKey);
+                outPool.documentSelfLink, this.accessKey, this.secretKey,
+                this.isAwsClientMock, this.awsMockEndpointReference);
 
         // create a AWS VM compute resoruce
         this.vmState = createAWSVMResource(this.host, outComputeHost.documentSelfLink,
