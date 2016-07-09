@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
-import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -67,6 +66,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
 
         }
     }
+
     /**
      * The enumeration service context needed to spawn off control to the creation and deletion adapters for AWS.
      */
@@ -104,7 +104,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
         op.complete();
         EnumerationContext awsEnumerationContext = new EnumerationContext(
                 op.getBody(ComputeEnumerateResourceRequest.class), op);
-        validateState(awsEnumerationContext);
+        AdapterUtils.validateEnumRequest(awsEnumerationContext.computeEnumerationRequest);
         if (awsEnumerationContext.computeEnumerationRequest.isMockRequest) {
             // patch status to parent task
             AdapterUtils.sendPatchToEnumerationTask(this,
@@ -176,30 +176,6 @@ public class AWSEnumerationAdapterService extends StatelessService {
                     aws.computeEnumerationRequest.taskReference, aws.error);
             break;
 
-        }
-    }
-    /**
-     * Method to validate that the passed in Enumeration Request State is valid.
-     * Validating that the parent compute link and the adapter links are populated
-     * in the request.
-     *
-     * Also defaulting the EnumerationRequestType to REFRESH
-     * @param AWSstate The enumeration context.
-     */
-    public void validateState(EnumerationContext AWSstate) {
-        if (AWSstate.computeEnumerationRequest.computeDescriptionLink == null) {
-            throw new IllegalArgumentException("computeDescriptionLink is required.");
-        }
-        if (AWSstate.computeEnumerationRequest.adapterManagementReference == null) {
-            throw new IllegalArgumentException(
-                    "adapterManagementReference is required.");
-        }
-        if (AWSstate.computeEnumerationRequest.resourceReference == null) {
-            throw new IllegalArgumentException(
-                    "parentCompute URI is required.");
-        }
-        if (AWSstate.computeEnumerationRequest.enumerationAction == null) {
-            AWSstate.computeEnumerationRequest.enumerationAction = EnumerationAction.START;
         }
     }
 

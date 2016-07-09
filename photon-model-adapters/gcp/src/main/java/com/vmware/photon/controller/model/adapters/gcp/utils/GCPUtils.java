@@ -98,11 +98,11 @@ public class GCPUtils {
      */
     public static void assignPowerState(ComputeState computeState, String vmStatus) {
         switch (vmStatus) {
-        case INSTANCE_STATUS_PROVISIONING:
         case INSTANCE_STATUS_RUNNING:
-        case INSTANCE_STATUS_STAGING:
             computeState.powerState = PowerState.ON;
             break;
+        case INSTANCE_STATUS_PROVISIONING:
+        case INSTANCE_STATUS_STAGING:
         case INSTANCE_STATUS_STOPPING:
         case INSTANCE_STATUS_SUSPENDED:
         case INSTANCE_STATUS_SUSPENDING:

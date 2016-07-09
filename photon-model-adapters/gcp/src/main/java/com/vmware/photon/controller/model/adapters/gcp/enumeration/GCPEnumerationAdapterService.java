@@ -69,7 +69,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -122,7 +122,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
         EnumerationStages stage;
         Throwable error;
         AuthCredentialsServiceState parentAuth;
-        ResourcePoolState resourcePool;
+        ResourceGroupState resourceGroup;
         Long enumerationStartTimeInMicros;
         String enumNextPageLink;
 
@@ -158,7 +158,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
         op.complete();
         EnumerationContext ctx = new EnumerationContext(
                 op.getBody(ComputeEnumerateResourceRequest.class));
-        validateState(ctx);
+        AdapterUtils.validateEnumRequest(ctx.enumRequest);
         if (ctx.enumRequest.isMockRequest) {
             AdapterUtils.sendPatchToEnumerationTask(this,ctx.enumRequest.taskReference);
             return;
@@ -176,10 +176,10 @@ public class GCPEnumerationAdapterService extends StatelessService {
             getHostComputeDescription(ctx, EnumerationStages.PARENTAUTH);
             break;
         case PARENTAUTH:
-            getParentAuth(ctx, EnumerationStages.RESOURCEPOOL);
+            getParentAuth(ctx, EnumerationStages.RESOURCEGROUP);
             break;
-        case RESOURCEPOOL:
-            getResourcePool(ctx, EnumerationStages.CLIENT);
+        case RESOURCEGROUP:
+            getResourceGroup(ctx, EnumerationStages.CLIENT);
             break;
         case CLIENT:
             try {
@@ -766,19 +766,20 @@ public class GCPEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Method to retrieve the resource pool on which the enumeration task will be performed.
+     * Method to retrieve the resource group on which the enumeration task will be performed.
      * @param ctx The Enumeration Context.
      * @param next The next enumeration sub stage.
      */
-    private void getResourcePool(EnumerationContext ctx, EnumerationStages next) {
+    private void getResourceGroup(EnumerationContext ctx, EnumerationStages next) {
         Consumer<Operation> onSuccess = op -> {
-            ctx.resourcePool = op.getBody(ResourcePoolState.class);
-            validateResourcePool(ctx, ctx.resourcePool);
+            ctx.resourceGroup = op.getBody(ResourceGroupState.class);
+            validateResourceGroup(ctx, ctx.resourceGroup);
             ctx.stage = next;
             handleEnumerationRequest(ctx);
         };
-        URI resourcePoolURI = UriUtils.buildUri(this.getHost(), ctx.enumRequest.resourcePoolLink);
-        AdapterUtils.getServiceState(this, resourcePoolURI, onSuccess, getFailureConsumer(ctx));
+        URI resourceGroupURI = UriUtils.buildUri(this.getHost(),
+                ctx.computeHostDesc.groupLinks.iterator().next());
+        AdapterUtils.getServiceState(this, resourceGroupURI, onSuccess, getFailureConsumer(ctx));
     }
 
     /**
@@ -829,35 +830,6 @@ public class GCPEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Method to validate that the passed in Enumeration Request State is valid.
-     * Validating that the compute description, adapter management reference
-     * parent compute link and the resource pool link are populated in the request.
-     *
-     * Also defaulting the enumeration action to START
-     *
-     * This method can only be applied for GCP enumeration adapter, because only GCP
-     * requires resource pool link provided for enumeration.
-     * @param ctx The enumeration context.
-     */
-    private void validateState(EnumerationContext ctx) {
-        if (ctx.enumRequest.computeDescriptionLink == null) {
-            throw new IllegalArgumentException("computeDescriptionLink is required.");
-        }
-        if (ctx.enumRequest.adapterManagementReference == null) {
-            throw new IllegalArgumentException("adapterManagementReference is required.");
-        }
-        if (ctx.enumRequest.resourceLink() == null) {
-            throw new IllegalArgumentException("parentComputeLink is required.");
-        }
-        if (ctx.enumRequest.resourcePoolLink == null) {
-            throw new IllegalArgumentException("resourcePoolLink is required.");
-        }
-        if (ctx.enumRequest.enumerationAction == null) {
-            ctx.enumRequest.enumerationAction = EnumerationAction.START;
-        }
-    }
-
-    /**
      * Method to validate that the passed in Compute Host Description is valid.
      * Validating that the zoneId is populated in Compute Host Description.
      * @param ctx The enumeration context.
@@ -866,6 +838,15 @@ public class GCPEnumerationAdapterService extends StatelessService {
     private void validateHost(EnumerationContext ctx, ComputeDescription computeHostDesc) {
         if (computeHostDesc.zoneId == null) {
             throw new IllegalArgumentException("zoneId is required");
+        }
+        if (computeHostDesc.authCredentialsLink == null) {
+            throw new IllegalArgumentException("auth credential is required");
+        }
+        if (computeHostDesc.groupLinks == null) {
+            throw new IllegalArgumentException("resource group link is required");
+        }
+        if (computeHostDesc.groupLinks.size() != 1) {
+            throw new IllegalArgumentException("number of resource groups should be one");
         }
         ctx.zoneId = computeHostDesc.zoneId;
     }
@@ -887,16 +868,16 @@ public class GCPEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Method to validate that the passed in Resource Pool is valid.
-     * Validating that the projectId is populated in Resource Pool.
+     * Method to validate that the passed in Resource Group is valid.
+     * Validating that the projectId is populated in Resource Group.
      * @param ctx The enumeration context.
-     * @param resourcePool The resource pool.
+     * @param resourceGroup The resource group.
      */
-    private void validateResourcePool(EnumerationContext ctx, ResourcePoolState resourcePool) {
-        if (resourcePool.projectName == null) {
+    private void validateResourceGroup(EnumerationContext ctx, ResourceGroupState resourceGroup) {
+        if (resourceGroup.name == null) {
             throw new IllegalArgumentException("projectName is required");
         }
-        ctx.projectId = resourcePool.projectName;
+        ctx.projectId = resourceGroup.name;
     }
 
     /**

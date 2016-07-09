@@ -16,6 +16,8 @@ package com.vmware.photon.controller.model.adapters.util;
 import java.net.URI;
 import java.util.function.Consumer;
 
+import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
+import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService;
@@ -177,5 +179,28 @@ public class AdapterUtils {
                 .createPatch(existingStateURI)
                 .setBody(state)
                 .setReferer(service.getHost().getUri());
+    }
+
+    /**
+     * Method to validate that the passed in Enumeration Request State is valid.
+     * Validating that the parent compute link, the adapter links and the resource
+     * reference are populated in the request.
+     *
+     * Also defaulting the enumeration action to START.
+     * @param enumRequest The enumeration request.
+     */
+    public static void validateEnumRequest(ComputeEnumerateResourceRequest enumRequest) {
+        if (enumRequest.computeDescriptionLink == null) {
+            throw new IllegalArgumentException("computeDescriptionLink is required.");
+        }
+        if (enumRequest.adapterManagementReference == null) {
+            throw new IllegalArgumentException("adapterManagementReference is required.");
+        }
+        if (enumRequest.resourceReference == null) {
+            throw new IllegalArgumentException("resourceReference is required.");
+        }
+        if (enumRequest.enumerationAction == null) {
+            enumRequest.enumerationAction = EnumerationAction.START;
+        }
     }
 }

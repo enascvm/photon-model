@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -49,6 +50,8 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -82,26 +85,42 @@ public class GCPTestUtil {
     private static volatile boolean queryResult = false;
 
     /**
-     * Create a resource pool where the VM will be housed
+     * Create a resource pool where the VM will be housed.
      * @param host The test host service.
-     * @param projectId The GCP project ID.
      * @return The default resource pool.
      * @throws Throwable The exception during creating resource pool.
      */
     public static ResourcePoolService.ResourcePoolState createDefaultResourcePool(
-            VerificationHost host,
-            String projectId)
+            VerificationHost host)
             throws Throwable {
         ResourcePoolService.ResourcePoolState inPool = new ResourcePoolService.ResourcePoolState();
 
         inPool.name = UUID.randomUUID().toString();
         inPool.id = inPool.name;
-        inPool.projectName = projectId;
         inPool.minCpuCount = MIN_CPU_COUNT;
         inPool.minMemoryBytes = MIN_MEMORY_BYTES;
 
         return TestUtils.doPost(host, inPool, ResourcePoolService.ResourcePoolState.class,
                 UriUtils.buildUri(host, ResourcePoolService.FACTORY_LINK));
+    }
+
+    /**
+     * Create a resource group for a GCP project.
+     * @param host The test host service.
+     * @param projectId The GCP project ID.
+     * @return The default resource group.
+     * @throws Throwable The exception during creating compute host.
+     */
+    public static ResourceGroupState createDefaultResourceGroup(
+            VerificationHost host,
+            String projectId)
+            throws Throwable {
+        ResourceGroupState resourceGroup = new ResourceGroupState();
+
+        resourceGroup.name = projectId;
+
+        return TestUtils.doPost(host, resourceGroup, ResourceGroupState.class,
+                UriUtils.buildUri(host, ResourceGroupService.FACTORY_LINK));
     }
 
     /**
@@ -111,6 +130,7 @@ public class GCPTestUtil {
      * @param privateKey The service account's private key.
      * @param zoneId The GCP project's zone ID.
      * @param resourcePoolLink The default resource pool's link.
+     * @param resourceGroupLink The default resource group's link.
      * @return The default compute host.
      * @throws Throwable The exception during creating compute host.
      */
@@ -118,7 +138,8 @@ public class GCPTestUtil {
                                                                        String userEmail,
                                                                        String privateKey,
                                                                        String zoneId,
-                                                                       String resourcePoolLink)
+                                                                       String resourcePoolLink,
+                                                                       String resourceGroupLink)
             throws Throwable {
         AuthCredentialsService.AuthCredentialsServiceState auth =
                 new AuthCredentialsService.AuthCredentialsServiceState();
@@ -141,6 +162,8 @@ public class GCPTestUtil {
                 GCPUriPaths.GCP_ENUMERATION_ADAPTER);
         gcpHostDescription.zoneId = zoneId;
         gcpHostDescription.authCredentialsLink = authLink;
+        gcpHostDescription.groupLinks = new HashSet<>();
+        gcpHostDescription.groupLinks.add(resourceGroupLink);
 
         TestUtils.doPost(host, gcpHostDescription,
                 ComputeDescriptionService.ComputeDescription.class,

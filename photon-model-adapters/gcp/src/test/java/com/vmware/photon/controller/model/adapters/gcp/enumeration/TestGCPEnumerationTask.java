@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.gcp.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.createDefaultComputeHost;
+import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.createDefaultResourceGroup;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.createDefaultVMResource;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.deleteDocument;
@@ -43,6 +44,7 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.gcp.GCPAdapters;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
@@ -240,11 +242,14 @@ public class TestGCPEnumerationTask extends BasicReusableHostTestCase {
      */
     private void createResourcePoolComputeHostAndVMState() throws Throwable {
         // Create a resource pool where the VM will be housed.
-        this.outPool = createDefaultResourcePool(this.host, this.projectID);
+        this.outPool = createDefaultResourcePool(this.host);
 
-        // Create a compute host for the GCP GCE VM.
+        // Create a resource group for the GCP project.
+        ResourceGroupState resourceGroup = createDefaultResourceGroup(this.host, this.projectID);
+
+        // Create a compute host for the GCP VM.
         this.computeHost = createDefaultComputeHost(this.host, this.userEmail, this.privateKey, this.zoneID,
-                this.outPool.documentSelfLink);
+                this.outPool.documentSelfLink, resourceGroup.documentSelfLink);
 
         // Create a GCP VM compute resource.
         // This vm is stale and should be deleted after the first enumeration.

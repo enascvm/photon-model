@@ -138,7 +138,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         op.complete();
         EnumerationContext ctx = new EnumerationContext(
                 op.getBody(ComputeEnumerateResourceRequest.class));
-        validateState(ctx);
+        AdapterUtils.validateEnumRequest(ctx.enumRequest);
         if (ctx.enumRequest.isMockRequest) {
             // patch status to parent task
             AdapterUtils.sendPatchToEnumerationTask(this, ctx.enumRequest.taskReference);
@@ -746,31 +746,6 @@ public class AzureEnumerationAdapterService extends StatelessService {
                         handleSubStage(ctx);
                     }
                 }).sendWith(this);
-    }
-
-    /**
-     * Method to validate that the passed in Enumeration Request State is valid.
-     * Validating that the parent compute link and the adapter links are populated
-     * in the request.
-     *
-     * Also defaulting the EnumerationRequestType to REFRESH
-     * @param ctx The enumeration context.
-     */
-    private void validateState(EnumerationContext ctx) {
-        if (ctx.enumRequest.computeDescriptionLink == null) {
-            throw new IllegalArgumentException("computeDescriptionLink is required.");
-        }
-        if (ctx.enumRequest.adapterManagementReference == null) {
-            throw new IllegalArgumentException(
-                    "adapterManagementReference is required.");
-        }
-        if (ctx.enumRequest.resourceReference == null) {
-            throw new IllegalArgumentException(
-                    "parentCompute URI is required.");
-        }
-        if (ctx.enumRequest.enumerationAction == null) {
-            ctx.enumRequest.enumerationAction = EnumerationAction.START;
-        }
     }
 
     private void handleError(EnumerationContext ctx, Throwable e) {
