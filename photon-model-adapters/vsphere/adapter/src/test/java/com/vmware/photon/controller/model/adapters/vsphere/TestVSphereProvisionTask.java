@@ -127,7 +127,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
 
     private SnapshotState createSnapshotState(ComputeState vm) throws Throwable {
         SnapshotState state = new SnapshotState();
-        state.id = "snapshot" + UUID.randomUUID();
+        state.documentSelfLink = state.id = "snapshot" + UUID.randomUUID();
         state.name = state.id;
         state.computeLink = vm.documentSelfLink;
         state.description = "description: " + state.name;

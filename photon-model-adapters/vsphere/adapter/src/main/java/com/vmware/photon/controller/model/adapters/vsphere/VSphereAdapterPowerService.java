@@ -143,7 +143,7 @@ public class VSphereAdapterPowerService extends StatelessService {
 
         OperationSequence.create(patchState)
                 .next(patchTask)
-                .setCompletion(ctx.failOnError())
+                .setCompletion(ctx.failTaskOnError())
                 .sendWith(this);
     }
 

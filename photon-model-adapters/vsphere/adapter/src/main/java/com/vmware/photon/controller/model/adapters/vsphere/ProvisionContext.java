@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -40,6 +41,8 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 /**
  */
 public class ProvisionContext {
+    private static final Logger logger = Logger.getLogger(ProvisionContext.class.getName());
+
     public final URI computeReference;
     public final URI provisioningTaskReference;
 
@@ -198,10 +201,11 @@ public class ProvisionContext {
 
                         os.values().forEach(op -> ctx.disks.add(op.getBody(DiskState.class)));
 
-                        onSuccess.accept(ctx);
+                        populateContextThen(service, ctx, onSuccess);
                     });
 
             join.sendWith(service);
+            return;
         }
 
         // context populated, invoke handler
@@ -212,10 +216,11 @@ public class ProvisionContext {
      * The returned JoinedCompletionHandler fails this context by invoking the error handler if any
      * error is found in {@link JoinedCompletionHandler#handle(java.util.Map, java.util.Map) error map}.
      */
-    public JoinedCompletionHandler failOnError() {
+    public JoinedCompletionHandler failTaskOnError() {
         return (ops, failures) -> {
             if (failures != null && !failures.isEmpty()) {
-                this.fail(failures.values().iterator().next());
+                Throwable firstError = failures.values().iterator().next();
+                this.fail(firstError);
             }
         };
     }
@@ -261,5 +266,15 @@ public class ProvisionContext {
 
     public void failWithMessage(String msg) {
         fail(new IllegalStateException(msg));
+    }
+
+    public JoinedCompletionHandler logOnError() {
+        return (ops, failures) -> {
+            if (failures != null && !failures.isEmpty()) {
+                logger.info(
+                        "Ignoring errors while completing task " + this.task.documentSelfLink + ": "
+                                + failures.values());
+            }
+        };
     }
 }

@@ -132,7 +132,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         }
 
                         seq.next(finishTask)
-                                .setCompletion(ctx.failOnError())
+                                .setCompletion(ctx.failTaskOnError())
                                 .sendWith(this);
                     } catch (Exception e) {
                         ctx.fail(e);
@@ -171,9 +171,9 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         Operation finishTask = mgr.createTaskPatch(TaskStage.FINISHED);
 
                         OperationSequence
-                                .create(deleteComputeState)
-                                .next(finishTask)
-                                .setCompletion(ctx.failOnError())
+                                .create(finishTask)
+                                .next(deleteComputeState)
+                                .setCompletion(ctx.logOnError())
                                 .sendWith(this);
                     } catch (Exception e) {
                         ctx.fail(e);
@@ -185,10 +185,15 @@ public class VSphereAdapterInstanceService extends StatelessService {
             ProvisionContext ctx) {
         // clean up the compute state
         if (req.requestType == InstanceRequestType.DELETE) {
-            createComputeStateDelete(ctx).sendWith(this);
+            OperationJoin deleteComputeState = createComputeStateDelete(ctx);
+            OperationSequence
+                    .create(mgr.createTaskPatch(TaskStage.FINISHED))
+                    .next(deleteComputeState)
+                    .setCompletion(ctx.logOnError())
+                    .sendWith(this);
+        } else {
+            mgr.patchTask(TaskStage.FINISHED);
         }
-
-        mgr.patchTask(TaskStage.FINISHED);
     }
 
     private OperationJoin createComputeStateDelete(ProvisionContext ctx) {
@@ -200,14 +205,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
             }
         }
 
-        deleteOps.add(Operation
-                .createDelete(UriUtils.buildUri(this.getHost(), ctx.child.documentSelfLink)));
 
         return OperationJoin.create(deleteOps)
-                .setCompletion((os, es) -> {
-                    if (es != null && !es.isEmpty()) {
-                        ctx.fail(es.values().iterator().next());
-                    }
-                });
+                .setCompletion(ctx.logOnError());
     }
 }

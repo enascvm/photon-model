@@ -98,15 +98,17 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         validate(request);
 
-        TaskManager mgr = new TaskManager(this, request.taskReference);
-        mgr.patchTask(TaskStage.STARTED);
-
         op.setStatusCode(Operation.STATUS_CODE_CREATED);
         op.complete();
 
+        TaskManager mgr = new TaskManager(this, request.taskReference);
+
         if (request.isMockRequest) {
+            // just finish the mock request
             mgr.patchTask(TaskStage.FINISHED);
             return;
+        } else {
+            mgr.patchTask(TaskStage.STARTED);
         }
 
         URI parentUri = ComputeStateWithDescription.buildUri(request.resourceReference);

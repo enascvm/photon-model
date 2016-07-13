@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -38,7 +37,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 /**
  *
  */
-@Ignore("https://jira-hzn.eng.vmware.com/browse/VSYM-933")
 public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
     // fields that are used across method calls, stash them as private fields
