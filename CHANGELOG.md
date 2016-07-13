@@ -2,6 +2,8 @@
 
 ## 0.4.1-SNAPSHOT
 
+* Add support for aggregating resource metrics to get hourly min/max/avg values
+
 * Unify the field names for calling task reference and target resource in all Request object.
   The new names are `taskReference` and `resourceReference`.
   This change is **breaking change** for existing Providers implementations.

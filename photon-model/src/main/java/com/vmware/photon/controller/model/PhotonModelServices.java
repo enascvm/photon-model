@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model;
 
+import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -45,7 +46,8 @@ public class PhotonModelServices {
             NetworkService.FACTORY_LINK,
             FirewallService.FACTORY_LINK,
             StorageDescriptionService.FACTORY_LINK,
-            ResourceMetricService.FACTORY_LINK };
+            ResourceMetricService.FACTORY_LINK,
+            ResourceAggregateMetricsService.FACTORY_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
 
@@ -61,5 +63,6 @@ public class PhotonModelServices {
         host.startFactory(new FirewallService());
         host.startFactory(new StorageDescriptionService());
         host.startFactory(ResourceMetricService.class, ResourceMetricService::createFactory);
+        host.startFactory(ResourceAggregateMetricsService.class, ResourceAggregateMetricsService::createFactory);
     }
 }

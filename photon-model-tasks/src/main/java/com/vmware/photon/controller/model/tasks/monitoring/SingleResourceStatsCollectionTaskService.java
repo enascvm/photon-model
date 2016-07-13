@@ -52,16 +52,7 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";
 
-    // keep data for an hour, at 1 minute intervals
-    private static int numBucketsHourly = 60;
-    private static int bucketSizeMinutes = 1000 * 60;
 
-    // keep data for an day, at one hour intervals
-    private static int numBucketsDaily = 24;
-    private static int bucketSizeHours = bucketSizeMinutes * 60;
-
-    private static String HOUR_SUFFIX = "(Hourly)";
-    private static String MIN_SUFFIX = "(Minutes)";
 
     public enum SingleResourceTaskCollectionStage {
         GET_DESCRIPTIONS, UPDATE_STATS
@@ -244,19 +235,19 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
             for (Entry<String, ServiceStat> entry : stats.statValues.entrySet()) {
                 ServiceStats.ServiceStat minuteStats = new ServiceStats.ServiceStat();
-                minuteStats.name = new StringBuffer(entry.getKey()).append(MIN_SUFFIX).toString();
+                minuteStats.name = new StringBuffer(entry.getKey()).append(StatsConstants.MIN_SUFFIX).toString();
                 minuteStats.latestValue = entry.getValue().latestValue;
                 minuteStats.unit = entry.getValue().unit;
-                minuteStats.timeSeriesStats = new TimeSeriesStats(numBucketsHourly,
-                        bucketSizeMinutes, EnumSet.allOf(AggregationType.class));
+                minuteStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_MINUTE_DATA,
+                        StatsConstants.BUCKET_SIZE_MINUTES_IN_MILLIS, EnumSet.allOf(AggregationType.class));
                 persistStat(persistStatsUri, entry, currentState.computeLink);
 
                 ServiceStats.ServiceStat hourStats = new ServiceStats.ServiceStat();
-                hourStats.name = new StringBuffer(entry.getKey()).append(HOUR_SUFFIX).toString();
+                hourStats.name = new StringBuffer(entry.getKey()).append(StatsConstants.HOUR_SUFFIX).toString();
                 hourStats.latestValue = entry.getValue().latestValue;
                 hourStats.unit = entry.getValue().unit;
-                hourStats.timeSeriesStats = new TimeSeriesStats(numBucketsDaily,
-                        bucketSizeHours, EnumSet.allOf(AggregationType.class));
+                hourStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_HOURLY_DATA,
+                        StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS, EnumSet.allOf(AggregationType.class));
                 operations.add(Operation.createPost(statsUri)
                         .setBody(hourStats));
                 operations.add(Operation.createPost(statsUri)

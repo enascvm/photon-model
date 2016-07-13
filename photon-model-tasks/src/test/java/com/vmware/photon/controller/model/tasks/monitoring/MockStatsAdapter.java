@@ -16,10 +16,12 @@ package com.vmware.photon.controller.model.tasks.monitoring;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
@@ -49,10 +51,12 @@ public class MockStatsAdapter extends StatelessService {
             counter++;
             ServiceStat key1 = new ServiceStat();
             key1.latestValue = counter;
+            key1.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
             key1.unit = UNIT_1;
             statValues.put(KEY_1, key1);
             ServiceStat key2 = new ServiceStat();
             key2.latestValue = counter;
+            key2.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
             key2.unit = UNIT_2;
             statValues.put(KEY_2, key2);
             ComputeStats cStat = new ComputeStats();

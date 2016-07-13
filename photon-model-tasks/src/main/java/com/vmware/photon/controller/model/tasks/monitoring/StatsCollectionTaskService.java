@@ -23,6 +23,7 @@ import com.vmware.photon.controller.model.tasks.ComputeSubTaskService;
 import com.vmware.photon.controller.model.tasks.ComputeSubTaskService.ComputeSubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.TaskState.TaskStage;
@@ -207,8 +208,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                                 return;
                             }
                             QueryTask page = getOp.getBody(QueryTask.class);
-                            if (page.results.nextPageLink == null
-                                    && page.results.documentLinks.size() == 0) {
+                            if (page.results.documentLinks.size() == 0) {
                                 StatsCollectionTaskState patchBody = new StatsCollectionTaskState();
                                 patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
                                 TaskUtils.sendPatch(this, patchBody);
@@ -222,9 +222,13 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
     private void createSubTask(List<String> computeResources, String nextPageLink,
             StatsCollectionTaskState currentState) {
         StatsCollectionTaskState patchBody = new StatsCollectionTaskState();
-        patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-        patchBody.taskStage = StatsCollectionStage.GET_RESOURCES;
-        patchBody.nextPageLink = nextPageLink;
+        if (nextPageLink != null) {
+            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+            patchBody.taskStage = StatsCollectionStage.GET_RESOURCES;
+            patchBody.nextPageLink = nextPageLink;
+        } else {
+            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+        }
         ComputeSubTaskService.ComputeSubTaskState subTaskInitState = new ComputeSubTaskService.ComputeSubTaskState();
         subTaskInitState.parentPatchBody = Utils.toJson(patchBody);
         subTaskInitState.errorThreshold = 0;
