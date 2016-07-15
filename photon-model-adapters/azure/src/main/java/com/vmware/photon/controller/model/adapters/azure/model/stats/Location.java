@@ -21,7 +21,7 @@ import java.util.List;
  *
  */
 public class Location {
-    private String tableEndpoint;
+    public String tableEndpoint;
     private List<TableInfo> tableInfo = new ArrayList<TableInfo>();
     private String partitionKey;
 

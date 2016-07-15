@@ -14,6 +14,6 @@
 package com.vmware.photon.controller.model.adapters.azure.model.diagnostics;
 
 public class DiagnosticInfrastructureLogs {
-    private String scheduledTransferLogLevelFilter;
-    private String scheduledTransferPeriod;
+    public String scheduledTransferLogLevelFilter;
+    public String scheduledTransferPeriod;
 }

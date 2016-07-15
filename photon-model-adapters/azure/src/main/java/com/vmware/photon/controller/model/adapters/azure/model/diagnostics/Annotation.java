@@ -14,6 +14,6 @@
 package com.vmware.photon.controller.model.adapters.azure.model.diagnostics;
 
 public class Annotation {
-    private String value;
-    private String locale;
+    public String value;
+    public String locale;
 }

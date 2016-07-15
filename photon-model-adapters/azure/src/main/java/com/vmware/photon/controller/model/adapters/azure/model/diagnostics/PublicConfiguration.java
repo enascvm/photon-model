@@ -20,7 +20,7 @@ public class PublicConfiguration {
     @SerializedName("odata.type")
     private String odataType;
     private DiagnosticMonitorConfiguration diagnosticMonitorConfiguration;
-    private String storageAccount;
+    public String storageAccount;
 
     public DiagnosticMonitorConfiguration getDiagnosticMonitorConfiguration() {
         return this.diagnosticMonitorConfiguration;

@@ -17,6 +17,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class WindowsEventLog {
-    private List<String> dataSources = new ArrayList<String>();
-    private String scheduledTransferPeriod;
+    public List<String> dataSources = new ArrayList<String>();
+    public String scheduledTransferPeriod;
 }

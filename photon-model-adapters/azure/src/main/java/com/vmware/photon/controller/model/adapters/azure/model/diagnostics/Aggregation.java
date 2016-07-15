@@ -14,5 +14,5 @@
 package com.vmware.photon.controller.model.adapters.azure.model.diagnostics;
 
 public class Aggregation {
-    private String scheduledTransferPeriod;
+    public String scheduledTransferPeriod;
 }

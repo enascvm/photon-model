@@ -17,8 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Counter {
-    private List<Annotation> annotations = new ArrayList<Annotation>();
-    private String counterSpecifier;
-    private String sampleRate;
-    private String unit;
+    public List<Annotation> annotations = new ArrayList<Annotation>();
+    public String counterSpecifier;
+    public String sampleRate;
+    public String unit;
 }

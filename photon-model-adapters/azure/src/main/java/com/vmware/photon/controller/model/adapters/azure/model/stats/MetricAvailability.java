@@ -26,6 +26,10 @@ public class MetricAvailability {
         return this.timeGrain;
     }
 
+    public String getRetention() {
+        return this.retention;
+    }
+
     public Location getLocation() {
         return this.location;
     }

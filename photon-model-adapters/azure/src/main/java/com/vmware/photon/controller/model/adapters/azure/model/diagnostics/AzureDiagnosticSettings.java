@@ -14,7 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.model.diagnostics;
 
 public class AzureDiagnosticSettings {
-    private String name;
+    public String name;
     private Properties properties;
 
     public Properties getProperties() {

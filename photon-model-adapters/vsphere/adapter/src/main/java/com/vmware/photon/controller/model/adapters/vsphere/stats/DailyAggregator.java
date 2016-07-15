@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.stats;
 
-import static java.awt.SystemColor.info;
-
 import java.util.EnumSet;
 import java.util.List;
 

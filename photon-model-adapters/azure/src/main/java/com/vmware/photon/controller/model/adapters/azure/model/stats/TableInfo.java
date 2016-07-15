@@ -20,9 +20,9 @@ package com.vmware.photon.controller.model.adapters.azure.model.stats;
 public class TableInfo {
     private String tableName;
     private String startTime;
-    private String endTime;
-    private String sasToken;
-    private String sasTokenExpirationTime;
+    public String endTime;
+    public String sasToken;
+    public String sasTokenExpirationTime;
 
     public String getStartTime() {
         return this.startTime;

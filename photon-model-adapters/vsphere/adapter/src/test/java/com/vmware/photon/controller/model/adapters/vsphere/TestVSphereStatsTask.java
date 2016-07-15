@@ -112,27 +112,6 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
                 .waitForTaskCompletion(this.host, uris, ResourceEnumerationTaskState.class);
     }
 
-    private ComputeDescription createVmDescription() throws Throwable {
-        ComputeDescription computeDesc = new ComputeDescription();
-
-        computeDesc.id = "description-for-refresh";
-        computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
-        computeDesc.instanceAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
-
-        computeDesc.enumerationAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
-        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-        computeDesc.name = computeDesc.id;
-        computeDesc.dataStoreId = this.dataStoreId;
-        computeDesc.networkId = this.networkId;
-
-        return TestUtils.doPost(this.host, computeDesc,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
-    }
-
     /**
      * Create a compute host representing a vcenter server
      */

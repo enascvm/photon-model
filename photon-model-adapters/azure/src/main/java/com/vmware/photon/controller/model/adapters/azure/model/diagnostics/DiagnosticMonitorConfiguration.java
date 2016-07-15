@@ -14,12 +14,12 @@
 package com.vmware.photon.controller.model.adapters.azure.model.diagnostics;
 
 public class DiagnosticMonitorConfiguration {
-    private Integer overallQuotaInMB;
+    public Integer overallQuotaInMB;
     private Metrics metrics;
-    private DiagnosticInfrastructureLogs diagnosticInfrastructureLogs;
-    private Directories directories;
-    private PerformanceCounters performanceCounters;
-    private WindowsEventLog windowsEventLog;
+    public DiagnosticInfrastructureLogs diagnosticInfrastructureLogs;
+    public Directories directories;
+    public PerformanceCounters performanceCounters;
+    public WindowsEventLog windowsEventLog;
 
     public Metrics getMetrics() {
         return this.metrics;

@@ -21,17 +21,17 @@ import java.util.List;
  *
  */
 public class Value {
-    private String resourceUri;
-    private String resourceId;
-    private Name name;
-    private String startTime;
-    private String endTime;
-    private String unit;
-    private String primaryAggregationType;
-    private String ResourceUri;
-    private String ResourceId;
+    public String resourceUri;
+    public String resourceId;
+    public Name name;
+    public String startTime;
+    public String endTime;
+    public String unit;
+    public String primaryAggregationType;
+    public String ResourceUri;
+    public String ResourceId;
     private List<MetricAvailability> metricAvailabilities = new ArrayList<MetricAvailability>();
-    private String id;
+    public String id;
 
     public List<MetricAvailability> getMetricAvailabilities() {
         return this.metricAvailabilities;

@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class PerformanceCounters {
-
-    private List<Counter> counters = new ArrayList<Counter>();
-    private String scheduledTransferPeriod;
+    public List<Counter> counters = new ArrayList<Counter>();
+    public String scheduledTransferPeriod;
 }

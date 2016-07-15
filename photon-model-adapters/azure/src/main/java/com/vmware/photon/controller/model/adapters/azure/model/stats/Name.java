@@ -18,6 +18,6 @@ package com.vmware.photon.controller.model.adapters.azure.model.stats;
  *
  */
 public class Name {
-    private String value;
-    private String localizedValue;
+    public String value;
+    public String localizedValue;
 }

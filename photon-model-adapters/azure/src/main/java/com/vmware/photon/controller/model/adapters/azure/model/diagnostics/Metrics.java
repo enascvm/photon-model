@@ -17,10 +17,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Metrics {
-    private String resourceId;
-    private List<Aggregation> aggregations = new ArrayList<Aggregation>();
+    public String resourceId;
+    public List<Aggregation> aggregations = new ArrayList<Aggregation>();
 
     public void setResourceId(String resourceId) {
         this.resourceId = resourceId;
+    }
+
+    public String getResourceId() {
+        return this.resourceId;
     }
 }

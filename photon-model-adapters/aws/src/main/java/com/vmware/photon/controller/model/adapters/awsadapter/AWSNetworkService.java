@@ -215,13 +215,6 @@ public class AWSNetworkService extends StatelessService {
 
     }
 
-    private void handleFailure(AWSNetworkRequestState awsNet, Throwable e) {
-        logSevere(e);
-        awsNet.error = e;
-        awsNet.stage = NetworkStage.FAILED;
-        handleStages(awsNet);
-    }
-
     private String getCustomProperty(AWSNetworkRequestState aws, String key) {
         return aws.network.customProperties.get(key);
     }

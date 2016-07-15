@@ -21,7 +21,7 @@ import java.util.List;
  *
  */
 public class MetricDefinitions {
-    private String id;
+    public String id;
     private List<Value> value = new ArrayList<Value>();
 
     public List<Value> getValues() {
