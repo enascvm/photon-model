@@ -18,6 +18,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -116,6 +117,8 @@ public class ComputeServiceTest extends Suite {
      */
     public static class HandleStartTest extends BaseModelTest {
 
+        public final long startTimeMicros = Utils.getNowMicrosUtc();
+
         @Test
         public void testValidStartStateWithRestart() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
@@ -195,6 +198,44 @@ public class ComputeServiceTest extends Suite {
             postServiceSynchronously(ComputeService.FACTORY_LINK,
                     startState, ComputeService.ComputeState.class,
                     IllegalArgumentException.class);
+        }
+
+        @Test
+        public void testMissingCreationTimeMicros() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd);
+            startState.creationTimeMicros = null;
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.creationTimeMicros);
+            assertTrue(
+                    String.format("launchtime (%s) should be before now (%s)",
+                            returnState.creationTimeMicros,
+                            Utils.getNowMicrosUtc()),
+                    returnState.creationTimeMicros <= Utils.getNowMicrosUtc());
+            assertTrue(
+                    String.format("launchtime (%s) should be after testStartTime (%s)",
+                            returnState.creationTimeMicros, this.startTimeMicros),
+                    returnState.creationTimeMicros >= this.startTimeMicros);
+        }
+
+        @Test
+        public void testProvidedCreationTimeMicros() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd);
+            startState.creationTimeMicros = Long.MIN_VALUE;
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.creationTimeMicros);
+            assertEquals(Long.MIN_VALUE, returnState.creationTimeMicros.longValue());
         }
     }
 
@@ -304,6 +345,8 @@ public class ComputeServiceTest extends Suite {
                     is(patchBody.adapterManagementReference));
             assertEquals(getState.tenantLinks, patchBody.tenantLinks);
             assertEquals(getState.groupLinks, patchBody.groupLinks);
+            // make sure launchTimeMicros was preserved
+            assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
         }
 
         @Test

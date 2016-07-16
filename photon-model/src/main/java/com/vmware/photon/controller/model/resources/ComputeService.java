@@ -126,6 +126,12 @@ public class ComputeService extends StatefulService {
          * Network interfaces associated with this compute instance.
          */
         public List<String> networkLinks;
+
+        /**
+         * Compute creation time in micros since epoch.
+         */
+        @UsageOption(option = PropertyUsageOption.REQUIRED)
+        public Long creationTimeMicros;
     }
 
     /**
@@ -206,9 +212,9 @@ public class ComputeService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
+    public void handleCreate(Operation start) {
         try {
-            validateStartOrPut(start);
+            validateCreate(start);
             start.complete();
         } catch (Throwable t) {
             start.fail(t);
@@ -218,7 +224,7 @@ public class ComputeService extends StatefulService {
     @Override
     public void handlePut(Operation put) {
         try {
-            ComputeState returnState = validateStartOrPut(put);
+            ComputeState returnState = validatePut(put);
             setState(put, returnState);
             put.complete();
         } catch (Throwable t) {
@@ -226,7 +232,19 @@ public class ComputeService extends StatefulService {
         }
     }
 
-    private ComputeState validateStartOrPut(Operation op) {
+    private ComputeState validateCreate(Operation op) {
+        if (!op.hasBody()) {
+            throw (new IllegalArgumentException("body is required"));
+        }
+        ComputeState state = op.getBody(ComputeState.class);
+        if (state.creationTimeMicros == null) {
+            state.creationTimeMicros = Utils.getNowMicrosUtc();
+        }
+        Utils.validateState(getStateDescription(), state);
+        return state;
+    }
+
+    private ComputeState validatePut(Operation op) {
         if (!op.hasBody()) {
             throw (new IllegalArgumentException("body is required"));
         }

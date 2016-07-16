@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.ec2.model.Instance;
 
@@ -192,6 +193,12 @@ public class AWSEnumerationUtils {
         }
         computeState.customProperties.put(SOURCE_TASK_LINK,
                 ResourceEnumerationTaskService.FACTORY_LINK);
+
+        if (instance.getLaunchTime() != null) {
+            computeState.creationTimeMicros = TimeUnit.MILLISECONDS
+                    .toMicros(instance.getLaunchTime().getTime());
+        }
+
         computeState.tenantLinks = tenantLinks;
 
         // Network State. Create one network state mapping to each VPC that is discovered during
