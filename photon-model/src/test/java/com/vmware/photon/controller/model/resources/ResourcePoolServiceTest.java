@@ -96,7 +96,6 @@ public class ResourcePoolServiceTest extends Suite {
                     Service.ServiceOption.OWNER_SELECTION,
                     Service.ServiceOption.PERSISTENCE,
                     Service.ServiceOption.REPLICATION,
-                    Service.ServiceOption.HTML_USER_INTERFACE,
                     Service.ServiceOption.IDEMPOTENT_POST);
 
             assertThat(this.resourcePoolService.getOptions(), is(expected));

@@ -20,7 +20,6 @@ import java.util.logging.Logger;
 
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -62,17 +61,8 @@ public class EnumerationClientTest {
         PropertyFilterSpec spec = client.createFullFilterSpec();
 
         for (List<ObjectContent> page : client.retrieveObjects(spec)) {
-            this.logger.info("***");
-
             for (ObjectContent cont : page) {
-                if (cont.getObj().getType().equals(VimNames.TYPE_VM)) {
-                    VmOverlay vm = new VmOverlay(cont);
-                    this.logger.info(vm.getName());
-                    this.logger.info(vm.getInstanceUuid());
-                    this.logger.info(vm.getDescriptionLink());
-                    this.logger.info(vm.getParentLink());
-                    this.logger.info("" + vm.getPowerState());
-                }
+                this.logger.info(VimUtils.convertMoRefToString(cont.getObj()));
             }
         }
     }

@@ -214,5 +214,18 @@ public final class VimUtils {
         } catch (DatatypeConfigurationException e) {
             throw new AssertionError(e);
         }
+
+    }
+
+    public static boolean isComputeResource(ManagedObjectReference obj) {
+        if (obj == null) {
+            return false;
+        }
+
+        return VimNames.TYPE_COMPUTE_RESOURCE.equals(obj.getType()) ||
+                VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(obj.getType());
+
     }
 }
+
+

@@ -138,7 +138,6 @@ public class ResourcePoolService extends StatefulService {
         super.toggleOption(ServiceOption.PERSISTENCE, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
-        super.toggleOption(ServiceOption.HTML_USER_INTERFACE, true);
         super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
     }
 

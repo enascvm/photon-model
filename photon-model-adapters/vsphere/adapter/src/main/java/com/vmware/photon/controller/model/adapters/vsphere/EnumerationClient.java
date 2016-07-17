@@ -219,9 +219,9 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.vm_config_hardware_device,
                 VimPath.vm_summary_config_numCpu,
                 VimPath.vm_config_extraConfig,
+                VimPath.vm_config_template,
                 VimPath.vm_runtime_powerState,
                 VimPath.vm_runtime_maxCpuUsage,
-                VimPath.vm_config_template,
                 VimPath.vm_runtime_maxMemoryUsage
         ));
 
@@ -243,12 +243,21 @@ public class EnumerationClient extends BaseHelper {
                 "name"
         ));
 
+        PropertySpec clusterSpec = new PropertySpec();
+        clusterSpec.setType(VimNames.TYPE_COMPUTE_RESOURCE);
+        clusterSpec.getPathSet().addAll(Arrays.asList(
+                VimPath.res_summary_numCpuCores,
+                VimPath.res_summary_totalCpu,
+                VimPath.res_summary_effectiveMemory,
+                "name"
+        ));
+
         PropertyFilterSpec filterSpec = new PropertyFilterSpec();
         filterSpec.getObjectSet().add(ospec);
         filterSpec.getPropSet().add(hostSpec);
         filterSpec.getPropSet().add(vmSpec);
         filterSpec.getPropSet().add(rpSpec);
-
+        filterSpec.getPropSet().add(clusterSpec);
         return filterSpec;
     }
 
@@ -312,7 +321,8 @@ public class EnumerationClient extends BaseHelper {
             if (this.result == null) {
                 try {
                     this.result = getVimPort()
-                            .retrievePropertiesEx(this.pc, Collections.singletonList(this.spec), this.opts);
+                            .retrievePropertiesEx(this.pc, Collections.singletonList(this.spec),
+                                    this.opts);
                 } catch (RuntimeException e) {
                     destroyCollectorQuietly(this.pc);
                     throw e;
@@ -325,7 +335,8 @@ public class EnumerationClient extends BaseHelper {
             }
 
             try {
-                this.result = getVimPort().continueRetrievePropertiesEx(this.pc, this.result.getToken());
+                this.result = getVimPort()
+                        .continueRetrievePropertiesEx(this.pc, this.result.getToken());
             } catch (RuntimeException e) {
                 destroyCollectorQuietly(this.pc);
                 throw e;

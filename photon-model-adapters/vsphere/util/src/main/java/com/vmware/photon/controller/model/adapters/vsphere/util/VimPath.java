@@ -1518,4 +1518,46 @@ public class VimPath {
     /** PropertyType: <code>ManagedEntityStatus</code> */
     public static final String rp_runtime_overallStatus = "runtime.overallStatus";
 
+    /** PropertyType: <code>ComputeResourceSummary</code> */
+    public static final String res_summary = "summary";
+
+    /** PropertyType: <code>int</code> */
+    public static final String res_summary_numHosts = "summary.numHosts";
+
+    /** PropertyType: <code>int</code> */
+    public static final String res_summary_numEffectiveHosts = "summary.numEffectiveHosts";
+
+    /** PropertyType: <code>int</code> */
+    public static final String res_summary_totalCpu = "summary.totalCpu";
+
+    /** PropertyType: <code>long</code> */
+    public static final String res_summary_totalMemory = "summary.totalMemory";
+
+    /** PropertyType: <code>long</code> */
+    public static final String res_summary_effectiveMemory = "summary.effectiveMemory";
+
+    /** PropertyType: <code>int</code> */
+    public static final String res_summary_effectiveCpu = "summary.effectiveCpu";
+
+    /** PropertyType: <code>short</code> */
+    public static final String res_summary_numCpuCores = "summary.numCpuCores";
+
+    /** PropertyType: <code>short</code> */
+    public static final String res_summary_numCpuThreads = "summary.numCpuThreads";
+
+    /** PropertyType: <code>ManagedEntityStatus</code> */
+    public static final String res_summary_overallStatus = "summary.overallStatus";
+
+    /** PropertyType: <code>ComputeResourceConfigInfo</code> */
+    public static final String res_configurationEx = "configurationEx";
+
+    /** PropertyType: <code>string</code> */
+    public static final String res_configurationEx_vmSwapPlacement = "configurationEx.vmSwapPlacement";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String res_configurationEx_spbmEnabled = "configurationEx.spbmEnabled";
+
+    /** PropertyType: <code>string</code> */
+    public static final String res_configurationEx_defaultHardwareVersionKey = "configurationEx.defaultHardwareVersionKey";
+
 }

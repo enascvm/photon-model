@@ -110,6 +110,9 @@ public final class VimPathGenerator {
 
         this.roots.put("rp:summary", "ResourcePoolSummary");
         this.roots.put("rp:runtime", "ResourcePoolRuntimeInfo");
+
+        this.roots.put("res:summary", "ComputeResourceSummary");
+        this.roots.put("res:configurationEx", "ComputeResourceConfigInfo");
     }
 
     private static class FieldType {
