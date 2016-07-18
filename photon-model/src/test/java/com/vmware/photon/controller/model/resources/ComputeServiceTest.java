@@ -42,6 +42,7 @@ import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.TenantService;
 
@@ -141,7 +142,7 @@ public class ComputeServiceTest extends Suite {
             this.host.stop();
             this.host.setPort(0);
             this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(100));
-            this.host.start();
+            VerificationHost.restartStatefulHost(this.host);
             startFactories(this);
             ComputeService.ComputeState getState = getServiceSynchronously(
                     returnState.documentSelfLink, ComputeService.ComputeState.class);
