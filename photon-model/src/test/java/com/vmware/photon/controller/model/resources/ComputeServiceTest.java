@@ -26,7 +26,6 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -42,7 +41,6 @@ import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.TenantService;
 
@@ -119,42 +117,6 @@ public class ComputeServiceTest extends Suite {
     public static class HandleStartTest extends BaseModelTest {
 
         public final long startTimeMicros = Utils.getNowMicrosUtc();
-
-        @Test
-        public void testValidStartStateWithRestart() throws Throwable {
-            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
-                    .createComputeDescription(this);
-            ComputeService.ComputeState startState = ComputeServiceTest
-                    .buildValidStartState(cd);
-            ComputeService.ComputeState returnState = postServiceSynchronously(
-                    ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
-
-            assertNotNull(returnState);
-            assertThat(returnState.id, is(startState.id));
-            assertThat(returnState.descriptionLink,
-                    is(startState.descriptionLink));
-            assertThat(returnState.address, is(startState.address));
-            assertThat(returnState.primaryMAC, is(startState.primaryMAC));
-            assertThat(returnState.powerState, is(startState.powerState));
-            assertThat(returnState.adapterManagementReference,
-                    is(startState.adapterManagementReference));
-
-            this.host.stop();
-            this.host.setPort(0);
-            this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(100));
-            VerificationHost.restartStatefulHost(this.host);
-            startFactories(this);
-            ComputeService.ComputeState getState = getServiceSynchronously(
-                    returnState.documentSelfLink, ComputeService.ComputeState.class);
-            assertThat(getState.id, is(startState.id));
-            assertThat(getState.descriptionLink,
-                    is(getState.descriptionLink));
-            assertThat(getState.address, is(startState.address));
-            assertThat(getState.primaryMAC, is(startState.primaryMAC));
-            assertThat(getState.powerState, is(startState.powerState));
-            assertThat(getState.adapterManagementReference,
-                    is(startState.adapterManagementReference));
-        }
 
         @Test
         public void testDuplicatePost() throws Throwable {
