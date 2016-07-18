@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.4.1-SNAPSHOT
+## 0.4.2-SNAPSHOT
+
+## 0.4.1
 
 * Add support for aggregating resource metrics to get hourly min/max/avg values
 
