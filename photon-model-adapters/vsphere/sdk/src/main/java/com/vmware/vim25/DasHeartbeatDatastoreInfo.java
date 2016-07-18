@@ -15,16 +15,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DasHeartbeatDatastoreInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="datastore" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="hosts" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DasHeartbeatDatastoreInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="datastore" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="hosts" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

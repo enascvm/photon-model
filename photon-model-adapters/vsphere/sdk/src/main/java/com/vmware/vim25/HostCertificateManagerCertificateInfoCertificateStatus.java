@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostCertificateManagerCertificateInfoCertificateStatus">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="unknown"/>
- *     &lt;enumeration value="expired"/>
- *     &lt;enumeration value="expiring"/>
- *     &lt;enumeration value="expiringShortly"/>
- *     &lt;enumeration value="expirationImminent"/>
- *     &lt;enumeration value="good"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostCertificateManagerCertificateInfoCertificateStatus"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="unknown"/&gt;
+ *     &lt;enumeration value="expired"/&gt;
+ *     &lt;enumeration value="expiring"/&gt;
+ *     &lt;enumeration value="expiringShortly"/&gt;
+ *     &lt;enumeration value="expirationImminent"/&gt;
+ *     &lt;enumeration value="good"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

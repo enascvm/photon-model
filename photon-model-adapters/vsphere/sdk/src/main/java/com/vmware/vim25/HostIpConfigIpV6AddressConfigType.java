@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostIpConfigIpV6AddressConfigType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="other"/>
- *     &lt;enumeration value="manual"/>
- *     &lt;enumeration value="dhcp"/>
- *     &lt;enumeration value="linklayer"/>
- *     &lt;enumeration value="random"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostIpConfigIpV6AddressConfigType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="other"/&gt;
+ *     &lt;enumeration value="manual"/&gt;
+ *     &lt;enumeration value="dhcp"/&gt;
+ *     &lt;enumeration value="linklayer"/&gt;
+ *     &lt;enumeration value="random"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

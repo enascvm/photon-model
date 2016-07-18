@@ -4,6 +4,7 @@ package com.vmware.vim25;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -13,17 +14,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="RelocateVMRequestType">
- *   &lt;complexContent>
- *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
- *       &lt;sequence>
- *         &lt;element name="_this" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="spec" type="{urn:vim25}VirtualMachineRelocateSpec"/>
- *         &lt;element name="priority" type="{urn:vim25}VirtualMachineMovePriority" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/restriction>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="RelocateVMRequestType"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="_this" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="spec" type="{urn:vim25}VirtualMachineRelocateSpec"/&gt;
+ *         &lt;element name="priority" type="{urn:vim25}VirtualMachineMovePriority" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/restriction&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -40,6 +41,7 @@ public class RelocateVMRequestType {
     protected ManagedObjectReference _this;
     @XmlElement(required = true)
     protected VirtualMachineRelocateSpec spec;
+    @XmlSchemaType(name = "string")
     protected VirtualMachineMovePriority priority;
 
     /**

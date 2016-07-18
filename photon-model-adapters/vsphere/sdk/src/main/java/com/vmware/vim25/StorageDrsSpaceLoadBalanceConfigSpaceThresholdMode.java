@@ -12,12 +12,12 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="StorageDrsSpaceLoadBalanceConfigSpaceThresholdMode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="utilization"/>
- *     &lt;enumeration value="freeSpace"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="StorageDrsSpaceLoadBalanceConfigSpaceThresholdMode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="utilization"/&gt;
+ *     &lt;enumeration value="freeSpace"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

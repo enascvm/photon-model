@@ -12,12 +12,12 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="NumVirtualCpusIncompatibleReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="recordReplay"/>
- *     &lt;enumeration value="faultTolerance"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="NumVirtualCpusIncompatibleReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="recordReplay"/&gt;
+ *     &lt;enumeration value="faultTolerance"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

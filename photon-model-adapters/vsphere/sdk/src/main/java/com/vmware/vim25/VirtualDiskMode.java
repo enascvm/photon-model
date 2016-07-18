@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualDiskMode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="persistent"/>
- *     &lt;enumeration value="nonpersistent"/>
- *     &lt;enumeration value="undoable"/>
- *     &lt;enumeration value="independent_persistent"/>
- *     &lt;enumeration value="independent_nonpersistent"/>
- *     &lt;enumeration value="append"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualDiskMode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="persistent"/&gt;
+ *     &lt;enumeration value="nonpersistent"/&gt;
+ *     &lt;enumeration value="undoable"/&gt;
+ *     &lt;enumeration value="independent_persistent"/&gt;
+ *     &lt;enumeration value="independent_nonpersistent"/&gt;
+ *     &lt;enumeration value="append"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -13,18 +13,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDiskOptionVFlashCacheConfigOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="cacheConsistencyType" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="cacheMode" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="reservationInMB" type="{urn:vim25}LongOption"/>
- *         &lt;element name="blockSizeInKB" type="{urn:vim25}LongOption"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDiskOptionVFlashCacheConfigOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="cacheConsistencyType" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="cacheMode" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="reservationInMB" type="{urn:vim25}LongOption"/&gt;
+ *         &lt;element name="blockSizeInKB" type="{urn:vim25}LongOption"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

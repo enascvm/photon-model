@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfExport">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfExport"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,13 +28,13 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OvfExport")
 @XmlSeeAlso({
-    OvfExportFailed.class,
     ConnectedIso.class,
-    OvfPropertyExport.class,
+    OvfDuplicatedPropertyIdExport.class,
     OvfDuplicatedPropertyIdImport.class,
+    OvfExportFailed.class,
+    OvfPropertyExport.class,
     OvfPropertyNetworkExport.class,
-    OvfHardwareExport.class,
-    OvfDuplicatedPropertyIdExport.class
+    OvfHardwareExport.class
 })
 public class OvfExport
     extends OvfFault

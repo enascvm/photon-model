@@ -13,18 +13,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostFibreChannelOverEthernetHba">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostFibreChannelHba">
- *       &lt;sequence>
- *         &lt;element name="underlyingNic" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="linkInfo" type="{urn:vim25}HostFibreChannelOverEthernetHbaLinkInfo"/>
- *         &lt;element name="isSoftwareFcoe" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="markedForRemoval" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostFibreChannelOverEthernetHba"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostFibreChannelHba"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="underlyingNic" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="linkInfo" type="{urn:vim25}HostFibreChannelOverEthernetHbaLinkInfo"/&gt;
+ *         &lt;element name="isSoftwareFcoe" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="markedForRemoval" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

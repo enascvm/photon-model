@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostIoFilterInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}IoFilterInfo">
- *       &lt;sequence>
- *         &lt;element name="available" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostIoFilterInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}IoFilterInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="available" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

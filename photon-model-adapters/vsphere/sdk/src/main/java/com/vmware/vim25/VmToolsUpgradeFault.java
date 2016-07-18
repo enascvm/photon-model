@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmToolsUpgradeFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmToolsUpgradeFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,12 +28,12 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VmToolsUpgradeFault")
 @XmlSeeAlso({
-    ToolsImageNotAvailable.class,
-    ToolsUpgradeCancelled.class,
     ToolsAlreadyUpgraded.class,
     ToolsAutoUpgradeNotSupported.class,
     ToolsImageCopyFailed.class,
-    ToolsImageSignatureCheckFailed.class
+    ToolsImageNotAvailable.class,
+    ToolsImageSignatureCheckFailed.class,
+    ToolsUpgradeCancelled.class
 })
 public class VmToolsUpgradeFault
     extends VimFault

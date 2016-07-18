@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachinePowerOpType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="soft"/>
- *     &lt;enumeration value="hard"/>
- *     &lt;enumeration value="preset"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachinePowerOpType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="soft"/&gt;
+ *     &lt;enumeration value="hard"/&gt;
+ *     &lt;enumeration value="preset"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

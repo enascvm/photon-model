@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="AlarmClearedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}AlarmEvent">
- *       &lt;sequence>
- *         &lt;element name="source" type="{urn:vim25}ManagedEntityEventArgument"/>
- *         &lt;element name="entity" type="{urn:vim25}ManagedEntityEventArgument"/>
- *         &lt;element name="from" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="AlarmClearedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}AlarmEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="source" type="{urn:vim25}ManagedEntityEventArgument"/&gt;
+ *         &lt;element name="entity" type="{urn:vim25}ManagedEntityEventArgument"/&gt;
+ *         &lt;element name="from" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

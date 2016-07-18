@@ -17,25 +17,25 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterRecommendation">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="time" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="rating" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="reason" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="reasonText" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="warningText" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="warningDetails" type="{urn:vim25}LocalizableMessage" minOccurs="0"/>
- *         &lt;element name="prerequisite" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="action" type="{urn:vim25}ClusterAction" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="target" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterRecommendation"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="time" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="rating" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="reason" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="reasonText" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="warningText" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="warningDetails" type="{urn:vim25}LocalizableMessage" minOccurs="0"/&gt;
+ *         &lt;element name="prerequisite" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="action" type="{urn:vim25}ClusterAction" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="target" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="UplinkPortVlanTrunkedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DvsHealthStatusChangeEvent">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="UplinkPortVlanTrunkedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DvsHealthStatusChangeEvent"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

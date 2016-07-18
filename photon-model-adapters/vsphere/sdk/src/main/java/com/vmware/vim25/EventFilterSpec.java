@@ -14,25 +14,25 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="EventFilterSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="entity" type="{urn:vim25}EventFilterSpecByEntity" minOccurs="0"/>
- *         &lt;element name="time" type="{urn:vim25}EventFilterSpecByTime" minOccurs="0"/>
- *         &lt;element name="userName" type="{urn:vim25}EventFilterSpecByUsername" minOccurs="0"/>
- *         &lt;element name="eventChainId" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="alarm" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="scheduledTask" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="disableFullMessage" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="category" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="tag" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="eventTypeId" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="EventFilterSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="entity" type="{urn:vim25}EventFilterSpecByEntity" minOccurs="0"/&gt;
+ *         &lt;element name="time" type="{urn:vim25}EventFilterSpecByTime" minOccurs="0"/&gt;
+ *         &lt;element name="userName" type="{urn:vim25}EventFilterSpecByUsername" minOccurs="0"/&gt;
+ *         &lt;element name="eventChainId" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="alarm" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="scheduledTask" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="disableFullMessage" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="category" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="tag" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="eventTypeId" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

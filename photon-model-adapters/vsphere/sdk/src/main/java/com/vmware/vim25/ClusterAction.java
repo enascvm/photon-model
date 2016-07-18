@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterAction">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="target" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterAction"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="target" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -34,13 +34,13 @@ import javax.xml.bind.annotation.XmlType;
     "target"
 })
 @XmlSeeAlso({
-    ClusterInitialPlacementAction.class,
     ClusterHostPowerAction.class,
-    PlacementAction.class,
-    StoragePlacementAction.class,
-    HbrDiskMigrationAction.class,
+    ClusterInitialPlacementAction.class,
     ClusterMigrationAction.class,
-    StorageMigrationAction.class
+    PlacementAction.class,
+    HbrDiskMigrationAction.class,
+    StorageMigrationAction.class,
+    StoragePlacementAction.class
 })
 public class ClusterAction
     extends DynamicData

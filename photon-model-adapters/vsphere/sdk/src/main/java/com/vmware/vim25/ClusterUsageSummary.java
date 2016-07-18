@@ -12,27 +12,27 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterUsageSummary">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="totalCpuCapacityMhz" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="totalMemCapacityMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="cpuReservationMhz" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="memReservationMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="poweredOffCpuReservationMhz" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="poweredOffMemReservationMB" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="cpuDemandMhz" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="memDemandMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="statsGenNumber" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="cpuEntitledMhz" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="memEntitledMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="poweredOffVmCount" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="totalVmCount" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterUsageSummary"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="totalCpuCapacityMhz" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="totalMemCapacityMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="cpuReservationMhz" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="memReservationMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="poweredOffCpuReservationMhz" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="poweredOffMemReservationMB" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="cpuDemandMhz" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="memDemandMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="statsGenNumber" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="cpuEntitledMhz" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="memEntitledMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="poweredOffVmCount" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="totalVmCount" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

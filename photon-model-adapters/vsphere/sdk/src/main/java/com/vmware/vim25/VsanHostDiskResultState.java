@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VsanHostDiskResultState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="inUse"/>
- *     &lt;enumeration value="eligible"/>
- *     &lt;enumeration value="ineligible"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VsanHostDiskResultState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="inUse"/&gt;
+ *     &lt;enumeration value="eligible"/&gt;
+ *     &lt;enumeration value="ineligible"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

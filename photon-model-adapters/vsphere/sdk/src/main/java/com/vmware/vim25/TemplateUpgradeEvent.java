@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="TemplateUpgradeEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *         &lt;element name="legacyTemplate" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="TemplateUpgradeEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="legacyTemplate" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,9 +32,9 @@ import javax.xml.bind.annotation.XmlType;
     "legacyTemplate"
 })
 @XmlSeeAlso({
-    TemplateUpgradedEvent.class,
+    TemplateBeingUpgradedEvent.class,
     TemplateUpgradeFailedEvent.class,
-    TemplateBeingUpgradedEvent.class
+    TemplateUpgradedEvent.class
 })
 public class TemplateUpgradeEvent
     extends Event

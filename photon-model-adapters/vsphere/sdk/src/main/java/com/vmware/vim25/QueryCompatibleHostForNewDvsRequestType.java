@@ -13,18 +13,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="QueryCompatibleHostForNewDvsRequestType">
- *   &lt;complexContent>
- *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
- *       &lt;sequence>
- *         &lt;element name="_this" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="container" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="recursive" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="switchProductSpec" type="{urn:vim25}DistributedVirtualSwitchProductSpec" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/restriction>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="QueryCompatibleHostForNewDvsRequestType"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="_this" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="container" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="recursive" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="switchProductSpec" type="{urn:vim25}DistributedVirtualSwitchProductSpec" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/restriction&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

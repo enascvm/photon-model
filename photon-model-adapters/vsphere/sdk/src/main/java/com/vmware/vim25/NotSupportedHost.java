@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="NotSupportedHost">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostConnectFault">
- *       &lt;sequence>
- *         &lt;element name="productName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="productVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="NotSupportedHost"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostConnectFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="productName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="productVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -33,14 +33,14 @@ import javax.xml.bind.annotation.XmlType;
     "productVersion"
 })
 @XmlSeeAlso({
-    NotSupportedHostForVFlash.class,
-    NotSupportedHostInHACluster.class,
     NonVmwareOuiMacNotSupportedHost.class,
+    NotSupportedHostForVFlash.class,
     NotSupportedHostForVmcp.class,
     NotSupportedHostForVmemFile.class,
-    NotSupportedHostInDvs.class,
     NotSupportedHostForVsan.class,
-    NotSupportedHostInCluster.class
+    NotSupportedHostInCluster.class,
+    NotSupportedHostInDvs.class,
+    NotSupportedHostInHACluster.class
 })
 public class NotSupportedHost
     extends HostConnectFault

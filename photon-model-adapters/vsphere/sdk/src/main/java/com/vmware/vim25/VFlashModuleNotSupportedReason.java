@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VFlashModuleNotSupportedReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="CacheModeNotSupported"/>
- *     &lt;enumeration value="CacheConsistencyTypeNotSupported"/>
- *     &lt;enumeration value="CacheBlockSizeNotSupported"/>
- *     &lt;enumeration value="CacheReservationNotSupported"/>
- *     &lt;enumeration value="DiskSizeNotSupported"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VFlashModuleNotSupportedReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="CacheModeNotSupported"/&gt;
+ *     &lt;enumeration value="CacheConsistencyTypeNotSupported"/&gt;
+ *     &lt;enumeration value="CacheBlockSizeNotSupported"/&gt;
+ *     &lt;enumeration value="CacheReservationNotSupported"/&gt;
+ *     &lt;enumeration value="DiskSizeNotSupported"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

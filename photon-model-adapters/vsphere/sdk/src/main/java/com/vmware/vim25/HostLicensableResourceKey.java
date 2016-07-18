@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostLicensableResourceKey">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="numCpuPackages"/>
- *     &lt;enumeration value="numCpuCores"/>
- *     &lt;enumeration value="memorySize"/>
- *     &lt;enumeration value="memoryForVms"/>
- *     &lt;enumeration value="numVmsStarted"/>
- *     &lt;enumeration value="numVmsStarting"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostLicensableResourceKey"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="numCpuPackages"/&gt;
+ *     &lt;enumeration value="numCpuCores"/&gt;
+ *     &lt;enumeration value="memorySize"/&gt;
+ *     &lt;enumeration value="memoryForVms"/&gt;
+ *     &lt;enumeration value="numVmsStarted"/&gt;
+ *     &lt;enumeration value="numVmsStarting"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

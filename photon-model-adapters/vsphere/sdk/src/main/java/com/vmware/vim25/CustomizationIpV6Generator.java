@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="CustomizationIpV6Generator">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="CustomizationIpV6Generator"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,12 +28,12 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "CustomizationIpV6Generator")
 @XmlSeeAlso({
-    CustomizationCustomIpV6Generator.class,
     CustomizationDhcpIpV6Generator.class,
     CustomizationStatelessIpV6Generator.class,
-    CustomizationUnknownIpV6Generator.class,
+    CustomizationFixedIpV6 .class,
     CustomizationAutoIpV6Generator.class,
-    CustomizationFixedIpV6 .class
+    CustomizationUnknownIpV6Generator.class,
+    CustomizationCustomIpV6Generator.class
 })
 public class CustomizationIpV6Generator
     extends DynamicData

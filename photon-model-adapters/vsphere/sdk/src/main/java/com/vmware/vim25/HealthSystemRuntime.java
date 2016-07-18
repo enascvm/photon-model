@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HealthSystemRuntime">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="systemHealthInfo" type="{urn:vim25}HostSystemHealthInfo" minOccurs="0"/>
- *         &lt;element name="hardwareStatusInfo" type="{urn:vim25}HostHardwareStatusInfo" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HealthSystemRuntime"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="systemHealthInfo" type="{urn:vim25}HostSystemHealthInfo" minOccurs="0"/&gt;
+ *         &lt;element name="hardwareStatusInfo" type="{urn:vim25}HostHardwareStatusInfo" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

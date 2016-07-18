@@ -15,18 +15,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="RemoveDiskMappingRequestType">
- *   &lt;complexContent>
- *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
- *       &lt;sequence>
- *         &lt;element name="_this" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="mapping" type="{urn:vim25}VsanHostDiskMapping" maxOccurs="unbounded"/>
- *         &lt;element name="maintenanceSpec" type="{urn:vim25}HostMaintenanceSpec" minOccurs="0"/>
- *         &lt;element name="timeout" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/restriction>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="RemoveDiskMappingRequestType"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="_this" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="mapping" type="{urn:vim25}VsanHostDiskMapping" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="maintenanceSpec" type="{urn:vim25}HostMaintenanceSpec" minOccurs="0"/&gt;
+ *         &lt;element name="timeout" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/restriction&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

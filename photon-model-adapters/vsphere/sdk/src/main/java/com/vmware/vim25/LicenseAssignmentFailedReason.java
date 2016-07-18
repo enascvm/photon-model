@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="LicenseAssignmentFailedReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="keyEntityMismatch"/>
- *     &lt;enumeration value="downgradeDisallowed"/>
- *     &lt;enumeration value="inventoryNotManageableByVirtualCenter"/>
- *     &lt;enumeration value="hostsUnmanageableByVirtualCenterWithoutLicenseServer"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="LicenseAssignmentFailedReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="keyEntityMismatch"/&gt;
+ *     &lt;enumeration value="downgradeDisallowed"/&gt;
+ *     &lt;enumeration value="inventoryNotManageableByVirtualCenter"/&gt;
+ *     &lt;enumeration value="hostsUnmanageableByVirtualCenterWithoutLicenseServer"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

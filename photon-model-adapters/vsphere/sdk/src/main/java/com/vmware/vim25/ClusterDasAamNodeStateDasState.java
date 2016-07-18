@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ClusterDasAamNodeStateDasState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="uninitialized"/>
- *     &lt;enumeration value="initialized"/>
- *     &lt;enumeration value="configuring"/>
- *     &lt;enumeration value="unconfiguring"/>
- *     &lt;enumeration value="running"/>
- *     &lt;enumeration value="error"/>
- *     &lt;enumeration value="agentShutdown"/>
- *     &lt;enumeration value="nodeFailed"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ClusterDasAamNodeStateDasState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="uninitialized"/&gt;
+ *     &lt;enumeration value="initialized"/&gt;
+ *     &lt;enumeration value="configuring"/&gt;
+ *     &lt;enumeration value="unconfiguring"/&gt;
+ *     &lt;enumeration value="running"/&gt;
+ *     &lt;enumeration value="error"/&gt;
+ *     &lt;enumeration value="agentShutdown"/&gt;
+ *     &lt;enumeration value="nodeFailed"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -13,19 +13,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="CustomizationSysprep">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}CustomizationIdentitySettings">
- *       &lt;sequence>
- *         &lt;element name="guiUnattended" type="{urn:vim25}CustomizationGuiUnattended"/>
- *         &lt;element name="userData" type="{urn:vim25}CustomizationUserData"/>
- *         &lt;element name="guiRunOnce" type="{urn:vim25}CustomizationGuiRunOnce" minOccurs="0"/>
- *         &lt;element name="identification" type="{urn:vim25}CustomizationIdentification"/>
- *         &lt;element name="licenseFilePrintData" type="{urn:vim25}CustomizationLicenseFilePrintData" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="CustomizationSysprep"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}CustomizationIdentitySettings"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="guiUnattended" type="{urn:vim25}CustomizationGuiUnattended"/&gt;
+ *         &lt;element name="userData" type="{urn:vim25}CustomizationUserData"/&gt;
+ *         &lt;element name="guiRunOnce" type="{urn:vim25}CustomizationGuiRunOnce" minOccurs="0"/&gt;
+ *         &lt;element name="identification" type="{urn:vim25}CustomizationIdentification"/&gt;
+ *         &lt;element name="licenseFilePrintData" type="{urn:vim25}CustomizationLicenseFilePrintData" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

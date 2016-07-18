@@ -15,19 +15,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostUnresolvedVmfsVolume">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="extent" type="{urn:vim25}HostUnresolvedVmfsExtent" maxOccurs="unbounded"/>
- *         &lt;element name="vmfsLabel" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="vmfsUuid" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="totalBlocks" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="resolveStatus" type="{urn:vim25}HostUnresolvedVmfsVolumeResolveStatus"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostUnresolvedVmfsVolume"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="extent" type="{urn:vim25}HostUnresolvedVmfsExtent" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="vmfsLabel" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="vmfsUuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="totalBlocks" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="resolveStatus" type="{urn:vim25}HostUnresolvedVmfsVolumeResolveStatus"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

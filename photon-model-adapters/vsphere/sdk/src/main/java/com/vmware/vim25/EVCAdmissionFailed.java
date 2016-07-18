@@ -15,15 +15,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="EVCAdmissionFailed">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}NotSupportedHostInCluster">
- *       &lt;sequence>
- *         &lt;element name="faults" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="EVCAdmissionFailed"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}NotSupportedHostInCluster"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="faults" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -33,15 +33,15 @@ import javax.xml.bind.annotation.XmlType;
     "faults"
 })
 @XmlSeeAlso({
-    EVCAdmissionFailedHostSoftware.class,
     EVCAdmissionFailedCPUFeaturesForMode.class,
-    EVCAdmissionFailedHostSoftwareForMode.class,
-    EVCAdmissionFailedCPUVendorUnknown.class,
-    EVCAdmissionFailedCPUVendor.class,
-    EVCAdmissionFailedCPUModelForMode.class,
-    EVCAdmissionFailedVmActive.class,
     EVCAdmissionFailedCPUModel.class,
-    EVCAdmissionFailedHostDisconnected.class
+    EVCAdmissionFailedCPUModelForMode.class,
+    EVCAdmissionFailedCPUVendor.class,
+    EVCAdmissionFailedCPUVendorUnknown.class,
+    EVCAdmissionFailedHostDisconnected.class,
+    EVCAdmissionFailedHostSoftware.class,
+    EVCAdmissionFailedHostSoftwareForMode.class,
+    EVCAdmissionFailedVmActive.class
 })
 public class EVCAdmissionFailed
     extends NotSupportedHostInCluster

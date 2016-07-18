@@ -12,12 +12,12 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ThirdPartyLicenseAssignmentFailedReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="licenseAssignmentFailed"/>
- *     &lt;enumeration value="moduleNotInstalled"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ThirdPartyLicenseAssignmentFailedReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="licenseAssignmentFailed"/&gt;
+ *     &lt;enumeration value="moduleNotInstalled"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

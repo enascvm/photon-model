@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="LicenseSourceUnavailable">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}NotEnoughLicenses">
- *       &lt;sequence>
- *         &lt;element name="licenseSource" type="{urn:vim25}LicenseSource"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="LicenseSourceUnavailable"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}NotEnoughLicenses"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="licenseSource" type="{urn:vim25}LicenseSource"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

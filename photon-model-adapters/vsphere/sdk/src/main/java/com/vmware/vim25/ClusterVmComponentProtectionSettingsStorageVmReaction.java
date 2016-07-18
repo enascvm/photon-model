@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ClusterVmComponentProtectionSettingsStorageVmReaction">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="disabled"/>
- *     &lt;enumeration value="warning"/>
- *     &lt;enumeration value="restartConservative"/>
- *     &lt;enumeration value="restartAggressive"/>
- *     &lt;enumeration value="clusterDefault"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ClusterVmComponentProtectionSettingsStorageVmReaction"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="disabled"/&gt;
+ *     &lt;enumeration value="warning"/&gt;
+ *     &lt;enumeration value="restartConservative"/&gt;
+ *     &lt;enumeration value="restartAggressive"/&gt;
+ *     &lt;enumeration value="clusterDefault"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

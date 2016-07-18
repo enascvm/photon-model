@@ -15,16 +15,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ChoiceOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OptionType">
- *       &lt;sequence>
- *         &lt;element name="choiceInfo" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/>
- *         &lt;element name="defaultIndex" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ChoiceOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OptionType"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="choiceInfo" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="defaultIndex" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

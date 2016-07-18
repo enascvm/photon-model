@@ -13,20 +13,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HttpNfcLeaseManifestEntry">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="sha1" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="size" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="disk" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="capacity" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="populatedSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HttpNfcLeaseManifestEntry"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="sha1" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="size" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="disk" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="capacity" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="populatedSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

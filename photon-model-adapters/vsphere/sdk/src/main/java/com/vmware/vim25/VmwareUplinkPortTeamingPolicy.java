@@ -12,20 +12,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmwareUplinkPortTeamingPolicy">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}InheritablePolicy">
- *       &lt;sequence>
- *         &lt;element name="policy" type="{urn:vim25}StringPolicy" minOccurs="0"/>
- *         &lt;element name="reversePolicy" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *         &lt;element name="notifySwitches" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *         &lt;element name="rollingOrder" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *         &lt;element name="failureCriteria" type="{urn:vim25}DVSFailureCriteria" minOccurs="0"/>
- *         &lt;element name="uplinkPortOrder" type="{urn:vim25}VMwareUplinkPortOrderPolicy" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmwareUplinkPortTeamingPolicy"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}InheritablePolicy"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="policy" type="{urn:vim25}StringPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="reversePolicy" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="notifySwitches" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="rollingOrder" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="failureCriteria" type="{urn:vim25}DVSFailureCriteria" minOccurs="0"/&gt;
+ *         &lt;element name="uplinkPortOrder" type="{urn:vim25}VMwareUplinkPortOrderPolicy" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

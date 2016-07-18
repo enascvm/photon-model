@@ -14,20 +14,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostStorageDeviceInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="hostBusAdapter" type="{urn:vim25}HostHostBusAdapter" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="scsiLun" type="{urn:vim25}ScsiLun" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="scsiTopology" type="{urn:vim25}HostScsiTopology" minOccurs="0"/>
- *         &lt;element name="multipathInfo" type="{urn:vim25}HostMultipathInfo" minOccurs="0"/>
- *         &lt;element name="plugStoreTopology" type="{urn:vim25}HostPlugStoreTopology" minOccurs="0"/>
- *         &lt;element name="softwareInternetScsiEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostStorageDeviceInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="hostBusAdapter" type="{urn:vim25}HostHostBusAdapter" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="scsiLun" type="{urn:vim25}ScsiLun" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="scsiTopology" type="{urn:vim25}HostScsiTopology" minOccurs="0"/&gt;
+ *         &lt;element name="multipathInfo" type="{urn:vim25}HostMultipathInfo" minOccurs="0"/&gt;
+ *         &lt;element name="plugStoreTopology" type="{urn:vim25}HostPlugStoreTopology" minOccurs="0"/&gt;
+ *         &lt;element name="softwareInternetScsiEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

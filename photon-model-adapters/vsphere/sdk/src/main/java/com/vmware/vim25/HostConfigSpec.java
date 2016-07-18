@@ -14,31 +14,31 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostConfigSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="nasDatastore" type="{urn:vim25}HostNasVolumeConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="network" type="{urn:vim25}HostNetworkConfig" minOccurs="0"/>
- *         &lt;element name="nicTypeSelection" type="{urn:vim25}HostVirtualNicManagerNicTypeSelection" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="service" type="{urn:vim25}HostServiceConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="firewall" type="{urn:vim25}HostFirewallConfig" minOccurs="0"/>
- *         &lt;element name="option" type="{urn:vim25}OptionValue" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="datastorePrincipal" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="datastorePrincipalPasswd" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="datetime" type="{urn:vim25}HostDateTimeConfig" minOccurs="0"/>
- *         &lt;element name="storageDevice" type="{urn:vim25}HostStorageDeviceInfo" minOccurs="0"/>
- *         &lt;element name="license" type="{urn:vim25}HostLicenseSpec" minOccurs="0"/>
- *         &lt;element name="security" type="{urn:vim25}HostSecuritySpec" minOccurs="0"/>
- *         &lt;element name="userAccount" type="{urn:vim25}HostAccountSpec" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="usergroupAccount" type="{urn:vim25}HostAccountSpec" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="memory" type="{urn:vim25}HostMemorySpec" minOccurs="0"/>
- *         &lt;element name="activeDirectory" type="{urn:vim25}HostActiveDirectory" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="genericConfig" type="{urn:vim25}KeyAnyValue" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostConfigSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="nasDatastore" type="{urn:vim25}HostNasVolumeConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="network" type="{urn:vim25}HostNetworkConfig" minOccurs="0"/&gt;
+ *         &lt;element name="nicTypeSelection" type="{urn:vim25}HostVirtualNicManagerNicTypeSelection" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="service" type="{urn:vim25}HostServiceConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="firewall" type="{urn:vim25}HostFirewallConfig" minOccurs="0"/&gt;
+ *         &lt;element name="option" type="{urn:vim25}OptionValue" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="datastorePrincipal" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="datastorePrincipalPasswd" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="datetime" type="{urn:vim25}HostDateTimeConfig" minOccurs="0"/&gt;
+ *         &lt;element name="storageDevice" type="{urn:vim25}HostStorageDeviceInfo" minOccurs="0"/&gt;
+ *         &lt;element name="license" type="{urn:vim25}HostLicenseSpec" minOccurs="0"/&gt;
+ *         &lt;element name="security" type="{urn:vim25}HostSecuritySpec" minOccurs="0"/&gt;
+ *         &lt;element name="userAccount" type="{urn:vim25}HostAccountSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="usergroupAccount" type="{urn:vim25}HostAccountSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="memory" type="{urn:vim25}HostMemorySpec" minOccurs="0"/&gt;
+ *         &lt;element name="activeDirectory" type="{urn:vim25}HostActiveDirectory" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="genericConfig" type="{urn:vim25}KeyAnyValue" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

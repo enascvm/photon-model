@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="GatewayToHostConnectFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}GatewayConnectFault">
- *       &lt;sequence>
- *         &lt;element name="hostname" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="port" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="GatewayToHostConnectFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}GatewayConnectFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="hostname" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="port" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -34,9 +34,9 @@ import javax.xml.bind.annotation.XmlType;
     "port"
 })
 @XmlSeeAlso({
+    GatewayHostNotReachable.class,
     GatewayToHostAuthFault.class,
-    GatewayToHostTrustVerifyFault.class,
-    GatewayHostNotReachable.class
+    GatewayToHostTrustVerifyFault.class
 })
 public class GatewayToHostConnectFault
     extends GatewayConnectFault

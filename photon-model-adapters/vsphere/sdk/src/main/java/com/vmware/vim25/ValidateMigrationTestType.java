@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ValidateMigrationTestType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="sourceTests"/>
- *     &lt;enumeration value="compatibilityTests"/>
- *     &lt;enumeration value="diskAccessibilityTests"/>
- *     &lt;enumeration value="resourceTests"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ValidateMigrationTestType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="sourceTests"/&gt;
+ *     &lt;enumeration value="compatibilityTests"/&gt;
+ *     &lt;enumeration value="diskAccessibilityTests"/&gt;
+ *     &lt;enumeration value="resourceTests"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

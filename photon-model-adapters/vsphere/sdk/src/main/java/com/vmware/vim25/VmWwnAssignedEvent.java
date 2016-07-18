@@ -15,16 +15,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmWwnAssignedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmEvent">
- *       &lt;sequence>
- *         &lt;element name="nodeWwns" type="{http://www.w3.org/2001/XMLSchema}long" maxOccurs="unbounded"/>
- *         &lt;element name="portWwns" type="{http://www.w3.org/2001/XMLSchema}long" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmWwnAssignedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="nodeWwns" type="{http://www.w3.org/2001/XMLSchema}long" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="portWwns" type="{http://www.w3.org/2001/XMLSchema}long" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

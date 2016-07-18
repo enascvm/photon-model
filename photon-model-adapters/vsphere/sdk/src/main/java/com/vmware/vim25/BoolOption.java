@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="BoolOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OptionType">
- *       &lt;sequence>
- *         &lt;element name="supported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="defaultValue" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="BoolOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OptionType"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="supported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="defaultValue" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

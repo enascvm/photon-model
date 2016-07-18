@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="CannotPowerOffVmInClusterOperation">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="suspend"/>
- *     &lt;enumeration value="powerOff"/>
- *     &lt;enumeration value="guestShutdown"/>
- *     &lt;enumeration value="guestSuspend"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="CannotPowerOffVmInClusterOperation"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="suspend"/&gt;
+ *     &lt;enumeration value="powerOff"/&gt;
+ *     &lt;enumeration value="guestShutdown"/&gt;
+ *     &lt;enumeration value="guestSuspend"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

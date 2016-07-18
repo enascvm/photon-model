@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ResourcePoolEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *         &lt;element name="resourcePool" type="{urn:vim25}ResourcePoolEventArgument"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ResourcePoolEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="resourcePool" type="{urn:vim25}ResourcePoolEventArgument"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,10 +32,10 @@ import javax.xml.bind.annotation.XmlType;
     "resourcePool"
 })
 @XmlSeeAlso({
-    ResourcePoolDestroyedEvent.class,
     ResourcePoolCreatedEvent.class,
-    ResourcePoolReconfiguredEvent.class,
+    ResourcePoolDestroyedEvent.class,
     ResourcePoolMovedEvent.class,
+    ResourcePoolReconfiguredEvent.class,
     ResourceViolatedEvent.class
 })
 public class ResourcePoolEvent

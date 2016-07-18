@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="SessionManagerHttpServiceRequestSpecMethod">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="httpOptions"/>
- *     &lt;enumeration value="httpGet"/>
- *     &lt;enumeration value="httpHead"/>
- *     &lt;enumeration value="httpPost"/>
- *     &lt;enumeration value="httpPut"/>
- *     &lt;enumeration value="httpDelete"/>
- *     &lt;enumeration value="httpTrace"/>
- *     &lt;enumeration value="httpConnect"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="SessionManagerHttpServiceRequestSpecMethod"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="httpOptions"/&gt;
+ *     &lt;enumeration value="httpGet"/&gt;
+ *     &lt;enumeration value="httpHead"/&gt;
+ *     &lt;enumeration value="httpPost"/&gt;
+ *     &lt;enumeration value="httpPut"/&gt;
+ *     &lt;enumeration value="httpDelete"/&gt;
+ *     &lt;enumeration value="httpTrace"/&gt;
+ *     &lt;enumeration value="httpConnect"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

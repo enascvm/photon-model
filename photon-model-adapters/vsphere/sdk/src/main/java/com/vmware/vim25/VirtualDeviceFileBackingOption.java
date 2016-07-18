@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDeviceFileBackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceBackingOption">
- *       &lt;sequence>
- *         &lt;element name="fileNameExtensions" type="{urn:vim25}ChoiceOption" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDeviceFileBackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="fileNameExtensions" type="{urn:vim25}ChoiceOption" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -31,15 +31,15 @@ import javax.xml.bind.annotation.XmlType;
     "fileNameExtensions"
 })
 @XmlSeeAlso({
-    VirtualParallelPortFileBackingOption.class,
+    VirtualCdromIsoBackingOption.class,
+    VirtualDiskSparseVer1BackingOption.class,
     VirtualDiskSparseVer2BackingOption.class,
     VirtualDiskFlatVer1BackingOption.class,
-    VirtualDiskSeSparseBackingOption.class,
     VirtualDiskFlatVer2BackingOption.class,
-    VirtualCdromIsoBackingOption.class,
+    VirtualDiskSeSparseBackingOption.class,
     VirtualFloppyImageBackingOption.class,
-    VirtualSerialPortFileBackingOption.class,
-    VirtualDiskSparseVer1BackingOption.class
+    VirtualParallelPortFileBackingOption.class,
+    VirtualSerialPortFileBackingOption.class
 })
 public class VirtualDeviceFileBackingOption
     extends VirtualDeviceBackingOption

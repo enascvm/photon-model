@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineGuestState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="running"/>
- *     &lt;enumeration value="shuttingDown"/>
- *     &lt;enumeration value="resetting"/>
- *     &lt;enumeration value="standby"/>
- *     &lt;enumeration value="notRunning"/>
- *     &lt;enumeration value="unknown"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineGuestState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="running"/&gt;
+ *     &lt;enumeration value="shuttingDown"/&gt;
+ *     &lt;enumeration value="resetting"/&gt;
+ *     &lt;enumeration value="standby"/&gt;
+ *     &lt;enumeration value="notRunning"/&gt;
+ *     &lt;enumeration value="unknown"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

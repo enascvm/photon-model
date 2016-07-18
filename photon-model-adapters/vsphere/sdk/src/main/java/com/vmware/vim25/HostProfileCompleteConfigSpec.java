@@ -14,20 +14,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostProfileCompleteConfigSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostProfileConfigSpec">
- *       &lt;sequence>
- *         &lt;element name="applyProfile" type="{urn:vim25}HostApplyProfile" minOccurs="0"/>
- *         &lt;element name="customComplyProfile" type="{urn:vim25}ComplianceProfile" minOccurs="0"/>
- *         &lt;element name="disabledExpressionListChanged" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="disabledExpressionList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="validatorHost" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="validating" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostProfileCompleteConfigSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostProfileConfigSpec"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="applyProfile" type="{urn:vim25}HostApplyProfile" minOccurs="0"/&gt;
+ *         &lt;element name="customComplyProfile" type="{urn:vim25}ComplianceProfile" minOccurs="0"/&gt;
+ *         &lt;element name="disabledExpressionListChanged" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="disabledExpressionList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="validatorHost" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="validating" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

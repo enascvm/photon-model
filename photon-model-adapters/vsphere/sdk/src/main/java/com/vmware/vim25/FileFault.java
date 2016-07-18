@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="FileFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *         &lt;element name="file" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="FileFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="file" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,24 +32,24 @@ import javax.xml.bind.annotation.XmlType;
     "file"
 })
 @XmlSeeAlso({
-    TooManyConcurrentNativeClones.class,
-    FileNameTooLong.class,
-    CannotCreateFile.class,
-    FileNotWritable.class,
-    NoDiskSpace.class,
-    FileNotFound.class,
     CannotAccessFile.class,
-    NetworkCopyFault.class,
-    IncorrectFileType.class,
-    TooManyNativeClonesOnFile.class,
-    NotADirectory.class,
-    DirectoryNotEmpty.class,
-    FileTooLarge.class,
-    FileLocked.class,
+    CannotCreateFile.class,
     CannotDeleteFile.class,
+    DirectoryNotEmpty.class,
+    FileAlreadyExists.class,
+    FileLocked.class,
+    FileNameTooLong.class,
+    FileNotFound.class,
+    FileNotWritable.class,
+    FileTooLarge.class,
+    IncorrectFileType.class,
+    NetworkCopyFault.class,
+    NoDiskSpace.class,
+    NotADirectory.class,
     NotAFile.class,
+    TooManyConcurrentNativeClones.class,
     TooManyNativeCloneLevels.class,
-    FileAlreadyExists.class
+    TooManyNativeClonesOnFile.class
 })
 public class FileFault
     extends VimFault

@@ -12,12 +12,12 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="CannotMoveFaultToleranceVmMoveType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="resourcePool"/>
- *     &lt;enumeration value="cluster"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="CannotMoveFaultToleranceVmMoveType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="resourcePool"/&gt;
+ *     &lt;enumeration value="cluster"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -4,6 +4,7 @@ package com.vmware.vim25;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -13,21 +14,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="MetricAlarmExpression">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}AlarmExpression">
- *       &lt;sequence>
- *         &lt;element name="operator" type="{urn:vim25}MetricAlarmOperator"/>
- *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="metric" type="{urn:vim25}PerfMetricId"/>
- *         &lt;element name="yellow" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="yellowInterval" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="red" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="redInterval" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="MetricAlarmExpression"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}AlarmExpression"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="operator" type="{urn:vim25}MetricAlarmOperator"/&gt;
+ *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="metric" type="{urn:vim25}PerfMetricId"/&gt;
+ *         &lt;element name="yellow" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="yellowInterval" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="red" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="redInterval" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -47,6 +48,7 @@ public class MetricAlarmExpression
 {
 
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected MetricAlarmOperator operator;
     @XmlElement(required = true)
     protected String type;

@@ -3,6 +3,7 @@ package com.vmware.vim25;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -12,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="CustomizationWinOptions">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}CustomizationOptions">
- *       &lt;sequence>
- *         &lt;element name="changeSID" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="deleteAccounts" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="reboot" type="{urn:vim25}CustomizationSysprepRebootOption" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="CustomizationWinOptions"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}CustomizationOptions"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="changeSID" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="deleteAccounts" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="reboot" type="{urn:vim25}CustomizationSysprepRebootOption" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -39,6 +40,7 @@ public class CustomizationWinOptions
 
     protected boolean changeSID;
     protected boolean deleteAccounts;
+    @XmlSchemaType(name = "string")
     protected CustomizationSysprepRebootOption reboot;
 
     /**

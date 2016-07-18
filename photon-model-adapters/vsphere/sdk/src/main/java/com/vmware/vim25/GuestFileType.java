@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="GuestFileType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="file"/>
- *     &lt;enumeration value="directory"/>
- *     &lt;enumeration value="symlink"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="GuestFileType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="file"/&gt;
+ *     &lt;enumeration value="directory"/&gt;
+ *     &lt;enumeration value="symlink"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

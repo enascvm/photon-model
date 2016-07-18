@@ -12,12 +12,12 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DiagnosticPartitionType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="singleHost"/>
- *     &lt;enumeration value="multiHost"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DiagnosticPartitionType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="singleHost"/&gt;
+ *     &lt;enumeration value="multiHost"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

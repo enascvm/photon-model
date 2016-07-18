@@ -4,6 +4,7 @@ package com.vmware.vim25;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -13,18 +14,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterHostPowerAction">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ClusterAction">
- *       &lt;sequence>
- *         &lt;element name="operationType" type="{urn:vim25}HostPowerOperationType"/>
- *         &lt;element name="powerConsumptionWatt" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="cpuCapacityMHz" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="memCapacityMB" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterHostPowerAction"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ClusterAction"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="operationType" type="{urn:vim25}HostPowerOperationType"/&gt;
+ *         &lt;element name="powerConsumptionWatt" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="cpuCapacityMHz" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="memCapacityMB" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -41,6 +42,7 @@ public class ClusterHostPowerAction
 {
 
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected HostPowerOperationType operationType;
     protected Integer powerConsumptionWatt;
     protected Integer cpuCapacityMHz;

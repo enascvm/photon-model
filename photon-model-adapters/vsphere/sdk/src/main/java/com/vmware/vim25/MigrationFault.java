@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="MigrationFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="MigrationFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,42 +28,42 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "MigrationFault")
 @XmlSeeAlso({
-    SnapshotRevertIssue.class,
-    MismatchedVMotionNetworkNames.class,
+    AffinityConfigured.class,
+    CannotModifyConfigCpuRequirements.class,
+    CannotMoveVmWithDeltaDisk.class,
+    CannotMoveVmWithNativeDeltaDisk.class,
+    CloneFromSnapshotNotSupported.class,
+    DatacenterMismatch.class,
+    DisallowedMigrationDeviceAttached.class,
+    DiskMoveTypeNotSupported.class,
+    FaultToleranceAntiAffinityViolated.class,
+    FaultToleranceNeedsThickDisk.class,
     FaultToleranceNotSameBuild.class,
-    ToolsInstallationInProgress.class,
-    WillLoseHAProtection.class,
-    MigrationDisabled.class,
+    HAErrorsAtDest.class,
+    IncompatibleDefaultDevice.class,
     LargeRDMConversionNotSupported.class,
     MaintenanceModeFileMove.class,
-    CannotMoveVmWithNativeDeltaDisk.class,
-    DiskMoveTypeNotSupported.class,
-    CannotModifyConfigCpuRequirements.class,
-    FaultToleranceAntiAffinityViolated.class,
-    UncommittedUndoableDisk.class,
-    RDMNotPreserved.class,
-    TooManyDisksOnLegacyHost.class,
-    NetworksMayNotBeTheSame.class,
-    AffinityConfigured.class,
-    ReadOnlyDisksWithLegacyDestination.class,
-    HAErrorsAtDest.class,
-    WillModifyConfigCpuRequirements.class,
-    CannotMoveVmWithDeltaDisk.class,
-    SuspendedRelocateNotSupported.class,
-    RDMConversionNotSupported.class,
-    DatacenterMismatch.class,
-    WillResetSnapshotDirectory.class,
+    MigrationDisabled.class,
     MigrationNotReady.class,
-    FaultToleranceNeedsThickDisk.class,
-    NoGuestHeartbeat.class,
-    SnapshotCopyNotSupported.class,
     MismatchedNetworkPolicies.class,
+    MismatchedVMotionNetworkNames.class,
+    NetworksMayNotBeTheSame.class,
+    NoGuestHeartbeat.class,
+    RDMConversionNotSupported.class,
+    RDMNotPreserved.class,
+    ReadOnlyDisksWithLegacyDestination.class,
+    SnapshotCopyNotSupported.class,
+    SnapshotRevertIssue.class,
+    SuspendedRelocateNotSupported.class,
+    TooManyDisksOnLegacyHost.class,
+    ToolsInstallationInProgress.class,
+    UncommittedUndoableDisk.class,
     MigrationFeatureNotSupported.class,
-    IncompatibleDefaultDevice.class,
-    DisallowedMigrationDeviceAttached.class,
-    CloneFromSnapshotNotSupported.class,
+    VMotionInterfaceIssue.class,
     VMotionProtocolIncompatible.class,
-    VMotionInterfaceIssue.class
+    WillLoseHAProtection.class,
+    WillModifyConfigCpuRequirements.class,
+    WillResetSnapshotDirectory.class
 })
 public class MigrationFault
     extends VimFault

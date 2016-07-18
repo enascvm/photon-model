@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineToolsStatus">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="toolsNotInstalled"/>
- *     &lt;enumeration value="toolsNotRunning"/>
- *     &lt;enumeration value="toolsOld"/>
- *     &lt;enumeration value="toolsOk"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineToolsStatus"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="toolsNotInstalled"/&gt;
+ *     &lt;enumeration value="toolsNotRunning"/&gt;
+ *     &lt;enumeration value="toolsOld"/&gt;
+ *     &lt;enumeration value="toolsOk"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

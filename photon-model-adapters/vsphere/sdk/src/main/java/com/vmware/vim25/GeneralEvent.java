@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="GeneralEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *         &lt;element name="message" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="GeneralEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="message" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,14 +32,14 @@ import javax.xml.bind.annotation.XmlType;
     "message"
 })
 @XmlSeeAlso({
-    GeneralUserEvent.class,
     GeneralHostInfoEvent.class,
+    GeneralHostWarningEvent.class,
     GeneralHostErrorEvent.class,
     GeneralVmInfoEvent.class,
     GeneralVmWarningEvent.class,
-    ExtendedEvent.class,
     GeneralVmErrorEvent.class,
-    GeneralHostWarningEvent.class
+    GeneralUserEvent.class,
+    ExtendedEvent.class
 })
 public class GeneralEvent
     extends Event

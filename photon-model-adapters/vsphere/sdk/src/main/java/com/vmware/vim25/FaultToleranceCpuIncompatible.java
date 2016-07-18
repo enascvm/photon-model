@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="FaultToleranceCpuIncompatible">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}CpuIncompatible">
- *       &lt;sequence>
- *         &lt;element name="model" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="family" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="stepping" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="FaultToleranceCpuIncompatible"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}CpuIncompatible"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="model" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="family" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="stepping" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

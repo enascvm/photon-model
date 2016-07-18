@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualSriovEthernetCard">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualEthernetCard">
- *       &lt;sequence>
- *         &lt;element name="allowGuestOSMtuChange" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="sriovBacking" type="{urn:vim25}VirtualSriovEthernetCardSriovBackingInfo" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualSriovEthernetCard"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualEthernetCard"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="allowGuestOSMtuChange" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="sriovBacking" type="{urn:vim25}VirtualSriovEthernetCardSriovBackingInfo" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

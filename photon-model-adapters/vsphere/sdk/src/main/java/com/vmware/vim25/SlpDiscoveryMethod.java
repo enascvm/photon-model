@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="SlpDiscoveryMethod">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="slpDhcp"/>
- *     &lt;enumeration value="slpAutoUnicast"/>
- *     &lt;enumeration value="slpAutoMulticast"/>
- *     &lt;enumeration value="slpManual"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="SlpDiscoveryMethod"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="slpDhcp"/&gt;
+ *     &lt;enumeration value="slpAutoUnicast"/&gt;
+ *     &lt;enumeration value="slpAutoMulticast"/&gt;
+ *     &lt;enumeration value="slpManual"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

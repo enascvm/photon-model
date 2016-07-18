@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualPS2ControllerOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualControllerOption">
- *       &lt;sequence>
- *         &lt;element name="numKeyboards" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numPointingDevices" type="{urn:vim25}IntOption"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualPS2ControllerOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualControllerOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="numKeyboards" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numPointingDevices" type="{urn:vim25}IntOption"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

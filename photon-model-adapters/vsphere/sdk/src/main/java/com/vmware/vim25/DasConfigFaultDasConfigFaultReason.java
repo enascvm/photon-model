@@ -12,19 +12,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DasConfigFaultDasConfigFaultReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="HostNetworkMisconfiguration"/>
- *     &lt;enumeration value="HostMisconfiguration"/>
- *     &lt;enumeration value="InsufficientPrivileges"/>
- *     &lt;enumeration value="NoPrimaryAgentAvailable"/>
- *     &lt;enumeration value="Other"/>
- *     &lt;enumeration value="NoDatastoresConfigured"/>
- *     &lt;enumeration value="CreateConfigVvolFailed"/>
- *     &lt;enumeration value="VSanNotSupportedOnHost"/>
- *     &lt;enumeration value="DasNetworkMisconfiguration"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DasConfigFaultDasConfigFaultReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="HostNetworkMisconfiguration"/&gt;
+ *     &lt;enumeration value="HostMisconfiguration"/&gt;
+ *     &lt;enumeration value="InsufficientPrivileges"/&gt;
+ *     &lt;enumeration value="NoPrimaryAgentAvailable"/&gt;
+ *     &lt;enumeration value="Other"/&gt;
+ *     &lt;enumeration value="NoDatastoresConfigured"/&gt;
+ *     &lt;enumeration value="CreateConfigVvolFailed"/&gt;
+ *     &lt;enumeration value="VSanNotSupportedOnHost"/&gt;
+ *     &lt;enumeration value="DasNetworkMisconfiguration"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -12,12 +12,12 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostPatchManagerInstallState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="hostRestarted"/>
- *     &lt;enumeration value="imageActive"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostPatchManagerInstallState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="hostRestarted"/&gt;
+ *     &lt;enumeration value="imageActive"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

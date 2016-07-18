@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VmDasBeingResetEventReasonCode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="vmtoolsHeartbeatFailure"/>
- *     &lt;enumeration value="appHeartbeatFailure"/>
- *     &lt;enumeration value="appImmediateResetRequest"/>
- *     &lt;enumeration value="vmcpResetApdCleared"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VmDasBeingResetEventReasonCode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="vmtoolsHeartbeatFailure"/&gt;
+ *     &lt;enumeration value="appHeartbeatFailure"/&gt;
+ *     &lt;enumeration value="appImmediateResetRequest"/&gt;
+ *     &lt;enumeration value="vmcpResetApdCleared"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

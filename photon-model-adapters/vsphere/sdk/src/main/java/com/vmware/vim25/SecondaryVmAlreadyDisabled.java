@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="SecondaryVmAlreadyDisabled">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmFaultToleranceIssue">
- *       &lt;sequence>
- *         &lt;element name="instanceUuid" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="SecondaryVmAlreadyDisabled"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmFaultToleranceIssue"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="instanceUuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

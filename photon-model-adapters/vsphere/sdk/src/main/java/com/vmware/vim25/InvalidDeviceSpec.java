@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InvalidDeviceSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}InvalidVmConfig">
- *       &lt;sequence>
- *         &lt;element name="deviceIndex" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InvalidDeviceSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}InvalidVmConfig"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="deviceIndex" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -31,15 +31,15 @@ import javax.xml.bind.annotation.XmlType;
     "deviceIndex"
 })
 @XmlSeeAlso({
-    DisallowedDiskModeChange.class,
-    DeviceNotFound.class,
     DeviceHotPlugNotSupported.class,
-    InvalidDeviceOperation.class,
-    MissingController.class,
-    DeviceUnsupportedForVmVersion.class,
-    InvalidDeviceBacking.class,
+    DeviceNotFound.class,
     DeviceUnsupportedForVmPlatform.class,
-    InvalidController.class
+    DeviceUnsupportedForVmVersion.class,
+    DisallowedDiskModeChange.class,
+    InvalidController.class,
+    InvalidDeviceBacking.class,
+    InvalidDeviceOperation.class,
+    MissingController.class
 })
 public class InvalidDeviceSpec
     extends InvalidVmConfig

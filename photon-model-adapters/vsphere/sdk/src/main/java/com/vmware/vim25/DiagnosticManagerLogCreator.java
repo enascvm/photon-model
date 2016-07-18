@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DiagnosticManagerLogCreator">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="vpxd"/>
- *     &lt;enumeration value="vpxa"/>
- *     &lt;enumeration value="hostd"/>
- *     &lt;enumeration value="serverd"/>
- *     &lt;enumeration value="install"/>
- *     &lt;enumeration value="vpxClient"/>
- *     &lt;enumeration value="recordLog"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DiagnosticManagerLogCreator"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="vpxd"/&gt;
+ *     &lt;enumeration value="vpxa"/&gt;
+ *     &lt;enumeration value="hostd"/&gt;
+ *     &lt;enumeration value="serverd"/&gt;
+ *     &lt;enumeration value="install"/&gt;
+ *     &lt;enumeration value="vpxClient"/&gt;
+ *     &lt;enumeration value="recordLog"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

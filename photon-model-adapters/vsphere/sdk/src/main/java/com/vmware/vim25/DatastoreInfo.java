@@ -16,22 +16,22 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DatastoreInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="url" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="freeSpace" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="maxFileSize" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="maxVirtualDiskCapacity" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="maxMemoryFileSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="timestamp" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/>
- *         &lt;element name="containerId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DatastoreInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="url" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="freeSpace" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="maxFileSize" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="maxVirtualDiskCapacity" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="maxMemoryFileSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="timestamp" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
+ *         &lt;element name="containerId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -48,10 +48,10 @@ import javax.xml.datatype.XMLGregorianCalendar;
     "containerId"
 })
 @XmlSeeAlso({
+    VmfsDatastoreInfo.class,
     NasDatastoreInfo.class,
     LocalDatastoreInfo.class,
-    VvolDatastoreInfo.class,
-    VmfsDatastoreInfo.class
+    VvolDatastoreInfo.class
 })
 public class DatastoreInfo
     extends DynamicData

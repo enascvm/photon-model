@@ -13,25 +13,25 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualPCIControllerOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualControllerOption">
- *       &lt;sequence>
- *         &lt;element name="numSCSIControllers" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numEthernetCards" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numVideoCards" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numSoundCards" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numVmiRoms" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numVmciDevices" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="numPCIPassthroughDevices" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="numSasSCSIControllers" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="numVmxnet3EthernetCards" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="numParaVirtualSCSIControllers" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="numSATAControllers" type="{urn:vim25}IntOption" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualPCIControllerOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualControllerOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="numSCSIControllers" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numEthernetCards" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numVideoCards" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numSoundCards" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numVmiRoms" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numVmciDevices" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numPCIPassthroughDevices" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numSasSCSIControllers" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numVmxnet3EthernetCards" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numParaVirtualSCSIControllers" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numSATAControllers" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

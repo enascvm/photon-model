@@ -15,25 +15,25 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostHardwareInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="systemInfo" type="{urn:vim25}HostSystemInfo"/>
- *         &lt;element name="cpuPowerManagementInfo" type="{urn:vim25}HostCpuPowerManagementInfo" minOccurs="0"/>
- *         &lt;element name="cpuInfo" type="{urn:vim25}HostCpuInfo"/>
- *         &lt;element name="cpuPkg" type="{urn:vim25}HostCpuPackage" maxOccurs="unbounded"/>
- *         &lt;element name="memorySize" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="numaInfo" type="{urn:vim25}HostNumaInfo" minOccurs="0"/>
- *         &lt;element name="smcPresent" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="pciDevice" type="{urn:vim25}HostPciDevice" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="cpuFeature" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="biosInfo" type="{urn:vim25}HostBIOSInfo" minOccurs="0"/>
- *         &lt;element name="reliableMemoryInfo" type="{urn:vim25}HostReliableMemoryInfo" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostHardwareInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="systemInfo" type="{urn:vim25}HostSystemInfo"/&gt;
+ *         &lt;element name="cpuPowerManagementInfo" type="{urn:vim25}HostCpuPowerManagementInfo" minOccurs="0"/&gt;
+ *         &lt;element name="cpuInfo" type="{urn:vim25}HostCpuInfo"/&gt;
+ *         &lt;element name="cpuPkg" type="{urn:vim25}HostCpuPackage" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="memorySize" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="numaInfo" type="{urn:vim25}HostNumaInfo" minOccurs="0"/&gt;
+ *         &lt;element name="smcPresent" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="pciDevice" type="{urn:vim25}HostPciDevice" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="cpuFeature" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="biosInfo" type="{urn:vim25}HostBIOSInfo" minOccurs="0"/&gt;
+ *         &lt;element name="reliableMemoryInfo" type="{urn:vim25}HostReliableMemoryInfo" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

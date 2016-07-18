@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="FileQueryFlags">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="fileType" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="fileSize" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="modification" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="fileOwner" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="FileQueryFlags"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="fileType" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="fileSize" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="modification" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="fileOwner" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

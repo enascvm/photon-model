@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostRuntimeInfoNetStackInstanceRuntimeInfoState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="inactive"/>
- *     &lt;enumeration value="active"/>
- *     &lt;enumeration value="deactivating"/>
- *     &lt;enumeration value="activating"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostRuntimeInfoNetStackInstanceRuntimeInfoState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="inactive"/&gt;
+ *     &lt;enumeration value="active"/&gt;
+ *     &lt;enumeration value="deactivating"/&gt;
+ *     &lt;enumeration value="activating"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

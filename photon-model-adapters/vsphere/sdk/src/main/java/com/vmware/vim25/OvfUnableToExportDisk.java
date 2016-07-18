@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfUnableToExportDisk">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfHardwareExport">
- *       &lt;sequence>
- *         &lt;element name="diskName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfUnableToExportDisk"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfHardwareExport"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="diskName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

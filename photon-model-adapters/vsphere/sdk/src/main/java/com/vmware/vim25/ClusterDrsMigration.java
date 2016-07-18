@@ -15,25 +15,25 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterDrsMigration">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="time" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="cpuLoad" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="memoryLoad" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="source" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="sourceCpuLoad" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="sourceMemoryLoad" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="destination" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="destinationCpuLoad" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="destinationMemoryLoad" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterDrsMigration"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="time" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="cpuLoad" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="memoryLoad" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="source" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="sourceCpuLoad" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="sourceMemoryLoad" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="destination" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="destinationCpuLoad" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="destinationMemoryLoad" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

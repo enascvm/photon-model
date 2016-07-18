@@ -12,30 +12,30 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VMwareDvsLacpLoadBalanceAlgorithm">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="srcMac"/>
- *     &lt;enumeration value="destMac"/>
- *     &lt;enumeration value="srcDestMac"/>
- *     &lt;enumeration value="destIpVlan"/>
- *     &lt;enumeration value="srcIpVlan"/>
- *     &lt;enumeration value="srcDestIpVlan"/>
- *     &lt;enumeration value="destTcpUdpPort"/>
- *     &lt;enumeration value="srcTcpUdpPort"/>
- *     &lt;enumeration value="srcDestTcpUdpPort"/>
- *     &lt;enumeration value="destIpTcpUdpPort"/>
- *     &lt;enumeration value="srcIpTcpUdpPort"/>
- *     &lt;enumeration value="srcDestIpTcpUdpPort"/>
- *     &lt;enumeration value="destIpTcpUdpPortVlan"/>
- *     &lt;enumeration value="srcIpTcpUdpPortVlan"/>
- *     &lt;enumeration value="srcDestIpTcpUdpPortVlan"/>
- *     &lt;enumeration value="destIp"/>
- *     &lt;enumeration value="srcIp"/>
- *     &lt;enumeration value="srcDestIp"/>
- *     &lt;enumeration value="vlan"/>
- *     &lt;enumeration value="srcPortId"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VMwareDvsLacpLoadBalanceAlgorithm"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="srcMac"/&gt;
+ *     &lt;enumeration value="destMac"/&gt;
+ *     &lt;enumeration value="srcDestMac"/&gt;
+ *     &lt;enumeration value="destIpVlan"/&gt;
+ *     &lt;enumeration value="srcIpVlan"/&gt;
+ *     &lt;enumeration value="srcDestIpVlan"/&gt;
+ *     &lt;enumeration value="destTcpUdpPort"/&gt;
+ *     &lt;enumeration value="srcTcpUdpPort"/&gt;
+ *     &lt;enumeration value="srcDestTcpUdpPort"/&gt;
+ *     &lt;enumeration value="destIpTcpUdpPort"/&gt;
+ *     &lt;enumeration value="srcIpTcpUdpPort"/&gt;
+ *     &lt;enumeration value="srcDestIpTcpUdpPort"/&gt;
+ *     &lt;enumeration value="destIpTcpUdpPortVlan"/&gt;
+ *     &lt;enumeration value="srcIpTcpUdpPortVlan"/&gt;
+ *     &lt;enumeration value="srcDestIpTcpUdpPortVlan"/&gt;
+ *     &lt;enumeration value="destIp"/&gt;
+ *     &lt;enumeration value="srcIp"/&gt;
+ *     &lt;enumeration value="srcDestIp"/&gt;
+ *     &lt;enumeration value="vlan"/&gt;
+ *     &lt;enumeration value="srcPortId"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -12,22 +12,22 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="CpuIncompatible1ECX">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}CpuIncompatible">
- *       &lt;sequence>
- *         &lt;element name="sse3" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="pclmulqdq" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="ssse3" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="sse41" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="sse42" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="aes" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="other" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="otherOnly" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="CpuIncompatible1ECX"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}CpuIncompatible"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="sse3" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="pclmulqdq" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="ssse3" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="sse41" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="sse42" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="aes" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="other" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="otherOnly" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

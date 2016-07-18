@@ -12,12 +12,12 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualDiskVFlashCacheConfigInfoCacheConsistencyType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="strong"/>
- *     &lt;enumeration value="weak"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualDiskVFlashCacheConfigInfoCacheConsistencyType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="strong"/&gt;
+ *     &lt;enumeration value="weak"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

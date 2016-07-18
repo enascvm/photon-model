@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="InvalidDasConfigArgumentEntryForInvalidArgument">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="admissionControl"/>
- *     &lt;enumeration value="userHeartbeatDs"/>
- *     &lt;enumeration value="vmConfig"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="InvalidDasConfigArgumentEntryForInvalidArgument"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="admissionControl"/&gt;
+ *     &lt;enumeration value="userHeartbeatDs"/&gt;
+ *     &lt;enumeration value="vmConfig"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

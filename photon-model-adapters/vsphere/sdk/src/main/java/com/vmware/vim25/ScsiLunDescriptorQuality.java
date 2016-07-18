@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ScsiLunDescriptorQuality">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="highQuality"/>
- *     &lt;enumeration value="mediumQuality"/>
- *     &lt;enumeration value="lowQuality"/>
- *     &lt;enumeration value="unknownQuality"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ScsiLunDescriptorQuality"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="highQuality"/&gt;
+ *     &lt;enumeration value="mediumQuality"/&gt;
+ *     &lt;enumeration value="lowQuality"/&gt;
+ *     &lt;enumeration value="unknownQuality"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostStandbyMode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="entering"/>
- *     &lt;enumeration value="exiting"/>
- *     &lt;enumeration value="in"/>
- *     &lt;enumeration value="none"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostStandbyMode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="entering"/&gt;
+ *     &lt;enumeration value="exiting"/&gt;
+ *     &lt;enumeration value="in"/&gt;
+ *     &lt;enumeration value="none"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

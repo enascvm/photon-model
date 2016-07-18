@@ -13,18 +13,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="SendEmailAction">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Action">
- *       &lt;sequence>
- *         &lt;element name="toList" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="ccList" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="subject" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="body" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="SendEmailAction"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Action"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="toList" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="ccList" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="subject" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="body" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

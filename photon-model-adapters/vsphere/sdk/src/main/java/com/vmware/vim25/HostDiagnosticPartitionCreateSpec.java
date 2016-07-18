@@ -13,19 +13,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostDiagnosticPartitionCreateSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="storageType" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="diagnosticType" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="id" type="{urn:vim25}HostScsiDiskPartition"/>
- *         &lt;element name="partition" type="{urn:vim25}HostDiskPartitionSpec"/>
- *         &lt;element name="active" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostDiagnosticPartitionCreateSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="storageType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="diagnosticType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="id" type="{urn:vim25}HostScsiDiskPartition"/&gt;
+ *         &lt;element name="partition" type="{urn:vim25}HostDiskPartitionSpec"/&gt;
+ *         &lt;element name="active" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

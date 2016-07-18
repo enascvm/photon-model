@@ -14,26 +14,26 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="NetworkProfile">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ApplyProfile">
- *       &lt;sequence>
- *         &lt;element name="vswitch" type="{urn:vim25}VirtualSwitchProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vmPortGroup" type="{urn:vim25}VmPortGroupProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="hostPortGroup" type="{urn:vim25}HostPortGroupProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="serviceConsolePortGroup" type="{urn:vim25}ServiceConsolePortGroupProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="dnsConfig" type="{urn:vim25}NetworkProfileDnsConfigProfile" minOccurs="0"/>
- *         &lt;element name="ipRouteConfig" type="{urn:vim25}IpRouteProfile" minOccurs="0"/>
- *         &lt;element name="consoleIpRouteConfig" type="{urn:vim25}IpRouteProfile" minOccurs="0"/>
- *         &lt;element name="pnic" type="{urn:vim25}PhysicalNicProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="dvswitch" type="{urn:vim25}DvsProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="dvsServiceConsoleNic" type="{urn:vim25}DvsServiceConsoleVNicProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="dvsHostNic" type="{urn:vim25}DvsHostVNicProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="netStackInstance" type="{urn:vim25}NetStackInstanceProfile" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="NetworkProfile"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ApplyProfile"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vswitch" type="{urn:vim25}VirtualSwitchProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vmPortGroup" type="{urn:vim25}VmPortGroupProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="hostPortGroup" type="{urn:vim25}HostPortGroupProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="serviceConsolePortGroup" type="{urn:vim25}ServiceConsolePortGroupProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="dnsConfig" type="{urn:vim25}NetworkProfileDnsConfigProfile" minOccurs="0"/&gt;
+ *         &lt;element name="ipRouteConfig" type="{urn:vim25}IpRouteProfile" minOccurs="0"/&gt;
+ *         &lt;element name="consoleIpRouteConfig" type="{urn:vim25}IpRouteProfile" minOccurs="0"/&gt;
+ *         &lt;element name="pnic" type="{urn:vim25}PhysicalNicProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="dvswitch" type="{urn:vim25}DvsProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="dvsServiceConsoleNic" type="{urn:vim25}DvsServiceConsoleVNicProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="dvsHostNic" type="{urn:vim25}DvsHostVNicProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="netStackInstance" type="{urn:vim25}NetStackInstanceProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

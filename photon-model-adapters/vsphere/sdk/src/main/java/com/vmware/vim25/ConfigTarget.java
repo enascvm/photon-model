@@ -14,40 +14,40 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ConfigTarget">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="numCpus" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="numCpuCores" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="numNumaNodes" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="smcPresent" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="datastore" type="{urn:vim25}VirtualMachineDatastoreInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="network" type="{urn:vim25}VirtualMachineNetworkInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="opaqueNetwork" type="{urn:vim25}OpaqueNetworkTargetInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="distributedVirtualPortgroup" type="{urn:vim25}DistributedVirtualPortgroupInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="distributedVirtualSwitch" type="{urn:vim25}DistributedVirtualSwitchInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="cdRom" type="{urn:vim25}VirtualMachineCdromInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="serial" type="{urn:vim25}VirtualMachineSerialInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="parallel" type="{urn:vim25}VirtualMachineParallelInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="sound" type="{urn:vim25}VirtualMachineSoundInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="usb" type="{urn:vim25}VirtualMachineUsbInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="floppy" type="{urn:vim25}VirtualMachineFloppyInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="legacyNetworkInfo" type="{urn:vim25}VirtualMachineLegacyNetworkSwitchInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="scsiPassthrough" type="{urn:vim25}VirtualMachineScsiPassthroughInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="scsiDisk" type="{urn:vim25}VirtualMachineScsiDiskDeviceInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="ideDisk" type="{urn:vim25}VirtualMachineIdeDiskDeviceInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="maxMemMBOptimalPerf" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="resourcePool" type="{urn:vim25}ResourcePoolRuntimeInfo" minOccurs="0"/>
- *         &lt;element name="autoVmotion" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="pciPassthrough" type="{urn:vim25}VirtualMachinePciPassthroughInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="sriov" type="{urn:vim25}VirtualMachineSriovInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vFlashModule" type="{urn:vim25}VirtualMachineVFlashModuleInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="sharedGpuPassthroughTypes" type="{urn:vim25}VirtualMachinePciSharedGpuPassthroughInfo" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ConfigTarget"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="numCpus" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="numCpuCores" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="numNumaNodes" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="smcPresent" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="datastore" type="{urn:vim25}VirtualMachineDatastoreInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="network" type="{urn:vim25}VirtualMachineNetworkInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="opaqueNetwork" type="{urn:vim25}OpaqueNetworkTargetInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="distributedVirtualPortgroup" type="{urn:vim25}DistributedVirtualPortgroupInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="distributedVirtualSwitch" type="{urn:vim25}DistributedVirtualSwitchInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="cdRom" type="{urn:vim25}VirtualMachineCdromInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="serial" type="{urn:vim25}VirtualMachineSerialInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="parallel" type="{urn:vim25}VirtualMachineParallelInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="sound" type="{urn:vim25}VirtualMachineSoundInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="usb" type="{urn:vim25}VirtualMachineUsbInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="floppy" type="{urn:vim25}VirtualMachineFloppyInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="legacyNetworkInfo" type="{urn:vim25}VirtualMachineLegacyNetworkSwitchInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="scsiPassthrough" type="{urn:vim25}VirtualMachineScsiPassthroughInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="scsiDisk" type="{urn:vim25}VirtualMachineScsiDiskDeviceInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="ideDisk" type="{urn:vim25}VirtualMachineIdeDiskDeviceInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="maxMemMBOptimalPerf" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="resourcePool" type="{urn:vim25}ResourcePoolRuntimeInfo" minOccurs="0"/&gt;
+ *         &lt;element name="autoVmotion" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="pciPassthrough" type="{urn:vim25}VirtualMachinePciPassthroughInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="sriov" type="{urn:vim25}VirtualMachineSriovInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vFlashModule" type="{urn:vim25}VirtualMachineVFlashModuleInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="sharedGpuPassthroughTypes" type="{urn:vim25}VirtualMachinePciSharedGpuPassthroughInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

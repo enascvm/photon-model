@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DVPortStatusVmDirectPathGen2InactiveReasonNetwork">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="portNptIncompatibleDvs"/>
- *     &lt;enumeration value="portNptNoCompatibleNics"/>
- *     &lt;enumeration value="portNptNoVirtualFunctionsAvailable"/>
- *     &lt;enumeration value="portNptDisabledForPort"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DVPortStatusVmDirectPathGen2InactiveReasonNetwork"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="portNptIncompatibleDvs"/&gt;
+ *     &lt;enumeration value="portNptNoCompatibleNics"/&gt;
+ *     &lt;enumeration value="portNptNoVirtualFunctionsAvailable"/&gt;
+ *     &lt;enumeration value="portNptDisabledForPort"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

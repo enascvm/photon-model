@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VsanDiskFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VsanFault">
- *       &lt;sequence>
- *         &lt;element name="device" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VsanDiskFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VsanFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="device" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -31,14 +31,14 @@ import javax.xml.bind.annotation.XmlType;
     "device"
 })
 @XmlSeeAlso({
-    DuplicateDisks.class,
-    DiskTooSmall.class,
+    DiskHasPartitions.class,
+    DiskIsLastRemainingNonSSD.class,
     DiskIsNonLocal.class,
     DiskIsUSB.class,
-    VsanIncompatibleDiskMapping.class,
-    DiskIsLastRemainingNonSSD.class,
-    DiskHasPartitions.class,
-    InsufficientDisks.class
+    DiskTooSmall.class,
+    DuplicateDisks.class,
+    InsufficientDisks.class,
+    VsanIncompatibleDiskMapping.class
 })
 public class VsanDiskFault
     extends VsanFault

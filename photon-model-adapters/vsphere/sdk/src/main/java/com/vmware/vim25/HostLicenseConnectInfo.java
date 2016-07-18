@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostLicenseConnectInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="license" type="{urn:vim25}LicenseManagerLicenseInfo"/>
- *         &lt;element name="evaluation" type="{urn:vim25}LicenseManagerEvaluationInfo"/>
- *         &lt;element name="resource" type="{urn:vim25}HostLicensableResourceInfo" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostLicenseConnectInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="license" type="{urn:vim25}LicenseManagerLicenseInfo"/&gt;
+ *         &lt;element name="evaluation" type="{urn:vim25}LicenseManagerEvaluationInfo"/&gt;
+ *         &lt;element name="resource" type="{urn:vim25}HostLicensableResourceInfo" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="PropertyChangeOp">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="add"/>
- *     &lt;enumeration value="remove"/>
- *     &lt;enumeration value="assign"/>
- *     &lt;enumeration value="indirectRemove"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="PropertyChangeOp"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="add"/&gt;
+ *     &lt;enumeration value="remove"/&gt;
+ *     &lt;enumeration value="assign"/&gt;
+ *     &lt;enumeration value="indirectRemove"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

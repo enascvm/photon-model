@@ -12,21 +12,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VMwareDVSFeatureCapability">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DVSFeatureCapability">
- *       &lt;sequence>
- *         &lt;element name="vspanSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="lldpSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="ipfixSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="ipfixCapability" type="{urn:vim25}VMwareDvsIpfixCapability" minOccurs="0"/>
- *         &lt;element name="multicastSnoopingSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="vspanCapability" type="{urn:vim25}VMwareDVSVspanCapability" minOccurs="0"/>
- *         &lt;element name="lacpCapability" type="{urn:vim25}VMwareDvsLacpCapability" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VMwareDVSFeatureCapability"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DVSFeatureCapability"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vspanSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="lldpSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="ipfixSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="ipfixCapability" type="{urn:vim25}VMwareDvsIpfixCapability" minOccurs="0"/&gt;
+ *         &lt;element name="multicastSnoopingSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="vspanCapability" type="{urn:vim25}VMwareDVSVspanCapability" minOccurs="0"/&gt;
+ *         &lt;element name="lacpCapability" type="{urn:vim25}VMwareDvsLacpCapability" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

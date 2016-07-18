@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DistributedVirtualSwitchNicTeamingPolicyMode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="loadbalance_ip"/>
- *     &lt;enumeration value="loadbalance_srcmac"/>
- *     &lt;enumeration value="loadbalance_srcid"/>
- *     &lt;enumeration value="failover_explicit"/>
- *     &lt;enumeration value="loadbalance_loadbased"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DistributedVirtualSwitchNicTeamingPolicyMode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="loadbalance_ip"/&gt;
+ *     &lt;enumeration value="loadbalance_srcmac"/&gt;
+ *     &lt;enumeration value="loadbalance_srcid"/&gt;
+ *     &lt;enumeration value="failover_explicit"/&gt;
+ *     &lt;enumeration value="loadbalance_loadbased"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

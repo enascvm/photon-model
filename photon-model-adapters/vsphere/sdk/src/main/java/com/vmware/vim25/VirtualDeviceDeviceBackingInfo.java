@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDeviceDeviceBackingInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceBackingInfo">
- *       &lt;sequence>
- *         &lt;element name="deviceName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="useAutoDetect" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDeviceDeviceBackingInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceBackingInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="deviceName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="useAutoDetect" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -34,20 +34,20 @@ import javax.xml.bind.annotation.XmlType;
     "useAutoDetect"
 })
 @XmlSeeAlso({
-    VirtualParallelPortDeviceBackingInfo.class,
-    VirtualSCSIPassthroughDeviceBackingInfo.class,
-    VirtualSerialPortDeviceBackingInfo.class,
-    VirtualPointingDeviceDeviceBackingInfo.class,
+    VirtualCdromPassthroughBackingInfo.class,
+    VirtualCdromAtapiBackingInfo.class,
+    VirtualDiskRawDiskVer2BackingInfo.class,
     VirtualEthernetCardNetworkBackingInfo.class,
     VirtualEthernetCardLegacyNetworkBackingInfo.class,
     VirtualFloppyDeviceBackingInfo.class,
     VirtualPCIPassthroughDeviceBackingInfo.class,
-    VirtualCdromAtapiBackingInfo.class,
-    VirtualUSBRemoteHostBackingInfo.class,
-    VirtualDiskRawDiskVer2BackingInfo.class,
+    VirtualParallelPortDeviceBackingInfo.class,
+    VirtualPointingDeviceDeviceBackingInfo.class,
+    VirtualSCSIPassthroughDeviceBackingInfo.class,
+    VirtualSerialPortDeviceBackingInfo.class,
     VirtualSoundCardDeviceBackingInfo.class,
-    VirtualCdromPassthroughBackingInfo.class,
-    VirtualUSBUSBBackingInfo.class
+    VirtualUSBUSBBackingInfo.class,
+    VirtualUSBRemoteHostBackingInfo.class
 })
 public class VirtualDeviceDeviceBackingInfo
     extends VirtualDeviceBackingInfo

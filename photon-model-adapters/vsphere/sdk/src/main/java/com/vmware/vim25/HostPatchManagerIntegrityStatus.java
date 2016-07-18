@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostPatchManagerIntegrityStatus">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="validated"/>
- *     &lt;enumeration value="keyNotFound"/>
- *     &lt;enumeration value="keyRevoked"/>
- *     &lt;enumeration value="keyExpired"/>
- *     &lt;enumeration value="digestMismatch"/>
- *     &lt;enumeration value="notEnoughSignatures"/>
- *     &lt;enumeration value="validationError"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostPatchManagerIntegrityStatus"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="validated"/&gt;
+ *     &lt;enumeration value="keyNotFound"/&gt;
+ *     &lt;enumeration value="keyRevoked"/&gt;
+ *     &lt;enumeration value="keyExpired"/&gt;
+ *     &lt;enumeration value="digestMismatch"/&gt;
+ *     &lt;enumeration value="notEnoughSignatures"/&gt;
+ *     &lt;enumeration value="validationError"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

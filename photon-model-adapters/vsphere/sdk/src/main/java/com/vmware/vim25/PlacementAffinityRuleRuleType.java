@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="PlacementAffinityRuleRuleType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="affinity"/>
- *     &lt;enumeration value="antiAffinity"/>
- *     &lt;enumeration value="softAffinity"/>
- *     &lt;enumeration value="softAntiAffinity"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="PlacementAffinityRuleRuleType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="affinity"/&gt;
+ *     &lt;enumeration value="antiAffinity"/&gt;
+ *     &lt;enumeration value="softAffinity"/&gt;
+ *     &lt;enumeration value="softAntiAffinity"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

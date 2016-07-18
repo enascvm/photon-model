@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VMwareDVSTeamingMatchStatus">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="iphashMatch"/>
- *     &lt;enumeration value="nonIphashMatch"/>
- *     &lt;enumeration value="iphashMismatch"/>
- *     &lt;enumeration value="nonIphashMismatch"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VMwareDVSTeamingMatchStatus"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="iphashMatch"/&gt;
+ *     &lt;enumeration value="nonIphashMatch"/&gt;
+ *     &lt;enumeration value="iphashMismatch"/&gt;
+ *     &lt;enumeration value="nonIphashMismatch"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

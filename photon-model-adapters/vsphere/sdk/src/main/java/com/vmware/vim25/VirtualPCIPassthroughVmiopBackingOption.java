@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualPCIPassthroughVmiopBackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualPCIPassthroughPluginBackingOption">
- *       &lt;sequence>
- *         &lt;element name="vgpu" type="{urn:vim25}StringOption"/>
- *         &lt;element name="maxInstances" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualPCIPassthroughVmiopBackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualPCIPassthroughPluginBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vgpu" type="{urn:vim25}StringOption"/&gt;
+ *         &lt;element name="maxInstances" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

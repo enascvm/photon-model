@@ -30,34 +30,37 @@
       <build>
         <plugins>
           <plugin>
-            <groupId>org.jvnet.jax-ws-commons</groupId>
-            <artifactId>jaxws-maven-plugin</artifactId>
+            <groupId>org.apache.cxf</groupId>
+            <artifactId>cxf-codegen-plugin</artifactId>
+            <version>3.1.6</version>
             <executions>
               <execution>
-                <id>wsimport-web-service</id>
-                <goals>
-                  <goal>wsimport</goal>
-                </goals>
+                <id>generate-sources</id>
+                <phase>generate-sources</phase>
                 <configuration>
-                  <wsdlDirectory>src/main/resources/com/vmware/vim25</wsdlDirectory>
-                  <wsdlFiles>
-                    <file>vimService.wsdl</file>
-                  </wsdlFiles>
+                  <sourceRoot>src/main/java</sourceRoot>
+                  <wsdlOptions>
+                    <wsdlOption>
+                      <wsdl>src/main/resources/com/vmware/vim25/vimService.wsdl</wsdl>
+                      <extraargs>
+                        <extraarg>-verbose</extraarg>
+                        <extraarg>-p</extraarg>
+                        <extraarg>urn:vim25=com.vmware.vim25</extraarg>
+                        <extraarg>-p</extraarg>
+                        <extraarg>urn:vim25Service=com.vmware.vim25</extraarg>
+                        <extraarg>-faultSerialVersionUID</extraarg>
+                        <extraarg>1</extraarg>
+                        <extraarg>-wsdlLocation</extraarg>
+                        <extraarg>vimService.wsdl</extraarg>
+                      </extraargs>
+                    </wsdlOption>
+                  </wsdlOptions>
                 </configuration>
+                <goals>
+                  <goal>wsdl2java</goal>
+                </goals>
               </execution>
             </executions>
-            <configuration>
-              <vmArgs>
-                <vmArg>-Djavax.xml.accessExternalSchema=all</vmArg>
-              </vmArgs>
-              <packageName>com.vmware.vim25</packageName>
-              <wsdlLocation>vimService.wsdl</wsdlLocation>
-              <sourceDestDir>src/main/java</sourceDestDir>
-              <xnocompile>true</xnocompile>
-              <verbose>true</verbose>
-              <extension>true</extension>
-              <sei>/</sei>
-            </configuration>
           </plugin>
         </plugins>
       </build>

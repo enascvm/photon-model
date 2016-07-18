@@ -6,6 +6,7 @@ import java.util.List;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlSeeAlso;
 import javax.xml.bind.annotation.XmlType;
 
@@ -16,21 +17,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualSCSIControllerOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualControllerOption">
- *       &lt;sequence>
- *         &lt;element name="numSCSIDisks" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numSCSICdroms" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numSCSIPassthrough" type="{urn:vim25}IntOption"/>
- *         &lt;element name="sharing" type="{urn:vim25}VirtualSCSISharing" maxOccurs="unbounded"/>
- *         &lt;element name="defaultSharedIndex" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="hotAddRemove" type="{urn:vim25}BoolOption"/>
- *         &lt;element name="scsiCtlrUnitNumber" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualSCSIControllerOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualControllerOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="numSCSIDisks" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numSCSICdroms" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numSCSIPassthrough" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="sharing" type="{urn:vim25}VirtualSCSISharing" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="defaultSharedIndex" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="hotAddRemove" type="{urn:vim25}BoolOption"/&gt;
+ *         &lt;element name="scsiCtlrUnitNumber" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -46,10 +47,10 @@ import javax.xml.bind.annotation.XmlType;
     "scsiCtlrUnitNumber"
 })
 @XmlSeeAlso({
-    VirtualLsiLogicSASControllerOption.class,
-    VirtualBusLogicControllerOption.class,
     ParaVirtualSCSIControllerOption.class,
-    VirtualLsiLogicControllerOption.class
+    VirtualBusLogicControllerOption.class,
+    VirtualLsiLogicControllerOption.class,
+    VirtualLsiLogicSASControllerOption.class
 })
 public class VirtualSCSIControllerOption
     extends VirtualControllerOption
@@ -62,6 +63,7 @@ public class VirtualSCSIControllerOption
     @XmlElement(required = true)
     protected IntOption numSCSIPassthrough;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected List<VirtualSCSISharing> sharing;
     protected int defaultSharedIndex;
     @XmlElement(required = true)

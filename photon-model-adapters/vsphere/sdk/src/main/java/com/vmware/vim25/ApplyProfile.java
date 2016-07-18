@@ -15,19 +15,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ApplyProfile">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="enabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="policy" type="{urn:vim25}ProfilePolicy" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="profileTypeName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="profileVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="property" type="{urn:vim25}ProfileApplyProfileProperty" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ApplyProfile"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="enabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="policy" type="{urn:vim25}ProfilePolicy" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="profileTypeName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="profileVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="property" type="{urn:vim25}ProfileApplyProfileProperty" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -41,39 +41,39 @@ import javax.xml.bind.annotation.XmlType;
     "property"
 })
 @XmlSeeAlso({
-    NetworkPolicyProfile.class,
+    ProfileApplyProfileElement.class,
+    HostApplyProfile.class,
+    PhysicalNicProfile.class,
     HostMemoryProfile.class,
+    UserProfile.class,
     UserGroupProfile.class,
     SecurityProfile.class,
-    VirtualSwitchProfile.class,
-    NetworkProfileDnsConfigProfile.class,
-    ActiveDirectoryProfile.class,
-    VlanProfile.class,
-    StorageProfile.class,
-    UserProfile.class,
-    IpRouteProfile.class,
-    NetworkProfile.class,
-    FirewallProfile.class,
-    PnicUplinkProfile.class,
-    PhysicalNicProfile.class,
-    NetStackInstanceProfile.class,
-    AuthenticationProfile.class,
     OptionProfile.class,
-    NasStorageProfile.class,
-    IpAddressProfile.class,
-    DvsProfile.class,
-    FirewallProfileRulesetProfile.class,
-    HostApplyProfile.class,
+    DateTimeProfile.class,
     ServiceProfile.class,
-    ProfileApplyProfileElement.class,
-    PermissionProfile.class,
-    VirtualSwitchSelectionProfile.class,
+    FirewallProfileRulesetProfile.class,
+    FirewallProfile.class,
+    NasStorageProfile.class,
+    StorageProfile.class,
+    NetworkProfileDnsConfigProfile.class,
+    NetworkProfile.class,
     DvsVNicProfile.class,
+    DvsProfile.class,
+    PnicUplinkProfile.class,
+    IpRouteProfile.class,
     StaticRouteProfile.class,
     LinkProfile.class,
     NumPortsProfile.class,
+    VirtualSwitchProfile.class,
+    NetStackInstanceProfile.class,
+    VlanProfile.class,
+    VirtualSwitchSelectionProfile.class,
     PortGroupProfile.class,
-    DateTimeProfile.class
+    NetworkPolicyProfile.class,
+    IpAddressProfile.class,
+    AuthenticationProfile.class,
+    ActiveDirectoryProfile.class,
+    PermissionProfile.class
 })
 public class ApplyProfile
     extends DynamicData

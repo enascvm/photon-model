@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DatastoreSummaryMaintenanceModeState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="normal"/>
- *     &lt;enumeration value="enteringMaintenance"/>
- *     &lt;enumeration value="inMaintenance"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DatastoreSummaryMaintenanceModeState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="normal"/&gt;
+ *     &lt;enumeration value="enteringMaintenance"/&gt;
+ *     &lt;enumeration value="inMaintenance"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

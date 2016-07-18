@@ -4,6 +4,7 @@ package com.vmware.vim25;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -13,19 +14,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostFirewallRule">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="port" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="endPort" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="direction" type="{urn:vim25}HostFirewallRuleDirection"/>
- *         &lt;element name="portType" type="{urn:vim25}HostFirewallRulePortType" minOccurs="0"/>
- *         &lt;element name="protocol" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostFirewallRule"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="port" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="endPort" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="direction" type="{urn:vim25}HostFirewallRuleDirection"/&gt;
+ *         &lt;element name="portType" type="{urn:vim25}HostFirewallRulePortType" minOccurs="0"/&gt;
+ *         &lt;element name="protocol" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -45,7 +46,9 @@ public class HostFirewallRule
     protected int port;
     protected Integer endPort;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected HostFirewallRuleDirection direction;
+    @XmlSchemaType(name = "string")
     protected HostFirewallRulePortType portType;
     @XmlElement(required = true)
     protected String protocol;

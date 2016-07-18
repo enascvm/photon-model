@@ -12,20 +12,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VsanHostNodeState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="error"/>
- *     &lt;enumeration value="disabled"/>
- *     &lt;enumeration value="agent"/>
- *     &lt;enumeration value="master"/>
- *     &lt;enumeration value="backup"/>
- *     &lt;enumeration value="starting"/>
- *     &lt;enumeration value="stopping"/>
- *     &lt;enumeration value="enteringMaintenanceMode"/>
- *     &lt;enumeration value="exitingMaintenanceMode"/>
- *     &lt;enumeration value="decommissioning"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VsanHostNodeState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="error"/&gt;
+ *     &lt;enumeration value="disabled"/&gt;
+ *     &lt;enumeration value="agent"/&gt;
+ *     &lt;enumeration value="master"/&gt;
+ *     &lt;enumeration value="backup"/&gt;
+ *     &lt;enumeration value="starting"/&gt;
+ *     &lt;enumeration value="stopping"/&gt;
+ *     &lt;enumeration value="enteringMaintenanceMode"/&gt;
+ *     &lt;enumeration value="exitingMaintenanceMode"/&gt;
+ *     &lt;enumeration value="decommissioning"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

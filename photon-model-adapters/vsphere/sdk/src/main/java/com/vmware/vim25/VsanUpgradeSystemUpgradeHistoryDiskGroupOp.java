@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VsanUpgradeSystemUpgradeHistoryDiskGroupOp">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VsanUpgradeSystemUpgradeHistoryItem">
- *       &lt;sequence>
- *         &lt;element name="operation" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="diskMapping" type="{urn:vim25}VsanHostDiskMapping"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VsanUpgradeSystemUpgradeHistoryDiskGroupOp"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VsanUpgradeSystemUpgradeHistoryItem"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="operation" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="diskMapping" type="{urn:vim25}VsanHostDiskMapping"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

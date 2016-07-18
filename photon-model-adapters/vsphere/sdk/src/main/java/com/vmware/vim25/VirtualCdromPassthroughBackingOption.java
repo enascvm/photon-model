@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualCdromPassthroughBackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceDeviceBackingOption">
- *       &lt;sequence>
- *         &lt;element name="exclusive" type="{urn:vim25}BoolOption"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualCdromPassthroughBackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceDeviceBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="exclusive" type="{urn:vim25}BoolOption"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

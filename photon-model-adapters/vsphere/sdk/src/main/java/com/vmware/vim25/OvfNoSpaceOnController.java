@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfNoSpaceOnController">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfUnsupportedElement">
- *       &lt;sequence>
- *         &lt;element name="parent" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfNoSpaceOnController"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfUnsupportedElement"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="parent" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

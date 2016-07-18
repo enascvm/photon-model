@@ -16,33 +16,33 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ScsiLun">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostDevice">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="descriptor" type="{urn:vim25}ScsiLunDescriptor" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="canonicalName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="displayName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="lunType" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="vendor" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="model" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="revision" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="scsiLevel" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="serialNumber" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="durableName" type="{urn:vim25}ScsiLunDurableName" minOccurs="0"/>
- *         &lt;element name="alternateName" type="{urn:vim25}ScsiLunDurableName" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="standardInquiry" type="{http://www.w3.org/2001/XMLSchema}byte" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="queueDepth" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="operationalState" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/>
- *         &lt;element name="capabilities" type="{urn:vim25}ScsiLunCapabilities" minOccurs="0"/>
- *         &lt;element name="vStorageSupport" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="protocolEndpoint" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ScsiLun"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostDevice"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="descriptor" type="{urn:vim25}ScsiLunDescriptor" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="canonicalName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="displayName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="lunType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="vendor" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="model" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="revision" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="scsiLevel" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="serialNumber" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="durableName" type="{urn:vim25}ScsiLunDurableName" minOccurs="0"/&gt;
+ *         &lt;element name="alternateName" type="{urn:vim25}ScsiLunDurableName" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="standardInquiry" type="{http://www.w3.org/2001/XMLSchema}byte" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="queueDepth" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="operationalState" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="capabilities" type="{urn:vim25}ScsiLunCapabilities" minOccurs="0"/&gt;
+ *         &lt;element name="vStorageSupport" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="protocolEndpoint" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

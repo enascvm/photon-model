@@ -15,15 +15,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmwareDistributedVirtualSwitchTrunkVlanSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmwareDistributedVirtualSwitchVlanSpec">
- *       &lt;sequence>
- *         &lt;element name="vlanId" type="{urn:vim25}NumericRange" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmwareDistributedVirtualSwitchTrunkVlanSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmwareDistributedVirtualSwitchVlanSpec"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vlanId" type="{urn:vim25}NumericRange" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

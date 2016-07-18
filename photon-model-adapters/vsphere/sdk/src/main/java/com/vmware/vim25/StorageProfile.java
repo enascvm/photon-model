@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="StorageProfile">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ApplyProfile">
- *       &lt;sequence>
- *         &lt;element name="nasStorage" type="{urn:vim25}NasStorageProfile" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="StorageProfile"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ApplyProfile"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="nasStorage" type="{urn:vim25}NasStorageProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

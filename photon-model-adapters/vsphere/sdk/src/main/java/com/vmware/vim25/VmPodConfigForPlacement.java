@@ -15,18 +15,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmPodConfigForPlacement">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="storagePod" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="disk" type="{urn:vim25}PodDiskLocator" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vmConfig" type="{urn:vim25}StorageDrsVmConfigInfo" minOccurs="0"/>
- *         &lt;element name="interVmRule" type="{urn:vim25}ClusterRuleInfo" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmPodConfigForPlacement"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="storagePod" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="disk" type="{urn:vim25}PodDiskLocator" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vmConfig" type="{urn:vim25}StorageDrsVmConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="interVmRule" type="{urn:vim25}ClusterRuleInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

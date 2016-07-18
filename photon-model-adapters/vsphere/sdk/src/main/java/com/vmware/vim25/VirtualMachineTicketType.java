@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineTicketType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="mks"/>
- *     &lt;enumeration value="device"/>
- *     &lt;enumeration value="guestControl"/>
- *     &lt;enumeration value="webmks"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineTicketType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="mks"/&gt;
+ *     &lt;enumeration value="device"/&gt;
+ *     &lt;enumeration value="guestControl"/&gt;
+ *     &lt;enumeration value="webmks"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

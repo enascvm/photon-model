@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualSIOControllerOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualControllerOption">
- *       &lt;sequence>
- *         &lt;element name="numFloppyDrives" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numSerialPorts" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numParallelPorts" type="{urn:vim25}IntOption"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualSIOControllerOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualControllerOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="numFloppyDrives" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numSerialPorts" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numParallelPorts" type="{urn:vim25}IntOption"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DvsMacNetworkRuleQualifier">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DvsNetworkRuleQualifier">
- *       &lt;sequence>
- *         &lt;element name="sourceAddress" type="{urn:vim25}MacAddress" minOccurs="0"/>
- *         &lt;element name="destinationAddress" type="{urn:vim25}MacAddress" minOccurs="0"/>
- *         &lt;element name="protocol" type="{urn:vim25}IntExpression" minOccurs="0"/>
- *         &lt;element name="vlanId" type="{urn:vim25}IntExpression" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DvsMacNetworkRuleQualifier"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DvsNetworkRuleQualifier"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="sourceAddress" type="{urn:vim25}MacAddress" minOccurs="0"/&gt;
+ *         &lt;element name="destinationAddress" type="{urn:vim25}MacAddress" minOccurs="0"/&gt;
+ *         &lt;element name="protocol" type="{urn:vim25}IntExpression" minOccurs="0"/&gt;
+ *         &lt;element name="vlanId" type="{urn:vim25}IntExpression" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

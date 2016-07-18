@@ -12,36 +12,36 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="RecommendationReasonCode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="fairnessCpuAvg"/>
- *     &lt;enumeration value="fairnessMemAvg"/>
- *     &lt;enumeration value="jointAffin"/>
- *     &lt;enumeration value="antiAffin"/>
- *     &lt;enumeration value="hostMaint"/>
- *     &lt;enumeration value="enterStandby"/>
- *     &lt;enumeration value="reservationCpu"/>
- *     &lt;enumeration value="reservationMem"/>
- *     &lt;enumeration value="powerOnVm"/>
- *     &lt;enumeration value="powerSaving"/>
- *     &lt;enumeration value="increaseCapacity"/>
- *     &lt;enumeration value="checkResource"/>
- *     &lt;enumeration value="unreservedCapacity"/>
- *     &lt;enumeration value="vmHostHardAffinity"/>
- *     &lt;enumeration value="vmHostSoftAffinity"/>
- *     &lt;enumeration value="balanceDatastoreSpaceUsage"/>
- *     &lt;enumeration value="balanceDatastoreIOLoad"/>
- *     &lt;enumeration value="balanceDatastoreIOPSReservation"/>
- *     &lt;enumeration value="datastoreMaint"/>
- *     &lt;enumeration value="virtualDiskJointAffin"/>
- *     &lt;enumeration value="virtualDiskAntiAffin"/>
- *     &lt;enumeration value="datastoreSpaceOutage"/>
- *     &lt;enumeration value="storagePlacement"/>
- *     &lt;enumeration value="iolbDisabledInternal"/>
- *     &lt;enumeration value="xvmotionPlacement"/>
- *     &lt;enumeration value="networkBandwidthReservation"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="RecommendationReasonCode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="fairnessCpuAvg"/&gt;
+ *     &lt;enumeration value="fairnessMemAvg"/&gt;
+ *     &lt;enumeration value="jointAffin"/&gt;
+ *     &lt;enumeration value="antiAffin"/&gt;
+ *     &lt;enumeration value="hostMaint"/&gt;
+ *     &lt;enumeration value="enterStandby"/&gt;
+ *     &lt;enumeration value="reservationCpu"/&gt;
+ *     &lt;enumeration value="reservationMem"/&gt;
+ *     &lt;enumeration value="powerOnVm"/&gt;
+ *     &lt;enumeration value="powerSaving"/&gt;
+ *     &lt;enumeration value="increaseCapacity"/&gt;
+ *     &lt;enumeration value="checkResource"/&gt;
+ *     &lt;enumeration value="unreservedCapacity"/&gt;
+ *     &lt;enumeration value="vmHostHardAffinity"/&gt;
+ *     &lt;enumeration value="vmHostSoftAffinity"/&gt;
+ *     &lt;enumeration value="balanceDatastoreSpaceUsage"/&gt;
+ *     &lt;enumeration value="balanceDatastoreIOLoad"/&gt;
+ *     &lt;enumeration value="balanceDatastoreIOPSReservation"/&gt;
+ *     &lt;enumeration value="datastoreMaint"/&gt;
+ *     &lt;enumeration value="virtualDiskJointAffin"/&gt;
+ *     &lt;enumeration value="virtualDiskAntiAffin"/&gt;
+ *     &lt;enumeration value="datastoreSpaceOutage"/&gt;
+ *     &lt;enumeration value="storagePlacement"/&gt;
+ *     &lt;enumeration value="iolbDisabledInternal"/&gt;
+ *     &lt;enumeration value="xvmotionPlacement"/&gt;
+ *     &lt;enumeration value="networkBandwidthReservation"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

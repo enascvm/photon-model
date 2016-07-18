@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineRelocateDiskMoveOptions">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="moveAllDiskBackingsAndAllowSharing"/>
- *     &lt;enumeration value="moveAllDiskBackingsAndDisallowSharing"/>
- *     &lt;enumeration value="moveChildMostDiskBacking"/>
- *     &lt;enumeration value="createNewChildDiskBacking"/>
- *     &lt;enumeration value="moveAllDiskBackingsAndConsolidate"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineRelocateDiskMoveOptions"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="moveAllDiskBackingsAndAllowSharing"/&gt;
+ *     &lt;enumeration value="moveAllDiskBackingsAndDisallowSharing"/&gt;
+ *     &lt;enumeration value="moveChildMostDiskBacking"/&gt;
+ *     &lt;enumeration value="createNewChildDiskBacking"/&gt;
+ *     &lt;enumeration value="moveAllDiskBackingsAndConsolidate"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

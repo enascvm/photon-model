@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DatastoreCapacityIncreasedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DatastoreEvent">
- *       &lt;sequence>
- *         &lt;element name="oldCapacity" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="newCapacity" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DatastoreCapacityIncreasedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DatastoreEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="oldCapacity" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="newCapacity" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmLimitLicense">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}NotEnoughLicenses">
- *       &lt;sequence>
- *         &lt;element name="limit" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmLimitLicense"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}NotEnoughLicenses"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="limit" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

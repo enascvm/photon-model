@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineUsbInfoSpeed">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="low"/>
- *     &lt;enumeration value="full"/>
- *     &lt;enumeration value="high"/>
- *     &lt;enumeration value="superSpeed"/>
- *     &lt;enumeration value="unknownSpeed"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineUsbInfoSpeed"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="low"/&gt;
+ *     &lt;enumeration value="full"/&gt;
+ *     &lt;enumeration value="high"/&gt;
+ *     &lt;enumeration value="superSpeed"/&gt;
+ *     &lt;enumeration value="unknownSpeed"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

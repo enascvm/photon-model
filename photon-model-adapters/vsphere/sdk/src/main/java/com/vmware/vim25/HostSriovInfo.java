@@ -12,20 +12,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostSriovInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostPciPassthruInfo">
- *       &lt;sequence>
- *         &lt;element name="sriovEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="sriovCapable" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="sriovActive" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="numVirtualFunctionRequested" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="numVirtualFunction" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="maxVirtualFunctionSupported" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostSriovInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostPciPassthruInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="sriovEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="sriovCapable" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="sriovActive" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="numVirtualFunctionRequested" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="numVirtualFunction" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="maxVirtualFunctionSupported" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

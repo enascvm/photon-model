@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DvsNetworkRuleDirectionType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="incomingPackets"/>
- *     &lt;enumeration value="outgoingPackets"/>
- *     &lt;enumeration value="both"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DvsNetworkRuleDirectionType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="incomingPackets"/&gt;
+ *     &lt;enumeration value="outgoingPackets"/&gt;
+ *     &lt;enumeration value="both"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

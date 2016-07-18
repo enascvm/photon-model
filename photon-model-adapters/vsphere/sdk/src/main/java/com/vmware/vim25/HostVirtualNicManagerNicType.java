@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostVirtualNicManagerNicType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="vmotion"/>
- *     &lt;enumeration value="faultToleranceLogging"/>
- *     &lt;enumeration value="vSphereReplication"/>
- *     &lt;enumeration value="vSphereReplicationNFC"/>
- *     &lt;enumeration value="management"/>
- *     &lt;enumeration value="vsan"/>
- *     &lt;enumeration value="vSphereProvisioning"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostVirtualNicManagerNicType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="vmotion"/&gt;
+ *     &lt;enumeration value="faultToleranceLogging"/&gt;
+ *     &lt;enumeration value="vSphereReplication"/&gt;
+ *     &lt;enumeration value="vSphereReplicationNFC"/&gt;
+ *     &lt;enumeration value="management"/&gt;
+ *     &lt;enumeration value="vsan"/&gt;
+ *     &lt;enumeration value="vSphereProvisioning"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

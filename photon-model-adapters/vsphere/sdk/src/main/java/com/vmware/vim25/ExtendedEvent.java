@@ -15,17 +15,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ExtendedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}GeneralEvent">
- *       &lt;sequence>
- *         &lt;element name="eventTypeId" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="managedObject" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="data" type="{urn:vim25}ExtendedEventPair" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ExtendedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}GeneralEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="eventTypeId" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="managedObject" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="data" type="{urn:vim25}ExtendedEventPair" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

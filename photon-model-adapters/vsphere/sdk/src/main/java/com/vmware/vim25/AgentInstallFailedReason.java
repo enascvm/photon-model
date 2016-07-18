@@ -12,19 +12,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="AgentInstallFailedReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="NotEnoughSpaceOnDevice"/>
- *     &lt;enumeration value="PrepareToUpgradeFailed"/>
- *     &lt;enumeration value="AgentNotRunning"/>
- *     &lt;enumeration value="AgentNotReachable"/>
- *     &lt;enumeration value="InstallTimedout"/>
- *     &lt;enumeration value="SignatureVerificationFailed"/>
- *     &lt;enumeration value="AgentUploadFailed"/>
- *     &lt;enumeration value="AgentUploadTimedout"/>
- *     &lt;enumeration value="UnknownInstallerError"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="AgentInstallFailedReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="NotEnoughSpaceOnDevice"/&gt;
+ *     &lt;enumeration value="PrepareToUpgradeFailed"/&gt;
+ *     &lt;enumeration value="AgentNotRunning"/&gt;
+ *     &lt;enumeration value="AgentNotReachable"/&gt;
+ *     &lt;enumeration value="InstallTimedout"/&gt;
+ *     &lt;enumeration value="SignatureVerificationFailed"/&gt;
+ *     &lt;enumeration value="AgentUploadFailed"/&gt;
+ *     &lt;enumeration value="AgentUploadTimedout"/&gt;
+ *     &lt;enumeration value="UnknownInstallerError"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

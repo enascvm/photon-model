@@ -12,19 +12,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostCapabilityFtUnsupportedReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="vMotionNotLicensed"/>
- *     &lt;enumeration value="missingVMotionNic"/>
- *     &lt;enumeration value="missingFTLoggingNic"/>
- *     &lt;enumeration value="ftNotLicensed"/>
- *     &lt;enumeration value="haAgentIssue"/>
- *     &lt;enumeration value="unsupportedProduct"/>
- *     &lt;enumeration value="cpuHvUnsupported"/>
- *     &lt;enumeration value="cpuHwmmuUnsupported"/>
- *     &lt;enumeration value="cpuHvDisabled"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostCapabilityFtUnsupportedReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="vMotionNotLicensed"/&gt;
+ *     &lt;enumeration value="missingVMotionNic"/&gt;
+ *     &lt;enumeration value="missingFTLoggingNic"/&gt;
+ *     &lt;enumeration value="ftNotLicensed"/&gt;
+ *     &lt;enumeration value="haAgentIssue"/&gt;
+ *     &lt;enumeration value="unsupportedProduct"/&gt;
+ *     &lt;enumeration value="cpuHvUnsupported"/&gt;
+ *     &lt;enumeration value="cpuHwmmuUnsupported"/&gt;
+ *     &lt;enumeration value="cpuHvDisabled"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

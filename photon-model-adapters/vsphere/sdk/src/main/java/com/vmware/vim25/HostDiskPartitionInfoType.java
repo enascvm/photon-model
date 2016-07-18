@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostDiskPartitionInfoType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="none"/>
- *     &lt;enumeration value="vmfs"/>
- *     &lt;enumeration value="linuxNative"/>
- *     &lt;enumeration value="linuxSwap"/>
- *     &lt;enumeration value="extended"/>
- *     &lt;enumeration value="ntfs"/>
- *     &lt;enumeration value="vmkDiagnostic"/>
- *     &lt;enumeration value="vffs"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostDiskPartitionInfoType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="none"/&gt;
+ *     &lt;enumeration value="vmfs"/&gt;
+ *     &lt;enumeration value="linuxNative"/&gt;
+ *     &lt;enumeration value="linuxSwap"/&gt;
+ *     &lt;enumeration value="extended"/&gt;
+ *     &lt;enumeration value="ntfs"/&gt;
+ *     &lt;enumeration value="vmkDiagnostic"/&gt;
+ *     &lt;enumeration value="vffs"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

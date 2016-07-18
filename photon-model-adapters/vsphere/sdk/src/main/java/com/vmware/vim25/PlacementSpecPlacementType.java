@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="PlacementSpecPlacementType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="create"/>
- *     &lt;enumeration value="reconfigure"/>
- *     &lt;enumeration value="relocate"/>
- *     &lt;enumeration value="clone"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="PlacementSpecPlacementType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="create"/&gt;
+ *     &lt;enumeration value="reconfigure"/&gt;
+ *     &lt;enumeration value="relocate"/&gt;
+ *     &lt;enumeration value="clone"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

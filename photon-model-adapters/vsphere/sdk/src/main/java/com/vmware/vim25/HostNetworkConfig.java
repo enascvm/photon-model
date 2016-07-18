@@ -14,28 +14,28 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostNetworkConfig">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="vswitch" type="{urn:vim25}HostVirtualSwitchConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="proxySwitch" type="{urn:vim25}HostProxySwitchConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="portgroup" type="{urn:vim25}HostPortGroupConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="pnic" type="{urn:vim25}PhysicalNicConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vnic" type="{urn:vim25}HostVirtualNicConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="consoleVnic" type="{urn:vim25}HostVirtualNicConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="dnsConfig" type="{urn:vim25}HostDnsConfig" minOccurs="0"/>
- *         &lt;element name="ipRouteConfig" type="{urn:vim25}HostIpRouteConfig" minOccurs="0"/>
- *         &lt;element name="consoleIpRouteConfig" type="{urn:vim25}HostIpRouteConfig" minOccurs="0"/>
- *         &lt;element name="routeTableConfig" type="{urn:vim25}HostIpRouteTableConfig" minOccurs="0"/>
- *         &lt;element name="dhcp" type="{urn:vim25}HostDhcpServiceConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="nat" type="{urn:vim25}HostNatServiceConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="ipV6Enabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="netStackSpec" type="{urn:vim25}HostNetworkConfigNetStackSpec" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostNetworkConfig"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vswitch" type="{urn:vim25}HostVirtualSwitchConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="proxySwitch" type="{urn:vim25}HostProxySwitchConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="portgroup" type="{urn:vim25}HostPortGroupConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="pnic" type="{urn:vim25}PhysicalNicConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vnic" type="{urn:vim25}HostVirtualNicConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="consoleVnic" type="{urn:vim25}HostVirtualNicConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="dnsConfig" type="{urn:vim25}HostDnsConfig" minOccurs="0"/&gt;
+ *         &lt;element name="ipRouteConfig" type="{urn:vim25}HostIpRouteConfig" minOccurs="0"/&gt;
+ *         &lt;element name="consoleIpRouteConfig" type="{urn:vim25}HostIpRouteConfig" minOccurs="0"/&gt;
+ *         &lt;element name="routeTableConfig" type="{urn:vim25}HostIpRouteTableConfig" minOccurs="0"/&gt;
+ *         &lt;element name="dhcp" type="{urn:vim25}HostDhcpServiceConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="nat" type="{urn:vim25}HostNatServiceConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="ipV6Enabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="netStackSpec" type="{urn:vim25}HostNetworkConfigNetStackSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

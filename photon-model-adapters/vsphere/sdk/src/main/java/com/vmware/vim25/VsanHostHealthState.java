@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VsanHostHealthState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="unknown"/>
- *     &lt;enumeration value="healthy"/>
- *     &lt;enumeration value="unhealthy"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VsanHostHealthState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="unknown"/&gt;
+ *     &lt;enumeration value="healthy"/&gt;
+ *     &lt;enumeration value="unhealthy"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

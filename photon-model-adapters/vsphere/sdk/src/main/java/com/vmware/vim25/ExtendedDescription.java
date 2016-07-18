@@ -15,16 +15,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ExtendedDescription">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Description">
- *       &lt;sequence>
- *         &lt;element name="messageCatalogKeyPrefix" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="messageArg" type="{urn:vim25}KeyAnyValue" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ExtendedDescription"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Description"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="messageCatalogKeyPrefix" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="messageArg" type="{urn:vim25}KeyAnyValue" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

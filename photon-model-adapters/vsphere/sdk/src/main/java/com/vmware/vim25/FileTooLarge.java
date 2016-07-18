@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="FileTooLarge">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}FileFault">
- *       &lt;sequence>
- *         &lt;element name="datastore" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="fileSize" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="maxFileSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="FileTooLarge"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}FileFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="datastore" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="fileSize" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="maxFileSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

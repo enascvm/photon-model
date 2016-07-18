@@ -13,18 +13,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDiskRawDiskMappingVer1BackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceDeviceBackingOption">
- *       &lt;sequence>
- *         &lt;element name="descriptorFileNameExtensions" type="{urn:vim25}ChoiceOption" minOccurs="0"/>
- *         &lt;element name="compatibilityMode" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="diskMode" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDiskRawDiskMappingVer1BackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceDeviceBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="descriptorFileNameExtensions" type="{urn:vim25}ChoiceOption" minOccurs="0"/&gt;
+ *         &lt;element name="compatibilityMode" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="diskMode" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

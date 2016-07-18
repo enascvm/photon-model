@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostAccessMode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="accessNone"/>
- *     &lt;enumeration value="accessAdmin"/>
- *     &lt;enumeration value="accessNoAccess"/>
- *     &lt;enumeration value="accessReadOnly"/>
- *     &lt;enumeration value="accessOther"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostAccessMode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="accessNone"/&gt;
+ *     &lt;enumeration value="accessAdmin"/&gt;
+ *     &lt;enumeration value="accessNoAccess"/&gt;
+ *     &lt;enumeration value="accessReadOnly"/&gt;
+ *     &lt;enumeration value="accessOther"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

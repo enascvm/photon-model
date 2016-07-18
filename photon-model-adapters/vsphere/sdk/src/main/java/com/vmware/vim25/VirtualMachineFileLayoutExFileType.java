@@ -12,33 +12,33 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineFileLayoutExFileType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="config"/>
- *     &lt;enumeration value="extendedConfig"/>
- *     &lt;enumeration value="diskDescriptor"/>
- *     &lt;enumeration value="diskExtent"/>
- *     &lt;enumeration value="digestDescriptor"/>
- *     &lt;enumeration value="digestExtent"/>
- *     &lt;enumeration value="diskReplicationState"/>
- *     &lt;enumeration value="log"/>
- *     &lt;enumeration value="stat"/>
- *     &lt;enumeration value="namespaceData"/>
- *     &lt;enumeration value="nvram"/>
- *     &lt;enumeration value="snapshotData"/>
- *     &lt;enumeration value="snapshotMemory"/>
- *     &lt;enumeration value="snapshotList"/>
- *     &lt;enumeration value="snapshotManifestList"/>
- *     &lt;enumeration value="suspend"/>
- *     &lt;enumeration value="suspendMemory"/>
- *     &lt;enumeration value="swap"/>
- *     &lt;enumeration value="uwswap"/>
- *     &lt;enumeration value="core"/>
- *     &lt;enumeration value="screenshot"/>
- *     &lt;enumeration value="ftMetadata"/>
- *     &lt;enumeration value="guestCustomization"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineFileLayoutExFileType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="config"/&gt;
+ *     &lt;enumeration value="extendedConfig"/&gt;
+ *     &lt;enumeration value="diskDescriptor"/&gt;
+ *     &lt;enumeration value="diskExtent"/&gt;
+ *     &lt;enumeration value="digestDescriptor"/&gt;
+ *     &lt;enumeration value="digestExtent"/&gt;
+ *     &lt;enumeration value="diskReplicationState"/&gt;
+ *     &lt;enumeration value="log"/&gt;
+ *     &lt;enumeration value="stat"/&gt;
+ *     &lt;enumeration value="namespaceData"/&gt;
+ *     &lt;enumeration value="nvram"/&gt;
+ *     &lt;enumeration value="snapshotData"/&gt;
+ *     &lt;enumeration value="snapshotMemory"/&gt;
+ *     &lt;enumeration value="snapshotList"/&gt;
+ *     &lt;enumeration value="snapshotManifestList"/&gt;
+ *     &lt;enumeration value="suspend"/&gt;
+ *     &lt;enumeration value="suspendMemory"/&gt;
+ *     &lt;enumeration value="swap"/&gt;
+ *     &lt;enumeration value="uwswap"/&gt;
+ *     &lt;enumeration value="core"/&gt;
+ *     &lt;enumeration value="screenshot"/&gt;
+ *     &lt;enumeration value="ftMetadata"/&gt;
+ *     &lt;enumeration value="guestCustomization"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

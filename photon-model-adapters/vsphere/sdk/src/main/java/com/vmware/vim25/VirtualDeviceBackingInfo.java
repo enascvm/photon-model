@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDeviceBackingInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDeviceBackingInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,16 +28,16 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VirtualDeviceBackingInfo")
 @XmlSeeAlso({
-    VirtualSerialPortThinPrintBackingInfo.class,
-    VirtualPCIPassthroughPluginBackingInfo.class,
-    VirtualEthernetCardOpaqueNetworkBackingInfo.class,
-    VirtualDevicePipeBackingInfo.class,
-    VirtualSriovEthernetCardSriovBackingInfo.class,
-    VirtualDeviceURIBackingInfo.class,
     VirtualEthernetCardDistributedVirtualPortBackingInfo.class,
-    VirtualDeviceRemoteDeviceBackingInfo.class,
+    VirtualEthernetCardOpaqueNetworkBackingInfo.class,
+    VirtualPCIPassthroughPluginBackingInfo.class,
     VirtualDeviceFileBackingInfo.class,
-    VirtualDeviceDeviceBackingInfo.class
+    VirtualDevicePipeBackingInfo.class,
+    VirtualDeviceURIBackingInfo.class,
+    VirtualSerialPortThinPrintBackingInfo.class,
+    VirtualSriovEthernetCardSriovBackingInfo.class,
+    VirtualDeviceDeviceBackingInfo.class,
+    VirtualDeviceRemoteDeviceBackingInfo.class
 })
 public class VirtualDeviceBackingInfo
     extends DynamicData

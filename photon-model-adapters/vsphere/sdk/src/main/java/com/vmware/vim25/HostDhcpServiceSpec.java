@@ -13,22 +13,22 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostDhcpServiceSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="virtualSwitch" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="defaultLeaseDuration" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="leaseBeginIp" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="leaseEndIp" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="maxLeaseDuration" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="unlimitedLease" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="ipSubnetAddr" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="ipSubnetMask" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostDhcpServiceSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="virtualSwitch" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="defaultLeaseDuration" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="leaseBeginIp" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="leaseEndIp" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="maxLeaseDuration" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="unlimitedLease" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="ipSubnetAddr" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="ipSubnetMask" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DrsBehavior">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="manual"/>
- *     &lt;enumeration value="partiallyAutomated"/>
- *     &lt;enumeration value="fullyAutomated"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DrsBehavior"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="manual"/&gt;
+ *     &lt;enumeration value="partiallyAutomated"/&gt;
+ *     &lt;enumeration value="fullyAutomated"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

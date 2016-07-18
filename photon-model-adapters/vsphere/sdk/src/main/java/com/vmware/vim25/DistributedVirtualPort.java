@@ -15,26 +15,26 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DistributedVirtualPort">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="config" type="{urn:vim25}DVPortConfigInfo"/>
- *         &lt;element name="dvsUuid" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="portgroupKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="proxyHost" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="connectee" type="{urn:vim25}DistributedVirtualSwitchPortConnectee" minOccurs="0"/>
- *         &lt;element name="conflict" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="conflictPortKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="state" type="{urn:vim25}DVPortState" minOccurs="0"/>
- *         &lt;element name="connectionCookie" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="lastStatusChange" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="hostLocalPort" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DistributedVirtualPort"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="config" type="{urn:vim25}DVPortConfigInfo"/&gt;
+ *         &lt;element name="dvsUuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="portgroupKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="proxyHost" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="connectee" type="{urn:vim25}DistributedVirtualSwitchPortConnectee" minOccurs="0"/&gt;
+ *         &lt;element name="conflict" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="conflictPortKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="state" type="{urn:vim25}DVPortState" minOccurs="0"/&gt;
+ *         &lt;element name="connectionCookie" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="lastStatusChange" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="hostLocalPort" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

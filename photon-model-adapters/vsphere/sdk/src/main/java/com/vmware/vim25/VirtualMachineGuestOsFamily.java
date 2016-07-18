@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineGuestOsFamily">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="windowsGuest"/>
- *     &lt;enumeration value="linuxGuest"/>
- *     &lt;enumeration value="netwareGuest"/>
- *     &lt;enumeration value="solarisGuest"/>
- *     &lt;enumeration value="darwinGuestFamily"/>
- *     &lt;enumeration value="otherGuestFamily"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineGuestOsFamily"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="windowsGuest"/&gt;
+ *     &lt;enumeration value="linuxGuest"/&gt;
+ *     &lt;enumeration value="netwareGuest"/&gt;
+ *     &lt;enumeration value="solarisGuest"/&gt;
+ *     &lt;enumeration value="darwinGuestFamily"/&gt;
+ *     &lt;enumeration value="otherGuestFamily"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

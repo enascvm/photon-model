@@ -14,17 +14,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="PermissionEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}AuthorizationEvent">
- *       &lt;sequence>
- *         &lt;element name="entity" type="{urn:vim25}ManagedEntityEventArgument"/>
- *         &lt;element name="principal" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="group" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="PermissionEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}AuthorizationEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="entity" type="{urn:vim25}ManagedEntityEventArgument"/&gt;
+ *         &lt;element name="principal" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="group" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -36,9 +36,9 @@ import javax.xml.bind.annotation.XmlType;
     "group"
 })
 @XmlSeeAlso({
-    PermissionRemovedEvent.class,
     PermissionAddedEvent.class,
-    PermissionUpdatedEvent.class
+    PermissionUpdatedEvent.class,
+    PermissionRemovedEvent.class
 })
 public class PermissionEvent
     extends AuthorizationEvent

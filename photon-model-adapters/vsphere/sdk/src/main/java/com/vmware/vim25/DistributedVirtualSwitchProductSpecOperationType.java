@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DistributedVirtualSwitchProductSpecOperationType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="preInstall"/>
- *     &lt;enumeration value="upgrade"/>
- *     &lt;enumeration value="notifyAvailableUpgrade"/>
- *     &lt;enumeration value="proceedWithUpgrade"/>
- *     &lt;enumeration value="updateBundleInfo"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DistributedVirtualSwitchProductSpecOperationType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="preInstall"/&gt;
+ *     &lt;enumeration value="upgrade"/&gt;
+ *     &lt;enumeration value="notifyAvailableUpgrade"/&gt;
+ *     &lt;enumeration value="proceedWithUpgrade"/&gt;
+ *     &lt;enumeration value="updateBundleInfo"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

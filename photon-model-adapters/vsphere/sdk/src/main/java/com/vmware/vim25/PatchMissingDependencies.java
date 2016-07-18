@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="PatchMissingDependencies">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}PatchNotApplicable">
- *       &lt;sequence>
- *         &lt;element name="prerequisitePatch" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="prerequisiteLib" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="PatchMissingDependencies"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}PatchNotApplicable"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="prerequisitePatch" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="prerequisiteLib" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

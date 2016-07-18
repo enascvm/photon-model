@@ -13,22 +13,22 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualMachineDatastoreInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualMachineTargetInfo">
- *       &lt;sequence>
- *         &lt;element name="datastore" type="{urn:vim25}DatastoreSummary"/>
- *         &lt;element name="capability" type="{urn:vim25}DatastoreCapability"/>
- *         &lt;element name="maxFileSize" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="maxVirtualDiskCapacity" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="maxPhysicalRDMFileSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="maxVirtualRDMFileSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="mode" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="vStorageSupport" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualMachineDatastoreInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualMachineTargetInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="datastore" type="{urn:vim25}DatastoreSummary"/&gt;
+ *         &lt;element name="capability" type="{urn:vim25}DatastoreCapability"/&gt;
+ *         &lt;element name="maxFileSize" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="maxVirtualDiskCapacity" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="maxPhysicalRDMFileSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="maxVirtualRDMFileSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="mode" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="vStorageSupport" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

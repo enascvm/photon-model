@@ -15,16 +15,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostResignatureRescanResult">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="rescan" type="{urn:vim25}HostVmfsRescanResult" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="result" type="{urn:vim25}ManagedObjectReference"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostResignatureRescanResult"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="rescan" type="{urn:vim25}HostVmfsRescanResult" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="result" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

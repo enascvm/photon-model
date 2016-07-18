@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="SessionEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="SessionEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,14 +28,14 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "SessionEvent")
 @XmlSeeAlso({
-    BadUsernameSessionEvent.class,
     ServerStartedSessionEvent.class,
+    UserLoginSessionEvent.class,
     UserLogoutSessionEvent.class,
-    SessionTerminatedEvent.class,
-    NoAccessUserEvent.class,
+    BadUsernameSessionEvent.class,
     AlreadyAuthenticatedSessionEvent.class,
-    GlobalMessageChangedEvent.class,
-    UserLoginSessionEvent.class
+    NoAccessUserEvent.class,
+    SessionTerminatedEvent.class,
+    GlobalMessageChangedEvent.class
 })
 public class SessionEvent
     extends Event

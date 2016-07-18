@@ -14,17 +14,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDeviceURIBackingInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceBackingInfo">
- *       &lt;sequence>
- *         &lt;element name="serviceURI" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="direction" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="proxyURI" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDeviceURIBackingInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceBackingInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="serviceURI" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="direction" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="proxyURI" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

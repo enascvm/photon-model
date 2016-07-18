@@ -15,20 +15,20 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="AlarmInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}AlarmSpec">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="alarm" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="entity" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="lastModifiedTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="lastModifiedUser" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="creationEventId" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="AlarmInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}AlarmSpec"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="alarm" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="entity" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="lastModifiedTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="lastModifiedUser" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="creationEventId" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -13,21 +13,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DVPortSetting">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="blocked" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *         &lt;element name="vmDirectPathGen2Allowed" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *         &lt;element name="inShapingPolicy" type="{urn:vim25}DVSTrafficShapingPolicy" minOccurs="0"/>
- *         &lt;element name="outShapingPolicy" type="{urn:vim25}DVSTrafficShapingPolicy" minOccurs="0"/>
- *         &lt;element name="vendorSpecificConfig" type="{urn:vim25}DVSVendorSpecificConfig" minOccurs="0"/>
- *         &lt;element name="networkResourcePoolKey" type="{urn:vim25}StringPolicy" minOccurs="0"/>
- *         &lt;element name="filterPolicy" type="{urn:vim25}DvsFilterPolicy" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DVPortSetting"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="blocked" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="vmDirectPathGen2Allowed" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="inShapingPolicy" type="{urn:vim25}DVSTrafficShapingPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="outShapingPolicy" type="{urn:vim25}DVSTrafficShapingPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="vendorSpecificConfig" type="{urn:vim25}DVSVendorSpecificConfig" minOccurs="0"/&gt;
+ *         &lt;element name="networkResourcePoolKey" type="{urn:vim25}StringPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="filterPolicy" type="{urn:vim25}DvsFilterPolicy" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -15,23 +15,23 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterDasFailoverLevelAdvancedRuntimeInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ClusterDasAdvancedRuntimeInfo">
- *       &lt;sequence>
- *         &lt;element name="slotInfo" type="{urn:vim25}ClusterDasFailoverLevelAdvancedRuntimeInfoSlotInfo"/>
- *         &lt;element name="totalSlots" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="usedSlots" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="unreservedSlots" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="totalVms" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="totalHosts" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="totalGoodHosts" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="hostSlots" type="{urn:vim25}ClusterDasFailoverLevelAdvancedRuntimeInfoHostSlots" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vmsRequiringMultipleSlots" type="{urn:vim25}ClusterDasFailoverLevelAdvancedRuntimeInfoVmSlots" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterDasFailoverLevelAdvancedRuntimeInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ClusterDasAdvancedRuntimeInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="slotInfo" type="{urn:vim25}ClusterDasFailoverLevelAdvancedRuntimeInfoSlotInfo"/&gt;
+ *         &lt;element name="totalSlots" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="usedSlots" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="unreservedSlots" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="totalVms" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="totalHosts" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="totalGoodHosts" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="hostSlots" type="{urn:vim25}ClusterDasFailoverLevelAdvancedRuntimeInfoHostSlots" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vmsRequiringMultipleSlots" type="{urn:vim25}ClusterDasFailoverLevelAdvancedRuntimeInfoVmSlots" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -13,19 +13,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualResourcePoolUsage">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="vrpId" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="cpuReservationMhz" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="memReservationMB" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="cpuReservationUsedMhz" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="memReservationUsedMB" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualResourcePoolUsage"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vrpId" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="cpuReservationMhz" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="memReservationMB" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="cpuReservationUsedMhz" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="memReservationUsedMB" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="FilterInUse">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ResourceInUse">
- *       &lt;sequence>
- *         &lt;element name="disk" type="{urn:vim25}VirtualDiskId" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="FilterInUse"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ResourceInUse"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="disk" type="{urn:vim25}VirtualDiskId" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

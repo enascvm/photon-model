@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VmwareDistributedVirtualSwitchPvlanPortType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="promiscuous"/>
- *     &lt;enumeration value="isolated"/>
- *     &lt;enumeration value="community"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VmwareDistributedVirtualSwitchPvlanPortType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="promiscuous"/&gt;
+ *     &lt;enumeration value="isolated"/&gt;
+ *     &lt;enumeration value="community"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InvalidVmConfig">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmConfigFault">
- *       &lt;sequence>
- *         &lt;element name="property" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InvalidVmConfig"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmConfigFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="property" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -31,11 +31,11 @@ import javax.xml.bind.annotation.XmlType;
     "property"
 })
 @XmlSeeAlso({
+    InvalidDeviceSpec.class,
     SwapPlacementOverrideNotSupported.class,
-    UnsupportedGuest.class,
     TooManyDevices.class,
-    VmWwnConflict.class,
-    InvalidDeviceSpec.class
+    UnsupportedGuest.class,
+    VmWwnConflict.class
 })
 public class InvalidVmConfig
     extends VmConfigFault

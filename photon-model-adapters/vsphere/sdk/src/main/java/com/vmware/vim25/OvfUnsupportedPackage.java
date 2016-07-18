@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfUnsupportedPackage">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfFault">
- *       &lt;sequence>
- *         &lt;element name="lineNumber" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfUnsupportedPackage"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="lineNumber" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -31,12 +31,12 @@ import javax.xml.bind.annotation.XmlType;
     "lineNumber"
 })
 @XmlSeeAlso({
-    OvfNoSupportedHardwareFamily.class,
     OvfInvalidVmName.class,
-    OvfUnsupportedSubType.class,
     OvfNoHostNic.class,
-    OvfUnsupportedElement.class,
+    OvfNoSupportedHardwareFamily.class,
     OvfUnsupportedAttribute.class,
+    OvfUnsupportedElement.class,
+    OvfUnsupportedSubType.class,
     OvfUnsupportedType.class
 })
 public class OvfUnsupportedPackage

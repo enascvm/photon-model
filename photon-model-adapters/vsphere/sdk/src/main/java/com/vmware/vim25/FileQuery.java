@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="FileQuery">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="FileQuery"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,14 +28,14 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "FileQuery")
 @XmlSeeAlso({
-    VmSnapshotFileQuery.class,
-    FolderFileQuery.class,
-    VmLogFileQuery.class,
     VmConfigFileQuery.class,
     VmDiskFileQuery.class,
-    VmNvramFileQuery.class,
+    FolderFileQuery.class,
+    VmSnapshotFileQuery.class,
+    IsoImageFileQuery.class,
     FloppyImageFileQuery.class,
-    IsoImageFileQuery.class
+    VmNvramFileQuery.class,
+    VmLogFileQuery.class
 })
 public class FileQuery
     extends DynamicData

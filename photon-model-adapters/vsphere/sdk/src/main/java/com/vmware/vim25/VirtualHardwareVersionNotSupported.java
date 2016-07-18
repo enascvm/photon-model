@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualHardwareVersionNotSupported">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualHardwareCompatibilityIssue">
- *       &lt;sequence>
- *         &lt;element name="hostName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualHardwareVersionNotSupported"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualHardwareCompatibilityIssue"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="hostName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

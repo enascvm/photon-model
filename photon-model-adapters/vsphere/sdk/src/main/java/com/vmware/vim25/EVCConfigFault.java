@@ -15,15 +15,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="EVCConfigFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *         &lt;element name="faults" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="EVCConfigFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="faults" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -33,13 +33,13 @@ import javax.xml.bind.annotation.XmlType;
     "faults"
 })
 @XmlSeeAlso({
-    EVCModeIllegalByVendor.class,
     ActiveVMsBlockingEVC.class,
-    EVCUnsupportedByHostHardware.class,
-    HeterogenousHostsBlockingEVC.class,
     DisconnectedHostsBlockingEVC.class,
+    EVCModeIllegalByVendor.class,
     EVCModeUnsupportedByHosts.class,
-    EVCUnsupportedByHostSoftware.class
+    EVCUnsupportedByHostHardware.class,
+    EVCUnsupportedByHostSoftware.class,
+    HeterogenousHostsBlockingEVC.class
 })
 public class EVCConfigFault
     extends VimFault

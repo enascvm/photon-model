@@ -12,38 +12,38 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VmFaultToleranceConfigIssueReasonForIssue">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="haNotEnabled"/>
- *     &lt;enumeration value="moreThanOneSecondary"/>
- *     &lt;enumeration value="recordReplayNotSupported"/>
- *     &lt;enumeration value="replayNotSupported"/>
- *     &lt;enumeration value="templateVm"/>
- *     &lt;enumeration value="multipleVCPU"/>
- *     &lt;enumeration value="hostInactive"/>
- *     &lt;enumeration value="ftUnsupportedHardware"/>
- *     &lt;enumeration value="ftUnsupportedProduct"/>
- *     &lt;enumeration value="missingVMotionNic"/>
- *     &lt;enumeration value="missingFTLoggingNic"/>
- *     &lt;enumeration value="thinDisk"/>
- *     &lt;enumeration value="verifySSLCertificateFlagNotSet"/>
- *     &lt;enumeration value="hasSnapshots"/>
- *     &lt;enumeration value="noConfig"/>
- *     &lt;enumeration value="ftSecondaryVm"/>
- *     &lt;enumeration value="hasLocalDisk"/>
- *     &lt;enumeration value="esxAgentVm"/>
- *     &lt;enumeration value="video3dEnabled"/>
- *     &lt;enumeration value="hasUnsupportedDisk"/>
- *     &lt;enumeration value="insufficientBandwidth"/>
- *     &lt;enumeration value="hasNestedHVConfiguration"/>
- *     &lt;enumeration value="hasVFlashConfiguration"/>
- *     &lt;enumeration value="unsupportedProduct"/>
- *     &lt;enumeration value="cpuHvUnsupported"/>
- *     &lt;enumeration value="cpuHwmmuUnsupported"/>
- *     &lt;enumeration value="cpuHvDisabled"/>
- *     &lt;enumeration value="hasEFIFirmware"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VmFaultToleranceConfigIssueReasonForIssue"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="haNotEnabled"/&gt;
+ *     &lt;enumeration value="moreThanOneSecondary"/&gt;
+ *     &lt;enumeration value="recordReplayNotSupported"/&gt;
+ *     &lt;enumeration value="replayNotSupported"/&gt;
+ *     &lt;enumeration value="templateVm"/&gt;
+ *     &lt;enumeration value="multipleVCPU"/&gt;
+ *     &lt;enumeration value="hostInactive"/&gt;
+ *     &lt;enumeration value="ftUnsupportedHardware"/&gt;
+ *     &lt;enumeration value="ftUnsupportedProduct"/&gt;
+ *     &lt;enumeration value="missingVMotionNic"/&gt;
+ *     &lt;enumeration value="missingFTLoggingNic"/&gt;
+ *     &lt;enumeration value="thinDisk"/&gt;
+ *     &lt;enumeration value="verifySSLCertificateFlagNotSet"/&gt;
+ *     &lt;enumeration value="hasSnapshots"/&gt;
+ *     &lt;enumeration value="noConfig"/&gt;
+ *     &lt;enumeration value="ftSecondaryVm"/&gt;
+ *     &lt;enumeration value="hasLocalDisk"/&gt;
+ *     &lt;enumeration value="esxAgentVm"/&gt;
+ *     &lt;enumeration value="video3dEnabled"/&gt;
+ *     &lt;enumeration value="hasUnsupportedDisk"/&gt;
+ *     &lt;enumeration value="insufficientBandwidth"/&gt;
+ *     &lt;enumeration value="hasNestedHVConfiguration"/&gt;
+ *     &lt;enumeration value="hasVFlashConfiguration"/&gt;
+ *     &lt;enumeration value="unsupportedProduct"/&gt;
+ *     &lt;enumeration value="cpuHvUnsupported"/&gt;
+ *     &lt;enumeration value="cpuHwmmuUnsupported"/&gt;
+ *     &lt;enumeration value="cpuHvDisabled"/&gt;
+ *     &lt;enumeration value="hasEFIFirmware"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

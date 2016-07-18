@@ -15,15 +15,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="GroupAlarmAction">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}AlarmAction">
- *       &lt;sequence>
- *         &lt;element name="action" type="{urn:vim25}AlarmAction" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="GroupAlarmAction"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}AlarmAction"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="action" type="{urn:vim25}AlarmAction" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDeviceDeviceBackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceBackingOption">
- *       &lt;sequence>
- *         &lt;element name="autoDetectAvailable" type="{urn:vim25}BoolOption"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDeviceDeviceBackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="autoDetectAvailable" type="{urn:vim25}BoolOption"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,22 +32,22 @@ import javax.xml.bind.annotation.XmlType;
     "autoDetectAvailable"
 })
 @XmlSeeAlso({
-    VirtualParallelPortDeviceBackingOption.class,
-    VirtualCdromRemoteAtapiBackingOption.class,
-    VirtualCdromAtapiBackingOption.class,
-    VirtualPointingDeviceBackingOption.class,
-    VirtualDiskRawDiskVer2BackingOption.class,
-    VirtualEthernetCardNetworkBackingOption.class,
-    VirtualDiskRawDiskMappingVer1BackingOption.class,
-    VirtualEthernetCardLegacyNetworkBackingOption.class,
-    VirtualSerialPortDeviceBackingOption.class,
-    VirtualSCSIPassthroughDeviceBackingOption.class,
-    VirtualUSBRemoteHostBackingOption.class,
-    VirtualUSBUSBBackingOption.class,
-    VirtualSoundCardDeviceBackingOption.class,
     VirtualCdromPassthroughBackingOption.class,
+    VirtualCdromAtapiBackingOption.class,
+    VirtualCdromRemoteAtapiBackingOption.class,
+    VirtualDiskRawDiskVer2BackingOption.class,
+    VirtualDiskRawDiskMappingVer1BackingOption.class,
+    VirtualEthernetCardNetworkBackingOption.class,
+    VirtualEthernetCardLegacyNetworkBackingOption.class,
     VirtualFloppyDeviceBackingOption.class,
-    VirtualPCIPassthroughDeviceBackingOption.class
+    VirtualPCIPassthroughDeviceBackingOption.class,
+    VirtualParallelPortDeviceBackingOption.class,
+    VirtualPointingDeviceBackingOption.class,
+    VirtualSCSIPassthroughDeviceBackingOption.class,
+    VirtualSerialPortDeviceBackingOption.class,
+    VirtualSoundCardDeviceBackingOption.class,
+    VirtualUSBUSBBackingOption.class,
+    VirtualUSBRemoteHostBackingOption.class
 })
 public class VirtualDeviceDeviceBackingOption
     extends VirtualDeviceBackingOption

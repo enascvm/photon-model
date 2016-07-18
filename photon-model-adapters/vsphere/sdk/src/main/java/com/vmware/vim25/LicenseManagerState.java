@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="LicenseManagerState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="initializing"/>
- *     &lt;enumeration value="normal"/>
- *     &lt;enumeration value="marginal"/>
- *     &lt;enumeration value="fault"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="LicenseManagerState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="initializing"/&gt;
+ *     &lt;enumeration value="normal"/&gt;
+ *     &lt;enumeration value="marginal"/&gt;
+ *     &lt;enumeration value="fault"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

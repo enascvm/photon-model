@@ -4,6 +4,7 @@ package com.vmware.vim25;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -13,27 +14,27 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="StoragePlacementSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="priority" type="{urn:vim25}VirtualMachineMovePriority" minOccurs="0"/>
- *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="podSelectionSpec" type="{urn:vim25}StorageDrsPodSelectionSpec"/>
- *         &lt;element name="cloneSpec" type="{urn:vim25}VirtualMachineCloneSpec" minOccurs="0"/>
- *         &lt;element name="cloneName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="configSpec" type="{urn:vim25}VirtualMachineConfigSpec" minOccurs="0"/>
- *         &lt;element name="relocateSpec" type="{urn:vim25}VirtualMachineRelocateSpec" minOccurs="0"/>
- *         &lt;element name="resourcePool" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="folder" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="disallowPrerequisiteMoves" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="resourceLeaseDurationSec" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="StoragePlacementSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="priority" type="{urn:vim25}VirtualMachineMovePriority" minOccurs="0"/&gt;
+ *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="podSelectionSpec" type="{urn:vim25}StorageDrsPodSelectionSpec"/&gt;
+ *         &lt;element name="cloneSpec" type="{urn:vim25}VirtualMachineCloneSpec" minOccurs="0"/&gt;
+ *         &lt;element name="cloneName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="configSpec" type="{urn:vim25}VirtualMachineConfigSpec" minOccurs="0"/&gt;
+ *         &lt;element name="relocateSpec" type="{urn:vim25}VirtualMachineRelocateSpec" minOccurs="0"/&gt;
+ *         &lt;element name="resourcePool" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="folder" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="disallowPrerequisiteMoves" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="resourceLeaseDurationSec" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -60,6 +61,7 @@ public class StoragePlacementSpec
 
     @XmlElement(required = true)
     protected String type;
+    @XmlSchemaType(name = "string")
     protected VirtualMachineMovePriority priority;
     protected ManagedObjectReference vm;
     @XmlElement(required = true)

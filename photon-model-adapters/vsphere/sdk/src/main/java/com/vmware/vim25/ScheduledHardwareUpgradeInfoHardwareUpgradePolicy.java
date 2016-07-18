@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ScheduledHardwareUpgradeInfoHardwareUpgradePolicy">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="never"/>
- *     &lt;enumeration value="onSoftPowerOff"/>
- *     &lt;enumeration value="always"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ScheduledHardwareUpgradeInfoHardwareUpgradePolicy"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="never"/&gt;
+ *     &lt;enumeration value="onSoftPowerOff"/&gt;
+ *     &lt;enumeration value="always"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

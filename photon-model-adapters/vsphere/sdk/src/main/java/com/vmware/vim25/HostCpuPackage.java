@@ -15,21 +15,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostCpuPackage">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="index" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="vendor" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="hz" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="busHz" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="threadId" type="{http://www.w3.org/2001/XMLSchema}short" maxOccurs="unbounded"/>
- *         &lt;element name="cpuFeature" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostCpuPackage"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="index" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="vendor" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="hz" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="busHz" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="threadId" type="{http://www.w3.org/2001/XMLSchema}short" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="cpuFeature" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

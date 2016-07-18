@@ -6,6 +6,7 @@ import java.util.List;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -15,64 +16,64 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostConfigInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="product" type="{urn:vim25}AboutInfo"/>
- *         &lt;element name="hyperThread" type="{urn:vim25}HostHyperThreadScheduleInfo" minOccurs="0"/>
- *         &lt;element name="consoleReservation" type="{urn:vim25}ServiceConsoleReservationInfo" minOccurs="0"/>
- *         &lt;element name="virtualMachineReservation" type="{urn:vim25}VirtualMachineMemoryReservationInfo" minOccurs="0"/>
- *         &lt;element name="storageDevice" type="{urn:vim25}HostStorageDeviceInfo" minOccurs="0"/>
- *         &lt;element name="multipathState" type="{urn:vim25}HostMultipathStateInfo" minOccurs="0"/>
- *         &lt;element name="fileSystemVolume" type="{urn:vim25}HostFileSystemVolumeInfo" minOccurs="0"/>
- *         &lt;element name="systemFile" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="network" type="{urn:vim25}HostNetworkInfo" minOccurs="0"/>
- *         &lt;element name="vmotion" type="{urn:vim25}HostVMotionInfo" minOccurs="0"/>
- *         &lt;element name="virtualNicManagerInfo" type="{urn:vim25}HostVirtualNicManagerInfo" minOccurs="0"/>
- *         &lt;element name="capabilities" type="{urn:vim25}HostNetCapabilities" minOccurs="0"/>
- *         &lt;element name="datastoreCapabilities" type="{urn:vim25}HostDatastoreSystemCapabilities" minOccurs="0"/>
- *         &lt;element name="offloadCapabilities" type="{urn:vim25}HostNetOffloadCapabilities" minOccurs="0"/>
- *         &lt;element name="service" type="{urn:vim25}HostServiceInfo" minOccurs="0"/>
- *         &lt;element name="firewall" type="{urn:vim25}HostFirewallInfo" minOccurs="0"/>
- *         &lt;element name="autoStart" type="{urn:vim25}HostAutoStartManagerConfig" minOccurs="0"/>
- *         &lt;element name="activeDiagnosticPartition" type="{urn:vim25}HostDiagnosticPartition" minOccurs="0"/>
- *         &lt;element name="option" type="{urn:vim25}OptionValue" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="optionDef" type="{urn:vim25}OptionDef" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="datastorePrincipal" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="localSwapDatastore" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="systemSwapConfiguration" type="{urn:vim25}HostSystemSwapConfiguration" minOccurs="0"/>
- *         &lt;element name="systemResources" type="{urn:vim25}HostSystemResourceInfo" minOccurs="0"/>
- *         &lt;element name="dateTimeInfo" type="{urn:vim25}HostDateTimeInfo" minOccurs="0"/>
- *         &lt;element name="flags" type="{urn:vim25}HostFlagInfo" minOccurs="0"/>
- *         &lt;element name="adminDisabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="lockdownMode" type="{urn:vim25}HostLockdownMode" minOccurs="0"/>
- *         &lt;element name="ipmi" type="{urn:vim25}HostIpmiInfo" minOccurs="0"/>
- *         &lt;element name="sslThumbprintInfo" type="{urn:vim25}HostSslThumbprintInfo" minOccurs="0"/>
- *         &lt;element name="sslThumbprintData" type="{urn:vim25}HostSslThumbprintInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="certificate" type="{http://www.w3.org/2001/XMLSchema}byte" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="pciPassthruInfo" type="{urn:vim25}HostPciPassthruInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="authenticationManagerInfo" type="{urn:vim25}HostAuthenticationManagerInfo" minOccurs="0"/>
- *         &lt;element name="featureVersion" type="{urn:vim25}HostFeatureVersionInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="powerSystemCapability" type="{urn:vim25}PowerSystemCapability" minOccurs="0"/>
- *         &lt;element name="powerSystemInfo" type="{urn:vim25}PowerSystemInfo" minOccurs="0"/>
- *         &lt;element name="cacheConfigurationInfo" type="{urn:vim25}HostCacheConfigurationInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="wakeOnLanCapable" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="featureCapability" type="{urn:vim25}HostFeatureCapability" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="maskedFeatureCapability" type="{urn:vim25}HostFeatureCapability" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vFlashConfigInfo" type="{urn:vim25}HostVFlashManagerVFlashConfigInfo" minOccurs="0"/>
- *         &lt;element name="vsanHostConfig" type="{urn:vim25}VsanHostConfigInfo" minOccurs="0"/>
- *         &lt;element name="domainList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="scriptCheckSum" type="{http://www.w3.org/2001/XMLSchema}base64Binary" minOccurs="0"/>
- *         &lt;element name="hostConfigCheckSum" type="{http://www.w3.org/2001/XMLSchema}base64Binary" minOccurs="0"/>
- *         &lt;element name="graphicsInfo" type="{urn:vim25}HostGraphicsInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="sharedPassthruGpuTypes" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="ioFilterInfo" type="{urn:vim25}HostIoFilterInfo" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostConfigInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="product" type="{urn:vim25}AboutInfo"/&gt;
+ *         &lt;element name="hyperThread" type="{urn:vim25}HostHyperThreadScheduleInfo" minOccurs="0"/&gt;
+ *         &lt;element name="consoleReservation" type="{urn:vim25}ServiceConsoleReservationInfo" minOccurs="0"/&gt;
+ *         &lt;element name="virtualMachineReservation" type="{urn:vim25}VirtualMachineMemoryReservationInfo" minOccurs="0"/&gt;
+ *         &lt;element name="storageDevice" type="{urn:vim25}HostStorageDeviceInfo" minOccurs="0"/&gt;
+ *         &lt;element name="multipathState" type="{urn:vim25}HostMultipathStateInfo" minOccurs="0"/&gt;
+ *         &lt;element name="fileSystemVolume" type="{urn:vim25}HostFileSystemVolumeInfo" minOccurs="0"/&gt;
+ *         &lt;element name="systemFile" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="network" type="{urn:vim25}HostNetworkInfo" minOccurs="0"/&gt;
+ *         &lt;element name="vmotion" type="{urn:vim25}HostVMotionInfo" minOccurs="0"/&gt;
+ *         &lt;element name="virtualNicManagerInfo" type="{urn:vim25}HostVirtualNicManagerInfo" minOccurs="0"/&gt;
+ *         &lt;element name="capabilities" type="{urn:vim25}HostNetCapabilities" minOccurs="0"/&gt;
+ *         &lt;element name="datastoreCapabilities" type="{urn:vim25}HostDatastoreSystemCapabilities" minOccurs="0"/&gt;
+ *         &lt;element name="offloadCapabilities" type="{urn:vim25}HostNetOffloadCapabilities" minOccurs="0"/&gt;
+ *         &lt;element name="service" type="{urn:vim25}HostServiceInfo" minOccurs="0"/&gt;
+ *         &lt;element name="firewall" type="{urn:vim25}HostFirewallInfo" minOccurs="0"/&gt;
+ *         &lt;element name="autoStart" type="{urn:vim25}HostAutoStartManagerConfig" minOccurs="0"/&gt;
+ *         &lt;element name="activeDiagnosticPartition" type="{urn:vim25}HostDiagnosticPartition" minOccurs="0"/&gt;
+ *         &lt;element name="option" type="{urn:vim25}OptionValue" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="optionDef" type="{urn:vim25}OptionDef" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="datastorePrincipal" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="localSwapDatastore" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="systemSwapConfiguration" type="{urn:vim25}HostSystemSwapConfiguration" minOccurs="0"/&gt;
+ *         &lt;element name="systemResources" type="{urn:vim25}HostSystemResourceInfo" minOccurs="0"/&gt;
+ *         &lt;element name="dateTimeInfo" type="{urn:vim25}HostDateTimeInfo" minOccurs="0"/&gt;
+ *         &lt;element name="flags" type="{urn:vim25}HostFlagInfo" minOccurs="0"/&gt;
+ *         &lt;element name="adminDisabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="lockdownMode" type="{urn:vim25}HostLockdownMode" minOccurs="0"/&gt;
+ *         &lt;element name="ipmi" type="{urn:vim25}HostIpmiInfo" minOccurs="0"/&gt;
+ *         &lt;element name="sslThumbprintInfo" type="{urn:vim25}HostSslThumbprintInfo" minOccurs="0"/&gt;
+ *         &lt;element name="sslThumbprintData" type="{urn:vim25}HostSslThumbprintInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="certificate" type="{http://www.w3.org/2001/XMLSchema}byte" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="pciPassthruInfo" type="{urn:vim25}HostPciPassthruInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="authenticationManagerInfo" type="{urn:vim25}HostAuthenticationManagerInfo" minOccurs="0"/&gt;
+ *         &lt;element name="featureVersion" type="{urn:vim25}HostFeatureVersionInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="powerSystemCapability" type="{urn:vim25}PowerSystemCapability" minOccurs="0"/&gt;
+ *         &lt;element name="powerSystemInfo" type="{urn:vim25}PowerSystemInfo" minOccurs="0"/&gt;
+ *         &lt;element name="cacheConfigurationInfo" type="{urn:vim25}HostCacheConfigurationInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="wakeOnLanCapable" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="featureCapability" type="{urn:vim25}HostFeatureCapability" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="maskedFeatureCapability" type="{urn:vim25}HostFeatureCapability" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vFlashConfigInfo" type="{urn:vim25}HostVFlashManagerVFlashConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="vsanHostConfig" type="{urn:vim25}VsanHostConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="domainList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="scriptCheckSum" type="{http://www.w3.org/2001/XMLSchema}base64Binary" minOccurs="0"/&gt;
+ *         &lt;element name="hostConfigCheckSum" type="{http://www.w3.org/2001/XMLSchema}base64Binary" minOccurs="0"/&gt;
+ *         &lt;element name="graphicsInfo" type="{urn:vim25}HostGraphicsInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="sharedPassthruGpuTypes" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="ioFilterInfo" type="{urn:vim25}HostIoFilterInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -164,6 +165,7 @@ public class HostConfigInfo
     protected HostDateTimeInfo dateTimeInfo;
     protected HostFlagInfo flags;
     protected Boolean adminDisabled;
+    @XmlSchemaType(name = "string")
     protected HostLockdownMode lockdownMode;
     protected HostIpmiInfo ipmi;
     protected HostSslThumbprintInfo sslThumbprintInfo;

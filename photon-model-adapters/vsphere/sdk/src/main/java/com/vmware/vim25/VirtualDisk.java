@@ -14,21 +14,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDisk">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDevice">
- *       &lt;sequence>
- *         &lt;element name="capacityInKB" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="capacityInBytes" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="shares" type="{urn:vim25}SharesInfo" minOccurs="0"/>
- *         &lt;element name="storageIOAllocation" type="{urn:vim25}StorageIOAllocationInfo" minOccurs="0"/>
- *         &lt;element name="diskObjectId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="vFlashCacheConfigInfo" type="{urn:vim25}VirtualDiskVFlashCacheConfigInfo" minOccurs="0"/>
- *         &lt;element name="iofilter" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDisk"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDevice"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="capacityInKB" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="capacityInBytes" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="shares" type="{urn:vim25}SharesInfo" minOccurs="0"/&gt;
+ *         &lt;element name="storageIOAllocation" type="{urn:vim25}StorageIOAllocationInfo" minOccurs="0"/&gt;
+ *         &lt;element name="diskObjectId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="vFlashCacheConfigInfo" type="{urn:vim25}VirtualDiskVFlashCacheConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="iofilter" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

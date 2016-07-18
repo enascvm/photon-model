@@ -12,19 +12,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineToolsVersionStatus">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="guestToolsNotInstalled"/>
- *     &lt;enumeration value="guestToolsNeedUpgrade"/>
- *     &lt;enumeration value="guestToolsCurrent"/>
- *     &lt;enumeration value="guestToolsUnmanaged"/>
- *     &lt;enumeration value="guestToolsTooOld"/>
- *     &lt;enumeration value="guestToolsSupportedOld"/>
- *     &lt;enumeration value="guestToolsSupportedNew"/>
- *     &lt;enumeration value="guestToolsTooNew"/>
- *     &lt;enumeration value="guestToolsBlacklisted"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineToolsVersionStatus"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="guestToolsNotInstalled"/&gt;
+ *     &lt;enumeration value="guestToolsNeedUpgrade"/&gt;
+ *     &lt;enumeration value="guestToolsCurrent"/&gt;
+ *     &lt;enumeration value="guestToolsUnmanaged"/&gt;
+ *     &lt;enumeration value="guestToolsTooOld"/&gt;
+ *     &lt;enumeration value="guestToolsSupportedOld"/&gt;
+ *     &lt;enumeration value="guestToolsSupportedNew"/&gt;
+ *     &lt;enumeration value="guestToolsTooNew"/&gt;
+ *     &lt;enumeration value="guestToolsBlacklisted"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

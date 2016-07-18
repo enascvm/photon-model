@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InvalidFolder">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *         &lt;element name="target" type="{urn:vim25}ManagedObjectReference"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InvalidFolder"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="target" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

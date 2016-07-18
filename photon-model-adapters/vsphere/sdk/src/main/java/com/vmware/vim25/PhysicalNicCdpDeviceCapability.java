@@ -12,21 +12,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="PhysicalNicCdpDeviceCapability">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="router" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="transparentBridge" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="sourceRouteBridge" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="networkSwitch" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="host" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="igmpEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="repeater" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="PhysicalNicCdpDeviceCapability"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="router" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="transparentBridge" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="sourceRouteBridge" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="networkSwitch" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="host" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="igmpEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="repeater" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfHardwareExport">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfExport">
- *       &lt;sequence>
- *         &lt;element name="device" type="{urn:vim25}VirtualDevice" minOccurs="0"/>
- *         &lt;element name="vmPath" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfHardwareExport"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfExport"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="device" type="{urn:vim25}VirtualDevice" minOccurs="0"/&gt;
+ *         &lt;element name="vmPath" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -36,8 +36,8 @@ import javax.xml.bind.annotation.XmlType;
 @XmlSeeAlso({
     OvfConnectedDevice.class,
     OvfUnableToExportDisk.class,
-    OvfUnsupportedDeviceExport.class,
-    OvfUnknownDeviceBacking.class
+    OvfUnknownDeviceBacking.class,
+    OvfUnsupportedDeviceExport.class
 })
 public class OvfHardwareExport
     extends OvfExport

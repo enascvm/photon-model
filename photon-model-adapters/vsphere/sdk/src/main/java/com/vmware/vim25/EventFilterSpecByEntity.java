@@ -4,6 +4,7 @@ package com.vmware.vim25;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -13,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="EventFilterSpecByEntity">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="entity" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="recursion" type="{urn:vim25}EventFilterSpecRecursionOption"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="EventFilterSpecByEntity"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="entity" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="recursion" type="{urn:vim25}EventFilterSpecRecursionOption"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -39,6 +40,7 @@ public class EventFilterSpecByEntity
     @XmlElement(required = true)
     protected ManagedObjectReference entity;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected EventFilterSpecRecursionOption recursion;
 
     /**

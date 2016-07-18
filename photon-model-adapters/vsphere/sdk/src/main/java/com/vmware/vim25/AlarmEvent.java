@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="AlarmEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *         &lt;element name="alarm" type="{urn:vim25}AlarmEventArgument"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="AlarmEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="alarm" type="{urn:vim25}AlarmEventArgument"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,19 +32,19 @@ import javax.xml.bind.annotation.XmlType;
     "alarm"
 })
 @XmlSeeAlso({
-    AlarmClearedEvent.class,
-    AlarmSnmpFailedEvent.class,
     AlarmCreatedEvent.class,
-    AlarmEmailCompletedEvent.class,
-    AlarmSnmpCompletedEvent.class,
-    AlarmReconfiguredEvent.class,
-    AlarmRemovedEvent.class,
-    AlarmScriptCompleteEvent.class,
-    AlarmActionTriggeredEvent.class,
-    AlarmAcknowledgedEvent.class,
-    AlarmEmailFailedEvent.class,
     AlarmStatusChangedEvent.class,
-    AlarmScriptFailedEvent.class
+    AlarmActionTriggeredEvent.class,
+    AlarmEmailCompletedEvent.class,
+    AlarmEmailFailedEvent.class,
+    AlarmSnmpCompletedEvent.class,
+    AlarmSnmpFailedEvent.class,
+    AlarmScriptCompleteEvent.class,
+    AlarmScriptFailedEvent.class,
+    AlarmRemovedEvent.class,
+    AlarmReconfiguredEvent.class,
+    AlarmAcknowledgedEvent.class,
+    AlarmClearedEvent.class
 })
 public class AlarmEvent
     extends Event

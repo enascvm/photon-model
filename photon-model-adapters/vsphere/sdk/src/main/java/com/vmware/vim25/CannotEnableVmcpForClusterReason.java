@@ -12,12 +12,12 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="CannotEnableVmcpForClusterReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="APDTimeoutDisabled"/>
- *     &lt;enumeration value="IncompatibleHostVersion"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="CannotEnableVmcpForClusterReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="APDTimeoutDisabled"/&gt;
+ *     &lt;enumeration value="IncompatibleHostVersion"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

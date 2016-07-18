@@ -14,18 +14,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="GatewayConnectFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostConnectFault">
- *       &lt;sequence>
- *         &lt;element name="gatewayType" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="gatewayId" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="gatewayInfo" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="details" type="{urn:vim25}LocalizableMessage" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="GatewayConnectFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostConnectFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="gatewayType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="gatewayId" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="gatewayInfo" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="details" type="{urn:vim25}LocalizableMessage" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -38,8 +38,8 @@ import javax.xml.bind.annotation.XmlType;
     "details"
 })
 @XmlSeeAlso({
-    GatewayNotReachable.class,
     GatewayNotFound.class,
+    GatewayNotReachable.class,
     GatewayOperationRefused.class,
     GatewayToHostConnectFault.class
 })

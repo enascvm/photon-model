@@ -3,6 +3,7 @@ package com.vmware.vim25;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -12,19 +13,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualAppSummary">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ResourcePoolSummary">
- *       &lt;sequence>
- *         &lt;element name="product" type="{urn:vim25}VAppProductInfo" minOccurs="0"/>
- *         &lt;element name="vAppState" type="{urn:vim25}VirtualAppVAppState" minOccurs="0"/>
- *         &lt;element name="suspended" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="installBootRequired" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="instanceUuid" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualAppSummary"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ResourcePoolSummary"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="product" type="{urn:vim25}VAppProductInfo" minOccurs="0"/&gt;
+ *         &lt;element name="vAppState" type="{urn:vim25}VirtualAppVAppState" minOccurs="0"/&gt;
+ *         &lt;element name="suspended" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="installBootRequired" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="instanceUuid" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -42,6 +43,7 @@ public class VirtualAppSummary
 {
 
     protected VAppProductInfo product;
+    @XmlSchemaType(name = "string")
     protected VirtualAppVAppState vAppState;
     protected Boolean suspended;
     protected Boolean installBootRequired;

@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DvsIpPortRange">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DvsIpPort">
- *       &lt;sequence>
- *         &lt;element name="startPortNumber" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="endPortNumber" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DvsIpPortRange"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DvsIpPort"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="startPortNumber" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="endPortNumber" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

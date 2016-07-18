@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfSystemFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfSystemFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,14 +28,14 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OvfSystemFault")
 @XmlSeeAlso({
-    OvfUnsupportedDeviceBackingOption.class,
-    OvfUnknownEntity.class,
-    OvfUnknownDevice.class,
-    OvfInternalError.class,
+    OvfDiskMappingNotFound.class,
     OvfHostValueNotParsed.class,
+    OvfInternalError.class,
     OvfToXmlUnsupportedElement.class,
+    OvfUnknownDevice.class,
+    OvfUnknownEntity.class,
     OvfUnsupportedDeviceBackingInfo.class,
-    OvfDiskMappingNotFound.class
+    OvfUnsupportedDeviceBackingOption.class
 })
 public class OvfSystemFault
     extends OvfFault

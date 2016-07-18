@@ -13,27 +13,27 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="KernelModuleInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="id" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="filename" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="optionString" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="loaded" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="enabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="useCount" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="readOnlySection" type="{urn:vim25}KernelModuleSectionInfo"/>
- *         &lt;element name="writableSection" type="{urn:vim25}KernelModuleSectionInfo"/>
- *         &lt;element name="textSection" type="{urn:vim25}KernelModuleSectionInfo"/>
- *         &lt;element name="dataSection" type="{urn:vim25}KernelModuleSectionInfo"/>
- *         &lt;element name="bssSection" type="{urn:vim25}KernelModuleSectionInfo"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="KernelModuleInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="id" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="filename" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="optionString" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="loaded" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="enabled" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="useCount" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="readOnlySection" type="{urn:vim25}KernelModuleSectionInfo"/&gt;
+ *         &lt;element name="writableSection" type="{urn:vim25}KernelModuleSectionInfo"/&gt;
+ *         &lt;element name="textSection" type="{urn:vim25}KernelModuleSectionInfo"/&gt;
+ *         &lt;element name="dataSection" type="{urn:vim25}KernelModuleSectionInfo"/&gt;
+ *         &lt;element name="bssSection" type="{urn:vim25}KernelModuleSectionInfo"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

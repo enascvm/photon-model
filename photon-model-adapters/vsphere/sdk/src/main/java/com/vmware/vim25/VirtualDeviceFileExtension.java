@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualDeviceFileExtension">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="iso"/>
- *     &lt;enumeration value="flp"/>
- *     &lt;enumeration value="vmdk"/>
- *     &lt;enumeration value="dsk"/>
- *     &lt;enumeration value="rdm"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualDeviceFileExtension"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="iso"/&gt;
+ *     &lt;enumeration value="flp"/&gt;
+ *     &lt;enumeration value="vmdk"/&gt;
+ *     &lt;enumeration value="dsk"/&gt;
+ *     &lt;enumeration value="rdm"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -15,19 +15,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterConfigInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="dasConfig" type="{urn:vim25}ClusterDasConfigInfo"/>
- *         &lt;element name="dasVmConfig" type="{urn:vim25}ClusterDasVmConfigInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="drsConfig" type="{urn:vim25}ClusterDrsConfigInfo"/>
- *         &lt;element name="drsVmConfig" type="{urn:vim25}ClusterDrsVmConfigInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="rule" type="{urn:vim25}ClusterRuleInfo" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterConfigInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="dasConfig" type="{urn:vim25}ClusterDasConfigInfo"/&gt;
+ *         &lt;element name="dasVmConfig" type="{urn:vim25}ClusterDasVmConfigInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="drsConfig" type="{urn:vim25}ClusterDrsConfigInfo"/&gt;
+ *         &lt;element name="drsVmConfig" type="{urn:vim25}ClusterDrsVmConfigInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="rule" type="{urn:vim25}ClusterRuleInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

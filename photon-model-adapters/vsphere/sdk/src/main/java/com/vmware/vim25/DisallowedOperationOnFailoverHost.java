@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DisallowedOperationOnFailoverHost">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}RuntimeFault">
- *       &lt;sequence>
- *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="hostname" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DisallowedOperationOnFailoverHost"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}RuntimeFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="hostname" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

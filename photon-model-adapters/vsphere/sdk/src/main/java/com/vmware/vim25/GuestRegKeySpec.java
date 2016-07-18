@@ -15,17 +15,17 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="GuestRegKeySpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="keyName" type="{urn:vim25}GuestRegKeyNameSpec"/>
- *         &lt;element name="classType" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="lastWritten" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="GuestRegKeySpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="keyName" type="{urn:vim25}GuestRegKeyNameSpec"/&gt;
+ *         &lt;element name="classType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="lastWritten" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

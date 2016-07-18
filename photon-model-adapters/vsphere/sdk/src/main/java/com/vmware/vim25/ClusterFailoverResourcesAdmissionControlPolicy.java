@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterFailoverResourcesAdmissionControlPolicy">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ClusterDasAdmissionControlPolicy">
- *       &lt;sequence>
- *         &lt;element name="cpuFailoverResourcesPercent" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="memoryFailoverResourcesPercent" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterFailoverResourcesAdmissionControlPolicy"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ClusterDasAdmissionControlPolicy"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="cpuFailoverResourcesPercent" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="memoryFailoverResourcesPercent" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

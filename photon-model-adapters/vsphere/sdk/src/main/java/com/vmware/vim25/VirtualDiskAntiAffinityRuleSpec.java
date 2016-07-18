@@ -15,15 +15,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDiskAntiAffinityRuleSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ClusterRuleInfo">
- *       &lt;sequence>
- *         &lt;element name="diskId" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDiskAntiAffinityRuleSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ClusterRuleInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="diskId" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

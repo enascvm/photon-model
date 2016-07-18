@@ -16,16 +16,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualController">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDevice">
- *       &lt;sequence>
- *         &lt;element name="busNumber" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="device" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualController"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDevice"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="busNumber" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="device" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -36,14 +36,14 @@ import javax.xml.bind.annotation.XmlType;
     "device"
 })
 @XmlSeeAlso({
-    VirtualUSBController.class,
-    VirtualUSBXHCIController.class,
-    VirtualSIOController.class,
-    VirtualPS2Controller.class,
-    VirtualPCIController.class,
     VirtualIDEController.class,
+    VirtualPCIController.class,
+    VirtualPS2Controller.class,
     VirtualSATAController.class,
-    VirtualSCSIController.class
+    VirtualSCSIController.class,
+    VirtualSIOController.class,
+    VirtualUSBController.class,
+    VirtualUSBXHCIController.class
 })
 public class VirtualController
     extends VirtualDevice

@@ -15,22 +15,22 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="StoragePerformanceSummary">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="interval" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="percentile" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded"/>
- *         &lt;element name="datastoreReadLatency" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/>
- *         &lt;element name="datastoreWriteLatency" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/>
- *         &lt;element name="datastoreVmLatency" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/>
- *         &lt;element name="datastoreReadIops" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/>
- *         &lt;element name="datastoreWriteIops" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/>
- *         &lt;element name="siocActivityDuration" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="StoragePerformanceSummary"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="interval" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="percentile" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="datastoreReadLatency" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="datastoreWriteLatency" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="datastoreVmLatency" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="datastoreReadIops" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="datastoreWriteIops" type="{http://www.w3.org/2001/XMLSchema}double" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="siocActivityDuration" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

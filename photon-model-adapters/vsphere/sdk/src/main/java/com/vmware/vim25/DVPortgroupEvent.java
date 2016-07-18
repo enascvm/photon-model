@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DVPortgroupEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DVPortgroupEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,12 +28,12 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "DVPortgroupEvent")
 @XmlSeeAlso({
-    DvpgRestoreEvent.class,
-    DVPortgroupReconfiguredEvent.class,
+    DVPortgroupCreatedEvent.class,
     DVPortgroupRenamedEvent.class,
-    DvpgImportEvent.class,
+    DVPortgroupReconfiguredEvent.class,
     DVPortgroupDestroyedEvent.class,
-    DVPortgroupCreatedEvent.class
+    DvpgImportEvent.class,
+    DvpgRestoreEvent.class
 })
 public class DVPortgroupEvent
     extends Event

@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ActionType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="MigrationV1"/>
- *     &lt;enumeration value="VmPowerV1"/>
- *     &lt;enumeration value="HostPowerV1"/>
- *     &lt;enumeration value="HostMaintenanceV1"/>
- *     &lt;enumeration value="StorageMigrationV1"/>
- *     &lt;enumeration value="StoragePlacementV1"/>
- *     &lt;enumeration value="PlacementV1"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ActionType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="MigrationV1"/&gt;
+ *     &lt;enumeration value="VmPowerV1"/&gt;
+ *     &lt;enumeration value="HostPowerV1"/&gt;
+ *     &lt;enumeration value="HostMaintenanceV1"/&gt;
+ *     &lt;enumeration value="StorageMigrationV1"/&gt;
+ *     &lt;enumeration value="StoragePlacementV1"/&gt;
+ *     &lt;enumeration value="PlacementV1"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

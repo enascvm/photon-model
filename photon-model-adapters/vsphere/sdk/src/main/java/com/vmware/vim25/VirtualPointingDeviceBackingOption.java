@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualPointingDeviceBackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceDeviceBackingOption">
- *       &lt;sequence>
- *         &lt;element name="hostPointingDevice" type="{urn:vim25}ChoiceOption"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualPointingDeviceBackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceDeviceBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="hostPointingDevice" type="{urn:vim25}ChoiceOption"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

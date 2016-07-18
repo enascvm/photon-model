@@ -13,51 +13,51 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualMachineCapability">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="snapshotOperationsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="multipleSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="snapshotConfigSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="poweredOffSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="memorySnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="revertToSnapshotSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="quiescedSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="disableSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="lockSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="consolePreferencesSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="cpuFeatureMaskSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="s1AcpiManagementSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="settingScreenResolutionSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="toolsAutoUpdateSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="vmNpivWwnSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="npivWwnOnNonRdmVmSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="vmNpivWwnDisableSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="vmNpivWwnUpdateSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="swapPlacementSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="toolsSyncTimeSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="virtualMmuUsageSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="diskSharesSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="bootOptionsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="bootRetryOptionsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="settingVideoRamSizeSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="settingDisplayTopologySupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="recordReplaySupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="changeTrackingSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="multipleCoresPerSocketSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="hostBasedReplicationSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="guestAutoLockSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="memoryReservationLockSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="featureRequirementSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="poweredOnMonitorTypeChangeSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="seSparseDiskSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="nestedHVSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="vPMCSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualMachineCapability"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="snapshotOperationsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="multipleSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="snapshotConfigSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="poweredOffSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="memorySnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="revertToSnapshotSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="quiescedSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="disableSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="lockSnapshotsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="consolePreferencesSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="cpuFeatureMaskSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="s1AcpiManagementSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="settingScreenResolutionSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="toolsAutoUpdateSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="vmNpivWwnSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="npivWwnOnNonRdmVmSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="vmNpivWwnDisableSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="vmNpivWwnUpdateSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="swapPlacementSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="toolsSyncTimeSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="virtualMmuUsageSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="diskSharesSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="bootOptionsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="bootRetryOptionsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="settingVideoRamSizeSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="settingDisplayTopologySupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="recordReplaySupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="changeTrackingSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="multipleCoresPerSocketSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="hostBasedReplicationSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="guestAutoLockSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="memoryReservationLockSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="featureRequirementSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="poweredOnMonitorTypeChangeSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="seSparseDiskSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="nestedHVSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="vPMCSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

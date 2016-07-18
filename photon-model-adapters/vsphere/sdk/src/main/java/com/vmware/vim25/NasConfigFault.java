@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="NasConfigFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostConfigFault">
- *       &lt;sequence>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="NasConfigFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostConfigFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,13 +32,13 @@ import javax.xml.bind.annotation.XmlType;
     "name"
 })
 @XmlSeeAlso({
-    NoPermissionOnNasVolume.class,
-    InvalidNetworkResource.class,
-    NetworkInaccessible.class,
-    NasConnectionLimitReached.class,
     InvalidNasCredentials.class,
+    InvalidNetworkResource.class,
+    NasConnectionLimitReached.class,
+    NasSessionCredentialConflict.class,
     NasVolumeNotMounted.class,
-    NasSessionCredentialConflict.class
+    NetworkInaccessible.class,
+    NoPermissionOnNasVolume.class
 })
 public class NasConfigFault
     extends HostConfigFault

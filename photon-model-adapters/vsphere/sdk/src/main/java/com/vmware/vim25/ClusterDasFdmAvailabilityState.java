@@ -12,20 +12,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ClusterDasFdmAvailabilityState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="uninitialized"/>
- *     &lt;enumeration value="election"/>
- *     &lt;enumeration value="master"/>
- *     &lt;enumeration value="connectedToMaster"/>
- *     &lt;enumeration value="networkPartitionedFromMaster"/>
- *     &lt;enumeration value="networkIsolated"/>
- *     &lt;enumeration value="hostDown"/>
- *     &lt;enumeration value="initializationError"/>
- *     &lt;enumeration value="uninitializationError"/>
- *     &lt;enumeration value="fdmUnreachable"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ClusterDasFdmAvailabilityState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="uninitialized"/&gt;
+ *     &lt;enumeration value="election"/&gt;
+ *     &lt;enumeration value="master"/&gt;
+ *     &lt;enumeration value="connectedToMaster"/&gt;
+ *     &lt;enumeration value="networkPartitionedFromMaster"/&gt;
+ *     &lt;enumeration value="networkIsolated"/&gt;
+ *     &lt;enumeration value="hostDown"/&gt;
+ *     &lt;enumeration value="initializationError"/&gt;
+ *     &lt;enumeration value="uninitializationError"/&gt;
+ *     &lt;enumeration value="fdmUnreachable"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

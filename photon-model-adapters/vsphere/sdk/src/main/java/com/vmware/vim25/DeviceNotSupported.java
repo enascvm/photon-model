@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DeviceNotSupported">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualHardwareCompatibilityIssue">
- *       &lt;sequence>
- *         &lt;element name="device" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="reason" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DeviceNotSupported"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualHardwareCompatibilityIssue"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="device" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="reason" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -35,18 +35,18 @@ import javax.xml.bind.annotation.XmlType;
 })
 @XmlSeeAlso({
     DeviceControllerNotSupported.class,
-    MultiWriterNotSupported.class,
     DigestNotSupported.class,
-    VMINotSupported.class,
-    VirtualEthernetCardNotSupported.class,
-    RemoteDeviceNotSupported.class,
     FileBackedPortNotSupported.class,
-    VirtualDiskModeNotSupported.class,
-    SharedBusControllerNotSupported.class,
-    DeviceBackingNotSupported.class,
-    RawDiskNotSupported.class,
+    MultiWriterNotSupported.class,
     NonPersistentDisksNotSupported.class,
-    RDMNotSupported.class
+    RDMNotSupported.class,
+    RawDiskNotSupported.class,
+    RemoteDeviceNotSupported.class,
+    SharedBusControllerNotSupported.class,
+    VMINotSupported.class,
+    DeviceBackingNotSupported.class,
+    VirtualDiskModeNotSupported.class,
+    VirtualEthernetCardNotSupported.class
 })
 public class DeviceNotSupported
     extends VirtualHardwareCompatibilityIssue

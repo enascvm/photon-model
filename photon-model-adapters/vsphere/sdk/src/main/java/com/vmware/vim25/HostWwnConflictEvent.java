@@ -14,17 +14,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostWwnConflictEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostEvent">
- *       &lt;sequence>
- *         &lt;element name="conflictedVms" type="{urn:vim25}VmEventArgument" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="conflictedHosts" type="{urn:vim25}HostEventArgument" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="wwn" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostWwnConflictEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="conflictedVms" type="{urn:vim25}VmEventArgument" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="conflictedHosts" type="{urn:vim25}HostEventArgument" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="wwn" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -12,24 +12,24 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ReplicationVmConfigFaultReasonForFault">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="incompatibleHwVersion"/>
- *     &lt;enumeration value="invalidVmReplicationId"/>
- *     &lt;enumeration value="invalidGenerationNumber"/>
- *     &lt;enumeration value="outOfBoundsRpoValue"/>
- *     &lt;enumeration value="invalidDestinationIpAddress"/>
- *     &lt;enumeration value="invalidDestinationPort"/>
- *     &lt;enumeration value="invalidExtraVmOptions"/>
- *     &lt;enumeration value="staleGenerationNumber"/>
- *     &lt;enumeration value="reconfigureVmReplicationIdNotAllowed"/>
- *     &lt;enumeration value="cannotRetrieveVmReplicationConfiguration"/>
- *     &lt;enumeration value="replicationAlreadyEnabled"/>
- *     &lt;enumeration value="invalidPriorConfiguration"/>
- *     &lt;enumeration value="replicationNotEnabled"/>
- *     &lt;enumeration value="replicationConfigurationFailed"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ReplicationVmConfigFaultReasonForFault"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="incompatibleHwVersion"/&gt;
+ *     &lt;enumeration value="invalidVmReplicationId"/&gt;
+ *     &lt;enumeration value="invalidGenerationNumber"/&gt;
+ *     &lt;enumeration value="outOfBoundsRpoValue"/&gt;
+ *     &lt;enumeration value="invalidDestinationIpAddress"/&gt;
+ *     &lt;enumeration value="invalidDestinationPort"/&gt;
+ *     &lt;enumeration value="invalidExtraVmOptions"/&gt;
+ *     &lt;enumeration value="staleGenerationNumber"/&gt;
+ *     &lt;enumeration value="reconfigureVmReplicationIdNotAllowed"/&gt;
+ *     &lt;enumeration value="cannotRetrieveVmReplicationConfiguration"/&gt;
+ *     &lt;enumeration value="replicationAlreadyEnabled"/&gt;
+ *     &lt;enumeration value="invalidPriorConfiguration"/&gt;
+ *     &lt;enumeration value="replicationNotEnabled"/&gt;
+ *     &lt;enumeration value="replicationConfigurationFailed"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

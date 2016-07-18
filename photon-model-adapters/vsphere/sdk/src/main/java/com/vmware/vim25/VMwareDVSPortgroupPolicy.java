@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VMwareDVSPortgroupPolicy">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DVPortgroupPolicy">
- *       &lt;sequence>
- *         &lt;element name="vlanOverrideAllowed" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="uplinkTeamingOverrideAllowed" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="securityPolicyOverrideAllowed" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="ipfixOverrideAllowed" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VMwareDVSPortgroupPolicy"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DVPortgroupPolicy"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vlanOverrideAllowed" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="uplinkTeamingOverrideAllowed" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="securityPolicyOverrideAllowed" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="ipfixOverrideAllowed" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InheritablePolicy">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="inherited" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InheritablePolicy"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="inherited" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -31,20 +31,20 @@ import javax.xml.bind.annotation.XmlType;
     "inherited"
 })
 @XmlSeeAlso({
-    DVSTrafficShapingPolicy.class,
-    VMwareUplinkLacpPolicy.class,
-    VmwareUplinkPortTeamingPolicy.class,
+    BoolPolicy.class,
     IntPolicy.class,
-    DVSVendorSpecificConfig.class,
-    DvsFilterPolicy.class,
-    DVSFailureCriteria.class,
     LongPolicy.class,
+    StringPolicy.class,
+    DVSTrafficShapingPolicy.class,
+    DVSVendorSpecificConfig.class,
+    DvsFilterConfig.class,
+    DvsFilterPolicy.class,
     VMwareUplinkPortOrderPolicy.class,
+    DVSFailureCriteria.class,
+    VmwareUplinkPortTeamingPolicy.class,
     VmwareDistributedVirtualSwitchVlanSpec.class,
     DVSSecurityPolicy.class,
-    DvsFilterConfig.class,
-    StringPolicy.class,
-    BoolPolicy.class
+    VMwareUplinkLacpPolicy.class
 })
 public class InheritablePolicy
     extends DynamicData

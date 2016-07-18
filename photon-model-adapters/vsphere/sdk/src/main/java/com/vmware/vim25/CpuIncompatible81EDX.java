@@ -12,20 +12,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="CpuIncompatible81EDX">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}CpuIncompatible">
- *       &lt;sequence>
- *         &lt;element name="nx" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="ffxsr" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="rdtscp" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="lm" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="other" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="otherOnly" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="CpuIncompatible81EDX"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}CpuIncompatible"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="nx" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="ffxsr" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="rdtscp" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="lm" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="other" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="otherOnly" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

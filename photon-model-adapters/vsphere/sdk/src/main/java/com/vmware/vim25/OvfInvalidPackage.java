@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfInvalidPackage">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfFault">
- *       &lt;sequence>
- *         &lt;element name="lineNumber" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfInvalidPackage"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="lineNumber" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -31,12 +31,12 @@ import javax.xml.bind.annotation.XmlType;
     "lineNumber"
 })
 @XmlSeeAlso({
-    OvfXmlFormat.class,
-    OvfWrongNamespace.class,
     OvfConstraint.class,
-    OvfElement.class,
     OvfAttribute.class,
-    OvfProperty.class
+    OvfProperty.class,
+    OvfElement.class,
+    OvfWrongNamespace.class,
+    OvfXmlFormat.class
 })
 public class OvfInvalidPackage
     extends OvfFault

@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="NetStackInstanceProfile">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ApplyProfile">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="dnsConfig" type="{urn:vim25}NetworkProfileDnsConfigProfile"/>
- *         &lt;element name="ipRouteConfig" type="{urn:vim25}IpRouteProfile"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="NetStackInstanceProfile"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ApplyProfile"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="dnsConfig" type="{urn:vim25}NetworkProfileDnsConfigProfile"/&gt;
+ *         &lt;element name="ipRouteConfig" type="{urn:vim25}IpRouteProfile"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

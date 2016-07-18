@@ -15,16 +15,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="EVCUnsupportedByHostSoftware">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}EVCConfigFault">
- *       &lt;sequence>
- *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded"/>
- *         &lt;element name="hostName" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="EVCUnsupportedByHostSoftware"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}EVCConfigFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="hostName" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

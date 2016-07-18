@@ -4,6 +4,7 @@ package com.vmware.vim25;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -13,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="MonthlyByWeekdayTaskScheduler">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}MonthlyTaskScheduler">
- *       &lt;sequence>
- *         &lt;element name="offset" type="{urn:vim25}WeekOfMonth"/>
- *         &lt;element name="weekday" type="{urn:vim25}DayOfWeek"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="MonthlyByWeekdayTaskScheduler"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}MonthlyTaskScheduler"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="offset" type="{urn:vim25}WeekOfMonth"/&gt;
+ *         &lt;element name="weekday" type="{urn:vim25}DayOfWeek"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -37,8 +38,10 @@ public class MonthlyByWeekdayTaskScheduler
 {
 
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected WeekOfMonth offset;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected DayOfWeek weekday;
 
     /**

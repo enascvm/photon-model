@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InvalidState">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InvalidState"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,15 +28,15 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "InvalidState")
 @XmlSeeAlso({
-    VmPowerOnDisabled.class,
-    QuestionPending.class,
+    CannotPowerOffVmInCluster.class,
     InvalidDatastoreState.class,
+    InvalidHostState.class,
+    InvalidPowerState.class,
     MksConnectionLimitReached.class,
     NoActiveHostInCluster.class,
-    InvalidPowerState.class,
-    CannotPowerOffVmInCluster.class,
     OvfConsumerPowerOnFault.class,
-    InvalidHostState.class
+    QuestionPending.class,
+    VmPowerOnDisabled.class
 })
 public class InvalidState
     extends VimFault

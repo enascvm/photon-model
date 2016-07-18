@@ -15,24 +15,24 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="AlarmDescription">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="expr" type="{urn:vim25}TypeDescription" maxOccurs="unbounded"/>
- *         &lt;element name="stateOperator" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/>
- *         &lt;element name="metricOperator" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/>
- *         &lt;element name="hostSystemConnectionState" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/>
- *         &lt;element name="virtualMachinePowerState" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/>
- *         &lt;element name="datastoreConnectionState" type="{urn:vim25}ElementDescription" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="hostSystemPowerState" type="{urn:vim25}ElementDescription" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="virtualMachineGuestHeartbeatStatus" type="{urn:vim25}ElementDescription" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="entityStatus" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/>
- *         &lt;element name="action" type="{urn:vim25}TypeDescription" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="AlarmDescription"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="expr" type="{urn:vim25}TypeDescription" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="stateOperator" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="metricOperator" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="hostSystemConnectionState" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="virtualMachinePowerState" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="datastoreConnectionState" type="{urn:vim25}ElementDescription" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="hostSystemPowerState" type="{urn:vim25}ElementDescription" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="virtualMachineGuestHeartbeatStatus" type="{urn:vim25}ElementDescription" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="entityStatus" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="action" type="{urn:vim25}TypeDescription" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

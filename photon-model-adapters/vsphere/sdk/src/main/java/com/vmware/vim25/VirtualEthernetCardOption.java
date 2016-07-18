@@ -14,19 +14,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualEthernetCardOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceOption">
- *       &lt;sequence>
- *         &lt;element name="supportedOUI" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="macType" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="wakeOnLanEnabled" type="{urn:vim25}BoolOption"/>
- *         &lt;element name="vmDirectPathGen2Supported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="uptCompatibilityEnabled" type="{urn:vim25}BoolOption" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualEthernetCardOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="supportedOUI" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="macType" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="wakeOnLanEnabled" type="{urn:vim25}BoolOption"/&gt;
+ *         &lt;element name="vmDirectPathGen2Supported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="uptCompatibilityEnabled" type="{urn:vim25}BoolOption" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -40,11 +40,11 @@ import javax.xml.bind.annotation.XmlType;
     "uptCompatibilityEnabled"
 })
 @XmlSeeAlso({
-    VirtualE1000EOption.class,
-    VirtualVmxnetOption.class,
     VirtualE1000Option.class,
+    VirtualE1000EOption.class,
     VirtualPCNet32Option.class,
-    VirtualSriovEthernetCardOption.class
+    VirtualSriovEthernetCardOption.class,
+    VirtualVmxnetOption.class
 })
 public class VirtualEthernetCardOption
     extends VirtualDeviceOption

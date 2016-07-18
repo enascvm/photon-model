@@ -6,6 +6,7 @@ import java.util.List;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -15,33 +16,33 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostInternetScsiHba">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostHostBusAdapter">
- *       &lt;sequence>
- *         &lt;element name="isSoftwareBased" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="canBeDisabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="networkBindingSupport" type="{urn:vim25}HostInternetScsiHbaNetworkBindingSupportType" minOccurs="0"/>
- *         &lt;element name="discoveryCapabilities" type="{urn:vim25}HostInternetScsiHbaDiscoveryCapabilities"/>
- *         &lt;element name="discoveryProperties" type="{urn:vim25}HostInternetScsiHbaDiscoveryProperties"/>
- *         &lt;element name="authenticationCapabilities" type="{urn:vim25}HostInternetScsiHbaAuthenticationCapabilities"/>
- *         &lt;element name="authenticationProperties" type="{urn:vim25}HostInternetScsiHbaAuthenticationProperties"/>
- *         &lt;element name="digestCapabilities" type="{urn:vim25}HostInternetScsiHbaDigestCapabilities" minOccurs="0"/>
- *         &lt;element name="digestProperties" type="{urn:vim25}HostInternetScsiHbaDigestProperties" minOccurs="0"/>
- *         &lt;element name="ipCapabilities" type="{urn:vim25}HostInternetScsiHbaIPCapabilities"/>
- *         &lt;element name="ipProperties" type="{urn:vim25}HostInternetScsiHbaIPProperties"/>
- *         &lt;element name="supportedAdvancedOptions" type="{urn:vim25}OptionDef" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="advancedOptions" type="{urn:vim25}HostInternetScsiHbaParamValue" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="iScsiName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="iScsiAlias" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="configuredSendTarget" type="{urn:vim25}HostInternetScsiHbaSendTarget" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="configuredStaticTarget" type="{urn:vim25}HostInternetScsiHbaStaticTarget" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="maxSpeedMb" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="currentSpeedMb" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostInternetScsiHba"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostHostBusAdapter"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="isSoftwareBased" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="canBeDisabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="networkBindingSupport" type="{urn:vim25}HostInternetScsiHbaNetworkBindingSupportType" minOccurs="0"/&gt;
+ *         &lt;element name="discoveryCapabilities" type="{urn:vim25}HostInternetScsiHbaDiscoveryCapabilities"/&gt;
+ *         &lt;element name="discoveryProperties" type="{urn:vim25}HostInternetScsiHbaDiscoveryProperties"/&gt;
+ *         &lt;element name="authenticationCapabilities" type="{urn:vim25}HostInternetScsiHbaAuthenticationCapabilities"/&gt;
+ *         &lt;element name="authenticationProperties" type="{urn:vim25}HostInternetScsiHbaAuthenticationProperties"/&gt;
+ *         &lt;element name="digestCapabilities" type="{urn:vim25}HostInternetScsiHbaDigestCapabilities" minOccurs="0"/&gt;
+ *         &lt;element name="digestProperties" type="{urn:vim25}HostInternetScsiHbaDigestProperties" minOccurs="0"/&gt;
+ *         &lt;element name="ipCapabilities" type="{urn:vim25}HostInternetScsiHbaIPCapabilities"/&gt;
+ *         &lt;element name="ipProperties" type="{urn:vim25}HostInternetScsiHbaIPProperties"/&gt;
+ *         &lt;element name="supportedAdvancedOptions" type="{urn:vim25}OptionDef" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="advancedOptions" type="{urn:vim25}HostInternetScsiHbaParamValue" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="iScsiName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="iScsiAlias" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="configuredSendTarget" type="{urn:vim25}HostInternetScsiHbaSendTarget" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="configuredStaticTarget" type="{urn:vim25}HostInternetScsiHbaStaticTarget" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="maxSpeedMb" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="currentSpeedMb" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -74,6 +75,7 @@ public class HostInternetScsiHba
 
     protected boolean isSoftwareBased;
     protected Boolean canBeDisabled;
+    @XmlSchemaType(name = "string")
     protected HostInternetScsiHbaNetworkBindingSupportType networkBindingSupport;
     @XmlElement(required = true)
     protected HostInternetScsiHbaDiscoveryCapabilities discoveryCapabilities;

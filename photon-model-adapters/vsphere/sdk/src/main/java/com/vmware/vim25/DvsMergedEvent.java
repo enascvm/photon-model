@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DvsMergedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DvsEvent">
- *       &lt;sequence>
- *         &lt;element name="sourceDvs" type="{urn:vim25}DvsEventArgument"/>
- *         &lt;element name="destinationDvs" type="{urn:vim25}DvsEventArgument"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DvsMergedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DvsEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="sourceDvs" type="{urn:vim25}DvsEventArgument"/&gt;
+ *         &lt;element name="destinationDvs" type="{urn:vim25}DvsEventArgument"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

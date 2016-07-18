@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InsufficientVFlashResourcesFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}InsufficientResourcesFault">
- *       &lt;sequence>
- *         &lt;element name="freeSpaceInMB" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="freeSpace" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="requestedSpaceInMB" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="requestedSpace" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InsufficientVFlashResourcesFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}InsufficientResourcesFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="freeSpaceInMB" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="freeSpace" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="requestedSpaceInMB" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="requestedSpace" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

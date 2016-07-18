@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualHardwareCompatibilityIssue">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmConfigFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualHardwareCompatibilityIssue"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmConfigFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,20 +28,20 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VirtualHardwareCompatibilityIssue")
 @XmlSeeAlso({
-    WakeOnLanNotSupported.class,
-    VirtualHardwareVersionNotSupported.class,
-    StorageVmotionIncompatible.class,
-    MemorySizeNotSupported.class,
-    MemorySizeNotRecommended.class,
-    NumVirtualCpusNotSupported.class,
     DrsVmotionIncompatibleFault.class,
-    MemorySizeNotSupportedByDatastore.class,
     CpuIncompatible.class,
     FeatureRequirementsNotMet.class,
-    NumVirtualCoresPerSocketNotSupported.class,
+    DiskNotSupported.class,
+    MemorySizeNotRecommended.class,
+    MemorySizeNotSupported.class,
+    MemorySizeNotSupportedByDatastore.class,
     NotEnoughCpus.class,
+    NumVirtualCoresPerSocketNotSupported.class,
+    NumVirtualCpusNotSupported.class,
+    StorageVmotionIncompatible.class,
     DeviceNotSupported.class,
-    DiskNotSupported.class
+    VirtualHardwareVersionNotSupported.class,
+    WakeOnLanNotSupported.class
 })
 public class VirtualHardwareCompatibilityIssue
     extends VmConfigFault

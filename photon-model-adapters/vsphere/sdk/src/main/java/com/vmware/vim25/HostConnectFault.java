@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostConnectFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostConnectFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,21 +28,21 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "HostConnectFault")
 @XmlSeeAlso({
-    ReadHostResourcePoolTreeFailed.class,
-    CannotAddHostWithFTVmAsStandalone.class,
-    TooManyHosts.class,
-    AlreadyBeingManaged.class,
     AgentInstallFailed.class,
+    AlreadyBeingManaged.class,
+    AlreadyConnected.class,
+    CannotAddHostWithFTVmAsStandalone.class,
+    CannotAddHostWithFTVmToDifferentCluster.class,
+    CannotAddHostWithFTVmToNonHACluster.class,
+    GatewayConnectFault.class,
+    MultipleCertificatesVerifyFault.class,
     NoHost.class,
     NoPermissionOnHost.class,
-    CannotAddHostWithFTVmToDifferentCluster.class,
+    NotSupportedHost.class,
+    ReadHostResourcePoolTreeFailed.class,
     SSLDisabledFault.class,
     SSLVerifyFault.class,
-    AlreadyConnected.class,
-    CannotAddHostWithFTVmToNonHACluster.class,
-    NotSupportedHost.class,
-    GatewayConnectFault.class,
-    MultipleCertificatesVerifyFault.class
+    TooManyHosts.class
 })
 public class HostConnectFault
     extends VimFault

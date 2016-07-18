@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InsufficientResourcesFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InsufficientResourcesFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,22 +28,22 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "InsufficientResourcesFault")
 @XmlSeeAlso({
-    InvalidResourcePoolStructureFault.class,
-    InsufficientFailoverResourcesFault.class,
-    InsufficientGraphicsResourcesFault.class,
-    InsufficientStorageSpace.class,
-    VmFaultToleranceTooManyVMsOnHost.class,
-    VmFaultToleranceTooManyFtVcpusOnHost.class,
-    VmSmpFaultToleranceTooManyVMsOnHost.class,
-    InsufficientHostCapacityFault.class,
-    InsufficientStandbyResource.class,
-    InsufficientVFlashResourcesFault.class,
-    InsufficientNetworkCapacity.class,
-    NumVirtualCpusExceedsLimit.class,
     InsufficientAgentVmsDeployed.class,
     InsufficientCpuResourcesFault.class,
+    InsufficientFailoverResourcesFault.class,
+    InsufficientGraphicsResourcesFault.class,
+    InsufficientMemoryResourcesFault.class,
+    InsufficientNetworkCapacity.class,
     InsufficientNetworkResourcePoolCapacity.class,
-    InsufficientMemoryResourcesFault.class
+    InsufficientHostCapacityFault.class,
+    InsufficientStandbyResource.class,
+    InsufficientStorageSpace.class,
+    InsufficientVFlashResourcesFault.class,
+    InvalidResourcePoolStructureFault.class,
+    NumVirtualCpusExceedsLimit.class,
+    VmFaultToleranceTooManyFtVcpusOnHost.class,
+    VmFaultToleranceTooManyVMsOnHost.class,
+    VmSmpFaultToleranceTooManyVMsOnHost.class
 })
 public class InsufficientResourcesFault
     extends VimFault

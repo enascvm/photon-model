@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="LicenseEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="LicenseEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,20 +28,20 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "LicenseEvent")
 @XmlSeeAlso({
-    InvalidEditionEvent.class,
     ServerLicenseExpiredEvent.class,
-    HostInventoryFullEvent.class,
-    LicenseNonComplianceEvent.class,
-    LicenseRestrictedEvent.class,
-    LicenseServerUnavailableEvent.class,
-    UnlicensedVirtualMachinesFoundEvent.class,
-    UnlicensedVirtualMachinesEvent.class,
-    LicenseServerAvailableEvent.class,
-    AllVirtualMachinesLicensedEvent.class,
-    NoLicenseEvent.class,
-    IncorrectHostInformationEvent.class,
     HostLicenseExpiredEvent.class,
-    VMotionLicenseExpiredEvent.class
+    VMotionLicenseExpiredEvent.class,
+    NoLicenseEvent.class,
+    LicenseServerUnavailableEvent.class,
+    LicenseServerAvailableEvent.class,
+    InvalidEditionEvent.class,
+    HostInventoryFullEvent.class,
+    LicenseRestrictedEvent.class,
+    IncorrectHostInformationEvent.class,
+    UnlicensedVirtualMachinesEvent.class,
+    UnlicensedVirtualMachinesFoundEvent.class,
+    AllVirtualMachinesLicensedEvent.class,
+    LicenseNonComplianceEvent.class
 })
 public class LicenseEvent
     extends Event

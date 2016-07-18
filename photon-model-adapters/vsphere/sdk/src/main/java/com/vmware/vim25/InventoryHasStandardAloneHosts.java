@@ -15,15 +15,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InventoryHasStandardAloneHosts">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}NotEnoughLicenses">
- *       &lt;sequence>
- *         &lt;element name="hosts" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InventoryHasStandardAloneHosts"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}NotEnoughLicenses"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="hosts" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

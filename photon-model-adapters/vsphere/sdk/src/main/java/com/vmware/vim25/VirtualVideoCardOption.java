@@ -13,21 +13,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualVideoCardOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceOption">
- *       &lt;sequence>
- *         &lt;element name="videoRamSizeInKB" type="{urn:vim25}LongOption" minOccurs="0"/>
- *         &lt;element name="numDisplays" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="useAutoDetect" type="{urn:vim25}BoolOption" minOccurs="0"/>
- *         &lt;element name="support3D" type="{urn:vim25}BoolOption" minOccurs="0"/>
- *         &lt;element name="use3dRendererSupported" type="{urn:vim25}BoolOption" minOccurs="0"/>
- *         &lt;element name="graphicsMemorySizeInKB" type="{urn:vim25}LongOption" minOccurs="0"/>
- *         &lt;element name="graphicsMemorySizeSupported" type="{urn:vim25}BoolOption" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualVideoCardOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="videoRamSizeInKB" type="{urn:vim25}LongOption" minOccurs="0"/&gt;
+ *         &lt;element name="numDisplays" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="useAutoDetect" type="{urn:vim25}BoolOption" minOccurs="0"/&gt;
+ *         &lt;element name="support3D" type="{urn:vim25}BoolOption" minOccurs="0"/&gt;
+ *         &lt;element name="use3dRendererSupported" type="{urn:vim25}BoolOption" minOccurs="0"/&gt;
+ *         &lt;element name="graphicsMemorySizeInKB" type="{urn:vim25}LongOption" minOccurs="0"/&gt;
+ *         &lt;element name="graphicsMemorySizeSupported" type="{urn:vim25}BoolOption" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

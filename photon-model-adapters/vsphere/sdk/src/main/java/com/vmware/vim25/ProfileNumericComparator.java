@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ProfileNumericComparator">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="lessThan"/>
- *     &lt;enumeration value="lessThanEqual"/>
- *     &lt;enumeration value="equal"/>
- *     &lt;enumeration value="notEqual"/>
- *     &lt;enumeration value="greaterThanEqual"/>
- *     &lt;enumeration value="greaterThan"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ProfileNumericComparator"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="lessThan"/&gt;
+ *     &lt;enumeration value="lessThanEqual"/&gt;
+ *     &lt;enumeration value="equal"/&gt;
+ *     &lt;enumeration value="notEqual"/&gt;
+ *     &lt;enumeration value="greaterThanEqual"/&gt;
+ *     &lt;enumeration value="greaterThan"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

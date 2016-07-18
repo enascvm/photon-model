@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="GuestOperationsFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="GuestOperationsFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,17 +28,17 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "GuestOperationsFault")
 @XmlSeeAlso({
-    GuestMultipleMappings.class,
-    InvalidGuestLogin.class,
-    TooManyGuestLogons.class,
-    GuestProcessNotFound.class,
-    GuestPermissionDenied.class,
-    OperationNotSupportedByGuest.class,
-    GuestOperationsUnavailable.class,
-    GuestRegistryFault.class,
-    GuestComponentsOutOfDate.class,
     GuestAuthenticationChallenge.class,
-    OperationDisabledByGuest.class
+    GuestComponentsOutOfDate.class,
+    GuestMultipleMappings.class,
+    GuestOperationsUnavailable.class,
+    GuestPermissionDenied.class,
+    GuestProcessNotFound.class,
+    GuestRegistryFault.class,
+    InvalidGuestLogin.class,
+    OperationDisabledByGuest.class,
+    OperationNotSupportedByGuest.class,
+    TooManyGuestLogons.class
 })
 public class GuestOperationsFault
     extends VimFault

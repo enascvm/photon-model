@@ -16,25 +16,25 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDeviceOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="connectOption" type="{urn:vim25}VirtualDeviceConnectOption" minOccurs="0"/>
- *         &lt;element name="busSlotOption" type="{urn:vim25}VirtualDeviceBusSlotOption" minOccurs="0"/>
- *         &lt;element name="controllerType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="autoAssignController" type="{urn:vim25}BoolOption" minOccurs="0"/>
- *         &lt;element name="backingOption" type="{urn:vim25}VirtualDeviceBackingOption" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="defaultBackingOptionIndex" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="licensingLimit" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="deprecated" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="plugAndPlay" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="hotRemoveSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDeviceOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="connectOption" type="{urn:vim25}VirtualDeviceConnectOption" minOccurs="0"/&gt;
+ *         &lt;element name="busSlotOption" type="{urn:vim25}VirtualDeviceBusSlotOption" minOccurs="0"/&gt;
+ *         &lt;element name="controllerType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="autoAssignController" type="{urn:vim25}BoolOption" minOccurs="0"/&gt;
+ *         &lt;element name="backingOption" type="{urn:vim25}VirtualDeviceBackingOption" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="defaultBackingOptionIndex" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="licensingLimit" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="deprecated" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="plugAndPlay" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="hotRemoveSupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -54,22 +54,22 @@ import javax.xml.bind.annotation.XmlType;
     "hotRemoveSupported"
 })
 @XmlSeeAlso({
-    VirtualUSBOption.class,
-    VirtualSerialPortOption.class,
     VirtualCdromOption.class,
-    VirtualMachineVMCIDeviceOption.class,
-    VirtualSoundCardOption.class,
-    VirtualParallelPortOption.class,
-    VirtualSCSIPassthroughOption.class,
-    VirtualVideoCardOption.class,
-    VirtualKeyboardOption.class,
-    VirtualFloppyOption.class,
-    VirtualPCIPassthroughOption.class,
-    VirtualVMIROMOption.class,
     VirtualDiskOption.class,
+    VirtualFloppyOption.class,
+    VirtualKeyboardOption.class,
+    VirtualPCIPassthroughOption.class,
+    VirtualParallelPortOption.class,
+    VirtualPointingDeviceOption.class,
+    VirtualSCSIPassthroughOption.class,
+    VirtualSerialPortOption.class,
+    VirtualSoundCardOption.class,
+    VirtualUSBOption.class,
     VirtualControllerOption.class,
-    VirtualEthernetCardOption.class,
-    VirtualPointingDeviceOption.class
+    VirtualMachineVMCIDeviceOption.class,
+    VirtualVMIROMOption.class,
+    VirtualVideoCardOption.class,
+    VirtualEthernetCardOption.class
 })
 public class VirtualDeviceOption
     extends DynamicData

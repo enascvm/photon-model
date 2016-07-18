@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -14,24 +15,24 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualMachineRelocateSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="service" type="{urn:vim25}ServiceLocator" minOccurs="0"/>
- *         &lt;element name="folder" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="datastore" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="diskMoveType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="pool" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="disk" type="{urn:vim25}VirtualMachineRelocateSpecDiskLocator" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="transform" type="{urn:vim25}VirtualMachineRelocateTransformation" minOccurs="0"/>
- *         &lt;element name="deviceChange" type="{urn:vim25}VirtualDeviceConfigSpec" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="profile" type="{urn:vim25}VirtualMachineProfileSpec" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualMachineRelocateSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="service" type="{urn:vim25}ServiceLocator" minOccurs="0"/&gt;
+ *         &lt;element name="folder" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="datastore" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="diskMoveType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="pool" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="disk" type="{urn:vim25}VirtualMachineRelocateSpecDiskLocator" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="transform" type="{urn:vim25}VirtualMachineRelocateTransformation" minOccurs="0"/&gt;
+ *         &lt;element name="deviceChange" type="{urn:vim25}VirtualDeviceConfigSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="profile" type="{urn:vim25}VirtualMachineProfileSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -60,6 +61,7 @@ public class VirtualMachineRelocateSpec
     protected ManagedObjectReference pool;
     protected ManagedObjectReference host;
     protected List<VirtualMachineRelocateSpecDiskLocator> disk;
+    @XmlSchemaType(name = "string")
     protected VirtualMachineRelocateTransformation transform;
     protected List<VirtualDeviceConfigSpec> deviceChange;
     protected List<VirtualMachineProfileSpec> profile;

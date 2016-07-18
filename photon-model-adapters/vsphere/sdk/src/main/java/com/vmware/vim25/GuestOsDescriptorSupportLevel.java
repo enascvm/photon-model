@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="GuestOsDescriptorSupportLevel">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="experimental"/>
- *     &lt;enumeration value="legacy"/>
- *     &lt;enumeration value="terminated"/>
- *     &lt;enumeration value="supported"/>
- *     &lt;enumeration value="unsupported"/>
- *     &lt;enumeration value="deprecated"/>
- *     &lt;enumeration value="techPreview"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="GuestOsDescriptorSupportLevel"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="experimental"/&gt;
+ *     &lt;enumeration value="legacy"/&gt;
+ *     &lt;enumeration value="terminated"/&gt;
+ *     &lt;enumeration value="supported"/&gt;
+ *     &lt;enumeration value="unsupported"/&gt;
+ *     &lt;enumeration value="deprecated"/&gt;
+ *     &lt;enumeration value="techPreview"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

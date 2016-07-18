@@ -16,17 +16,17 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ExpiredFeatureLicense">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}NotEnoughLicenses">
- *       &lt;sequence>
- *         &lt;element name="feature" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="count" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="expirationDate" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ExpiredFeatureLicense"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}NotEnoughLicenses"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="feature" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="count" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="expirationDate" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -38,8 +38,8 @@ import javax.xml.datatype.XMLGregorianCalendar;
     "expirationDate"
 })
 @XmlSeeAlso({
-    ExpiredEditionLicense.class,
-    ExpiredAddonLicense.class
+    ExpiredAddonLicense.class,
+    ExpiredEditionLicense.class
 })
 public class ExpiredFeatureLicense
     extends NotEnoughLicenses

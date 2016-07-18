@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualEthernetCardLegacyNetworkDeviceName">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="bridged"/>
- *     &lt;enumeration value="nat"/>
- *     &lt;enumeration value="hostonly"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualEthernetCardLegacyNetworkDeviceName"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="bridged"/&gt;
+ *     &lt;enumeration value="nat"/&gt;
+ *     &lt;enumeration value="hostonly"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

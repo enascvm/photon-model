@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ReplicationVmFaultReasonForFault">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="notConfigured"/>
- *     &lt;enumeration value="poweredOff"/>
- *     &lt;enumeration value="suspended"/>
- *     &lt;enumeration value="poweredOn"/>
- *     &lt;enumeration value="offlineReplicating"/>
- *     &lt;enumeration value="invalidState"/>
- *     &lt;enumeration value="invalidInstanceId"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ReplicationVmFaultReasonForFault"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="notConfigured"/&gt;
+ *     &lt;enumeration value="poweredOff"/&gt;
+ *     &lt;enumeration value="suspended"/&gt;
+ *     &lt;enumeration value="poweredOn"/&gt;
+ *     &lt;enumeration value="offlineReplicating"/&gt;
+ *     &lt;enumeration value="invalidState"/&gt;
+ *     &lt;enumeration value="invalidInstanceId"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

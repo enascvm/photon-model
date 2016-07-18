@@ -12,19 +12,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ActionParameter">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="targetName"/>
- *     &lt;enumeration value="alarmName"/>
- *     &lt;enumeration value="oldStatus"/>
- *     &lt;enumeration value="newStatus"/>
- *     &lt;enumeration value="triggeringSummary"/>
- *     &lt;enumeration value="declaringSummary"/>
- *     &lt;enumeration value="eventDescription"/>
- *     &lt;enumeration value="target"/>
- *     &lt;enumeration value="alarm"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ActionParameter"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="targetName"/&gt;
+ *     &lt;enumeration value="alarmName"/&gt;
+ *     &lt;enumeration value="oldStatus"/&gt;
+ *     &lt;enumeration value="newStatus"/&gt;
+ *     &lt;enumeration value="triggeringSummary"/&gt;
+ *     &lt;enumeration value="declaringSummary"/&gt;
+ *     &lt;enumeration value="eventDescription"/&gt;
+ *     &lt;enumeration value="target"/&gt;
+ *     &lt;enumeration value="alarm"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

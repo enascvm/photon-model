@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmValidateMaxDevice">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *         &lt;element name="device" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="max" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="count" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmValidateMaxDevice"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="device" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="max" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="count" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

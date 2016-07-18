@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineFaultToleranceState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="notConfigured"/>
- *     &lt;enumeration value="disabled"/>
- *     &lt;enumeration value="enabled"/>
- *     &lt;enumeration value="needSecondary"/>
- *     &lt;enumeration value="starting"/>
- *     &lt;enumeration value="running"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineFaultToleranceState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="notConfigured"/&gt;
+ *     &lt;enumeration value="disabled"/&gt;
+ *     &lt;enumeration value="enabled"/&gt;
+ *     &lt;enumeration value="needSecondary"/&gt;
+ *     &lt;enumeration value="starting"/&gt;
+ *     &lt;enumeration value="running"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

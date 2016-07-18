@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="LinkDiscoveryProtocolConfigOperationType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="none"/>
- *     &lt;enumeration value="listen"/>
- *     &lt;enumeration value="advertise"/>
- *     &lt;enumeration value="both"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="LinkDiscoveryProtocolConfigOperationType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="none"/&gt;
+ *     &lt;enumeration value="listen"/&gt;
+ *     &lt;enumeration value="advertise"/&gt;
+ *     &lt;enumeration value="both"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

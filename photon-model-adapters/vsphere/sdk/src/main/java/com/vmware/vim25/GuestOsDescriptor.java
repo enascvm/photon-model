@@ -15,57 +15,57 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="GuestOsDescriptor">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="id" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="family" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="fullName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="supportedMaxCPUs" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="numSupportedPhysicalSockets" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="numSupportedCoresPerSocket" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="supportedMinMemMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="supportedMaxMemMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="recommendedMemMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="recommendedColorDepth" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="supportedDiskControllerList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/>
- *         &lt;element name="recommendedSCSIController" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="recommendedDiskController" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="supportedNumDisks" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="recommendedDiskSizeMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="recommendedCdromController" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="supportedEthernetCard" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/>
- *         &lt;element name="recommendedEthernetCard" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="supportsSlaveDisk" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="cpuFeatureMask" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="smcRequired" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="supportsWakeOnLan" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="supportsVMI" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="supportsMemoryHotAdd" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="supportsCpuHotAdd" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="supportsCpuHotRemove" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="supportedFirmware" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="recommendedFirmware" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="supportedUSBControllerList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="recommendedUSBController" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="supports3D" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="recommended3D" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="smcRecommended" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="ich7mRecommended" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="usbRecommended" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="supportLevel" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="supportedForCreate" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="vRAMSizeInKB" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="numSupportedFloppyDevices" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="wakeOnLanEthernetCard" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="supportsPvscsiControllerForBoot" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="diskUuidEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="supportsHotPlugPCI" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="GuestOsDescriptor"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="id" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="family" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="fullName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="supportedMaxCPUs" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="numSupportedPhysicalSockets" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="numSupportedCoresPerSocket" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="supportedMinMemMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="supportedMaxMemMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="recommendedMemMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="recommendedColorDepth" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="supportedDiskControllerList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="recommendedSCSIController" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="recommendedDiskController" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="supportedNumDisks" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="recommendedDiskSizeMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="recommendedCdromController" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="supportedEthernetCard" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="recommendedEthernetCard" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="supportsSlaveDisk" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="cpuFeatureMask" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="smcRequired" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="supportsWakeOnLan" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="supportsVMI" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="supportsMemoryHotAdd" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="supportsCpuHotAdd" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="supportsCpuHotRemove" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="supportedFirmware" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="recommendedFirmware" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="supportedUSBControllerList" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="recommendedUSBController" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="supports3D" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="recommended3D" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="smcRecommended" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="ich7mRecommended" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="usbRecommended" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="supportLevel" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="supportedForCreate" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="vRAMSizeInKB" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numSupportedFloppyDevices" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="wakeOnLanEthernetCard" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="supportsPvscsiControllerForBoot" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="diskUuidEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="supportsHotPlugPCI" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

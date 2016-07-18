@@ -6,6 +6,7 @@ import java.util.List;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -15,23 +16,23 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="PerfCounterInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="nameInfo" type="{urn:vim25}ElementDescription"/>
- *         &lt;element name="groupInfo" type="{urn:vim25}ElementDescription"/>
- *         &lt;element name="unitInfo" type="{urn:vim25}ElementDescription"/>
- *         &lt;element name="rollupType" type="{urn:vim25}PerfSummaryType"/>
- *         &lt;element name="statsType" type="{urn:vim25}PerfStatsType"/>
- *         &lt;element name="level" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="perDeviceLevel" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="associatedCounterId" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="PerfCounterInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="nameInfo" type="{urn:vim25}ElementDescription"/&gt;
+ *         &lt;element name="groupInfo" type="{urn:vim25}ElementDescription"/&gt;
+ *         &lt;element name="unitInfo" type="{urn:vim25}ElementDescription"/&gt;
+ *         &lt;element name="rollupType" type="{urn:vim25}PerfSummaryType"/&gt;
+ *         &lt;element name="statsType" type="{urn:vim25}PerfStatsType"/&gt;
+ *         &lt;element name="level" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="perDeviceLevel" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="associatedCounterId" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -60,8 +61,10 @@ public class PerfCounterInfo
     @XmlElement(required = true)
     protected ElementDescription unitInfo;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected PerfSummaryType rollupType;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected PerfStatsType statsType;
     protected Integer level;
     protected Integer perDeviceLevel;

@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostConfigFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostConfigFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,19 +28,19 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "HostConfigFault")
 @XmlSeeAlso({
+    AdminDisabled.class,
+    AdminNotDisabled.class,
+    BlockedByFirewall.class,
+    ClockSkew.class,
     DisableAdminNotSupported.class,
     HostConfigFailed.class,
     HostInDomain.class,
-    BlockedByFirewall.class,
-    AdminNotDisabled.class,
-    NoGateway.class,
     InvalidHostName.class,
-    ClockSkew.class,
-    PlatformConfigFault.class,
-    AdminDisabled.class,
+    NoGateway.class,
+    NasConfigFault.class,
     NoVirtualNic.class,
-    VmfsMountFault.class,
-    NasConfigFault.class
+    PlatformConfigFault.class,
+    VmfsMountFault.class
 })
 public class HostConfigFault
     extends VimFault

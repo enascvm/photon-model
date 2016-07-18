@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DvsNetworkRuleAction">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DvsNetworkRuleAction"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,15 +28,15 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "DvsNetworkRuleAction")
 @XmlSeeAlso({
-    DvsLogNetworkRuleAction.class,
-    DvsAcceptNetworkRuleAction.class,
-    DvsPuntNetworkRuleAction.class,
     DvsDropNetworkRuleAction.class,
-    DvsMacRewriteNetworkRuleAction.class,
+    DvsAcceptNetworkRuleAction.class,
     DvsUpdateTagNetworkRuleAction.class,
+    DvsRateLimitNetworkRuleAction.class,
+    DvsLogNetworkRuleAction.class,
     DvsGreEncapNetworkRuleAction.class,
-    DvsCopyNetworkRuleAction.class,
-    DvsRateLimitNetworkRuleAction.class
+    DvsMacRewriteNetworkRuleAction.class,
+    DvsPuntNetworkRuleAction.class,
+    DvsCopyNetworkRuleAction.class
 })
 public class DvsNetworkRuleAction
     extends DynamicData

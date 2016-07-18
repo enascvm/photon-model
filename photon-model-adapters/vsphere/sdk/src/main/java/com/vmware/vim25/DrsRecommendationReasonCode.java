@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DrsRecommendationReasonCode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="fairnessCpuAvg"/>
- *     &lt;enumeration value="fairnessMemAvg"/>
- *     &lt;enumeration value="jointAffin"/>
- *     &lt;enumeration value="antiAffin"/>
- *     &lt;enumeration value="hostMaint"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DrsRecommendationReasonCode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="fairnessCpuAvg"/&gt;
+ *     &lt;enumeration value="fairnessMemAvg"/&gt;
+ *     &lt;enumeration value="jointAffin"/&gt;
+ *     &lt;enumeration value="antiAffin"/&gt;
+ *     &lt;enumeration value="hostMaint"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

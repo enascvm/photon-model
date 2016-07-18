@@ -16,27 +16,27 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="Event">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="chainId" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="createdTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="userName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="datacenter" type="{urn:vim25}DatacenterEventArgument" minOccurs="0"/>
- *         &lt;element name="computeResource" type="{urn:vim25}ComputeResourceEventArgument" minOccurs="0"/>
- *         &lt;element name="host" type="{urn:vim25}HostEventArgument" minOccurs="0"/>
- *         &lt;element name="vm" type="{urn:vim25}VmEventArgument" minOccurs="0"/>
- *         &lt;element name="ds" type="{urn:vim25}DatastoreEventArgument" minOccurs="0"/>
- *         &lt;element name="net" type="{urn:vim25}NetworkEventArgument" minOccurs="0"/>
- *         &lt;element name="dvs" type="{urn:vim25}DvsEventArgument" minOccurs="0"/>
- *         &lt;element name="fullFormattedMessage" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="changeTag" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="Event"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="chainId" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="createdTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="userName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="datacenter" type="{urn:vim25}DatacenterEventArgument" minOccurs="0"/&gt;
+ *         &lt;element name="computeResource" type="{urn:vim25}ComputeResourceEventArgument" minOccurs="0"/&gt;
+ *         &lt;element name="host" type="{urn:vim25}HostEventArgument" minOccurs="0"/&gt;
+ *         &lt;element name="vm" type="{urn:vim25}VmEventArgument" minOccurs="0"/&gt;
+ *         &lt;element name="ds" type="{urn:vim25}DatastoreEventArgument" minOccurs="0"/&gt;
+ *         &lt;element name="net" type="{urn:vim25}NetworkEventArgument" minOccurs="0"/&gt;
+ *         &lt;element name="dvs" type="{urn:vim25}DvsEventArgument" minOccurs="0"/&gt;
+ *         &lt;element name="fullFormattedMessage" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="changeTag" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -58,32 +58,32 @@ import javax.xml.datatype.XMLGregorianCalendar;
     "changeTag"
 })
 @XmlSeeAlso({
-    EventEx.class,
-    LockerReconfiguredEvent.class,
-    LockerMisconfiguredEvent.class,
-    DatacenterEvent.class,
+    GeneralEvent.class,
+    HealthStatusChangedEvent.class,
     HostInventoryUnreadableEvent.class,
-    DVPortgroupEvent.class,
+    DatacenterEvent.class,
+    SessionEvent.class,
     UpgradeEvent.class,
+    ProfileEvent.class,
+    ScheduledTaskEvent.class,
+    AlarmEvent.class,
+    CustomFieldEvent.class,
+    AuthorizationEvent.class,
+    DatastoreEvent.class,
     TaskEvent.class,
     LicenseExpiredEvent.class,
-    TemplateUpgradeEvent.class,
-    ScheduledTaskEvent.class,
-    CustomFieldEvent.class,
-    HealthStatusChangedEvent.class,
-    DatastoreEvent.class,
-    ResourcePoolEvent.class,
-    NetworkRollbackEvent.class,
-    DvsEvent.class,
-    GeneralEvent.class,
-    SessionEvent.class,
     LicenseEvent.class,
+    ResourcePoolEvent.class,
+    TemplateUpgradeEvent.class,
+    LockerMisconfiguredEvent.class,
+    LockerReconfiguredEvent.class,
+    NetworkRollbackEvent.class,
     HostEvent.class,
-    AuthorizationEvent.class,
-    ProfileEvent.class,
+    DvsEvent.class,
+    DVPortgroupEvent.class,
+    ClusterEvent.class,
     VmEvent.class,
-    AlarmEvent.class,
-    ClusterEvent.class
+    EventEx.class
 })
 public class Event
     extends DynamicData

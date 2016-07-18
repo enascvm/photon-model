@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DvsFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DvsFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,28 +28,28 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "DvsFault")
 @XmlSeeAlso({
+    BackupBlobReadFailure.class,
+    BackupBlobWriteFailure.class,
+    CollectorAddressUnset.class,
+    ConflictingConfiguration.class,
+    DvsApplyOperationFault.class,
+    DvsNotAuthorized.class,
+    DvsOperationBulkFault.class,
+    DvsScopeViolated.class,
+    ImportHostAddFailure.class,
+    ImportOperationBulkFault.class,
+    InvalidIpfixConfig.class,
+    RollbackFailure.class,
     SwitchIpUnset.class,
     SwitchNotInUpgradeMode.class,
-    DvsApplyOperationFault.class,
-    VspanPortConflict.class,
-    ConflictingConfiguration.class,
     VspanDestPortConflict.class,
-    CollectorAddressUnset.class,
-    VspanPortPromiscChangeFault.class,
-    VspanSameSessionPortConflict.class,
-    VspanPortgroupTypeChangeFault.class,
-    InvalidIpfixConfig.class,
-    DvsOperationBulkFault.class,
-    VspanPortgroupPromiscChangeFault.class,
-    BackupBlobReadFailure.class,
-    DvsScopeViolated.class,
-    ImportOperationBulkFault.class,
+    VspanPortConflict.class,
     VspanPortMoveFault.class,
-    BackupBlobWriteFailure.class,
-    ImportHostAddFailure.class,
+    VspanPortPromiscChangeFault.class,
+    VspanPortgroupPromiscChangeFault.class,
+    VspanPortgroupTypeChangeFault.class,
     VspanPromiscuousPortNotSupported.class,
-    DvsNotAuthorized.class,
-    RollbackFailure.class
+    VspanSameSessionPortConflict.class
 })
 public class DvsFault
     extends VimFault

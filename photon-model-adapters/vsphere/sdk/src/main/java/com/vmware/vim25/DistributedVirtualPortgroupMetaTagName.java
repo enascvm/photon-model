@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DistributedVirtualPortgroupMetaTagName">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="dvsName"/>
- *     &lt;enumeration value="portgroupName"/>
- *     &lt;enumeration value="portIndex"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DistributedVirtualPortgroupMetaTagName"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="dvsName"/&gt;
+ *     &lt;enumeration value="portgroupName"/&gt;
+ *     &lt;enumeration value="portIndex"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

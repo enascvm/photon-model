@@ -12,24 +12,24 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineDeviceRuntimeInfoVirtualEthernetCardRuntimeStateVmDirectPathGen2InactiveReasonVm">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="vmNptIncompatibleGuest"/>
- *     &lt;enumeration value="vmNptIncompatibleGuestDriver"/>
- *     &lt;enumeration value="vmNptIncompatibleAdapterType"/>
- *     &lt;enumeration value="vmNptDisabledOrDisconnectedAdapter"/>
- *     &lt;enumeration value="vmNptIncompatibleAdapterFeatures"/>
- *     &lt;enumeration value="vmNptIncompatibleBackingType"/>
- *     &lt;enumeration value="vmNptInsufficientMemoryReservation"/>
- *     &lt;enumeration value="vmNptFaultToleranceOrRecordReplayConfigured"/>
- *     &lt;enumeration value="vmNptConflictingIOChainConfigured"/>
- *     &lt;enumeration value="vmNptMonitorBlocks"/>
- *     &lt;enumeration value="vmNptConflictingOperationInProgress"/>
- *     &lt;enumeration value="vmNptRuntimeError"/>
- *     &lt;enumeration value="vmNptOutOfIntrVector"/>
- *     &lt;enumeration value="vmNptVMCIActive"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineDeviceRuntimeInfoVirtualEthernetCardRuntimeStateVmDirectPathGen2InactiveReasonVm"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="vmNptIncompatibleGuest"/&gt;
+ *     &lt;enumeration value="vmNptIncompatibleGuestDriver"/&gt;
+ *     &lt;enumeration value="vmNptIncompatibleAdapterType"/&gt;
+ *     &lt;enumeration value="vmNptDisabledOrDisconnectedAdapter"/&gt;
+ *     &lt;enumeration value="vmNptIncompatibleAdapterFeatures"/&gt;
+ *     &lt;enumeration value="vmNptIncompatibleBackingType"/&gt;
+ *     &lt;enumeration value="vmNptInsufficientMemoryReservation"/&gt;
+ *     &lt;enumeration value="vmNptFaultToleranceOrRecordReplayConfigured"/&gt;
+ *     &lt;enumeration value="vmNptConflictingIOChainConfigured"/&gt;
+ *     &lt;enumeration value="vmNptMonitorBlocks"/&gt;
+ *     &lt;enumeration value="vmNptConflictingOperationInProgress"/&gt;
+ *     &lt;enumeration value="vmNptRuntimeError"/&gt;
+ *     &lt;enumeration value="vmNptOutOfIntrVector"/&gt;
+ *     &lt;enumeration value="vmNptVMCIActive"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

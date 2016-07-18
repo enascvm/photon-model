@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="MigrationResourceErrorEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}MigrationEvent">
- *       &lt;sequence>
- *         &lt;element name="dstPool" type="{urn:vim25}ResourcePoolEventArgument"/>
- *         &lt;element name="dstHost" type="{urn:vim25}HostEventArgument"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="MigrationResourceErrorEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}MigrationEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="dstPool" type="{urn:vim25}ResourcePoolEventArgument"/&gt;
+ *         &lt;element name="dstHost" type="{urn:vim25}HostEventArgument"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

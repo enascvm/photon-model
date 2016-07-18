@@ -12,21 +12,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="WeeklyTaskScheduler">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DailyTaskScheduler">
- *       &lt;sequence>
- *         &lt;element name="sunday" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="monday" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="tuesday" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="wednesday" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="thursday" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="friday" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="saturday" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="WeeklyTaskScheduler"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DailyTaskScheduler"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="sunday" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="monday" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="tuesday" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="wednesday" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="thursday" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="friday" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="saturday" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

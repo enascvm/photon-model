@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DVSTrafficShapingPolicy">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}InheritablePolicy">
- *       &lt;sequence>
- *         &lt;element name="enabled" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *         &lt;element name="averageBandwidth" type="{urn:vim25}LongPolicy" minOccurs="0"/>
- *         &lt;element name="peakBandwidth" type="{urn:vim25}LongPolicy" minOccurs="0"/>
- *         &lt;element name="burstSize" type="{urn:vim25}LongPolicy" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DVSTrafficShapingPolicy"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}InheritablePolicy"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="enabled" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="averageBandwidth" type="{urn:vim25}LongPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="peakBandwidth" type="{urn:vim25}LongPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="burstSize" type="{urn:vim25}LongPolicy" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

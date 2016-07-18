@@ -13,22 +13,22 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostVFlashManagerVFlashCacheConfigInfoVFlashModuleConfigOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="vFlashModule" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="vFlashModuleVersion" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="minSupportedModuleVersion" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="cacheConsistencyType" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="cacheMode" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="blockSizeInKBOption" type="{urn:vim25}LongOption"/>
- *         &lt;element name="reservationInMBOption" type="{urn:vim25}LongOption"/>
- *         &lt;element name="maxDiskSizeInKB" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostVFlashManagerVFlashCacheConfigInfoVFlashModuleConfigOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vFlashModule" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="vFlashModuleVersion" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="minSupportedModuleVersion" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="cacheConsistencyType" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="cacheMode" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="blockSizeInKBOption" type="{urn:vim25}LongOption"/&gt;
+ *         &lt;element name="reservationInMBOption" type="{urn:vim25}LongOption"/&gt;
+ *         &lt;element name="maxDiskSizeInKB" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

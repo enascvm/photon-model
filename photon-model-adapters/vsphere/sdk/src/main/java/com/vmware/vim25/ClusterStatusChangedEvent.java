@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterStatusChangedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ClusterEvent">
- *       &lt;sequence>
- *         &lt;element name="oldStatus" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="newStatus" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterStatusChangedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ClusterEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="oldStatus" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="newStatus" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

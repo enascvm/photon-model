@@ -15,26 +15,26 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HbrDiskMigrationAction">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ClusterAction">
- *       &lt;sequence>
- *         &lt;element name="collectionId" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="collectionName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="diskIds" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/>
- *         &lt;element name="source" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="destination" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="sizeTransferred" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="spaceUtilSrcBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *         &lt;element name="spaceUtilDstBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *         &lt;element name="spaceUtilSrcAfter" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *         &lt;element name="spaceUtilDstAfter" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *         &lt;element name="ioLatencySrcBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *         &lt;element name="ioLatencyDstBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HbrDiskMigrationAction"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ClusterAction"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="collectionId" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="collectionName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="diskIds" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="source" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="destination" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="sizeTransferred" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="spaceUtilSrcBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *         &lt;element name="spaceUtilDstBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *         &lt;element name="spaceUtilSrcAfter" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *         &lt;element name="spaceUtilDstAfter" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *         &lt;element name="ioLatencySrcBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *         &lt;element name="ioLatencyDstBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

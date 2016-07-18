@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostDasEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostEvent">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostDasEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostEvent"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,15 +28,15 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "HostDasEvent")
 @XmlSeeAlso({
-    HostIsolationIpPingFailedEvent.class,
-    HostExtraNetworksEvent.class,
-    HostNoRedundantManagementNetworkEvent.class,
-    HostNotInClusterEvent.class,
-    HostShortNameInconsistentEvent.class,
-    HostNoHAEnabledPortGroupsEvent.class,
-    HostMissingNetworksEvent.class,
     HostPrimaryAgentNotShortNameEvent.class,
-    HostNoAvailableNetworksEvent.class
+    HostNotInClusterEvent.class,
+    HostIsolationIpPingFailedEvent.class,
+    HostShortNameInconsistentEvent.class,
+    HostNoRedundantManagementNetworkEvent.class,
+    HostNoAvailableNetworksEvent.class,
+    HostExtraNetworksEvent.class,
+    HostNoHAEnabledPortGroupsEvent.class,
+    HostMissingNetworksEvent.class
 })
 public class HostDasEvent
     extends HostEvent

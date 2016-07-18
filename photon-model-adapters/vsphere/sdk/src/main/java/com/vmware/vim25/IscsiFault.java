@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="IscsiFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="IscsiFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,17 +28,17 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "IscsiFault")
 @XmlSeeAlso({
-    IscsiFaultVnicNotBound.class,
-    IscsiFaultVnicIsLastPath.class,
-    IscsiFaultVnicNotFound.class,
-    IscsiFaultPnicInUse.class,
-    IscsiFaultVnicHasActivePaths.class,
-    IscsiFaultVnicInUse.class,
     IscsiFaultInvalidVnic.class,
-    IscsiFaultVnicHasNoUplinks.class,
+    IscsiFaultPnicInUse.class,
     IscsiFaultVnicAlreadyBound.class,
+    IscsiFaultVnicHasActivePaths.class,
+    IscsiFaultVnicHasMultipleUplinks.class,
+    IscsiFaultVnicHasNoUplinks.class,
     IscsiFaultVnicHasWrongUplink.class,
-    IscsiFaultVnicHasMultipleUplinks.class
+    IscsiFaultVnicInUse.class,
+    IscsiFaultVnicIsLastPath.class,
+    IscsiFaultVnicNotBound.class,
+    IscsiFaultVnicNotFound.class
 })
 public class IscsiFault
     extends VimFault

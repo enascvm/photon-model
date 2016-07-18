@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDeviceRemoteDeviceBackingInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceBackingInfo">
- *       &lt;sequence>
- *         &lt;element name="deviceName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="useAutoDetect" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDeviceRemoteDeviceBackingInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceBackingInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="deviceName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="useAutoDetect" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -34,10 +34,10 @@ import javax.xml.bind.annotation.XmlType;
     "useAutoDetect"
 })
 @XmlSeeAlso({
-    VirtualFloppyRemoteDeviceBackingInfo.class,
     VirtualCdromRemotePassthroughBackingInfo.class,
-    VirtualUSBRemoteClientBackingInfo.class,
-    VirtualCdromRemoteAtapiBackingInfo.class
+    VirtualCdromRemoteAtapiBackingInfo.class,
+    VirtualFloppyRemoteDeviceBackingInfo.class,
+    VirtualUSBRemoteClientBackingInfo.class
 })
 public class VirtualDeviceRemoteDeviceBackingInfo
     extends VirtualDeviceBackingInfo

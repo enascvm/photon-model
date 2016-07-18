@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="EventAlarmExpressionComparisonOperator">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="equals"/>
- *     &lt;enumeration value="notEqualTo"/>
- *     &lt;enumeration value="startsWith"/>
- *     &lt;enumeration value="doesNotStartWith"/>
- *     &lt;enumeration value="endsWith"/>
- *     &lt;enumeration value="doesNotEndWith"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="EventAlarmExpressionComparisonOperator"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="equals"/&gt;
+ *     &lt;enumeration value="notEqualTo"/&gt;
+ *     &lt;enumeration value="startsWith"/&gt;
+ *     &lt;enumeration value="doesNotStartWith"/&gt;
+ *     &lt;enumeration value="endsWith"/&gt;
+ *     &lt;enumeration value="doesNotEndWith"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

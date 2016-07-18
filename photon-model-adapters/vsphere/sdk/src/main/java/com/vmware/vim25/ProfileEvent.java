@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ProfileEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *         &lt;element name="profile" type="{urn:vim25}ProfileEventArgument"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ProfileEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="profile" type="{urn:vim25}ProfileEventArgument"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -34,10 +34,10 @@ import javax.xml.bind.annotation.XmlType;
 @XmlSeeAlso({
     ProfileCreatedEvent.class,
     ProfileRemovedEvent.class,
-    ProfileChangedEvent.class,
-    ProfileDissociatedEvent.class,
     ProfileAssociatedEvent.class,
-    ProfileReferenceHostChangedEvent.class
+    ProfileDissociatedEvent.class,
+    ProfileReferenceHostChangedEvent.class,
+    ProfileChangedEvent.class
 })
 public class ProfileEvent
     extends Event

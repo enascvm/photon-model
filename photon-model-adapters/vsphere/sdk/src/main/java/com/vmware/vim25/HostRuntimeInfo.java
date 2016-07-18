@@ -17,26 +17,26 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostRuntimeInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="connectionState" type="{urn:vim25}HostSystemConnectionState"/>
- *         &lt;element name="powerState" type="{urn:vim25}HostSystemPowerState"/>
- *         &lt;element name="standbyMode" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="inMaintenanceMode" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="bootTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/>
- *         &lt;element name="healthSystemRuntime" type="{urn:vim25}HealthSystemRuntime" minOccurs="0"/>
- *         &lt;element name="dasHostState" type="{urn:vim25}ClusterDasFdmHostState" minOccurs="0"/>
- *         &lt;element name="tpmPcrValues" type="{urn:vim25}HostTpmDigestInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vsanRuntimeInfo" type="{urn:vim25}VsanHostRuntimeInfo" minOccurs="0"/>
- *         &lt;element name="networkRuntimeInfo" type="{urn:vim25}HostRuntimeInfoNetworkRuntimeInfo" minOccurs="0"/>
- *         &lt;element name="vFlashResourceRuntimeInfo" type="{urn:vim25}HostVFlashManagerVFlashResourceRunTimeInfo" minOccurs="0"/>
- *         &lt;element name="hostMaxVirtualDiskCapacity" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostRuntimeInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="connectionState" type="{urn:vim25}HostSystemConnectionState"/&gt;
+ *         &lt;element name="powerState" type="{urn:vim25}HostSystemPowerState"/&gt;
+ *         &lt;element name="standbyMode" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="inMaintenanceMode" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="bootTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
+ *         &lt;element name="healthSystemRuntime" type="{urn:vim25}HealthSystemRuntime" minOccurs="0"/&gt;
+ *         &lt;element name="dasHostState" type="{urn:vim25}ClusterDasFdmHostState" minOccurs="0"/&gt;
+ *         &lt;element name="tpmPcrValues" type="{urn:vim25}HostTpmDigestInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vsanRuntimeInfo" type="{urn:vim25}VsanHostRuntimeInfo" minOccurs="0"/&gt;
+ *         &lt;element name="networkRuntimeInfo" type="{urn:vim25}HostRuntimeInfoNetworkRuntimeInfo" minOccurs="0"/&gt;
+ *         &lt;element name="vFlashResourceRuntimeInfo" type="{urn:vim25}HostVFlashManagerVFlashResourceRunTimeInfo" minOccurs="0"/&gt;
+ *         &lt;element name="hostMaxVirtualDiskCapacity" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -61,8 +61,10 @@ public class HostRuntimeInfo
 {
 
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected HostSystemConnectionState connectionState;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected HostSystemPowerState powerState;
     protected String standbyMode;
     protected boolean inMaintenanceMode;

@@ -12,12 +12,12 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VAppIPAssignmentInfoAllocationSchemes">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="dhcp"/>
- *     &lt;enumeration value="ovfenv"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VAppIPAssignmentInfoAllocationSchemes"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="dhcp"/&gt;
+ *     &lt;enumeration value="ovfenv"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

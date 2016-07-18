@@ -12,20 +12,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmDiskFileQueryFlags">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="diskType" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="capacityKb" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="hardwareVersion" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="controllerType" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="diskExtents" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="thin" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmDiskFileQueryFlags"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="diskType" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="capacityKb" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="hardwareVersion" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="controllerType" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="diskExtents" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="thin" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

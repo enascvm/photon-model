@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ManagedEntityStatus">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="gray"/>
- *     &lt;enumeration value="green"/>
- *     &lt;enumeration value="yellow"/>
- *     &lt;enumeration value="red"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ManagedEntityStatus"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="gray"/&gt;
+ *     &lt;enumeration value="green"/&gt;
+ *     &lt;enumeration value="yellow"/&gt;
+ *     &lt;enumeration value="red"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

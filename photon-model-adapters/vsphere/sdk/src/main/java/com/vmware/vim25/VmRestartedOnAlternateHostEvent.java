@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmRestartedOnAlternateHostEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmPoweredOnEvent">
- *       &lt;sequence>
- *         &lt;element name="sourceHost" type="{urn:vim25}HostEventArgument"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmRestartedOnAlternateHostEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmPoweredOnEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="sourceHost" type="{urn:vim25}HostEventArgument"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

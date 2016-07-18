@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostProfileHostBasedConfigSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostProfileConfigSpec">
- *       &lt;sequence>
- *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="useHostProfileEngine" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostProfileHostBasedConfigSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostProfileConfigSpec"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="useHostProfileEngine" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -15,15 +15,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDiskPartitionedRawDiskVer2BackingInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDiskRawDiskVer2BackingInfo">
- *       &lt;sequence>
- *         &lt;element name="partition" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDiskPartitionedRawDiskVer2BackingInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDiskRawDiskVer2BackingInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="partition" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

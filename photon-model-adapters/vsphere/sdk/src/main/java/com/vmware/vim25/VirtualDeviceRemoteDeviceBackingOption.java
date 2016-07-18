@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDeviceRemoteDeviceBackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceBackingOption">
- *       &lt;sequence>
- *         &lt;element name="autoDetectAvailable" type="{urn:vim25}BoolOption"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDeviceRemoteDeviceBackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="autoDetectAvailable" type="{urn:vim25}BoolOption"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -33,8 +33,8 @@ import javax.xml.bind.annotation.XmlType;
 })
 @XmlSeeAlso({
     VirtualCdromRemotePassthroughBackingOption.class,
-    VirtualUSBRemoteClientBackingOption.class,
-    VirtualFloppyRemoteDeviceBackingOption.class
+    VirtualFloppyRemoteDeviceBackingOption.class,
+    VirtualUSBRemoteClientBackingOption.class
 })
 public class VirtualDeviceRemoteDeviceBackingOption
     extends VirtualDeviceBackingOption

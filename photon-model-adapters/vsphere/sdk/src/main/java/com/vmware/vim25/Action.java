@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="Action">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="Action"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -29,10 +29,10 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(name = "Action")
 @XmlSeeAlso({
     MethodAction.class,
-    CreateTaskAction.class,
     SendEmailAction.class,
+    SendSNMPAction.class,
     RunScriptAction.class,
-    SendSNMPAction.class
+    CreateTaskAction.class
 })
 public class Action
     extends DynamicData

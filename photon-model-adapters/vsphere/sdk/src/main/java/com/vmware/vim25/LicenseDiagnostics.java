@@ -15,23 +15,23 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="LicenseDiagnostics">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="sourceLastChanged" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="sourceLost" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="sourceLatency" type="{http://www.w3.org/2001/XMLSchema}float"/>
- *         &lt;element name="licenseRequests" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="licenseRequestFailures" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="licenseFeatureUnknowns" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="opState" type="{urn:vim25}LicenseManagerState"/>
- *         &lt;element name="lastStatusUpdate" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="opFailureMessage" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="LicenseDiagnostics"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="sourceLastChanged" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="sourceLost" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="sourceLatency" type="{http://www.w3.org/2001/XMLSchema}float"/&gt;
+ *         &lt;element name="licenseRequests" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="licenseRequestFailures" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="licenseFeatureUnknowns" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="opState" type="{urn:vim25}LicenseManagerState"/&gt;
+ *         &lt;element name="lastStatusUpdate" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="opFailureMessage" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -65,6 +65,7 @@ public class LicenseDiagnostics
     @XmlElement(required = true)
     protected String licenseFeatureUnknowns;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected LicenseManagerState opState;
     @XmlElement(required = true)
     @XmlSchemaType(name = "dateTime")

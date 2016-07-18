@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostReplayUnsupportedReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="incompatibleProduct"/>
- *     &lt;enumeration value="incompatibleCpu"/>
- *     &lt;enumeration value="hvDisabled"/>
- *     &lt;enumeration value="cpuidLimitSet"/>
- *     &lt;enumeration value="oldBIOS"/>
- *     &lt;enumeration value="unknown"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostReplayUnsupportedReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="incompatibleProduct"/&gt;
+ *     &lt;enumeration value="incompatibleCpu"/&gt;
+ *     &lt;enumeration value="hvDisabled"/&gt;
+ *     &lt;enumeration value="cpuidLimitSet"/&gt;
+ *     &lt;enumeration value="oldBIOS"/&gt;
+ *     &lt;enumeration value="unknown"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

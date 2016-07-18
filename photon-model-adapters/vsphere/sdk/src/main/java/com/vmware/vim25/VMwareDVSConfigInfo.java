@@ -14,22 +14,22 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VMwareDVSConfigInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DVSConfigInfo">
- *       &lt;sequence>
- *         &lt;element name="vspanSession" type="{urn:vim25}VMwareVspanSession" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="pvlanConfig" type="{urn:vim25}VMwareDVSPvlanMapEntry" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="maxMtu" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="linkDiscoveryProtocolConfig" type="{urn:vim25}LinkDiscoveryProtocolConfig" minOccurs="0"/>
- *         &lt;element name="ipfixConfig" type="{urn:vim25}VMwareIpfixConfig" minOccurs="0"/>
- *         &lt;element name="lacpGroupConfig" type="{urn:vim25}VMwareDvsLacpGroupConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="lacpApiVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="multicastFilteringMode" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VMwareDVSConfigInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DVSConfigInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vspanSession" type="{urn:vim25}VMwareVspanSession" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="pvlanConfig" type="{urn:vim25}VMwareDVSPvlanMapEntry" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="maxMtu" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="linkDiscoveryProtocolConfig" type="{urn:vim25}LinkDiscoveryProtocolConfig" minOccurs="0"/&gt;
+ *         &lt;element name="ipfixConfig" type="{urn:vim25}VMwareIpfixConfig" minOccurs="0"/&gt;
+ *         &lt;element name="lacpGroupConfig" type="{urn:vim25}VMwareDvsLacpGroupConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="lacpApiVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="multicastFilteringMode" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

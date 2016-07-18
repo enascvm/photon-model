@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="SnapshotFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="SnapshotFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,15 +28,15 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "SnapshotFault")
 @XmlSeeAlso({
-    MemorySnapshotOnIndependentDisk.class,
-    SnapshotIncompatibleDeviceInVm.class,
-    SnapshotDisabled.class,
-    FilesystemQuiesceFault.class,
     ApplicationQuiesceFault.class,
-    TooManySnapshotLevels.class,
+    FilesystemQuiesceFault.class,
+    MemorySnapshotOnIndependentDisk.class,
     MultipleSnapshotsNotSupported.class,
+    SnapshotDisabled.class,
+    SnapshotIncompatibleDeviceInVm.class,
+    SnapshotLocked.class,
     SnapshotNoChange.class,
-    SnapshotLocked.class
+    TooManySnapshotLevels.class
 })
 public class SnapshotFault
     extends VimFault

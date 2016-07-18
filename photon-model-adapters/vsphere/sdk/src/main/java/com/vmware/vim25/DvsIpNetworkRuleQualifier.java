@@ -12,20 +12,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DvsIpNetworkRuleQualifier">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DvsNetworkRuleQualifier">
- *       &lt;sequence>
- *         &lt;element name="sourceAddress" type="{urn:vim25}IpAddress" minOccurs="0"/>
- *         &lt;element name="destinationAddress" type="{urn:vim25}IpAddress" minOccurs="0"/>
- *         &lt;element name="protocol" type="{urn:vim25}IntExpression" minOccurs="0"/>
- *         &lt;element name="sourceIpPort" type="{urn:vim25}DvsIpPort" minOccurs="0"/>
- *         &lt;element name="destinationIpPort" type="{urn:vim25}DvsIpPort" minOccurs="0"/>
- *         &lt;element name="tcpFlags" type="{urn:vim25}IntExpression" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DvsIpNetworkRuleQualifier"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DvsNetworkRuleQualifier"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="sourceAddress" type="{urn:vim25}IpAddress" minOccurs="0"/&gt;
+ *         &lt;element name="destinationAddress" type="{urn:vim25}IpAddress" minOccurs="0"/&gt;
+ *         &lt;element name="protocol" type="{urn:vim25}IntExpression" minOccurs="0"/&gt;
+ *         &lt;element name="sourceIpPort" type="{urn:vim25}DvsIpPort" minOccurs="0"/&gt;
+ *         &lt;element name="destinationIpPort" type="{urn:vim25}DvsIpPort" minOccurs="0"/&gt;
+ *         &lt;element name="tcpFlags" type="{urn:vim25}IntExpression" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

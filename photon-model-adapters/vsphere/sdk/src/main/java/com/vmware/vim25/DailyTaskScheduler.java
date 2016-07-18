@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DailyTaskScheduler">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HourlyTaskScheduler">
- *       &lt;sequence>
- *         &lt;element name="hour" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DailyTaskScheduler"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HourlyTaskScheduler"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="hour" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

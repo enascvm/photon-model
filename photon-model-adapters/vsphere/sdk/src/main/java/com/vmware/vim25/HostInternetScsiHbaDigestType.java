@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostInternetScsiHbaDigestType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="digestProhibited"/>
- *     &lt;enumeration value="digestDiscouraged"/>
- *     &lt;enumeration value="digestPreferred"/>
- *     &lt;enumeration value="digestRequired"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostInternetScsiHbaDigestType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="digestProhibited"/&gt;
+ *     &lt;enumeration value="digestDiscouraged"/&gt;
+ *     &lt;enumeration value="digestPreferred"/&gt;
+ *     &lt;enumeration value="digestRequired"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

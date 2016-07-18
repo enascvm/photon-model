@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="OvfConsumerOstNodeType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="envelope"/>
- *     &lt;enumeration value="virtualSystem"/>
- *     &lt;enumeration value="virtualSystemCollection"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="OvfConsumerOstNodeType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="envelope"/&gt;
+ *     &lt;enumeration value="virtualSystem"/&gt;
+ *     &lt;enumeration value="virtualSystemCollection"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

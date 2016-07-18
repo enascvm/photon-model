@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="CustomizationGuiUnattended">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="password" type="{urn:vim25}CustomizationPassword" minOccurs="0"/>
- *         &lt;element name="timeZone" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="autoLogon" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="autoLogonCount" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="CustomizationGuiUnattended"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="password" type="{urn:vim25}CustomizationPassword" minOccurs="0"/&gt;
+ *         &lt;element name="timeZone" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="autoLogon" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="autoLogonCount" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

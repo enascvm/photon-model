@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmBeingMigratedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmEvent">
- *       &lt;sequence>
- *         &lt;element name="destHost" type="{urn:vim25}HostEventArgument"/>
- *         &lt;element name="destDatacenter" type="{urn:vim25}DatacenterEventArgument" minOccurs="0"/>
- *         &lt;element name="destDatastore" type="{urn:vim25}DatastoreEventArgument" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmBeingMigratedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="destHost" type="{urn:vim25}HostEventArgument"/&gt;
+ *         &lt;element name="destDatacenter" type="{urn:vim25}DatacenterEventArgument" minOccurs="0"/&gt;
+ *         &lt;element name="destDatastore" type="{urn:vim25}DatastoreEventArgument" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

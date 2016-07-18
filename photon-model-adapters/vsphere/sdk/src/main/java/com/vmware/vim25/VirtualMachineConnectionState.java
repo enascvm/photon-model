@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineConnectionState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="connected"/>
- *     &lt;enumeration value="disconnected"/>
- *     &lt;enumeration value="orphaned"/>
- *     &lt;enumeration value="inaccessible"/>
- *     &lt;enumeration value="invalid"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineConnectionState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="connected"/&gt;
+ *     &lt;enumeration value="disconnected"/&gt;
+ *     &lt;enumeration value="orphaned"/&gt;
+ *     &lt;enumeration value="inaccessible"/&gt;
+ *     &lt;enumeration value="invalid"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

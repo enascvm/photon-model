@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VvolDatastoreInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DatastoreInfo">
- *       &lt;sequence>
- *         &lt;element name="vvolDS" type="{urn:vim25}HostVvolVolume" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VvolDatastoreInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DatastoreInfo"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vvolDS" type="{urn:vim25}HostVvolVolume" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -14,24 +14,24 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterConfigSpecEx">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ComputeResourceConfigSpec">
- *       &lt;sequence>
- *         &lt;element name="dasConfig" type="{urn:vim25}ClusterDasConfigInfo" minOccurs="0"/>
- *         &lt;element name="dasVmConfigSpec" type="{urn:vim25}ClusterDasVmConfigSpec" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="drsConfig" type="{urn:vim25}ClusterDrsConfigInfo" minOccurs="0"/>
- *         &lt;element name="drsVmConfigSpec" type="{urn:vim25}ClusterDrsVmConfigSpec" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="rulesSpec" type="{urn:vim25}ClusterRuleSpec" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="dpmConfig" type="{urn:vim25}ClusterDpmConfigInfo" minOccurs="0"/>
- *         &lt;element name="dpmHostConfigSpec" type="{urn:vim25}ClusterDpmHostConfigSpec" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vsanConfig" type="{urn:vim25}VsanClusterConfigInfo" minOccurs="0"/>
- *         &lt;element name="vsanHostConfigSpec" type="{urn:vim25}VsanHostConfigInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="groupSpec" type="{urn:vim25}ClusterGroupSpec" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterConfigSpecEx"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ComputeResourceConfigSpec"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="dasConfig" type="{urn:vim25}ClusterDasConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="dasVmConfigSpec" type="{urn:vim25}ClusterDasVmConfigSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="drsConfig" type="{urn:vim25}ClusterDrsConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="drsVmConfigSpec" type="{urn:vim25}ClusterDrsVmConfigSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="rulesSpec" type="{urn:vim25}ClusterRuleSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="dpmConfig" type="{urn:vim25}ClusterDpmConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="dpmHostConfigSpec" type="{urn:vim25}ClusterDpmHostConfigSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vsanConfig" type="{urn:vim25}VsanClusterConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="vsanHostConfigSpec" type="{urn:vim25}VsanHostConfigInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="groupSpec" type="{urn:vim25}ClusterGroupSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

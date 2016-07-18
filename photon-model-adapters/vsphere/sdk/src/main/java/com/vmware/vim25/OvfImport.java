@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfImport">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfImport"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,14 +28,14 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "OvfImport")
 @XmlSeeAlso({
-    OvfUnsupportedDiskProvisioning.class,
-    OvfMissingHardware.class,
-    OvfImportFailed.class,
-    OvfHardwareCheck.class,
-    OvfNetworkMappingNotSupported.class,
-    OvfMappedOsId.class,
     OvfCpuCompatibility.class,
-    OvfCpuCompatibilityCheckNotSupported.class
+    OvfCpuCompatibilityCheckNotSupported.class,
+    OvfHardwareCheck.class,
+    OvfImportFailed.class,
+    OvfMappedOsId.class,
+    OvfMissingHardware.class,
+    OvfNetworkMappingNotSupported.class,
+    OvfUnsupportedDiskProvisioning.class
 })
 public class OvfImport
     extends OvfFault

@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ProfileProfileStructureProperty">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="propertyName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="array" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="element" type="{urn:vim25}ProfileProfileStructure"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ProfileProfileStructureProperty"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="propertyName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="array" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="element" type="{urn:vim25}ProfileProfileStructure"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

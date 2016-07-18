@@ -15,21 +15,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostScsiDisk">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ScsiLun">
- *       &lt;sequence>
- *         &lt;element name="capacity" type="{urn:vim25}HostDiskDimensionsLba"/>
- *         &lt;element name="devicePath" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="ssd" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="localDisk" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="physicalLocation" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="emulatedDIXDIFEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="vsanDiskInfo" type="{urn:vim25}VsanHostVsanDiskInfo" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostScsiDisk"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ScsiLun"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="capacity" type="{urn:vim25}HostDiskDimensionsLba"/&gt;
+ *         &lt;element name="devicePath" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="ssd" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="localDisk" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="physicalLocation" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="emulatedDIXDIFEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="vsanDiskInfo" type="{urn:vim25}VsanHostVsanDiskInfo" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

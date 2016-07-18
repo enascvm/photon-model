@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VAppPropertySpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ArrayUpdateSpec">
- *       &lt;sequence>
- *         &lt;element name="info" type="{urn:vim25}VAppPropertyInfo" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VAppPropertySpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ArrayUpdateSpec"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="info" type="{urn:vim25}VAppPropertyInfo" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

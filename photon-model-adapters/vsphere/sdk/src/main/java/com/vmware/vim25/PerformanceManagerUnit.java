@@ -12,23 +12,23 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="PerformanceManagerUnit">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="percent"/>
- *     &lt;enumeration value="kiloBytes"/>
- *     &lt;enumeration value="megaBytes"/>
- *     &lt;enumeration value="megaHertz"/>
- *     &lt;enumeration value="number"/>
- *     &lt;enumeration value="microsecond"/>
- *     &lt;enumeration value="millisecond"/>
- *     &lt;enumeration value="second"/>
- *     &lt;enumeration value="kiloBytesPerSecond"/>
- *     &lt;enumeration value="megaBytesPerSecond"/>
- *     &lt;enumeration value="watt"/>
- *     &lt;enumeration value="joule"/>
- *     &lt;enumeration value="teraBytes"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="PerformanceManagerUnit"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="percent"/&gt;
+ *     &lt;enumeration value="kiloBytes"/&gt;
+ *     &lt;enumeration value="megaBytes"/&gt;
+ *     &lt;enumeration value="megaHertz"/&gt;
+ *     &lt;enumeration value="number"/&gt;
+ *     &lt;enumeration value="microsecond"/&gt;
+ *     &lt;enumeration value="millisecond"/&gt;
+ *     &lt;enumeration value="second"/&gt;
+ *     &lt;enumeration value="kiloBytesPerSecond"/&gt;
+ *     &lt;enumeration value="megaBytesPerSecond"/&gt;
+ *     &lt;enumeration value="watt"/&gt;
+ *     &lt;enumeration value="joule"/&gt;
+ *     &lt;enumeration value="teraBytes"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

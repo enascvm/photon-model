@@ -15,17 +15,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmfsDatastoreCreateSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmfsDatastoreSpec">
- *       &lt;sequence>
- *         &lt;element name="partition" type="{urn:vim25}HostDiskPartitionSpec"/>
- *         &lt;element name="vmfs" type="{urn:vim25}HostVmfsSpec"/>
- *         &lt;element name="extent" type="{urn:vim25}HostScsiDiskPartition" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmfsDatastoreCreateSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmfsDatastoreSpec"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="partition" type="{urn:vim25}HostDiskPartitionSpec"/&gt;
+ *         &lt;element name="vmfs" type="{urn:vim25}HostVmfsSpec"/&gt;
+ *         &lt;element name="extent" type="{urn:vim25}HostScsiDiskPartition" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

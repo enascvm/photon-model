@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VsanHostDecommissionModeObjectAction">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="noAction"/>
- *     &lt;enumeration value="ensureObjectAccessibility"/>
- *     &lt;enumeration value="evacuateAllData"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VsanHostDecommissionModeObjectAction"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="noAction"/&gt;
+ *     &lt;enumeration value="ensureObjectAccessibility"/&gt;
+ *     &lt;enumeration value="evacuateAllData"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

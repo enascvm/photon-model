@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmConfigFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmConfigFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,36 +28,36 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VmConfigFault")
 @XmlSeeAlso({
-    VAppNotRunning.class,
-    OvfConsumerValidationFault.class,
-    VmConfigIncompatibleForRecordReplay.class,
-    NumVirtualCpusIncompatible.class,
-    NoCompatibleSoftAffinityHost.class,
-    FaultToleranceCannotEditMem.class,
-    DeltaDiskFormatNotSupported.class,
-    VmConfigIncompatibleForFaultTolerance.class,
-    LargeRDMNotSupportedOnDatastore.class,
-    NoCompatibleHardAffinityHost.class,
-    UnsupportedVmxLocation.class,
     CannotDisableSnapshot.class,
-    InvalidFormat.class,
-    RDMNotSupportedOnDatastore.class,
-    GenericVmConfigFault.class,
-    VmHostAffinityRuleViolation.class,
-    VFlashModuleNotSupported.class,
-    MemoryHotPlugNotSupported.class,
-    SoftRuleVioCorrectionDisallowed.class,
-    RuleViolation.class,
-    VFlashCacheHotConfigNotSupported.class,
-    CannotAccessVmComponent.class,
-    VAppPropertyFault.class,
+    CannotUseNetwork.class,
     CpuHotPlugNotSupported.class,
-    InvalidVmConfig.class,
-    UnsupportedDatastore.class,
-    SoftRuleVioCorrectionImpact.class,
+    DeltaDiskFormatNotSupported.class,
     EightHostLimitViolated.class,
-    VirtualHardwareCompatibilityIssue.class,
-    CannotUseNetwork.class
+    FaultToleranceCannotEditMem.class,
+    GenericVmConfigFault.class,
+    InvalidFormat.class,
+    LargeRDMNotSupportedOnDatastore.class,
+    MemoryHotPlugNotSupported.class,
+    NoCompatibleHardAffinityHost.class,
+    NoCompatibleSoftAffinityHost.class,
+    NumVirtualCpusIncompatible.class,
+    OvfConsumerValidationFault.class,
+    RDMNotSupportedOnDatastore.class,
+    RuleViolation.class,
+    SoftRuleVioCorrectionDisallowed.class,
+    SoftRuleVioCorrectionImpact.class,
+    UnsupportedDatastore.class,
+    UnsupportedVmxLocation.class,
+    VAppNotRunning.class,
+    VAppPropertyFault.class,
+    VFlashCacheHotConfigNotSupported.class,
+    VFlashModuleNotSupported.class,
+    CannotAccessVmComponent.class,
+    VmConfigIncompatibleForFaultTolerance.class,
+    VmConfigIncompatibleForRecordReplay.class,
+    VmHostAffinityRuleViolation.class,
+    InvalidVmConfig.class,
+    VirtualHardwareCompatibilityIssue.class
 })
 public class VmConfigFault
     extends VimFault

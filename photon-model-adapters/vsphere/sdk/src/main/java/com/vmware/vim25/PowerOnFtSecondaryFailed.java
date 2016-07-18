@@ -6,6 +6,7 @@ import java.util.List;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlType;
 
 
@@ -15,19 +16,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="PowerOnFtSecondaryFailed">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmFaultToleranceIssue">
- *       &lt;sequence>
- *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="vmName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="hostSelectionBy" type="{urn:vim25}FtIssuesOnHostHostSelectionType"/>
- *         &lt;element name="hostErrors" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="rootCause" type="{urn:vim25}LocalizedMethodFault"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="PowerOnFtSecondaryFailed"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmFaultToleranceIssue"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="vmName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="hostSelectionBy" type="{urn:vim25}FtIssuesOnHostHostSelectionType"/&gt;
+ *         &lt;element name="hostErrors" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="rootCause" type="{urn:vim25}LocalizedMethodFault"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -49,6 +50,7 @@ public class PowerOnFtSecondaryFailed
     @XmlElement(required = true)
     protected String vmName;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected FtIssuesOnHostHostSelectionType hostSelectionBy;
     protected List<LocalizedMethodFault> hostErrors;
     @XmlElement(required = true)

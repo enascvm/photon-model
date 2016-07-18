@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="CannotUseNetworkReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="NetworkReservationNotSupported"/>
- *     &lt;enumeration value="MismatchedNetworkPolicies"/>
- *     &lt;enumeration value="MismatchedDvsVersionOrVendor"/>
- *     &lt;enumeration value="VMotionToUnsupportedNetworkType"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="CannotUseNetworkReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="NetworkReservationNotSupported"/&gt;
+ *     &lt;enumeration value="MismatchedNetworkPolicies"/&gt;
+ *     &lt;enumeration value="MismatchedDvsVersionOrVendor"/&gt;
+ *     &lt;enumeration value="VMotionToUnsupportedNetworkType"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

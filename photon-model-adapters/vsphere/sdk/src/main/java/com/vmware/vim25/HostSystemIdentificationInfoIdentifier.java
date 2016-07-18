@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostSystemIdentificationInfoIdentifier">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="AssetTag"/>
- *     &lt;enumeration value="ServiceTag"/>
- *     &lt;enumeration value="OemSpecificString"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostSystemIdentificationInfoIdentifier"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="AssetTag"/&gt;
+ *     &lt;enumeration value="ServiceTag"/&gt;
+ *     &lt;enumeration value="OemSpecificString"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

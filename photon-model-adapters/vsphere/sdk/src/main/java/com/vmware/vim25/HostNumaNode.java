@@ -15,18 +15,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostNumaNode">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="typeId" type="{http://www.w3.org/2001/XMLSchema}byte"/>
- *         &lt;element name="cpuID" type="{http://www.w3.org/2001/XMLSchema}short" maxOccurs="unbounded"/>
- *         &lt;element name="memoryRangeBegin" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="memoryRangeLength" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostNumaNode"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="typeId" type="{http://www.w3.org/2001/XMLSchema}byte"/&gt;
+ *         &lt;element name="cpuID" type="{http://www.w3.org/2001/XMLSchema}short" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="memoryRangeBegin" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="memoryRangeLength" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

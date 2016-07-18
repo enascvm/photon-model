@@ -12,19 +12,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DVSNetworkResourceManagementCapability">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="networkResourceManagementSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="networkResourcePoolHighShareValue" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="qosSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="userDefinedNetworkResourcePoolsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="networkResourceControlVersion3Supported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DVSNetworkResourceManagementCapability"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="networkResourceManagementSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="networkResourcePoolHighShareValue" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="qosSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="userDefinedNetworkResourcePoolsSupported" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="networkResourceControlVersion3Supported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

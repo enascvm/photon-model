@@ -15,31 +15,31 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualHardwareOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="hwVersion" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="virtualDeviceOption" type="{urn:vim25}VirtualDeviceOption" maxOccurs="unbounded"/>
- *         &lt;element name="deviceListReadonly" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="numCPU" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded"/>
- *         &lt;element name="numCoresPerSocket" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="numCpuReadonly" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="memoryMB" type="{urn:vim25}LongOption"/>
- *         &lt;element name="numPCIControllers" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numIDEControllers" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numUSBControllers" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numUSBXHCIControllers" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="numSIOControllers" type="{urn:vim25}IntOption"/>
- *         &lt;element name="numPS2Controllers" type="{urn:vim25}IntOption"/>
- *         &lt;element name="licensingLimit" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="numSupportedWwnPorts" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="numSupportedWwnNodes" type="{urn:vim25}IntOption" minOccurs="0"/>
- *         &lt;element name="resourceConfigOption" type="{urn:vim25}ResourceConfigOption" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualHardwareOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="hwVersion" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="virtualDeviceOption" type="{urn:vim25}VirtualDeviceOption" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="deviceListReadonly" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="numCPU" type="{http://www.w3.org/2001/XMLSchema}int" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="numCoresPerSocket" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numCpuReadonly" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="memoryMB" type="{urn:vim25}LongOption"/&gt;
+ *         &lt;element name="numPCIControllers" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numIDEControllers" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numUSBControllers" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numUSBXHCIControllers" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numSIOControllers" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="numPS2Controllers" type="{urn:vim25}IntOption"/&gt;
+ *         &lt;element name="licensingLimit" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="numSupportedWwnPorts" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="numSupportedWwnNodes" type="{urn:vim25}IntOption" minOccurs="0"/&gt;
+ *         &lt;element name="resourceConfigOption" type="{urn:vim25}ResourceConfigOption" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

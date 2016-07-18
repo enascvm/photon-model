@@ -12,20 +12,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="OvfCreateImportSpecParamsDiskProvisioningType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="monolithicSparse"/>
- *     &lt;enumeration value="monolithicFlat"/>
- *     &lt;enumeration value="twoGbMaxExtentSparse"/>
- *     &lt;enumeration value="twoGbMaxExtentFlat"/>
- *     &lt;enumeration value="thin"/>
- *     &lt;enumeration value="thick"/>
- *     &lt;enumeration value="seSparse"/>
- *     &lt;enumeration value="eagerZeroedThick"/>
- *     &lt;enumeration value="sparse"/>
- *     &lt;enumeration value="flat"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="OvfCreateImportSpecParamsDiskProvisioningType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="monolithicSparse"/&gt;
+ *     &lt;enumeration value="monolithicFlat"/&gt;
+ *     &lt;enumeration value="twoGbMaxExtentSparse"/&gt;
+ *     &lt;enumeration value="twoGbMaxExtentFlat"/&gt;
+ *     &lt;enumeration value="thin"/&gt;
+ *     &lt;enumeration value="thick"/&gt;
+ *     &lt;enumeration value="seSparse"/&gt;
+ *     &lt;enumeration value="eagerZeroedThick"/&gt;
+ *     &lt;enumeration value="sparse"/&gt;
+ *     &lt;enumeration value="flat"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

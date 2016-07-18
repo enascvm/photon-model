@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostInternetScsiHbaStaticTargetTargetDiscoveryMethod">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="staticMethod"/>
- *     &lt;enumeration value="sendTargetMethod"/>
- *     &lt;enumeration value="slpMethod"/>
- *     &lt;enumeration value="isnsMethod"/>
- *     &lt;enumeration value="unknownMethod"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostInternetScsiHbaStaticTargetTargetDiscoveryMethod"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="staticMethod"/&gt;
+ *     &lt;enumeration value="sendTargetMethod"/&gt;
+ *     &lt;enumeration value="slpMethod"/&gt;
+ *     &lt;enumeration value="isnsMethod"/&gt;
+ *     &lt;enumeration value="unknownMethod"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

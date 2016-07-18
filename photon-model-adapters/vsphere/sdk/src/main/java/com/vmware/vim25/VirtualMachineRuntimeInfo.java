@@ -17,42 +17,42 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualMachineRuntimeInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="device" type="{urn:vim25}VirtualMachineDeviceRuntimeInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="connectionState" type="{urn:vim25}VirtualMachineConnectionState"/>
- *         &lt;element name="powerState" type="{urn:vim25}VirtualMachinePowerState"/>
- *         &lt;element name="faultToleranceState" type="{urn:vim25}VirtualMachineFaultToleranceState" minOccurs="0"/>
- *         &lt;element name="dasVmProtection" type="{urn:vim25}VirtualMachineRuntimeInfoDasProtectionState" minOccurs="0"/>
- *         &lt;element name="toolsInstallerMounted" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="suspendTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/>
- *         &lt;element name="bootTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/>
- *         &lt;element name="suspendInterval" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="question" type="{urn:vim25}VirtualMachineQuestionInfo" minOccurs="0"/>
- *         &lt;element name="memoryOverhead" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="maxCpuUsage" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="maxMemoryUsage" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="numMksConnections" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="recordReplayState" type="{urn:vim25}VirtualMachineRecordReplayState" minOccurs="0"/>
- *         &lt;element name="cleanPowerOff" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="needSecondaryReason" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="onlineStandby" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="minRequiredEVCModeKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="consolidationNeeded" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="offlineFeatureRequirement" type="{urn:vim25}VirtualMachineFeatureRequirement" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="featureRequirement" type="{urn:vim25}VirtualMachineFeatureRequirement" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="featureMask" type="{urn:vim25}HostFeatureMask" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vFlashCacheAllocation" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="paused" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="snapshotInBackground" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="quiescedForkParent" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualMachineRuntimeInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="device" type="{urn:vim25}VirtualMachineDeviceRuntimeInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="connectionState" type="{urn:vim25}VirtualMachineConnectionState"/&gt;
+ *         &lt;element name="powerState" type="{urn:vim25}VirtualMachinePowerState"/&gt;
+ *         &lt;element name="faultToleranceState" type="{urn:vim25}VirtualMachineFaultToleranceState" minOccurs="0"/&gt;
+ *         &lt;element name="dasVmProtection" type="{urn:vim25}VirtualMachineRuntimeInfoDasProtectionState" minOccurs="0"/&gt;
+ *         &lt;element name="toolsInstallerMounted" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="suspendTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
+ *         &lt;element name="bootTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
+ *         &lt;element name="suspendInterval" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="question" type="{urn:vim25}VirtualMachineQuestionInfo" minOccurs="0"/&gt;
+ *         &lt;element name="memoryOverhead" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="maxCpuUsage" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="maxMemoryUsage" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="numMksConnections" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="recordReplayState" type="{urn:vim25}VirtualMachineRecordReplayState" minOccurs="0"/&gt;
+ *         &lt;element name="cleanPowerOff" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="needSecondaryReason" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="onlineStandby" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="minRequiredEVCModeKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="consolidationNeeded" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="offlineFeatureRequirement" type="{urn:vim25}VirtualMachineFeatureRequirement" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="featureRequirement" type="{urn:vim25}VirtualMachineFeatureRequirement" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="featureMask" type="{urn:vim25}HostFeatureMask" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vFlashCacheAllocation" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="paused" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="snapshotInBackground" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="quiescedForkParent" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -95,9 +95,12 @@ public class VirtualMachineRuntimeInfo
     protected List<VirtualMachineDeviceRuntimeInfo> device;
     protected ManagedObjectReference host;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected VirtualMachineConnectionState connectionState;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected VirtualMachinePowerState powerState;
+    @XmlSchemaType(name = "string")
     protected VirtualMachineFaultToleranceState faultToleranceState;
     protected VirtualMachineRuntimeInfoDasProtectionState dasVmProtection;
     protected boolean toolsInstallerMounted;
@@ -111,6 +114,7 @@ public class VirtualMachineRuntimeInfo
     protected Integer maxCpuUsage;
     protected Integer maxMemoryUsage;
     protected int numMksConnections;
+    @XmlSchemaType(name = "string")
     protected VirtualMachineRecordReplayState recordReplayState;
     protected Boolean cleanPowerOff;
     protected String needSecondaryReason;

@@ -15,15 +15,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VsanUpgradeSystemNetworkPartitionIssue">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VsanUpgradeSystemPreflightCheckIssue">
- *       &lt;sequence>
- *         &lt;element name="partitions" type="{urn:vim25}VsanUpgradeSystemNetworkPartitionInfo" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VsanUpgradeSystemNetworkPartitionIssue"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VsanUpgradeSystemPreflightCheckIssue"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="partitions" type="{urn:vim25}VsanUpgradeSystemNetworkPartitionInfo" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -11,14 +11,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ClusterProfileServiceType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="DRS"/>
- *     &lt;enumeration value="HA"/>
- *     &lt;enumeration value="DPM"/>
- *     &lt;enumeration value="FT"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ClusterProfileServiceType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="DRS"/&gt;
+ *     &lt;enumeration value="HA"/&gt;
+ *     &lt;enumeration value="DPM"/&gt;
+ *     &lt;enumeration value="FT"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

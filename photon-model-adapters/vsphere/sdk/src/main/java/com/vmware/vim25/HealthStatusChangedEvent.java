@@ -13,19 +13,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HealthStatusChangedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *         &lt;element name="componentId" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="oldStatus" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="newStatus" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="componentName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="serviceId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HealthStatusChangedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="componentId" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="oldStatus" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="newStatus" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="componentName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="serviceId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

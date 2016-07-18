@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="GuestRegistryKeyFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}GuestRegistryFault">
- *       &lt;sequence>
- *         &lt;element name="keyName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="GuestRegistryKeyFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}GuestRegistryFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="keyName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,10 +32,10 @@ import javax.xml.bind.annotation.XmlType;
     "keyName"
 })
 @XmlSeeAlso({
-    GuestRegistryKeyInvalid.class,
-    GuestRegistryKeyParentVolatile.class,
+    GuestRegistryKeyAlreadyExists.class,
     GuestRegistryKeyHasSubkeys.class,
-    GuestRegistryKeyAlreadyExists.class
+    GuestRegistryKeyInvalid.class,
+    GuestRegistryKeyParentVolatile.class
 })
 public class GuestRegistryKeyFault
     extends GuestRegistryFault

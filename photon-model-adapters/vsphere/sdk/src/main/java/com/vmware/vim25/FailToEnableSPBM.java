@@ -15,17 +15,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="FailToEnableSPBM">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}NotEnoughLicenses">
- *       &lt;sequence>
- *         &lt;element name="cs" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="csName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="hostLicenseStates" type="{urn:vim25}ComputeResourceHostSPBMLicenseInfo" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="FailToEnableSPBM"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}NotEnoughLicenses"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="cs" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="csName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="hostLicenseStates" type="{urn:vim25}ComputeResourceHostSPBMLicenseInfo" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

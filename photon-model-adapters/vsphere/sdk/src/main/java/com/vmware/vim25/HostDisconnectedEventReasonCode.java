@@ -12,19 +12,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostDisconnectedEventReasonCode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="sslThumbprintVerifyFailed"/>
- *     &lt;enumeration value="licenseExpired"/>
- *     &lt;enumeration value="agentUpgrade"/>
- *     &lt;enumeration value="userRequest"/>
- *     &lt;enumeration value="insufficientLicenses"/>
- *     &lt;enumeration value="agentOutOfDate"/>
- *     &lt;enumeration value="passwordDecryptFailure"/>
- *     &lt;enumeration value="unknown"/>
- *     &lt;enumeration value="vcVRAMCapacityExceeded"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostDisconnectedEventReasonCode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="sslThumbprintVerifyFailed"/&gt;
+ *     &lt;enumeration value="licenseExpired"/&gt;
+ *     &lt;enumeration value="agentUpgrade"/&gt;
+ *     &lt;enumeration value="userRequest"/&gt;
+ *     &lt;enumeration value="insufficientLicenses"/&gt;
+ *     &lt;enumeration value="agentOutOfDate"/&gt;
+ *     &lt;enumeration value="passwordDecryptFailure"/&gt;
+ *     &lt;enumeration value="unknown"/&gt;
+ *     &lt;enumeration value="vcVRAMCapacityExceeded"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -13,54 +13,54 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ServiceContent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="rootFolder" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="propertyCollector" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="viewManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="about" type="{urn:vim25}AboutInfo"/>
- *         &lt;element name="setting" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="userDirectory" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="sessionManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="authorizationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="serviceManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="perfManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="scheduledTaskManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="alarmManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="eventManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="taskManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="extensionManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="customizationSpecManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="customFieldsManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="accountManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="diagnosticManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="licenseManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="searchIndex" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="fileManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="datastoreNamespaceManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="virtualDiskManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="virtualizationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="snmpSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="vmProvisioningChecker" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="vmCompatibilityChecker" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="ovfManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="ipPoolManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="dvSwitchManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="hostProfileManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="clusterProfileManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="complianceManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="localizationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="storageResourceManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="guestOperationsManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="overheadMemoryManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="certificateManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="ioFilterManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ServiceContent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="rootFolder" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="propertyCollector" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="viewManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="about" type="{urn:vim25}AboutInfo"/&gt;
+ *         &lt;element name="setting" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="userDirectory" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="sessionManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="authorizationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="serviceManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="perfManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="scheduledTaskManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="alarmManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="eventManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="taskManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="extensionManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="customizationSpecManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="customFieldsManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="accountManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="diagnosticManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="licenseManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="searchIndex" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="fileManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="datastoreNamespaceManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="virtualDiskManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="virtualizationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="snmpSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="vmProvisioningChecker" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="vmCompatibilityChecker" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="ovfManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="ipPoolManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="dvSwitchManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="hostProfileManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="clusterProfileManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="complianceManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="localizationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="storageResourceManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="guestOperationsManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="overheadMemoryManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="certificateManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="ioFilterManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -15,18 +15,18 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualMachineStorageSummary">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="committed" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="uncommitted" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="unshared" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="timestamp" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualMachineStorageSummary"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="committed" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="uncommitted" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="unshared" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="timestamp" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

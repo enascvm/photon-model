@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualDeviceConnectInfoStatus">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="ok"/>
- *     &lt;enumeration value="recoverableError"/>
- *     &lt;enumeration value="unrecoverableError"/>
- *     &lt;enumeration value="untried"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualDeviceConnectInfoStatus"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="ok"/&gt;
+ *     &lt;enumeration value="recoverableError"/&gt;
+ *     &lt;enumeration value="unrecoverableError"/&gt;
+ *     &lt;enumeration value="untried"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

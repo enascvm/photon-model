@@ -12,23 +12,23 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualDiskType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="preallocated"/>
- *     &lt;enumeration value="thin"/>
- *     &lt;enumeration value="seSparse"/>
- *     &lt;enumeration value="rdm"/>
- *     &lt;enumeration value="rdmp"/>
- *     &lt;enumeration value="raw"/>
- *     &lt;enumeration value="delta"/>
- *     &lt;enumeration value="sparse2Gb"/>
- *     &lt;enumeration value="thick2Gb"/>
- *     &lt;enumeration value="eagerZeroedThick"/>
- *     &lt;enumeration value="sparseMonolithic"/>
- *     &lt;enumeration value="flatMonolithic"/>
- *     &lt;enumeration value="thick"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualDiskType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="preallocated"/&gt;
+ *     &lt;enumeration value="thin"/&gt;
+ *     &lt;enumeration value="seSparse"/&gt;
+ *     &lt;enumeration value="rdm"/&gt;
+ *     &lt;enumeration value="rdmp"/&gt;
+ *     &lt;enumeration value="raw"/&gt;
+ *     &lt;enumeration value="delta"/&gt;
+ *     &lt;enumeration value="sparse2Gb"/&gt;
+ *     &lt;enumeration value="thick2Gb"/&gt;
+ *     &lt;enumeration value="eagerZeroedThick"/&gt;
+ *     &lt;enumeration value="sparseMonolithic"/&gt;
+ *     &lt;enumeration value="flatMonolithic"/&gt;
+ *     &lt;enumeration value="thick"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

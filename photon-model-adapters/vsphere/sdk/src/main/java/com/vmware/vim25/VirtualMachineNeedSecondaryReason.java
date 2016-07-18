@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineNeedSecondaryReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="initializing"/>
- *     &lt;enumeration value="divergence"/>
- *     &lt;enumeration value="lostConnection"/>
- *     &lt;enumeration value="partialHardwareFailure"/>
- *     &lt;enumeration value="userAction"/>
- *     &lt;enumeration value="checkpointError"/>
- *     &lt;enumeration value="other"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineNeedSecondaryReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="initializing"/&gt;
+ *     &lt;enumeration value="divergence"/&gt;
+ *     &lt;enumeration value="lostConnection"/&gt;
+ *     &lt;enumeration value="partialHardwareFailure"/&gt;
+ *     &lt;enumeration value="userAction"/&gt;
+ *     &lt;enumeration value="checkpointError"/&gt;
+ *     &lt;enumeration value="other"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

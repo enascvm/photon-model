@@ -12,22 +12,22 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterComputeResourceSummary">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ComputeResourceSummary">
- *       &lt;sequence>
- *         &lt;element name="currentFailoverLevel" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="admissionControlInfo" type="{urn:vim25}ClusterDasAdmissionControlInfo" minOccurs="0"/>
- *         &lt;element name="numVmotions" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="targetBalance" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="currentBalance" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="usageSummary" type="{urn:vim25}ClusterUsageSummary" minOccurs="0"/>
- *         &lt;element name="currentEVCModeKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="dasData" type="{urn:vim25}ClusterDasData" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterComputeResourceSummary"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ComputeResourceSummary"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="currentFailoverLevel" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="admissionControlInfo" type="{urn:vim25}ClusterDasAdmissionControlInfo" minOccurs="0"/&gt;
+ *         &lt;element name="numVmotions" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="targetBalance" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="currentBalance" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="usageSummary" type="{urn:vim25}ClusterUsageSummary" minOccurs="0"/&gt;
+ *         &lt;element name="currentEVCModeKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="dasData" type="{urn:vim25}ClusterDasData" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

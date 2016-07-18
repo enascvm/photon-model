@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostVFlashManagerVFlashConfigInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="vFlashResourceConfigInfo" type="{urn:vim25}HostVFlashManagerVFlashResourceConfigInfo" minOccurs="0"/>
- *         &lt;element name="vFlashCacheConfigInfo" type="{urn:vim25}HostVFlashManagerVFlashCacheConfigInfo" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostVFlashManagerVFlashConfigInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vFlashResourceConfigInfo" type="{urn:vim25}HostVFlashManagerVFlashResourceConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="vFlashCacheConfigInfo" type="{urn:vim25}HostVFlashManagerVFlashCacheConfigInfo" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

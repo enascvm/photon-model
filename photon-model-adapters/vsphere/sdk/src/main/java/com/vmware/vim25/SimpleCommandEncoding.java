@@ -11,13 +11,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="SimpleCommandEncoding">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="CSV"/>
- *     &lt;enumeration value="HEX"/>
- *     &lt;enumeration value="STRING"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="SimpleCommandEncoding"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="CSV"/&gt;
+ *     &lt;enumeration value="HEX"/&gt;
+ *     &lt;enumeration value="STRING"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

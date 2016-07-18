@@ -13,21 +13,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostNumericSensorInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="healthState" type="{urn:vim25}ElementDescription" minOccurs="0"/>
- *         &lt;element name="currentReading" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="unitModifier" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="baseUnits" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="rateUnits" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="sensorType" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostNumericSensorInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="healthState" type="{urn:vim25}ElementDescription" minOccurs="0"/&gt;
+ *         &lt;element name="currentReading" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="unitModifier" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="baseUnits" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="rateUnits" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="sensorType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

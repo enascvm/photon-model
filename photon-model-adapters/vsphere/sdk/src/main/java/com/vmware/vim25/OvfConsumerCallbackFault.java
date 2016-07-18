@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfConsumerCallbackFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfFault">
- *       &lt;sequence>
- *         &lt;element name="extensionKey" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="extensionName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfConsumerCallbackFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="extensionKey" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="extensionName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -34,11 +34,11 @@ import javax.xml.bind.annotation.XmlType;
     "extensionName"
 })
 @XmlSeeAlso({
-    OvfConsumerUndeclaredSection.class,
+    OvfConsumerCommunicationError.class,
     OvfConsumerFault.class,
-    OvfConsumerUndefinedPrefix.class,
     OvfConsumerInvalidSection.class,
-    OvfConsumerCommunicationError.class
+    OvfConsumerUndeclaredSection.class,
+    OvfConsumerUndefinedPrefix.class
 })
 public class OvfConsumerCallbackFault
     extends OvfFault

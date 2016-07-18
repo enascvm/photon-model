@@ -15,24 +15,24 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDiskFlatVer2BackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceFileBackingOption">
- *       &lt;sequence>
- *         &lt;element name="diskMode" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="split" type="{urn:vim25}BoolOption"/>
- *         &lt;element name="writeThrough" type="{urn:vim25}BoolOption"/>
- *         &lt;element name="growable" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="hotGrowable" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="thinProvisioned" type="{urn:vim25}BoolOption" minOccurs="0"/>
- *         &lt;element name="eagerlyScrub" type="{urn:vim25}BoolOption" minOccurs="0"/>
- *         &lt;element name="deltaDiskFormat" type="{urn:vim25}ChoiceOption" minOccurs="0"/>
- *         &lt;element name="deltaDiskFormatsSupported" type="{urn:vim25}VirtualDiskDeltaDiskFormatsSupported" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDiskFlatVer2BackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceFileBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="diskMode" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="split" type="{urn:vim25}BoolOption"/&gt;
+ *         &lt;element name="writeThrough" type="{urn:vim25}BoolOption"/&gt;
+ *         &lt;element name="growable" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="hotGrowable" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="thinProvisioned" type="{urn:vim25}BoolOption" minOccurs="0"/&gt;
+ *         &lt;element name="eagerlyScrub" type="{urn:vim25}BoolOption" minOccurs="0"/&gt;
+ *         &lt;element name="deltaDiskFormat" type="{urn:vim25}ChoiceOption" minOccurs="0"/&gt;
+ *         &lt;element name="deltaDiskFormatsSupported" type="{urn:vim25}VirtualDiskDeltaDiskFormatsSupported" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

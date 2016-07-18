@@ -12,20 +12,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ClusterResourceUsageSummary">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="cpuUsedMHz" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="cpuCapacityMHz" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="memUsedMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="memCapacityMB" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="storageUsedMB" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="storageCapacityMB" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ClusterResourceUsageSummary"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="cpuUsedMHz" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="cpuCapacityMHz" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="memUsedMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="memCapacityMB" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="storageUsedMB" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="storageCapacityMB" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

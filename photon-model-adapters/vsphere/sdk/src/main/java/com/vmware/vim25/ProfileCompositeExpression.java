@@ -15,16 +15,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ProfileCompositeExpression">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ProfileExpression">
- *       &lt;sequence>
- *         &lt;element name="operator" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="expressionName" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ProfileCompositeExpression"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ProfileExpression"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="operator" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="expressionName" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

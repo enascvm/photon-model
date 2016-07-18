@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DistributedVirtualSwitchHostMemberHostComponentState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="up"/>
- *     &lt;enumeration value="pending"/>
- *     &lt;enumeration value="outOfSync"/>
- *     &lt;enumeration value="warning"/>
- *     &lt;enumeration value="disconnected"/>
- *     &lt;enumeration value="down"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DistributedVirtualSwitchHostMemberHostComponentState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="up"/&gt;
+ *     &lt;enumeration value="pending"/&gt;
+ *     &lt;enumeration value="outOfSync"/&gt;
+ *     &lt;enumeration value="warning"/&gt;
+ *     &lt;enumeration value="disconnected"/&gt;
+ *     &lt;enumeration value="down"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

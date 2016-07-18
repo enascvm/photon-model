@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfElement">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfInvalidPackage">
- *       &lt;sequence>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfElement"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfInvalidPackage"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,12 +32,12 @@ import javax.xml.bind.annotation.XmlType;
     "name"
 })
 @XmlSeeAlso({
-    OvfUnexpectedElement.class,
     OvfDuplicateElement.class,
-    OvfMissingElement.class,
-    OvfWrongElement.class,
     OvfDuplicatedElementBoundary.class,
-    OvfElementInvalidValue.class
+    OvfElementInvalidValue.class,
+    OvfMissingElement.class,
+    OvfUnexpectedElement.class,
+    OvfWrongElement.class
 })
 public class OvfElement
     extends OvfInvalidPackage

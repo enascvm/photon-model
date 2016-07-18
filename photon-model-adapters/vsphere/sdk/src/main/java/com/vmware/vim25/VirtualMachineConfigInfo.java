@@ -17,75 +17,75 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualMachineConfigInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="changeVersion" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="modified" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="guestFullName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="instanceUuid" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="npivNodeWorldWideName" type="{http://www.w3.org/2001/XMLSchema}long" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="npivPortWorldWideName" type="{http://www.w3.org/2001/XMLSchema}long" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="npivWorldWideNameType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="npivDesiredNodeWwns" type="{http://www.w3.org/2001/XMLSchema}short" minOccurs="0"/>
- *         &lt;element name="npivDesiredPortWwns" type="{http://www.w3.org/2001/XMLSchema}short" minOccurs="0"/>
- *         &lt;element name="npivTemporaryDisabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="npivOnNonRdmDisks" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="locationId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="template" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="guestId" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="alternateGuestName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="annotation" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="files" type="{urn:vim25}VirtualMachineFileInfo"/>
- *         &lt;element name="tools" type="{urn:vim25}ToolsConfigInfo" minOccurs="0"/>
- *         &lt;element name="flags" type="{urn:vim25}VirtualMachineFlagInfo"/>
- *         &lt;element name="consolePreferences" type="{urn:vim25}VirtualMachineConsolePreferences" minOccurs="0"/>
- *         &lt;element name="defaultPowerOps" type="{urn:vim25}VirtualMachineDefaultPowerOpInfo"/>
- *         &lt;element name="hardware" type="{urn:vim25}VirtualHardware"/>
- *         &lt;element name="cpuAllocation" type="{urn:vim25}ResourceAllocationInfo" minOccurs="0"/>
- *         &lt;element name="memoryAllocation" type="{urn:vim25}ResourceAllocationInfo" minOccurs="0"/>
- *         &lt;element name="latencySensitivity" type="{urn:vim25}LatencySensitivity" minOccurs="0"/>
- *         &lt;element name="memoryHotAddEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="cpuHotAddEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="cpuHotRemoveEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="hotPlugMemoryLimit" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="hotPlugMemoryIncrementSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="cpuAffinity" type="{urn:vim25}VirtualMachineAffinityInfo" minOccurs="0"/>
- *         &lt;element name="memoryAffinity" type="{urn:vim25}VirtualMachineAffinityInfo" minOccurs="0"/>
- *         &lt;element name="networkShaper" type="{urn:vim25}VirtualMachineNetworkShaperInfo" minOccurs="0"/>
- *         &lt;element name="extraConfig" type="{urn:vim25}OptionValue" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="cpuFeatureMask" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="datastoreUrl" type="{urn:vim25}VirtualMachineConfigInfoDatastoreUrlPair" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="swapPlacement" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="bootOptions" type="{urn:vim25}VirtualMachineBootOptions" minOccurs="0"/>
- *         &lt;element name="ftInfo" type="{urn:vim25}FaultToleranceConfigInfo" minOccurs="0"/>
- *         &lt;element name="repConfig" type="{urn:vim25}ReplicationConfigSpec" minOccurs="0"/>
- *         &lt;element name="vAppConfig" type="{urn:vim25}VmConfigInfo" minOccurs="0"/>
- *         &lt;element name="vAssertsEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="changeTrackingEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="firmware" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="maxMksConnections" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="guestAutoLockEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="managedBy" type="{urn:vim25}ManagedByInfo" minOccurs="0"/>
- *         &lt;element name="memoryReservationLockedToMax" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="initialOverhead" type="{urn:vim25}VirtualMachineConfigInfoOverheadInfo" minOccurs="0"/>
- *         &lt;element name="nestedHVEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="vPMCEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="scheduledHardwareUpgradeInfo" type="{urn:vim25}ScheduledHardwareUpgradeInfo" minOccurs="0"/>
- *         &lt;element name="forkConfigInfo" type="{urn:vim25}VirtualMachineForkConfigInfo" minOccurs="0"/>
- *         &lt;element name="vFlashCacheReservation" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="vmxConfigChecksum" type="{http://www.w3.org/2001/XMLSchema}base64Binary" minOccurs="0"/>
- *         &lt;element name="messageBusTunnelEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="vmStorageObjectId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="swapStorageObjectId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualMachineConfigInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="changeVersion" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="modified" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="guestFullName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="instanceUuid" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="npivNodeWorldWideName" type="{http://www.w3.org/2001/XMLSchema}long" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="npivPortWorldWideName" type="{http://www.w3.org/2001/XMLSchema}long" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="npivWorldWideNameType" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="npivDesiredNodeWwns" type="{http://www.w3.org/2001/XMLSchema}short" minOccurs="0"/&gt;
+ *         &lt;element name="npivDesiredPortWwns" type="{http://www.w3.org/2001/XMLSchema}short" minOccurs="0"/&gt;
+ *         &lt;element name="npivTemporaryDisabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="npivOnNonRdmDisks" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="locationId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="template" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="guestId" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="alternateGuestName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="annotation" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="files" type="{urn:vim25}VirtualMachineFileInfo"/&gt;
+ *         &lt;element name="tools" type="{urn:vim25}ToolsConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="flags" type="{urn:vim25}VirtualMachineFlagInfo"/&gt;
+ *         &lt;element name="consolePreferences" type="{urn:vim25}VirtualMachineConsolePreferences" minOccurs="0"/&gt;
+ *         &lt;element name="defaultPowerOps" type="{urn:vim25}VirtualMachineDefaultPowerOpInfo"/&gt;
+ *         &lt;element name="hardware" type="{urn:vim25}VirtualHardware"/&gt;
+ *         &lt;element name="cpuAllocation" type="{urn:vim25}ResourceAllocationInfo" minOccurs="0"/&gt;
+ *         &lt;element name="memoryAllocation" type="{urn:vim25}ResourceAllocationInfo" minOccurs="0"/&gt;
+ *         &lt;element name="latencySensitivity" type="{urn:vim25}LatencySensitivity" minOccurs="0"/&gt;
+ *         &lt;element name="memoryHotAddEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="cpuHotAddEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="cpuHotRemoveEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="hotPlugMemoryLimit" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="hotPlugMemoryIncrementSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="cpuAffinity" type="{urn:vim25}VirtualMachineAffinityInfo" minOccurs="0"/&gt;
+ *         &lt;element name="memoryAffinity" type="{urn:vim25}VirtualMachineAffinityInfo" minOccurs="0"/&gt;
+ *         &lt;element name="networkShaper" type="{urn:vim25}VirtualMachineNetworkShaperInfo" minOccurs="0"/&gt;
+ *         &lt;element name="extraConfig" type="{urn:vim25}OptionValue" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="cpuFeatureMask" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="datastoreUrl" type="{urn:vim25}VirtualMachineConfigInfoDatastoreUrlPair" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="swapPlacement" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="bootOptions" type="{urn:vim25}VirtualMachineBootOptions" minOccurs="0"/&gt;
+ *         &lt;element name="ftInfo" type="{urn:vim25}FaultToleranceConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="repConfig" type="{urn:vim25}ReplicationConfigSpec" minOccurs="0"/&gt;
+ *         &lt;element name="vAppConfig" type="{urn:vim25}VmConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="vAssertsEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="changeTrackingEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="firmware" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="maxMksConnections" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="guestAutoLockEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="managedBy" type="{urn:vim25}ManagedByInfo" minOccurs="0"/&gt;
+ *         &lt;element name="memoryReservationLockedToMax" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="initialOverhead" type="{urn:vim25}VirtualMachineConfigInfoOverheadInfo" minOccurs="0"/&gt;
+ *         &lt;element name="nestedHVEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="vPMCEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="scheduledHardwareUpgradeInfo" type="{urn:vim25}ScheduledHardwareUpgradeInfo" minOccurs="0"/&gt;
+ *         &lt;element name="forkConfigInfo" type="{urn:vim25}VirtualMachineForkConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="vFlashCacheReservation" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="vmxConfigChecksum" type="{http://www.w3.org/2001/XMLSchema}base64Binary" minOccurs="0"/&gt;
+ *         &lt;element name="messageBusTunnelEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="vmStorageObjectId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="swapStorageObjectId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

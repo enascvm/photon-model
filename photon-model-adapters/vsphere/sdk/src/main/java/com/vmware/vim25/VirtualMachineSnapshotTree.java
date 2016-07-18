@@ -17,25 +17,25 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualMachineSnapshotTree">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="snapshot" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="id" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="createTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="state" type="{urn:vim25}VirtualMachinePowerState"/>
- *         &lt;element name="quiesced" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="backupManifest" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="childSnapshotList" type="{urn:vim25}VirtualMachineSnapshotTree" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="replaySupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualMachineSnapshotTree"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="snapshot" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="id" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="createTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="state" type="{urn:vim25}VirtualMachinePowerState"/&gt;
+ *         &lt;element name="quiesced" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="backupManifest" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="childSnapshotList" type="{urn:vim25}VirtualMachineSnapshotTree" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="replaySupported" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -71,6 +71,7 @@ public class VirtualMachineSnapshotTree
     @XmlSchemaType(name = "dateTime")
     protected XMLGregorianCalendar createTime;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected VirtualMachinePowerState state;
     protected boolean quiesced;
     protected String backupManifest;

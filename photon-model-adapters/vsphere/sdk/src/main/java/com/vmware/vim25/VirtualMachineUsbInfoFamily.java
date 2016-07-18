@@ -12,29 +12,29 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineUsbInfoFamily">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="audio"/>
- *     &lt;enumeration value="hid"/>
- *     &lt;enumeration value="hid_bootable"/>
- *     &lt;enumeration value="physical"/>
- *     &lt;enumeration value="communication"/>
- *     &lt;enumeration value="imaging"/>
- *     &lt;enumeration value="printer"/>
- *     &lt;enumeration value="storage"/>
- *     &lt;enumeration value="hub"/>
- *     &lt;enumeration value="smart_card"/>
- *     &lt;enumeration value="security"/>
- *     &lt;enumeration value="video"/>
- *     &lt;enumeration value="wireless"/>
- *     &lt;enumeration value="bluetooth"/>
- *     &lt;enumeration value="wusb"/>
- *     &lt;enumeration value="pda"/>
- *     &lt;enumeration value="vendor_specific"/>
- *     &lt;enumeration value="other"/>
- *     &lt;enumeration value="unknownFamily"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineUsbInfoFamily"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="audio"/&gt;
+ *     &lt;enumeration value="hid"/&gt;
+ *     &lt;enumeration value="hid_bootable"/&gt;
+ *     &lt;enumeration value="physical"/&gt;
+ *     &lt;enumeration value="communication"/&gt;
+ *     &lt;enumeration value="imaging"/&gt;
+ *     &lt;enumeration value="printer"/&gt;
+ *     &lt;enumeration value="storage"/&gt;
+ *     &lt;enumeration value="hub"/&gt;
+ *     &lt;enumeration value="smart_card"/&gt;
+ *     &lt;enumeration value="security"/&gt;
+ *     &lt;enumeration value="video"/&gt;
+ *     &lt;enumeration value="wireless"/&gt;
+ *     &lt;enumeration value="bluetooth"/&gt;
+ *     &lt;enumeration value="wusb"/&gt;
+ *     &lt;enumeration value="pda"/&gt;
+ *     &lt;enumeration value="vendor_specific"/&gt;
+ *     &lt;enumeration value="other"/&gt;
+ *     &lt;enumeration value="unknownFamily"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

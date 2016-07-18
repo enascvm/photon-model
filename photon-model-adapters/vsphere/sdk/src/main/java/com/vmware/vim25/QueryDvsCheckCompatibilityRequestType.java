@@ -15,18 +15,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="QueryDvsCheckCompatibilityRequestType">
- *   &lt;complexContent>
- *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType">
- *       &lt;sequence>
- *         &lt;element name="_this" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="hostContainer" type="{urn:vim25}DistributedVirtualSwitchManagerHostContainer"/>
- *         &lt;element name="dvsProductSpec" type="{urn:vim25}DistributedVirtualSwitchManagerDvsProductSpec" minOccurs="0"/>
- *         &lt;element name="hostFilterSpec" type="{urn:vim25}DistributedVirtualSwitchManagerHostDvsFilterSpec" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/restriction>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="QueryDvsCheckCompatibilityRequestType"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;restriction base="{http://www.w3.org/2001/XMLSchema}anyType"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="_this" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="hostContainer" type="{urn:vim25}DistributedVirtualSwitchManagerHostContainer"/&gt;
+ *         &lt;element name="dvsProductSpec" type="{urn:vim25}DistributedVirtualSwitchManagerDvsProductSpec" minOccurs="0"/&gt;
+ *         &lt;element name="hostFilterSpec" type="{urn:vim25}DistributedVirtualSwitchManagerHostDvsFilterSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/restriction&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

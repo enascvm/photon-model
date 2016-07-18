@@ -12,23 +12,23 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ScsiLunType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="disk"/>
- *     &lt;enumeration value="tape"/>
- *     &lt;enumeration value="printer"/>
- *     &lt;enumeration value="processor"/>
- *     &lt;enumeration value="worm"/>
- *     &lt;enumeration value="cdrom"/>
- *     &lt;enumeration value="scanner"/>
- *     &lt;enumeration value="opticalDevice"/>
- *     &lt;enumeration value="mediaChanger"/>
- *     &lt;enumeration value="communications"/>
- *     &lt;enumeration value="storageArrayController"/>
- *     &lt;enumeration value="enclosure"/>
- *     &lt;enumeration value="unknown"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ScsiLunType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="disk"/&gt;
+ *     &lt;enumeration value="tape"/&gt;
+ *     &lt;enumeration value="printer"/&gt;
+ *     &lt;enumeration value="processor"/&gt;
+ *     &lt;enumeration value="worm"/&gt;
+ *     &lt;enumeration value="cdrom"/&gt;
+ *     &lt;enumeration value="scanner"/&gt;
+ *     &lt;enumeration value="opticalDevice"/&gt;
+ *     &lt;enumeration value="mediaChanger"/&gt;
+ *     &lt;enumeration value="communications"/&gt;
+ *     &lt;enumeration value="storageArrayController"/&gt;
+ *     &lt;enumeration value="enclosure"/&gt;
+ *     &lt;enumeration value="unknown"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

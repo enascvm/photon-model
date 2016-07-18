@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DistributedVirtualSwitchPortConnecteeConnecteeType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="pnic"/>
- *     &lt;enumeration value="vmVnic"/>
- *     &lt;enumeration value="hostConsoleVnic"/>
- *     &lt;enumeration value="hostVmkVnic"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DistributedVirtualSwitchPortConnecteeConnecteeType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="pnic"/&gt;
+ *     &lt;enumeration value="vmVnic"/&gt;
+ *     &lt;enumeration value="hostConsoleVnic"/&gt;
+ *     &lt;enumeration value="hostVmkVnic"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

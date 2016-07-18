@@ -12,30 +12,30 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DistributedVirtualSwitchPortStatistics">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="packetsInMulticast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="packetsOutMulticast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="bytesInMulticast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="bytesOutMulticast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="packetsInUnicast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="packetsOutUnicast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="bytesInUnicast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="bytesOutUnicast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="packetsInBroadcast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="packetsOutBroadcast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="bytesInBroadcast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="bytesOutBroadcast" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="packetsInDropped" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="packetsOutDropped" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="packetsInException" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="packetsOutException" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DistributedVirtualSwitchPortStatistics"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="packetsInMulticast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="packetsOutMulticast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="bytesInMulticast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="bytesOutMulticast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="packetsInUnicast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="packetsOutUnicast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="bytesInUnicast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="bytesOutUnicast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="packetsInBroadcast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="packetsOutBroadcast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="bytesInBroadcast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="bytesOutBroadcast" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="packetsInDropped" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="packetsOutDropped" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="packetsInException" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="packetsOutException" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

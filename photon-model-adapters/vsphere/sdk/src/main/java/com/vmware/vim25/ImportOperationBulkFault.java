@@ -15,15 +15,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ImportOperationBulkFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DvsFault">
- *       &lt;sequence>
- *         &lt;element name="importFaults" type="{urn:vim25}ImportOperationBulkFaultFaultOnImport" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ImportOperationBulkFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DvsFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="importFaults" type="{urn:vim25}ImportOperationBulkFaultFaultOnImport" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

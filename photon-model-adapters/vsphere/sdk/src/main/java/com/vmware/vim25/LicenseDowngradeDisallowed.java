@@ -15,17 +15,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="LicenseDowngradeDisallowed">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}NotEnoughLicenses">
- *       &lt;sequence>
- *         &lt;element name="edition" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="entityId" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="features" type="{urn:vim25}KeyAnyValue" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="LicenseDowngradeDisallowed"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}NotEnoughLicenses"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="edition" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="entityId" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="features" type="{urn:vim25}KeyAnyValue" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

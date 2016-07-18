@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmBeingClonedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VmCloneEvent">
- *       &lt;sequence>
- *         &lt;element name="destFolder" type="{urn:vim25}FolderEventArgument"/>
- *         &lt;element name="destName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="destHost" type="{urn:vim25}HostEventArgument"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmBeingClonedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VmCloneEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="destFolder" type="{urn:vim25}FolderEventArgument"/&gt;
+ *         &lt;element name="destName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="destHost" type="{urn:vim25}HostEventArgument"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

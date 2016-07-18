@@ -15,24 +15,24 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostVmfsVolume">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostFileSystemVolume">
- *       &lt;sequence>
- *         &lt;element name="blockSizeMb" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="maxBlocks" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="majorVersion" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="extent" type="{urn:vim25}HostScsiDiskPartition" maxOccurs="unbounded"/>
- *         &lt;element name="vmfsUpgradable" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="forceMountedInfo" type="{urn:vim25}HostForceMountedInfo" minOccurs="0"/>
- *         &lt;element name="ssd" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="local" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostVmfsVolume"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostFileSystemVolume"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="blockSizeMb" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="maxBlocks" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="majorVersion" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="extent" type="{urn:vim25}HostScsiDiskPartition" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="vmfsUpgradable" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="forceMountedInfo" type="{urn:vim25}HostForceMountedInfo" minOccurs="0"/&gt;
+ *         &lt;element name="ssd" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="local" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

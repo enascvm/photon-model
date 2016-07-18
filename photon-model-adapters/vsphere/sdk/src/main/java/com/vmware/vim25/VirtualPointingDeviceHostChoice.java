@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualPointingDeviceHostChoice">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="autodetect"/>
- *     &lt;enumeration value="intellimouseExplorer"/>
- *     &lt;enumeration value="intellimousePs2"/>
- *     &lt;enumeration value="logitechMouseman"/>
- *     &lt;enumeration value="microsoft_serial"/>
- *     &lt;enumeration value="mouseSystems"/>
- *     &lt;enumeration value="mousemanSerial"/>
- *     &lt;enumeration value="ps2"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualPointingDeviceHostChoice"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="autodetect"/&gt;
+ *     &lt;enumeration value="intellimouseExplorer"/&gt;
+ *     &lt;enumeration value="intellimousePs2"/&gt;
+ *     &lt;enumeration value="logitechMouseman"/&gt;
+ *     &lt;enumeration value="microsoft_serial"/&gt;
+ *     &lt;enumeration value="mouseSystems"/&gt;
+ *     &lt;enumeration value="mousemanSerial"/&gt;
+ *     &lt;enumeration value="ps2"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

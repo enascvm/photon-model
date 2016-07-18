@@ -13,22 +13,22 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="StoragePlacementAction">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ClusterAction">
- *       &lt;sequence>
- *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="relocateSpec" type="{urn:vim25}VirtualMachineRelocateSpec"/>
- *         &lt;element name="destination" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="spaceUtilBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *         &lt;element name="spaceDemandBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *         &lt;element name="spaceUtilAfter" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *         &lt;element name="spaceDemandAfter" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *         &lt;element name="ioLatencyBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="StoragePlacementAction"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ClusterAction"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="relocateSpec" type="{urn:vim25}VirtualMachineRelocateSpec"/&gt;
+ *         &lt;element name="destination" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="spaceUtilBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *         &lt;element name="spaceDemandBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *         &lt;element name="spaceUtilAfter" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *         &lt;element name="spaceDemandAfter" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *         &lt;element name="ioLatencyBefore" type="{http://www.w3.org/2001/XMLSchema}float" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

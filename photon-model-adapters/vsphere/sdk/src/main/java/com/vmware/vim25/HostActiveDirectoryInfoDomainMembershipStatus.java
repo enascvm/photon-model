@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostActiveDirectoryInfoDomainMembershipStatus">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="unknown"/>
- *     &lt;enumeration value="ok"/>
- *     &lt;enumeration value="noServers"/>
- *     &lt;enumeration value="clientTrustBroken"/>
- *     &lt;enumeration value="serverTrustBroken"/>
- *     &lt;enumeration value="inconsistentTrust"/>
- *     &lt;enumeration value="otherProblem"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostActiveDirectoryInfoDomainMembershipStatus"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="unknown"/&gt;
+ *     &lt;enumeration value="ok"/&gt;
+ *     &lt;enumeration value="noServers"/&gt;
+ *     &lt;enumeration value="clientTrustBroken"/&gt;
+ *     &lt;enumeration value="serverTrustBroken"/&gt;
+ *     &lt;enumeration value="inconsistentTrust"/&gt;
+ *     &lt;enumeration value="otherProblem"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

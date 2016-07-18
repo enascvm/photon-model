@@ -15,17 +15,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="TaskDescription">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="methodInfo" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/>
- *         &lt;element name="state" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/>
- *         &lt;element name="reason" type="{urn:vim25}TypeDescription" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="TaskDescription"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="methodInfo" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="state" type="{urn:vim25}ElementDescription" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="reason" type="{urn:vim25}TypeDescription" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

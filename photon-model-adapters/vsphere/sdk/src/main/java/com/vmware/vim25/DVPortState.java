@@ -15,17 +15,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DVPortState">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="runtimeInfo" type="{urn:vim25}DVPortStatus" minOccurs="0"/>
- *         &lt;element name="stats" type="{urn:vim25}DistributedVirtualSwitchPortStatistics"/>
- *         &lt;element name="vendorSpecificState" type="{urn:vim25}DistributedVirtualSwitchKeyedOpaqueBlob" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DVPortState"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="runtimeInfo" type="{urn:vim25}DVPortStatus" minOccurs="0"/&gt;
+ *         &lt;element name="stats" type="{urn:vim25}DistributedVirtualSwitchPortStatistics"/&gt;
+ *         &lt;element name="vendorSpecificState" type="{urn:vim25}DistributedVirtualSwitchKeyedOpaqueBlob" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

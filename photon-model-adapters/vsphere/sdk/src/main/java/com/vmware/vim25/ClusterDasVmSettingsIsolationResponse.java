@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ClusterDasVmSettingsIsolationResponse">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="none"/>
- *     &lt;enumeration value="powerOff"/>
- *     &lt;enumeration value="shutdown"/>
- *     &lt;enumeration value="clusterIsolationResponse"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ClusterDasVmSettingsIsolationResponse"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="none"/&gt;
+ *     &lt;enumeration value="powerOff"/&gt;
+ *     &lt;enumeration value="shutdown"/&gt;
+ *     &lt;enumeration value="clusterIsolationResponse"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

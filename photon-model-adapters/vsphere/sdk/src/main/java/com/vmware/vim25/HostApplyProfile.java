@@ -14,25 +14,25 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostApplyProfile">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ApplyProfile">
- *       &lt;sequence>
- *         &lt;element name="memory" type="{urn:vim25}HostMemoryProfile" minOccurs="0"/>
- *         &lt;element name="storage" type="{urn:vim25}StorageProfile" minOccurs="0"/>
- *         &lt;element name="network" type="{urn:vim25}NetworkProfile" minOccurs="0"/>
- *         &lt;element name="datetime" type="{urn:vim25}DateTimeProfile" minOccurs="0"/>
- *         &lt;element name="firewall" type="{urn:vim25}FirewallProfile" minOccurs="0"/>
- *         &lt;element name="security" type="{urn:vim25}SecurityProfile" minOccurs="0"/>
- *         &lt;element name="service" type="{urn:vim25}ServiceProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="option" type="{urn:vim25}OptionProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="userAccount" type="{urn:vim25}UserProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="usergroupAccount" type="{urn:vim25}UserGroupProfile" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="authentication" type="{urn:vim25}AuthenticationProfile" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostApplyProfile"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ApplyProfile"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="memory" type="{urn:vim25}HostMemoryProfile" minOccurs="0"/&gt;
+ *         &lt;element name="storage" type="{urn:vim25}StorageProfile" minOccurs="0"/&gt;
+ *         &lt;element name="network" type="{urn:vim25}NetworkProfile" minOccurs="0"/&gt;
+ *         &lt;element name="datetime" type="{urn:vim25}DateTimeProfile" minOccurs="0"/&gt;
+ *         &lt;element name="firewall" type="{urn:vim25}FirewallProfile" minOccurs="0"/&gt;
+ *         &lt;element name="security" type="{urn:vim25}SecurityProfile" minOccurs="0"/&gt;
+ *         &lt;element name="service" type="{urn:vim25}ServiceProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="option" type="{urn:vim25}OptionProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="userAccount" type="{urn:vim25}UserProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="usergroupAccount" type="{urn:vim25}UserGroupProfile" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="authentication" type="{urn:vim25}AuthenticationProfile" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

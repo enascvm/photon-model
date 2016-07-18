@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="AutoStartAction">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="none"/>
- *     &lt;enumeration value="systemDefault"/>
- *     &lt;enumeration value="powerOn"/>
- *     &lt;enumeration value="powerOff"/>
- *     &lt;enumeration value="guestShutdown"/>
- *     &lt;enumeration value="suspend"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="AutoStartAction"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="none"/&gt;
+ *     &lt;enumeration value="systemDefault"/&gt;
+ *     &lt;enumeration value="powerOn"/&gt;
+ *     &lt;enumeration value="powerOff"/&gt;
+ *     &lt;enumeration value="guestShutdown"/&gt;
+ *     &lt;enumeration value="suspend"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

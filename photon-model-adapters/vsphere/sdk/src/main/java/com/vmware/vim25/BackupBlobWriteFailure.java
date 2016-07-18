@@ -13,17 +13,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="BackupBlobWriteFailure">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DvsFault">
- *       &lt;sequence>
- *         &lt;element name="entityName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="entityType" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="fault" type="{urn:vim25}LocalizedMethodFault"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="BackupBlobWriteFailure"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DvsFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="entityName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="entityType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="fault" type="{urn:vim25}LocalizedMethodFault"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

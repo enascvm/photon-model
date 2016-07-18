@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostNumericSensorType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="fan"/>
- *     &lt;enumeration value="power"/>
- *     &lt;enumeration value="temperature"/>
- *     &lt;enumeration value="voltage"/>
- *     &lt;enumeration value="other"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostNumericSensorType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="fan"/&gt;
+ *     &lt;enumeration value="power"/&gt;
+ *     &lt;enumeration value="temperature"/&gt;
+ *     &lt;enumeration value="voltage"/&gt;
+ *     &lt;enumeration value="other"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -17,37 +17,37 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="TaskInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="task" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="description" type="{urn:vim25}LocalizableMessage" minOccurs="0"/>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="descriptionId" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="entity" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="entityName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="locked" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="state" type="{urn:vim25}TaskInfoState"/>
- *         &lt;element name="cancelled" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="cancelable" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="error" type="{urn:vim25}LocalizedMethodFault" minOccurs="0"/>
- *         &lt;element name="result" type="{http://www.w3.org/2001/XMLSchema}anyType" minOccurs="0"/>
- *         &lt;element name="progress" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="reason" type="{urn:vim25}TaskReason"/>
- *         &lt;element name="queueTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="startTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/>
- *         &lt;element name="completeTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/>
- *         &lt;element name="eventChainId" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="changeTag" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="parentTaskKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="rootTaskKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="activationId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="TaskInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="task" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="description" type="{urn:vim25}LocalizableMessage" minOccurs="0"/&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="descriptionId" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="entity" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="entityName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="locked" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="state" type="{urn:vim25}TaskInfoState"/&gt;
+ *         &lt;element name="cancelled" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="cancelable" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="error" type="{urn:vim25}LocalizedMethodFault" minOccurs="0"/&gt;
+ *         &lt;element name="result" type="{http://www.w3.org/2001/XMLSchema}anyType" minOccurs="0"/&gt;
+ *         &lt;element name="progress" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="reason" type="{urn:vim25}TaskReason"/&gt;
+ *         &lt;element name="queueTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="startTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
+ *         &lt;element name="completeTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
+ *         &lt;element name="eventChainId" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="changeTag" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="parentTaskKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="rootTaskKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="activationId" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -94,6 +94,7 @@ public class TaskInfo
     protected String entityName;
     protected List<ManagedObjectReference> locked;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected TaskInfoState state;
     protected boolean cancelled;
     protected boolean cancelable;

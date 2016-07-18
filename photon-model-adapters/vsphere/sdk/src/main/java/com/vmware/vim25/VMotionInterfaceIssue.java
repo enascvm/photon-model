@@ -14,17 +14,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VMotionInterfaceIssue">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}MigrationFault">
- *       &lt;sequence>
- *         &lt;element name="atSourceHost" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="failedHost" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="failedHostEntity" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VMotionInterfaceIssue"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}MigrationFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="atSourceHost" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="failedHost" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="failedHostEntity" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -36,11 +36,11 @@ import javax.xml.bind.annotation.XmlType;
     "failedHostEntity"
 })
 @XmlSeeAlso({
-    VMotionNotLicensed.class,
-    VMotionNotSupported.class,
     VMotionLinkCapacityLow.class,
     VMotionLinkDown.class,
-    VMotionNotConfigured.class
+    VMotionNotConfigured.class,
+    VMotionNotLicensed.class,
+    VMotionNotSupported.class
 })
 public class VMotionInterfaceIssue
     extends MigrationFault

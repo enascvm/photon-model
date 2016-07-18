@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InvalidCAMServer">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ActiveDirectoryFault">
- *       &lt;sequence>
- *         &lt;element name="camServer" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InvalidCAMServer"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ActiveDirectoryFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="camServer" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,8 +32,8 @@ import javax.xml.bind.annotation.XmlType;
     "camServer"
 })
 @XmlSeeAlso({
-    InvalidCAMCertificate.class,
-    CAMServerRefusedConnection.class
+    CAMServerRefusedConnection.class,
+    InvalidCAMCertificate.class
 })
 public class InvalidCAMServer
     extends ActiveDirectoryFault

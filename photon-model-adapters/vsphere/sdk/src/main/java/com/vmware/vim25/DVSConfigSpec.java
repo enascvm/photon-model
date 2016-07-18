@@ -15,31 +15,31 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DVSConfigSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="configVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="numStandalonePorts" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="maxPorts" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="uplinkPortPolicy" type="{urn:vim25}DVSUplinkPortPolicy" minOccurs="0"/>
- *         &lt;element name="uplinkPortgroup" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="defaultPortConfig" type="{urn:vim25}DVPortSetting" minOccurs="0"/>
- *         &lt;element name="host" type="{urn:vim25}DistributedVirtualSwitchHostMemberConfigSpec" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="extensionKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="policy" type="{urn:vim25}DVSPolicy" minOccurs="0"/>
- *         &lt;element name="vendorSpecificConfig" type="{urn:vim25}DistributedVirtualSwitchKeyedOpaqueBlob" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="contact" type="{urn:vim25}DVSContactInfo" minOccurs="0"/>
- *         &lt;element name="switchIpAddress" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="defaultProxySwitchMaxNumPorts" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="infrastructureTrafficResourceConfig" type="{urn:vim25}DvsHostInfrastructureTrafficResource" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="networkResourceControlVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DVSConfigSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="configVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="numStandalonePorts" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="maxPorts" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="uplinkPortPolicy" type="{urn:vim25}DVSUplinkPortPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="uplinkPortgroup" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="defaultPortConfig" type="{urn:vim25}DVPortSetting" minOccurs="0"/&gt;
+ *         &lt;element name="host" type="{urn:vim25}DistributedVirtualSwitchHostMemberConfigSpec" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="extensionKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="policy" type="{urn:vim25}DVSPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="vendorSpecificConfig" type="{urn:vim25}DistributedVirtualSwitchKeyedOpaqueBlob" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="contact" type="{urn:vim25}DVSContactInfo" minOccurs="0"/&gt;
+ *         &lt;element name="switchIpAddress" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="defaultProxySwitchMaxNumPorts" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="infrastructureTrafficResourceConfig" type="{urn:vim25}DvsHostInfrastructureTrafficResource" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="networkResourceControlVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

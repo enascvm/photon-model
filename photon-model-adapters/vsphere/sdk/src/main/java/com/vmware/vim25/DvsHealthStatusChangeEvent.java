@@ -14,16 +14,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DvsHealthStatusChangeEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}HostEvent">
- *       &lt;sequence>
- *         &lt;element name="switchUuid" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="healthResult" type="{urn:vim25}HostMemberHealthCheckResult" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DvsHealthStatusChangeEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}HostEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="switchUuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="healthResult" type="{urn:vim25}HostMemberHealthCheckResult" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -34,14 +34,14 @@ import javax.xml.bind.annotation.XmlType;
     "healthResult"
 })
 @XmlSeeAlso({
-    MtuMatchEvent.class,
     UplinkPortVlanTrunkedEvent.class,
     UplinkPortVlanUntrunkedEvent.class,
-    TeamingMatchEvent.class,
-    UplinkPortMtuSupportEvent.class,
-    TeamingMisMatchEvent.class,
+    MtuMatchEvent.class,
     MtuMismatchEvent.class,
-    UplinkPortMtuNotSupportEvent.class
+    UplinkPortMtuNotSupportEvent.class,
+    UplinkPortMtuSupportEvent.class,
+    TeamingMatchEvent.class,
+    TeamingMisMatchEvent.class
 })
 public class DvsHealthStatusChangeEvent
     extends HostEvent

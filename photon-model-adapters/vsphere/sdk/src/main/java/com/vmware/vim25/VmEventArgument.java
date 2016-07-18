@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmEventArgument">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}EntityEventArgument">
- *       &lt;sequence>
- *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmEventArgument"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}EntityEventArgument"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vm" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

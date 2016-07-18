@@ -12,21 +12,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DVSFailureCriteria">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}InheritablePolicy">
- *       &lt;sequence>
- *         &lt;element name="checkSpeed" type="{urn:vim25}StringPolicy" minOccurs="0"/>
- *         &lt;element name="speed" type="{urn:vim25}IntPolicy" minOccurs="0"/>
- *         &lt;element name="checkDuplex" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *         &lt;element name="fullDuplex" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *         &lt;element name="checkErrorPercent" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *         &lt;element name="percentage" type="{urn:vim25}IntPolicy" minOccurs="0"/>
- *         &lt;element name="checkBeacon" type="{urn:vim25}BoolPolicy" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DVSFailureCriteria"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}InheritablePolicy"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="checkSpeed" type="{urn:vim25}StringPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="speed" type="{urn:vim25}IntPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="checkDuplex" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="fullDuplex" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="checkErrorPercent" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="percentage" type="{urn:vim25}IntPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="checkBeacon" type="{urn:vim25}BoolPolicy" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

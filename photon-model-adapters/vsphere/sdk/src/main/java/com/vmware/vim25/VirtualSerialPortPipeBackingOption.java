@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualSerialPortPipeBackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDevicePipeBackingOption">
- *       &lt;sequence>
- *         &lt;element name="endpoint" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="noRxLoss" type="{urn:vim25}BoolOption"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualSerialPortPipeBackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDevicePipeBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="endpoint" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="noRxLoss" type="{urn:vim25}BoolOption"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -15,22 +15,22 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostNatServiceNameServiceSpec">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="dnsAutoDetect" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="dnsPolicy" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="dnsRetries" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="dnsTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="dnsNameServer" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="nbdsTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="nbnsRetries" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="nbnsTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostNatServiceNameServiceSpec"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="dnsAutoDetect" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="dnsPolicy" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="dnsRetries" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="dnsTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="dnsNameServer" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="nbdsTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="nbnsRetries" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="nbnsTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

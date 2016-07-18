@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DvsEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}Event">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DvsEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}Event"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -29,42 +29,42 @@ import javax.xml.bind.annotation.XmlType;
 @XmlType(name = "DvsEvent")
 @XmlSeeAlso({
     DvsCreatedEvent.class,
-    VmVnicPoolReservationViolationClearEvent.class,
-    DvsPortCreatedEvent.class,
-    DvsUpgradeInProgressEvent.class,
-    RecoveryEvent.class,
-    DvsPortRuntimeChangeEvent.class,
-    HostLocalPortCreatedEvent.class,
-    DvsUpgradeAvailableEvent.class,
-    DvsHostJoinedEvent.class,
-    DvsUpgradeRejectedEvent.class,
-    RollbackEvent.class,
-    DvsHostLeftEvent.class,
-    DvsPortLinkUpEvent.class,
-    DvsRestoreEvent.class,
-    DvsPortBlockedEvent.class,
-    DvsPortReconfiguredEvent.class,
-    DvsPortExitedPassthruEvent.class,
-    DvsPortLinkDownEvent.class,
-    DvsImportEvent.class,
-    DvsHostWentOutOfSyncEvent.class,
-    DvsPortUnblockedEvent.class,
-    DvsPortLeavePortgroupEvent.class,
-    DvsHostBackInSyncEvent.class,
-    DvsPortDeletedEvent.class,
-    DvsHostStatusUpdated.class,
-    DvsMergedEvent.class,
-    VmVnicPoolReservationViolationRaiseEvent.class,
-    DvsPortVendorSpecificStateChangeEvent.class,
-    DvsReconfiguredEvent.class,
-    DvsDestroyedEvent.class,
-    DvsUpgradedEvent.class,
-    DvsPortEnteredPassthruEvent.class,
     DvsRenamedEvent.class,
+    DvsReconfiguredEvent.class,
+    DvsUpgradeAvailableEvent.class,
+    DvsUpgradeInProgressEvent.class,
+    DvsUpgradeRejectedEvent.class,
+    DvsUpgradedEvent.class,
+    DvsHostJoinedEvent.class,
+    DvsHostLeftEvent.class,
     OutOfSyncDvsHost.class,
-    DvsPortDisconnectedEvent.class,
+    DvsHostWentOutOfSyncEvent.class,
+    DvsHostBackInSyncEvent.class,
+    DvsHostStatusUpdated.class,
+    DvsPortCreatedEvent.class,
+    DvsPortReconfiguredEvent.class,
+    DvsPortDeletedEvent.class,
     DvsPortConnectedEvent.class,
-    DvsPortJoinPortgroupEvent.class
+    DvsPortDisconnectedEvent.class,
+    DvsPortVendorSpecificStateChangeEvent.class,
+    DvsPortRuntimeChangeEvent.class,
+    DvsPortLinkUpEvent.class,
+    DvsPortLinkDownEvent.class,
+    DvsPortJoinPortgroupEvent.class,
+    DvsPortLeavePortgroupEvent.class,
+    DvsPortBlockedEvent.class,
+    DvsPortUnblockedEvent.class,
+    DvsPortEnteredPassthruEvent.class,
+    DvsPortExitedPassthruEvent.class,
+    DvsDestroyedEvent.class,
+    DvsMergedEvent.class,
+    HostLocalPortCreatedEvent.class,
+    RollbackEvent.class,
+    RecoveryEvent.class,
+    DvsImportEvent.class,
+    DvsRestoreEvent.class,
+    VmVnicPoolReservationViolationRaiseEvent.class,
+    VmVnicPoolReservationViolationClearEvent.class
 })
 public class DvsEvent
     extends Event

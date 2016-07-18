@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostPatchManagerReason">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="obsoleted"/>
- *     &lt;enumeration value="missingPatch"/>
- *     &lt;enumeration value="missingLib"/>
- *     &lt;enumeration value="hasDependentPatch"/>
- *     &lt;enumeration value="conflictPatch"/>
- *     &lt;enumeration value="conflictLib"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostPatchManagerReason"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="obsoleted"/&gt;
+ *     &lt;enumeration value="missingPatch"/&gt;
+ *     &lt;enumeration value="missingLib"/&gt;
+ *     &lt;enumeration value="hasDependentPatch"/&gt;
+ *     &lt;enumeration value="conflictPatch"/&gt;
+ *     &lt;enumeration value="conflictLib"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

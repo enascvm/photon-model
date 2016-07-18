@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="EventFilterSpecRecursionOption">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="self"/>
- *     &lt;enumeration value="children"/>
- *     &lt;enumeration value="all"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="EventFilterSpecRecursionOption"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="self"/&gt;
+ *     &lt;enumeration value="children"/&gt;
+ *     &lt;enumeration value="all"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

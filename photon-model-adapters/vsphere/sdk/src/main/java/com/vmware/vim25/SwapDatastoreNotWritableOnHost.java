@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="SwapDatastoreNotWritableOnHost">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DatastoreNotWritableOnHost">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="SwapDatastoreNotWritableOnHost"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DatastoreNotWritableOnHost"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

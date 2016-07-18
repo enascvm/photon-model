@@ -12,16 +12,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="PerfSummaryType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="average"/>
- *     &lt;enumeration value="maximum"/>
- *     &lt;enumeration value="minimum"/>
- *     &lt;enumeration value="latest"/>
- *     &lt;enumeration value="summation"/>
- *     &lt;enumeration value="none"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="PerfSummaryType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="average"/&gt;
+ *     &lt;enumeration value="maximum"/&gt;
+ *     &lt;enumeration value="minimum"/&gt;
+ *     &lt;enumeration value="latest"/&gt;
+ *     &lt;enumeration value="summation"/&gt;
+ *     &lt;enumeration value="none"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

@@ -13,26 +13,26 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostPciDevice">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="id" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="classId" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="bus" type="{http://www.w3.org/2001/XMLSchema}byte"/>
- *         &lt;element name="slot" type="{http://www.w3.org/2001/XMLSchema}byte"/>
- *         &lt;element name="function" type="{http://www.w3.org/2001/XMLSchema}byte"/>
- *         &lt;element name="vendorId" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="subVendorId" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="vendorName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="deviceId" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="subDeviceId" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="parentBridge" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="deviceName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostPciDevice"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="id" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="classId" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="bus" type="{http://www.w3.org/2001/XMLSchema}byte"/&gt;
+ *         &lt;element name="slot" type="{http://www.w3.org/2001/XMLSchema}byte"/&gt;
+ *         &lt;element name="function" type="{http://www.w3.org/2001/XMLSchema}byte"/&gt;
+ *         &lt;element name="vendorId" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="subVendorId" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="vendorName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="deviceId" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="subDeviceId" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="parentBridge" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="deviceName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

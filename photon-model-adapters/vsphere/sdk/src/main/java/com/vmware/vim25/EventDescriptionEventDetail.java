@@ -13,23 +13,23 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="EventDescriptionEventDetail">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="category" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="formatOnDatacenter" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="formatOnComputeResource" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="formatOnHost" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="formatOnVm" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="fullFormat" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="longDescription" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="EventDescriptionEventDetail"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="category" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="formatOnDatacenter" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="formatOnComputeResource" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="formatOnHost" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="formatOnVm" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="fullFormat" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="longDescription" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

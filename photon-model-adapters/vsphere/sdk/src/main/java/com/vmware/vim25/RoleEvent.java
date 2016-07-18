@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="RoleEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}AuthorizationEvent">
- *       &lt;sequence>
- *         &lt;element name="role" type="{urn:vim25}RoleEventArgument"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="RoleEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}AuthorizationEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="role" type="{urn:vim25}RoleEventArgument"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,9 +32,9 @@ import javax.xml.bind.annotation.XmlType;
     "role"
 })
 @XmlSeeAlso({
+    RoleAddedEvent.class,
     RoleUpdatedEvent.class,
-    RoleRemovedEvent.class,
-    RoleAddedEvent.class
+    RoleRemovedEvent.class
 })
 public class RoleEvent
     extends AuthorizationEvent

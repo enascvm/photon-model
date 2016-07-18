@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="IscsiPortInfoPathStatus">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="notUsed"/>
- *     &lt;enumeration value="active"/>
- *     &lt;enumeration value="standBy"/>
- *     &lt;enumeration value="lastActive"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="IscsiPortInfoPathStatus"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="notUsed"/&gt;
+ *     &lt;enumeration value="active"/&gt;
+ *     &lt;enumeration value="standBy"/&gt;
+ *     &lt;enumeration value="lastActive"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

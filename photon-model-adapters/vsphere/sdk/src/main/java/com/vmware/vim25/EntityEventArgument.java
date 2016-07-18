@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="EntityEventArgument">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}EventArgument">
- *       &lt;sequence>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="EntityEventArgument"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}EventArgument"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,18 +32,18 @@ import javax.xml.bind.annotation.XmlType;
     "name"
 })
 @XmlSeeAlso({
-    DatastoreEventArgument.class,
-    NetworkEventArgument.class,
-    ScheduledTaskEventArgument.class,
     ManagedEntityEventArgument.class,
-    DvsEventArgument.class,
-    VmEventArgument.class,
-    AlarmEventArgument.class,
+    FolderEventArgument.class,
     DatacenterEventArgument.class,
-    HostEventArgument.class,
     ComputeResourceEventArgument.class,
     ResourcePoolEventArgument.class,
-    FolderEventArgument.class
+    HostEventArgument.class,
+    VmEventArgument.class,
+    DatastoreEventArgument.class,
+    NetworkEventArgument.class,
+    AlarmEventArgument.class,
+    ScheduledTaskEventArgument.class,
+    DvsEventArgument.class
 })
 public class EntityEventArgument
     extends EventArgument

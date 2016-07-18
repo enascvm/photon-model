@@ -12,21 +12,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VMwareIpfixConfig">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="collectorIpAddress" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="collectorPort" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="observationDomainId" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="activeFlowTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="idleFlowTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="samplingRate" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="internalFlowsOnly" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VMwareIpfixConfig"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="collectorIpAddress" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="collectorPort" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="observationDomainId" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="activeFlowTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="idleFlowTimeout" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="samplingRate" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="internalFlowsOnly" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -18,40 +18,40 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DVSConfigInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="numStandalonePorts" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="numPorts" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="maxPorts" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="uplinkPortPolicy" type="{urn:vim25}DVSUplinkPortPolicy"/>
- *         &lt;element name="uplinkPortgroup" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="defaultPortConfig" type="{urn:vim25}DVPortSetting"/>
- *         &lt;element name="host" type="{urn:vim25}DistributedVirtualSwitchHostMember" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="productInfo" type="{urn:vim25}DistributedVirtualSwitchProductSpec"/>
- *         &lt;element name="targetInfo" type="{urn:vim25}DistributedVirtualSwitchProductSpec" minOccurs="0"/>
- *         &lt;element name="extensionKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="vendorSpecificConfig" type="{urn:vim25}DistributedVirtualSwitchKeyedOpaqueBlob" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="policy" type="{urn:vim25}DVSPolicy" minOccurs="0"/>
- *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="configVersion" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="contact" type="{urn:vim25}DVSContactInfo"/>
- *         &lt;element name="switchIpAddress" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="createTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="networkResourceManagementEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="defaultProxySwitchMaxNumPorts" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="healthCheckConfig" type="{urn:vim25}DVSHealthCheckConfig" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="infrastructureTrafficResourceConfig" type="{urn:vim25}DvsHostInfrastructureTrafficResource" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="networkResourceControlVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="vmVnicNetworkResourcePool" type="{urn:vim25}DVSVmVnicNetworkResourcePool" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="pnicCapacityRatioForReservation" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DVSConfigInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="numStandalonePorts" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="numPorts" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="maxPorts" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="uplinkPortPolicy" type="{urn:vim25}DVSUplinkPortPolicy"/&gt;
+ *         &lt;element name="uplinkPortgroup" type="{urn:vim25}ManagedObjectReference" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="defaultPortConfig" type="{urn:vim25}DVPortSetting"/&gt;
+ *         &lt;element name="host" type="{urn:vim25}DistributedVirtualSwitchHostMember" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="productInfo" type="{urn:vim25}DistributedVirtualSwitchProductSpec"/&gt;
+ *         &lt;element name="targetInfo" type="{urn:vim25}DistributedVirtualSwitchProductSpec" minOccurs="0"/&gt;
+ *         &lt;element name="extensionKey" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="vendorSpecificConfig" type="{urn:vim25}DistributedVirtualSwitchKeyedOpaqueBlob" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="policy" type="{urn:vim25}DVSPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="configVersion" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="contact" type="{urn:vim25}DVSContactInfo"/&gt;
+ *         &lt;element name="switchIpAddress" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="createTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="networkResourceManagementEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="defaultProxySwitchMaxNumPorts" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="healthCheckConfig" type="{urn:vim25}DVSHealthCheckConfig" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="infrastructureTrafficResourceConfig" type="{urn:vim25}DvsHostInfrastructureTrafficResource" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="networkResourceControlVersion" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="vmVnicNetworkResourcePool" type="{urn:vim25}DVSVmVnicNetworkResourcePool" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="pnicCapacityRatioForReservation" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

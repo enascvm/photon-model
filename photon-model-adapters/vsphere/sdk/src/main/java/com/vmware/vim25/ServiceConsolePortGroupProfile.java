@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ServiceConsolePortGroupProfile">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}PortGroupProfile">
- *       &lt;sequence>
- *         &lt;element name="ipConfig" type="{urn:vim25}IpAddressProfile"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ServiceConsolePortGroupProfile"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}PortGroupProfile"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="ipConfig" type="{urn:vim25}IpAddressProfile"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

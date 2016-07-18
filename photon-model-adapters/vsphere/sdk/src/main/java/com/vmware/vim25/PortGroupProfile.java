@@ -14,19 +14,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="PortGroupProfile">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ApplyProfile">
- *       &lt;sequence>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="vlan" type="{urn:vim25}VlanProfile"/>
- *         &lt;element name="vswitch" type="{urn:vim25}VirtualSwitchSelectionProfile"/>
- *         &lt;element name="networkPolicy" type="{urn:vim25}NetworkPolicyProfile"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="PortGroupProfile"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ApplyProfile"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="name" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="vlan" type="{urn:vim25}VlanProfile"/&gt;
+ *         &lt;element name="vswitch" type="{urn:vim25}VirtualSwitchSelectionProfile"/&gt;
+ *         &lt;element name="networkPolicy" type="{urn:vim25}NetworkPolicyProfile"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -40,9 +40,9 @@ import javax.xml.bind.annotation.XmlType;
     "networkPolicy"
 })
 @XmlSeeAlso({
-    ServiceConsolePortGroupProfile.class,
+    VmPortGroupProfile.class,
     HostPortGroupProfile.class,
-    VmPortGroupProfile.class
+    ServiceConsolePortGroupProfile.class
 })
 public class PortGroupProfile
     extends ApplyProfile

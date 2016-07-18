@@ -15,32 +15,32 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfParseDescriptorResult">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="eula" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="network" type="{urn:vim25}OvfNetworkInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="ipAllocationScheme" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="ipProtocols" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="property" type="{urn:vim25}VAppPropertyInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="productInfo" type="{urn:vim25}VAppProductInfo" minOccurs="0"/>
- *         &lt;element name="annotation" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="approximateDownloadSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="approximateFlatDeploymentSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="approximateSparseDeploymentSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/>
- *         &lt;element name="defaultEntityName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="virtualApp" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="deploymentOption" type="{urn:vim25}OvfDeploymentOption" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="defaultDeploymentOption" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="entityName" type="{urn:vim25}KeyValue" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="annotatedOst" type="{urn:vim25}OvfConsumerOstNode" minOccurs="0"/>
- *         &lt;element name="error" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="warning" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfParseDescriptorResult"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="eula" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="network" type="{urn:vim25}OvfNetworkInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="ipAllocationScheme" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="ipProtocols" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="property" type="{urn:vim25}VAppPropertyInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="productInfo" type="{urn:vim25}VAppProductInfo" minOccurs="0"/&gt;
+ *         &lt;element name="annotation" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="approximateDownloadSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="approximateFlatDeploymentSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="approximateSparseDeploymentSize" type="{http://www.w3.org/2001/XMLSchema}long" minOccurs="0"/&gt;
+ *         &lt;element name="defaultEntityName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="virtualApp" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="deploymentOption" type="{urn:vim25}OvfDeploymentOption" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="defaultDeploymentOption" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="entityName" type="{urn:vim25}KeyValue" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="annotatedOst" type="{urn:vim25}OvfConsumerOstNode" minOccurs="0"/&gt;
+ *         &lt;element name="error" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="warning" type="{urn:vim25}LocalizedMethodFault" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

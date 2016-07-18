@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="NotEnoughLicenses">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}RuntimeFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="NotEnoughLicenses"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}RuntimeFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,20 +28,20 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "NotEnoughLicenses")
 @XmlSeeAlso({
-    IncorrectHostInformation.class,
-    HostInventoryFull.class,
-    VmLimitLicense.class,
-    LicenseExpired.class,
-    LicenseDowngradeDisallowed.class,
-    InUseFeatureManipulationDisallowed.class,
+    ExpiredFeatureLicense.class,
     FailToEnableSPBM.class,
+    HostInventoryFull.class,
+    InUseFeatureManipulationDisallowed.class,
+    IncorrectHostInformation.class,
+    InvalidEditionLicense.class,
     InventoryHasStandardAloneHosts.class,
+    LicenseDowngradeDisallowed.class,
+    LicenseExpired.class,
     LicenseKeyEntityMismatch.class,
     LicenseRestricted.class,
-    ExpiredFeatureLicense.class,
-    InvalidEditionLicense.class,
     LicenseSourceUnavailable.class,
     NoLicenseServerConfigured.class,
+    VmLimitLicense.class,
     VramLimitLicense.class
 })
 public class NotEnoughLicenses

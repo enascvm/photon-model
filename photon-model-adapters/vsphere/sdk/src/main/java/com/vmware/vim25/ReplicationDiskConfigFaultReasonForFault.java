@@ -12,17 +12,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ReplicationDiskConfigFaultReasonForFault">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="diskNotFound"/>
- *     &lt;enumeration value="diskTypeNotSupported"/>
- *     &lt;enumeration value="invalidDiskKey"/>
- *     &lt;enumeration value="invalidDiskReplicationId"/>
- *     &lt;enumeration value="duplicateDiskReplicationId"/>
- *     &lt;enumeration value="invalidPersistentFilePath"/>
- *     &lt;enumeration value="reconfigureDiskReplicationIdNotAllowed"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ReplicationDiskConfigFaultReasonForFault"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="diskNotFound"/&gt;
+ *     &lt;enumeration value="diskTypeNotSupported"/&gt;
+ *     &lt;enumeration value="invalidDiskKey"/&gt;
+ *     &lt;enumeration value="invalidDiskReplicationId"/&gt;
+ *     &lt;enumeration value="duplicateDiskReplicationId"/&gt;
+ *     &lt;enumeration value="invalidPersistentFilePath"/&gt;
+ *     &lt;enumeration value="reconfigureDiskReplicationIdNotAllowed"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

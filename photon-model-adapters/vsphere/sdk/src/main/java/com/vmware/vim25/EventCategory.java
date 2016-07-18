@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="EventCategory">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="info"/>
- *     &lt;enumeration value="warning"/>
- *     &lt;enumeration value="error"/>
- *     &lt;enumeration value="user"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="EventCategory"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="info"/&gt;
+ *     &lt;enumeration value="warning"/&gt;
+ *     &lt;enumeration value="error"/&gt;
+ *     &lt;enumeration value="user"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

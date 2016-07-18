@@ -13,18 +13,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostDiagnosticPartition">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="storageType" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="diagnosticType" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="slots" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="id" type="{urn:vim25}HostScsiDiskPartition"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostDiagnosticPartition"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="storageType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="diagnosticType" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="slots" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="id" type="{urn:vim25}HostScsiDiskPartition"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

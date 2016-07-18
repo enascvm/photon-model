@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VsanFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VsanFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,11 +28,11 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VsanFault")
 @XmlSeeAlso({
-    DuplicateVsanNetworkInterface.class,
     CannotChangeVsanClusterUuid.class,
-    CannotReconfigureVsanWhenHaEnabled.class,
-    CannotMoveVsanEnabledHost.class,
     CannotChangeVsanNodeUuid.class,
+    CannotReconfigureVsanWhenHaEnabled.class,
+    DuplicateVsanNetworkInterface.class,
+    CannotMoveVsanEnabledHost.class,
     VsanDiskFault.class
 })
 public class VsanFault

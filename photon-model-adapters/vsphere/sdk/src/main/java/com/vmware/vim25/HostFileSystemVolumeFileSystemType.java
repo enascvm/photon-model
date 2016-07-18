@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="HostFileSystemVolumeFileSystemType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="VMFS"/>
- *     &lt;enumeration value="NFS"/>
- *     &lt;enumeration value="NFS41"/>
- *     &lt;enumeration value="CIFS"/>
- *     &lt;enumeration value="vsan"/>
- *     &lt;enumeration value="VFFS"/>
- *     &lt;enumeration value="VVOL"/>
- *     &lt;enumeration value="OTHER"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="HostFileSystemVolumeFileSystemType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="VMFS"/&gt;
+ *     &lt;enumeration value="NFS"/&gt;
+ *     &lt;enumeration value="NFS41"/&gt;
+ *     &lt;enumeration value="CIFS"/&gt;
+ *     &lt;enumeration value="vsan"/&gt;
+ *     &lt;enumeration value="VFFS"/&gt;
+ *     &lt;enumeration value="VVOL"/&gt;
+ *     &lt;enumeration value="OTHER"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

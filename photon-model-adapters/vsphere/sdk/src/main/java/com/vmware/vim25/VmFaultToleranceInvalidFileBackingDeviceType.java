@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VmFaultToleranceInvalidFileBackingDeviceType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="virtualFloppy"/>
- *     &lt;enumeration value="virtualCdrom"/>
- *     &lt;enumeration value="virtualSerialPort"/>
- *     &lt;enumeration value="virtualParallelPort"/>
- *     &lt;enumeration value="virtualDisk"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VmFaultToleranceInvalidFileBackingDeviceType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="virtualFloppy"/&gt;
+ *     &lt;enumeration value="virtualCdrom"/&gt;
+ *     &lt;enumeration value="virtualSerialPort"/&gt;
+ *     &lt;enumeration value="virtualParallelPort"/&gt;
+ *     &lt;enumeration value="virtualDisk"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

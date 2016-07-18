@@ -12,19 +12,19 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="DistributedVirtualSwitchHostInfrastructureTrafficClass">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="management"/>
- *     &lt;enumeration value="faultTolerance"/>
- *     &lt;enumeration value="vmotion"/>
- *     &lt;enumeration value="virtualMachine"/>
- *     &lt;enumeration value="iSCSI"/>
- *     &lt;enumeration value="nfs"/>
- *     &lt;enumeration value="hbr"/>
- *     &lt;enumeration value="vsan"/>
- *     &lt;enumeration value="vdp"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="DistributedVirtualSwitchHostInfrastructureTrafficClass"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="management"/&gt;
+ *     &lt;enumeration value="faultTolerance"/&gt;
+ *     &lt;enumeration value="vmotion"/&gt;
+ *     &lt;enumeration value="virtualMachine"/&gt;
+ *     &lt;enumeration value="iSCSI"/&gt;
+ *     &lt;enumeration value="nfs"/&gt;
+ *     &lt;enumeration value="hbr"/&gt;
+ *     &lt;enumeration value="vsan"/&gt;
+ *     &lt;enumeration value="vdp"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

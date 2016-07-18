@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="DatacenterCreatedEvent">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DatacenterEvent">
- *       &lt;sequence>
- *         &lt;element name="parent" type="{urn:vim25}FolderEventArgument"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="DatacenterCreatedEvent"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DatacenterEvent"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="parent" type="{urn:vim25}FolderEventArgument"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

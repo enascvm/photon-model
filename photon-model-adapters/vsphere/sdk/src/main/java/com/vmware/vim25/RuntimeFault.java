@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="RuntimeFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}MethodFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="RuntimeFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}MethodFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,32 +28,32 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "RuntimeFault")
 @XmlSeeAlso({
-    ThirdPartyLicenseAssignmentFailed.class,
+    CannotDisableDrsOnClusterManagedByVDC.class,
+    CannotDisableDrsOnClustersWithVApps.class,
     ConflictingDatastoreFound.class,
-    VAppOperationInProgress.class,
     DatabaseError.class,
     DisallowedChangeByService.class,
-    LicenseAssignmentFailed.class,
-    NotImplemented.class,
     DisallowedOperationOnFailoverHost.class,
-    UnexpectedFault.class,
-    ManagedObjectNotFound.class,
-    NotSupported.class,
-    CannotDisableDrsOnClusterManagedByVDC.class,
-    MethodAlreadyDisabledFault.class,
-    SystemError.class,
-    MethodDisabled.class,
     FailToLockFaultToleranceVMs.class,
-    SecurityError.class,
-    RequestCanceled.class,
-    InvalidArgument.class,
-    NotEnoughLicenses.class,
-    CannotDisableDrsOnClustersWithVApps.class,
-    RestrictedByAdministrator.class,
-    InvalidRequest.class,
-    HostCommunication.class,
+    InvalidProfileReferenceHost.class,
+    LicenseAssignmentFailed.class,
+    MethodAlreadyDisabledFault.class,
+    MethodDisabled.class,
     OperationDisallowedOnHost.class,
-    InvalidProfileReferenceHost.class
+    RestrictedByAdministrator.class,
+    ThirdPartyLicenseAssignmentFailed.class,
+    VAppOperationInProgress.class,
+    HostCommunication.class,
+    InvalidArgument.class,
+    ManagedObjectNotFound.class,
+    InvalidRequest.class,
+    NotEnoughLicenses.class,
+    NotImplemented.class,
+    NotSupported.class,
+    RequestCanceled.class,
+    SecurityError.class,
+    SystemError.class,
+    UnexpectedFault.class
 })
 public class RuntimeFault
     extends MethodFault

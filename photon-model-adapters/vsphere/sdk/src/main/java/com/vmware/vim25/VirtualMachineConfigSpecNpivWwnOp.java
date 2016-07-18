@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualMachineConfigSpecNpivWwnOp">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="generate"/>
- *     &lt;enumeration value="set"/>
- *     &lt;enumeration value="remove"/>
- *     &lt;enumeration value="extend"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualMachineConfigSpecNpivWwnOp"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="generate"/&gt;
+ *     &lt;enumeration value="set"/&gt;
+ *     &lt;enumeration value="remove"/&gt;
+ *     &lt;enumeration value="extend"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

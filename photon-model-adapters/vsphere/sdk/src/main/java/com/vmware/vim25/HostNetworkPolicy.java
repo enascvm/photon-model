@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostNetworkPolicy">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="security" type="{urn:vim25}HostNetworkSecurityPolicy" minOccurs="0"/>
- *         &lt;element name="nicTeaming" type="{urn:vim25}HostNicTeamingPolicy" minOccurs="0"/>
- *         &lt;element name="offloadPolicy" type="{urn:vim25}HostNetOffloadCapabilities" minOccurs="0"/>
- *         &lt;element name="shapingPolicy" type="{urn:vim25}HostNetworkTrafficShapingPolicy" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostNetworkPolicy"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="security" type="{urn:vim25}HostNetworkSecurityPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="nicTeaming" type="{urn:vim25}HostNicTeamingPolicy" minOccurs="0"/&gt;
+ *         &lt;element name="offloadPolicy" type="{urn:vim25}HostNetOffloadCapabilities" minOccurs="0"/&gt;
+ *         &lt;element name="shapingPolicy" type="{urn:vim25}HostNetworkTrafficShapingPolicy" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

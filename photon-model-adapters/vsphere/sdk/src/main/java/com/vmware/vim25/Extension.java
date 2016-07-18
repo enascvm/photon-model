@@ -17,34 +17,34 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="Extension">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="description" type="{urn:vim25}Description"/>
- *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="company" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="subjectName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="server" type="{urn:vim25}ExtensionServerInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="client" type="{urn:vim25}ExtensionClientInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="taskList" type="{urn:vim25}ExtensionTaskTypeInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="eventList" type="{urn:vim25}ExtensionEventTypeInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="faultList" type="{urn:vim25}ExtensionFaultTypeInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="privilegeList" type="{urn:vim25}ExtensionPrivilegeInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="resourceList" type="{urn:vim25}ExtensionResourceInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="lastHeartbeatTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="healthInfo" type="{urn:vim25}ExtensionHealthInfo" minOccurs="0"/>
- *         &lt;element name="ovfConsumerInfo" type="{urn:vim25}ExtensionOvfConsumerInfo" minOccurs="0"/>
- *         &lt;element name="extendedProductInfo" type="{urn:vim25}ExtExtendedProductInfo" minOccurs="0"/>
- *         &lt;element name="managedEntityInfo" type="{urn:vim25}ExtManagedEntityInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="shownInSolutionManager" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *         &lt;element name="solutionManagerInfo" type="{urn:vim25}ExtSolutionManagerInfo" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="Extension"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="description" type="{urn:vim25}Description"/&gt;
+ *         &lt;element name="key" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="company" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="type" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="subjectName" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="server" type="{urn:vim25}ExtensionServerInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="client" type="{urn:vim25}ExtensionClientInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="taskList" type="{urn:vim25}ExtensionTaskTypeInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="eventList" type="{urn:vim25}ExtensionEventTypeInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="faultList" type="{urn:vim25}ExtensionFaultTypeInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="privilegeList" type="{urn:vim25}ExtensionPrivilegeInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="resourceList" type="{urn:vim25}ExtensionResourceInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="lastHeartbeatTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="healthInfo" type="{urn:vim25}ExtensionHealthInfo" minOccurs="0"/&gt;
+ *         &lt;element name="ovfConsumerInfo" type="{urn:vim25}ExtensionOvfConsumerInfo" minOccurs="0"/&gt;
+ *         &lt;element name="extendedProductInfo" type="{urn:vim25}ExtExtendedProductInfo" minOccurs="0"/&gt;
+ *         &lt;element name="managedEntityInfo" type="{urn:vim25}ExtManagedEntityInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="shownInSolutionManager" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *         &lt;element name="solutionManagerInfo" type="{urn:vim25}ExtSolutionManagerInfo" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

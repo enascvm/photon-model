@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="CustomizationFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="CustomizationFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,18 +28,18 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "CustomizationFault")
 @XmlSeeAlso({
-    UnexpectedCustomizationFault.class,
-    VolumeEditorError.class,
-    MissingLinuxCustResources.class,
-    IpHostnameGeneratorError.class,
-    NicSettingMismatch.class,
-    MountError.class,
-    CustomizationPending.class,
-    NoDisksToCustomize.class,
-    LinuxVolumeNotClean.class,
     CannotDecryptPasswords.class,
+    CustomizationPending.class,
+    IpHostnameGeneratorError.class,
+    LinuxVolumeNotClean.class,
+    MissingLinuxCustResources.class,
     MissingWindowsCustResources.class,
-    UncustomizableGuest.class
+    MountError.class,
+    NicSettingMismatch.class,
+    NoDisksToCustomize.class,
+    UncustomizableGuest.class,
+    UnexpectedCustomizationFault.class,
+    VolumeEditorError.class
 })
 public class CustomizationFault
     extends VimFault

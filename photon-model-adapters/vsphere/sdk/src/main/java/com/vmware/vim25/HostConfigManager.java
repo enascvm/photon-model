@@ -12,50 +12,50 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostConfigManager">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="cpuScheduler" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="datastoreSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="memoryManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="storageSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="networkSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="vmotionSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="virtualNicManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="serviceSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="firewallSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="advancedOption" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="diagnosticSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="autoStartManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="snmpSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="dateTimeSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="patchManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="imageConfigManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="bootDeviceSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="firmwareSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="healthStatusSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="pciPassthruSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="licenseManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="kernelModuleSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="authenticationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="powerSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="cacheConfigurationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="esxAgentHostManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="iscsiManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="vFlashManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="vsanSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="messageBusProxy" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="userDirectory" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="accountManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="hostAccessManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="graphicsManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="vsanInternalSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="certificateManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostConfigManager"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="cpuScheduler" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="datastoreSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="memoryManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="storageSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="networkSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="vmotionSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="virtualNicManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="serviceSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="firewallSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="advancedOption" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="diagnosticSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="autoStartManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="snmpSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="dateTimeSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="patchManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="imageConfigManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="bootDeviceSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="firmwareSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="healthStatusSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="pciPassthruSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="licenseManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="kernelModuleSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="authenticationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="powerSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="cacheConfigurationManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="esxAgentHostManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="iscsiManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="vFlashManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="vsanSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="messageBusProxy" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="userDirectory" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="accountManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="hostAccessManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="graphicsManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="vsanInternalSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="certificateManager" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

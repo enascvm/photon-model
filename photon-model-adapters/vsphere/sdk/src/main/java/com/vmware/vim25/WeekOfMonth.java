@@ -12,15 +12,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="WeekOfMonth">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="first"/>
- *     &lt;enumeration value="second"/>
- *     &lt;enumeration value="third"/>
- *     &lt;enumeration value="fourth"/>
- *     &lt;enumeration value="last"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="WeekOfMonth"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="first"/&gt;
+ *     &lt;enumeration value="second"/&gt;
+ *     &lt;enumeration value="third"/&gt;
+ *     &lt;enumeration value="fourth"/&gt;
+ *     &lt;enumeration value="last"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

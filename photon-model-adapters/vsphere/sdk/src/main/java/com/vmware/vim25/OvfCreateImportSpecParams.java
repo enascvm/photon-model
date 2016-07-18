@@ -15,23 +15,23 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="OvfCreateImportSpecParams">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}OvfManagerCommonParams">
- *       &lt;sequence>
- *         &lt;element name="entityName" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="hostSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="networkMapping" type="{urn:vim25}OvfNetworkMapping" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="ipAllocationPolicy" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="ipProtocol" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="propertyMapping" type="{urn:vim25}KeyValue" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="resourceMapping" type="{urn:vim25}OvfResourceMap" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="diskProvisioning" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/>
- *         &lt;element name="instantiationOst" type="{urn:vim25}OvfConsumerOstNode" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="OvfCreateImportSpecParams"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}OvfManagerCommonParams"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="entityName" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="hostSystem" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="networkMapping" type="{urn:vim25}OvfNetworkMapping" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="ipAllocationPolicy" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="ipProtocol" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="propertyMapping" type="{urn:vim25}KeyValue" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="resourceMapping" type="{urn:vim25}OvfResourceMap" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="diskProvisioning" type="{http://www.w3.org/2001/XMLSchema}string" minOccurs="0"/&gt;
+ *         &lt;element name="instantiationOst" type="{urn:vim25}OvfConsumerOstNode" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

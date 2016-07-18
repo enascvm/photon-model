@@ -14,17 +14,17 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="NetIpConfigInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="ipAddress" type="{urn:vim25}NetIpConfigInfoIpAddress" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="dhcp" type="{urn:vim25}NetDhcpConfigInfo" minOccurs="0"/>
- *         &lt;element name="autoConfigurationEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="NetIpConfigInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="ipAddress" type="{urn:vim25}NetIpConfigInfoIpAddress" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="dhcp" type="{urn:vim25}NetDhcpConfigInfo" minOccurs="0"/&gt;
+ *         &lt;element name="autoConfigurationEnabled" type="{http://www.w3.org/2001/XMLSchema}boolean" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="CustomizationNetBIOSMode">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="enableNetBIOSViaDhcp"/>
- *     &lt;enumeration value="enableNetBIOS"/>
- *     &lt;enumeration value="disableNetBIOS"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="CustomizationNetBIOSMode"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="enableNetBIOSViaDhcp"/&gt;
+ *     &lt;enumeration value="enableNetBIOS"/&gt;
+ *     &lt;enumeration value="disableNetBIOS"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

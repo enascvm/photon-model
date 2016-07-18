@@ -13,16 +13,16 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="CustomizationFixedIpV6">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}CustomizationIpV6Generator">
- *       &lt;sequence>
- *         &lt;element name="ipAddress" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="subnetMask" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="CustomizationFixedIpV6"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}CustomizationIpV6Generator"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="ipAddress" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="subnetMask" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

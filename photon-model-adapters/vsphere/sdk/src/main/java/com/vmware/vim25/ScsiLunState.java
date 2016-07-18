@@ -12,18 +12,18 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="ScsiLunState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="unknownState"/>
- *     &lt;enumeration value="ok"/>
- *     &lt;enumeration value="error"/>
- *     &lt;enumeration value="off"/>
- *     &lt;enumeration value="quiesced"/>
- *     &lt;enumeration value="degraded"/>
- *     &lt;enumeration value="lostCommunication"/>
- *     &lt;enumeration value="timeout"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="ScsiLunState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="unknownState"/&gt;
+ *     &lt;enumeration value="ok"/&gt;
+ *     &lt;enumeration value="error"/&gt;
+ *     &lt;enumeration value="off"/&gt;
+ *     &lt;enumeration value="quiesced"/&gt;
+ *     &lt;enumeration value="degraded"/&gt;
+ *     &lt;enumeration value="lostCommunication"/&gt;
+ *     &lt;enumeration value="timeout"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

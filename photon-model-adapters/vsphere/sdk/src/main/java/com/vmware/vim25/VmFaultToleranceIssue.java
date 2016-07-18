@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VmFaultToleranceIssue">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VimFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VmFaultToleranceIssue"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VimFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,26 +28,26 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "VmFaultToleranceIssue")
 @XmlSeeAlso({
-    VmFaultToleranceConfigIssueWrapper.class,
-    VmFaultToleranceInvalidFileBacking.class,
-    NoHostSuitableForFtSecondary.class,
-    InvalidOperationOnSecondaryVm.class,
+    CannotChangeDrsBehaviorForFtSecondary.class,
     CannotChangeHaSettingsForFtSecondary.class,
-    PowerOnFtSecondaryFailed.class,
-    SecondaryVmAlreadyEnabled.class,
-    SecondaryVmNotRegistered.class,
-    SecondaryVmAlreadyDisabled.class,
-    FtIssuesOnHost.class,
     CannotComputeFTCompatibleHosts.class,
     FaultToleranceNotLicensed.class,
-    VmFaultToleranceConfigIssue.class,
-    CannotChangeDrsBehaviorForFtSecondary.class,
-    VmFaultToleranceOpIssuesList.class,
-    HostIncompatibleForFaultTolerance.class,
     FaultTolerancePrimaryPowerOnNotAttempted.class,
-    SecondaryVmAlreadyRegistered.class,
+    FtIssuesOnHost.class,
+    HostIncompatibleForFaultTolerance.class,
     IncompatibleHostForFtSecondary.class,
-    NotSupportedDeviceForFT.class
+    InvalidOperationOnSecondaryVm.class,
+    NoHostSuitableForFtSecondary.class,
+    NotSupportedDeviceForFT.class,
+    PowerOnFtSecondaryFailed.class,
+    SecondaryVmAlreadyDisabled.class,
+    SecondaryVmAlreadyEnabled.class,
+    SecondaryVmAlreadyRegistered.class,
+    SecondaryVmNotRegistered.class,
+    VmFaultToleranceConfigIssue.class,
+    VmFaultToleranceConfigIssueWrapper.class,
+    VmFaultToleranceInvalidFileBacking.class,
+    VmFaultToleranceOpIssuesList.class
 })
 public class VmFaultToleranceIssue
     extends VimFault

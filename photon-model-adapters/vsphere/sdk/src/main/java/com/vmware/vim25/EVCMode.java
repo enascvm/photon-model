@@ -15,21 +15,21 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="EVCMode">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ElementDescription">
- *       &lt;sequence>
- *         &lt;element name="guaranteedCPUFeatures" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="featureCapability" type="{urn:vim25}HostFeatureCapability" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="featureMask" type="{urn:vim25}HostFeatureMask" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="featureRequirement" type="{urn:vim25}VirtualMachineFeatureRequirement" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vendor" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="track" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="vendorTier" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="EVCMode"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ElementDescription"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="guaranteedCPUFeatures" type="{urn:vim25}HostCpuIdInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="featureCapability" type="{urn:vim25}HostFeatureCapability" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="featureMask" type="{urn:vim25}HostFeatureMask" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="featureRequirement" type="{urn:vim25}VirtualMachineFeatureRequirement" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vendor" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="track" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="vendorTier" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

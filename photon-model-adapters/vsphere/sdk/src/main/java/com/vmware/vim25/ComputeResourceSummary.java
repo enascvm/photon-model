@@ -4,6 +4,7 @@ package com.vmware.vim25;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlSchemaType;
 import javax.xml.bind.annotation.XmlSeeAlso;
 import javax.xml.bind.annotation.XmlType;
 
@@ -14,23 +15,23 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ComputeResourceSummary">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="totalCpu" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="totalMemory" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="numCpuCores" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="numCpuThreads" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="effectiveCpu" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="effectiveMemory" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="numHosts" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="numEffectiveHosts" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="overallStatus" type="{urn:vim25}ManagedEntityStatus"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ComputeResourceSummary"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="totalCpu" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="totalMemory" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="numCpuCores" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="numCpuThreads" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="effectiveCpu" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="effectiveMemory" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="numHosts" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="numEffectiveHosts" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="overallStatus" type="{urn:vim25}ManagedEntityStatus"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -63,6 +64,7 @@ public class ComputeResourceSummary
     protected int numHosts;
     protected int numEffectiveHosts;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected ManagedEntityStatus overallStatus;
 
     /**

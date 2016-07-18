@@ -15,25 +15,25 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualMachineConfigOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="guestOSDescriptor" type="{urn:vim25}GuestOsDescriptor" maxOccurs="unbounded"/>
- *         &lt;element name="guestOSDefaultIndex" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="hardwareOptions" type="{urn:vim25}VirtualHardwareOption"/>
- *         &lt;element name="capabilities" type="{urn:vim25}VirtualMachineCapability"/>
- *         &lt;element name="datastore" type="{urn:vim25}DatastoreOption"/>
- *         &lt;element name="defaultDevice" type="{urn:vim25}VirtualDevice" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="supportedMonitorType" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/>
- *         &lt;element name="supportedOvfEnvironmentTransport" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="supportedOvfInstallTransport" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualMachineConfigOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="version" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="description" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="guestOSDescriptor" type="{urn:vim25}GuestOsDescriptor" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="guestOSDefaultIndex" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="hardwareOptions" type="{urn:vim25}VirtualHardwareOption"/&gt;
+ *         &lt;element name="capabilities" type="{urn:vim25}VirtualMachineCapability"/&gt;
+ *         &lt;element name="datastore" type="{urn:vim25}DatastoreOption"/&gt;
+ *         &lt;element name="defaultDevice" type="{urn:vim25}VirtualDevice" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="supportedMonitorType" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded"/&gt;
+ *         &lt;element name="supportedOvfEnvironmentTransport" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="supportedOvfInstallTransport" type="{http://www.w3.org/2001/XMLSchema}string" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

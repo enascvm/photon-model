@@ -13,15 +13,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="InsufficientHostCapacityFault">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}InsufficientResourcesFault">
- *       &lt;sequence>
- *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="InsufficientHostCapacityFault"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}InsufficientResourcesFault"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="host" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -31,9 +31,9 @@ import javax.xml.bind.annotation.XmlType;
     "host"
 })
 @XmlSeeAlso({
-    InsufficientPerCpuCapacity.class,
+    InsufficientHostCpuCapacityFault.class,
     InsufficientHostMemoryCapacityFault.class,
-    InsufficientHostCpuCapacityFault.class
+    InsufficientPerCpuCapacity.class
 })
 public class InsufficientHostCapacityFault
     extends InsufficientResourcesFault

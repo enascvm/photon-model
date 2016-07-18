@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="NetIpStackInfoEntryType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="other"/>
- *     &lt;enumeration value="invalid"/>
- *     &lt;enumeration value="dynamic"/>
- *     &lt;enumeration value="manual"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="NetIpStackInfoEntryType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="other"/&gt;
+ *     &lt;enumeration value="invalid"/&gt;
+ *     &lt;enumeration value="dynamic"/&gt;
+ *     &lt;enumeration value="manual"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

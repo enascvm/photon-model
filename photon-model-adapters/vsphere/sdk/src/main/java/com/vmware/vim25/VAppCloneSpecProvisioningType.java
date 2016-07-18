@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VAppCloneSpecProvisioningType">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="sameAsSource"/>
- *     &lt;enumeration value="thin"/>
- *     &lt;enumeration value="thick"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VAppCloneSpecProvisioningType"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="sameAsSource"/&gt;
+ *     &lt;enumeration value="thin"/&gt;
+ *     &lt;enumeration value="thick"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

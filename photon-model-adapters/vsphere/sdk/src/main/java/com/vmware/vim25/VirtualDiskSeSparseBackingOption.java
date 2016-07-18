@@ -15,20 +15,20 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VirtualDiskSeSparseBackingOption">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}VirtualDeviceFileBackingOption">
- *       &lt;sequence>
- *         &lt;element name="diskMode" type="{urn:vim25}ChoiceOption"/>
- *         &lt;element name="writeThrough" type="{urn:vim25}BoolOption"/>
- *         &lt;element name="growable" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="hotGrowable" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}boolean"/>
- *         &lt;element name="deltaDiskFormatsSupported" type="{urn:vim25}VirtualDiskDeltaDiskFormatsSupported" maxOccurs="unbounded"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VirtualDiskSeSparseBackingOption"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}VirtualDeviceFileBackingOption"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="diskMode" type="{urn:vim25}ChoiceOption"/&gt;
+ *         &lt;element name="writeThrough" type="{urn:vim25}BoolOption"/&gt;
+ *         &lt;element name="growable" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="hotGrowable" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}boolean"/&gt;
+ *         &lt;element name="deltaDiskFormatsSupported" type="{urn:vim25}VirtualDiskDeltaDiskFormatsSupported" maxOccurs="unbounded"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

@@ -15,26 +15,26 @@ import javax.xml.datatype.XMLGregorianCalendar;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="ScheduledTaskInfo">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}ScheduledTaskSpec">
- *       &lt;sequence>
- *         &lt;element name="scheduledTask" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="entity" type="{urn:vim25}ManagedObjectReference"/>
- *         &lt;element name="lastModifiedTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/>
- *         &lt;element name="lastModifiedUser" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="nextRunTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/>
- *         &lt;element name="prevRunTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/>
- *         &lt;element name="state" type="{urn:vim25}TaskInfoState"/>
- *         &lt;element name="error" type="{urn:vim25}LocalizedMethodFault" minOccurs="0"/>
- *         &lt;element name="result" type="{http://www.w3.org/2001/XMLSchema}anyType" minOccurs="0"/>
- *         &lt;element name="progress" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/>
- *         &lt;element name="activeTask" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *         &lt;element name="taskObject" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="ScheduledTaskInfo"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}ScheduledTaskSpec"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="scheduledTask" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="entity" type="{urn:vim25}ManagedObjectReference"/&gt;
+ *         &lt;element name="lastModifiedTime" type="{http://www.w3.org/2001/XMLSchema}dateTime"/&gt;
+ *         &lt;element name="lastModifiedUser" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="nextRunTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
+ *         &lt;element name="prevRunTime" type="{http://www.w3.org/2001/XMLSchema}dateTime" minOccurs="0"/&gt;
+ *         &lt;element name="state" type="{urn:vim25}TaskInfoState"/&gt;
+ *         &lt;element name="error" type="{urn:vim25}LocalizedMethodFault" minOccurs="0"/&gt;
+ *         &lt;element name="result" type="{http://www.w3.org/2001/XMLSchema}anyType" minOccurs="0"/&gt;
+ *         &lt;element name="progress" type="{http://www.w3.org/2001/XMLSchema}int" minOccurs="0"/&gt;
+ *         &lt;element name="activeTask" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *         &lt;element name="taskObject" type="{urn:vim25}ManagedObjectReference" minOccurs="0"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -72,6 +72,7 @@ public class ScheduledTaskInfo
     @XmlSchemaType(name = "dateTime")
     protected XMLGregorianCalendar prevRunTime;
     @XmlElement(required = true)
+    @XmlSchemaType(name = "string")
     protected TaskInfoState state;
     protected LocalizedMethodFault error;
     protected Object result;

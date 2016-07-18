@@ -15,26 +15,26 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="HostHardwareSummary">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="vendor" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="model" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="otherIdentifyingInfo" type="{urn:vim25}HostSystemIdentificationInfo" maxOccurs="unbounded" minOccurs="0"/>
- *         &lt;element name="memorySize" type="{http://www.w3.org/2001/XMLSchema}long"/>
- *         &lt;element name="cpuModel" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *         &lt;element name="cpuMhz" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="numCpuPkgs" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="numCpuCores" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="numCpuThreads" type="{http://www.w3.org/2001/XMLSchema}short"/>
- *         &lt;element name="numNics" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *         &lt;element name="numHBAs" type="{http://www.w3.org/2001/XMLSchema}int"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="HostHardwareSummary"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="vendor" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="model" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="uuid" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="otherIdentifyingInfo" type="{urn:vim25}HostSystemIdentificationInfo" maxOccurs="unbounded" minOccurs="0"/&gt;
+ *         &lt;element name="memorySize" type="{http://www.w3.org/2001/XMLSchema}long"/&gt;
+ *         &lt;element name="cpuModel" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *         &lt;element name="cpuMhz" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="numCpuPkgs" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="numCpuCores" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="numCpuThreads" type="{http://www.w3.org/2001/XMLSchema}short"/&gt;
+ *         &lt;element name="numNics" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *         &lt;element name="numHBAs" type="{http://www.w3.org/2001/XMLSchema}int"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 

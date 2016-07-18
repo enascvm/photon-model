@@ -12,13 +12,13 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="AutoStartWaitHeartbeatSetting">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="yes"/>
- *     &lt;enumeration value="no"/>
- *     &lt;enumeration value="systemDefault"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="AutoStartWaitHeartbeatSetting"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="yes"/&gt;
+ *     &lt;enumeration value="no"/&gt;
+ *     &lt;enumeration value="systemDefault"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */

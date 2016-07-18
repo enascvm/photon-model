@@ -14,15 +14,15 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="VsanUpgradeSystemPreflightCheckIssue">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}DynamicData">
- *       &lt;sequence>
- *         &lt;element name="msg" type="{http://www.w3.org/2001/XMLSchema}string"/>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="VsanUpgradeSystemPreflightCheckIssue"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}DynamicData"&gt;
+ *       &lt;sequence&gt;
+ *         &lt;element name="msg" type="{http://www.w3.org/2001/XMLSchema}string"/&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -32,15 +32,15 @@ import javax.xml.bind.annotation.XmlType;
     "msg"
 })
 @XmlSeeAlso({
-    VsanUpgradeSystemNotEnoughFreeCapacityIssue.class,
     VsanUpgradeSystemHostsDisconnectedIssue.class,
-    VsanUpgradeSystemV2ObjectsPresentDuringDowngradeIssue.class,
     VsanUpgradeSystemMissingHostsInClusterIssue.class,
+    VsanUpgradeSystemRogueHostsInClusterIssue.class,
     VsanUpgradeSystemWrongEsxVersionIssue.class,
-    VsanUpgradeSystemAPIBrokenIssue.class,
     VsanUpgradeSystemAutoClaimEnabledOnHostsIssue.class,
-    VsanUpgradeSystemNetworkPartitionIssue.class,
-    VsanUpgradeSystemRogueHostsInClusterIssue.class
+    VsanUpgradeSystemAPIBrokenIssue.class,
+    VsanUpgradeSystemV2ObjectsPresentDuringDowngradeIssue.class,
+    VsanUpgradeSystemNotEnoughFreeCapacityIssue.class,
+    VsanUpgradeSystemNetworkPartitionIssue.class
 })
 public class VsanUpgradeSystemPreflightCheckIssue
     extends DynamicData

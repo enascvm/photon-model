@@ -13,14 +13,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * 
  * <pre>
- * &lt;complexType name="SecurityError">
- *   &lt;complexContent>
- *     &lt;extension base="{urn:vim25}RuntimeFault">
- *       &lt;sequence>
- *       &lt;/sequence>
- *     &lt;/extension>
- *   &lt;/complexContent>
- * &lt;/complexType>
+ * &lt;complexType name="SecurityError"&gt;
+ *   &lt;complexContent&gt;
+ *     &lt;extension base="{urn:vim25}RuntimeFault"&gt;
+ *       &lt;sequence&gt;
+ *       &lt;/sequence&gt;
+ *     &lt;/extension&gt;
+ *   &lt;/complexContent&gt;
+ * &lt;/complexType&gt;
  * </pre>
  * 
  * 
@@ -28,8 +28,8 @@ import javax.xml.bind.annotation.XmlType;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlType(name = "SecurityError")
 @XmlSeeAlso({
-    RestrictedVersion.class,
-    NoPermission.class
+    NoPermission.class,
+    RestrictedVersion.class
 })
 public class SecurityError
     extends RuntimeFault

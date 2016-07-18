@@ -12,14 +12,14 @@ import javax.xml.bind.annotation.XmlType;
  * <p>The following schema fragment specifies the expected content contained within this class.
  * <p>
  * <pre>
- * &lt;simpleType name="VirtualAppVAppState">
- *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string">
- *     &lt;enumeration value="started"/>
- *     &lt;enumeration value="stopped"/>
- *     &lt;enumeration value="starting"/>
- *     &lt;enumeration value="stopping"/>
- *   &lt;/restriction>
- * &lt;/simpleType>
+ * &lt;simpleType name="VirtualAppVAppState"&gt;
+ *   &lt;restriction base="{http://www.w3.org/2001/XMLSchema}string"&gt;
+ *     &lt;enumeration value="started"/&gt;
+ *     &lt;enumeration value="stopped"/&gt;
+ *     &lt;enumeration value="starting"/&gt;
+ *     &lt;enumeration value="stopping"/&gt;
+ *   &lt;/restriction&gt;
+ * &lt;/simpleType&gt;
  * </pre>
  * 
  */
