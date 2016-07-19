@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.util.List;
@@ -112,11 +113,11 @@ public class TestAWSUtils {
         //create something to name
         AWSNetworkService svc = new AWSNetworkService();
         String vpcID = svc.createVPC("10.20.0.0/16",client);
-        AWSUtils.setResourceName(vpcID, TEST_NAME, client);
+        AWSUtils.tagResourcesWithName(client, TEST_NAME, vpcID);
         List<TagDescription> tags = AWSUtils.getResourceTags(vpcID,client);
 
         for (TagDescription tagDesc:tags) {
-            if (tagDesc.getKey().equalsIgnoreCase(AWSUtils.AWS_TAG_NAME)) {
+            if (tagDesc.getKey().equalsIgnoreCase(AWS_TAG_NAME)) {
                 assertTrue(tagDesc.getValue().equalsIgnoreCase(TEST_NAME));
                 tagFound = true;
                 break;

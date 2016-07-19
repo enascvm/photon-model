@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_PENDING;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_RUNNING;
@@ -23,8 +24,8 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -66,7 +67,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  * AWS utils.
  */
 public class AWSUtils {
-    public static final String AWS_TAG_NAME = "Name";
     public static final String AWS_FILTER_RESOURCE_ID = "resource-id";
     public static final String AWS_FILTER_VPC_ID = "vpc-id";
     public static final String NO_VALUE = "no-value";
@@ -135,55 +135,28 @@ public class AWSUtils {
         return client;
     }
 
-    /*
-     * Synchronous call to AWS to create tags for the specified resources The list of tags will be
-     * applied to all provided resources
+    /**
+     * Synchronous Tagging of one or many AWS resources with the provided tags.
      */
-    public static void createTags(Collection<String> resources,
-            Collection<Tag> tags, AmazonEC2AsyncClient client) {
+    public static void tagResources(AmazonEC2AsyncClient client,
+            Collection<Tag> tags, String... resourceIds) {
         if (isAwsClientMock()) {
             return;
         }
 
         CreateTagsRequest req = new CreateTagsRequest()
-                .withResources(resources).withTags(tags);
+                .withResources(resourceIds).withTags(tags);
 
         client.createTags(req);
     }
 
-    /*
-     * Create tags for a resource based on the passed map of name / value pairs
+    /**
+     * Synchronous Tagging of one or many AWS resources with the provided name.
      */
-    public static void createTags(String resourceID, Map<String, String> tags,
-            AmazonEC2AsyncClient client) {
-        if (isAwsClientMock()) {
-            return;
-        }
-
-        ArrayList<Tag> awsTags = new ArrayList<>();
-        if (tags != null) {
-            tags.forEach((k, v) -> {
-                Tag t = new Tag().withKey(k).withValue(v);
-                awsTags.add(t);
-            });
-        }
-        ArrayList<String> resource = new ArrayList<>();
-        resource.add(resourceID);
-        createTags(resource, awsTags, client);
-    }
-
-    /*
-     * An AWS Resource name is actually a Tag that must be applied to a resource. This helper method
-     * will take an AWS resourceID and Name and apply that as a tag
-     */
-    public static void setResourceName(String resourceID, String name,
-            AmazonEC2AsyncClient client) {
-        Tag awsName = new Tag().withKey(AWS_TAG_NAME).withValue(name);
-        ArrayList<Tag> tags = new ArrayList<>();
-        tags.add(awsName);
-        ArrayList<String> resource = new ArrayList<>();
-        resource.add(resourceID);
-        createTags(resource, tags, client);
+    public static void tagResourcesWithName(AmazonEC2AsyncClient client, String name,
+            String... resourceIds) {
+        Tag awsNameTag = new Tag().withKey(AWS_TAG_NAME).withValue(name);
+        tagResources(client, Collections.singletonList(awsNameTag), resourceIds);
     }
 
     /*

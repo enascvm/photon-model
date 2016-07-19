@@ -13,7 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAGS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
@@ -30,6 +32,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.Tag;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
@@ -188,6 +191,11 @@ public class AWSEnumerationUtils {
         computeState.powerState = AWSUtils.mapToPowerState(instance.getState());
         computeState.customProperties = new HashMap<String, String>();
         if (!instance.getTags().isEmpty()) {
+            // start with custom tag mapping(s)
+            computeState.customProperties.put(CUSTOM_DISPLAY_NAME,
+                    getTagValue(instance, AWS_TAG_NAME));
+
+            // map all aws tags under the AWS_TAGS placeholder
             computeState.customProperties.put(AWS_TAGS,
                     Utils.toJson(new AWSTags(instance.getTags())));
         }
@@ -215,5 +223,18 @@ public class AWSEnumerationUtils {
      */
     public static String getIdFromDocumentLink(String documentLink) {
         return documentLink.substring(documentLink.lastIndexOf(URI_PATH_CHAR) + 1);
+    }
+
+
+    /**
+     * Get the Tag value corresponding to the provided key.
+     */
+    private static String getTagValue(Instance instance, String key) {
+        for (Tag tag : instance.getTags()) {
+            if (tag.getKey().equals(key)) {
+                return tag.getValue();
+            }
+        }
+        return null;
     }
 }

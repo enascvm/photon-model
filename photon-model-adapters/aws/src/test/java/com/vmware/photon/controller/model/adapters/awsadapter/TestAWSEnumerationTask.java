@@ -17,16 +17,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAGS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryResultLimit;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.cleanupEC2ClientResources;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.setResourceName;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
@@ -54,8 +55,6 @@ import java.util.Map;
 import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.ec2.model.Tag;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -76,6 +75,7 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -89,50 +89,47 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  *
  */
 public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
-    public static final int ZERO = 0;
-    public static final int count1 = 1;
-    public static final int count2 = 2;
-    public static final int count3 = 3;
-    public static final int count4 = 4;
-    public static final int count5 = 5;
-    public static final int count6 = 6;
-    public static final int count7 = 7;
-    public static final int count8 = 8;
-    public int instanceCountAtScale = 10;
-    public ComputeService.ComputeState vmState;
-    public String computeDescriptionLink;
-    public ResourcePoolState outPool;
-    public ComputeService.ComputeState outComputeHost;
-    public AuthCredentialsServiceState creds;
-    public static final String EC2_IMAGEID = "ami-0d4cfd66";
-    public static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
-    public static final String DEFAULT_SECURITY_GROUP_NAME = "cell-manager-security-group";
-    public static final String VM_NAME = "aws-test-vm";
-    public static final String VM_UPDATED_NAME = "aws-test-vm-updated";
-    public static List<String> instancesToCleanUp = new ArrayList<String>();
-    public static List<String> instanceIds = new ArrayList<String>();
-    public List<String> instanceIdsToDeleteFirstTime = new ArrayList<String>();
-    public List<String> instanceIdsToDeleteSecondTime = new ArrayList<String>();
-    public AmazonEC2AsyncClient client;
-    public static List<Boolean> provisioningFlags;
-    public static List<Boolean> deletionFlags = new ArrayList<Boolean>();
-    public boolean isMock = true;
-    public boolean isAwsClientMock = false;
-    public String awsMockEndpointReference = null;
-    public BaseLineState baseLineState;
-    public static final String TEST_CASE_INITIAL = "Initial Run ";
-    public static final String TEST_CASE_ADDITIONAL_VM = "Additional VM ";
-    public static final String TEST_CASE_PURE_UPDATE = "Only Update to existing VM.";
-    public static final String TEST_CASE_DELETE_VM = "Delete VM ";
-    public static final String TEST_CASE_DELETE_VMS = "Delete multiple VMs ";
-    public static final String TEST_CASE_MOCK_MODE = "Mock Mode ";
-    public static final int DEFAULT_TEST_PAGE_SIZE = 5;
+    private static final int ZERO = 0;
+    private static final int count1 = 1;
+    private static final int count2 = 2;
+    private static final int count3 = 3;
+    private static final int count4 = 4;
+    private static final int count6 = 6;
+    private static final int count7 = 7;
+    private static final int count8 = 8;
 
-    public String accessKey = "accessKey";
-    public String secretKey = "secretKey";
-    public static List<String> testComputeDescriptions = new ArrayList<String>(
+    private static final String TEST_CASE_INITIAL = "Initial Run ";
+    private static final String TEST_CASE_ADDITIONAL_VM = "Additional VM ";
+    private static final String TEST_CASE_PURE_UPDATE = "Only Update to existing VM.";
+    private static final String TEST_CASE_DELETE_VM = "Delete VM ";
+    private static final String TEST_CASE_DELETE_VMS = "Delete multiple VMs ";
+    private static final String TEST_CASE_MOCK_MODE = "Mock Mode ";
+    private static final int DEFAULT_TEST_PAGE_SIZE = 5;
+    private static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
+    private static final String VM_NAME = "TestAWSEnumerationTask-create";
+    private static final String VM_UPDATED_NAME = "TestAWSEnumerationTask-update";
+
+    private static List<String> testComputeDescriptions = new ArrayList<String>(
             Arrays.asList(zoneId + "~" + T2_NANO_INSTANCE_TYPE,
                     zoneId + "~" + instanceType_t2_micro));
+
+    private ComputeService.ComputeState vmState;
+    private String computeDescriptionLink;
+    private ResourcePoolState outPool;
+    private ComputeService.ComputeState outComputeHost;
+    private AuthCredentialsServiceState creds;
+
+    private List<String> instancesToCleanUp = new ArrayList<String>();
+    private List<String> instanceIdsToDeleteFirstTime = new ArrayList<String>();
+    private List<String> instanceIdsToDeleteSecondTime = new ArrayList<String>();
+    private AmazonEC2AsyncClient client;
+    private boolean isMock = true;
+    private boolean isAwsClientMock = false;
+    private String awsMockEndpointReference = null;
+    private BaseLineState baseLineState;
+
+    private String accessKey = "accessKey";
+    private String secretKey = "secretKey";
 
     @Before
     public void setUp() throws Exception {
@@ -171,16 +168,17 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
         }
         try {
             // Delete all vms from the endpoint that were provisioned from the test.
-            this.host.log("Deleting %d instance created from the test ", instancesToCleanUp.size());
-            if (instancesToCleanUp.size() == 0) {
+            this.host.log("Deleting %d instance created from the test ",
+                    this.instancesToCleanUp.size());
+            if (this.instancesToCleanUp.size() == 0) {
                 cleanupEC2ClientResources(this.client);
                 return;
             }
             deleteVMsOnThisEndpoint(this.host, this.isMock,
-                    this.outComputeHost.documentSelfLink, instancesToCleanUp);
+                    this.outComputeHost.documentSelfLink, this.instancesToCleanUp);
             // Check that all the instances that are required to be deleted are in
             // terminated state on AWS
-            waitForInstancesToBeTerminated(this.client, this.host, instancesToCleanUp);
+            waitForInstancesToBeTerminated(this.client, this.host, this.instancesToCleanUp);
             cleanupEC2ClientResources(this.client);
             setAwsClientMockInfo(false, null);
         } catch (Throwable deleteEx) {
@@ -202,7 +200,7 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
             this.baseLineState = getBaseLineInstanceCount(this.host, this.client, testComputeDescriptions);
             this.host.log(this.baseLineState.toString());
             // Provision a single VM . Check initial state.
-            provisionMachine(this.host, this.vmState, this.isMock, instancesToCleanUp);
+            provisionMachine(this.host, this.vmState, this.isMock, this.instancesToCleanUp);
             queryComputeInstances(this.host, count2);
             queryDocumentsAndAssertExpectedCount(this.host, count2,
                     ComputeDescriptionService.FACTORY_LINK);
@@ -213,7 +211,7 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
             List<String> instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, count1,
                     instanceType_t2_micro);
             this.instanceIdsToDeleteFirstTime.addAll(instanceIds);
-            instancesToCleanUp.addAll(this.instanceIdsToDeleteFirstTime);
+            this.instancesToCleanUp.addAll(this.instanceIdsToDeleteFirstTime);
             waitForProvisioningToComplete(this.instanceIdsToDeleteFirstTime, this.host, this.client, ZERO);
             // Tag the first VM with a name
             tagProvisionedVM(this.vmState.id, VM_NAME, this.client);
@@ -253,13 +251,13 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                     TEST_CASE_PURE_UPDATE);
 
-            validateTagInformation(VM_UPDATED_NAME);
+            validateAWSNameTag(VM_UPDATED_NAME);
 
             // Provision an additional VM with a different instance type. It should re-use the
             // existing compute description created by the enumeration task above.
             this.instanceIdsToDeleteSecondTime = provisionAWSVMWithEC2Client(this.client, this.host,
                     count1, TestAWSSetupUtils.instanceType_t2_micro);
-            instancesToCleanUp.addAll(this.instanceIdsToDeleteSecondTime);
+            this.instancesToCleanUp.addAll(this.instanceIdsToDeleteSecondTime);
             waitForProvisioningToComplete(this.instanceIdsToDeleteSecondTime, this.host, this.client, ZERO);
             enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
@@ -313,12 +311,11 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
             return;
         }
 
-        URI[] computeStateURIs = { UriUtils.buildUri(this.host, this.vmState.documentSelfLink) };
-        Map<URI, ComputeState> computeStateMap = this.host
-                .getServiceState(null, ComputeState.class, computeStateURIs);
-        ComputeState computeStateToTag = computeStateMap.get(computeStateURIs[0]);
-        setResourceName(computeStateToTag.id, vmName, this.client);
+        ComputeState compute = getCompute(this.vmState.documentSelfLink);
+
+        tagResourcesWithName(this.client, vmName, compute.id);
     }
+
 
     /**
      * Verifies if the tag information exists for a given resource. And that private and public IP addresses
@@ -332,7 +329,7 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
             return null;
         }
 
-        ComputeState taggedComputeState = validateTagInformation(VM_NAME);
+        ComputeState taggedComputeState = validateAWSNameTag(VM_NAME);
 
         assertEquals(taggedComputeState.descriptionLink, this.computeDescriptionLink);
         assertTrue(taggedComputeState.networkLinks != null);
@@ -358,22 +355,29 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
     /**
      * Validates the tag information on a compute state matches an expected virtual machine name.
      */
-    private ComputeState validateTagInformation(String vmName) throws Throwable {
+    private ComputeState validateAWSNameTag(String vmName) throws Throwable {
         if (this.isAwsClientMock) {
             return null;
         }
 
-        URI[] computeStateURIs = { UriUtils.buildUri(this.host, this.vmState.documentSelfLink) };
-        Map<URI, ComputeState> computeStateMap = this.host
-                .getServiceState(null, ComputeState.class, computeStateURIs);
-        ComputeState taggedComputeState = computeStateMap.get(computeStateURIs[0]);
-        assertTrue(taggedComputeState.customProperties.get(AWS_TAGS) != null);
-        String tagsJson = taggedComputeState.customProperties.get(AWS_TAGS);
-        AWSTags resultTags = Utils.fromJson(tagsJson, AWSTags.class);
-        assertTrue(resultTags != null);
-        Tag nameTag = resultTags.awsTags.get(0);
-        assertEquals(nameTag.getKey(), AWS_TAG_NAME);
-        assertEquals(vmName, nameTag.getValue());
+        ComputeState taggedComputeState = getCompute(this.vmState.documentSelfLink);
+
+        // verify conversion from AWS_TAGS to CUSTOM_DISPLAY_NAME
+        String tagNameValue = taggedComputeState.customProperties.get(CUSTOM_DISPLAY_NAME);
+        assertNotNull("'displayName' property should be present", tagNameValue);
+        assertEquals(vmName, tagNameValue);
+
+        // verify aws tags
+        String awsTagsStr = taggedComputeState.customProperties.get(AWS_TAGS);
+        assertNotNull(awsTagsStr);
+
+        AWSTags awsTags = Utils.fromJson(awsTagsStr, AWSTags.class);
+        assertNotNull(awsTags);
+        assertNotNull(awsTags.awsTags);
+        assertEquals(1, awsTags.awsTags.size());
+
+        assertEquals(AWS_TAG_NAME, awsTags.awsTags.get(0).getKey());
+        assertEquals(vmName, awsTags.awsTags.get(0).getValue());
         return taggedComputeState;
     }
 
@@ -433,4 +437,14 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
                 this.outPool.documentSelfLink, TestAWSSetupUtils.class);
         this.computeDescriptionLink = this.vmState.descriptionLink;
     }
+
+    /**
+     * Lookup a Compute
+     */
+    private ComputeState getCompute(String computeLink) throws Throwable {
+        Operation response = host
+                .waitForResponse(Operation.createGet(this.host, this.vmState.documentSelfLink));
+        return response.getBody(ComputeState.class);
+    }
+
 }

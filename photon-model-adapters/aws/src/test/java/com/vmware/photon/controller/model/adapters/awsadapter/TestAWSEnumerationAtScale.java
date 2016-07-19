@@ -13,9 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.cleanupEC2ClientResources;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createTags;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsOnThisEndpoint;
@@ -36,8 +35,6 @@ import java.util.List;
 import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.ec2.model.Tag;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -216,7 +213,10 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
             int instancesToTagCount = (int) ((this.instanceCountAtScale / HUNDERED) * this.modifyRate);
             this.host.log("Updating %d instances", instancesToTagCount);
             List<String> instanceIdsToTag = instancesToCleanUp.subList(0, instancesToTagCount);
-            createNameTagForResources(instanceIdsToTag);
+
+            tagResourcesWithName(this.client, SCALE_VM_NAME,
+                    instanceIdsToTag.toArray(new String[0]));
+
             // Record the time taken to discover updates to a subset of the instances.
             enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
@@ -232,16 +232,6 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
         } else {
             // Do nothing. Basic enumeration logic tested in functional test.
         }
-    }
-
-    /**
-     * Creates a name tag on AWS for the list of resources that are passed in.
-     */
-    private void createNameTagForResources(List<String> instanceIdsToTag) {
-        Tag awsName = new Tag().withKey(AWS_TAG_NAME).withValue(SCALE_VM_NAME);
-        ArrayList<Tag> tags = new ArrayList<>();
-        tags.add(awsName);
-        createTags(instanceIdsToTag, tags, this.client);
     }
 
     /**
