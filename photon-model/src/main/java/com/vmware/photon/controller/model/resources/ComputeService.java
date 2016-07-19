@@ -23,6 +23,7 @@ import org.apache.commons.validator.routines.InetAddressValidator;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -165,6 +166,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.customProperties = currentState.customProperties;
             chsWithDesc.networkLinks = currentState.networkLinks;
             chsWithDesc.tenantLinks = currentState.tenantLinks;
+            chsWithDesc.creationTimeMicros = currentState.creationTimeMicros;
 
             chsWithDesc.description = desc;
             chsWithDesc.descriptionLink = desc.documentSelfLink;

@@ -233,6 +233,7 @@ public class ComputeServiceTest extends Suite {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
             ComputeService.ComputeStateWithDescription startState = buildValidStartState(cd);
+            startState.creationTimeMicros = Long.MIN_VALUE;
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
                     ComputeService.FACTORY_LINK,
@@ -249,6 +250,8 @@ public class ComputeServiceTest extends Suite {
             assertThat(getState.description.id, is(startState.description.id));
             assertThat(getState.description.name,
                     is(startState.description.name));
+            assertNotNull(returnState.creationTimeMicros);
+            assertEquals(Long.MIN_VALUE, returnState.creationTimeMicros.longValue());
 
             getState = getServiceSynchronously(
                     UriUtils.extendUriWithQuery(UriUtils.buildUri(returnState.documentSelfLink),
@@ -260,6 +263,8 @@ public class ComputeServiceTest extends Suite {
             assertThat(getState.description.id, is(startState.description.id));
             assertThat(getState.description.name,
                     is(startState.description.name));
+            assertNotNull(getState.creationTimeMicros);
+            assertEquals(Long.MIN_VALUE, getState.creationTimeMicros.longValue());
         }
     }
 
