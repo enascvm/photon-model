@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -39,7 +38,6 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.vim25.ArrayOfVirtualDevice;
-import com.vmware.vim25.DuplicateNameFaultMsg;
 import com.vmware.vim25.FileAlreadyExists;
 import com.vmware.vim25.InsufficientResourcesFaultFaultMsg;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
@@ -48,11 +46,7 @@ import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.MethodFault;
 import com.vmware.vim25.OptionValue;
-import com.vmware.vim25.ResourceAllocationInfo;
-import com.vmware.vim25.ResourceConfigSpec;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
-import com.vmware.vim25.SharesInfo;
-import com.vmware.vim25.SharesLevel;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VirtualCdrom;
@@ -138,7 +132,8 @@ public class InstanceClient extends BaseHelper {
         this.vm = vm;
 
         ComputeState state = new ComputeState();
-        state.resourcePoolLink = VimUtils.firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
+        state.resourcePoolLink = VimUtils
+                .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
 
         enrichStateFromVm(state, vm);
 
@@ -158,7 +153,8 @@ public class InstanceClient extends BaseHelper {
         cloneSpec.setPowerOn(true);
         cloneSpec.setTemplate(false);
 
-        String displayName = getCustomProperty(ComputeProperties.CUSTOM_DISPLAY_NAME, this.state.description.name);
+        String displayName = getCustomProperty(ComputeProperties.CUSTOM_DISPLAY_NAME,
+                this.state.description.name);
         ManagedObjectReference cloneTask = getVimPort()
                 .cloneVMTask(template, folder, displayName, cloneSpec);
 
@@ -192,7 +188,7 @@ public class InstanceClient extends BaseHelper {
         info = waitTaskEnd(task);
         ignoreError("Ignore error deleting VM", info);
         // delete resource pool
-        ManagedObjectReference resourcePool = getOrCreateResourcePoolForVm(false);
+        ManagedObjectReference resourcePool = getResourcePoolForVm();
         if (resourcePool != null) {
             task = getVimPort().destroyTask(resourcePool);
             info = waitTaskEnd(task);
@@ -223,7 +219,8 @@ public class InstanceClient extends BaseHelper {
         this.vm = vm;
 
         ComputeState state = new ComputeState();
-        state.resourcePoolLink = VimUtils.firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
+        state.resourcePoolLink = VimUtils
+                .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
 
         enrichStateFromVm(state, vm);
 
@@ -253,7 +250,8 @@ public class InstanceClient extends BaseHelper {
         String dir = this.get.entityProp(this.vm, VimPath.vm_config_files_vmPathName);
         dir = Paths.get(dir).getParent().toString();
 
-        ArrayOfVirtualDevice devices = this.get.entityProp(this.vm, VimPath.vm_config_hardware_device);
+        ArrayOfVirtualDevice devices = this.get
+                .entityProp(this.vm, VimPath.vm_config_hardware_device);
 
         VirtualDevice scsiController = getFirstScsiController(devices);
         int scsiUnit = findFreeUnit(scsiController, devices.getVirtualDevice());
@@ -327,7 +325,8 @@ public class InstanceClient extends BaseHelper {
             String dir, VirtualDevice scsiController, int unitNumber)
             throws Exception {
 
-        ManagedObjectReference diskManager = this.connection.getServiceContent().getVirtualDiskManager();
+        ManagedObjectReference diskManager = this.connection.getServiceContent()
+                .getVirtualDiskManager();
 
         // put full clone in the vm folder
         String destName = makePathToVmdkFile(ds, dir);
@@ -563,7 +562,6 @@ public class InstanceClient extends BaseHelper {
                 .put(ComputeProperties.CUSTOM_DISPLAY_NAME, vm.getName());
     }
 
-
     /**
      * Creates a VM in vsphere. This method will block untill the CreateVM_Task completes.
      * The path to the .vmx file is explicitly set and its existence is iterpreted as if the VM has
@@ -575,7 +573,7 @@ public class InstanceClient extends BaseHelper {
      */
     private ManagedObjectReference createVm() throws FinderException, Exception {
         ManagedObjectReference folder = getVmFolder();
-        ManagedObjectReference resourcePool = getOrCreateResourcePoolForVm(true);
+        ManagedObjectReference resourcePool = getResourcePoolForVm();
         ManagedObjectReference datastore = getDatastore();
 
         String datastoreName = this.get.entityProp(datastore, "name");
@@ -637,7 +635,8 @@ public class InstanceClient extends BaseHelper {
      */
     private VirtualMachineConfigSpec buildVirtualMachineConfigSpec(String datastoreName)
             throws InvalidPropertyFaultMsg, FinderException, RuntimeFaultFaultMsg {
-        String displayName = getCustomProperty(ComputeProperties.CUSTOM_DISPLAY_NAME, this.state.description.name);
+        String displayName = getCustomProperty(ComputeProperties.CUSTOM_DISPLAY_NAME,
+                this.state.description.name);
         VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
         spec.setName(displayName);
         spec.setNumCPUs((int) this.state.description.cpuCount);
@@ -737,7 +736,6 @@ public class InstanceClient extends BaseHelper {
     /**
      * Creates a resource pool for the VM. The created resource pool is a child of the resource
      * pool (zoneId) specified in the {@link #state} or {@link #parent}, whichever is defined first.
-     * @param create will create a reseource pool for the compute state only of create is true
      * @return the created resource pool, null if create is false and no resource pool was found
      * @throws RuntimeFaultFaultMsg
      * @throws InvalidPropertyFaultMsg
@@ -745,7 +743,7 @@ public class InstanceClient extends BaseHelper {
      * @throws InvalidNameFaultMsg
      * @throws InsufficientResourcesFaultFaultMsg
      */
-    private ManagedObjectReference getOrCreateResourcePoolForVm(boolean create)
+    private ManagedObjectReference getResourcePoolForVm()
             throws RuntimeFaultFaultMsg, InvalidPropertyFaultMsg, FinderException,
             InvalidNameFaultMsg, InsufficientResourcesFaultFaultMsg {
         Element parentResourcePool;
@@ -761,25 +759,7 @@ public class InstanceClient extends BaseHelper {
             parentResourcePool = this.finder.defaultResourcePool();
         }
 
-        String vmName = this.state.description.name;
-
-        // try to build a resource pool for the requested vm
-        String resourcePoolPath = parentResourcePool.path + "/" + vmName;
-
-        ManagedObjectReference result = null;
-
-        try {
-            result = this.finder.resourcePool(resourcePoolPath).object;
-        } catch (FinderException e) {
-            logger.log(Level.INFO, "cannot find ResourcePool " + resourcePoolPath);
-            // resource pool not found
-
-            if (create) {
-                result = createResourcePool(parentResourcePool.object, vmName, resourcePoolPath);
-            }
-        }
-
-        return result;
+        return parentResourcePool.object;
     }
 
     /**
@@ -798,58 +778,6 @@ public class InstanceClient extends BaseHelper {
         }
 
         return defaultValue;
-    }
-
-    /**
-     * Creates a resource pool with the given name as a child of the given parent. If the resource
-     * pool already exists returns the existing object.
-     *
-     * @param parent
-     * @param name
-     * @param resourcePoolPath
-     * @return
-     * @throws FinderException
-     * @throws InvalidPropertyFaultMsg
-     * @throws RuntimeFaultFaultMsg
-     * @throws InvalidNameFaultMsg
-     * @throws InsufficientResourcesFaultFaultMsg
-     */
-    private ManagedObjectReference createResourcePool(ManagedObjectReference parent, String name,
-            String resourcePoolPath)
-            throws FinderException,
-            InvalidPropertyFaultMsg,
-            RuntimeFaultFaultMsg,
-            InvalidNameFaultMsg,
-            InsufficientResourcesFaultFaultMsg {
-
-        ResourceConfigSpec spec = new ResourceConfigSpec();
-        spec.setCpuAllocation(new ResourceAllocationInfo());
-        spec.setMemoryAllocation(new ResourceAllocationInfo());
-
-        // generous default allocations
-        for (ResourceAllocationInfo rai : new ResourceAllocationInfo[] { spec.getCpuAllocation(),
-                spec.getMemoryAllocation() }) {
-            rai.setExpandableReservation(true);
-
-            // VC requires the following fields to be set,
-            // even though doc/wsdl lists them as optional.
-
-            // unlimited
-            rai.setLimit(-1L);
-
-            rai.setReservation(1L);
-
-            SharesInfo shares = new SharesInfo();
-            shares.setLevel(SharesLevel.NORMAL);
-            rai.setShares(shares);
-        }
-
-        try {
-            return getVimPort().createResourcePool(parent, name, spec);
-        } catch (DuplicateNameFaultMsg e) {
-            // someone else won the race to create this pool, just return it
-            return this.finder.resourcePool(resourcePoolPath).object;
-        }
     }
 
     /**
