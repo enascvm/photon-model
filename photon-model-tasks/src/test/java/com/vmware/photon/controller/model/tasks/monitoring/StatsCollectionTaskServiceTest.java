@@ -17,6 +17,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
 
@@ -28,23 +29,24 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskSchedulerService.StatsCollectionTaskServiceSchedulerState;
+import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
+import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 
-public class StatsCollectionTaskSchedulerServiceTest extends BaseModelTest {
+public class StatsCollectionTaskServiceTest extends BaseModelTest {
 
     public int numResources = 200;
 
     @Override
     protected void startRequiredServices() throws Throwable {
         super.startRequiredServices();
-        // set the monitoring interval to 250 ms
-        System.setProperty(StatsCollectionTaskSchedulerService.STATS_MONITORING_INTERVAL, "250");
         PhotonModelTaskServices.startServices(this.getHost());
         this.host.startService(
                 Operation.createPost(UriUtils.buildUri(this.host,
@@ -52,7 +54,6 @@ public class StatsCollectionTaskSchedulerServiceTest extends BaseModelTest {
                 new MockStatsAdapter());
         this.host.waitForServiceAvailable(StatsCollectionTaskService.FACTORY_LINK);
         this.host.waitForServiceAvailable(SingleResourceStatsCollectionTaskService.FACTORY_LINK);
-        this.host.waitForServiceAvailable(StatsCollectionTaskSchedulerService.FACTORY_LINK);
         this.host.waitForServiceAvailable(MockStatsAdapter.SELF_LINK);
     }
 
@@ -80,15 +81,19 @@ public class StatsCollectionTaskSchedulerServiceTest extends BaseModelTest {
             computeLinks.add(res.documentSelfLink);
         }
         // create a stats collection scheduler task
-        StatsCollectionTaskServiceSchedulerState schedulerState =
-                new StatsCollectionTaskServiceSchedulerState();
-        schedulerState.resourcePoolLink = rpReturnState.documentSelfLink;
+        StatsCollectionTaskService.StatsCollectionTaskState statCollectionState =
+                new StatsCollectionTaskService.StatsCollectionTaskState();
+        statCollectionState.resourcePoolLink = rpReturnState.documentSelfLink;
+        ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
+        statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
+        statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
+        statsCollectionTaskState.intervalMicros =   TimeUnit.MILLISECONDS.toMicros(250);
         postServiceSynchronously(
-                StatsCollectionTaskSchedulerService.FACTORY_LINK, schedulerState,
-                StatsCollectionTaskServiceSchedulerState.class);
+                ScheduledTaskService.FACTORY_LINK, statsCollectionTaskState,
+                ScheduledTaskState.class);
         ServiceDocumentQueryResult res = this.host.getFactoryState(UriUtils
                 .buildExpandLinksQueryUri(UriUtils.buildUri(this.host,
-                        StatsCollectionTaskSchedulerService.FACTORY_LINK)));
+                        ScheduledTaskService.FACTORY_LINK)));
         assertTrue(res.documents.size() == 1);
 
         // get stats from resources; make sure maintenance has run more than once

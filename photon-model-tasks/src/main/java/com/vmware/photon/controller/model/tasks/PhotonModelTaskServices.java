@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.tasks;
 
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService;
-import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskSchedulerService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
 
 import com.vmware.xenon.common.Operation;
@@ -36,7 +35,6 @@ public class PhotonModelTaskServices {
             ProvisionNetworkTaskService.FACTORY_LINK,
             SnapshotTaskService.FACTORY_LINK,
             ProvisionFirewallTaskService.FACTORY_LINK,
-            StatsCollectionTaskSchedulerService.FACTORY_LINK,
             StatsCollectionTaskService.FACTORY_LINK,
             SingleResourceStatsCollectionTaskService.FACTORY_LINK,
             StatsAggregationTaskService.FACTORY_LINK,};
@@ -54,7 +52,6 @@ public class PhotonModelTaskServices {
         host.startFactory(new ProvisionNetworkTaskService());
         host.startFactory(new SnapshotTaskService());
         host.startFactory(new ProvisionFirewallTaskService());
-        host.startFactory(new StatsCollectionTaskSchedulerService());
         host.startFactory(new StatsCollectionTaskService());
         host.startFactory(new StatsAggregationTaskService());
         host.startFactory(new SingleResourceStatsCollectionTaskService());

@@ -2,6 +2,9 @@
 
 ## 0.4.2-SNAPSHOT
 
+* Remove StatsCollectionTaskSchedulerService - The functionality this class provided
+  can be achieved using ScheduledTaskService
+
 ## 0.4.1
 
 * Add support for aggregating resource metrics to get hourly min/max/avg values

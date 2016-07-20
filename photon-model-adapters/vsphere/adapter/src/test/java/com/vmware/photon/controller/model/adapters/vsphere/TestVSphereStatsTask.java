@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
 
@@ -31,11 +32,14 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
+import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
+import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskSchedulerService;
-import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskSchedulerService.StatsCollectionTaskServiceSchedulerState;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
+
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -64,14 +68,19 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
         doRefresh();
 
         // collect stats for a few instances
-        StatsCollectionTaskServiceSchedulerState task = new StatsCollectionTaskServiceSchedulerState();
-        task.resourcePoolLink = this.resourcePool.documentSelfLink;
+        StatsCollectionTaskService.StatsCollectionTaskState statCollectionState =
+                new StatsCollectionTaskService.StatsCollectionTaskState();
+        statCollectionState.resourcePoolLink = this.resourcePool.documentSelfLink;
+        ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
+        statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
+        statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
+        statsCollectionTaskState.intervalMicros =   TimeUnit.MINUTES.toMicros(1);
 
         TestUtils.doPost(this.host,
-                task,
-                StatsCollectionTaskServiceSchedulerState.class,
+                statsCollectionTaskState,
+                ScheduledTaskState.class,
                 UriUtils.buildUri(this.host,
-                        StatsCollectionTaskSchedulerService.FACTORY_LINK));
+                        ScheduledTaskService.FACTORY_LINK));
 
         if (isMock()) {
             return;
