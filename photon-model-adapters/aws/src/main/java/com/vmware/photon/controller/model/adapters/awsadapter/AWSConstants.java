@@ -84,6 +84,8 @@ public class AWSConstants {
     public static final String UNIT_PERCENT = "Percent";
     public static final String UNIT_COST = "USD";
 
+    public static final String WINDOWS_PLATFORM = "windows";
+
     public static void setQueryPageSize(int size) {
         QUERY_PAGE_SIZE = size;
     }

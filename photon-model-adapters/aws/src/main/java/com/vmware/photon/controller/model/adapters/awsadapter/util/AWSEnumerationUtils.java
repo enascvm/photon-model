@@ -14,9 +14,11 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAGS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.WINDOWS_PLATFORM;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
@@ -34,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Tag;
 
+import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService.AWSTags;
@@ -190,6 +193,10 @@ public class AWSEnumerationUtils {
         computeState.address = instance.getPublicIpAddress();
         computeState.powerState = AWSUtils.mapToPowerState(instance.getState());
         computeState.customProperties = new HashMap<String, String>();
+
+        computeState.customProperties.put(CUSTOM_OS_TYPE,
+                getNormalizedOSType(instance));
+
         if (!instance.getTags().isEmpty()) {
             // start with custom tag mapping(s)
             computeState.customProperties.put(CUSTOM_DISPLAY_NAME,
@@ -236,5 +243,16 @@ public class AWSEnumerationUtils {
             }
         }
         return null;
+    }
+
+    /**
+     * Return Instance normalized OS Type.
+     */
+    private static String getNormalizedOSType(Instance instance) {
+        if (WINDOWS_PLATFORM.equalsIgnoreCase(instance.getPlatform())) {
+            return OSType.WINDOWS.toString();
+        } else { // else assume Linux
+            return OSType.LINUX.toString();
+        }
     }
 }

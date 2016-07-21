@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
@@ -22,9 +23,11 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_VM_SIZE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LINUX_OPERATING_SYSTEM;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VM_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.VM_REST_API_VERSION;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.WINDOWS_OPERATING_SYSTEM;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
@@ -55,11 +58,10 @@ import com.microsoft.azure.management.storage.StorageManagementClient;
 import com.microsoft.azure.management.storage.StorageManagementClientImpl;
 import com.microsoft.azure.management.storage.models.StorageAccountKeys;
 import com.microsoft.rest.ServiceResponse;
-
 import okhttp3.OkHttpClient;
-
 import retrofit2.Retrofit;
 
+import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -825,6 +827,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         resource.diskLinks = vmDisks;
         resource.customProperties = new HashMap<>();
         resource.customProperties.put(CUSTOM_DISPLAY_NAME, virtualMachine.name);
+        resource.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
         resource.id = virtualMachine.id.toLowerCase();
         resource.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
@@ -912,5 +915,25 @@ public class AzureEnumerationAdapterService extends StatelessService {
         }
         logFine("Input VM id was [%s]", vmId);
         return vmId;
+    }
+
+    /**
+     * Return Instance normalized OS Type.
+     */
+    private String getNormalizedOSType(VirtualMachine vm) {
+        if (vm.properties == null
+                || vm.properties.storageProfile == null
+                || vm.properties.storageProfile.getOsDisk() == null
+                || vm.properties.storageProfile.getOsDisk().getOsType() == null) {
+            return null;
+        }
+        String osType = vm.properties.storageProfile.getOsDisk().getOsType();
+        if (WINDOWS_OPERATING_SYSTEM.equalsIgnoreCase(osType)) {
+            return OSType.WINDOWS.toString();
+        } else if (LINUX_OPERATING_SYSTEM.equalsIgnoreCase(osType)) {
+            return OSType.LINUX.toString();
+        } else {
+            return null;
+        }
     }
 }

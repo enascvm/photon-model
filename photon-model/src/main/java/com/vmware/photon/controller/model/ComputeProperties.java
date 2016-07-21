@@ -29,4 +29,15 @@ public class ComputeProperties {
      * resources.
      */
     public static final String RESOURCE_GROUP_NAME = "resourceGroupName";
+
+    /**
+     * The normalized OS type of the compute resource.
+     * See {@link OSType} for a list of possible values.
+     */
+    public static final String CUSTOM_OS_TYPE = "osType";
+
+    public static enum OSType {
+        WINDOWS, LINUX;
+    }
+
 }
