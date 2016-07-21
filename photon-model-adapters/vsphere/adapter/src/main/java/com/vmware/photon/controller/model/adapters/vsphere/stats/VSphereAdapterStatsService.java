@@ -142,6 +142,10 @@ public class VSphereAdapterStatsService extends StatelessService {
         case VimNames.TYPE_VM:
             metrics = client.retrieveMetricsForVm(obj);
             break;
+        case VimNames.TYPE_COMPUTE_RESOURCE:
+        case VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE:
+            metrics = client.retrieveMetricsForCluster(obj);
+            break;
         case VimNames.TYPE_HOST:
             metrics = client.retrieveMetricsForHost(obj);
             break;

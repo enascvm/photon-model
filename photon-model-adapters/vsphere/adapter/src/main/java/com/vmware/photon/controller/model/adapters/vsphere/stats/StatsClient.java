@@ -74,6 +74,7 @@ public class StatsClient extends BaseHelper {
      * for other valid values.
      */
     private static final int DEFAULT_INTERVAL_ID = 300;
+    private static final int COLLECT_INTERVAL_HOURS = 24;
 
     static {
         PERF_MGR_MOREF.setType(VimNames.TYPE_PERFORMANCE_MANAGER);
@@ -185,7 +186,7 @@ public class StatsClient extends BaseHelper {
 
         StatCollectionContext ctx = new StatCollectionContext(vm);
 
-        ctx.limitResults(DEFAULT_INTERVAL_ID, 24, TimeUnit.HOURS);
+        ctx.limitResults(DEFAULT_INTERVAL_ID, COLLECT_INTERVAL_HOURS, TimeUnit.HOURS);
 
         addDefaultMetrics(ctx);
         return querySingleEntity(ctx);
@@ -217,7 +218,18 @@ public class StatsClient extends BaseHelper {
             throws RuntimeFaultFaultMsg {
         StatCollectionContext ctx = new StatCollectionContext(host);
 
-        ctx.limitResults(DEFAULT_INTERVAL_ID, 24, TimeUnit.HOURS);
+        ctx.limitResults(DEFAULT_INTERVAL_ID, COLLECT_INTERVAL_HOURS, TimeUnit.HOURS);
+
+        addDefaultMetrics(ctx);
+
+        return querySingleEntity(ctx);
+    }
+
+    public List<ServiceStat> retrieveMetricsForCluster(ManagedObjectReference cluster)
+            throws RuntimeFaultFaultMsg {
+        StatCollectionContext ctx = new StatCollectionContext(cluster);
+
+        ctx.limitResults(DEFAULT_INTERVAL_ID, COLLECT_INTERVAL_HOURS, TimeUnit.HOURS);
 
         addDefaultMetrics(ctx);
 
