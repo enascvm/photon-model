@@ -226,6 +226,14 @@ public final class VimUtils {
                 VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(obj.getType());
 
     }
+
+    public static boolean isDatastore(ManagedObjectReference obj) {
+        if (obj == null) {
+            return false;
+        }
+
+        return VimNames.TYPE_DATASTORE.equals(obj.getType());
+    }
 }
 
 

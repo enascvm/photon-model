@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import java.net.URI;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -36,6 +38,8 @@ public class StorageDescriptionService extends StatefulService {
      * {@link com.vmware.photon.controller.model.resources.StorageDescriptionService} task.
      */
     public static class StorageDescription extends ResourceState {
+        public static final String FIELD_NAME_ADAPTER_REFERENCE = "adapterManagementReference";
+        public static final String FIELD_NAME_NAME = "name";
         /**
          * Identifier of the Storage service Instance
          */
@@ -74,6 +78,18 @@ public class StorageDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String resourcePoolLink;
+
+        /**
+         * URI reference to resource pool management site.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public URI adapterManagementReference;
+
+        /**
+         * Total capacity of the storage.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long capacityBytes;
     }
 
     @Override

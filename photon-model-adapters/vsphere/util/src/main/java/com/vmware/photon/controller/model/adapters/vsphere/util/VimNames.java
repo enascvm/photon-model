@@ -20,6 +20,7 @@ public class VimNames {
     public static final String TYPE_VM = "VirtualMachine";
     public static final String TYPE_HOST = "HostSystem";
     public static final String TYPE_DATACENTER = "Datacenter";
+    public static final String TYPE_DATASTORE = "Datastore";
     public static final String TYPE_RESOURCE_POOL = "ResourcePool";
     public static final String TYPE_COMPUTE_RESOURCE = "ComputeResource";
     public static final String TYPE_CLUSTER_COMPUTE_RESOURCE = "ClusterComputeResource";

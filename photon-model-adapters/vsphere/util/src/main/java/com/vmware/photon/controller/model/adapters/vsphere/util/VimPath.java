@@ -1560,4 +1560,37 @@ public class VimPath {
     /** PropertyType: <code>string</code> */
     public static final String res_configurationEx_defaultHardwareVersionKey = "configurationEx.defaultHardwareVersionKey";
 
+    /** PropertyType: <code>DatastoreSummary</code> */
+    public static final String ds_summary = "summary";
+
+    /** PropertyType: <code>long</code> */
+    public static final String ds_summary_uncommitted = "summary.uncommitted";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String ds_summary_accessible = "summary.accessible";
+
+    /** PropertyType: <code>long</code> */
+    public static final String ds_summary_freeSpace = "summary.freeSpace";
+
+    /** PropertyType: <code>ManagedObjectReference</code> */
+    public static final String ds_summary_datastore = "summary.datastore";
+
+    /** PropertyType: <code>string</code> */
+    public static final String ds_summary_name = "summary.name";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String ds_summary_multipleHostAccess = "summary.multipleHostAccess";
+
+    /** PropertyType: <code>string</code> */
+    public static final String ds_summary_maintenanceMode = "summary.maintenanceMode";
+
+    /** PropertyType: <code>string</code> */
+    public static final String ds_summary_type = "summary.type";
+
+    /** PropertyType: <code>string</code> */
+    public static final String ds_summary_url = "summary.url";
+
+    /** PropertyType: <code>long</code> */
+    public static final String ds_summary_capacity = "summary.capacity";
+
 }

@@ -45,6 +45,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.UpdateSet;
@@ -294,8 +296,76 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             } else if (VimUtils.isComputeResource(cont.getObj())) {
                 ComputeResourceOverlay cr = new ComputeResourceOverlay(cont);
                 processFoundCluster(request, cr);
+            } else if (VimUtils.isDatastore(cont.getObj())) {
+                DatastoreOverlay ds = new DatastoreOverlay(cont);
+                processFoundDatastore(request, ds);
             }
         }
+    }
+
+    private void processFoundDatastore(ComputeEnumerateResourceRequest request,
+            DatastoreOverlay ds) {
+        QueryTask task = createStorageQueryTask(request.adapterManagementReference, ds.getName());
+
+        withTaskResults(task, result -> {
+            if (result.documentLinks.isEmpty()) {
+                createNewStorageDescription(request, ds);
+            } else {
+                StorageDescription oldDocument = Utils
+                        .fromJson(result.documents.values().iterator().next(),
+                                StorageDescription.class);
+                updateStorageDescription(oldDocument, request, ds);
+            }
+        });
+    }
+
+    private void updateStorageDescription(StorageDescription oldDocument,
+            ComputeEnumerateResourceRequest request, DatastoreOverlay ds) {
+        StorageDescription desc = makeStorageFromResults(request, ds);
+        desc.documentSelfLink = oldDocument.documentSelfLink;
+
+        Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
+                .setBody(desc)
+                .sendWith(this);
+    }
+
+    private void createNewStorageDescription(ComputeEnumerateResourceRequest request,
+            DatastoreOverlay ds) {
+        StorageDescription desc = makeStorageFromResults(request, ds);
+
+        logInfo("Found new Datastore %s", ds.getName());
+
+        Operation.createPost(this, StorageDescriptionService.FACTORY_LINK)
+                .setBody(desc)
+                .sendWith(this);
+    }
+
+    private StorageDescription makeStorageFromResults(ComputeEnumerateResourceRequest request,
+            DatastoreOverlay ds) {
+        StorageDescription res = new StorageDescription();
+        res.id = res.name = ds.getName();
+        res.type = ds.getType();
+        res.resourcePoolLink = request.resourcePoolLink;
+        res.adapterManagementReference = request.adapterManagementReference;
+
+        res.capacityBytes =  ds.getCapacityBytes();
+
+        return res;
+    }
+
+    private QueryTask createStorageQueryTask(URI adapterManagementReference, String name) {
+        QuerySpecification qs = new QuerySpecification();
+        qs.query.addBooleanClause(
+                Query.Builder.create().addFieldClause(StorageDescription.FIELD_NAME_NAME, name)
+                        .build());
+
+        qs.query.addBooleanClause(Query.Builder.create()
+                .addFieldClause(StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
+                        adapterManagementReference.toString()).build());
+
+        return QueryTask
+                .create(qs)
+                .setDirect(true);
     }
 
     /**
@@ -307,7 +377,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      */
     private void processFoundCluster(ComputeEnumerateResourceRequest request,
             ComputeResourceOverlay cr) {
-        QueryTask task = createClusterQueryTask(request.resourceReference.getPath(),
+        QueryTask task = createClusterQueryTask(request.resourceLink(),
                 cr.getId().getValue());
 
         withTaskResults(task, result -> {
@@ -326,7 +396,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = makeClusterFromResults(request, cr);
         state.documentSelfLink = oldDocument.documentSelfLink;
 
-        logFine("Syncing ComputeResource %s", oldDocument.documentSelfLink);
+        logInfo("Syncing ComputeResource %s", oldDocument.documentSelfLink);
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .sendWith(this);
@@ -426,7 +496,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         ComputeDescription desc = makeDescriptionForHost(request, hs);
         desc.documentSelfLink = oldDocument.descriptionLink;
-        Operation.createPatch(UriUtils.buildUri(getHost(),  desc.documentSelfLink))
+        Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .sendWith(this);
     }

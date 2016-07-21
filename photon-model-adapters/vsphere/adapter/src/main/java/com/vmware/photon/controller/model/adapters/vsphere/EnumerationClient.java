@@ -252,12 +252,22 @@ public class EnumerationClient extends BaseHelper {
                 "name"
         ));
 
+        PropertySpec dsSpec = new PropertySpec();
+        dsSpec.setType(VimNames.TYPE_DATASTORE);
+        dsSpec.getPathSet().addAll(Arrays.asList(
+                VimPath.ds_summary_type,
+                VimPath.ds_summary_freeSpace,
+                VimPath.ds_summary_capacity,
+                "name"
+        ));
+
         PropertyFilterSpec filterSpec = new PropertyFilterSpec();
         filterSpec.getObjectSet().add(ospec);
         filterSpec.getPropSet().add(hostSpec);
         filterSpec.getPropSet().add(vmSpec);
         filterSpec.getPropSet().add(rpSpec);
         filterSpec.getPropSet().add(clusterSpec);
+        filterSpec.getPropSet().add(dsSpec);
         return filterSpec;
     }
 
