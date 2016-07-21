@@ -22,7 +22,9 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.UUID;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -62,8 +64,12 @@ import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 
 /**
+ * PRE-REQUISITE: An Azure Resource Manager VM named <b>EnumTestVM-DoNotDelete</b>, with diagnostics enabled,
+ *                is required for the stats collection on compute host to be successful.
+ *
  * NOTE: Testing pagination related changes requires manual setup due to account limits, slowness
  * of vm creation on azure (this slowness is on azure), and cost associated.
  *
@@ -90,6 +96,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private ComputeManagementClient computeManagementClient;
     private ResourceManagementClient resourceManagementClient;
     private String enumeratedComputeLink;
+
+    private static final String CUSTOM_DIAGNOSTIC_ENABLED_VM = "EnumTestVM-DoNotDelete";
 
     @Before
     public void setUp() throws Exception {
@@ -187,35 +195,45 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         ServiceDocumentQueryResult result = ProvisioningUtils.queryComputeInstances(this.host, count);
 
-        for (String docLink : result.documentLinks) {
-            if (!docLink.equals(this.computeHost.documentSelfLink)
-                    && !docLink.equals(this.vmState.documentSelfLink)) {
-                this.enumeratedComputeLink = docLink;
+        for (Entry<String, Object> key : result.documents.entrySet()) {
+            ComputeState document = Utils.fromJson(key.getValue(), ComputeState.class);
+            if (!document.documentSelfLink.equals(this.computeHost.documentSelfLink)
+                    && !document.documentSelfLink.equals(this.vmState.documentSelfLink)
+                    && document.id.toLowerCase()
+                            .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
+                this.enumeratedComputeLink = document.documentSelfLink;
                 break;
             }
         }
 
-        // Test stats for the VM that was just enumerated from Azure.
-        if (this.enumeratedComputeLink != null) {
+        try {
+            // Test stats for the VM that was just enumerated from Azure.
+            this.host.log(Level.INFO, "Collecting stats for [%s]", this.enumeratedComputeLink);
+            this.host.setTimeoutSeconds(300);
+            if (this.enumeratedComputeLink != null) {
+                this.host.waitFor("Error waiting for VM stats", () -> {
+                    try {
+                        issueStatsRequest(this.enumeratedComputeLink);
+                    } catch (Throwable t) {
+                        return false;
+                    }
+                    return true;
+                });
+            }
+
+            // Test stats for the compute host.
+            this.host.log(Level.INFO, "Collecting stats for [%s]", this.computeHost.documentSelfLink);
             this.host.waitFor("Error waiting for host stats", () -> {
                 try {
-                    issueStatsRequest(this.enumeratedComputeLink);
+                    issueStatsRequest(this.computeHost.documentSelfLink);
                 } catch (Throwable t) {
                     return false;
                 }
                 return true;
             });
+        } catch (TimeoutException te) {
+            this.host.log(Level.SEVERE, te.getMessage());
         }
-
-        // Test stats for the compute host.
-        this.host.waitFor("Error waiting for host stats", () -> {
-            try {
-                issueStatsRequest(this.computeHost.documentSelfLink);
-            } catch (Throwable t) {
-                return false;
-            }
-            return true;
-        });
 
         // delete vm directly on azure
         this.computeManagementClient.getVirtualMachinesOperations()
@@ -295,6 +313,11 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 if (op.getAction() == Action.PATCH) {
                     if (!TestAzureEnumerationTask.this.isMock) {
                         ComputeStatsResponse resp = op.getBody(ComputeStatsResponse.class);
+                        if (resp == null) {
+                            TestAzureEnumerationTask.this.host.failIteration(
+                                    new IllegalStateException("response was null."));
+                            return;
+                        }
                         if (resp.statsList.size() != 1) {
                             TestAzureEnumerationTask.this.host.failIteration(
                                     new IllegalStateException("response size was incorrect."));

@@ -31,6 +31,7 @@ import java.util.function.Consumer;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.storage.CloudStorageAccount;
+import com.microsoft.azure.storage.ResultSegment;
 import com.microsoft.azure.storage.StorageException;
 import com.microsoft.azure.storage.table.CloudTable;
 import com.microsoft.azure.storage.table.CloudTableClient;
@@ -65,6 +66,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
+import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -219,6 +221,11 @@ public class AzureStatsGatherer extends StatelessService {
 
     private Consumer<Throwable> getFailureConsumer(AzureStatsDataHolder statsData) {
         return ((throwable) -> {
+            if (throwable instanceof ServiceNotFoundException) {
+                logWarning("Skipping stats collection because [%s]", throwable.getMessage());
+                patchEmptyResponse(statsData);
+                return;
+            }
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     statsData.statsRequest.taskReference, throwable);
         });
@@ -306,16 +313,20 @@ public class AzureStatsGatherer extends StatelessService {
                             statsData.statsRequest.taskReference, e);
                 }
             } else {
-                // Patch back to the Parent with empty response
-                ComputeStatsResponse respBody = new ComputeStatsResponse();
-                statsData.statsResponse.computeLink = statsData.computeDesc.documentSelfLink;
-                respBody.taskStage = statsData.statsRequest.nextStage;
-                respBody.statsList = new ArrayList<>();
-                this.sendRequest(Operation.createPatch(statsData.statsRequest.taskReference)
-                        .setBody(respBody));
+                patchEmptyResponse(statsData);
             }
         });
         sendRequest(operation);
+    }
+
+    private void patchEmptyResponse(AzureStatsDataHolder statsData) {
+        // Patch back to the Parent with empty response
+        ComputeStatsResponse respBody = new ComputeStatsResponse();
+        statsData.statsResponse.computeLink = statsData.computeDesc.documentSelfLink;
+        respBody.taskStage = statsData.statsRequest.nextStage;
+        respBody.statsList = new ArrayList<>();
+        this.sendRequest(Operation.createPatch(statsData.statsRequest.taskReference)
+                .setBody(respBody));
     }
 
     private void getMetrics(AzureStatsDataHolder statsData)
@@ -437,12 +448,14 @@ public class AzureStatsGatherer extends StatelessService {
                             partitionAndTimestampFilter, Operators.AND, counterFilter);
 
                     // Create the query
-                    TableQuery<DynamicTableEntity> partitionQuery = TableQuery
+                    TableQuery<DynamicTableEntity> query = TableQuery
                             .from(DynamicTableEntity.class).where(combinedFilter);
 
                     response.setLabel(request.getMetricName());
                     List<Datapoint> datapoints = new ArrayList<>();
-                    for (DynamicTableEntity entity : table.execute(partitionQuery)) {
+                    ResultSegment<DynamicTableEntity> entities = table
+                            .executeSegmented(query, null);
+                    for (DynamicTableEntity entity : entities.getResults()) {
                         HashMap<String, EntityProperty> properties = entity
                                 .getProperties();
                         Datapoint dp = new Datapoint();
@@ -478,6 +491,7 @@ public class AzureStatsGatherer extends StatelessService {
                             }
                         }
                         datapoints.add(dp);
+                        break;
                     }
                     response.setDatapoints(datapoints);
                 } catch (Exception ex) {

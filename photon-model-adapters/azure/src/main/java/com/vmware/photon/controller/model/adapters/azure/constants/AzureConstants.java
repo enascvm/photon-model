@@ -76,7 +76,7 @@ public class AzureConstants {
     public static final String METRIC_DEFINITIONS_ENDPOINT = "metricDefinitions";
     public static final String METRIC_DEFINITIONS_MEMORY_FILTER = "name.value eq '\\Memory\\AvailableMemory'";
     public static final String METRIC_TIME_GRAIN_1_MINUTE = "PT1M";
-    public static final int METRIC_COLLECTION_PERIOD = 5;
+    public static final int METRIC_COLLECTION_PERIOD = 1;
     public static final String METRIC_TIME_FORMAT = "yyyy-MM-dd'T'HH:mm:ssZ";
     public static final String METRIC_KEY_LAST = "Last";
     public static final String METRIC_KEY_MAXIMUM = "Maximum";

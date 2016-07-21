@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.stats;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -251,8 +252,8 @@ public class AzureStatsService extends StatelessService {
         int numberOfComputeResponse = items.size();
         ComputeStats computeStats = new ComputeStats();
         computeStats.computeLink = statsData.computeDesc.documentSelfLink;
-        computeStats.statValues = new ConcurrentSkipListMap<String, ServiceStat>();
 
+        Map<String, ServiceStat> statMap = new HashMap<>();
         // Gather all the stats in a single response.
         for (QueryTask queryResult : items) {
             if (queryResult.results.documents != null) {
@@ -260,26 +261,26 @@ public class AzureStatsService extends StatelessService {
                     ResourceMetric metric = Utils.fromJson(queryResult.results.documents.get(key),
                             ResourceMetric.class);
                     String metricName = getMetricNameFromSelfLink(metric.documentSelfLink);
-                    if (computeStats.statValues.containsKey(metricName)) {
-                        computeStats.statValues
-                                .get(key).latestValue += metric.value;
+                    if (statMap.containsKey(metricName)) {
+                        statMap.get(metricName).latestValue += metric.value;
                     } else {
                         ServiceStat stat = new ServiceStat();
                         stat.latestValue = metric.value;
-                        computeStats.statValues.put(metricName, stat);
+                        statMap.put(metricName, stat);
                     }
                 }
             }
         }
 
         // Divide each metric value by the number of computes to get an average value.
-        for (String key : computeStats.statValues.keySet()) {
-            ServiceStat serviceStatValue = computeStats.statValues.get(key);
+        for (String key : statMap.keySet()) {
+            ServiceStat serviceStatValue = statMap.get(key);
             serviceStatValue.unit = PhotonModelConstants.getUnitForMetric(key);
             serviceStatValue.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
             serviceStatValue.latestValue = serviceStatValue.latestValue / numberOfComputeResponse;
         }
 
+        computeStats.statValues = new ConcurrentSkipListMap<String, ServiceStat>(statMap);
         ComputeStatsResponse computeStatsResponse = new ComputeStatsResponse();
         computeStatsResponse.statsList = new ArrayList<>();
         if (computeStats.statValues.size() > 0) {

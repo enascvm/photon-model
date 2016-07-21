@@ -33,6 +33,7 @@ import static com.vmware.photon.controller.model.resources.ComputeDescriptionSer
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -688,6 +689,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
 
     private void createHelper(EnumerationContext ctx, VirtualMachine virtualMachine,
             AtomicInteger size) {
+        Collection<Operation> opCollection = new ArrayList<>();
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
         auth.userEmail = virtualMachine.properties.osProfile.getAdminUsername();
         auth.privateKey = virtualMachine.properties.osProfile.getAdminPassword();
@@ -700,6 +702,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         Operation authOp = Operation
                 .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
                 .setBody(auth);
+        opCollection.add(authOp);
 
         // TODO VSYM-631: Match existing descriptions for new VMs discovered on Azure
         ComputeDescription computeDescription = new ComputeDescription();
@@ -732,50 +735,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         Operation compDescOp = Operation
                 .createPost(getHost(), ComputeDescriptionService.FACTORY_LINK)
                 .setBody(computeDescription);
-
-        String storageAuthLink = UUID.randomUUID().toString();
-        getStorageManagementClient(ctx).getStorageAccountsOperations().listKeysAsync(
-                resourceGroupName, diagnosticStorageAccountName,
-                new AzureAsyncCallback<StorageAccountKeys>() {
-
-                    @Override
-                    public void onError(Throwable e) {
-                        logSevere(e.getMessage());
-                        handleError(ctx, e);
-                    }
-
-                    @Override
-                    public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
-                        StorageAccountKeys keys = result.getBody();
-                        String key1 = keys.getKey1();
-                        String key2 = keys.getKey2();
-
-                        AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
-                        storageAuth.documentSelfLink = storageAuthLink;
-                        storageAuth.customProperties = new HashMap<>();
-                        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, key1);
-                        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, key2);
-                        storageAuth.tenantLinks = ctx.computeHostDesc.tenantLinks;
-
-                        Operation storageAuthOp = Operation
-                                .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
-                                .setBody(storageAuth);
-                        sendRequest(storageAuthOp);
-                    }
-                });
-        StorageDescription storageDescription = new StorageDescription();
-        storageDescription.documentSelfLink = UUID.randomUUID().toString();
-        storageDescription.name = diagnosticStorageAccountName;
-        storageDescription.resourcePoolLink = ctx.enumRequest.resourcePoolLink;
-        storageDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
-        storageDescription.authCredentialsLink = UriUtils.buildUriPath(
-                AuthCredentialsService.FACTORY_LINK,
-                storageAuthLink);
-
-        Operation storageOp = Operation
-                .createPost(getHost(),
-                        StorageDescriptionService.FACTORY_LINK)
-                .setBody(storageDescription);
+        opCollection.add(compDescOp);
 
         // Create root disk
         DiskState rootDisk = new DiskState();
@@ -783,9 +743,6 @@ public class AzureEnumerationAdapterService extends StatelessService {
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.name = virtualMachine.properties.storageProfile.getOsDisk().getName();
         rootDisk.type = DiskType.HDD;
-        rootDisk.storageDescriptionLink = UriUtils.buildUriPath(
-                StorageDescriptionService.FACTORY_LINK,
-                storageDescription.documentSelfLink);
         ImageReference imageReference = virtualMachine.properties.storageProfile.getImageReference();
         rootDisk.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
         rootDisk.bootOrder = 1;
@@ -797,11 +754,65 @@ public class AzureEnumerationAdapterService extends StatelessService {
                         virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri()));
         rootDisk.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
-        Operation diskOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
-                .setBody(rootDisk);
-
         List<String> vmDisks = new ArrayList<>();
         vmDisks.add(UriUtils.buildUriPath(DiskService.FACTORY_LINK, rootDisk.id));
+
+        String storageAuthLink = UUID.randomUUID().toString();
+        Operation storageOp = null;
+        if (diagnosticStorageAccountName != null && diagnosticStorageAccountName.length() > 0) {
+            logInfo("Diagnostic Storage Account is enabled for VM [%s]", computeDescription.name);
+            getStorageManagementClient(ctx).getStorageAccountsOperations().listKeysAsync(
+                    resourceGroupName, diagnosticStorageAccountName,
+                    new AzureAsyncCallback<StorageAccountKeys>() {
+
+                        @Override
+                        public void onError(Throwable e) {
+                            logSevere(e.getMessage());
+                        }
+
+                        @Override
+                        public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
+                            StorageAccountKeys keys = result.getBody();
+                            String key1 = keys.getKey1();
+                            String key2 = keys.getKey2();
+
+                            AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
+                            storageAuth.documentSelfLink = storageAuthLink;
+                            storageAuth.customProperties = new HashMap<>();
+                            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, key1);
+                            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, key2);
+                            storageAuth.tenantLinks = ctx.computeHostDesc.tenantLinks;
+
+                            Operation storageAuthOp = Operation
+                                    .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
+                                    .setBody(storageAuth);
+                            sendRequest(storageAuthOp);
+                        }
+                    });
+            StorageDescription storageDescription = new StorageDescription();
+            storageDescription.documentSelfLink = UUID.randomUUID().toString();
+            storageDescription.name = diagnosticStorageAccountName;
+            storageDescription.resourcePoolLink = ctx.enumRequest.resourcePoolLink;
+            storageDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
+            storageDescription.authCredentialsLink = UriUtils.buildUriPath(
+                    AuthCredentialsService.FACTORY_LINK,
+                    storageAuthLink);
+
+            storageOp = Operation
+                    .createPost(getHost(),
+                            StorageDescriptionService.FACTORY_LINK)
+                    .setBody(storageDescription);
+            opCollection.add(storageOp);
+
+            // Set the storage description link only if storage account is present
+            rootDisk.storageDescriptionLink = UriUtils.buildUriPath(
+                    StorageDescriptionService.FACTORY_LINK,
+                    storageDescription.documentSelfLink);
+        }
+
+        Operation diskOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
+                .setBody(rootDisk);
+        opCollection.add(diskOp);
 
         // Create compute state
         ComputeState resource = new ComputeState();
@@ -820,8 +831,9 @@ public class AzureEnumerationAdapterService extends StatelessService {
         Operation resourceOp = Operation
                 .createPost(getHost(), ComputeService.FACTORY_LINK)
                 .setBody(resource);
+        opCollection.add(resourceOp);
 
-        OperationJoin.create(authOp, compDescOp, storageOp, diskOp, resourceOp)
+        OperationJoin.create(opCollection)
                 .setCompletion((ops, exs) -> {
                     if (exs != null) {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
