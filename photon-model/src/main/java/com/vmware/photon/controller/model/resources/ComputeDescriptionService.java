@@ -317,7 +317,7 @@ public class ComputeDescriptionService extends StatefulService {
         ComputeDescription patchBody = getBody(patch);
 
         boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(), currentState, patchBody);
-        ResourceUtils.complePatchOperation(patch, hasStateChanged);
+        ResourceUtils.completePatchOperation(patch, hasStateChanged);
     }
 
     @Override

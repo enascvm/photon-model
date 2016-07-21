@@ -111,7 +111,7 @@ public class ResourceDescriptionService extends StatefulService {
 
         boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(),
                 currentState, patchBody);
-        ResourceUtils.complePatchOperation(patch, hasStateChanged);
+        ResourceUtils.completePatchOperation(patch, hasStateChanged);
 
     }
 

@@ -24,7 +24,7 @@ public class ResourceUtils {
      * @param patch the PATCH operation
      * @param hasStateChanged true if the patch has updated the service state, false otherwise
      */
-    public static void complePatchOperation(Operation patch, boolean hasStateChanged) {
+    public static void completePatchOperation(Operation patch, boolean hasStateChanged) {
         if (!hasStateChanged) {
             patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
         }

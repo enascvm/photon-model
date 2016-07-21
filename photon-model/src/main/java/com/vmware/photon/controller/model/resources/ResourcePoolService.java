@@ -179,7 +179,7 @@ public class ResourcePoolService extends StatefulService {
 
         boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(),
                 currentState, patchBody);
-        ResourceUtils.complePatchOperation(patch, hasStateChanged);
+        ResourceUtils.completePatchOperation(patch, hasStateChanged);
     }
 
     public void validateState(ResourcePoolState state) {

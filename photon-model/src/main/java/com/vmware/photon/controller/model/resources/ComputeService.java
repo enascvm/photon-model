@@ -336,7 +336,7 @@ public class ComputeService extends StatefulService {
             }
         }
 
-        ResourceUtils.complePatchOperation(patch, hasStateChanged);
+        ResourceUtils.completePatchOperation(patch, hasStateChanged);
     }
 
     @Override

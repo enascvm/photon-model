@@ -292,7 +292,7 @@ public class FirewallService extends StatefulService {
             currentState.egress = patchBody.egress;
             hasStateChanged = true;
         }
-        ResourceUtils.complePatchOperation(patch, hasStateChanged);
+        ResourceUtils.completePatchOperation(patch, hasStateChanged);
 
     }
 

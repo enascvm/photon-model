@@ -271,7 +271,7 @@ public class DiskService extends StatefulService {
             hasStateChanged = true;
         }
 
-        ResourceUtils.complePatchOperation(patch, hasStateChanged);
+        ResourceUtils.completePatchOperation(patch, hasStateChanged);
     }
 
     @Override

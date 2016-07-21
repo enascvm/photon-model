@@ -112,6 +112,6 @@ public class StorageDescriptionService extends StatefulService {
         StorageDescription patchBody = getBody(patch);
 
         boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(), currentState, patchBody);
-        ResourceUtils.complePatchOperation(patch, hasStateChanged);
+        ResourceUtils.completePatchOperation(patch, hasStateChanged);
     }
 }
