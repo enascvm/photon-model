@@ -21,10 +21,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 
-import java.net.URI;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
@@ -39,7 +36,6 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.ServiceDocument;
@@ -91,9 +87,7 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
                 EndpointAllocationTaskState.class,
                 UriUtils.buildUri(this.host, EndpointAllocationTaskService.FACTORY_LINK));
 
-        List<URI> uris = new ArrayList<URI>();
-        uris.add(UriUtils.buildUri(this.host, outTask.documentSelfLink));
-        ProvisioningUtils.waitForTaskCompletion(this.host, uris, EndpointAllocationTaskState.class);
+        this.host.waitForFinishedTask(EndpointAllocationTaskState.class, outTask.documentSelfLink);
     }
 
     @Test
@@ -108,9 +102,7 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
                 EndpointAllocationTaskState.class,
                 UriUtils.buildUri(this.host, EndpointAllocationTaskService.FACTORY_LINK));
 
-        List<URI> uris = new ArrayList<URI>();
-        uris.add(UriUtils.buildUri(this.host, outTask.documentSelfLink));
-        ProvisioningUtils.waitForTaskCompletion(this.host, uris, EndpointAllocationTaskState.class);
+        this.host.waitForFinishedTask(EndpointAllocationTaskState.class, outTask.documentSelfLink);
 
         EndpointAllocationTaskState taskState = getServiceSynchronously(outTask.documentSelfLink,
                 EndpointAllocationTaskState.class);

@@ -22,7 +22,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -30,7 +29,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -50,7 +48,6 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -159,9 +156,7 @@ public class TestAWSProvisionTask {
                 UriUtils.buildUri(this.host,
                         ProvisionComputeTaskService.FACTORY_LINK));
 
-        List<URI> uris = new ArrayList<URI>();
-        uris.add(UriUtils.buildUri(this.host, outTask.documentSelfLink));
-        ProvisioningUtils.waitForTaskCompletion(this.host, uris, ProvisionComputeTaskState.class );
+        this.host.waitForFinishedTask(ProvisionComputeTaskState.class, outTask.documentSelfLink);
 
         // check that the VM has been created
         ProvisioningUtils.queryComputeInstances(this.host, 2);

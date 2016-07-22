@@ -19,9 +19,6 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -122,10 +119,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 UriUtils.buildUri(this.host,
                         ProvisionComputeTaskService.FACTORY_LINK));
 
-        List<URI> uris = new ArrayList<>();
-        uris.add(UriUtils.buildUri(this.host, outTask.documentSelfLink));
-        ProvisioningUtils.waitForTaskCompletion(this.host, uris,
-                ProvisionComputeTaskState.class);
+        this.host.waitForFinishedTask(ProvisionComputeTaskState.class, outTask.documentSelfLink);
 
         // check that the VM has been created
         ProvisioningUtils.queryComputeInstances(this.host, 2);

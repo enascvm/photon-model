@@ -18,7 +18,10 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
+import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
@@ -36,7 +39,6 @@ public class TestUtils {
      * Generic doPost.
      *
      * @param host VerificationHost
-     * @param inState Body to POST
      * @param type Body type to return
      * @param uri URI to post to
      * @param <T> type
@@ -116,5 +118,36 @@ public class TestUtils {
         URL url = clazz.getResource(file);
         Path resPath = Paths.get(url.toURI());
         return new String(Files.readAllBytes(resPath), "UTF8");
+    }
+
+    /**
+     * Create a resource enumeration task.
+     * @param resourcePoolLink Link to the resource pool that hosts all resources.
+     * @param computeDescriptionLink Link to the compute host description.
+     * @param parentComputeLink Link to the compute host.
+     * @param adapterServiceLink Link to the enumeration adapter service.
+     * @param isMock If request is mock.
+     * @param tenantLinks Links to the tenants.
+     * @return The created resource enumeration task.
+     */
+    public static ResourceEnumerationTaskState createResourceEnumerationTask(String resourcePoolLink,
+                                                                             String computeDescriptionLink,
+                                                                             String parentComputeLink,
+                                                                             String adapterServiceLink,
+                                                                             boolean isMock,
+                                                                             List<String> tenantLinks) {
+        ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
+
+        enumerationTaskState.computeDescriptionLink = computeDescriptionLink;
+        enumerationTaskState.parentComputeLink = parentComputeLink;
+        enumerationTaskState.enumerationAction = EnumerationAction.START;
+        enumerationTaskState.adapterManagementReference = UriUtils.buildUri(adapterServiceLink);
+        enumerationTaskState.resourcePoolLink = resourcePoolLink;
+        enumerationTaskState.isMockRequest = isMock;
+        if (tenantLinks != null) {
+            enumerationTaskState.tenantLinks = tenantLinks;
+        }
+
+        return enumerationTaskState;
     }
 }

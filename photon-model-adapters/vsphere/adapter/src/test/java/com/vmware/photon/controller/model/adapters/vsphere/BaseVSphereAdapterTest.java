@@ -14,8 +14,6 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 import org.junit.After;
@@ -29,7 +27,6 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
-import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -154,9 +151,7 @@ public class BaseVSphereAdapterTest {
     }
 
     protected void awaitTaskEnd(TaskServiceState outTask) throws Throwable {
-        List<URI> uris = new ArrayList<>();
-        uris.add(UriUtils.buildUri(this.host, outTask.documentSelfLink));
-        ProvisioningUtils.waitForTaskCompletion(this.host, uris, outTask.getClass());
+        this.host.waitForFinishedTask(outTask.getClass(), outTask.documentSelfLink);
     }
 
     protected AuthCredentialsServiceState createAuth() throws Throwable {

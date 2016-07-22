@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.gcp.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
+import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.DEFAULT_DISK_CAPACITY;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.DEFAULT_DISK_SERVICE_REFERENCE;
@@ -51,6 +52,7 @@ import java.util.function.Consumer;
 
 import com.google.api.services.compute.ComputeScopes;
 
+import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -138,11 +140,17 @@ public class GCPEnumerationAdapterService extends StatelessService {
         String privateKey;
         String projectId;
         String zoneId;
+        Operation gcpAdapterOperation;
 
-        EnumerationContext(ComputeEnumerateResourceRequest request) {
-            this.enumRequest = request;
+        EnumerationContext(Operation op) {
+            this.gcpAdapterOperation = op;
+            this.enumRequest = op.getBody(ComputeEnumerateResourceRequest.class);
             this.stage = EnumerationStages.HOSTDESC;
         }
+    }
+
+    public GCPEnumerationAdapterService() {
+        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
     /**
@@ -151,15 +159,15 @@ public class GCPEnumerationAdapterService extends StatelessService {
      */
     @Override
     public void handlePatch(Operation op) {
+        setOperationHandlerInvokeTimeStat(op);
         if (!op.hasBody()) {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        op.complete();
-        EnumerationContext ctx = new EnumerationContext(
-                op.getBody(ComputeEnumerateResourceRequest.class));
+        EnumerationContext ctx = new EnumerationContext(op);
         AdapterUtils.validateEnumRequest(ctx.enumRequest);
         if (ctx.enumRequest.isMockRequest) {
+            op.complete();
             AdapterUtils.sendPatchToEnumerationTask(this,ctx.enumRequest.taskReference);
             return;
         }
@@ -219,8 +227,11 @@ public class GCPEnumerationAdapterService extends StatelessService {
             break;
         case FINISHED:
             AdapterUtils.sendPatchToEnumerationTask(this, ctx.enumRequest.taskReference);
+            setOperationDurationStat(ctx.gcpAdapterOperation);
+            ctx.gcpAdapterOperation.complete();
             break;
         case ERROR:
+            ctx.gcpAdapterOperation.fail(ctx.error);
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     ctx.enumRequest.taskReference, ctx.error);
             break;
@@ -228,6 +239,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
             String msg = String.format("Unknown GCP enumeration stage %s ", ctx.stage.toString());
             logSevere(msg);
             ctx.error = new IllegalStateException(msg);
+            ctx.gcpAdapterOperation.fail(ctx.error);
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     ctx.enumRequest.taskReference, ctx.error);
         }
@@ -492,6 +504,10 @@ public class GCPEnumerationAdapterService extends StatelessService {
         resource.diskLinks = vmDisks;
         resource.customProperties = new HashMap<>();
         resource.customProperties.put(CUSTOM_DISPLAY_NAME, virtualMachine.name);
+        String osType = getNormalizedOSType(virtualMachine);
+        if (osType != null) {
+            resource.customProperties.put(CUSTOM_OS_TYPE, osType);
+        }
         resource.tenantLinks = ctx.computeHostDesc.tenantLinks;
         assignIPAddress(resource, virtualMachine);
         assignPowerState(resource, virtualMachine.status);
@@ -890,5 +906,32 @@ public class GCPEnumerationAdapterService extends StatelessService {
         ctx.error = e;
         ctx.stage = EnumerationStages.ERROR;
         handleEnumerationRequest(ctx);
+    }
+
+    /**
+     * Get the os type from GCP instance response.
+     * @param instance The response of GCP instance resource.
+     * @return The string value of the os type.
+     */
+    private String getNormalizedOSType(GCPInstance instance) {
+        if (instance.disks == null || instance.disks.isEmpty()) {
+            return null;
+        }
+        String license = null;
+        for (GCPDisk disk : instance.disks) {
+            if (disk.boot) {
+                if (disk.licenses != null && disk.licenses.size() == 1) {
+                    license = disk.licenses.get(0).toLowerCase();
+                }
+                break;
+            }
+        }
+        if (license == null) {
+            return null;
+        }
+        if (license.contains("windows")) {
+            return OSType.WINDOWS.toString();
+        }
+        return OSType.LINUX.toString();
     }
 }

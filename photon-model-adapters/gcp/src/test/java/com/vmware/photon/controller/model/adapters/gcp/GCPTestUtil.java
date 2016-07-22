@@ -20,22 +20,32 @@ import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConst
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.DEFAULT_IMAGE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.DISK_TYPE_PERSISTENT;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.OPERATION_STATUS_DONE;
+import static com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils.privateKeyFromPkcs8;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_GCP;
+import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
+import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getVMCount;
 
 import java.io.IOException;
 import java.net.URI;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
+import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.HttpTransport;
+import com.google.api.client.json.JsonFactory;
+import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.compute.Compute;
+import com.google.api.services.compute.Compute.Instances;
 import com.google.api.services.compute.ComputeScopes;
 import com.google.api.services.compute.model.AccessConfig;
 import com.google.api.services.compute.model.AttachedDisk;
@@ -45,6 +55,7 @@ import com.google.api.services.compute.model.InstanceList;
 import com.google.api.services.compute.model.NetworkInterface;
 import com.google.api.services.compute.model.ServiceAccount;
 
+import com.vmware.photon.controller.model.adapters.gcp.enumeration.GCPEnumerationAdapterService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -54,9 +65,12 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
@@ -78,11 +92,10 @@ public class GCPTestUtil {
     private static final String BOOT_DISK_NAME_SUFFIX = "-boot-disk";
     private static final String DISK_TYPE = "https://www.googleapis" +
             ".com/compute/v1/projects/%s/zones/%s/diskTypes/pd-standard";
-    private static final long WAIT_INTERVAL = 5000;
+    private static final long WAIT_INTERVAL = 1000;
     private static final int MIN_CPU_COUNT = 1;
     private static final int MIN_MEMORY_BYTES = 1024;
-
-    private static volatile boolean queryResult = false;
+    private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
 
     /**
      * Create a resource pool where the VM will be housed.
@@ -279,109 +292,180 @@ public class GCPTestUtil {
 
     /**
      * Stop the instances of specified project and zone.
+     * @param host The test service host.
      * @param compute The Google Compute Engine client.
      * @param projectId The GCP project ID.
      * @param zoneId The GCP project's zone ID.
+     * @param instanceNames The list of instances' names to be stopped.
      * @throws IOException The IO exception during stopping remote instances.
      */
-    public static void stopInstances(Compute compute, String projectId, String zoneId, VerificationHost host)
-            throws IOException {
-        InstanceList instances = compute.instances().list(projectId, zoneId).execute();
-        if (instances.getItems() != null) {
-            instances.getItems().forEach(instance -> {
+    public static void stopInstances(VerificationHost host, Compute compute, String projectId, String zoneId,
+                                     List<String> instanceNames, int batchSize, long interval) throws Throwable {
+        if (batchSize <= 0) {
+            throw new Exception("batch size cannot be less or equal to zero.");
+        }
+        if (interval <= 0) {
+            throw new Exception("waiting interval cannot be less or equal to zero");
+        }
+        if (instanceNames != null) {
+            int num = instanceNames.size();
+            com.google.api.services.compute.model.Operation[] ops =
+                    new com.google.api.services.compute.model.Operation[num];
+            String[] zones = new String[num];
+            String[] opIds = new String[num];
+            for (int i = 0;i < num;i++) {
+                String instanceName = instanceNames.get(i);
                 try {
-                    com.google.api.services.compute.model.Operation op =
-                            compute.instances().stop(projectId, zoneId, instance.getName()).execute();
-                    String zone = op.getZone();
-                    zone = extractZoneFromZoneUri(zone);
-
-                    String opId = op.getName();
-
-                    waitForOperationsDone(compute, projectId,
-                            new com.google.api.services.compute.model.Operation[] {op},
-                            new String[] {zone}, new String[] {opId}, host);
-                } catch (IOException e) {
-                    host.log(Level.WARNING, String.format("Error: %s", e.getMessage()));
+                    ops[i] = compute.instances().stop(projectId, zoneId, instanceName).execute();
+                    zones[i] = ops[i].getZone();
+                    zones[i] = extractZoneFromZoneUri(zones[i]);
+                    opIds[i] = ops[i].getName();
+                    // There is an upper bound for the frequency of making Google API calls.
+                    // This is to prevent making too much API calls in a very short time.
+                    if ((i + 1) % batchSize == 0) {
+                        TimeUnit.MILLISECONDS.sleep(interval);
+                    }
+                } catch (Exception e) {
+                    host.log(Level.WARNING, "Error when stopping instances: " + e.getMessage());
                 }
-            });
+            }
+            waitForOperationsDone(host, compute, projectId, ops, zones, opIds);
         }
     }
 
     /**
      * Delete the instances of specified project and zone.
+     * @param host The test service host.
      * @param compute The Google Compute Engine client.
      * @param projectId The GCP project ID.
      * @param zoneId The GCP project's zone ID.
+     * @param instanceNames The list of instances' names to be deleted.
+     * @param batchSize The batch size.
+     * @param interval The waiting interval.
+     * @return The list of instances to be cleaned up.
      * @throws IOException The IO exception during deleting remote instances.
      */
-    public static void deleteInstances(Compute compute, String projectId, String zoneId, VerificationHost host)
-            throws IOException {
-        InstanceList instances = compute.instances().list(projectId, zoneId).execute();
-        if (instances.getItems() != null) {
-            instances.getItems().forEach(instance -> {
-                try {
-                    com.google.api.services.compute.model.Operation op =
-                            compute.instances().delete(projectId, zoneId, instance.getName()).execute();
-                    String zone = op.getZone();
-                    zone = extractZoneFromZoneUri(zone);
-
-                    String opId = op.getName();
-
-                    waitForOperationsDone(compute, projectId,
-                            new com.google.api.services.compute.model.Operation[] {op},
-                            new String[] {zone}, new String[] {opId}, host);
-                } catch (IOException e) {
-                    host.log(Level.WARNING, String.format("Error: %s", e.getMessage()));
-                }
-            });
+    public static List<String> deleteInstances(VerificationHost host, Compute compute, String projectId, String zoneId,
+                                               List<String> instanceNames, int batchSize, long interval)
+            throws Throwable {
+        if (batchSize <= 0) {
+            throw new Exception("batch size cannot be less or equal to zero.");
         }
+        if (interval <= 0) {
+            throw new Exception("waiting interval cannot be less or equal to zero");
+        }
+        List<String> instancesToCleanUp = new ArrayList<>();
+        if (instanceNames != null) {
+            int num = instanceNames.size();
+            com.google.api.services.compute.model.Operation[] ops =
+                    new com.google.api.services.compute.model.Operation[num];
+            String[] zones = new String[num];
+            String[] opIds = new String[num];
+            for (int i = 0;i < num;i++) {
+                String instanceName = instanceNames.get(i);
+                try {
+                    ops[i] = compute.instances().delete(projectId, zoneId, instanceName).execute();
+                    zones[i] = ops[i].getZone();
+                    zones[i] = extractZoneFromZoneUri(zones[i]);
+                    opIds[i] = ops[i].getName();
+                    // There is an upper bound for the frequency of making Google API calls.
+                    // This is to prevent making too much API calls in a very short time.
+                    if ((i + 1) % batchSize == 0) {
+                        TimeUnit.MILLISECONDS.sleep(interval);
+                    }
+                } catch (Exception e) {
+                    host.log(Level.WARNING, "Error when deleting instances: " + e.getMessage());
+                    e.printStackTrace();
+                    instancesToCleanUp.add(instanceName);
+                }
+            }
+            waitForOperationsDone(host, compute, projectId, ops, zones, opIds);
+        }
+        return instancesToCleanUp;
     }
 
     /**
-     * Provision the instances of specified project and zone.
+     * Provision the given number of instances in specified project and zone.
+     * @param host The test service host.
      * @param compute The Google Compute Engine client.
      * @param userEmail The service account's client email.
      * @param projectId The GCP project ID.
      * @param zoneId The GCP project's zone ID.
      * @param n The number of instances to provision.
+     * @param batchSize The batch size.
+     * @param interval The waiting interval.
      * @throws Throwable The exception during provisioning remote instances.
      */
-    public static void provisionInstances(Compute compute, String userEmail, String projectId,
-            String zoneId, int n, VerificationHost host) throws Throwable {
+    public static List<String> provisionInstances(VerificationHost host, Compute compute, String userEmail,
+                                                  String projectId, String zoneId, int n, int batchSize, long interval)
+            throws Throwable {
+        if (n < 0) {
+            throw new IllegalArgumentException("the number of instances to be provisioned cannot be negative.");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batch size cannot be less or equal to zero.");
+        }
+        if (interval <= 0) {
+            throw new IllegalArgumentException("waiting interval cannot be less or equal to zero");
+        }
+        List<String> scopes = Collections.singletonList(ComputeScopes.CLOUD_PLATFORM);
+        List<String> instanceNames = new ArrayList<>();
         com.google.api.services.compute.model.Operation[] ops =
                 new com.google.api.services.compute.model.Operation[n];
         String[] zones = new String[n];
         String[] opIds = new String[n];
-        List<String> scopes = Collections.singletonList(ComputeScopes.CLOUD_PLATFORM);
+        Instance instance = createInstanceTemplate(userEmail, projectId, zoneId, scopes);
 
         for (int i = 0;i < n;i++) {
-            ops[i] = provisionOneInstance(userEmail, projectId, zoneId,
-                    ENUMERATION_TEST_INSTANCE + i, scopes, compute);
+            String instanceName = ENUMERATION_TEST_INSTANCE + i;
+            instanceNames.add(instanceName);
+            ops[i] = provisionOneInstance(compute, instance, instanceName, projectId, zoneId);
             zones[i] = ops[i].getZone();
             zones[i] = extractZoneFromZoneUri(zones[i]);
-
             opIds[i] = ops[i].getName();
+            // There is an upper bound for the frequency of making Google API calls.
+            // This is to prevent making too much API calls in a very short time.
+            if ((i + 1) % batchSize == 0) {
+                TimeUnit.MILLISECONDS.sleep(interval);
+            }
         }
 
-        waitForOperationsDone(compute, projectId, ops, zones, opIds, host);
+        waitForOperationsDone(host, compute, projectId, ops, zones, opIds);
+
+        return instanceNames;
     }
 
     /**
      * Provision one instance of the specified project and zone.
-     * @param userEmail The service account's client email.
+     * @param compute The compute service used to call GCE APIs.
      * @param projectId The service account's project ID.
      * @param zoneId The GCP project's zone ID.
-     * @param instanceName The random instance name of the instance.
-     * @param scopes The scopes of the service account.
-     * @param compute The compute service used to call GCE APIs.
      * @return The Operation of provisioning the instance.
      * @throws Throwable The exception during creating the instance.
      */
-    private static com.google.api.services.compute.model.Operation provisionOneInstance(
-            String userEmail, String projectId, String zoneId, String instanceName,
-            List<String> scopes, Compute compute) throws Throwable {
-        Instance instance = new Instance();
+    private static com.google.api.services.compute.model.Operation provisionOneInstance(Compute compute,
+                                                                                        Instance instance,
+                                                                                        String instanceName,
+                                                                                        String projectId,
+                                                                                        String zoneId)
+            throws Throwable {
         instance.setName(instanceName);
+        instance.getDisks().get(0).getInitializeParams().setDiskName(instanceName);
+        Compute.Instances.Insert insert = compute.instances().insert(projectId, zoneId, instance);
+        return insert.execute();
+    }
+
+    /**
+     * Create an instance template for later provisioning.
+     * @param userEmail The service account's client email.
+     * @param projectId The project id.
+     * @param zoneId The zone id.
+     * @param scopes The priority scopes.
+     * @return The instance template.
+     */
+    private static Instance createInstanceTemplate(String userEmail, String projectId, String zoneId,
+                                                   List<String> scopes) {
+        Instance instance = new Instance();
         instance.setMachineType(String.format(ENUMERATION_TEST_MACHINE_TYPE, projectId, zoneId));
 
         NetworkInterface ifc = new NetworkInterface();
@@ -399,7 +483,6 @@ public class GCPTestUtil {
         disk.setAutoDelete(true);
         disk.setType(DISK_TYPE_PERSISTENT);
         AttachedDiskInitializeParams params = new AttachedDiskInitializeParams();
-        params.setDiskName(instanceName);
         params.setSourceImage(SOURCE_IMAGE);
         params.setDiskType(String.format(DISK_TYPE, projectId, zoneId));
         disk.setInitializeParams(params);
@@ -410,10 +493,8 @@ public class GCPTestUtil {
         account.setScopes(scopes);
         instance.setServiceAccounts(Collections.singletonList(account));
 
-        Compute.Instances.Insert insert = compute.instances().insert(projectId, zoneId, instance);
-        return insert.execute();
+        return instance;
     }
-
     /**
      * Generate a random name with the specified prefix.
      * @param prefix The prefix of the random name.
@@ -433,44 +514,129 @@ public class GCPTestUtil {
     }
 
     /**
+     * Get a Google Compute Engine client object.
+     * @param userEmail The service account's client email.
+     * @param privateKey The service account's private key.
+     * @param scopes The scopes used in the compute client object.
+     * @param applicationName The application name.
+     * @return The created Compute Engine client object.
+     * @throws GeneralSecurityException Exception when creating http transport.
+     * @throws IOException Exception when creating http transport.
+     */
+    public static Compute getGoogleComputeClient(String userEmail,
+                                                 String privateKey,
+                                                 List<String> scopes,
+                                                 String applicationName)
+            throws GeneralSecurityException, IOException {
+        HttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+        GoogleCredential credential = new GoogleCredential.Builder()
+                .setTransport(httpTransport)
+                .setJsonFactory(JSON_FACTORY)
+                .setServiceAccountId(userEmail)
+                .setServiceAccountScopes(scopes)
+                .setServiceAccountPrivateKey(privateKeyFromPkcs8(privateKey))
+                .build();
+        return new Compute.Builder(httpTransport, JSON_FACTORY, credential)
+                .setApplicationName(applicationName)
+                .build();
+    }
+
+    /**
+     * Method to perform compute resource enumeration on the GCP endpoint.
+     * @param host The test service host.
+     * @param peerURI The peer uri.
+     * @param enumTask The enumeration task.
+     * @return The enumeration task state.
+     * @throws Throwable Exception when sending enumeration request.
+     */
+    public static ResourceEnumerationTaskState performResourceEnumeration(VerificationHost host,
+                                                                          URI peerURI,
+                                                                          ResourceEnumerationTaskState enumTask)
+            throws Throwable {
+        URI uri = createServiceURI(host, peerURI, ResourceEnumerationTaskService.FACTORY_LINK);
+        return TestUtils.doPost(host, enumTask, ResourceEnumerationTaskState.class, uri);
+    }
+
+    /**
+     * Get the number of instances on specified GCP project and zone.
+     * @param compute The GCE client object.
+     * @param projectId The project id.
+     * @param zoneId The zone id.
+     * @return The number of instances.
+     * @throws Throwable Exception during query the number of instances.
+     */
+    public static int getInstanceNumber(Compute compute, String projectId, String zoneId) throws Throwable {
+        Instances instanceList = compute.instances();
+        Instances.List list = instanceList.list(projectId, zoneId);
+        InstanceList ins = list.execute();
+        List<Instance> instances = ins.getItems();
+        if (instances == null) {
+            return 0;
+        }
+        return instances.size();
+    }
+
+    /**
+     * Method to run enumeration on GCP endpoint.
+     * @param host The test service host.
+     * @param peerURI The peer uri.
+     * @param enumTask The enumeration task to run.
+     * @param testCase The test case name.
+     * @throws Throwable Exception when running enumeration tasks.
+     */
+    public static void enumerateResources(VerificationHost host, URI peerURI,
+                                          ResourceEnumerationTaskState enumTask, String testCase)
+            throws Throwable {
+        // Perform resource enumeration on the GCP end point.
+        // Pass the references to the GCP compute host.
+        host.log("Performing resource enumeration");
+        ResourceEnumerationTaskState enumTaskState = performResourceEnumeration(host, peerURI, enumTask);
+
+        // Wait for the enumeration task to be completed.
+        host.waitForFinishedTask(ResourceEnumerationTaskState.class,
+                createServiceURI(host, peerURI, enumTaskState.documentSelfLink));
+
+        host.log("\n==%s==Total Time Spent in Enumeration==\n", testCase + getVMCount(host, peerURI));
+        ServiceStats enumerationStats = host.getServiceState(null, ServiceStats.class, UriUtils
+                .buildStatsUri(createServiceURI(host, peerURI, GCPEnumerationAdapterService.SELF_LINK)));
+        host.log(Utils.toJsonHtml(enumerationStats));
+    }
+
+    /**
      * Query if there are desired number of compute states
      * with desired power states.
      * @param host The host server of the test.
      * @param resourcePool The default resource pool.
      * @param parentCompute The default compute host.
      * @param powerState The desired power state.
-     * @param num The desired number of compute states.
-     * @throws TimeoutException
+     * @param instanceNames The desired names of compute states.
+     * @throws Throwable When reach the time limit.
      */
     public static void syncQueryComputeStatesWithPowerState(VerificationHost host,
                                                             ResourcePoolState resourcePool,
                                                             ComputeState parentCompute,
                                                             PowerState powerState,
-                                                            int num)
-            throws TimeoutException {
-        Date expiration = host.getTestExpiration();
-        do {
-            queryComputeStatesWithPowerState(host, resourcePool, parentCompute,
-                    powerState, num);
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                host.log(Level.WARNING, String.format("Error: %s", e.getMessage()));
-            }
-            if (queryResult) {
-                queryResult = false;
-                return;
-            }
-        } while (new Date().before(expiration));
-        throw new TimeoutException("Desired number of compute states with power state "
-                + powerState.toString() + " not found.");
+                                                            Set<String> instanceNames)
+            throws Throwable {
+        host.waitFor("Waiting for changes of power statuses", () -> {
+            queryComputeStatesWithPowerState(host, resourcePool, parentCompute, powerState, instanceNames);
+            return instanceNames.isEmpty();
+        });
     }
 
+    /**
+     * Method to query the number of local compute states with given power state.
+     * @param host The test service host.
+     * @param resourcePool The default resource pool.
+     * @param parentCompute The default compute host.
+     * @param powerState The given power state.
+     * @param instanceNames The assumed names of compute states.
+     */
     private static void queryComputeStatesWithPowerState(VerificationHost host,
                                                         ResourcePoolState resourcePool,
                                                         ComputeState parentCompute,
                                                         PowerState powerState,
-                                                        int num) {
+                                                         Set<String> instanceNames) {
         Query query = QueryTask.Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
@@ -494,33 +660,33 @@ public class GCPTestUtil {
                         return;
                     }
                     QueryTask queryTask = o.getBody(QueryTask.class);
-                    if (queryTask.results.documentCount == num) {
-                        for (Object s : queryTask.results.documents.values()) {
+                    if (queryTask.results.documentCount > 0) {
+                        queryTask.results.documents.values().forEach(s -> {
                             ComputeState computeState = Utils.fromJson(s, ComputeState.class);
-                            if (!computeState.powerState.equals(powerState)) {
-                                return;
+                            if (computeState.powerState == powerState) {
+                                instanceNames.remove(computeState.customProperties.get(CUSTOM_DISPLAY_NAME));
                             }
-                        }
-                        queryResult = true;
+                        });
                     }
                 }));
     }
 
     /**
      * Wait for all the operations to be done.
+     * @param host The test service host.
      * @param compute The Google Compute Engine client.
      * @param projectId The project id.
      * @param ops The operations.
      * @param zones The zones.
      * @param opIds The operation ids.
-     * @throws IOException
+     * @throws IOException When operation fails on fetch status.
      */
-    private static void waitForOperationsDone(Compute compute,
+    private static void waitForOperationsDone(VerificationHost host,
+                                              Compute compute,
                                               String projectId,
                                               com.google.api.services.compute.model.Operation[] ops,
                                               String[] zones,
-                                              String[] opIds,
-                                              VerificationHost host) throws IOException {
+                                              String[] opIds) throws IOException {
         for (int i = 0;i < ops.length;i++) {
             while (ops[i] != null && !ops[i].getStatus().equals(OPERATION_STATUS_DONE)) {
                 try {

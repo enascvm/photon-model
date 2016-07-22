@@ -13,9 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import java.net.URI;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -29,14 +27,12 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
-import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
-
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -114,11 +110,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host,
                         ResourceEnumerationTaskService.FACTORY_LINK));
 
-        List<URI> uris = new ArrayList<>();
-        uris.add(UriUtils.buildUri(this.host, outTask.documentSelfLink));
-
-        ProvisioningUtils
-                .waitForTaskCompletion(this.host, uris, ResourceEnumerationTaskState.class);
+        this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
     }
 
     /**

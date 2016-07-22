@@ -20,7 +20,6 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.UUID;
@@ -35,7 +34,6 @@ import com.microsoft.azure.management.compute.models.VirtualMachine;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
 import com.microsoft.rest.ServiceResponse;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -57,7 +55,6 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -163,9 +160,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 .doPost(this.host, provisionTask, ProvisionComputeTaskState.class,
                         UriUtils.buildUri(this.host, ProvisionComputeTaskService.FACTORY_LINK));
 
-        List<URI> uris = new ArrayList<>();
-        uris.add(UriUtils.buildUri(this.host, outTask.documentSelfLink));
-        ProvisioningUtils.waitForTaskCompletion(this.host, uris, ProvisionComputeTaskState.class);
+        this.host.waitForFinishedTask(ProvisionComputeTaskState.class, outTask.documentSelfLink);
 
         // check that the VM has been created
         // 1 compute host instance + 1 vm compute state

@@ -27,8 +27,6 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -71,11 +69,9 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOptions;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceStats;
-import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
@@ -452,9 +448,7 @@ public class TestAWSSetupUtils {
                 createServiceURI(host, peerURI,
                         ProvisionComputeTaskService.FACTORY_LINK));
 
-        List<URI> uris = new ArrayList<URI>();
-        uris.add(UriUtils.buildUri(host, outTask.documentSelfLink));
-        ProvisioningUtils.waitForTaskCompletion(host, uris, ProvisionComputeTaskState.class);
+        host.waitForFinishedTask(ProvisionComputeTaskState.class, outTask.documentSelfLink);
 
         ComputeState provisionCompute = getCompute(host, vmState.documentSelfLink);
         assertNotNull(provisionCompute);
@@ -679,9 +673,9 @@ public class TestAWSSetupUtils {
                 computeHostLink,
                 tenantLinks);
         // Wait for the enumeration task to be completed.
-        host.waitFor("Error waiting for enumeration task for creation", () -> {
-            return checkEnumerationTaskCompletion(host, peerURI, enumTask);
-        });
+        host.waitForFinishedTask(ResourceEnumerationTaskState.class,
+                createServiceURI(host, peerURI, enumTask.documentSelfLink));
+
         host.log("\n==%s==Total Time Spent in Enumeration==\n",
                 testCase + getVMCount(host, peerURI));
         ServiceStats enumerationStats = host.getServiceState(null, ServiceStats.class, UriUtils
@@ -711,38 +705,6 @@ public class TestAWSSetupUtils {
                         .buildStatsUri(createServiceURI(host, peerURI,
                                 AWSEnumerationAndDeletionAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(deletionEnumerationStats));
-    }
-
-    /**
-     * Checks is the Enumeration task state is FINISHED and throws an error if the
-     * enumeration task has failed.
-     * @param enumTask
-     * @return boolean indicating the completion of the enumeration task.
-     * @throws Throwable
-     */
-    public static boolean checkEnumerationTaskCompletion(VerificationHost host, URI peerURI,
-            ResourceEnumerationTaskService.ResourceEnumerationTaskState enumTask) throws Throwable {
-        URI[] enumerationUris = { createServiceURI(host, peerURI, enumTask.documentSelfLink) };
-        Map<URI, ResourceEnumerationTaskService.ResourceEnumerationTaskState> enumTasks = host
-                .getServiceState(null,
-                        ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
-                        enumerationUris);
-        boolean endLoop = true;
-        for (Entry<URI, ResourceEnumerationTaskService.ResourceEnumerationTaskState> e : enumTasks
-                .entrySet()) {
-            ResourceEnumerationTaskService.ResourceEnumerationTaskState currentState = e
-                    .getValue();
-            if (currentState.taskInfo.stage == TaskState.TaskStage.FAILED) {
-                throw new IllegalStateException(
-                        "Task failed:" + Utils.toJsonHtml(currentState));
-            }
-            if (currentState.taskInfo.stage != TaskState.TaskStage.FINISHED) {
-                // this will record the state for all the tasks. Only exit when all the enumeration
-                // tasks have finished.
-                endLoop = endLoop & false;
-            }
-        }
-        return endLoop;
     }
 
     /**
@@ -781,6 +743,7 @@ public class TestAWSSetupUtils {
         return enumTask;
 
     }
+
     /**
      * Deletes instances on the AWS endpoint for the set of instance Ids that are passed in.
      * @param instanceIdsToDelete

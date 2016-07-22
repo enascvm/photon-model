@@ -18,7 +18,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
@@ -34,7 +33,6 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
-import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -110,11 +108,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host,
                         ResourceEnumerationTaskService.FACTORY_LINK));
 
-        List<URI> uris = new ArrayList<>();
-        uris.add(UriUtils.buildUri(this.host, outTask.documentSelfLink));
-
-        ProvisioningUtils
-                .waitForTaskCompletion(this.host, uris, ResourceEnumerationTaskState.class);
+        this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
     }
 
     /**

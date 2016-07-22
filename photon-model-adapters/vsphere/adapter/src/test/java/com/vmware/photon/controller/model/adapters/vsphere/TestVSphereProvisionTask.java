@@ -18,7 +18,6 @@ import static org.junit.Assert.fail;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.UUID;
 
 import org.junit.Test;
@@ -39,7 +38,6 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
-import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.SnapshotTaskService;
 import com.vmware.photon.controller.model.tasks.SnapshotTaskService.SnapshotTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -111,9 +109,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host,
                         SnapshotTaskService.FACTORY_LINK));
 
-        ProvisioningUtils.waitForTaskCompletion(this.host, Collections.singletonList(
-                UriUtils.buildUri(this.host, outSts.documentSelfLink)),
-                SnapshotTaskState.class);
+        this.host.waitForFinishedTask(SnapshotTaskState.class, outSts.documentSelfLink);
 
         SnapshotState stateAfterTaskComplete = this.host.getServiceState(null, SnapshotState.class,
                 UriUtils.buildUri(this.host, snapshotState.documentSelfLink));
