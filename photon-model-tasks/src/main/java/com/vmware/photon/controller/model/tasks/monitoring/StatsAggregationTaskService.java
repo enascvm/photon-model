@@ -234,8 +234,8 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         aggrMetricState.aggregations = new HashMap<String, DataPoint>();
         aggrMetricState.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(bucketForInterval);
         aggrMetricState.tenantLinks = tenantLinks;
-        aggrMetricState.documentSelfLink = UriUtils.buildUriPath(
-                UriUtils.getLastPathSegment(computeServiceLink), "-", Long.toString(bucketForInterval)) ;
+        aggrMetricState.documentSelfLink = new StringBuilder().append(UriUtils.getLastPathSegment(computeServiceLink))
+                .append("-").append(Long.toString(bucketForInterval)).toString();
         return aggrMetricState;
     }
 
