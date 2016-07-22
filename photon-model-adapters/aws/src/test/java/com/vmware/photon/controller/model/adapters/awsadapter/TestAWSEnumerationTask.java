@@ -26,7 +26,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryResultLimit;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.cleanupEC2ClientResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
@@ -170,16 +169,15 @@ public class TestAWSEnumerationTask extends BasicReusableHostTestCase {
             // Delete all vms from the endpoint that were provisioned from the test.
             this.host.log("Deleting %d instance created from the test ",
                     this.instancesToCleanUp.size());
-            if (this.instancesToCleanUp.size() == 0) {
-                cleanupEC2ClientResources(this.client);
-                return;
+            if (this.instancesToCleanUp.size() >= 0) {
+                deleteVMsOnThisEndpoint(this.host, this.isMock,
+                        this.outComputeHost.documentSelfLink, this.instancesToCleanUp);
+                // Check that all the instances that are required to be deleted are in
+                // terminated state on AWS
+                waitForInstancesToBeTerminated(this.client, this.host, this.instancesToCleanUp);
             }
-            deleteVMsOnThisEndpoint(this.host, this.isMock,
-                    this.outComputeHost.documentSelfLink, this.instancesToCleanUp);
-            // Check that all the instances that are required to be deleted are in
-            // terminated state on AWS
-            waitForInstancesToBeTerminated(this.client, this.host, this.instancesToCleanUp);
-            cleanupEC2ClientResources(this.client);
+
+            this.client.shutdown();
             setAwsClientMockInfo(false, null);
         } catch (Throwable deleteEx) {
             // just log and move on

@@ -20,8 +20,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths.AWS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.awaitTermination;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.cleanupCloudWatchClientResources;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.cleanupEC2ClientResources;
 
 import java.net.URI;
 import java.util.concurrent.ExecutorService;
@@ -149,14 +147,14 @@ public class AWSClientManager {
     public void cleanUp() {
         if (this.statsFlag) {
             for (AmazonCloudWatchAsyncClient client : this.cloudWatchClientCache.values()) {
-                cleanupCloudWatchClientResources(client);
+                client.shutdown();
             }
             cleanupExecutorCache();
             this.cloudWatchClientCache.clear();
             return;
         }
         for (AmazonEC2AsyncClient client : this.ec2ClientCache.values()) {
-            cleanupEC2ClientResources(client);
+            client.shutdown();
         }
         cleanupExecutorCache();
         this.ec2ClientCache.clear();

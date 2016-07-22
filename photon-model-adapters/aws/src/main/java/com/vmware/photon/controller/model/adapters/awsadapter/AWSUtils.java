@@ -176,29 +176,6 @@ public class AWSUtils {
         return new Filter().withName(name).withValues(value);
     }
 
-    /**
-     * Releases all the resources allocated for the use of the AWS EC2 client.
-     */
-    public static void cleanupEC2ClientResources(AmazonEC2AsyncClient client) {
-        if (client != null) {
-            client.shutdown();
-            // To ensure that no requests are made on a client on which shutdown has already been
-            // invoked.
-            client = null;
-        }
-    }
-
-    /**
-     * Releases all the resources allocated for the use of the AWS CloudWatchAsync client.
-     */
-    public static void cleanupCloudWatchClientResources(AmazonCloudWatchAsyncClient client) {
-        if (client != null) {
-            client.shutdown();
-            // To ensure that no requests are made on a client on which shutdown has already been
-            // invoked.
-            client = null;
-        }
-    }
 
     /**
      * Returns the region Id for the AWS instance

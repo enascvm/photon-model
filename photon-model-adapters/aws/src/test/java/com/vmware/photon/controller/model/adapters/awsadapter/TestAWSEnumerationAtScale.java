@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.cleanupEC2ClientResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
@@ -154,7 +153,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     waitForInstancesToBeTerminated(this.client, this.host, instanceBatchToDelete);
                 }
             }
-            cleanupEC2ClientResources(this.client);
+            this.client.shutdown();
             setAwsClientMockInfo(false, null);
         } catch (Throwable deleteEx) {
             // just log and move on
@@ -166,7 +165,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
      * Re-initializes the AWS client so that the outstanding memory buffers and threads are released back.
      */
     private void bounceAWSClient() {
-        cleanupEC2ClientResources(this.client);
+        this.client.shutdown();
         this.client = AWSUtils.getAsyncClient(this.creds, TestAWSSetupUtils.zoneId, getExecutor());
     }
 
