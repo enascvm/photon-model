@@ -340,6 +340,7 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
                                         "PATCH to instance service %s, failed: %s",
                                         deleteOp.getUri(), e.toString());
                                 ResourceRemovalTaskState subTaskPatchBody = new ResourceRemovalTaskState();
+                                subTaskPatchBody.taskInfo = new TaskState();
                                 subTaskPatchBody.taskInfo.stage = TaskState.TaskStage.FAILED;
                                 sendPatch(UriUtils.buildUri(getHost(),
                                         subTaskLink), subTaskPatchBody);
