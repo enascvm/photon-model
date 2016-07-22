@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.stats;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -272,15 +273,16 @@ public class AzureStatsService extends StatelessService {
             }
         }
 
+        computeStats.statValues = new ConcurrentSkipListMap<>();
         // Divide each metric value by the number of computes to get an average value.
         for (String key : statMap.keySet()) {
             ServiceStat serviceStatValue = statMap.get(key);
             serviceStatValue.unit = PhotonModelConstants.getUnitForMetric(key);
             serviceStatValue.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
             serviceStatValue.latestValue = serviceStatValue.latestValue / numberOfComputeResponse;
+            computeStats.statValues.put(key, Collections.singletonList(serviceStatValue));
         }
 
-        computeStats.statValues = new ConcurrentSkipListMap<String, ServiceStat>(statMap);
         ComputeStatsResponse computeStatsResponse = new ComputeStatsResponse();
         computeStatsResponse.statsList = new ArrayList<>();
         if (computeStats.statValues.size() > 0) {

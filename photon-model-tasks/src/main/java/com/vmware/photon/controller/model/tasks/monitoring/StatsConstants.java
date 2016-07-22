@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.tasks.monitoring;
 
 public class StatsConstants {
 
+    public static final String DAILY_SUFFIX = "(Daily)";
     public static final String HOUR_SUFFIX = "(Hourly)";
     public static final String MIN_SUFFIX = "(Minutes)";
 
@@ -25,6 +26,11 @@ public class StatsConstants {
 
     // number of buckets to keep data  for a day at one hour intervals
     public static final int NUM_BUCKETS_HOURLY_DATA = 24;
+    // number of buckets to keep data for 4 weeks at 1 day interval
+    public static final int NUM_BUCKETS_DAILY_DATA = 4 * 7;
+
     // size of the bucket in milliseconds for maintaining data at the granularity of an hour
     public static final int BUCKET_SIZE_HOURS_IN_MILLS = BUCKET_SIZE_MINUTES_IN_MILLIS * 60;
+    // size of the bucket in milliseconds for maintaining data at the granularity of a day
+    public static final int BUCKET_SIZE_DAYS_IN_MILLS = BUCKET_SIZE_HOURS_IN_MILLS * 24;
 }

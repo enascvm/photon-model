@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere.stats;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -26,8 +27,10 @@ import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPoolAllocator;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereUriPaths;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
@@ -123,7 +126,7 @@ public class VSphereAdapterStatsService extends StatelessService {
         cs.statValues = new HashMap<>();
 
         for (ServiceStat stat : stats) {
-            cs.statValues.put(stat.name, stat);
+            cs.statValues.put(stat.name, Collections.singletonList(stat));
         }
 
         ComputeStatsResponse respBody = new ComputeStatsResponse();

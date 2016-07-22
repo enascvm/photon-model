@@ -14,7 +14,9 @@
 package com.vmware.photon.controller.model.tasks.monitoring;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -47,18 +49,18 @@ public class MockStatsAdapter extends StatelessService {
             op.complete();
             ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
             ComputeStatsResponse statsResponse = new ComputeStatsResponse();
-            Map<String, ServiceStat> statValues = new HashMap<String, ServiceStat>();
+            Map<String, List<ServiceStat>> statValues = new HashMap<String, List<ServiceStat>>();
             counter++;
             ServiceStat key1 = new ServiceStat();
             key1.latestValue = counter;
             key1.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
             key1.unit = UNIT_1;
-            statValues.put(KEY_1, key1);
+            statValues.put(KEY_1, Collections.singletonList(key1));
             ServiceStat key2 = new ServiceStat();
             key2.latestValue = counter;
             key2.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
             key2.unit = UNIT_2;
-            statValues.put(KEY_2, key2);
+            statValues.put(KEY_2, Collections.singletonList(key2));
             ComputeStats cStat = new ComputeStats();
             cStat.statValues = statValues;
             cStat.computeLink = statsRequest.resourceReference.getPath();

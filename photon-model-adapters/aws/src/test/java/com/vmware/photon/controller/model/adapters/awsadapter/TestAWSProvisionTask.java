@@ -263,8 +263,10 @@ public class TestAWSProvisionTask {
                 .contains(PhotonModelConstants.API_CALL_COUNT));
         // Check that stat values are accompanied with Units.
         for (String key : computeStats.statValues.keySet()) {
-            ServiceStat stat = computeStats.statValues.get(key);
-            Assert.assertTrue("Unit is empty", !stat.unit.isEmpty());
+            List<ServiceStat> stats = computeStats.statValues.get(key);
+            for (ServiceStat stat : stats) {
+                Assert.assertTrue("Unit is empty", !stat.unit.isEmpty());
+            }
         }
     }
 }

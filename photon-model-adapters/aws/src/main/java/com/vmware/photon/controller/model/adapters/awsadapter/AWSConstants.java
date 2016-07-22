@@ -76,7 +76,8 @@ public class AWSConstants {
     public static final String STATUS_CHECK_FAILED_INSTANCE = "StatusCheckFailed_Instance";
     public static final String STATUS_CHECK_FAILED_SYSTEM = "StatusCheckFailed_System";
     public static final String ESTIMATED_CHARGES = "EstimatedCharges";
-    public static final String BURN_RATE = "BurnRatePerHour";
+    public static final String CURRENT_BURN_RATE = "CurrentBurnRatePerHour";
+    public static final String AVERAGE_BURN_RATE = "AverageBurnRatePerHour";
 
     // AWS Metric Unit related constants
     public static final String UNIT_COUNT = "Count";

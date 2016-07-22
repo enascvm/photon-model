@@ -125,7 +125,7 @@ public class AzureStatsGatherer extends StatelessService {
         public AzureStatsDataHolder() {
             this.statsResponse = new ComputeStats();
             // create a thread safe map to hold stats values for resource
-            this.statsResponse.statValues = new ConcurrentSkipListMap<String, ServiceStat>();
+            this.statsResponse.statValues = new ConcurrentSkipListMap<>();
         }
     }
 
@@ -373,21 +373,20 @@ public class AzureStatsGatherer extends StatelessService {
         @Override
         public void onSuccess(AzureMetricRequest request, AzureMetricResponse result) {
             OperationContext.restoreOperationContext(this.opContext);
+            List<ServiceStat> statDatapoints = new ArrayList<>();
             List<Datapoint> dpList = result.getDatapoints();
-            Double latestAverage = 0d;
-            Date timestamp = null;
+            String normalizedMetricName = AzureStatsNormalizer.getNormalizedStatKeyValue(result.getLabel());
             if (dpList != null && dpList.size() != 0) {
                 for (Datapoint dp : dpList) {
-                    latestAverage = dp.getAverage();
-                    timestamp = dp.getTimestamp();
+                    // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-769
+                    ServiceStat stat = new ServiceStat();
+                    stat.latestValue = dp.getAverage();
+                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(dp.getTimestamp().getTime());
+                    stat.unit = PhotonModelConstants.getUnitForMetric(normalizedMetricName);
+                    statDatapoints.add(stat);
                 }
-                // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-769
-                ServiceStat stat = new ServiceStat();
-                stat.latestValue = latestAverage;
-                stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp.getTime());
-                String normalizedMetricName = AzureStatsNormalizer.getNormalizedStatKeyValue(result.getLabel());
-                stat.unit = PhotonModelConstants.getUnitForMetric(normalizedMetricName);
-                this.statsData.statsResponse.statValues.put(normalizedMetricName, stat);
+
+                this.statsData.statsResponse.statValues.put(normalizedMetricName, statDatapoints);
             }
 
             if (this.statsData.numResponses.incrementAndGet() == METRIC_NAMES.length) {

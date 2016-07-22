@@ -42,6 +42,6 @@ public class ComputeStatsResponse {
         /**
          * Stats values are of type ServiceStat
          */
-        public Map<String, ServiceStat> statValues;
+        public Map<String, List<ServiceStat>> statValues;
     }
 }

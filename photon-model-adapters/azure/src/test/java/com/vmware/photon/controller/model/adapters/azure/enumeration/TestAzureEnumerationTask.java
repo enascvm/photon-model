@@ -338,8 +338,10 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                         // Persist stats on Verification Host for testing the computeHost stats.
                         URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
                         for (String key : resp.statsList.get(0).statValues.keySet()) {
-                            ServiceStat stat = resp.statsList.get(0).statValues.get(key);
-                            persistStat(persistStatsUri, key, stat, selfLink);
+                            List<ServiceStat> stats = resp.statsList.get(0).statValues.get(key);
+                            for (ServiceStat stat : stats) {
+                                persistStat(persistStatsUri, key, stat, selfLink);
+                            }
                         }
                     }
                     TestAzureEnumerationTask.this.host.completeIteration();

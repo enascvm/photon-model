@@ -90,7 +90,8 @@ public class AWSStatsService extends StatelessService {
     private static final String BILLING_NAMESPACE = "AWS/Billing";
     private static final String DIMENSION_CURRENCY = "Currency";
     private static final String DIMENSION_CURRENCY_VALUE = "USD";
-    private static final int COST_COLLECTION_WINDOW_IN_HOURS = 10;
+    private static final int COST_COLLECTION_WINDOW_IN_DAYS = 14;
+    private static final int COST_COLLECTION_PERIOD_IN_SECONDS = 14400;
     // AWS stores all billing data in us-east-1 zone.
     private static final String COST_ZONE_ID = "us-east-1";
 
@@ -257,8 +258,8 @@ public class AWSStatsService extends StatelessService {
         request.setEndTime(new Date(TimeUnit.MICROSECONDS.toMillis(endTimeMicros)));
         request.setStartTime(new Date(
                 TimeUnit.MICROSECONDS.toMillis(endTimeMicros) -
-                        TimeUnit.HOURS.toMillis(COST_COLLECTION_WINDOW_IN_HOURS)));
-        request.setPeriod(METRIC_COLLECTION_PERIOD_IN_SECONDS);
+                        TimeUnit.DAYS.toMillis(COST_COLLECTION_WINDOW_IN_DAYS)));
+        request.setPeriod(COST_COLLECTION_PERIOD_IN_SECONDS);
         request.setStatistics(Arrays.asList(STATISTICS));
         request.setNamespace(BILLING_NAMESPACE);
         request.setDimensions(Collections.singletonList(dimension));
@@ -313,49 +314,62 @@ public class AWSStatsService extends StatelessService {
                 GetMetricStatisticsResult result) {
             OperationContext.restoreOperationContext(this.opContext);
             List<Datapoint> dpList = result.getDatapoints();
-            // Sort the data points in increasing order of timestamp
+            // Sort the data points in increasing order of timestamp to calculate Burn rate
             Collections.sort(dpList, new Comparator<Datapoint>() {
                 @Override
                 public int compare(Datapoint o1, Datapoint o2) {
                     return o1.getTimestamp().compareTo(o2.getTimestamp());
                 }
             });
-            Double latestAverage = 0D;
-            Date timestamp = null;
-            Date currentDate = null;
-            Long timeDifference = 0L;
-            Double burnRate = 0D;
+            List<ServiceStat> estimatedChargesDatapoints = new ArrayList<>();
             if (dpList != null && dpList.size() != 0) {
                 for (Datapoint dp : dpList) {
-                    if (currentDate == null) {
-                        currentDate = dp.getTimestamp();
-                    } else {
-                        timeDifference = getDateDifference(currentDate, dp.getTimestamp(),
-                                TimeUnit.HOURS);
-                        currentDate = dp.getTimestamp();
-                    }
-                    burnRate = (timeDifference == 0 ? 0
-                            : ((dp.getAverage() - latestAverage) / timeDifference));
-                    latestAverage = dp.getAverage();
-                    timestamp = dp.getTimestamp();
+                    ServiceStat stat = new ServiceStat();
+                    stat.latestValue = dp.getAverage();
+                    stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(dp.getTimestamp().getTime());
+                    estimatedChargesDatapoints.add(stat);
                 }
-                ServiceStat stat = new ServiceStat();
-                stat.latestValue = latestAverage;
-                stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-                stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp.getTime());
-                this.statsData.statsResponse.statValues
-                        .put(AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()), stat);
-                ServiceStat burnRateStat = new ServiceStat();
-                burnRateStat.latestValue = burnRate;
-                burnRateStat.unit = AWSStatsNormalizer
-                        .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-                burnRateStat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp.getTime());
+
                 this.statsData.statsResponse.statValues.put(
-                        AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.BURN_RATE),
-                        burnRateStat);
+                        AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()),
+                        estimatedChargesDatapoints);
+                calculateBurnRate(dpList);
             }
 
             getEC2Stats(this.statsData, AGGREGATE_METRIC_NAMES_ACROSS_INSTANCES, true);
+        }
+
+        private void calculateBurnRate(List<Datapoint> dpList) {
+            Datapoint oldestDatapoint = dpList.get(0);
+            Datapoint latestDatapoint = dpList.get(dpList.size() - 1);
+
+            ServiceStat averageBurnRate = new ServiceStat();
+            averageBurnRate.latestValue = (latestDatapoint.getAverage()
+                    - oldestDatapoint.getAverage())
+                    / getDateDifference(oldestDatapoint.getTimestamp(),
+                            latestDatapoint.getTimestamp(), TimeUnit.MICROSECONDS);
+            averageBurnRate.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+            averageBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+            this.statsData.statsResponse.statValues.put(
+                    AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.AVERAGE_BURN_RATE),
+                    Collections.singletonList(averageBurnRate));
+
+            // Calculate current burn rate only if we have 1 day worth of data.
+            if (dpList.size() >= 7) {
+                Datapoint dayOldDatapoint = dpList.get(dpList.size() - 7);
+
+                ServiceStat currentBurnRate = new ServiceStat();
+                currentBurnRate.latestValue = (latestDatapoint.getAverage()
+                        - dayOldDatapoint.getAverage())
+                        / getDateDifference(dayOldDatapoint.getTimestamp(),
+                                latestDatapoint.getTimestamp(), TimeUnit.MICROSECONDS);
+                currentBurnRate.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                currentBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+                this.statsData.statsResponse.statValues.put(
+                        AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.CURRENT_BURN_RATE),
+                        Collections.singletonList(currentBurnRate));
+            }
         }
 
         private long getDateDifference(Date oldDate, Date newDate, TimeUnit timeUnit) {
@@ -393,23 +407,19 @@ public class AWSStatsService extends StatelessService {
         public void onSuccess(GetMetricStatisticsRequest request,
                 GetMetricStatisticsResult result) {
             OperationContext.restoreOperationContext(this.opContext);
+            List<ServiceStat> statDatapoints = new ArrayList<>();
             List<Datapoint> dpList = result.getDatapoints();
-            Double latestAverage = 0d;
-            Date timestamp = null;
-            String unit = null;
             if (dpList != null && dpList.size() != 0) {
                 for (Datapoint dp : dpList) {
-                    latestAverage = dp.getAverage();
-                    unit = dp.getUnit();
-                    timestamp = dp.getTimestamp();
+                    ServiceStat stat = new ServiceStat();
+                    stat.latestValue = dp.getAverage();
+                    stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(dp.getUnit());
+                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(dp.getTimestamp().getTime());
+                    statDatapoints.add(stat);
                 }
 
-                ServiceStat stat = new ServiceStat();
-                stat.latestValue = latestAverage;
-                stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(unit);
-                stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp.getTime());
                 this.statsData.statsResponse.statValues
-                        .put(AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()), stat);
+                        .put(AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()), statDatapoints);
             }
 
             if (this.statsData.numResponses.incrementAndGet() == this.numOfMetrics) {
@@ -423,7 +433,7 @@ public class AWSStatsService extends StatelessService {
                 apiCallCountStat.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
                 apiCallCountStat.unit = PhotonModelConstants.UNIT_COUNT;
                 this.statsData.statsResponse.statValues.put(PhotonModelConstants.API_CALL_COUNT,
-                        apiCallCountStat);
+                        Collections.singletonList(apiCallCountStat));
 
                 ComputeStatsResponse respBody = new ComputeStatsResponse();
                 this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;

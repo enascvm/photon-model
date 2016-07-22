@@ -233,25 +233,43 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
             URI statsUri = UriUtils.buildStatsUri(getHost(), stats.computeLink);
             URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
-            for (Entry<String, ServiceStat> entry : stats.statValues.entrySet()) {
-                ServiceStats.ServiceStat minuteStats = new ServiceStats.ServiceStat();
-                minuteStats.name = new StringBuffer(entry.getKey()).append(StatsConstants.MIN_SUFFIX).toString();
-                minuteStats.latestValue = entry.getValue().latestValue;
-                minuteStats.unit = entry.getValue().unit;
-                minuteStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_MINUTE_DATA,
-                        StatsConstants.BUCKET_SIZE_MINUTES_IN_MILLIS, EnumSet.allOf(AggregationType.class));
-                persistStat(persistStatsUri, entry, currentState.computeLink);
+            for (Entry<String, List<ServiceStat>> entries : stats.statValues.entrySet()) {
+                for (ServiceStat entry : entries.getValue()) {
+                    ServiceStats.ServiceStat minuteStats = new ServiceStats.ServiceStat();
+                    minuteStats.name = new StringBuilder(entries.getKey()).append(StatsConstants.MIN_SUFFIX).toString();
+                    minuteStats.latestValue = entry.latestValue;
+                    minuteStats.sourceTimeMicrosUtc = entry.sourceTimeMicrosUtc;
+                    minuteStats.unit = entry.unit;
+                    minuteStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_MINUTE_DATA,
+                            StatsConstants.BUCKET_SIZE_MINUTES_IN_MILLIS, EnumSet.allOf(AggregationType.class));
 
-                ServiceStats.ServiceStat hourStats = new ServiceStats.ServiceStat();
-                hourStats.name = new StringBuffer(entry.getKey()).append(StatsConstants.HOUR_SUFFIX).toString();
-                hourStats.latestValue = entry.getValue().latestValue;
-                hourStats.unit = entry.getValue().unit;
-                hourStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_HOURLY_DATA,
-                        StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS, EnumSet.allOf(AggregationType.class));
-                operations.add(Operation.createPost(statsUri)
-                        .setBody(hourStats));
-                operations.add(Operation.createPost(statsUri)
-                        .setBody(minuteStats));
+                    ServiceStats.ServiceStat hourStats = new ServiceStats.ServiceStat();
+                    hourStats.name = new StringBuilder(entries.getKey()).append(StatsConstants.HOUR_SUFFIX).toString();
+                    hourStats.latestValue = entry.latestValue;
+                    hourStats.sourceTimeMicrosUtc = entry.sourceTimeMicrosUtc;
+                    hourStats.unit = entry.unit;
+                    hourStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_HOURLY_DATA,
+                            StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS, EnumSet.allOf(AggregationType.class));
+                    operations.add(Operation.createPost(statsUri)
+                            .setBody(hourStats));
+                    operations.add(Operation.createPost(statsUri)
+                            .setBody(minuteStats));
+
+                    ServiceStats.ServiceStat dailyStats = new ServiceStats.ServiceStat();
+                    dailyStats.name = new StringBuilder(entries.getKey()).append(StatsConstants.DAILY_SUFFIX).toString();
+                    dailyStats.latestValue = entry.latestValue;
+                    dailyStats.sourceTimeMicrosUtc = entry.sourceTimeMicrosUtc;
+                    dailyStats.unit = entry.unit;
+                    dailyStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_DAILY_DATA,
+                            StatsConstants.BUCKET_SIZE_DAYS_IN_MILLS, EnumSet.allOf(AggregationType.class));
+                    operations.add(Operation.createPost(statsUri)
+                            .setBody(dailyStats));
+                    operations.add(Operation.createPost(statsUri)
+                            .setBody(minuteStats));
+
+                    // Persist every datapoint
+                    persistStat(persistStatsUri, entries.getKey(), entry, currentState.computeLink);
+                }
             }
         }
         // If there are no stats reported, just finish the task.
@@ -276,12 +294,13 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
         operationJoin.sendWith(this);
     }
 
-    private void persistStat(URI persistStatsUri, Entry<String, ServiceStat> serviceStatEntry, String computeLink) {
+    private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat, String computeLink) {
         ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
+        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1391
         // Set the documentSelfLink to <computeId>-<metricName>
-        stat.documentSelfLink = UriUtils.getLastPathSegment(computeLink) + "-" + serviceStatEntry.getKey();
-        stat.value = serviceStatEntry.getValue().latestValue;
-        stat.timestampMicrosUtc = serviceStatEntry.getValue().sourceTimeMicrosUtc;
+        stat.documentSelfLink = UriUtils.getLastPathSegment(computeLink) + "-" + metricName;
+        stat.value = serviceStat.latestValue;
+        stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
         getHost().sendRequest(Operation
                         .createPost(persistStatsUri)
                         .setReferer(getUri())

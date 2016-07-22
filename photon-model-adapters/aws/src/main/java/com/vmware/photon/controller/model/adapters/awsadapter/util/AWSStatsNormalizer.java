@@ -69,8 +69,10 @@ public class AWSStatsNormalizer {
                 PhotonModelConstants.STATUS_CHECK_FAILED_COUNT_SYSTEM);
         statMap.put(AWSConstants.ESTIMATED_CHARGES,
                 PhotonModelConstants.ESTIMATED_CHARGES);
-        statMap.put(AWSConstants.BURN_RATE,
-                PhotonModelConstants.BURN_RATE_PER_HOUR);
+        statMap.put(AWSConstants.CURRENT_BURN_RATE,
+                PhotonModelConstants.CURRENT_BURN_RATE_PER_HOUR);
+        statMap.put(AWSConstants.AVERAGE_BURN_RATE,
+                PhotonModelConstants.AVERAGE_BURN_RATE_PER_HOUR);
         PHOTON_MODEL_STATS_MAP = Collections.unmodifiableMap(statMap);
     }
 

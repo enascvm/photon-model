@@ -2,6 +2,8 @@
 
 ## 0.4.2-SNAPSHOT
 
+* Add support for aggregating metrics to get daily min/max/avg values over 4 weeks.
+
 * Remove StatsCollectionTaskSchedulerService - The functionality this class provided
   can be achieved using ScheduledTaskService
 
