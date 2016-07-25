@@ -29,6 +29,7 @@ import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -46,6 +47,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  *are shutdown.
  *
  */
+@Ignore("https://jira-hzn.eng.vmware.com/browse/VSYM-1398")
 public class TestAWSClientManagement extends BasicReusableHostTestCase {
     public static final int count1 = 1;
     public static final int count2 = 2;

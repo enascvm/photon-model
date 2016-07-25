@@ -187,13 +187,6 @@ public class InstanceClient extends BaseHelper {
         task = getVimPort().destroyTask(vm);
         info = waitTaskEnd(task);
         ignoreError("Ignore error deleting VM", info);
-        // delete resource pool
-        ManagedObjectReference resourcePool = getResourcePoolForVm();
-        if (resourcePool != null) {
-            task = getVimPort().destroyTask(resourcePool);
-            info = waitTaskEnd(task);
-            ignoreError("Ignore error deleting ResourcePool", info);
-        }
     }
 
     private void ignoreError(String s, TaskInfo info) {
