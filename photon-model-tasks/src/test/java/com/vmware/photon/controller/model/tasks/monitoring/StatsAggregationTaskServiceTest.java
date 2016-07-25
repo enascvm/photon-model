@@ -87,6 +87,22 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
         postServiceSynchronously(
                 StatsCollectionTaskService.FACTORY_LINK, collectionTaskState,
                 StatsCollectionTaskState.class);
+
+        // kick off an aggregation task when stats are not populated
+        StatsAggregationTaskState aggregationTaskState = new StatsAggregationTaskState();
+        aggregationTaskState.resourcePoolLink =  rpReturnState.documentSelfLink;
+        postServiceSynchronously(StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
+                StatsAggregationTaskState.class);
+        this.host.waitFor("Error waiting for stats", () -> {
+            ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
+                        ResourceAggregateMetricsService.FACTORY_LINK));
+            // Expect 0 stats because they're not collected yet
+            if (aggrRes.documentCount == 0) {
+                return true;
+            }
+            return false;
+        });
+
         // wait for stats to be populated for all resources
         for (int i = 0; i < this.numResources; i++) {
             String statsUriPath = UriUtils.buildUriPath(computeLinks.get(i),
@@ -103,7 +119,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
             });
         }
         // kick off an aggregation task
-        StatsAggregationTaskState aggregationTaskState = new StatsAggregationTaskState();
+        aggregationTaskState = new StatsAggregationTaskState();
         aggregationTaskState.resourcePoolLink =  rpReturnState.documentSelfLink;
         postServiceSynchronously(StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
                 StatsAggregationTaskState.class);

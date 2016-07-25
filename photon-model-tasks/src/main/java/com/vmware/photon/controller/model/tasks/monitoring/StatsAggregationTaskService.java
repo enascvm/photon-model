@@ -248,7 +248,13 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
             computeToTenantLinksMap.put(computeState.documentSelfLink, computeState.tenantLinks);
         }
         for (Operation resultOp : statsOps) {
+            if (!resultOp.hasBody()) {
+                continue;
+            }
             ServiceStats stats = resultOp.getBody(ServiceStats.class);
+            if (stats.documentSelfLink == null) {
+                continue;
+            }
             String computeServiceLink = stats.documentSelfLink.replace(ServiceHost.SERVICE_URI_SUFFIX_STATS, "");
             // normalize the collection time such that it aligns with a bucket boundary used for time series stats
             long currentTime = Utils.getNowMicrosUtc();
@@ -295,6 +301,18 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                     Operation.createPost(UriUtils.buildUri(getHost(), ResourceAggregateMetricsService.FACTORY_LINK))
                     .setBody(aggrMetricStateForPreviousInterval)
                     .setReferer(getHost().getUri()));
+        }
+        if (postResourceOps.size() == 0) {
+            StatsAggregationTaskState patchBody = new StatsAggregationTaskState();
+            if (page.results.nextPageLink == null) {
+                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+            } else {
+                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+                patchBody.taskStage = StatsAggregationStage.GET_RESOURCES;
+                patchBody.queryResultLink = page.results.nextPageLink;
+            }
+            sendSelfPatch(patchBody);
+            return;
         }
         OperationJoin.JoinedCompletionHandler postJoinCompletion = (postOps,
                 postExList) -> {
