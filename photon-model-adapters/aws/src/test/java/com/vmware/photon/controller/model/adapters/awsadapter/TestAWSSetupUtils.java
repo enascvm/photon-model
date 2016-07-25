@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
@@ -33,6 +36,7 @@ import java.util.concurrent.TimeoutException;
 
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.Filter;
@@ -99,13 +103,16 @@ public class TestAWSSetupUtils {
     public static final String DEFAULT_USER_DATA_FILE = "cloud_config_coreos.yml";
     public static final String DEFAULT_COREOS_USER = "core";
     public static final String DEFAULT_COREOS_PRIVATE_KEY_FILE = "private_coreos.key";
-    public static final String EC2_IMAGEID = "ami-0d4cfd66";
+
     public static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
     public static final String DEFAULT_SECURITY_GROUP_NAME = "cell-manager-security-group";
     public static final String BASELINE_INSTANCE_COUNT = "Baseline Instance Count ";
     public static final String BASELINE_COMPUTE_DESCRIPTION_COUNT = " Baseline Compute Description Count ";
     private static final float HUNDERED = 100.0f;
     public static final int AWS_VM_REQUEST_TIMEOUT_MINUTES = 5;
+
+    public static final String EC2_LINUX_AMI = "ami-0d4cfd66";
+    public static final String EC2_WINDOWS_AMI = "ami-3c32b12b";
 
     /**
      * Class to hold the baseline counts for the compute states and the compute descriptions that are present on the AWS endpoint
@@ -417,24 +424,23 @@ public class TestAWSSetupUtils {
     /**
      * Provisions a machine for which the state was created.
      */
-    public static void provisionMachine(VerificationHost host, ComputeState vmState,
+    public static ComputeState provisionMachine(VerificationHost host, ComputeState vmState,
             boolean isMock,
             List<String> instancesToCleanUp)
             throws InterruptedException, TimeoutException, Throwable {
-        provisionMachine(host, null, vmState, isMock, instancesToCleanUp);
+        return provisionMachine(host, null, vmState, isMock, instancesToCleanUp);
     }
 
     /**
      * Provisions a machine for which the state was created.Expects the peerURI for the location
      * of the service.
      */
-    public static void provisionMachine(VerificationHost host, URI peerURI, ComputeState vmState,
+    public static ComputeState provisionMachine(VerificationHost host, URI peerURI, ComputeState vmState,
             boolean isMock,
             List<String> instancesToCleanUp)
             throws Throwable, InterruptedException, TimeoutException {
         host.log("Provisioning a single virtual machine on AWS.");
         // kick off a provision task to do the actual VM creation
-        ComputeState computeStateToCleanup = null;
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
 
         provisionTask.computeLink = vmState.documentSelfLink;
@@ -449,17 +455,21 @@ public class TestAWSSetupUtils {
         List<URI> uris = new ArrayList<URI>();
         uris.add(UriUtils.buildUri(host, outTask.documentSelfLink));
         ProvisioningUtils.waitForTaskCompletion(host, uris, ProvisionComputeTaskState.class);
-        host.log("Sucessfully provisioned a machine %s ", vmState.id);
-        // Get instance Id of the provisioned machine and save that for cleanup
-        URI[] computeURIs = { UriUtils.buildUri(host, vmState.documentSelfLink) };
-        Map<URI, ComputeState> computeStateMap = host.getServiceState(null,
-                ComputeState.class, computeURIs);
-        if (computeStateMap != null) {
-            computeStateToCleanup = computeStateMap.get(computeURIs[0]);
-            if (computeStateToCleanup != null && computeStateToCleanup.customProperties != null) {
-                instancesToCleanUp.add(computeStateToCleanup.id);
-            }
-        }
+
+        ComputeState provisionCompute = getCompute(host, vmState.documentSelfLink);
+        assertNotNull(provisionCompute);
+
+        host.log("Sucessfully provisioned a machine %s ", provisionCompute.id);
+        instancesToCleanUp.add(provisionCompute.id);
+
+        return provisionCompute;
+    }
+
+    private static ComputeState getCompute(VerificationHost host, String computeLink)
+            throws Throwable {
+        Operation response = host
+                .waitForResponse(Operation.createGet(host, computeLink));
+        return response.getBody(ComputeState.class);
     }
 
     /**
@@ -475,7 +485,7 @@ public class TestAWSSetupUtils {
                 numberOfInstance);
 
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
-                .withImageId(EC2_IMAGEID).withInstanceType(instanceType)
+                .withImageId(EC2_LINUX_AMI).withInstanceType(instanceType)
                 .withMinCount(numberOfInstance).withMaxCount(numberOfInstance)
                 .withSecurityGroupIds(DEFAULT_SECURITY_GROUP_NAME);
 
@@ -488,6 +498,24 @@ public class TestAWSSetupUtils {
 
         });
         return creationHandler.instanceIds;
+    }
+
+    public static String provisionAWSVMWithEC2Client(AmazonEC2Client client, String ami) {
+
+        RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
+                .withImageId(ami)
+                .withInstanceType(instanceType_t2_micro)
+                .withMinCount(1).withMaxCount(1)
+                .withSecurityGroupIds(DEFAULT_SECURITY_GROUP_NAME);
+
+        // handler invoked once the EC2 runInstancesAsync commands completes
+        RunInstancesResult result = client.runInstances(runInstancesRequest);
+        assertNotNull(result);
+        assertNotNull(result.getReservation());
+        assertNotNull(result.getReservation().getInstances());
+        assertEquals(1, result.getReservation().getInstances().size());
+
+        return result.getReservation().getInstances().get(0).getInstanceId();
     }
 
     /**
