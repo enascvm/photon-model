@@ -348,7 +348,7 @@ public class AWSStatsService extends StatelessService {
             averageBurnRate.latestValue = (latestDatapoint.getAverage()
                     - oldestDatapoint.getAverage())
                     / getDateDifference(oldestDatapoint.getTimestamp(),
-                            latestDatapoint.getTimestamp(), TimeUnit.MICROSECONDS);
+                            latestDatapoint.getTimestamp(), TimeUnit.HOURS);
             averageBurnRate.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
             averageBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
             this.statsData.statsResponse.statValues.put(
@@ -363,7 +363,7 @@ public class AWSStatsService extends StatelessService {
                 currentBurnRate.latestValue = (latestDatapoint.getAverage()
                         - dayOldDatapoint.getAverage())
                         / getDateDifference(dayOldDatapoint.getTimestamp(),
-                                latestDatapoint.getTimestamp(), TimeUnit.MICROSECONDS);
+                                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
                 currentBurnRate.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
                 currentBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
                 this.statsData.statsResponse.statValues.put(
