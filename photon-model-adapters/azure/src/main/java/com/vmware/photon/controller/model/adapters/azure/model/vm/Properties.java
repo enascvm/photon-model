@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.model.vm;
 
 import com.microsoft.azure.management.compute.models.DiagnosticsProfile;
 import com.microsoft.azure.management.compute.models.HardwareProfile;
+import com.microsoft.azure.management.compute.models.NetworkProfile;
 import com.microsoft.azure.management.compute.models.OSProfile;
 import com.microsoft.azure.management.compute.models.StorageProfile;
 
@@ -25,6 +26,7 @@ public class Properties {
     public HardwareProfile hardwareProfile;
     public StorageProfile storageProfile;
     public DiagnosticsProfile diagnosticsProfile;
+    public NetworkProfile networkProfile;
     public OSProfile osProfile;
     public String provisioningState;
 }

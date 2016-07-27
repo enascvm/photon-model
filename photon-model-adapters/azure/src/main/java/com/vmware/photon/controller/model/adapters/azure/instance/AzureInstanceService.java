@@ -224,9 +224,15 @@ public class AzureInstanceService extends StatelessService {
                 }
             }
 
-            if (ctx.httpClient == null) {
+            try {
+                // Creating a shared singleton Http client instance
+                // Reference https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
+                // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
                 ctx.httpClient = new OkHttpClient();
                 ctx.clientBuilder = ctx.httpClient.newBuilder();
+            } catch (Exception e) {
+                handleError(ctx, e);
+                return;
             }
             // now that we have a client lets move onto the next step
             switch (ctx.computeRequest.requestType) {
@@ -1314,6 +1320,7 @@ public class AzureInstanceService extends StatelessService {
                         AzureConstants.AUTH_HEADER_BEARER_PREFIX + credentials.getToken());
             } catch (Exception ex) {
                 this.handleError(ctx, ex);
+                return;
             }
 
             logInfo("Enabling monitoring on the VM [%s]", vmName);

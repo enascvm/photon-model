@@ -21,10 +21,12 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.TaskState;
+import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.TaskService;
@@ -106,35 +108,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             validateState(state);
             start.setBody(state).complete();
 
-            ComputeEnumerateResourceRequest req = new ComputeEnumerateResourceRequest();
-            req.resourcePoolLink = state.resourcePoolLink;
-            req.computeDescriptionLink = state.computeDescriptionLink;
-            req.adapterManagementReference = state.adapterManagementReference;
-            req.resourceReference = UriUtils.buildUri(getHost(), state.parentComputeLink);
-            req.enumerationAction = state.enumerationAction;
-            req.taskReference = UriUtils.buildUri(getHost(),
-                    state.documentSelfLink);
-            req.isMockRequest = state.isMockRequest;
-
-            // Patch the enumerate service URI from the CHD
-            Operation.CompletionHandler descriptionCompletion = (o, ex) -> {
-                if (ex != null) {
-                    TaskUtils.sendFailurePatch(this, state, ex);
-                    start.fail(ex);
-                    return;
-                }
-
-                ComputeDescriptionService.ComputeDescription description = o
-                        .getBody(ComputeDescriptionService.ComputeDescription.class);
-                sendRequest(Operation
-                        .createPatch(description.enumerationAdapterReference)
-                        .setBody(req));
-            };
-
-            URI computeHost = UriUtils.buildUri(getHost(),
-                    state.computeDescriptionLink);
-            sendRequest(Operation.createGet(computeHost)
-                    .setCompletion(descriptionCompletion));
+            sendSelfPatch(state, TaskStage.STARTED, null);
         } catch (Throwable e) {
             start.fail(e);
         }
@@ -156,11 +130,15 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         // followed by FINISHED or FAILED when complete
         switch (currentState.taskInfo.stage) {
         case CREATED:
+            logFine("Created enum task");
             break;
         case STARTED:
+            logFine("Started enum task");
+            currentState.taskInfo.stage = TaskStage.STARTED;
+            sendEnumRequest(patch, currentState);
             break;
         case FINISHED:
-            logInfo("task is complete");
+            logFine("task is complete");
             if (currentState.deleteOnCompletion) {
                 sendRequest(Operation
                         .createDelete(getUri()));
@@ -168,16 +146,50 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             break;
         case FAILED:
         case CANCELLED:
+            logWarning("Task was canceled or task failed");
             if (currentState.deleteOnCompletion) {
                 sendRequest(Operation
                         .createDelete(getUri()));
             }
             break;
         default:
+            logWarning("Unknown stage");
             break;
         }
 
         patch.setBody(currentState).complete();
+    }
+
+    private void sendEnumRequest(Operation start, ResourceEnumerationTaskState state) {
+        ComputeEnumerateResourceRequest req = new ComputeEnumerateResourceRequest();
+        req.resourcePoolLink = state.resourcePoolLink;
+        req.computeDescriptionLink = state.computeDescriptionLink;
+        req.adapterManagementReference = state.adapterManagementReference;
+        req.resourceReference = UriUtils.buildUri(getHost(), state.parentComputeLink);
+        req.enumerationAction = state.enumerationAction;
+        req.taskReference = UriUtils.buildUri(getHost(),
+                state.documentSelfLink);
+        req.isMockRequest = state.isMockRequest;
+
+        // Patch the enumerate service URI from the CHD
+        Operation.CompletionHandler descriptionCompletion = (o, ex) -> {
+            if (ex != null) {
+                TaskUtils.sendFailurePatch(this, state, ex);
+                start.fail(ex);
+                return;
+            }
+
+            ComputeDescriptionService.ComputeDescription description = o
+                    .getBody(ComputeDescriptionService.ComputeDescription.class);
+            sendRequest(Operation
+                    .createPatch(description.enumerationAdapterReference)
+                    .setBody(req));
+        };
+
+        URI computeHost = UriUtils.buildUri(getHost(),
+                state.computeDescriptionLink);
+        sendRequest(Operation.createGet(computeHost)
+                .setCompletion(descriptionCompletion));
     }
 
     public static void validateState(ResourceEnumerationTaskState state) {

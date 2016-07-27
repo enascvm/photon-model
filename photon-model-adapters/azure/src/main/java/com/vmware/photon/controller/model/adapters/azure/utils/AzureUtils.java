@@ -63,6 +63,7 @@ public class AzureUtils {
         httpClientExecutor.shutdown();
 
         awaitTermination(service, httpClientExecutor);
+        httpClient = null;
     }
 
     /**
