@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getInstanceTypeFromComputeDescriptionKey;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getKeyForComputeDescriptionFromCD;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getNetworkIdFromComputeDescriptionKey;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRegionIdFromComputeDescriptionKey;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRepresentativeListOfCDsFromInstanceList;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
@@ -325,7 +324,6 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         computeDescription.regionId = getRegionIdFromComputeDescriptionKey(key);
         computeDescription.id = getInstanceTypeFromComputeDescriptionKey(key);
         computeDescription.instanceType = computeDescription.id;
-        computeDescription.networkId = getNetworkIdFromComputeDescriptionKey(key);
         computeDescription.name = computeDescription.id;
         computeDescription.tenantLinks = cd.cdState.tenantLinks;
         // Book keeping information about the creation of the compute description in the system.

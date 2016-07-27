@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -122,13 +123,13 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
     private List<String> instancesToCleanUp = new ArrayList<String>();
     private AmazonEC2AsyncClient client;
-    private boolean isAwsClientMock = false;
-    private String awsMockEndpointReference = null;
+    public boolean isAwsClientMock = false;
+    public String awsMockEndpointReference = null;
     private BaseLineState baseLineState;
 
-    private boolean isMock = true;
-    private String accessKey = "accessKey";
-    private String secretKey = "secretKey";
+    public boolean isMock = true;
+    public String accessKey = "accessKey";
+    public String secretKey = "secretKey";
 
     @Before
     public void setUp() throws Throwable {

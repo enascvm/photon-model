@@ -19,7 +19,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TI
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getInstanceTypeFromComputeDescriptionKey;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getKeyForComputeDescriptionFromInstance;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getNetworkIdFromComputeDescriptionKey;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRegionIdFromComputeDescriptionKey;
 
 import com.amazonaws.services.ec2.model.Instance;
@@ -35,7 +34,7 @@ public class TestAWSEnumerationUtils {
     public static final String AWS_VPC_ID = "vpc-4567";
     public static final String AWS_INSTANCE_TYPE = "t2.micro";
     public static final String AWS_COMPUTE_DESCRIPTION_KEY = AWS_REGION_ID + TILDA
-            + AWS_INSTANCE_TYPE + TILDA + AWS_VPC_ID;
+            + AWS_INSTANCE_TYPE;
 
     @Test
     public void testGetComputeDescriptionKeyFromAWSInstance() throws Throwable {
@@ -60,8 +59,6 @@ public class TestAWSEnumerationUtils {
         String regionID = getRegionIdFromComputeDescriptionKey(AWS_COMPUTE_DESCRIPTION_KEY);
         assertEquals(AWS_REGION_ID, regionID);
 
-        String vpcID = getNetworkIdFromComputeDescriptionKey(AWS_COMPUTE_DESCRIPTION_KEY);
-        assertEquals(AWS_VPC_ID, vpcID);
     }
 
 }

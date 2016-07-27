@@ -60,16 +60,15 @@ public class AWSEnumerationUtils {
 
     /**
      * Gets the key to uniquely represent a compute description that needs to be created in the system.
-     * Currently uses regionId and instanceType and networkId and is represented as below:
-     * us-east-1~t2.micro~vpc-3cbd
+     * Currently uses regionId and instanceType and is represented as below:
+     * us-east-1~t2.micro
      *
      * TODO harden key as more logic is realized in the enumeration
      * service.
      */
     public static String getKeyForComputeDescriptionFromInstance(Instance i) {
-        // Representing the compute-description as a key regionId~instanceType~networkId
-        return getRegionId(i).concat(TILDA)
-                .concat(i.getInstanceType().concat(TILDA).concat(i.getVpcId()));
+        // Representing the compute-description as a key regionId~instanceType
+        return getRegionId(i).concat(TILDA).concat(i.getInstanceType());
     }
 
     /**
@@ -77,38 +76,29 @@ public class AWSEnumerationUtils {
      * used to link the compute states to the correct compute descriptions.
      */
     public static String getKeyForComputeDescriptionFromCD(ComputeDescription computeDescription) {
-        // Representing the compute-description as a key regionId~instanceType~networkId
-        return computeDescription.regionId.concat(TILDA).concat(computeDescription.instanceType)
-                .concat(TILDA).concat(computeDescription.networkId);
+        // Representing the compute-description as a key regionId~instanceType
+        return computeDescription.regionId.concat(TILDA).concat(computeDescription.instanceType);
     }
 
     /**
      * Returns the instanceType from the compute description key which is created to look like
-     * regionId~instanceType~networkId
+     * regionId~instanceType
      */
     public static String getInstanceTypeFromComputeDescriptionKey(String computeDescriptionKey) {
-        return computeDescriptionKey.substring(computeDescriptionKey.indexOf(TILDA) + 1,
-                computeDescriptionKey.lastIndexOf(TILDA));
+        return computeDescriptionKey.substring(computeDescriptionKey.indexOf(TILDA) + 1);
+
     }
 
     /**
-     * Returns the regionId from the compute description key that looks like  regionId~instanceType~networkId
+     * Returns the regionId from the compute description key that looks like  regionId~instanceType
      */
     public static String getRegionIdFromComputeDescriptionKey(String computeDescriptionKey) {
         return computeDescriptionKey.substring(0, computeDescriptionKey.indexOf(TILDA));
     }
 
     /**
-     * Return the networkId from the compute description key that looks like regionId~instanceType~networkId
-     */
-    public static String getNetworkIdFromComputeDescriptionKey(String computeDescriptionKey) {
-        return computeDescriptionKey.substring(computeDescriptionKey.lastIndexOf(TILDA) + 1,
-                computeDescriptionKey.length());
-    }
-
-    /**
      * From the list of instances that are received from AWS arrive at the minimal set of compute descriptions that need
-     * to be created locally to represent them.The compute descriptions are represented as regionId~instanceType~networkId
+     * to be created locally to represent them.The compute descriptions are represented as regionId~instanceType
      * and put into a hashset. As a result, a representative set is created to represent all the discovered VMs.
      * @param context
      * @param next
