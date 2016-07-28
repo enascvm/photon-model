@@ -289,9 +289,14 @@ public class ComputeService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ComputeState currentState = getState(patch);
-        ComputeState patchBody = getBody(patch);
+        boolean hasStateChanged = false;
 
-        boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(), currentState, patchBody);
+        // handle the patch when body type is CollectionRemovalRequest
+        hasStateChanged = ResourceUtils.handleCollectionRemovalRequest(currentState, patch);
+
+        // handle the patch when body type is ComputeState
+        ComputeState patchBody = patch.getBody(ComputeState.class);
+        hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(), currentState, patchBody);
 
         if (patchBody.address != null
                 && !patchBody.address.equals(currentState.address)) {

@@ -165,7 +165,7 @@ public class AdapterUtils {
                 .createPost(service,
                         factoryLink)
                 .setBody(state)
-                .setReferer(service.getHost().getUri());
+                .setReferer(service.getUri());
     }
 
     /**
@@ -178,7 +178,20 @@ public class AdapterUtils {
         return Operation
                 .createPatch(existingStateURI)
                 .setBody(state)
-                .setReferer(service.getHost().getUri());
+                .setReferer(service.getUri());
+    }
+
+    /**
+     * Creates a PUT operation for updating an existing state.
+     */
+    public static Operation createPutOperation(StatelessService service,
+                                                 ResourceState state, String existingStateLink) {
+        URI existingStateURI = UriUtils.buildUri(service.getHost(),
+                existingStateLink);
+        return Operation
+                .createPut(existingStateURI)
+                .setBody(state)
+                .setReferer(service.getUri());
     }
 
     /**

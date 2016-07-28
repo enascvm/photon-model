@@ -13,6 +13,11 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import java.lang.reflect.Field;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.Utils;
@@ -72,5 +77,89 @@ public class ResourceUtils {
             }
         }
         return isChanged;
+    }
+
+    /**
+     * Remove elements from specified collections
+     *
+     * @param currentState currentState of the service
+     * @param removalBody request of removing elements
+     * @return Whether current state has been changed
+     * @throws NoSuchFieldException
+     * @throws IllegalAccessException
+     */
+    public static boolean removeCollections(ResourceState currentState, CollectionRemovalRequest removalBody)
+            throws NoSuchFieldException, IllegalAccessException {
+        boolean isChanged = false;
+
+        Class<? extends ResourceState> clazz = currentState.getClass();
+
+        for (String collectionName : removalBody.collectionsMap.keySet()) {
+            Collection<Object> elementsToBeRemoved = removalBody.collectionsMap.get(collectionName);
+
+            if (elementsToBeRemoved != null && !elementsToBeRemoved.isEmpty()) {
+                Field field = clazz.getField(collectionName);
+
+                if (field != null && Collection.class.isAssignableFrom(field.getType())) {
+                    // get target collection
+                    @SuppressWarnings("rawtypes")
+                    Collection collObj = (Collection) field.get(currentState);
+                    @SuppressWarnings("rawtypes")
+                    Iterator iterator = collObj.iterator();
+                    // delete elements from collection
+                    while (iterator.hasNext()) {
+                        Object currentElement = iterator.next();
+                        if (elementsToBeRemoved.contains(currentElement)) {
+                            iterator.remove();
+                            isChanged = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return isChanged;
+    }
+
+    /**
+     * Handle the request to remove elements of collections.
+     *
+     * @param currentState currentState of the service
+     * @param patch the PATCH Operation
+     * @return Whether current state has been changed
+     */
+    public static boolean handleCollectionRemovalRequest(ResourceState currentState, Operation patch) {
+        boolean isChanged = false;
+        ResourceUtils.CollectionRemovalRequest removalBody =
+                patch.getBody(ResourceUtils.CollectionRemovalRequest.class);
+
+        if (removalBody != null && removalBody.kind != null
+                && removalBody.kind.equals(ResourceUtils.CollectionRemovalRequest.KIND)) {
+
+            try {
+                isChanged = removeCollections(currentState, removalBody);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                patch.fail(e);
+            }
+
+            ResourceUtils.completePatchOperation(patch, isChanged);
+        }
+
+        return isChanged;
+    }
+
+    /**
+     * Request used in patch operation for removing elements of collection type attribute.
+     * E.g. remove ComputeState's networkLinks which are no longer needed.
+     */
+    public static class CollectionRemovalRequest {
+        public static final String KIND = Utils.buildKind(CollectionRemovalRequest.class);
+        /**
+         * Key is the field name of the collection, e.g. "networkLinks", "diskLinks".
+         * Value is the elements of the collection that need to be removed.
+         */
+        public Map<String, Collection<Object>> collectionsMap;
+
+        public String kind;
     }
 }

@@ -31,6 +31,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.ServiceUriPaths;
@@ -69,7 +70,8 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
                     throws Throwable {
 
         List<T> responseBody = new ArrayList<T>();
-        this.host.testStart(1);
+        TestContext ctx = this.host.testCreate(1);
+
         Operation postOperation = Operation
                 .createPost(UriUtils.buildUri(this.host, serviceUri))
                 .setBody(body)
@@ -84,25 +86,25 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
                                         "Call did not fail as expected")
                                         : throwable;
 
-                                this.host.failIteration(t);
+                                ctx.failIteration(t);
                                 return;
                             }
 
                             if (failureExpected
                                     && expectedException != throwable
                                             .getClass()) {
-                                this.host.failIteration(throwable);
+                                ctx.failIteration(throwable);
                                 return;
                             }
 
                             if (!failureExpected) {
                                 responseBody.add(operation.getBody(type));
                             }
-                            this.host.completeIteration();
+                            ctx.completeIteration();
                         });
 
         this.host.send(postOperation);
-        this.host.testWait();
+        this.host.testWait(ctx);
 
         if (!responseBody.isEmpty()) {
             return responseBody.get(0);
@@ -111,17 +113,32 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
         }
     }
 
-    public <T extends ServiceDocument> void patchServiceSynchronously(
+    public <T> void patchServiceSynchronously(
             String serviceUri, T patchBody) throws Throwable {
 
-        this.host.testStart(1);
+        TestContext ctx = this.host.testCreate(1);
+
         Operation patchOperation = Operation
                 .createPatch(UriUtils.buildUri(this.host, serviceUri))
                 .setBody(patchBody)
-                .setCompletion(this.host.getCompletion());
+                .setCompletion(ctx.getCompletion());
 
         this.host.send(patchOperation);
-        this.host.testWait();
+        this.host.testWait(ctx);
+    }
+
+    public <T extends ServiceDocument> void putServiceSynchronously(
+            String serviceUri, T putBody) throws Throwable {
+
+        TestContext ctx = this.host.testCreate(1);
+
+        Operation putOperation = Operation
+                .createPut(UriUtils.buildUri(this.host, serviceUri))
+                .setBody(putBody)
+                .setCompletion(ctx.getCompletion());
+
+        this.host.send(putOperation);
+        this.host.testWait(ctx);
     }
 
     public void testStart(int count) {
@@ -160,14 +177,15 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
             String serviceUri, ComputeInstanceRequest patchBody)
                     throws Throwable {
 
-        this.testStart(1);
+        TestContext ctx = this.host.testCreate(1);
+
         Operation patchOperation = Operation
                 .createPatch(UriUtils.buildUri(this.host, serviceUri))
                 .setBody(patchBody)
-                .setCompletion(getCompletion());
+                .setCompletion(ctx.getCompletion());
 
         this.host.send(patchOperation);
-        this.testWait();
+        this.testWait(ctx);
         return patchOperation.getStatusCode();
     }
 
@@ -176,21 +194,22 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
 
         List<T> responseBody = new ArrayList<T>();
 
-        this.testStart(1);
+        TestContext ctx = this.host.testCreate(1);
+
         Operation getOperation = Operation
                 .createGet(UriUtils.buildUri(this.host, serviceUri))
                 .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_QUEUE_FOR_SERVICE_AVAILABILITY)
                 .setCompletion((operation, throwable) -> {
                     if (throwable != null) {
-                        this.failIteration(throwable);
+                        ctx.failIteration(throwable);
                     }
 
                     responseBody.add(operation.getBody(type));
-                    this.completeIteration();
+                    ctx.completeIteration();
                 });
 
         this.send(getOperation);
-        this.testWait();
+        this.testWait(ctx);
 
         if (!responseBody.isEmpty()) {
             return responseBody.get(0);
@@ -201,15 +220,16 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
 
     private <T extends ServiceDocument> void deleteServiceSynchronously(
             String serviceUri, boolean stopOnly) throws Throwable {
-        this.testStart(1);
+        TestContext ctx = this.host.testCreate(1);
+
         Operation deleteOperation = Operation
                 .createDelete(UriUtils.buildUri(this.host, serviceUri))
                 .setCompletion((operation, throwable) -> {
                     if (throwable != null) {
-                        this.failIteration(throwable);
+                        ctx.failIteration(throwable);
                     }
 
-                    this.completeIteration();
+                    ctx.completeIteration();
                 });
 
         if (stopOnly) {
@@ -218,7 +238,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
         }
 
         this.send(deleteOperation);
-        this.testWait();
+        this.testWait(ctx);
     }
 
     public <T extends ServiceDocument> void stopServiceSynchronously(

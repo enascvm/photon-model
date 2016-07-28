@@ -22,9 +22,12 @@ import static org.junit.Assert.assertTrue;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.Before;
@@ -344,6 +347,111 @@ public class ComputeServiceTest extends Suite {
                     is(startState.resourcePoolLink));
             assertThat(getState.adapterManagementReference,
                     is(startState.adapterManagementReference));
+        }
+
+        @Test
+        public void testPatchRemoveNetworkLinks() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd);
+            // startState has four networkLinks: network, network1, network2, network3
+            startState.networkLinks.add("http://network1");
+            startState.networkLinks.add("http://network2");
+            startState.networkLinks.add("http://network3");
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+            assertNotNull(returnState);
+
+            ComputeService.ComputeState patchBody = new ComputeService.ComputeState();
+
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchBody);
+
+            ResourceUtils.CollectionRemovalRequest collectionRemovalBody
+                    = new ResourceUtils.CollectionRemovalRequest();
+            collectionRemovalBody.kind = ResourceUtils.CollectionRemovalRequest.KIND;
+            collectionRemovalBody.collectionsMap = new HashMap<>();
+            Collection<Object> networkLinksToBeRemoved = new ArrayList<>(Arrays.asList(
+                    "http://network1", "http://network3"));
+            collectionRemovalBody.collectionsMap.put("networkLinks", networkLinksToBeRemoved);
+
+            // send PATCH to remove networkLinks: network1, network3
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    collectionRemovalBody);
+
+            ComputeService.ComputeStateWithDescription getState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    ComputeService.ComputeStateWithDescription.class);
+
+            List<String> expectedNetworkLinks = new ArrayList<>(Arrays.asList(
+                    "http://network", "http://network2"));
+
+            assertThat(getState.id, is(startState.id));
+            assertEquals(getState.networkLinks, expectedNetworkLinks);
+        }
+    }
+
+    /**
+     * This class implements tests for the handlePut method.
+     */
+    public static class HandlePutTest extends BaseModelTest {
+
+        @Test
+        public void testPut() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd);
+            startState.creationTimeMicros = Long.MIN_VALUE;
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+            assertNotNull(returnState);
+
+            ComputeService.ComputeState newState = new ComputeService.ComputeState();
+            newState.id = UUID.randomUUID().toString();
+            newState.address = "10.0.0.2";
+            newState.creationTimeMicros = Long.MIN_VALUE;
+            newState.descriptionLink = startState.descriptionLink;
+            newState.powerState = ComputeService.PowerState.OFF;
+            newState.primaryMAC = "ba:98:76:54:32:10";
+            newState.resourcePoolLink = "http://newResourcePool";
+            newState.adapterManagementReference = URI
+                    .create("http://newAdapterManagementReference");
+            newState.tenantLinks = new ArrayList<String>();
+            newState.tenantLinks.add("tenant1");
+            newState.groupLinks = new HashSet<String>();
+            newState.groupLinks.add("group1");
+            newState.diskLinks = new ArrayList<>();
+            newState.diskLinks.add("http://disk1");
+            newState.networkLinks = new ArrayList<>();
+            newState.networkLinks.add("http://network1");
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    newState);
+
+            ComputeService.ComputeStateWithDescription getState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    ComputeService.ComputeStateWithDescription.class);
+
+            assertThat(getState.id, is(newState.id));
+            assertThat(getState.address, is(newState.address));
+            assertThat(getState.powerState, is(newState.powerState));
+            assertThat(getState.primaryMAC, is(newState.primaryMAC));
+            assertThat(getState.resourcePoolLink,
+                    is(newState.resourcePoolLink));
+            assertThat(getState.descriptionLink,
+                    is(newState.descriptionLink));
+            assertThat(getState.adapterManagementReference,
+                    is(newState.adapterManagementReference));
+            assertEquals(getState.tenantLinks, newState.tenantLinks);
+            assertEquals(getState.groupLinks, newState.groupLinks);
+            assertEquals(getState.diskLinks, newState.diskLinks);
+            assertEquals(getState.networkLinks, newState.networkLinks);
+            // make sure launchTimeMicros was preserved
+            assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
         }
     }
 
