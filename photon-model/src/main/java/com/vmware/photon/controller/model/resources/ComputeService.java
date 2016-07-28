@@ -113,7 +113,7 @@ public class ComputeService extends StatefulService {
         public String parentLink;
 
         /**
-         * URI reference to resource pool management site.
+         * Reference to the management endpoint of the compute provider.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI adapterManagementReference;

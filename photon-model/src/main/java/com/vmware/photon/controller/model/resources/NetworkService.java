@@ -80,6 +80,12 @@ public class NetworkService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI instanceAdapterReference;
+
+        /**
+         * Reference to the management endpoint of the compute provider.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public URI adapterManagementReference;
     }
 
     public NetworkService() {
