@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.gcp;
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.gcp.enumeration.GCPEnumerationAdapterService;
+import com.vmware.photon.controller.model.adapters.gcp.stats.GCPStatsService;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.Utils;
 
@@ -25,20 +26,20 @@ import com.vmware.xenon.common.Utils;
 public class GCPAdapters {
 
     // The array of links to all GCP adapter services.
-    // We only have enumeration adapter so far.
     public static final String[] LINKS = {
-            GCPEnumerationAdapterService.SELF_LINK
+            GCPEnumerationAdapterService.SELF_LINK,
+            GCPStatsService.SELF_LINK
     };
 
     /**
      * The helper function to start all GCP adapter services.
-     * We only have enumeration adapter so far.
      * @param host The host service.
      * @throws Throwable Exceptions during provisioning gcp adapters.
      */
     public static void startServices(ServiceHost host) throws Throwable {
         try {
             host.startService(new GCPEnumerationAdapterService());
+            host.startService(new GCPStatsService());
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring provisioning gcp adapters: %s",
                     Utils.toString(e));

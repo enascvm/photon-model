@@ -23,6 +23,10 @@ public class GCPConstants {
     private static final String BASE_COMPUTE_TEMPLATE_URI = BASE_URI + "/compute/"
             + GCP_API_VERSION + "/projects/%s/zones/%s";
     public static final String LIST_VM_TEMPLATE_URI = BASE_COMPUTE_TEMPLATE_URI + "/instances";
+    public static final String MONITORING_API_BASE_URI = "https://monitoring.googleapis.com/";
+    public static final String MONITORING_API_VERSION = "v3/";
+    public static final String MONITORING_API_URI = MONITORING_API_BASE_URI + MONITORING_API_VERSION
+            + "projects/";
 
     // GCP API Constants
     public static final String MAX_RESULTS = "maxResults";
@@ -90,4 +94,34 @@ public class GCPConstants {
     public static final String ASIA_EAST1_A = "asia-east1-a";
     public static final String ASIA_EAST1_B = "asia-east1-b";
     public static final String ASIA_EAST1_C = "asia-east1-c";
+
+    // GCP Metric Name Constants
+    public static final String METRIC_NAME_PREFIX = "compute.googleapis.com/";
+    public static final String CPU_UTILIZATION = "instance/cpu/utilization";
+    public static final String DISK_READ_BYTES = "instance/disk/read_bytes_count";
+    public static final String DISK_READ_OPERATIONS = "instance/disk/read_ops_count";
+    public static final String DISK_WRITE_BYTES = "instance/disk/write_bytes_count";
+    public static final String DISK_WRITE_OPERATIONS = "instance/disk/write_ops_count";
+    public static final String NETWORK_IN_BYTES = "instance/network/received_bytes_count";
+    public static final String NETWORK_IN_PACKETS = "instance/network/received_packets_count";
+    public static final String NETWORK_OUT_BYTES = "instance/network/sent_bytes_count";
+    public static final String NETWORK_OUT_PACKETS = "instance/network/sent_packets_count";
+
+    // GCP Metric Unit Constants
+    public static final String UNIT_COUNT = "Count";
+    public static final String UNIT_BYTE = "Bytes";
+    public static final String UNIT_PERCENT = "Percent";
+    public static final String MONITORING_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'";
+    public static final String UTC_TIMEZONE_ID = "UTC";
+
+    // GCP Metric Filter Constants
+    public static final String TIMESERIES_PREFIX = "/timeSeries";
+    public static final String FILTER_KEY = "filter";
+    public static final String INTERVAL_START_TIME = "interval.startTime";
+    public static final String INTERVAL_END_TIME = "interval.endTime";
+    public static final String METRIC_TYPE_FILTER = "metric.type";
+    public static final String INSTANCE_NAME_FILTER = "resource.label.instance_id";
+    public static final String RESPONSE_PAGE_SIZE = "pageSize";
+    public static final long START_TIME_MILLIS = 690000;
+    public static final long END_TIME_MILLIS = 600000;
 }
