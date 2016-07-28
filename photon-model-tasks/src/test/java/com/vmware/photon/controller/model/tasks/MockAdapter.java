@@ -17,10 +17,13 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeBootRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.ServiceHost;
@@ -49,6 +52,7 @@ public class MockAdapter {
         host.startService(new MockNetworkInstanceFailureAdapter());
         host.startService(new MockFirewallInstanceSuccessAdapter());
         host.startService(new MockFirewallInstanceFailureAdapter());
+        host.startService(new MockSuccessEndpointAdapter());
     }
 
     public static TaskState createFailedTaskInfo() {
@@ -414,6 +418,40 @@ public class MockAdapter {
                         request.taskReference).setBody(
                                 provisionFirewallTaskState));
                 op.complete();
+                break;
+            default:
+                super.handleRequest(op);
+            }
+        }
+    }
+
+    /**
+     * Mock endpoint adapter that always succeeds.
+     */
+    public static class MockSuccessEndpointAdapter extends StatelessService {
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_success_endpoint_adapter";
+
+        @Override
+        public void handleRequest(Operation op) {
+            if (!op.hasBody()) {
+                op.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+            switch (op.getAction()) {
+            case PATCH:
+                EndpointConfigRequest request = op
+                        .getBody(EndpointConfigRequest.class);
+                if (request.requestType == RequestType.VALIDATE) {
+                    op.complete();
+                    return;
+                }
+                EndpointAllocationTaskState state = new EndpointAllocationTaskState();
+                state.taskInfo = new TaskState();
+                state.taskInfo.stage = TaskState.TaskStage.FINISHED;
+                state.taskSubStage = EndpointAllocationTaskService.SubStage.COMPLETED;
+                sendRequest(Operation.createPatch(
+                        request.taskReference).setBody(state));
                 break;
             default:
                 super.handleRequest(op);

@@ -28,7 +28,8 @@ public class AWSAdapters {
             AWSInstanceService.SELF_LINK,
             AWSNetworkService.SELF_LINK,
             AWSStatsService.SELF_LINK,
-            AWSEnumerationAdapterService.SELF_LINK };
+            AWSEnumerationAdapterService.SELF_LINK,
+            AWSEndpointAdapterService.SELF_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
 
@@ -37,6 +38,7 @@ public class AWSAdapters {
             host.startService(new AWSNetworkService());
             host.startService(new AWSStatsService());
             host.startService(new AWSEnumerationAdapterService());
+            host.startService(new AWSEndpointAdapterService());
 
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring provisioning adapters: %s",

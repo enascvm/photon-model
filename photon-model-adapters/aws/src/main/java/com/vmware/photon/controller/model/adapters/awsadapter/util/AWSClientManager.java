@@ -33,7 +33,6 @@ import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.LRUCache;
-
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -164,7 +163,7 @@ public class AWSClientManager {
      * Returns the executor pool associated with the service host. In case one does not exist already,
      * creates a new one and saves that in a cache.
      */
-    private synchronized ExecutorService getExecutor(ServiceHost host) {
+    public synchronized ExecutorService getExecutor(ServiceHost host) {
         ExecutorService executorService;
         URI hostURI = host.getPublicUri();
         if (this.executorCache == null) {

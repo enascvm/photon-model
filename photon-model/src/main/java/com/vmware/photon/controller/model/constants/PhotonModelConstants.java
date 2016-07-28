@@ -86,4 +86,11 @@ public class PhotonModelConstants {
     public static String getUnitForMetric(String metricName) {
         return METRIC_UNIT_MAP.get(metricName);
     }
+
+    public enum EndpointType {
+        aws,
+        azure,
+        gpc,
+        vsphere;
+    }
 }

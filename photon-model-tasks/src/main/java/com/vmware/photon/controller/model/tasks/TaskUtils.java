@@ -14,13 +14,16 @@
 package com.vmware.photon.controller.model.tasks;
 
 import java.net.InetAddress;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.Collection;
 
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
@@ -171,5 +174,10 @@ public class TaskUtils {
         TaskState tState = new TaskState();
         tState.stage = stage;
         return tState;
+    }
+
+    public static URI getAdapterUri(StatefulService service, AdapterTypePath adapterTypePath,
+            String endpointType) {
+        return UriUtils.buildUri(service.getHost(), adapterTypePath.adapterLink(endpointType));
     }
 }

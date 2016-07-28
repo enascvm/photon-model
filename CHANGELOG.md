@@ -2,6 +2,8 @@
 
 ## 0.4.2-SNAPSHOT
 
+* Add new endpoint resource and task services.
+
 * Add support for aggregating metrics to get daily min/max/avg values over 4 weeks.
 
 * Remove StatsCollectionTaskSchedulerService - The functionality this class provided

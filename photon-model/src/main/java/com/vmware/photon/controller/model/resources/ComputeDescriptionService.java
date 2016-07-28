@@ -19,7 +19,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 
-
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -76,16 +75,19 @@ public class ComputeDescriptionService extends StatefulService {
         /**
          * Name of this description service instance.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String name;
 
         /**
          * Region identifier of this description service instance.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String regionId;
 
         /**
          * Identifier of the zone associated with this compute host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String zoneId;
 
         /**
@@ -98,21 +100,25 @@ public class ComputeDescriptionService extends StatefulService {
         /**
          * Environment/ Platform name this compute host is provisioned on.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String environmentName;
 
         /**
          * Identifier of the data center associated with this compute host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String dataCenterId;
 
         /**
          * Identifier of the data store associated with this compute host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String dataStoreId;
 
         /**
          * Identifier of the network associated with this compute host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String networkId;
 
         /**
@@ -130,64 +136,76 @@ public class ComputeDescriptionService extends StatefulService {
         /**
          * Number of CPU Cores in this host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public long cpuCount;
 
         /**
          * Clock Speed (in Mhz) per CPU Core.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public long cpuMhzPerCore;
 
         /**
          * Number of GPU Cores in this host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public long gpuCount;
 
         /**
          * Total amount of memory (in bytes) available on this host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public long totalMemoryBytes;
 
         /**
          * Pricing associated with this host (measured per minute).
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public double costPerMinute;
 
         /**
          * Currency unit used for pricing.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String currencyUnit;
 
         /**
          * URI reference to the adapter used to create an instance of this host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI instanceAdapterReference;
 
         /**
          * URI reference to the adapter used to power-on this host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI powerAdapterReference;
 
         /**
          * URI reference to the adapter used to boot this host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI bootAdapterReference;
 
         /**
          * URI reference to the adapter used to get the health status of this
          * host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI healthAdapterReference;
 
         /**
          * URI reference to the adapter used to get the stats info of this
          * host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI statsAdapterReference;
 
         /**
          * URI reference to the adapter used to enumerate instances of this
          * host.
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI enumerationAdapterReference;
     }
 

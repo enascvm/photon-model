@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure;
 
 import java.util.logging.Level;
 
+import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
 import com.vmware.photon.controller.model.adapters.azure.stats.AzureStatsGatherer;
@@ -31,7 +32,8 @@ public class AzureAdapters {
             AzureEnumerationAdapterService.SELF_LINK,
             AzureInstanceService.SELF_LINK,
             AzureStatsService.SELF_LINK,
-            AzureStatsGatherer.SELF_LINK};
+            AzureStatsGatherer.SELF_LINK,
+            AzureEndpointAdapterService.SELF_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
         try {
@@ -39,6 +41,7 @@ public class AzureAdapters {
             host.startService(new AzureInstanceService());
             host.startService(new AzureStatsService());
             host.startService(new AzureStatsGatherer());
+            host.startService(new AzureEndpointAdapterService());
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring provisioning adapters: %s",
                     Utils.toString(e));
