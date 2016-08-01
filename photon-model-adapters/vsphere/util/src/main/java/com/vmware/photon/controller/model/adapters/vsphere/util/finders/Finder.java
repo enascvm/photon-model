@@ -39,6 +39,8 @@ import com.vmware.vim25.TraversalSpec;
  * Port of https://github.com/vmware/govmomi/blob/master/find/finder.go to Java.
  */
 public class Finder extends Recurser {
+    private static final String CHAR_STAR = "*";
+    private static final String CHAR_AT = "@";
     private final Element datacenter;
 
     private Element networkFolder;
@@ -60,8 +62,10 @@ public class Finder extends Recurser {
     }
 
     public static List<String> toParts(String p) {
+        p = p.replace(CHAR_STAR, CHAR_AT);
         p = Paths.get(p).normalize().toString();
         p = p.replace('\\', '/');
+        p = p.replace(CHAR_AT, CHAR_STAR);
         if (p.equals("/")) {
             return Collections.emptyList();
         }
