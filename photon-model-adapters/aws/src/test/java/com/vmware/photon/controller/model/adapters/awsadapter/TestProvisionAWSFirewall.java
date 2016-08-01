@@ -134,7 +134,7 @@ public class TestProvisionAWSFirewall {
         fwInitialState.authCredentialsLink = creds.documentSelfLink;
         fwInitialState.authCredentialsLink = creds.documentSelfLink;
         fwInitialState.resourcePoolLink = pool.documentSelfLink;
-        fwInitialState.regionID = this.region;
+        fwInitialState.regionId = this.region;
         fwInitialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
                 AWSUriPaths.AWS_FIREWALL_ADAPTER,
@@ -200,7 +200,7 @@ public class TestProvisionAWSFirewall {
         fwInitialState.egress = getGlobalSSHRule();
         fwInitialState.authCredentialsLink = creds.documentSelfLink;
         fwInitialState.resourcePoolLink = pool.documentSelfLink;
-        fwInitialState.regionID = this.region;
+        fwInitialState.regionId = this.region;
         fwInitialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
                 AWSUriPaths.AWS_FIREWALL_ADAPTER,

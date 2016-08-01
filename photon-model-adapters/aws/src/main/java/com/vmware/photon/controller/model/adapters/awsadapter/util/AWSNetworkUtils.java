@@ -58,7 +58,7 @@ public class AWSNetworkUtils {
         NetworkState networkState = new NetworkState();
         networkState.id = instance.getVpcId();
         networkState.name = instance.getVpcId();
-        networkState.regionID = regionId;
+        networkState.regionId = regionId;
         networkState.resourcePoolLink = resourcePoolLink;
         networkState.authCredentialsLink = authCredentialsLink;
         networkState.instanceAdapterReference = UriUtils

@@ -17,6 +17,8 @@ package com.vmware.photon.controller.model.adapters.vsphere.util;
  * Hosts vim-api related strings (types, property names, paths. etc)
  */
 public class VimNames {
+    public static final String PROPERTY_NAME = "name";
+
     public static final String TYPE_VM = "VirtualMachine";
     public static final String TYPE_HOST = "HostSystem";
     public static final String TYPE_DATACENTER = "Datacenter";
@@ -27,4 +29,6 @@ public class VimNames {
     public static final String TYPE_VAPP = "VirtualApp";
     public static final String TYPE_FOLDER = "Folder";
     public static final String TYPE_PERFORMANCE_MANAGER = "PerformanceManager";
+    public static final String TYPE_NETWORK = "Network";
+    public static final String TYPE_PORTGROUP = "DistributedVirtualPortgroup";
 }

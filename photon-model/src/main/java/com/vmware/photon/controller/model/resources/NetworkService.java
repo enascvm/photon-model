@@ -36,6 +36,9 @@ public class NetworkService extends StatefulService {
      * Network State document.
      */
     public static class NetworkState extends ResourceState {
+        public static final String FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE = "adapterManagementReference";
+        public static final String FIELD_NAME_NAME = "name";
+
         @UsageOption(option = PropertyUsageOption.ID)
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public String id;
@@ -58,7 +61,7 @@ public class NetworkService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String regionID;
+        public String regionId;
 
         /**
          * Link to secrets. Required

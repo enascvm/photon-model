@@ -55,7 +55,7 @@ public class FirewallService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String regionID;
+        public String regionId;
 
         /**
          * Link to secrets. Required
@@ -168,8 +168,8 @@ public class FirewallService extends StatefulService {
                     "a minimum of one egress rule is required");
         }
 
-        if (state.regionID.isEmpty()) {
-            throw new IllegalArgumentException("regionID required");
+        if (state.regionId.isEmpty()) {
+            throw new IllegalArgumentException("regionId required");
         }
 
         if (state.authCredentialsLink.isEmpty()) {

@@ -227,6 +227,15 @@ public final class VimUtils {
 
     }
 
+    public static boolean isNetwork(ManagedObjectReference obj) {
+        if (obj == null) {
+            return false;
+        }
+
+        return VimNames.TYPE_NETWORK.equals(obj.getType()) ||
+                VimNames.TYPE_PORTGROUP.equals(obj.getType());
+    }
+
     public static boolean isDatastore(ManagedObjectReference obj) {
         if (obj == null) {
             return false;

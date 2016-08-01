@@ -65,7 +65,7 @@ public class FirewallServiceTest extends Suite {
         firewallState.tenantLinks.add("tenant-linkA");
         firewallState.ingress = getAllowIngressRules();
         firewallState.egress = getAllowEgressRules();
-        firewallState.regionID = "regionID";
+        firewallState.regionId = "regionId";
         firewallState.authCredentialsLink = "http://authCredentialsLink";
         firewallState.resourcePoolLink = "http://resourcePoolLink";
         try {
@@ -140,7 +140,7 @@ public class FirewallServiceTest extends Suite {
             assertThat(returnState.id, is(startState.id));
             assertThat(returnState.networkDescriptionLink,
                     is(startState.networkDescriptionLink));
-            assertThat(returnState.regionID, is(startState.regionID));
+            assertThat(returnState.regionId, is(startState.regionId));
             assertThat(returnState.authCredentialsLink,
                     is(startState.authCredentialsLink));
             assertThat(returnState.resourcePoolLink,
@@ -161,11 +161,11 @@ public class FirewallServiceTest extends Suite {
                             startState, FirewallService.FirewallState.class);
 
             assertNotNull(returnState);
-            assertThat(returnState.regionID, is(startState.regionID));
-            startState.regionID = "new-regionID";
+            assertThat(returnState.regionId, is(startState.regionId));
+            startState.regionId = "new-regionId";
             returnState = postServiceSynchronously(FirewallService.FACTORY_LINK,
                     startState, FirewallService.FirewallState.class);
-            assertThat(returnState.regionID, is(startState.regionID));
+            assertThat(returnState.regionId, is(startState.regionId));
 
         }
 
@@ -297,7 +297,7 @@ public class FirewallServiceTest extends Suite {
             patchState.customProperties = new HashMap<>();
             patchState.customProperties.put("customKey", "customValue");
 
-            patchState.regionID = "patchRregionID";
+            patchState.regionId = "patchRregionID";
             patchState.authCredentialsLink = "http://patchAuthCredentialsLink";
             patchState.resourcePoolLink = "http://patchResourcePoolLink";
             try {
@@ -317,7 +317,7 @@ public class FirewallServiceTest extends Suite {
                     returnState.documentSelfLink,
                     FirewallService.FirewallState.class);
 
-            assertThat(returnState.regionID, is(patchState.regionID));
+            assertThat(returnState.regionId, is(patchState.regionId));
             assertThat(returnState.authCredentialsLink,
                     is(patchState.authCredentialsLink));
             assertThat(returnState.resourcePoolLink,

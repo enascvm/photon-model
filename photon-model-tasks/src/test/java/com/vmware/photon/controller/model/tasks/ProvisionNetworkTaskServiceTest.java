@@ -58,7 +58,7 @@ public class ProvisionNetworkTaskServiceTest extends Suite {
         NetworkState nState = new NetworkState();
         nState.authCredentialsLink = "authCredentialsLink";
         nState.name = "firewall-name";
-        nState.regionID = "regionId";
+        nState.regionId = "regionId";
         nState.resourcePoolLink = "http://resourcePoolLink";
         nState.subnetCIDR = "152.151.150.222/22";
         if (success) {

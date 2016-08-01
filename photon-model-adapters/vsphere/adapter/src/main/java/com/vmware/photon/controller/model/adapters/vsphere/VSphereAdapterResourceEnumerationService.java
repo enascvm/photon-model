@@ -43,7 +43,8 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.ResourcePoolService;
+import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
@@ -71,6 +72,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     public static final String SELF_LINK = VSphereUriPaths.ENUMERATION_SERVICE;
 
     private static final int MAX_CONCURRENT_ENUM_PROCESSES = 10;
+    private static final String FAKE_SUBNET_CIDR = "0.0.0.0/0";
 
     /**
      * Stores currently running enumeration processes.
@@ -265,7 +267,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
-                processFoundObjects(request, page);
+                processFoundObjects(request, page, parent);
             }
         } catch (Exception e) {
             String msg = "Error processing PropertyCollector results";
@@ -280,16 +282,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @see #processFoundCluster(ComputeEnumerateResourceRequest, ComputeResourceOverlay)
      * @param request
      * @param objects
+     * @param parent
      */
     private void processFoundObjects(ComputeEnumerateResourceRequest request,
-            List<ObjectContent> objects) {
+            List<ObjectContent> objects, ComputeStateWithDescription parent) {
         for (ObjectContent cont : objects) {
             if (VimUtils.isVirtualMachine(cont.getObj())) {
                 VmOverlay vm = new VmOverlay(cont);
                 processFoundVm(request, vm);
             } else if (VimUtils.isResourcePool(cont.getObj())) {
-                ResourcePoolOverlay rp = new ResourcePoolOverlay(cont);
-                processFoundResourcePool(request, rp);
+                logInfo("Ignoring ResourcePool %s", cont.getObj());
             } else if (VimUtils.isHost(cont.getObj())) {
                 HostSystemOverlay hs = new HostSystemOverlay(cont);
                 processFoundHostSystem(request, hs);
@@ -298,40 +300,129 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 processFoundCluster(request, cr);
             } else if (VimUtils.isDatastore(cont.getObj())) {
                 DatastoreOverlay ds = new DatastoreOverlay(cont);
-                processFoundDatastore(request, ds);
+                processFoundDatastore(request, ds, parent.description.datacenterId);
+            } else if (VimUtils.isNetwork(cont.getObj())) {
+                NetworkOverlay net = new NetworkOverlay(cont);
+                processFoundNetwork(request, net, parent);
             }
         }
     }
 
-    private void processFoundDatastore(ComputeEnumerateResourceRequest request,
-            DatastoreOverlay ds) {
-        QueryTask task = createStorageQueryTask(request.adapterManagementReference, ds.getName());
+    private void processFoundNetwork(ComputeEnumerateResourceRequest request, NetworkOverlay net,
+            ComputeStateWithDescription parent) {
+        QueryTask task = queryForNetwork(request.adapterManagementReference, net.getName(),
+                parent.description.datacenterId);
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewStorageDescription(request, ds);
+                createNewNetwork(request, net, parent);
+            } else {
+                ComputeState oldDocument = Utils
+                        .fromJson(result.documents.values().iterator().next(), ComputeState.class);
+                updateNetwork(oldDocument, request, net, parent);
+            }
+        });
+    }
+
+    private void updateNetwork(ComputeState oldDocument, ComputeEnumerateResourceRequest request,
+            NetworkOverlay net, ComputeStateWithDescription parent) {
+        NetworkState state = makeNetworkStateFromResults(request, net, parent);
+        state.documentSelfLink = oldDocument.documentSelfLink;
+
+        logInfo("Syncing Network %s", net.getName());
+        Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
+                .setBody(state)
+                .sendWith(this);
+    }
+
+    private void createNewNetwork(ComputeEnumerateResourceRequest request, NetworkOverlay net,
+            ComputeStateWithDescription parent) {
+        NetworkState state = makeNetworkStateFromResults(request, net, parent);
+        Operation.createPost(this, NetworkService.FACTORY_LINK)
+                .setBody(state)
+                .sendWith(this);
+
+        logInfo("Found new Network %s", net.getName());
+    }
+
+    private NetworkState makeNetworkStateFromResults(ComputeEnumerateResourceRequest request,
+            NetworkOverlay net, ComputeStateWithDescription parent) {
+        NetworkState state = new NetworkState();
+
+        state.id = state.name = net.getName();
+        state.subnetCIDR = FAKE_SUBNET_CIDR;
+        state.regionId = parent.description.datacenterId;
+        state.resourcePoolLink = request.resourcePoolLink;
+        state.instanceAdapterReference = parent.description.instanceAdapterReference;
+        state.authCredentialsLink = parent.description.authCredentialsLink;
+        state.adapterManagementReference = request.adapterManagementReference;
+        CustomProperties.of(state)
+                .put(ComputeProperties.ON_PREMISE_DATACENTER, parent.description.datacenterId)
+                .put(CustomProperties.MOREF, net.getId())
+                .put(CustomProperties.TYPE, net.getId().getType());
+
+        return state;
+    }
+
+    private QueryTask queryForNetwork(URI adapterManagementReference, String name,
+            String datacenterId) {
+        QuerySpecification qs = new QuerySpecification();
+        qs.query.addBooleanClause(
+                Query.Builder.create()
+                        .addFieldClause(NetworkState.FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE,
+                                adapterManagementReference.toString())
+                        .build());
+
+        qs.query.addBooleanClause(
+                Query.Builder.create()
+                        .addFieldClause(NetworkState.FIELD_NAME_NAME,
+                                name)
+                        .build());
+
+        qs.query.addBooleanClause(Query.Builder.create()
+                .addFieldClause(
+                        QuerySpecification.buildCompositeFieldName(
+                                ResourcePoolState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                ComputeProperties.ON_PREMISE_DATACENTER),
+                        datacenterId).build());
+
+        return QueryTask
+                .create(qs)
+                .setDirect(true);
+    }
+
+    private void processFoundDatastore(ComputeEnumerateResourceRequest request,
+            DatastoreOverlay ds, String datacenterId) {
+        QueryTask task = queryForStorage(request.adapterManagementReference, ds.getName(),
+                datacenterId);
+
+        withTaskResults(task, result -> {
+            if (result.documentLinks.isEmpty()) {
+                createNewStorageDescription(request, ds, datacenterId);
             } else {
                 StorageDescription oldDocument = Utils
                         .fromJson(result.documents.values().iterator().next(),
                                 StorageDescription.class);
-                updateStorageDescription(oldDocument, request, ds);
+                updateStorageDescription(oldDocument, request, ds, datacenterId);
             }
         });
     }
 
     private void updateStorageDescription(StorageDescription oldDocument,
-            ComputeEnumerateResourceRequest request, DatastoreOverlay ds) {
-        StorageDescription desc = makeStorageFromResults(request, ds);
+            ComputeEnumerateResourceRequest request, DatastoreOverlay ds,
+            String datacenterId) {
+        StorageDescription desc = makeStorageFromResults(request, ds, datacenterId);
         desc.documentSelfLink = oldDocument.documentSelfLink;
 
+        logInfo("Syncing Storage %s", ds.getName());
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .sendWith(this);
     }
 
     private void createNewStorageDescription(ComputeEnumerateResourceRequest request,
-            DatastoreOverlay ds) {
-        StorageDescription desc = makeStorageFromResults(request, ds);
+            DatastoreOverlay ds, String datacenterId) {
+        StorageDescription desc = makeStorageFromResults(request, ds, datacenterId);
 
         logInfo("Found new Datastore %s", ds.getName());
 
@@ -341,19 +432,22 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private StorageDescription makeStorageFromResults(ComputeEnumerateResourceRequest request,
-            DatastoreOverlay ds) {
+            DatastoreOverlay ds, String datacenterId) {
         StorageDescription res = new StorageDescription();
         res.id = res.name = ds.getName();
         res.type = ds.getType();
         res.resourcePoolLink = request.resourcePoolLink;
         res.adapterManagementReference = request.adapterManagementReference;
-
-        res.capacityBytes =  ds.getCapacityBytes();
+        res.capacityBytes = ds.getCapacityBytes();
+        CustomProperties.of(res)
+                .put(CustomProperties.MOREF, ds.getId())
+                .put(ComputeProperties.ON_PREMISE_DATACENTER, datacenterId);
 
         return res;
     }
 
-    private QueryTask createStorageQueryTask(URI adapterManagementReference, String name) {
+    private QueryTask queryForStorage(URI adapterManagementReference, String name,
+            String datacenterId) {
         QuerySpecification qs = new QuerySpecification();
         qs.query.addBooleanClause(
                 Query.Builder.create().addFieldClause(StorageDescription.FIELD_NAME_NAME, name)
@@ -363,6 +457,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .addFieldClause(StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
                         adapterManagementReference.toString()).build());
 
+        qs.query.addBooleanClause(Query.Builder.create()
+                .addFieldClause(
+                        QuerySpecification.buildCompositeFieldName(
+                                ResourcePoolState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                ComputeProperties.ON_PREMISE_DATACENTER),
+                        datacenterId).build());
         return QueryTask
                 .create(qs)
                 .setDirect(true);
@@ -377,7 +477,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      */
     private void processFoundCluster(ComputeEnumerateResourceRequest request,
             ComputeResourceOverlay cr) {
-        QueryTask task = createClusterQueryTask(request.resourceLink(),
+        QueryTask task = queryForCluster(request.resourceLink(),
                 cr.getId().getValue());
 
         withTaskResults(task, result -> {
@@ -450,7 +550,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return state;
     }
 
-    private QueryTask createClusterQueryTask(String parentComputeLink, String moRefId) {
+    private QueryTask queryForCluster(String parentComputeLink, String moRefId) {
         QuerySpecification qs = new QuerySpecification();
         qs.query.addBooleanClause(
                 Query.Builder.create().addFieldClause(ComputeState.FIELD_NAME_ID, moRefId)
@@ -471,7 +571,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      */
     private void processFoundHostSystem(ComputeEnumerateResourceRequest request,
             HostSystemOverlay hs) {
-        QueryTask task = createHostSystemQueryTask(request.resourceLink(),
+        QueryTask task = queryForHostSystem(request.resourceLink(),
                 hs.getHardwareUuid());
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
@@ -543,80 +643,13 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return state;
     }
 
-    private void processFoundResourcePool(ComputeEnumerateResourceRequest request,
-            ResourcePoolOverlay rp) {
-        QueryTask task = createResourcePoolQueryTask(request.adapterManagementReference.toString(),
-                rp.getId().getValue());
-        withTaskResults(task, result -> {
-            if (result.documentLinks.isEmpty()) {
-                createNewResourcePool(request, rp);
-            } else {
-                updateResourcePool(result.documentLinks.get(0), request, rp);
-            }
-        });
-    }
-
-    private void updateResourcePool(String selfLink, ComputeEnumerateResourceRequest request,
-            ResourcePoolOverlay rp) {
-        ResourcePoolState state = makeResourcePoolFromResults(request, rp);
-        state.documentSelfLink = selfLink;
-
-        Operation.createPatch(UriUtils.buildUri(getHost(), selfLink))
-                .setBody(state)
-                .sendWith(this);
-    }
-
-    private void createNewResourcePool(ComputeEnumerateResourceRequest request,
-            ResourcePoolOverlay rp) {
-        ResourcePoolState state = makeResourcePoolFromResults(request, rp);
-
-        logInfo("Found new ResourcePool %s", rp.getName());
-        Operation.createPost(this, ResourcePoolService.FACTORY_LINK)
-                .setBody(state)
-                .sendWith(this);
-    }
-
-    private ResourcePoolState makeResourcePoolFromResults(ComputeEnumerateResourceRequest request,
-            ResourcePoolOverlay rp) {
-        ResourcePoolState state = new ResourcePoolState();
-        state.id = rp.getId().getValue();
-        state.name = rp.getName();
-        state.maxMemoryBytes = rp.getMemoryLimitBytes();
-        state.minMemoryBytes = rp.getMemoryReservationBytes();
-
-        CustomProperties.of(state)
-                .put(CustomProperties.ADAPTER_REFERENCE,
-                        request.adapterManagementReference.toString());
-
-        return state;
-    }
-
-    private QueryTask createResourcePoolQueryTask(String adapterReference,
-            String moId) {
-        QuerySpecification qs = new QuerySpecification();
-        qs.query.addBooleanClause(
-                Query.Builder.create().addFieldClause(ComputeState.FIELD_NAME_ID, moId)
-                        .build());
-
-        qs.query.addBooleanClause(Query.Builder.create()
-                .addFieldClause(
-                        QuerySpecification.buildCompositeFieldName(
-                                ResourcePoolState.FIELD_NAME_CUSTOM_PROPERTIES,
-                                CustomProperties.ADAPTER_REFERENCE),
-                        adapterReference).build());
-
-        return QueryTask
-                .create(qs)
-                .setDirect(true);
-    }
-
     /**
      * @see #processFoundCluster(ComputeEnumerateResourceRequest, ComputeResourceOverlay)
      * @param request
      * @param vm
      */
     private void processFoundVm(ComputeEnumerateResourceRequest request, VmOverlay vm) {
-        QueryTask task = createVmQueryTask(request.resourceLink(), vm.getInstanceUuid());
+        QueryTask task = queryForVm(request.resourceLink(), vm.getInstanceUuid());
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
                 createNewVm(request, vm);
@@ -703,7 +736,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param instanceUuid
      * @return
      */
-    private QueryTask createVmQueryTask(String parentComputeLink, String instanceUuid) {
+    private QueryTask queryForVm(String parentComputeLink, String instanceUuid) {
         QuerySpecification qs = new QuerySpecification();
         qs.query.addBooleanClause(
                 Query.Builder.create().addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid)
@@ -724,7 +757,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @param hardwareUuid
      * @return
      */
-    private QueryTask createHostSystemQueryTask(String parentComputeLink, String hardwareUuid) {
+    private QueryTask queryForHostSystem(String parentComputeLink, String hardwareUuid) {
         QuerySpecification qs = new QuerySpecification();
         qs.query.addBooleanClause(
                 Query.Builder.create().addFieldClause(ComputeState.FIELD_NAME_ID, hardwareUuid)
@@ -734,7 +767,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink).build());
 
         // fetch the whole document to extract the description link
-
         qs.options = EnumSet.of(EXPAND_CONTENT);
         return QueryTask
                 .create(qs)

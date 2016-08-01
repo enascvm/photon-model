@@ -30,14 +30,17 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -66,15 +69,18 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
         doRefresh();
 
-        snapshotFactoryState("dump", ComputeService.class);
-        snapshotFactoryState("dump", ComputeDescriptionService.class);
         Thread.sleep(2000);
+        snapshotFactoryState("refresh", ComputeService.class);
+        snapshotFactoryState("refresh", ComputeDescriptionService.class);
+        snapshotFactoryState("refresh", ResourcePoolService.class);
+        snapshotFactoryState("refresh", StorageDescriptionService.class);
+        snapshotFactoryState("refresh", NetworkService.class);
 
         // do a second refresh to test update path
         doRefresh();
     }
 
-    private void snapshotFactoryState(String tag, Class<? extends Service> factoryClass)
+    private void snapshotFactoryState(String tag, Class<? extends StatefulService> factoryClass)
             throws ExecutionException, InterruptedException, IOException {
         URI uri = UriUtils.buildFactoryUri(this.host, factoryClass);
         uri = UriUtils.extendUriWithQuery(uri, "expand", "true");
@@ -143,6 +149,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
 
         computeDesc.zoneId = this.zoneId;
+        computeDesc.datacenterId = this.datacenterId;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,

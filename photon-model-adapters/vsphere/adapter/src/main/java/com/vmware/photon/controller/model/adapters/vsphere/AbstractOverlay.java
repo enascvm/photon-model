@@ -66,4 +66,10 @@ public abstract class AbstractOverlay {
     public ManagedObjectReference getId() {
         return this.ref;
     }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + ":" + VimUtils.convertMoRefToString(this.ref) + ": "
+                + this.props;
+    }
 }

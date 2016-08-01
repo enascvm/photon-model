@@ -64,7 +64,7 @@ public class NetworkServiceTest extends Suite {
         networkState.subnetCIDR = "10.0.0.0/10";
         networkState.tenantLinks = new ArrayList<>();
         networkState.tenantLinks.add("tenant-linkA");
-        networkState.regionID = "regionID";
+        networkState.regionId = "regionId";
         networkState.authCredentialsLink = "http://authCredentialsLink";
         networkState.resourcePoolLink = "http://resourcePoolLink";
         try {
@@ -117,7 +117,7 @@ public class NetworkServiceTest extends Suite {
             assertThat(returnState.subnetCIDR, is(startState.subnetCIDR));
             assertThat(returnState.tenantLinks.get(0),
                     is(startState.tenantLinks.get(0)));
-            assertThat(returnState.regionID, is(startState.regionID));
+            assertThat(returnState.regionId, is(startState.regionId));
             assertThat(returnState.authCredentialsLink,
                     is(startState.authCredentialsLink));
             assertThat(returnState.resourcePoolLink,
@@ -191,7 +191,7 @@ public class NetworkServiceTest extends Suite {
             patchState.subnetCIDR = "152.151.150.222/22";
             patchState.customProperties = new HashMap<>();
             patchState.customProperties.put("patchKey", "patchValue");
-            patchState.regionID = "patchRregionID";
+            patchState.regionId = "patchRregionID";
             patchState.authCredentialsLink = "http://patchAuthCredentialsLink";
             patchState.resourcePoolLink = "http://patchResourcePoolLink";
             try {
@@ -215,7 +215,7 @@ public class NetworkServiceTest extends Suite {
             assertThat(returnState.subnetCIDR, is(patchState.subnetCIDR));
             assertThat(returnState.customProperties,
                     is(patchState.customProperties));
-            assertThat(returnState.regionID, is(patchState.regionID));
+            assertThat(returnState.regionId, is(patchState.regionId));
             assertThat(returnState.authCredentialsLink,
                     is(patchState.authCredentialsLink));
             assertThat(returnState.resourcePoolLink,

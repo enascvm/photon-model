@@ -107,7 +107,7 @@ public class ComputeDescriptionService extends StatefulService {
          * Identifier of the data center associated with this compute host.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String dataCenterId;
+        public String datacenterId;
 
         /**
          * Identifier of the data store associated with this compute host.
@@ -356,7 +356,7 @@ public class ComputeDescriptionService extends StatefulService {
         template.enumerationAdapterReference = UriUtils.buildUri(
                 this.getHost(), "/enumerationAdapterReference");
 
-        template.dataCenterId = null;
+        template.datacenterId = null;
         template.networkId = null;
         template.dataStoreId = null;
 

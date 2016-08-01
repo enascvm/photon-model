@@ -38,7 +38,7 @@ public class ComputeEnumerateResourceRequest extends ResourceRequest {
     public EnumerationAction enumerationAction;
 
     /**
-     * URI reference to resource pool management site.
+     * Reference to the management endpoint of the compute provider.
      */
     public URI adapterManagementReference;
 }

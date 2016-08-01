@@ -62,7 +62,7 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
         fState.networkDescriptionLink = "http://networkDescriptionLink";
         fState.authCredentialsLink = "authCredentialsLink";
         fState.name = "firewall-name";
-        fState.regionID = "regionId";
+        fState.regionId = "regionId";
         fState.resourcePoolLink = "http://resourcePoolLink";
         if (success) {
             fState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),

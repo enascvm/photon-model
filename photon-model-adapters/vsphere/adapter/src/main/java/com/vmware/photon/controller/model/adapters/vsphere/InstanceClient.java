@@ -107,7 +107,7 @@ public class InstanceClient extends BaseHelper {
         this.parent = parent;
 
         // the datacenterId is used as a ref to a vSphere datacenter name
-        String id = resource.description.dataCenterId;
+        String id = resource.description.datacenterId;
 
         try {
             this.finder = new Finder(connection, id);

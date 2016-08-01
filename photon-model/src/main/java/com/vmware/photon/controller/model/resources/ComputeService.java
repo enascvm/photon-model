@@ -41,7 +41,7 @@ public class ComputeService extends StatefulService {
     /**
      * Power State.
      */
-    public static enum PowerState {
+    public enum PowerState {
         ON, OFF, UNKNOWN, SUSPEND
     }
 

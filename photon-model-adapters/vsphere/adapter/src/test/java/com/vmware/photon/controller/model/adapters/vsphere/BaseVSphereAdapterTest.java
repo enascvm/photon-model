@@ -51,6 +51,7 @@ public class BaseVSphereAdapterTest {
     public String vcPassword = System.getProperty(TestProperties.VC_PASSWORD);
 
     public String zoneId = System.getProperty(TestProperties.VC_ZONE_ID);
+    public String datacenterId = System.getProperty(TestProperties.VC_DATECENTER_ID);
     public String dataStoreId = System.getProperty(TestProperties.VC_DATASTORE_ID);
     public String networkId = System.getProperty(TestProperties.VC_NETWORK_ID);
 

@@ -117,7 +117,7 @@ public class TestProvisionAWSNetwork {
         NetworkState initialState = TestUtils.buildNetworkState(this.host);
         initialState.authCredentialsLink = creds.documentSelfLink;
         initialState.resourcePoolLink = pool.documentSelfLink;
-        initialState.regionID = this.region;
+        initialState.regionId = this.region;
         initialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
                 AWSUriPaths.AWS_NETWORK_ADAPTER,
@@ -170,7 +170,7 @@ public class TestProvisionAWSNetwork {
         NetworkState initialState = TestUtils.buildNetworkState(this.host);
         initialState.authCredentialsLink = creds.documentSelfLink;
         initialState.resourcePoolLink = pool.documentSelfLink;
-        initialState.regionID = this.region;
+        initialState.regionId = this.region;
         initialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
                 AWSUriPaths.AWS_NETWORK_ADAPTER,

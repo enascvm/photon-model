@@ -60,7 +60,7 @@ public class EnumerationClient extends BaseHelper {
         this.parent = parent;
 
         // the datacenterId is used as a ref to a vSphere datacenter name
-        String id = parent.description.dataCenterId;
+        String id = parent.description.datacenterId;
 
         try {
             this.finder = new Finder(connection, id);
@@ -167,6 +167,12 @@ public class EnumerationClient extends BaseHelper {
         dcToVmf.setName("dcToVmf");
         dcToVmf.getSelectSet().add(getSelectionSpec("VisitFolders"));
 
+        TraversalSpec dcToNet = new TraversalSpec();
+        dcToNet.setType(VimNames.TYPE_DATACENTER);
+        dcToNet.setSkip(Boolean.FALSE);
+        dcToNet.setPath("network");
+        dcToNet.setName("dcToNet");
+
         // For Folder -> Folder recursion
         TraversalSpec visitFolders = new TraversalSpec();
         visitFolders.setType(VimNames.TYPE_FOLDER);
@@ -184,6 +190,7 @@ public class EnumerationClient extends BaseHelper {
         sspecarrvf.add(getSelectionSpec("dcToDs"));
         sspecarrvf.add(getSelectionSpec("hToVm"));
         sspecarrvf.add(getSelectionSpec("rpToVm"));
+        sspecarrvf.add(getSelectionSpec("dcToNet"));
         sspecarrvf.add(getSelectionSpec("VisitFolders"));
 
         visitFolders.getSelectSet().addAll(sspecarrvf);
@@ -200,6 +207,7 @@ public class EnumerationClient extends BaseHelper {
         resultspec.add(hToVm);
         resultspec.add(rpToVm);
         resultspec.add(rpToRp);
+        resultspec.add(dcToNet);
 
         return resultspec;
     }
@@ -232,7 +240,7 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.host_summary_hardware_cpuMhz,
                 VimPath.host_summary_hardware_numCpuCores,
                 VimPath.host_summary_hardware_uuid,
-                "name"
+                VimNames.PROPERTY_NAME
         ));
 
         PropertySpec rpSpec = new PropertySpec();
@@ -240,7 +248,7 @@ public class EnumerationClient extends BaseHelper {
         rpSpec.getPathSet().addAll(Arrays.asList(
                 VimPath.rp_summary_config_memoryAllocation_limit,
                 VimPath.rp_summary_config_memoryAllocation_reservation,
-                "name"
+                VimNames.PROPERTY_NAME
         ));
 
         PropertySpec clusterSpec = new PropertySpec();
@@ -249,7 +257,7 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.res_summary_numCpuCores,
                 VimPath.res_summary_totalCpu,
                 VimPath.res_summary_effectiveMemory,
-                "name"
+                VimNames.PROPERTY_NAME
         ));
 
         PropertySpec dsSpec = new PropertySpec();
@@ -258,7 +266,19 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.ds_summary_type,
                 VimPath.ds_summary_freeSpace,
                 VimPath.ds_summary_capacity,
-                "name"
+                VimNames.PROPERTY_NAME
+        ));
+
+        PropertySpec netSpec = new PropertySpec();
+        netSpec.setType(VimNames.TYPE_NETWORK);
+        netSpec.getPathSet().addAll(Arrays.asList(
+                VimNames.PROPERTY_NAME
+        ));
+
+        PropertySpec pgSpec = new PropertySpec();
+        pgSpec.setType(VimNames.TYPE_PORTGROUP);
+        pgSpec.getPathSet().addAll(Arrays.asList(
+                VimNames.PROPERTY_NAME
         ));
 
         PropertyFilterSpec filterSpec = new PropertyFilterSpec();
@@ -268,6 +288,8 @@ public class EnumerationClient extends BaseHelper {
         filterSpec.getPropSet().add(rpSpec);
         filterSpec.getPropSet().add(clusterSpec);
         filterSpec.getPropSet().add(dsSpec);
+        filterSpec.getPropSet().add(netSpec);
+        filterSpec.getPropSet().add(pgSpec);
         return filterSpec;
     }
 

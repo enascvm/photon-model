@@ -14,27 +14,21 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
-import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.vim25.ObjectContent;
 
-public class DatastoreOverlay extends AbstractOverlay {
-    protected DatastoreOverlay(ObjectContent cont) {
+public class NetworkOverlay extends AbstractOverlay {
+    public NetworkOverlay(ObjectContent cont) {
         super(cont);
+        String type = getId().getType();
+        if (!type.equals(VimNames.TYPE_NETWORK) &&
+                !type.equals(VimNames.TYPE_PORTGROUP)) {
+            String msg = String.format("Cannot overlay type '%s' on top of %s", type, VimUtils
+                    .convertMoRefToString(getId()));
+            throw new IllegalArgumentException(msg);
+        }
     }
 
     public String getName() {
         return (String) getOrFail(VimNames.PROPERTY_NAME);
-    }
-
-    public String getType() {
-        return (String) getOrFail(VimPath.ds_summary_type);
-    }
-
-    public long getCapacityBytes() {
-        return (long) getOrFail(VimPath.ds_summary_capacity);
-    }
-
-    public long getFreeSpaceBytes() {
-        return (long) getOrFail(VimPath.ds_summary_freeSpace);
     }
 }

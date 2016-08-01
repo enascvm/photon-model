@@ -143,7 +143,7 @@ public class TestUtils {
         URI tenantFactoryURI = UriUtils.buildFactoryUri(host, TenantService.class);
 
         NetworkState network = new NetworkState();
-        network.regionID = zoneId;
+        network.regionId = zoneId;
         network.id = UUID.randomUUID().toString();
         network.subnetCIDR = "10.1.0.0/16";
         network.tenantLinks = new ArrayList<>();

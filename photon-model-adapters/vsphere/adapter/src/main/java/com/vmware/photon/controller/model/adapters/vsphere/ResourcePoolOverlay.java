@@ -25,7 +25,7 @@ public class ResourcePoolOverlay extends AbstractOverlay {
     }
 
     public String getName() {
-        return (String) getOrFail("name");
+        return (String) getOrFail(VimNames.PROPERTY_NAME);
     }
 
     public long getMemoryLimitBytes() {

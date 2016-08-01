@@ -31,13 +31,17 @@ public class ComputeProperties {
     public static final String RESOURCE_GROUP_NAME = "resourceGroupName";
 
     /**
+     *
+     */
+    public static final String ON_PREMISE_DATACENTER = "datacenterId";
+
+    /**
      * The normalized OS type of the compute resource.
      * See {@link OSType} for a list of possible values.
      */
     public static final String CUSTOM_OS_TYPE = "osType";
 
-    public static enum OSType {
+    public enum OSType {
         WINDOWS, LINUX;
     }
-
 }
