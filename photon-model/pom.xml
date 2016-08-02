@@ -14,7 +14,7 @@
     <dependency>
       <groupId>com.vmware.xenon</groupId>
       <artifactId>xenon-common</artifactId>
-      <version>${xenon.common.version}</version>
+      <version>${xenon.version}</version>
     </dependency>
     <dependency>
       <groupId>commons-io</groupId>
@@ -40,7 +40,7 @@
     <dependency>
       <groupId>com.vmware.xenon</groupId>
       <artifactId>xenon-common</artifactId>
-      <version>${xenon.common.version}</version>
+      <version>${xenon.version}</version>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>

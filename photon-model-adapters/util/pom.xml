@@ -16,7 +16,7 @@
         <dependency>
             <groupId>com.vmware.xenon</groupId>
             <artifactId>xenon-common</artifactId>
-            <version>${xenon.common.version}</version>
+            <version>${xenon.version}</version>
         </dependency>
         <dependency>
             <groupId>com.vmware.photon.controller</groupId>
