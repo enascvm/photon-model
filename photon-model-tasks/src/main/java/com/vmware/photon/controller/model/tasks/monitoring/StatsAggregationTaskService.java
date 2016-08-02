@@ -263,34 +263,32 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
             long bucketForCurrentInterval = normalizeTimestamp(currentTime, StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS);
             long bucketForPreviousInterval = normalizeTimestamp(currentTime - TimeUnit.HOURS.toMicros(1),
                     StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS);
+            // Variables for daily buckets.
+            long bucketForCurrentDay = normalizeTimestamp(currentTime, StatsConstants.BUCKET_SIZE_DAYS_IN_MILLS);
+            long bucketForPreviousDay = normalizeTimestamp(currentTime - TimeUnit.HOURS.toMicros(1),
+                    StatsConstants.BUCKET_SIZE_DAYS_IN_MILLS);
+
             ResourceAggregateMetricsState aggrMetricStateForCurrentInterval =
                     buildResourceAggregateMetricsState(computeServiceLink, computeToTenantLinksMap.get(computeServiceLink),
                             bucketForCurrentInterval);
             ResourceAggregateMetricsState aggrMetricStateForPreviousInterval =
                     buildResourceAggregateMetricsState(computeServiceLink, computeToTenantLinksMap.get(computeServiceLink),
                             bucketForPreviousInterval);
+
             for (Entry<String, ServiceStat> entry : stats.entries.entrySet() ) {
                 ServiceStat stat = entry.getValue();
                 // if the stat is maintained at a minute granularity, skip it as we don't want to aggregate the time
                 // series data at this granularity
                 if (stat.name.endsWith(StatsConstants.MIN_SUFFIX)) {
                     continue;
-                }
-                if (!stat.timeSeriesStats.dataPoints.isEmpty()) {
-                    long latestBucket = stat.timeSeriesStats.dataPoints.lastKey();
-                    if (latestBucket == bucketForCurrentInterval) {
-                        aggrMetricStateForCurrentInterval.aggregations.put(entry.getKey(), stat.timeSeriesStats.dataPoints.get(latestBucket));
-                    }
-                    // remove the latest bucket, so that we can look the the closed bucket for the last interval
-                    stat.timeSeriesStats.dataPoints.remove(latestBucket);
-                }
-                // we really need to do this only if the task ran for the first time after the active bucket changed;
-                // doing this unconditionally for now and can be optimized later
-                if (!stat.timeSeriesStats.dataPoints.isEmpty()) {
-                    long previousBucket = stat.timeSeriesStats.dataPoints.lastKey();
-                    if (previousBucket == bucketForPreviousInterval) {
-                        aggrMetricStateForPreviousInterval.aggregations.put(entry.getKey(), stat.timeSeriesStats.dataPoints.get(previousBucket));
-                    }
+                } else if (stat.name.endsWith(StatsConstants.HOUR_SUFFIX)) {
+                    populateAggregareMetricState(entry, bucketForCurrentInterval,
+                            bucketForPreviousInterval, aggrMetricStateForCurrentInterval,
+                            aggrMetricStateForPreviousInterval);
+                } else if (stat.name.endsWith(StatsConstants.DAILY_SUFFIX)) {
+                    populateAggregareMetricState(entry, bucketForCurrentDay,
+                            bucketForPreviousDay, aggrMetricStateForCurrentInterval,
+                            aggrMetricStateForPreviousInterval);
                 }
             }
             postResourceOps.add(
@@ -303,15 +301,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                     .setReferer(getHost().getUri()));
         }
         if (postResourceOps.size() == 0) {
-            StatsAggregationTaskState patchBody = new StatsAggregationTaskState();
-            if (page.results.nextPageLink == null) {
-                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-            } else {
-                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-                patchBody.taskStage = StatsAggregationStage.GET_RESOURCES;
-                patchBody.queryResultLink = page.results.nextPageLink;
-            }
-            sendSelfPatch(patchBody);
+            sendSelfPatch(page);
             return;
         }
         OperationJoin.JoinedCompletionHandler postJoinCompletion = (postOps,
@@ -320,18 +310,53 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                 sendSelfFailurePatch(currentState, postExList.values().iterator().next().getMessage());
                 return;
             }
-            StatsAggregationTaskState patchBody = new StatsAggregationTaskState();
-            if (page.results.nextPageLink == null) {
-                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-            } else {
-                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-                patchBody.taskStage = StatsAggregationStage.GET_RESOURCES;
-                patchBody.queryResultLink = page.results.nextPageLink;
-            }
-            sendSelfPatch(patchBody);
+            sendSelfPatch(page);
         };
         OperationJoin postJoinOp = OperationJoin.create(postResourceOps);
         postJoinOp.setCompletion(postJoinCompletion);
         postJoinOp.sendWith(getHost());
+    }
+
+    /**
+     * Create a StatsAggregation patch body and send self patch.
+     */
+    private void sendSelfPatch(QueryTask page) {
+        StatsAggregationTaskState patchBody = new StatsAggregationTaskState();
+        if (page.results.nextPageLink == null) {
+            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+        } else {
+            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+            patchBody.taskStage = StatsAggregationStage.GET_RESOURCES;
+            patchBody.queryResultLink = page.results.nextPageLink;
+        }
+        sendSelfPatch(patchBody);
+    }
+
+    /**
+     * Populate aggregate metrics based on the provided interval buckets.
+     */
+    private void populateAggregareMetricState(Entry<String, ServiceStat> entry,
+            long bucketForCurrentInterval, long bucketForPreviousInterval,
+            ResourceAggregateMetricsState aggrMetricStateForCurrentInterval,
+            ResourceAggregateMetricsState aggrMetricStateForPreviousInterval) {
+        ServiceStat stat = entry.getValue();
+        if (!stat.timeSeriesStats.dataPoints.isEmpty()) {
+            long latestBucket = stat.timeSeriesStats.dataPoints.lastKey();
+            if (latestBucket == bucketForCurrentInterval) {
+                aggrMetricStateForCurrentInterval.aggregations.put(entry.getKey(),
+                        stat.timeSeriesStats.dataPoints.get(latestBucket));
+            }
+            // remove the latest bucket, so that we can look the the closed bucket for the last interval
+            stat.timeSeriesStats.dataPoints.remove(latestBucket);
+        }
+        // we really need to do this only if the task ran for the first time after the active bucket changed;
+        // doing this unconditionally for now and can be optimized later
+        if (!stat.timeSeriesStats.dataPoints.isEmpty()) {
+            long previousBucket = stat.timeSeriesStats.dataPoints.lastKey();
+            if (previousBucket == bucketForPreviousInterval) {
+                aggrMetricStateForPreviousInterval.aggregations.put(entry.getKey(),
+                        stat.timeSeriesStats.dataPoints.get(previousBucket));
+            }
+        }
     }
 }

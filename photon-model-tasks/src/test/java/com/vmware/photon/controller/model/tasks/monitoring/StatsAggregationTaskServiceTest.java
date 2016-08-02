@@ -53,6 +53,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
                 Operation.createPost(UriUtils.buildUri(this.host,
                         MockStatsAdapter.class)),
                 new MockStatsAdapter());
+
         this.host.waitForServiceAvailable(StatsCollectionTaskService.FACTORY_LINK);
         this.host.waitForServiceAvailable(SingleResourceStatsCollectionTaskService.FACTORY_LINK);
         this.host.waitForServiceAvailable(StatsAggregationTaskService.FACTORY_LINK);
@@ -139,7 +140,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
         for (Object aggrStatDoc : aggrRes.documents.values()) {
             ResourceAggregateMetricsState aggrMetricState = Utils.fromJson(aggrStatDoc, ResourceAggregateMetricsState.class);
             assertTrue((computeLinks.contains(aggrMetricState.computeServiceLink)));
-            if (aggrMetricState.aggregations.size() == 2) {
+            if (aggrMetricState.aggregations.size() == 4) {
                 countOfCurrentMetrics++;
             } else if (aggrMetricState.aggregations.size() == 0) {
                 // test does not have any metrics for the previous interval
