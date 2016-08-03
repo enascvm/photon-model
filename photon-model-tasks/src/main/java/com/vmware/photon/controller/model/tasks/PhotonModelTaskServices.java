@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import com.vmware.photon.controller.model.tasks.monitoring.ResourceStatsAggregationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
@@ -37,7 +38,8 @@ public class PhotonModelTaskServices {
             StatsCollectionTaskService.FACTORY_LINK,
             SingleResourceStatsCollectionTaskService.FACTORY_LINK,
             StatsAggregationTaskService.FACTORY_LINK,
-            EndpointAllocationTaskService.FACTORY_LINK };
+            EndpointAllocationTaskService.FACTORY_LINK,
+            ResourceStatsAggregationTaskService.FACTORY_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
 
@@ -56,5 +58,6 @@ public class PhotonModelTaskServices {
         host.startFactory(new StatsAggregationTaskService());
         host.startFactory(new SingleResourceStatsCollectionTaskService());
         host.startFactory(new EndpointAllocationTaskService());
+        host.startFactory(new ResourceStatsAggregationTaskService());
     }
 }
