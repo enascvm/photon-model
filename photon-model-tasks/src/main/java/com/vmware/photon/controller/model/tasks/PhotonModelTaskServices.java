@@ -19,6 +19,7 @@ import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskS
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.services.common.TaskFactoryService;
 
 /**
  * Helper class that starts all the photon model Task services
@@ -46,18 +47,33 @@ public class PhotonModelTaskServices {
         host.startService(Operation.createPost(host,
                 SshCommandTaskService.FACTORY_LINK),
                 SshCommandTaskService.createFactory());
-        host.startFactory(new ResourceAllocationTaskService());
-        host.startFactory(new ResourceEnumerationTaskService());
-        host.startFactory(new ScheduledTaskService());
-        host.startFactory(new ResourceRemovalTaskService());
-        host.startFactory(new ProvisionComputeTaskService());
-        host.startFactory(new ProvisionNetworkTaskService());
-        host.startFactory(new SnapshotTaskService());
-        host.startFactory(new ProvisionFirewallTaskService());
-        host.startFactory(new StatsCollectionTaskService());
-        host.startFactory(new StatsAggregationTaskService());
-        host.startFactory(new SingleResourceStatsCollectionTaskService());
-        host.startFactory(new EndpointAllocationTaskService());
-        host.startFactory(new ResourceStatsAggregationTaskService());
+        host.startFactory(ResourceAllocationTaskService.class,
+                () -> TaskFactoryService.create(ResourceAllocationTaskService.class));
+        host.startFactory(ResourceEnumerationTaskService.class,
+                () -> TaskFactoryService.create(ResourceEnumerationTaskService.class));
+        host.startFactory(ScheduledTaskService.class,
+                () -> TaskFactoryService.create(ScheduledTaskService.class));
+        host.startFactory(ResourceRemovalTaskService.class,
+                () -> TaskFactoryService.create(ResourceRemovalTaskService.class));
+        host.startFactory(ProvisionComputeTaskService.class,
+                () -> TaskFactoryService.create(ProvisionComputeTaskService.class));
+        host.startFactory(ProvisionNetworkTaskService.class,
+                () -> TaskFactoryService.create(ProvisionNetworkTaskService.class));
+        host.startFactory(SnapshotTaskService.class,
+                () -> TaskFactoryService.create(SnapshotTaskService.class));
+        host.startFactory(ProvisionFirewallTaskService.class,
+                () -> TaskFactoryService.create(ProvisionFirewallTaskService.class));
+        host.startFactory(StatsCollectionTaskService.class,
+                () -> TaskFactoryService.create(StatsCollectionTaskService.class));
+        host.startFactory(StatsAggregationTaskService.class,
+                () -> TaskFactoryService.create(StatsAggregationTaskService.class));
+        host.startFactory(SingleResourceStatsCollectionTaskService.class,
+                () -> TaskFactoryService.create(SingleResourceStatsCollectionTaskService.class));
+        host.startFactory(EndpointAllocationTaskService.class,
+                () -> TaskFactoryService.create(EndpointAllocationTaskService.class));
+        host.startFactory(EndpointRemovalTaskService.class,
+                () -> TaskFactoryService.create(EndpointRemovalTaskService.class));
+        host.startFactory(ResourceStatsAggregationTaskService.class,
+                () -> TaskFactoryService.create(ResourceStatsAggregationTaskService.class));
     }
 }

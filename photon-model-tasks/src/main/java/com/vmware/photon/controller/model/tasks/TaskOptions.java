@@ -17,5 +17,16 @@ public enum TaskOptions {
     /**
      * Update local document state; leave the remote state unmodified
      */
-    DOCUMENT_CHANGES_ONLY
+    DOCUMENT_CHANGES_ONLY,
+
+    /**
+     * Task will do only validation of the payload. No state will be created or modified.
+     */
+    VALIDATE_ONLY,
+
+    /**
+     * Option indicating whether the service should treat this as a mock request and complete the
+     * work flow without involving the underlying compute host infrastructure.
+     */
+    IS_MOCK
 }

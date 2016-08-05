@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.tasks;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertNotNull;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
@@ -32,25 +33,27 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
-import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
+import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 
 /**
- * This class implements tests for the {@link EndpointAllocationTaskService} class.
+ * This class implements tests for the {@link EndpointRemovalTaskService} class.
  */
 @RunWith(EndpointAllocationTaskServiceTest.class)
 @SuiteClasses({
-        EndpointAllocationTaskServiceTest.ConstructorTest.class,
-        EndpointAllocationTaskServiceTest.HandleStartTest.class,
-        EndpointAllocationTaskServiceTest.EndToEndTest.class })
-public class EndpointAllocationTaskServiceTest extends Suite {
+        EndpointRemovalTaskServiceTest.ConstructorTest.class,
+        EndpointRemovalTaskServiceTest.HandleStartTest.class,
+        EndpointRemovalTaskServiceTest.EndToEndTest.class })
+public class EndpointRemovalTaskServiceTest extends Suite {
 
-    public EndpointAllocationTaskServiceTest(Class<?> klass,
+    public EndpointRemovalTaskServiceTest(Class<?> klass,
             RunnerBuilder builder) throws InitializationError {
         super(klass, builder);
     }
@@ -65,11 +68,11 @@ public class EndpointAllocationTaskServiceTest extends Suite {
      */
     public static class ConstructorTest {
 
-        private EndpointAllocationTaskService endpointAllocationTaskService;
+        private EndpointRemovalTaskService endpointRemovalTaskService;
 
         @Before
         public void setUpTest() {
-            this.endpointAllocationTaskService = new EndpointAllocationTaskService();
+            this.endpointRemovalTaskService = new EndpointRemovalTaskService();
         }
 
         @Test
@@ -80,7 +83,7 @@ public class EndpointAllocationTaskServiceTest extends Suite {
                     Service.ServiceOption.OWNER_SELECTION,
                     Service.ServiceOption.INSTRUMENTATION);
 
-            assertThat(this.endpointAllocationTaskService.getOptions(),
+            assertThat(this.endpointRemovalTaskService.getOptions(),
                     is(expected));
         }
     }
@@ -92,91 +95,78 @@ public class EndpointAllocationTaskServiceTest extends Suite {
 
         @Override
         protected void startRequiredServices() throws Throwable {
-            EndpointAllocationTaskServiceTest.startFactoryServices(this);
+            EndpointRemovalTaskServiceTest.startFactoryServices(this);
             super.startRequiredServices();
         }
 
         @Test
         public void testMissingEndpointState() throws Throwable {
-            EndpointAllocationTaskState startState = createEndpointAllocationRequest(null);
+            EndpointRemovalTaskState startState = new EndpointRemovalTaskState();
 
             this.postServiceSynchronously(
-                    EndpointAllocationTaskService.FACTORY_LINK, startState,
-                    EndpointAllocationTaskState.class,
-                    IllegalArgumentException.class);
-        }
-
-        @Test
-        public void testMissingEndpointType() throws Throwable {
-            EndpointState endpoint = createEndpointState();
-            endpoint.endpointType = null;
-            EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
-
-            this.postServiceSynchronously(
-                    EndpointAllocationTaskService.FACTORY_LINK, startState,
-                    EndpointAllocationTaskState.class,
+                    EndpointRemovalTaskService.FACTORY_LINK, startState,
+                    EndpointRemovalTaskState.class,
                     IllegalArgumentException.class);
         }
 
     }
 
     /**
-     * This class implements EndToEnd tests for {@link EndpointAllocationTaskService}.
+     * This class implements EndToEnd tests for {@link EndpointRemovalTaskService}.
      */
     public static class EndToEndTest extends BaseModelTest {
         @Override
         protected void startRequiredServices() throws Throwable {
-            EndpointAllocationTaskServiceTest.startFactoryServices(this);
+            EndpointRemovalTaskServiceTest.startFactoryServices(this);
             super.startRequiredServices();
         }
 
         @Test
         public void testSuccess() throws Throwable {
-            EndpointState endpoint = createEndpointState();
-            EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
-            startState.adapterReference = UriUtils.buildUri(getHost(),
-                    MockSuccessEndpointAdapter.SELF_LINK);
+            EndpointState endpoint = createEndpoint(this);
 
-            EndpointAllocationTaskState returnState = this
+            EndpointRemovalTaskState removalTaskState = createEndpointRemovalTaskState(endpoint);
+
+            EndpointRemovalTaskState returnState = this
                     .postServiceSynchronously(
-                            EndpointAllocationTaskService.FACTORY_LINK,
-                            startState, EndpointAllocationTaskState.class);
+                            EndpointRemovalTaskService.FACTORY_LINK,
+                            removalTaskState, EndpointRemovalTaskState.class);
 
-            EndpointAllocationTaskState completeState = this
+            EndpointRemovalTaskState completeState = this
                     .waitForServiceState(
-                            EndpointAllocationTaskState.class,
+                            EndpointRemovalTaskState.class,
                             returnState.documentSelfLink,
                             state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
                                     .ordinal());
 
             assertThat(completeState.taskInfo.stage,
                     is(TaskState.TaskStage.FINISHED));
+
         }
 
         @Test
-        public void testSuccessWithEnumeration() throws Throwable {
+        public void testFailOnMissingEndpointToDelete() throws Throwable {
             EndpointState endpoint = createEndpointState();
-            EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
-            startState.adapterReference = UriUtils.buildUri(getHost(),
-                    MockSuccessEndpointAdapter.SELF_LINK);
-            startState.enumerationRequest = new EndpointAllocationTaskService.ResourceEnumerationRequest();
-            startState.enumerationRequest.resourcePoolLink = UriUtils
-                    .buildUriPath(ResourcePoolService.FACTORY_LINK, "fake-pool");
+            endpoint.documentSelfLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
+                    "fake-endpoint");
 
-            EndpointAllocationTaskState returnState = this
+            EndpointRemovalTaskState removalTaskState = createEndpointRemovalTaskState(endpoint);
+
+            EndpointRemovalTaskState returnState = this
                     .postServiceSynchronously(
-                            EndpointAllocationTaskService.FACTORY_LINK,
-                            startState, EndpointAllocationTaskState.class);
+                            EndpointRemovalTaskService.FACTORY_LINK,
+                            removalTaskState, EndpointRemovalTaskState.class);
 
-            EndpointAllocationTaskState completeState = this
+            EndpointRemovalTaskState completeState = this
                     .waitForServiceState(
-                            EndpointAllocationTaskState.class,
+                            EndpointRemovalTaskState.class,
                             returnState.documentSelfLink,
-                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                            state -> TaskState.TaskStage.FAILED.ordinal() <= state.taskInfo.stage
                                     .ordinal());
 
             assertThat(completeState.taskInfo.stage,
-                    is(TaskState.TaskStage.FINISHED));
+                    is(TaskState.TaskStage.FAILED));
+
         }
     }
 
@@ -195,5 +185,55 @@ public class EndpointAllocationTaskServiceTest extends Suite {
         EndpointAllocationTaskState endpointAllocationTaskState = new EndpointAllocationTaskState();
         endpointAllocationTaskState.endpointState = endpoint;
         return endpointAllocationTaskState;
+    }
+
+    private static EndpointRemovalTaskState createEndpointRemovalTaskState(
+            EndpointState endpoint) {
+        EndpointRemovalTaskState endpointRemovalTaskState = new EndpointRemovalTaskState();
+        endpointRemovalTaskState.endpointLink = endpoint.documentSelfLink;
+        endpointRemovalTaskState.tenantLinks = endpoint.tenantLinks;
+        return endpointRemovalTaskState;
+    }
+
+    private static EndpointState createEndpoint(BaseModelTest test) throws Throwable {
+        EndpointState endpoint = createEndpointState();
+
+        // Create endpoint
+        EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
+        startState.adapterReference = UriUtils.buildUri(test.getHost(),
+                MockSuccessEndpointAdapter.SELF_LINK);
+
+        EndpointAllocationTaskState returnState = test
+                .postServiceSynchronously(
+                        EndpointAllocationTaskService.FACTORY_LINK,
+                        startState, EndpointAllocationTaskState.class);
+
+        EndpointAllocationTaskState completeState = test
+                .waitForServiceState(
+                        EndpointAllocationTaskState.class,
+                        returnState.documentSelfLink,
+                        state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                .ordinal());
+
+        assertThat(completeState.taskInfo.stage,
+                is(TaskState.TaskStage.FINISHED));
+
+        EndpointAllocationTaskState taskState = getServiceSynchronously(test,
+                completeState.documentSelfLink,
+                EndpointAllocationTaskState.class);
+        assertNotNull(taskState);
+        assertNotNull(taskState.endpointState);
+
+        ServiceDocument endpointState = taskState.endpointState;
+        assertNotNull(endpointState.documentSelfLink);
+
+        return getServiceSynchronously(test, endpointState.documentSelfLink,
+                EndpointState.class);
+    }
+
+    private static <T extends ServiceDocument> T getServiceSynchronously(BaseModelTest test,
+            String serviceLink, Class<T> type) throws Throwable {
+        return test.getHost().getServiceState(null, type,
+                UriUtils.buildUri(test.getHost(), serviceLink));
     }
 }

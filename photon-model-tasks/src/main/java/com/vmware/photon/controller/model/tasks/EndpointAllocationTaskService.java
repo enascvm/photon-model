@@ -15,9 +15,14 @@ package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.tasks.TaskUtils.getAdapterUri;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.sendFailurePatch;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SERVICE_USE;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
@@ -33,8 +38,12 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
+import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationSequence;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -50,7 +59,12 @@ public class EndpointAllocationTaskService
         extends TaskService<EndpointAllocationTaskService.EndpointAllocationTaskState> {
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/endpoint-tasks";
 
-    public static final String FIELD_NAME_CUSTOM_PROP_TYPE = "__endpointType";
+    public static final String CUSTOM_PROP_ENPOINT_TYPE = "__endpointType";
+    public static final String CUSTOM_PROP_ENPOINT_LINK = "__endpointLink";
+
+    private static final Long DEFAULT_SCHEDULED_TASK_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
+
+    public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES.toMicros(10);
 
     /**
      * SubStage.
@@ -59,7 +73,7 @@ public class EndpointAllocationTaskService
         VALIDATE_CREDENTIALS,
         CREATE_UPDATE_ENDPOINT,
         INVOKE_ADAPTER,
-        PROVISIONING_CONTAINERS,
+        TRIGGER_ENUMERATION,
         COMPLETED,
         FAILED
     }
@@ -69,35 +83,36 @@ public class EndpointAllocationTaskService
      */
     public static class EndpointAllocationTaskState extends TaskService.TaskServiceState {
 
-        /**
-         * Endpoint payload to use to create Endpoint.
-         */
+        @Documentation(description = "Endpoint payload to use to create/update Endpoint.")
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
         public EndpointState endpointState;
 
-        /**
-         * URI reference to the adapter used to validate and enhance the endpoint data.
-         */
+        @Documentation(description = "URI reference to the adapter used to validate and enhance the endpoint data.")
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
         public URI adapterReference;
 
-        /**
-         * If set to {@code true} the adapter will only validate the data, now state will be created
-         * or modified.
-         */
-        public boolean validateOnly;
+        @Documentation(description = "Task's options")
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
+        public EnumSet<TaskOptions> options = EnumSet.noneOf(TaskOptions.class);
 
-        /**
-         * Tracks the task's substage.
-         */
+        @Documentation(description = "If specified a Resource enumeration will be scheduled.")
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
+        public ResourceEnumerationRequest enumerationRequest;
+
+        @Documentation(description = "Describes a service task sub stage.")
+        @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
         public SubStage taskSubStage;
-
-        /**
-         * Mock requests are used for testing.
-         */
-        public boolean isMockRequest = false;
     }
 
-    public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
-            .toMicros(10);
+    public static class ResourceEnumerationRequest {
+        // resource pool the compute instance will be placed under
+        public String resourcePoolLink;
+
+        // time interval (in microseconds) between syncing state between
+        // infra provider and the symphony server
+        public Long refreshIntervalMicros;
+
+    }
 
     public EndpointAllocationTaskService() {
         super(EndpointAllocationTaskState.class);
@@ -107,15 +122,24 @@ public class EndpointAllocationTaskService
     }
 
     @Override
-    public void handleStart(Operation start) {
-        if (!start.hasBody()) {
-            start.fail(new IllegalArgumentException("body is required"));
+    public void handleStart(Operation post) {
+        EndpointAllocationTaskState initialState = validateStartPost(post);
+        if (initialState == null) {
             return;
         }
 
-        EndpointAllocationTaskState state = getBody(start);
+        if (!ServiceHost.isServiceCreate(post)) {
+            return;
+        }
 
-        validateAndCompleteStart(start, state);
+        initializeState(initialState, post);
+        initialState.taskInfo.stage = TaskStage.CREATED;
+        post.setBody(initialState)
+                .setStatusCode(Operation.STATUS_CODE_ACCEPTED)
+                .complete();
+
+        // self patch to start state machine
+        sendSelfPatch(initialState, TaskStage.STARTED, null);
     }
 
     @Override
@@ -146,34 +170,25 @@ public class EndpointAllocationTaskService
         }
     }
 
-    private void validateAndCompleteStart(Operation start,
-            EndpointAllocationTaskState state) {
-        try {
-            validateState(state);
-        } catch (Exception e) {
-            start.fail(e);
-            return;
-        }
-
-        start.complete();
-
-        sendSelfPatch(createUpdateSubStageTask(state.taskSubStage));
-    }
-
     private void handleStagePatch(EndpointAllocationTaskState currentState) {
 
         adjustStat(currentState.taskSubStage.toString(), 1);
 
         switch (currentState.taskSubStage) {
         case VALIDATE_CREDENTIALS:
-            validateCredentials(currentState, currentState.validateOnly
-                    ? SubStage.COMPLETED : SubStage.CREATE_UPDATE_ENDPOINT);
+            validateCredentials(currentState,
+                    currentState.options.contains(TaskOptions.VALIDATE_ONLY)
+                            ? SubStage.COMPLETED : SubStage.CREATE_UPDATE_ENDPOINT);
             break;
         case CREATE_UPDATE_ENDPOINT:
             createOrUpdateEndpoint(currentState);
             break;
         case INVOKE_ADAPTER:
-            invokeAdapter(currentState, SubStage.COMPLETED);
+            invokeAdapter(currentState, currentState.enumerationRequest != null
+                    ? SubStage.TRIGGER_ENUMERATION : SubStage.COMPLETED);
+            break;
+        case TRIGGER_ENUMERATION:
+            triggerEnumeration(currentState, SubStage.COMPLETED);
             break;
         case FAILED:
             break;
@@ -186,25 +201,54 @@ public class EndpointAllocationTaskService
     }
 
     private void invokeAdapter(EndpointAllocationTaskState currentState, SubStage next) {
-        EndpointConfigRequest req = new EndpointConfigRequest();
-        req.isMockRequest = currentState.isMockRequest;
-        req.requestType = RequestType.ENHANCE;
-        req.resourceReference = UriUtils.buildUri(getHost(),
-                currentState.endpointState.documentSelfLink);
-        req.taskReference = UriUtils.buildUri(getHost(), getSelfLink());
-        sendRequest(Operation
-                .createPatch(currentState.adapterReference)
-                .setBody(req)
-                .setCompletion(
-                        (o, e) -> {
-                            if (e != null) {
-                                logWarning(
-                                        "PATCH to endpoint config adapter service %s, failed: %s",
-                                        o.getUri(), e.toString());
-                                sendFailurePatch(this, currentState, e);
-                                return;
-                            }
-                        }));
+        CompletionHandler c = (o, e) -> {
+            if (e != null) {
+                sendFailurePatch(this, currentState, e);
+                return;
+            }
+
+            EndpointConfigRequest req = new EndpointConfigRequest();
+            req.isMockRequest = currentState.options.contains(TaskOptions.IS_MOCK);
+            req.requestType = RequestType.ENHANCE;
+            req.resourceReference = UriUtils.buildUri(getHost(),
+                    currentState.endpointState.documentSelfLink);
+            req.taskReference = o.getUri();
+            sendEnhanceRequest(req, currentState);
+        };
+
+        createSubTask(c, next, currentState);
+    }
+
+    private void createSubTask(CompletionHandler c, SubStage nextStage,
+            EndpointAllocationTaskState currentState) {
+        EndpointAllocationTaskState patchBody = new EndpointAllocationTaskState();
+        patchBody.taskInfo = new TaskState();
+        patchBody.taskInfo.stage = TaskStage.STARTED;
+        patchBody.taskSubStage = nextStage;
+
+        ComputeSubTaskService.ComputeSubTaskState subTaskInitState = new ComputeSubTaskService.ComputeSubTaskState();
+        subTaskInitState.parentPatchBody = Utils.toJson(patchBody);
+        subTaskInitState.errorThreshold = 0;
+        subTaskInitState.parentTaskLink = getSelfLink();
+        subTaskInitState.tenantLinks = currentState.endpointState.tenantLinks;
+        subTaskInitState.documentExpirationTimeMicros = currentState.documentExpirationTimeMicros;
+        Operation startPost = Operation
+                .createPost(this, UUID.randomUUID().toString())
+                .setBody(subTaskInitState).setCompletion(c);
+        getHost().startService(startPost, new ComputeSubTaskService());
+    }
+
+    private void sendEnhanceRequest(Object body, EndpointAllocationTaskState currentState) {
+        sendRequest(Operation.createPatch(currentState.adapterReference).setBody(body)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logWarning(
+                                "PATCH to endpoint config adapter service %s, failed: %s",
+                                o.getUri(), e.toString());
+                        sendFailurePatch(this, currentState, e);
+                        return;
+                    }
+                }));
     }
 
     private void createOrUpdateEndpoint(EndpointAllocationTaskState currentState) {
@@ -303,7 +347,7 @@ public class EndpointAllocationTaskService
         EndpointConfigRequest req = new EndpointConfigRequest();
         req.requestType = RequestType.VALIDATE;
         req.endpointProperties = currentState.endpointState.endpointProperties;
-        req.isMockRequest = currentState.isMockRequest;
+        req.isMockRequest = currentState.options.contains(TaskOptions.IS_MOCK);
 
         Operation
                 .createPatch(currentState.adapterReference)
@@ -319,18 +363,67 @@ public class EndpointAllocationTaskService
                 }).sendWith(this);
     }
 
-    private void validateState(EndpointAllocationTaskState state) {
-        if (state.endpointState == null) {
-            throw new IllegalArgumentException("endpointState is required");
+    private void triggerEnumeration(EndpointAllocationTaskState currentState, SubStage next) {
+
+        Operation.createGet(this, currentState.endpointState.computeLink)
+                .setCompletion(
+                        (o, e) -> {
+                            if (e != null) {
+                                sendFailurePatch(this, currentState, e);
+                                return;
+                            }
+                            doTriggerEnumeration(currentState, next,
+                                    o.getBody(ComputeState.class).adapterManagementReference);
+                        })
+                .sendWith(this);
+    }
+
+    private void doTriggerEnumeration(EndpointAllocationTaskState currentState, SubStage next,
+            URI adapterManagementReference) {
+        EndpointState endpoint = currentState.endpointState;
+
+        long intervalMicros = currentState.enumerationRequest.refreshIntervalMicros != null
+                ? TimeUnit.MILLISECONDS
+                        .toMicros(currentState.enumerationRequest.refreshIntervalMicros)
+                : DEFAULT_SCHEDULED_TASK_INTERVAL_MICROS;
+
+        ResourceEnumerationTaskState enumTaskState = new ResourceEnumerationTaskState();
+        enumTaskState.parentComputeLink = endpoint.computeLink;
+        enumTaskState.resourcePoolLink = currentState.enumerationRequest.resourcePoolLink;
+        enumTaskState.adapterManagementReference = adapterManagementReference;
+        enumTaskState.tenantLinks = endpoint.tenantLinks;
+        // do not set link, so it gets a random link on each POST
+        enumTaskState.documentSelfLink = null;
+        enumTaskState.deleteOnCompletion = true;
+
+        ScheduledTaskState scheduledTaskState = new ScheduledTaskState();
+        scheduledTaskState.factoryLink = ResourceEnumerationTaskService.FACTORY_LINK;
+        scheduledTaskState.initialStateJson = Utils.toJson(enumTaskState);
+        scheduledTaskState.intervalMicros = intervalMicros;
+        scheduledTaskState.tenantLinks = endpoint.tenantLinks;
+        scheduledTaskState.customProperties = new HashMap<>();
+        scheduledTaskState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+                endpoint.documentSelfLink);
+
+        Operation.createPost(this, ScheduledTaskService.FACTORY_LINK)
+                .setBody(scheduledTaskState)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logWarning("Error triggering Enumeration task, reason: %s", e.getMessage());
+                    }
+                    sendSelfPatch(createUpdateSubStageTask(next));
+                })
+                .sendWith(this);
+    }
+
+    @Override
+    protected void initializeState(EndpointAllocationTaskState state, Operation taskOperation) {
+        if (state.taskSubStage == null) {
+            state.taskSubStage = SubStage.VALIDATE_CREDENTIALS;
         }
 
-        if (state.endpointState.endpointType == null) {
-            throw new IllegalArgumentException("endpointType is required");
-        }
-
-        if (state.taskInfo == null || state.taskInfo.stage == null) {
-            state.taskInfo = new TaskState();
-            state.taskInfo.stage = TaskStage.CREATED;
+        if (state.options == null) {
+            state.options = EnumSet.noneOf(TaskOptions.class);
         }
 
         if (state.adapterReference == null) {
@@ -338,14 +431,41 @@ public class EndpointAllocationTaskService
                     state.endpointState.endpointType);
         }
 
-        if (state.taskSubStage == null) {
-            state.taskSubStage = SubStage.VALIDATE_CREDENTIALS;
-        }
-
         if (state.documentExpirationTimeMicros == 0) {
             state.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                     + DEFAULT_TIMEOUT_MICROS;
         }
+        super.initializeState(state, taskOperation);
+    }
+
+    @Override
+    protected EndpointAllocationTaskState validateStartPost(Operation taskOperation) {
+        EndpointAllocationTaskState task = super.validateStartPost(taskOperation);
+        if (task == null) {
+            return null;
+        }
+
+        if (TaskState.isCancelled(task.taskInfo)
+                || TaskState.isFailed(task.taskInfo)
+                || TaskState.isFinished(task.taskInfo)) {
+            return null;
+        }
+
+        if (!ServiceHost.isServiceCreate(taskOperation)) {
+            return task;
+        }
+
+        if (task.endpointState == null) {
+            taskOperation.fail(new IllegalArgumentException("endpointState is required"));
+            return null;
+        }
+
+        if (task.endpointState.endpointType == null) {
+            taskOperation.fail(new IllegalArgumentException("endpointType is required"));
+            return null;
+        }
+
+        return task;
     }
 
     private boolean validateTransitionAndUpdateState(Operation patch,
@@ -366,6 +486,11 @@ public class EndpointAllocationTaskService
             isUpdate = true;
         }
 
+        if (body.options != null) {
+            currentState.options = body.options;
+            isUpdate = true;
+        }
+
         if (body.taskInfo == null || body.taskInfo.stage == null) {
             if (isUpdate) {
                 patch.complete();
@@ -376,19 +501,10 @@ public class EndpointAllocationTaskService
             return true;
         }
 
-        if (currentStage.ordinal() > body.taskInfo.stage.ordinal()) {
+        if (currentState.taskInfo.stage.ordinal() > body.taskInfo.stage.ordinal()) {
             patch.fail(new IllegalArgumentException(
                     "stage can not move backwards:" + body.taskInfo.stage));
             return true;
-        }
-
-        if (body.taskInfo.failure != null) {
-            logWarning("Referer %s is patching us to failure: %s",
-                    patch.getReferer(), Utils.toJsonHtml(body.taskInfo.failure));
-            currentState.taskInfo.failure = body.taskInfo.failure;
-            currentState.taskInfo.stage = body.taskInfo.stage;
-            currentState.taskSubStage = SubStage.FAILED;
-            return false;
         }
 
         if (body.taskSubStage != null) {
@@ -397,6 +513,16 @@ public class EndpointAllocationTaskService
                         "subStage can not move backwards:" + body.taskSubStage));
                 return true;
             }
+        }
+
+        if (body.taskInfo.failure != null) {
+            logWarning("Referer %s is patching us to failure: %s",
+                    patch.getReferer(), Utils.toJsonHtml(body.taskInfo.failure));
+
+            currentState.taskInfo.failure = body.taskInfo.failure;
+            currentState.taskInfo.stage = body.taskInfo.stage;
+            currentState.taskSubStage = SubStage.FAILED;
+            return false;
         }
 
         currentState.taskInfo.stage = body.taskInfo.stage;
@@ -415,7 +541,7 @@ public class EndpointAllocationTaskService
         if (state.customProperties != null) {
             authState.customProperties.putAll(state.customProperties);
         }
-        authState.customProperties.put(FIELD_NAME_CUSTOM_PROP_TYPE, state.endpointType);
+        authState.customProperties.put(CUSTOM_PROP_ENPOINT_TYPE, state.endpointType);
 
         return authState;
     }
@@ -437,7 +563,7 @@ public class EndpointAllocationTaskService
         if (state.customProperties != null) {
             cd.customProperties.putAll(state.customProperties);
         }
-        cd.customProperties.put(FIELD_NAME_CUSTOM_PROP_TYPE, state.endpointType);
+        cd.customProperties.put(CUSTOM_PROP_ENPOINT_TYPE, state.endpointType);
 
         return cd;
     }
@@ -450,7 +576,7 @@ public class EndpointAllocationTaskService
         if (state.customProperties != null) {
             computeHost.customProperties.putAll(state.customProperties);
         }
-        computeHost.customProperties.put(FIELD_NAME_CUSTOM_PROP_TYPE, state.endpointType);
+        computeHost.customProperties.put(CUSTOM_PROP_ENPOINT_TYPE, state.endpointType);
         return computeHost;
     }
 
@@ -480,16 +606,10 @@ public class EndpointAllocationTaskService
     }
 
     private void complete(EndpointAllocationTaskState state, SubStage completeSubStage) {
-        if (!isFailedOrCancelledTask(state)) {
+        if (!TaskUtils.isFailedOrCancelledTask(state)) {
             state.taskInfo.stage = TaskStage.FINISHED;
             state.taskSubStage = completeSubStage;
             sendSelfPatch(state);
         }
-    }
-
-    private boolean isFailedOrCancelledTask(EndpointAllocationTaskState state) {
-        return state.taskInfo != null &&
-                (TaskStage.FAILED == state.taskInfo.stage ||
-                        TaskStage.CANCELLED == state.taskInfo.stage);
     }
 }

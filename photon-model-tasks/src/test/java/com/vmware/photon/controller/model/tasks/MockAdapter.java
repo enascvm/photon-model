@@ -23,12 +23,16 @@ import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * Mock adapters used by photon model task tests.
@@ -52,7 +56,7 @@ public class MockAdapter {
         host.startService(new MockNetworkInstanceFailureAdapter());
         host.startService(new MockFirewallInstanceSuccessAdapter());
         host.startService(new MockFirewallInstanceFailureAdapter());
-        host.startService(new MockSuccessEndpointAdapter());
+        host.startService(new MockSuccessEndpointAdapter(test));
     }
 
     public static TaskState createFailedTaskInfo() {
@@ -432,6 +436,12 @@ public class MockAdapter {
         public static final String SELF_LINK = UriPaths.PROVISIONING
                 + "/mock_success_endpoint_adapter";
 
+        private BaseModelTest test;
+
+        public MockSuccessEndpointAdapter(BaseModelTest test) {
+            this.test = test;
+        }
+
         @Override
         public void handleRequest(Operation op) {
             if (!op.hasBody()) {
@@ -446,12 +456,29 @@ public class MockAdapter {
                     op.complete();
                     return;
                 }
-                EndpointAllocationTaskState state = new EndpointAllocationTaskState();
-                state.taskInfo = new TaskState();
-                state.taskInfo.stage = TaskState.TaskStage.FINISHED;
-                state.taskSubStage = EndpointAllocationTaskService.SubStage.COMPLETED;
-                sendRequest(Operation.createPatch(
-                        request.taskReference).setBody(state));
+                try {
+                    EndpointState endpoint = this.test.getServiceSynchronously(
+                            request.resourceLink(),
+                            EndpointState.class);
+                    ComputeDescription cd = new ComputeDescription();
+                    cd.enumerationAdapterReference = UriUtils.buildUri(getHost(),
+                            MockSuccessEnumerationAdapter.SELF_LINK);
+                    this.test.patchServiceSynchronously(endpoint.computeDescriptionLink, cd);
+
+                    ComputeState cs = new ComputeState();
+                    cs.adapterManagementReference = UriUtils.buildUri(getHost(),
+                            "fake-management-adapter");
+                    this.test.patchServiceSynchronously(endpoint.computeLink, cs);
+
+                    EndpointAllocationTaskState state = new EndpointAllocationTaskState();
+                    state.taskInfo = new TaskState();
+                    state.taskInfo.stage = TaskState.TaskStage.FINISHED;
+                    state.taskSubStage = EndpointAllocationTaskService.SubStage.COMPLETED;
+                    sendRequest(Operation.createPatch(
+                            request.taskReference).setBody(state));
+                } catch (Throwable e) {
+                    op.fail(e);
+                }
                 break;
             default:
                 super.handleRequest(op);

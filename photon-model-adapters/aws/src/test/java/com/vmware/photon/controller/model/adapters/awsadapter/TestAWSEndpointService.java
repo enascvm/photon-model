@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -36,6 +37,7 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
+import com.vmware.photon.controller.model.tasks.TaskOptions;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.ServiceDocument;
@@ -79,9 +81,10 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
         EndpointState endpoint = createEndpointState();
 
         EndpointAllocationTaskState validateEndpoint = new EndpointAllocationTaskState();
-        validateEndpoint.validateOnly = true;
+        validateEndpoint.options = this.isMock
+                ? EnumSet.of(TaskOptions.VALIDATE_ONLY, TaskOptions.IS_MOCK)
+                : EnumSet.of(TaskOptions.VALIDATE_ONLY);
         validateEndpoint.endpointState = endpoint;
-        validateEndpoint.isMockRequest = this.isMock;
 
         EndpointAllocationTaskState outTask = TestUtils.doPost(this.host, validateEndpoint,
                 EndpointAllocationTaskState.class,
@@ -96,7 +99,7 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
 
         EndpointAllocationTaskState validateEndpoint = new EndpointAllocationTaskState();
         validateEndpoint.endpointState = ep;
-        validateEndpoint.isMockRequest = this.isMock;
+        validateEndpoint.options = this.isMock ? EnumSet.of(TaskOptions.IS_MOCK) : null;
 
         EndpointAllocationTaskState outTask = TestUtils.doPost(this.host, validateEndpoint,
                 EndpointAllocationTaskState.class,
@@ -145,7 +148,7 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
 
         EndpointAllocationTaskState validateEndpoint = new EndpointAllocationTaskState();
         validateEndpoint.endpointState = ep;
-        validateEndpoint.isMockRequest = this.isMock;
+        validateEndpoint.options = this.isMock ? EnumSet.of(TaskOptions.IS_MOCK) : null;
 
         EndpointAllocationTaskState outTask = TestUtils.doPost(this.host, validateEndpoint,
                 EndpointAllocationTaskState.class,
