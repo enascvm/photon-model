@@ -97,7 +97,6 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
     private void doRefresh() throws Throwable {
         ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
         task.adapterManagementReference = this.computeHost.adapterManagementReference;
-        task.computeDescriptionLink = this.computeHostDescription.documentSelfLink;
 
         task.isMockRequest = isMock();
         task.enumerationAction = EnumerationAction.REFRESH;
@@ -148,6 +147,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
                 VSphereUriPaths.STATS_SERVICE);
 
         computeDesc.zoneId = this.zoneId;
+        computeDesc.datacenterId = this.datacenterId;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,

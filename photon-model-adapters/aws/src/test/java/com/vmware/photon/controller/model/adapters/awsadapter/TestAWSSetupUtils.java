@@ -725,7 +725,6 @@ public class TestAWSSetupUtils {
         // Kick of a Resource Enumeration task to enumerate the instances on the AWS endpoint
         ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskService.ResourceEnumerationTaskState();
 
-        enumerationTaskState.computeDescriptionLink = computeDescriptionLink;
         enumerationTaskState.parentComputeLink = parentComputeLink;
         enumerationTaskState.enumerationAction = EnumerationAction.START;
         enumerationTaskState.adapterManagementReference = UriUtils

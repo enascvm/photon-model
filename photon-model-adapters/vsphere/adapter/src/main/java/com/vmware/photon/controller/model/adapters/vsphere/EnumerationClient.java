@@ -225,6 +225,7 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.vm_config_name,
                 VimPath.vm_config_instanceUuid,
                 VimPath.vm_config_hardware_device,
+                VimPath.vm_config_hardware_memoryMB,
                 VimPath.vm_summary_config_numCpu,
                 VimPath.vm_config_extraConfig,
                 VimPath.vm_config_template,

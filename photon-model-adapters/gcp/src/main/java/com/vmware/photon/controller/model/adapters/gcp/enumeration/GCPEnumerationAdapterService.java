@@ -68,6 +68,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
@@ -756,13 +757,18 @@ public class GCPEnumerationAdapterService extends StatelessService {
      */
     private void getHostComputeDescription(EnumerationContext ctx, EnumerationStages next) {
         Consumer<Operation> onSuccess = (op) -> {
-            ctx.computeHostDesc = op.getBody(ComputeDescription.class);
+            ComputeStateWithDescription csd = op.getBody(ComputeStateWithDescription.class);
+            ctx.computeHostDesc = csd.description;
             validateHost(ctx, ctx.computeHostDesc);
             ctx.stage = next;
             handleEnumerationRequest(ctx);
         };
-        URI parentURI = UriUtils.buildUri(this.getHost(), ctx.enumRequest.computeDescriptionLink);
-        AdapterUtils.getServiceState(this, parentURI, onSuccess, getFailureConsumer(ctx));
+        URI computeUri = UriUtils
+                .extendUriWithQuery(
+                        UriUtils.buildUri(this.getHost(), ctx.enumRequest.resourceLink()),
+                        UriUtils.URI_PARAM_ODATA_EXPAND,
+                        Boolean.TRUE.toString());
+        AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(ctx));
     }
 
     /**

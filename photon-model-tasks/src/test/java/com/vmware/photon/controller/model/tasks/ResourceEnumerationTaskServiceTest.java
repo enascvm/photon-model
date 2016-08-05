@@ -69,7 +69,6 @@ public class ResourceEnumerationTaskServiceTest extends Suite {
         state.resourcePoolLink = "http://resourcePoolLink";
         state.enumerationAction = EnumerationAction.REFRESH;
         if (computeStateWithDescription != null) {
-            state.computeDescriptionLink = computeStateWithDescription.descriptionLink;
             state.parentComputeLink = computeStateWithDescription.documentSelfLink;
         }
         return state;
@@ -165,17 +164,6 @@ public class ResourceEnumerationTaskServiceTest extends Suite {
             ComputeDescriptionService.ComputeDescription cd = createComputeDescription(
                     this, "http://enumerationAdapter");
             this.computeHost = createCompute(this, cd);
-        }
-
-
-        @Test
-        public void testMissingComputeDescription() throws Throwable {
-            ResourceEnumerationTaskService.ResourceEnumerationTaskState state = buildValidStartState(null);
-            this.postServiceSynchronously(
-                            ResourceEnumerationTaskService.FACTORY_LINK,
-                            state,
-                            ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
-                            IllegalArgumentException.class);
         }
 
         @Test

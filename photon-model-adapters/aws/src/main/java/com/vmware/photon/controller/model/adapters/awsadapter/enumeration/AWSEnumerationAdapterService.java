@@ -22,6 +22,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -238,14 +239,19 @@ public class AWSEnumerationAdapterService extends StatelessService {
     private void getHostComputeDescription(EnumerationContext aws,
             AWSEnumerationStages next) {
         Consumer<Operation> onSuccess = (op) -> {
-            aws.computeHostDescription = op.getBody(ComputeDescription.class);
+            ComputeStateWithDescription csd = op.getBody(ComputeStateWithDescription.class);
+            aws.computeHostDescription = csd.description;
             aws.stage = next;
             handleEnumerationRequest(aws);
         };
-        URI parentURI = UriUtils.buildExpandLinksQueryUri(
-                UriUtils.buildUri(this.getHost(),
-                        aws.computeEnumerationRequest.computeDescriptionLink));
-        AdapterUtils.getServiceState(this, parentURI, onSuccess, getFailureConsumer(aws));
+
+        URI computeUri = UriUtils
+                .extendUriWithQuery(
+                        UriUtils.buildUri(this.getHost(), aws.computeEnumerationRequest.resourceLink()),
+                        UriUtils.URI_PARAM_ODATA_EXPAND,
+                        Boolean.TRUE.toString());
+
+        AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(aws));
     }
 
     /**

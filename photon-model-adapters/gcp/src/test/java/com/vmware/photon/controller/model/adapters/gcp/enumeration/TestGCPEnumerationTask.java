@@ -205,7 +205,7 @@ public class TestGCPEnumerationTask extends BasicReusableHostTestCase {
      */
     private void runEnumeration() throws Throwable {
         ResourceEnumerationTaskState enumTask = createResourceEnumerationTask(this.outPool.documentSelfLink,
-                this.computeHost.descriptionLink, this.computeHost.documentSelfLink,
+                this.computeHost.documentSelfLink,
                 GCPEnumerationAdapterService.SELF_LINK, this.isMock, this.computeHost.tenantLinks);
         ResourceEnumerationTaskState enumTaskState = performResourceEnumeration(this.host, null, enumTask);
         this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, enumTaskState.documentSelfLink);

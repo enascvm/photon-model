@@ -132,8 +132,7 @@ public class TestGCPEnumerationAtScale extends BasicReusableHostTestCase {
                 return;
             }
 
-            ResourceEnumerationTaskState enumTask = createResourceEnumerationTask(this.outPool.documentSelfLink,
-                    this.computeHost.descriptionLink, this.computeHost.documentSelfLink,
+            ResourceEnumerationTaskState enumTask = createResourceEnumerationTask(this.outPool.documentSelfLink, this.computeHost.documentSelfLink,
                     GCPEnumerationAdapterService.SELF_LINK, this.isMock, this.computeHost.tenantLinks);
             enumerateResources(this.host, null, enumTask, TEST_CASE_BASELINE_VMS);
 

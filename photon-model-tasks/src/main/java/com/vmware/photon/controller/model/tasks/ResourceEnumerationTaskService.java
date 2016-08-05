@@ -20,9 +20,10 @@ import java.util.concurrent.TimeUnit;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.TaskState;
@@ -45,12 +46,6 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
      * ResourceEnumerationTaskService instance.
      */
     public static class ResourceEnumerationTaskState extends TaskService.TaskServiceState {
-        /**
-         * Reference URI to the Compute Description that will be used for the
-         * compute instances created by the adapter.
-         */
-        public String computeDescriptionLink;
-
         /**
          * Reference URI to the resource pool.
          */
@@ -163,7 +158,6 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
     private void sendEnumRequest(Operation start, ResourceEnumerationTaskState state) {
         ComputeEnumerateResourceRequest req = new ComputeEnumerateResourceRequest();
         req.resourcePoolLink = state.resourcePoolLink;
-        req.computeDescriptionLink = state.computeDescriptionLink;
         req.adapterManagementReference = state.adapterManagementReference;
         req.resourceReference = UriUtils.buildUri(getHost(), state.parentComputeLink);
         req.enumerationAction = state.enumerationAction;
@@ -172,33 +166,31 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         req.isMockRequest = state.isMockRequest;
 
         // Patch the enumerate service URI from the CHD
-        Operation.CompletionHandler descriptionCompletion = (o, ex) -> {
+        CompletionHandler descriptionCompletion = (o, ex) -> {
             if (ex != null) {
                 TaskUtils.sendFailurePatch(this, state, ex);
                 start.fail(ex);
                 return;
             }
 
-            ComputeDescriptionService.ComputeDescription description = o
-                    .getBody(ComputeDescriptionService.ComputeDescription.class);
+            ComputeStateWithDescription csd = o
+                    .getBody(ComputeStateWithDescription.class);
             sendRequest(Operation
-                    .createPatch(description.enumerationAdapterReference)
+                    .createPatch(csd.description.enumerationAdapterReference)
                     .setBody(req));
         };
 
-        URI computeHost = UriUtils.buildUri(getHost(),
-                state.computeDescriptionLink);
-        sendRequest(Operation.createGet(computeHost)
+        URI computeUri = UriUtils
+                .extendUriWithQuery(
+                        UriUtils.buildUri(this.getHost(), state.parentComputeLink),
+                        UriUtils.URI_PARAM_ODATA_EXPAND,
+                        Boolean.TRUE.toString());
+
+        sendRequest(Operation.createGet(computeUri)
                 .setCompletion(descriptionCompletion));
     }
 
     public static void validateState(ResourceEnumerationTaskState state) {
-
-        if (state.computeDescriptionLink == null) {
-            throw new IllegalArgumentException(
-                    "computeDescriptionLink is required.");
-        }
-
         if (state.resourcePoolLink == null) {
             throw new IllegalArgumentException("resourcePoolLink is required.");
         }

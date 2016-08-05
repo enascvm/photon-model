@@ -95,7 +95,6 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     private void doRefresh() throws Throwable {
         ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
         task.adapterManagementReference = this.computeHost.adapterManagementReference;
-        task.computeDescriptionLink = this.computeHostDescription.documentSelfLink;
 
         task.isMockRequest = isMock();
         task.enumerationAction = EnumerationAction.REFRESH;

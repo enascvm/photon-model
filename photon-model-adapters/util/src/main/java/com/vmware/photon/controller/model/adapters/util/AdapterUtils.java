@@ -190,9 +190,6 @@ public class AdapterUtils {
      * @param enumRequest The enumeration request.
      */
     public static void validateEnumRequest(ComputeEnumerateResourceRequest enumRequest) {
-        if (enumRequest.computeDescriptionLink == null) {
-            throw new IllegalArgumentException("computeDescriptionLink is required.");
-        }
         if (enumRequest.adapterManagementReference == null) {
             throw new IllegalArgumentException("adapterManagementReference is required.");
         }

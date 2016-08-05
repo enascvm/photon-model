@@ -112,8 +112,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             // just finish the mock request
             mgr.patchTask(TaskStage.FINISHED);
             return;
-        } else {
-            mgr.patchTask(TaskStage.STARTED);
         }
 
         URI parentUri = ComputeStateWithDescription.buildUri(request.resourceReference);
@@ -289,7 +287,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         for (ObjectContent cont : objects) {
             if (VimUtils.isVirtualMachine(cont.getObj())) {
                 VmOverlay vm = new VmOverlay(cont);
-                processFoundVm(request, vm);
+                processFoundVm(request, vm, parent);
             } else if (VimUtils.isResourcePool(cont.getObj())) {
                 logInfo("Ignoring ResourcePool %s", cont.getObj());
             } else if (VimUtils.isHost(cont.getObj())) {
@@ -647,37 +645,71 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @see #processFoundCluster(ComputeEnumerateResourceRequest, ComputeResourceOverlay)
      * @param request
      * @param vm
+     * @param parent
      */
-    private void processFoundVm(ComputeEnumerateResourceRequest request, VmOverlay vm) {
+    private void processFoundVm(ComputeEnumerateResourceRequest request, VmOverlay vm,
+            ComputeStateWithDescription parent) {
         QueryTask task = queryForVm(request.resourceLink(), vm.getInstanceUuid());
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewVm(request, vm);
+                createNewVm(request, vm, parent);
             } else {
-                updateVm(result.documentLinks.get(0), request, vm);
+                ComputeState oldDocument = Utils
+                        .fromJson(result.documents.values().iterator().next(),
+                                ComputeState.class);
+                updateVm(oldDocument, request, vm, parent);
             }
         });
     }
 
-    private void updateVm(String computeLink, ComputeEnumerateResourceRequest request,
-            VmOverlay vm) {
+    private void updateVm(ComputeState oldDocument, ComputeEnumerateResourceRequest request,
+            VmOverlay vm, ComputeStateWithDescription parent) {
         ComputeState state = makeVmFromResults(request, vm);
-        state.documentSelfLink = computeLink;
+        state.documentSelfLink = oldDocument.documentSelfLink;
 
-        logInfo("Syncing VM %s", computeLink);
-
-        Operation.createPatch(UriUtils.buildUri(getHost(), computeLink))
+        logInfo("Syncing VM %s", state.documentSelfLink);
+        Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
+                .sendWith(this);
+
+        ComputeDescription desc = makeDescriptionForVm(request, vm, parent);
+        desc.documentSelfLink = state.descriptionLink;
+        Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
+                .setBody(desc)
                 .sendWith(this);
     }
 
-    private void createNewVm(ComputeEnumerateResourceRequest request, VmOverlay vm) {
+    private void createNewVm(ComputeEnumerateResourceRequest request, VmOverlay vm,
+            ComputeStateWithDescription parent) {
+        ComputeDescription desc = makeDescriptionForVm(request, vm, parent);
+        Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
+                .setBody(desc)
+                .sendWith(this);
+
         ComputeState state = makeVmFromResults(request, vm);
+        state.descriptionLink = desc.documentSelfLink;
 
         logInfo("Found new VM %s", vm.getInstanceUuid());
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .sendWith(this);
+    }
+
+    private ComputeDescription makeDescriptionForVm(ComputeEnumerateResourceRequest request,
+            VmOverlay vm, ComputeStateWithDescription parent) {
+        ComputeDescription res = new ComputeDescription();
+        res.documentSelfLink = UriUtils
+                .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
+        res.powerAdapterReference = parent.description.powerAdapterReference;
+        res.enumerationAdapterReference = parent.description.enumerationAdapterReference;
+        res.instanceAdapterReference = parent.description.instanceAdapterReference;
+        res.statsAdapterReference = parent.description.statsAdapterReference;
+
+        res.datacenterId = parent.description.datacenterId;
+
+        res.cpuCount = vm.getNumCpu();
+        res.totalMemoryBytes = vm.getMemoryBytes();
+        return res;
     }
 
     /**
@@ -692,7 +724,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = new ComputeState();
         state.adapterManagementReference = request.adapterManagementReference;
         state.parentLink = request.resourceLink();
-        state.descriptionLink = request.computeDescriptionLink;
         state.resourcePoolLink = request.resourcePoolLink;
 
         state.powerState = vm.getPowerState();

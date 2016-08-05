@@ -179,7 +179,6 @@ public class ScheduledTaskServiceTest extends Suite {
                     UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
 
             ResourceEnumerationTaskState enumTaskState = new ResourceEnumerationTaskState();
-            enumTaskState.computeDescriptionLink = outDesc.documentSelfLink;
             enumTaskState.parentComputeLink = returnComputeState.documentSelfLink;
             enumTaskState.resourcePoolLink = returnPool.documentSelfLink;
             enumTaskState.adapterManagementReference = UriUtils.buildUri("http://foo.com");

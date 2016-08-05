@@ -18,7 +18,6 @@ import java.util.Map;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
-
 import com.vmware.vim25.ArrayOfOptionValue;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ManagedObjectReference;
@@ -92,5 +91,13 @@ public class VmOverlay extends AbstractOverlay {
         }
 
         return null;
+    }
+
+    public int getNumCpu() {
+        return (int) getOrFail(VimPath.vm_summary_config_numCpu);
+    }
+
+    public long getMemoryBytes() {
+        return ((int) getOrFail(VimPath.vm_config_hardware_memoryMB)) * MB_to_bytes;
     }
 }

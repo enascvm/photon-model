@@ -123,7 +123,6 @@ public class TestUtils {
     /**
      * Create a resource enumeration task.
      * @param resourcePoolLink Link to the resource pool that hosts all resources.
-     * @param computeDescriptionLink Link to the compute host description.
      * @param parentComputeLink Link to the compute host.
      * @param adapterServiceLink Link to the enumeration adapter service.
      * @param isMock If request is mock.
@@ -131,14 +130,12 @@ public class TestUtils {
      * @return The created resource enumeration task.
      */
     public static ResourceEnumerationTaskState createResourceEnumerationTask(String resourcePoolLink,
-                                                                             String computeDescriptionLink,
                                                                              String parentComputeLink,
                                                                              String adapterServiceLink,
                                                                              boolean isMock,
                                                                              List<String> tenantLinks) {
         ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
 
-        enumerationTaskState.computeDescriptionLink = computeDescriptionLink;
         enumerationTaskState.parentComputeLink = parentComputeLink;
         enumerationTaskState.enumerationAction = EnumerationAction.START;
         enumerationTaskState.adapterManagementReference = UriUtils.buildUri(adapterServiceLink);

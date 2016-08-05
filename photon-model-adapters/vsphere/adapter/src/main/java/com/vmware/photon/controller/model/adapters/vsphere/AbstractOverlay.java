@@ -27,7 +27,7 @@ import com.vmware.vim25.ObjectContent;
  */
 public abstract class AbstractOverlay {
 
-    public static final int MB_to_bytes = 1024 * 1024;
+    public static final long MB_to_bytes = 1024 * 1024;
 
     private final ManagedObjectReference ref;
 

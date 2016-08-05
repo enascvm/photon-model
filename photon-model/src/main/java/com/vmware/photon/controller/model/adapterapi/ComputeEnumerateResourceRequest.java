@@ -26,11 +26,6 @@ public class ComputeEnumerateResourceRequest extends ResourceRequest {
      */
     public String resourcePoolLink;
 
-    /**
-     * Reference URI to the Compute Description that will be used for the
-     * compute instances created by the adapter.
-     */
-    public String computeDescriptionLink;
 
     /**
      * Enumeration Action Start, stop, refresh.

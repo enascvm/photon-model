@@ -256,7 +256,6 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private void runEnumeration() throws Throwable {
         ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
 
-        enumerationTaskState.computeDescriptionLink = this.computeHost.descriptionLink;
         enumerationTaskState.parentComputeLink = this.computeHost.documentSelfLink;
         enumerationTaskState.enumerationAction = EnumerationAction.START;
         enumerationTaskState.adapterManagementReference = UriUtils

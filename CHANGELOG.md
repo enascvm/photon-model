@@ -9,6 +9,10 @@
 * Remove StatsCollectionTaskSchedulerService - The functionality this class provided
   can be achieved using ScheduledTaskService
 
+* Remove computeDescriptionLink from ComputeEnumerateResourceRequest and
+  ResourceEnumerationTaskState. The description is reachable through the
+  ComputeState
+
 ## 0.4.1
 
 * Add support for aggregating resource metrics to get hourly min/max/avg values
