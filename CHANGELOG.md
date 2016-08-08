@@ -1,17 +1,19 @@
 # CHANGELOG
 
-## 0.4.2-SNAPSHOT
+## 0.4.2
 
 * Add new endpoint resource and task services.
 
 * Add support for aggregating metrics to get daily min/max/avg values over 4 weeks.
 
 * Remove StatsCollectionTaskSchedulerService - The functionality this class provided
-  can be achieved using ScheduledTaskService
+  can be achieved using ScheduledTaskService.
 
 * Remove computeDescriptionLink from ComputeEnumerateResourceRequest and
   ResourceEnumerationTaskState. The description is reachable through the
-  ComputeState
+  ComputeState.
+
+* Add support for query based resource stats aggregation.
 
 ## 0.4.1
 
