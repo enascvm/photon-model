@@ -30,6 +30,8 @@ import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConst
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.INSTANCE_STATUS_SUSPENDING;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.INSTANCE_STATUS_TERMINATED;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.PRIVATE_KEY;
+import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.TOKEN_REQUEST_BODY_TEMPLATE;
+import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.TOKEN_REQUEST_URI;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.UNKNOWN_REGION;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.US_CENTRAL1_A;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.US_CENTRAL1_B;
@@ -42,22 +44,46 @@ import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConst
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.net.URI;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.function.Consumer;
 
 import com.google.api.client.util.PemReader;
 import com.google.api.client.util.PemReader.Section;
 import com.google.api.client.util.SecurityUtils;
 
+import com.vmware.photon.controller.model.adapters.gcp.podo.authorization.GCPAccessTokenResponse;
 import com.vmware.photon.controller.model.adapters.gcp.podo.vm.GCPInstance;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
 
 /**
  * GCP Utility methods.
  */
 public class GCPUtils {
+    /**
+     * Makes a request to gets the access token required for making requests to the
+     * monitoring API.
+     * @param service The service with which the operation is to be sent.
+     * @param assertion JsonWebToken assertion required for getting the token.
+     * @param success Success handler
+     * @param failure Failure handler
+     */
+    public static void getAccessToken(Service service, String assertion,
+            Consumer<GCPAccessTokenResponse> success, Consumer<Throwable> failure) {
+        service.sendRequest(Operation.createPost(URI.create(TOKEN_REQUEST_URI))
+                .setContentType(Operation.MEDIA_TYPE_APPLICATION_X_WWW_FORM_ENCODED)
+                .setBody(String.format(TOKEN_REQUEST_BODY_TEMPLATE, assertion)).setCompletion((o, e) -> {
+                    if (e != null) {
+                        failure.accept(e);
+                    }
+                    success.accept(o.getBody(GCPAccessTokenResponse.class));
+                }));
+    }
     /**
      * The method validates an input string of private key and generate a java PrivateKey
      * object. The method is non-blocking.

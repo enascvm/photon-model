@@ -80,7 +80,7 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class GCPTestUtil {
-    private static final String ENUMERATION_TEST_INSTANCE = "enumeration-test-instance-";
+    private static final String ENUMERATION_TEST_INSTANCE = "adapter-test-instance-";
     private static final String ENUMERATION_TEST_MACHINE_TYPE = "https://www.googleapis" +
             ".com/compute/v1/projects/%s/zones/%s/machineTypes/f1-micro";
     private static final String NETWORK_INTERFACE = "https://www.googleapis" +

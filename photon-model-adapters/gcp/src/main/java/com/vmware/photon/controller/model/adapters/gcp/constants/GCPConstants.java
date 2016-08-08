@@ -13,6 +13,11 @@
 
 package com.vmware.photon.controller.model.adapters.gcp.constants;
 
+import java.util.Collection;
+import java.util.Collections;
+
+import com.google.api.services.compute.ComputeScopes;
+
 /**
  * GCP related constants.
  */
@@ -27,6 +32,8 @@ public class GCPConstants {
     public static final String MONITORING_API_VERSION = "v3/";
     public static final String MONITORING_API_URI = MONITORING_API_BASE_URI + MONITORING_API_VERSION
             + "projects/";
+    // Permission level for retrieving stats, used in authentication.
+    public static final Collection<String> SCOPES = Collections.singleton(ComputeScopes.CLOUD_PLATFORM);
 
     // GCP API Constants
     public static final String MAX_RESULTS = "maxResults";
@@ -111,7 +118,6 @@ public class GCPConstants {
     public static final String UNIT_COUNT = "Count";
     public static final String UNIT_BYTE = "Bytes";
     public static final String UNIT_PERCENT = "Percent";
-    public static final String MONITORING_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'";
     public static final String UTC_TIMEZONE_ID = "UTC";
 
     // GCP Metric Filter Constants
@@ -122,6 +128,24 @@ public class GCPConstants {
     public static final String METRIC_TYPE_FILTER = "metric.type";
     public static final String INSTANCE_NAME_FILTER = "resource.label.instance_id";
     public static final String RESPONSE_PAGE_SIZE = "pageSize";
+    public static final String TIME_INTERVAL_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'";
+    // To subtract 11 minutes 30 seconds from the current time and get start time.
     public static final long START_TIME_MILLIS = 690000;
+    // To subtract 10 minutes from the current time and get end time.
     public static final long END_TIME_MILLIS = 600000;
+
+    // GCP Aggregation Related Metric Filter Constants
+    public static final String AGGREGATION_ALIGNMENT_PERIOD = "aggregation.alignmentPeriod";
+    public static final String AGGREGATION_PER_SERIES_ALIGNER = "aggregation.perSeriesAligner";
+    public static final String AGGREGATION_CROSS_SERIES_REDUCER = "aggregation.crossSeriesReducer";
+    // Parameter specifying the duration for aggregation.
+    // Value is slightly more than the interval to ensure aggregation results in exactly one data
+    // point.
+    public static final String AGGREGATION_ALIGNMENT_PERIOD_VALUE = "91s";
+    // Aggregation enum values for CPU Utilization
+    public static final String CPU_UTIL_PER_SERIES_ALIGNER_VALUE = "ALIGN_MEAN";
+    public static final String CPU_UTIL_CROSS_SERIES_REDUCER_VALUE = "REDUCE_MEAN";
+    // Aggregation enum values for all other stats.
+    public static final String PER_SERIES_ALIGNER_VALUE = "ALIGN_SUM";
+    public static final String CROSS_SERIES_REDUCER_VALUE = "REDUCE_SUM";
 }

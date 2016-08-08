@@ -23,8 +23,6 @@ import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConst
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.LIST_VM_TEMPLATE_URI;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.MAX_RESULTS;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.PAGE_TOKEN;
-import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.TOKEN_REQUEST_BODY_TEMPLATE;
-import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.TOKEN_REQUEST_URI;
 import static com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils.assignIPAddress;
 import static com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils.assignPowerState;
 import static com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils.extractActualInstanceType;
@@ -61,6 +59,7 @@ import com.vmware.photon.controller.model.adapters.gcp.podo.authorization.GCPAcc
 import com.vmware.photon.controller.model.adapters.gcp.podo.vm.GCPDisk;
 import com.vmware.photon.controller.model.adapters.gcp.podo.vm.GCPInstance;
 import com.vmware.photon.controller.model.adapters.gcp.podo.vm.GCPInstancesList;
+import com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils;
 import com.vmware.photon.controller.model.adapters.gcp.utils.JSONWebToken;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
@@ -817,25 +816,15 @@ public class GCPEnumerationAdapterService extends StatelessService {
     private void getAccessToken(EnumerationContext ctx, String clientEmail,
             Collection<String> scopes, PrivateKey privateKey, EnumerationStages next)
             throws GeneralSecurityException, IOException {
+        Consumer<GCPAccessTokenResponse> onSuccess = response -> {
+            ctx.accessToken = response.access_token;
+            ctx.stage = next;
+            handleEnumerationRequest(ctx);
+        };
+
         JSONWebToken jwt = new JSONWebToken(clientEmail, scopes, privateKey);
         String assertion = jwt.getAssertion();
-        Operation.createPost(URI.create(TOKEN_REQUEST_URI))
-                .setContentType(Operation.MEDIA_TYPE_APPLICATION_X_WWW_FORM_ENCODED)
-                .setBody(String.format(TOKEN_REQUEST_BODY_TEMPLATE, assertion))
-                .setCompletion((op, er) -> {
-                    if (er != null) {
-                        logSevere(er);
-                        ctx.error = er;
-                        ctx.stage = EnumerationStages.ERROR;
-                        handleEnumerationRequest(ctx);
-                        return;
-                    }
-
-                    GCPAccessTokenResponse gcpAccessTokenResponse = op.getBody(GCPAccessTokenResponse.class);
-                    ctx.accessToken = gcpAccessTokenResponse.access_token;
-                    ctx.stage = next;
-                    handleEnumerationRequest(ctx);
-                }).sendWith(this);
+        GCPUtils.getAccessToken(this, assertion, onSuccess, getFailureConsumer(ctx));
     }
 
     /**

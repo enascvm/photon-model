@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService;
@@ -34,6 +35,18 @@ import com.vmware.xenon.common.Utils;
  * Common utility methods for different adapters.
  */
 public class AdapterUtils {
+    /**
+     * Checks if the given resource is a compute host or a VM.
+     * @param computeDescription ComputeDescription of the resource.
+     * @return If the resource is a compute host or not.
+     */
+    public static boolean isComputeHost(ComputeStateWithDescription computeDesc) {
+        if (computeDesc.parentLink == null) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
     public static void sendFailurePatchToProvisioningTask(StatelessService service,
             URI taskLink, Throwable t) {
