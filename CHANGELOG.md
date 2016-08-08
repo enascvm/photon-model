@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.4.3-SNAPSHOT
+
 ## 0.4.2
 
 * Add new endpoint resource and task services.
