@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -25,6 +26,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PUBLIC_INTERFACE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
@@ -41,6 +43,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionMachine;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.stopVMsUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
@@ -106,12 +109,14 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private static final String TEST_CASE_INITIAL = "Initial Run ";
     private static final String TEST_CASE_ADDITIONAL_VM = "Additional VM ";
     private static final String TEST_CASE_PURE_UPDATE = "Only Update to existing VM.";
+    private static final String TEST_CASE_STOP_VM = "Stop VM ";
     private static final String TEST_CASE_DELETE_VM = "Delete VM ";
     private static final String TEST_CASE_DELETE_VMS = "Delete multiple VMs ";
     private static final String TEST_CASE_MOCK_MODE = "Mock Mode ";
     private static final int DEFAULT_TEST_PAGE_SIZE = 5;
     private static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
     private static final String VM_NAME = "TestAWSEnumerationTask-create";
+    private static final String VM_STOPPED_NAME = "TestAWSEnumerationTask-stop";
     private static final String VM_UPDATED_NAME = "TestAWSEnumerationTask-update";
 
     private static List<String> testComputeDescriptions = new ArrayList<String>(
@@ -241,6 +246,24 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // One VPC should be discovered in the test.
         queryDocumentsAndAssertExpectedCount(this.host, count1,
                 NetworkService.FACTORY_LINK);
+
+        // Verify stop flow
+        // The first instance of instanceIdsToDeleteFirstTime will be stopped.
+        String instanceIdsToStop = instanceIdsToDeleteFirstTime.get(0);
+        tagResourcesWithName(this.client, VM_STOPPED_NAME, instanceIdsToStop);
+        // Stop one instance
+        stopVMsUsingEC2Client(this.client, this.host, new ArrayList<>(Arrays.asList(
+                instanceIdsToStop)));
+        // During the enumeration, if one instance is stopped, its public ip address
+        // will disappear, then the corresponding link of local ComputeState's public
+        // network interface and its document will be removed.
+        enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
+                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                TEST_CASE_STOP_VM);
+
+        // Because one public NIC and its document are removed,
+        // the totalNetworkInterfaceStateCount should go down by 1
+        validateRemovalOfPublicNetworkInterface(instanceIdsToStop, totalNetworkInterfaceStateCount - 1);
 
         // Provision an additional VM with a different instance type. It should re-use the
         // existing compute description created by the enumeration task above.
@@ -449,6 +472,26 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         queryDocumentsAndAssertExpectedCount(this.host, totalNetworkInterfaceStateCount,
                 NetworkInterfaceService.FACTORY_LINK);
+    }
+
+    /**
+     * Validates the public network interface and its document have been removed.
+     * @throws Throwable
+     */
+    private void validateRemovalOfPublicNetworkInterface(String instanceId,
+             int desiredNetworkInterfaceStateCount) throws Throwable {
+        if (this.isAwsClientMock) {
+            return;
+        }
+
+        ComputeState stoppedComputeState = getComputeByAWSId(instanceId);
+        assertNotNull(stoppedComputeState);
+        // make sure that the stopped instance has no public network interface
+        for (String networkLink: stoppedComputeState.networkLinks) {
+            assertFalse(networkLink.contains(PUBLIC_INTERFACE));
+        }
+
+        validateNetworkInterfaceCount(desiredNetworkInterfaceStateCount);
     }
 
     /**

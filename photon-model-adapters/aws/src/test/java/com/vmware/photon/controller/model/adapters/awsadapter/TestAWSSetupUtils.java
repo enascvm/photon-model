@@ -42,6 +42,8 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
+import com.amazonaws.services.ec2.model.StopInstancesRequest;
+import com.amazonaws.services.ec2.model.StopInstancesResult;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
@@ -584,7 +586,7 @@ public class TestAWSSetupUtils {
     public static void checkInstancesStarted(VerificationHost host, AmazonEC2AsyncClient client,
             List<String> instanceIds, List<Boolean> provisioningFlags) throws Throwable {
         AWSEnumerationAsyncHandler enumerationHandler = new AWSEnumerationAsyncHandler(host,
-                AWSEnumerationAsyncHandler.MODE.CHECK_START, provisioningFlags, null, null, null);
+                AWSEnumerationAsyncHandler.MODE.CHECK_START, provisioningFlags, null, null, null, null);
         DescribeInstancesRequest request = new DescribeInstancesRequest()
                 .withInstanceIds(instanceIds);
         client.describeInstancesAsync(request, enumerationHandler);
@@ -635,7 +637,7 @@ public class TestAWSSetupUtils {
             throws Throwable {
         BaseLineState baseLineState = new BaseLineState();
         AWSEnumerationAsyncHandler enumerationHandler = new AWSEnumerationAsyncHandler(host,
-                AWSEnumerationAsyncHandler.MODE.GET_COUNT, null, null, testComputeDescriptions,
+                AWSEnumerationAsyncHandler.MODE.GET_COUNT, null, null, null, testComputeDescriptions,
                 baseLineState);
         DescribeInstancesRequest request = new DescribeInstancesRequest();
         Filter runningInstanceFilter = getAWSNonTerminatedInstancesFilter();
@@ -765,7 +767,7 @@ public class TestAWSSetupUtils {
             deletionFlags.add(i, Boolean.FALSE);
         }
         host.waitFor("Error waiting for EC2 client delete instances in test ", () -> {
-            return computeInstancesStopState(client,
+            return computeInstancesTerminationState(client,
                     host, instanceIdsToDelete, deletionFlags);
         });
 
@@ -798,10 +800,10 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Method that polls to see if the instances provisioned have turned OFF on the AWS endpoint.
+     * Method that polls to see if the instances provisioned have been terminated on the AWS endpoint.
      * @param deletionFlags
      */
-    public static boolean computeInstancesStopState(AmazonEC2AsyncClient client,
+    public static boolean computeInstancesTerminationState(AmazonEC2AsyncClient client,
             VerificationHost host, List<String> instanceIdsToDelete,
             ArrayList<Boolean> deletionFlags) throws Throwable {
         checkInstancesDeleted(client, host, instanceIdsToDelete, deletionFlags);
@@ -820,7 +822,7 @@ public class TestAWSSetupUtils {
             VerificationHost host, List<String> instanceIdsToDelete,
             ArrayList<Boolean> deletionFlags) throws Throwable {
         AWSEnumerationAsyncHandler enumerationHandler = new AWSEnumerationAsyncHandler(host,
-                AWSEnumerationAsyncHandler.MODE.CHECK_TERMINATION, null, deletionFlags, null, null);
+                AWSEnumerationAsyncHandler.MODE.CHECK_TERMINATION, null, deletionFlags, null, null, null);
         DescribeInstancesRequest request = new DescribeInstancesRequest()
                 .withInstanceIds(instanceIdsToDelete);
         client.describeInstancesAsync(request, enumerationHandler);
@@ -829,6 +831,111 @@ public class TestAWSSetupUtils {
         host.waitFor("Waiting to get response from AWS ", () -> {
             return enumerationHandler.responseReceived;
         });
+    }
+
+    /**
+     * Method that polls to see if the instances provisioned have been stopped on the AWS endpoint.
+     * @param client
+     * @param host
+     * @param instanceIdsToStop
+     * @param stopFlags
+     * @throws Throwable
+     */
+    public static boolean computeInstancesStopState(AmazonEC2AsyncClient client,
+            VerificationHost host, List<String> instanceIdsToStop,
+            ArrayList<Boolean> stopFlags) throws Throwable {
+        checkInstancesStopped(client, host, instanceIdsToStop, stopFlags);
+        Boolean finalState = true;
+        for (Boolean b : stopFlags) {
+            finalState = finalState & b;
+        }
+        return finalState;
+    }
+
+    /**
+     * Checks if instances have their status set to stopped.
+     * @param client
+     * @param host
+     * @param instanceIdsToStop
+     * @param stopFlags
+     * @throws Throwable
+     */
+    public static void checkInstancesStopped(AmazonEC2AsyncClient client,
+            VerificationHost host, List<String> instanceIdsToStop,
+            ArrayList<Boolean> stopFlags) throws Throwable {
+        AWSEnumerationAsyncHandler enumerationHandler = new AWSEnumerationAsyncHandler(host,
+                AWSEnumerationAsyncHandler.MODE.CHECK_STOP, null, null, stopFlags, null, null);
+        DescribeInstancesRequest request = new DescribeInstancesRequest()
+                .withInstanceIds(instanceIdsToStop);
+        client.describeInstancesAsync(request, enumerationHandler);
+        // Waiting to get a response from AWS before the state computation is done for the list of
+        // VMs.
+        host.waitFor("Waiting to get response from AWS ", () -> {
+            return enumerationHandler.responseReceived;
+        });
+    }
+
+    /**
+     * Stop instances on the AWS endpoint for the set of instance Ids that are passed in.
+     * @param client
+     * @param host
+     * @param instanceIdsToStop
+     * @throws Throwable
+     */
+    public static void stopVMsUsingEC2Client(AmazonEC2AsyncClient client, VerificationHost host,
+            List<String> instanceIdsToStop) throws Throwable {
+        StopInstancesRequest stopRequest = new StopInstancesRequest(instanceIdsToStop);
+        AsyncHandler<StopInstancesRequest, StopInstancesResult> stopHandler = new AWSStopHandlerAsync(
+                host);
+        client.stopInstancesAsync(stopRequest, stopHandler);
+        waitForInstancesToBeStopped(client, host, instanceIdsToStop);
+
+    }
+
+    /**
+     * Wait for the instances have their status set to stopped.
+     * @param client
+     * @param host
+     * @param instanceIdsToStop
+     * @throws Throwable
+     */
+    public static void waitForInstancesToBeStopped(AmazonEC2AsyncClient client,
+            VerificationHost host, List<String> instanceIdsToStop) throws Throwable {
+        ArrayList<Boolean> stopFlags = new ArrayList<Boolean>(instanceIdsToStop.size());
+        for (int i = 0; i < instanceIdsToStop.size(); i++) {
+            stopFlags.add(i, Boolean.FALSE);
+        }
+        host.waitFor("Error waiting for EC2 client stop instances in test ", () -> {
+            return computeInstancesStopState(client,
+                    host, instanceIdsToStop, stopFlags);
+        });
+
+    }
+
+    /**
+     * Async handler for the stop of instances from the AWS endpoint.
+     *
+     */
+    public static class AWSStopHandlerAsync implements
+            AsyncHandler<StopInstancesRequest, StopInstancesResult> {
+
+        VerificationHost host;
+
+        AWSStopHandlerAsync(VerificationHost host) {
+            this.host = host;
+        }
+
+        @Override
+        public void onError(Exception exception) {
+            this.host.log("Error stopping instance{s} from AWS %s", exception);
+        }
+
+        @Override
+        public void onSuccess(StopInstancesRequest request,
+                              StopInstancesResult result) {
+            this.host.log("Successfully stopped instances from the AWS endpoint %s",
+                    result.getStoppingInstances().toString());
+        }
     }
 
     /**
@@ -844,26 +951,30 @@ public class TestAWSSetupUtils {
 
         private static final int AWS_TERMINATED_CODE = 48;
         private static final int AWS_STARTED_CODE = 16;
+        private static final int AWS_STOPPED_CODE = 80;
         public VerificationHost host;
         public MODE mode;
         public List<Boolean> provisioningFlags;
         public List<Boolean> deletionFlags;
+        public List<Boolean> stopFlags;
         public List<String> testComputeDescriptions;
         public BaseLineState baseLineState;
         public boolean responseReceived = false;
 
         // Flag to indicate whether you want to check if instance has started or stopped.
         public static enum MODE {
-            CHECK_START, CHECK_TERMINATION, GET_COUNT
+            CHECK_START, CHECK_TERMINATION, CHECK_STOP, GET_COUNT
         }
 
         AWSEnumerationAsyncHandler(VerificationHost host, MODE mode,
                 List<Boolean> provisioningFlags, List<Boolean> deletionFlags,
-                List<String> testComputeDescriptions, BaseLineState baseLineState) {
+                List<Boolean> stopFlags, List<String> testComputeDescriptions,
+                BaseLineState baseLineState) {
             this.host = host;
             this.mode = mode;
             this.provisioningFlags = provisioningFlags;
             this.deletionFlags = deletionFlags;
+            this.stopFlags = stopFlags;
             this.testComputeDescriptions = testComputeDescriptions;
             this.baseLineState = baseLineState;
             this.responseReceived = false;
@@ -896,6 +1007,16 @@ public class TestAWSSetupUtils {
                     for (Instance i : r.getInstances()) {
                         if (i.getState().getCode() == AWS_TERMINATED_CODE) {
                             this.deletionFlags.set(counter, Boolean.TRUE);
+                            counter++;
+                        }
+                    }
+                }
+                break;
+            case CHECK_STOP:
+                for (Reservation r : result.getReservations()) {
+                    for (Instance i : r.getInstances()) {
+                        if (i.getState().getCode() == AWS_STOPPED_CODE) {
+                            this.stopFlags.set(counter, Boolean.TRUE);
                             counter++;
                         }
                     }

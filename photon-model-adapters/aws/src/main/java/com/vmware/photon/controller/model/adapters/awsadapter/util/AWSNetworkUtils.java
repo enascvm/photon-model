@@ -23,8 +23,11 @@ import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.crea
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -38,6 +41,7 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -147,7 +151,7 @@ public class AWSNetworkUtils {
             if (isPublic && networkLink.contains(PUBLIC_INTERFACE)) {
                 existingInterfaceLink = networkLink;
                 break;
-            } else if (networkLink.contains(PRIVATE_INTERFACE)) {
+            } else if (!isPublic && networkLink.contains(PRIVATE_INTERFACE)) {
                 existingInterfaceLink = networkLink;
                 break;
             }
@@ -216,4 +220,37 @@ public class AWSNetworkUtils {
         q.tenantLinks = tenantLinks;
         return q;
     }
+
+    /**
+     * Remove a compute state's networkLink and delete the link's corresponding document
+     * @param service Service to issue the patch to.
+     * @param computeState The compute state to be updated.
+     * @param networkLink The network link need to be removed.
+     * @param enumerationOperations The operation list to store the operations.
+     * @return
+     */
+    public static void removeNetworkLinkAndDocument(StatelessService service, ComputeState computeState,
+            String networkLink, List<Operation> enumerationOperations) {
+        // create a PATCH to remove one ComputeState's networkLink
+        Map<String, Collection<Object>> collectionsMap = new HashMap<>();
+        Collection<Object> networkLinksToBeRemoved = new ArrayList<>(Arrays.asList(networkLink));
+        collectionsMap.put(ComputeState.FIELD_NAME_NETWORK_LINKS, networkLinksToBeRemoved);
+        ServiceStateCollectionUpdateRequest collectionRemovalBody =
+                ServiceStateCollectionUpdateRequest.create(null, collectionsMap);
+
+        Operation removeNetworkLinkOperation = Operation
+                .createPatch(UriUtils.buildUri(service.getHost(), computeState.documentSelfLink))
+                .setBody(collectionRemovalBody)
+                .setReferer(service.getUri());
+
+        enumerationOperations.add(removeNetworkLinkOperation);
+
+        // create a DELETE to remove that networkLink's corresponding document
+        Operation removeNetworkLinkDocumentOperation = Operation
+                .createDelete(UriUtils.buildUri(service.getHost(), networkLink))
+                .setReferer(service.getUri());
+
+        enumerationOperations.add(removeNetworkLinkDocumentOperation);
+    }
+
 }

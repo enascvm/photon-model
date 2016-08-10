@@ -29,6 +29,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNet
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapIPAddressToNetworkInterfaceState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapInstanceIPAddressToNICCreationOperations;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapVPCToNetworkState;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.removeNetworkLinkAndDocument;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
 
@@ -137,7 +138,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     public static class AWSComputeServiceCreationContext {
         public AmazonEC2AsyncClient amazonEC2Client;
         public AWSComputeStateForCreation computeState;
-        public List<Operation> createOrUpdateOperations;
+        public List<Operation> enumerationOperations;
         public int instanceToBeCreatedCounter = 0;
         public AWSComputeStateCreationStage creationStage;
         public AWSNetworkCreationStage networkCreationStage;
@@ -155,7 +156,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public AWSComputeServiceCreationContext(AWSComputeStateForCreation computeState,
                 Operation op) {
             this.computeState = computeState;
-            this.createOrUpdateOperations = new ArrayList<Operation>();
+            this.enumerationOperations = new ArrayList<Operation>();
             this.discoveredVpcNetworkStateMap = new HashMap<String, NetworkState>();
             this.localNetworkStateMap = new HashMap<String, NetworkState>();
             this.computeDescriptionMap = new HashMap<String, String>();
@@ -330,12 +331,12 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         List<Operation> networkOperations = mapInstanceIPAddressToNICCreationOperations(
                 instance, computeState, context.computeState.tenantLinks, this);
         if (networkOperations != null && !networkOperations.isEmpty()) {
-            context.createOrUpdateOperations.addAll(networkOperations);
+            context.enumerationOperations.addAll(networkOperations);
         }
         // Create operation for compute state once all the
         Operation postComputeState = createPostOperation(this, computeState,
                 ComputeService.FACTORY_LINK);
-        context.createOrUpdateOperations.add(postComputeState);
+        context.enumerationOperations.add(postComputeState);
     }
 
     /**
@@ -358,7 +359,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         Operation privateNICOperation = createOperationToUpdateOrCreateNetworkInterface(
                 existingComputeState, privateNICState,
                 context.computeState.tenantLinks, this, false);
-        context.createOrUpdateOperations.add(privateNICOperation);
+        context.enumerationOperations.add(privateNICOperation);
         computeState.networkLinks = new ArrayList<String>();
         computeState.networkLinks.add(UriUtils.buildUriPath(
                 NetworkInterfaceService.FACTORY_LINK,
@@ -372,16 +373,23 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             Operation postPublicNetworkInterfaceOperation = createOperationToUpdateOrCreateNetworkInterface(
                     existingComputeState, publicNICState,
                     context.computeState.tenantLinks, this, true);
-            context.createOrUpdateOperations.add(postPublicNetworkInterfaceOperation);
+            context.enumerationOperations.add(postPublicNetworkInterfaceOperation);
             computeState.networkLinks.add(UriUtils.buildUriPath(
                     NetworkInterfaceService.FACTORY_LINK, publicNICState.documentSelfLink));
+        } else {
+            existingNICLink = getExistingNetworkInterfaceLink(existingComputeState, true);
+            if (existingNICLink != null) {
+                // delete public network interface link and its document
+                removeNetworkLinkAndDocument(this, existingComputeState,
+                        existingNICLink, context.enumerationOperations);
+            }
         }
 
         // Create operation for compute state once all the associated network entities are accounted
         // for.
         Operation patchComputeState = createPatchOperation(this,
                 computeState, existingComputeState.documentSelfLink);
-        context.createOrUpdateOperations.add(patchComputeState);
+        context.enumerationOperations.add(patchComputeState);
 
     }
 
@@ -392,8 +400,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      */
     private void kickOffComputeStateCreation(AWSComputeServiceCreationContext context,
             AWSComputeStateCreationStage next) {
-        if (context.createOrUpdateOperations == null
-                || context.createOrUpdateOperations.size() == 0) {
+        if (context.enumerationOperations == null
+                || context.enumerationOperations.size() == 0) {
             logInfo("There are no compute states or networks to be created");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
@@ -414,7 +422,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             handleComputeStateCreateOrUpdate(context);
             return;
         };
-        OperationJoin joinOp = OperationJoin.create(context.createOrUpdateOperations);
+        OperationJoin joinOp = OperationJoin.create(context.enumerationOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(getHost());
 
@@ -739,12 +747,12 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     networkStateOperation = createPatchOperation(this,
                             networkState,
                             context.localNetworkStateMap.get(remoteVPCId).documentSelfLink);
-                    context.createOrUpdateOperations.add(networkStateOperation);
+                    context.enumerationOperations.add(networkStateOperation);
                     continue;
                 }
                 networkStateOperation = createPostOperation(this,
                         networkState, NetworkService.FACTORY_LINK);
-                context.createOrUpdateOperations.add(networkStateOperation);
+                context.enumerationOperations.add(networkStateOperation);
             }
         }
         handleComputeStateCreateOrUpdate(context);
