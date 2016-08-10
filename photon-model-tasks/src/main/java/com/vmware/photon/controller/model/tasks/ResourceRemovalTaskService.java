@@ -87,7 +87,7 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
         /**
          * Task options
          */
-        public EnumSet<TaskOptions> options;
+        public EnumSet<TaskOption> options;
     }
 
     public ResourceRemovalTaskService() {
@@ -327,7 +327,7 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
         deleteReq.taskReference = UriUtils.buildUri(getHost(),
                 subTaskLink);
         deleteReq.requestType =
-                (currentState.options != null && currentState.options.contains(TaskOptions.DOCUMENT_CHANGES_ONLY))
+                (currentState.options != null && currentState.options.contains(TaskOption.DOCUMENT_CHANGES_ONLY))
                 ? ComputeInstanceRequest.InstanceRequestType.DELETE_DOCUMENTS_ONLY : ComputeInstanceRequest.InstanceRequestType.DELETE;
         deleteReq.isMockRequest = currentState.isMockRequest;
         sendRequest(Operation

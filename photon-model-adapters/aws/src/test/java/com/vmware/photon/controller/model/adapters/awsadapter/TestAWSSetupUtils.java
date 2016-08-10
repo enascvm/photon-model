@@ -67,7 +67,7 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
-import com.vmware.photon.controller.model.tasks.TaskOptions;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -325,7 +325,7 @@ public class TestAWSSetupUtils {
         deletionState.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                 + TimeUnit.MINUTES.toMicros(AWS_VM_REQUEST_TIMEOUT_MINUTES);
         if (deleteDocumentOnly) {
-            deletionState.options = EnumSet.of(TaskOptions.DOCUMENT_CHANGES_ONLY);
+            deletionState.options = EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY);
         }
         host.send(Operation
                 .createPost(

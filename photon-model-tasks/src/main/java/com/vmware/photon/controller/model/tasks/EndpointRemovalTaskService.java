@@ -91,7 +91,7 @@ public class EndpointRemovalTaskService
         /**
          * Task options
          */
-        public EnumSet<TaskOptions> options = EnumSet.noneOf(TaskOptions.class);
+        public EnumSet<TaskOption> options = EnumSet.noneOf(TaskOption.class);
 
         /**
          * The error threshold.
@@ -276,8 +276,8 @@ public class EndpointRemovalTaskService
         ResourceRemovalTaskState removalServiceState = new ResourceRemovalTaskState();
         removalServiceState.documentSelfLink = UUID.randomUUID().toString();
         removalServiceState.resourceQuerySpec = qSpec;
-        removalServiceState.options = EnumSet.of(TaskOptions.DOCUMENT_CHANGES_ONLY);
-        removalServiceState.isMockRequest = state.options.contains(TaskOptions.IS_MOCK);
+        removalServiceState.options = EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY);
+        removalServiceState.isMockRequest = state.options.contains(TaskOption.IS_MOCK);
         removalServiceState.tenantLinks = state.tenantLinks;
 
         StatefulService service = this;
@@ -428,7 +428,7 @@ public class EndpointRemovalTaskService
         }
 
         if (state.options == null) {
-            state.options = EnumSet.noneOf(TaskOptions.class);
+            state.options = EnumSet.noneOf(TaskOption.class);
         }
 
         if (state.documentExpirationTimeMicros == 0) {

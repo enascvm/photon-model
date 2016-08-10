@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks;
 
-public enum TaskOptions {
+public enum TaskOption {
     /**
      * Update local document state; leave the remote state unmodified
      */

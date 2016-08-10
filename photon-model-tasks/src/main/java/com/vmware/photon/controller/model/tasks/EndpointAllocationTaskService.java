@@ -93,7 +93,7 @@ public class EndpointAllocationTaskService
 
         @Documentation(description = "Task's options")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
-        public EnumSet<TaskOptions> options = EnumSet.noneOf(TaskOptions.class);
+        public EnumSet<TaskOption> options = EnumSet.noneOf(TaskOption.class);
 
         @Documentation(description = "If specified a Resource enumeration will be scheduled.")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
@@ -177,7 +177,7 @@ public class EndpointAllocationTaskService
         switch (currentState.taskSubStage) {
         case VALIDATE_CREDENTIALS:
             validateCredentials(currentState,
-                    currentState.options.contains(TaskOptions.VALIDATE_ONLY)
+                    currentState.options.contains(TaskOption.VALIDATE_ONLY)
                             ? SubStage.COMPLETED : SubStage.CREATE_UPDATE_ENDPOINT);
             break;
         case CREATE_UPDATE_ENDPOINT:
@@ -208,7 +208,7 @@ public class EndpointAllocationTaskService
             }
 
             EndpointConfigRequest req = new EndpointConfigRequest();
-            req.isMockRequest = currentState.options.contains(TaskOptions.IS_MOCK);
+            req.isMockRequest = currentState.options.contains(TaskOption.IS_MOCK);
             req.requestType = RequestType.ENHANCE;
             req.resourceReference = UriUtils.buildUri(getHost(),
                     currentState.endpointState.documentSelfLink);
@@ -347,7 +347,7 @@ public class EndpointAllocationTaskService
         EndpointConfigRequest req = new EndpointConfigRequest();
         req.requestType = RequestType.VALIDATE;
         req.endpointProperties = currentState.endpointState.endpointProperties;
-        req.isMockRequest = currentState.options.contains(TaskOptions.IS_MOCK);
+        req.isMockRequest = currentState.options.contains(TaskOption.IS_MOCK);
 
         Operation
                 .createPatch(currentState.adapterReference)
@@ -423,7 +423,7 @@ public class EndpointAllocationTaskService
         }
 
         if (state.options == null) {
-            state.options = EnumSet.noneOf(TaskOptions.class);
+            state.options = EnumSet.noneOf(TaskOption.class);
         }
 
         if (state.adapterReference == null) {
