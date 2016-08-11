@@ -114,6 +114,10 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         ResourceEnumerationTaskState body = getBody(patch);
         ResourceEnumerationTaskState currentState = getState(patch);
 
+        if (!validateTransition(patch, currentState, body)) {
+            return;
+        }
+
         logInfo("Moving from %s to %s", currentState.taskInfo.stage.toString(),
                 body.taskInfo.stage.toString());
 
@@ -188,6 +192,21 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
 
         sendRequest(Operation.createGet(computeUri)
                 .setCompletion(descriptionCompletion));
+    }
+
+    @Override
+    protected boolean validateTransition(Operation patch,
+            ResourceEnumerationTaskState currentTask, ResourceEnumerationTaskState patchBody) {
+        boolean ok = super.validateTransition(patch, currentTask, patchBody);
+
+        if (ok) {
+            if (currentTask.taskInfo.stage == TaskStage.STARTED && patchBody.taskInfo.stage == TaskStage.STARTED) {
+                patch.fail(new IllegalArgumentException("Cannot start task again"));
+                return false;
+            }
+        }
+
+        return ok;
     }
 
     public static void validateState(ResourceEnumerationTaskState state) {
