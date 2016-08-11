@@ -28,6 +28,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.Before;
@@ -42,6 +43,7 @@ import com.vmware.photon.controller.model.helpers.BaseModelTest;
 
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -369,13 +371,12 @@ public class ComputeServiceTest extends Suite {
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchBody);
 
-            ResourceUtils.CollectionRemovalRequest collectionRemovalBody
-                    = new ResourceUtils.CollectionRemovalRequest();
-            collectionRemovalBody.kind = ResourceUtils.CollectionRemovalRequest.KIND;
-            collectionRemovalBody.collectionsMap = new HashMap<>();
+            Map<String, Collection<Object>>collectionsMap = new HashMap<>();
             Collection<Object> networkLinksToBeRemoved = new ArrayList<>(Arrays.asList(
                     "http://network1", "http://network3"));
-            collectionRemovalBody.collectionsMap.put("networkLinks", networkLinksToBeRemoved);
+            collectionsMap.put("networkLinks", networkLinksToBeRemoved);
+            ServiceStateCollectionUpdateRequest collectionRemovalBody =
+                    ServiceStateCollectionUpdateRequest.create(null, collectionsMap);
 
             // send PATCH to remove networkLinks: network1, network3
             patchServiceSynchronously(returnState.documentSelfLink,

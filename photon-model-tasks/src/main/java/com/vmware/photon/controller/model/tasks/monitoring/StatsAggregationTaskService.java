@@ -36,7 +36,7 @@ import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
-import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.DataPoint;
+import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.TimeBin;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -231,7 +231,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
             List<String> tenantLinks, long bucketForInterval) {
         ResourceAggregateMetricsState aggrMetricState = new ResourceAggregateMetricsState();
         aggrMetricState.computeServiceLink = computeServiceLink;
-        aggrMetricState.aggregations = new HashMap<String, DataPoint>();
+        aggrMetricState.aggregations = new HashMap<String, TimeBin>();
         aggrMetricState.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(bucketForInterval);
         aggrMetricState.tenantLinks = tenantLinks;
         aggrMetricState.documentSelfLink = new StringBuilder().append(UriUtils.getLastPathSegment(computeServiceLink))
@@ -340,22 +340,22 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
             ResourceAggregateMetricsState aggrMetricStateForCurrentInterval,
             ResourceAggregateMetricsState aggrMetricStateForPreviousInterval) {
         ServiceStat stat = entry.getValue();
-        if (!stat.timeSeriesStats.dataPoints.isEmpty()) {
-            long latestBucket = stat.timeSeriesStats.dataPoints.lastKey();
+        if (!stat.timeSeriesStats.bins.isEmpty()) {
+            long latestBucket = stat.timeSeriesStats.bins.lastKey();
             if (latestBucket == bucketForCurrentInterval) {
                 aggrMetricStateForCurrentInterval.aggregations.put(entry.getKey(),
-                        stat.timeSeriesStats.dataPoints.get(latestBucket));
+                        stat.timeSeriesStats.bins.get(latestBucket));
             }
             // remove the latest bucket, so that we can look the the closed bucket for the last interval
-            stat.timeSeriesStats.dataPoints.remove(latestBucket);
+            stat.timeSeriesStats.bins.remove(latestBucket);
         }
         // we really need to do this only if the task ran for the first time after the active bucket changed;
         // doing this unconditionally for now and can be optimized later
-        if (!stat.timeSeriesStats.dataPoints.isEmpty()) {
-            long previousBucket = stat.timeSeriesStats.dataPoints.lastKey();
+        if (!stat.timeSeriesStats.bins.isEmpty()) {
+            long previousBucket = stat.timeSeriesStats.bins.lastKey();
             if (previousBucket == bucketForPreviousInterval) {
                 aggrMetricStateForPreviousInterval.aggregations.put(entry.getKey(),
-                        stat.timeSeriesStats.dataPoints.get(previousBucket));
+                        stat.timeSeriesStats.bins.get(previousBucket));
             }
         }
     }

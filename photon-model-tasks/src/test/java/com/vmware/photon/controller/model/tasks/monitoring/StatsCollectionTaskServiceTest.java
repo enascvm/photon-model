@@ -105,7 +105,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 boolean returnStatus = true;
                 for (ServiceStat stat : resStats.entries.values()) {
                     if (stat.latestValue < this.numResources ||
-                            stat.timeSeriesStats.dataPoints.size() == 0) {
+                            stat.timeSeriesStats.bins.size() == 0) {
                         returnStatus = false;
                     }
                 }

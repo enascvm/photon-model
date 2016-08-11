@@ -30,7 +30,7 @@ import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
-import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.DataPoint;
+import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.TimeBin;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -89,7 +89,7 @@ public class ResourceStatsAggregationTaskService
          */
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public Map<String, DataPoint> aggregations = new HashMap<>();
+        public Map<String, TimeBin> aggregations = new HashMap<>();
     }
 
     /**
@@ -313,7 +313,7 @@ public class ResourceStatsAggregationTaskService
      */
     private void aggregateStats(ResourceStatsAggregationTaskState currentState,
             Collection<Operation> statsOps, QueryTask queryTask) {
-        Map<String, DataPoint> aggregations = currentState.aggregations;
+        Map<String, TimeBin> aggregations = currentState.aggregations;
         for (String metricName : currentState.metricNames) {
             double aggregateValue = 0.0;
             int count = 0;
@@ -329,15 +329,15 @@ public class ResourceStatsAggregationTaskService
 
                 ServiceStat stat = stats.entries.get(metricName);
                 if (stat == null || stat.timeSeriesStats == null
-                        || stat.timeSeriesStats.dataPoints == null
-                        || stat.timeSeriesStats.dataPoints.isEmpty()) {
+                        || stat.timeSeriesStats.bins == null
+                        || stat.timeSeriesStats.bins.isEmpty()) {
                     continue;
                 }
 
                 // Calculate aggregate value from the latest data point.
                 // We can define a behavior enum later to do different kind of aggregation.
-                long latestBucket = stat.timeSeriesStats.dataPoints.lastKey();
-                aggregateValue += stat.timeSeriesStats.dataPoints.get(latestBucket).avg;
+                long latestBucket = stat.timeSeriesStats.bins.lastKey();
+                aggregateValue += stat.timeSeriesStats.bins.get(latestBucket).avg;
                 count++;
             }
 
@@ -347,13 +347,13 @@ public class ResourceStatsAggregationTaskService
 
             // Here we store the aggregate value across all aggregation types since there is no
             // avg, max, min in this case.
-            DataPoint dp = new DataPoint();
+            TimeBin dp = new TimeBin();
             dp.avg = aggregateValue;
             dp.max = aggregateValue;
             dp.min = aggregateValue;
             dp.count = count;
 
-            DataPoint existingDP = aggregations.get(metricName);
+            TimeBin existingDP = aggregations.get(metricName);
             if (existingDP == null) {
                 aggregations.put(metricName, dp);
             } else {

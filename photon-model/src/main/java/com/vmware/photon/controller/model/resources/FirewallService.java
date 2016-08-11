@@ -17,10 +17,12 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -276,24 +278,27 @@ public class FirewallService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         FirewallState currentState = getState(patch);
-        FirewallState patchBody = getBody(patch);
+        Function<Operation, Boolean> customPatchHandler = new Function<Operation, Boolean>() {
+            @Override
+            public Boolean apply(Operation t) {
+                FirewallState patchBody = patch.getBody(FirewallState.class);
+                boolean hasStateChanged = false;
+                // allow rules are overwritten -- it's not a merge
+                // will result in a new version of the service on every call
+                // as ingress & egress are never null
+                if (patchBody.ingress != null) {
+                    currentState.ingress = patchBody.ingress;
+                    hasStateChanged = true;
+                }
 
-        boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(),
-                currentState, patchBody);
-        // allow rules are overwritten -- it's not a merge
-        // will result in a new version of the service on every call
-        // as ingress & egress are never null
-        if (patchBody.ingress != null) {
-            currentState.ingress = patchBody.ingress;
-            hasStateChanged = true;
-        }
-
-        if (patchBody.egress != null) {
-            currentState.egress = patchBody.egress;
-            hasStateChanged = true;
-        }
-        ResourceUtils.completePatchOperation(patch, hasStateChanged);
-
+                if (patchBody.egress != null) {
+                    currentState.egress = patchBody.egress;
+                    hasStateChanged = true;
+                }
+                return hasStateChanged;
+            }
+        };
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), customPatchHandler);
     }
 
     @Override

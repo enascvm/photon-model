@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.resources;
 import java.net.URI;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
@@ -125,9 +126,6 @@ public class StorageDescriptionService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         StorageDescription currentState = getState(patch);
-        StorageDescription patchBody = getBody(patch);
-
-        boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(), currentState, patchBody);
-        ResourceUtils.completePatchOperation(patch, hasStateChanged);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), null);
     }
 }

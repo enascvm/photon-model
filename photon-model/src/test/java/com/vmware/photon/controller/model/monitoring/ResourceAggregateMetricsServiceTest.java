@@ -32,7 +32,7 @@ import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 
 import com.vmware.xenon.common.Service;
-import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.DataPoint;
+import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.TimeBin;
 import com.vmware.xenon.common.Utils;
 
 
@@ -52,7 +52,7 @@ public class ResourceAggregateMetricsServiceTest extends Suite {
     private static ResourceAggregateMetricsService.ResourceAggregateMetricsState buildValidStartState() {
         ResourceAggregateMetricsService.ResourceAggregateMetricsState statState = new ResourceAggregateMetricsService.ResourceAggregateMetricsState();
         statState.computeServiceLink = "initialLink";
-        statState.aggregations = new HashMap<String, DataPoint>();
+        statState.aggregations = new HashMap<String, TimeBin>();
         statState.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
         return statState;
     }

@@ -19,10 +19,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 
 import org.junit.Test;
 
@@ -65,32 +62,5 @@ public class ResourceUtilsTest {
         assertFalse(changed);
         assertEquals(current.tenantLinks, patch.tenantLinks);
         assertEquals(current.groupLinks, patch.groupLinks);
-    }
-
-    @Test
-    public void testRemoveMultipleCollections() throws NoSuchFieldException, IllegalAccessException {
-        ResourceState current = new ResourceState();
-        current.tenantLinks = new ArrayList<>(Arrays.asList("tenant1", "tenant2", "tenant3"));
-        current.groupLinks = new HashSet<>(Arrays.asList("groupA", "groupB"));
-
-        ResourceUtils.CollectionRemovalRequest removalRequest = new ResourceUtils.CollectionRemovalRequest();
-        removalRequest.kind = ResourceUtils.CollectionRemovalRequest.KIND;
-        removalRequest.collectionsMap = new HashMap<>();
-        // remove tenantLinks: tenant1, tenant3.
-        Collection<Object> tenantLinksToBeRemoved = new ArrayList<>(Arrays.asList(
-                "tenant1", "tenant3"));
-        removalRequest.collectionsMap.put("tenantLinks", tenantLinksToBeRemoved);
-        // remove groupLinks: groupA.
-        Collection<Object> groupLinksToBeRemoved = new ArrayList<>(Arrays.asList("groupA"));
-        removalRequest.collectionsMap.put("groupLinks", groupLinksToBeRemoved);
-
-        boolean changed = ResourceUtils.removeCollections(current, removalRequest);
-
-        List<String> expectedTenantLinks =  new ArrayList<>(Arrays.asList("tenant2"));
-        HashSet<String> expectedGroupLinks = new HashSet<>(Arrays.asList("groupB"));
-
-        assertTrue(changed);
-        assertEquals(current.tenantLinks, expectedTenantLinks);
-        assertEquals(current.groupLinks, expectedGroupLinks);
     }
 }

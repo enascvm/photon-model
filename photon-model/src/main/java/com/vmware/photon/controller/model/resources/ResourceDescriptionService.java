@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.List;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -107,12 +108,7 @@ public class ResourceDescriptionService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ResourceDescription currentState = getState(patch);
-        ResourceDescription patchBody = getBody(patch);
-
-        boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(),
-                currentState, patchBody);
-        ResourceUtils.completePatchOperation(patch, hasStateChanged);
-
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), null);
     }
 
     private ResourceDescription processInput(Operation op) {

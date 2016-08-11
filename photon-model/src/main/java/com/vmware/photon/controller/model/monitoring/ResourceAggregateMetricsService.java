@@ -21,7 +21,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
-import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.DataPoint;
+import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.TimeBin;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
 
@@ -41,9 +41,12 @@ public class ResourceAggregateMetricsService extends StatefulService {
 
     public static class ResourceAggregateMetricsState extends  ResourceState {
 
+        public static final String FIELD_COMPUTE_SERVICE_LINK = "computeServiceLink";
+        public static final String FIELD_SOURCE_TIME_MICROS_UTC = "sourceTimeMicrosUtc";
+
         @Documentation(description = "Aggregate stats for a resource")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public Map<String, DataPoint> aggregations;
+        public Map<String, TimeBin> aggregations;
 
         @Documentation(description = "The compute service instance this state belongs to")
         @UsageOption(option = PropertyUsageOption.REQUIRED)

@@ -16,8 +16,10 @@ package com.vmware.photon.controller.model.resources;
 import java.net.URI;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -261,17 +263,20 @@ public class DiskService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         DiskState currentState = getState(patch);
-        DiskState patchBody = getBody(patch);
-
-        boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(),
-                currentState, patchBody);
-        if (patchBody.capacityMBytes != 0
-                && patchBody.capacityMBytes != currentState.capacityMBytes) {
-            currentState.capacityMBytes = patchBody.capacityMBytes;
-            hasStateChanged = true;
-        }
-
-        ResourceUtils.completePatchOperation(patch, hasStateChanged);
+        Function<Operation, Boolean> customPatchHandler = new Function<Operation, Boolean>() {
+            @Override
+            public Boolean apply(Operation t) {
+                DiskState patchBody = patch.getBody(DiskState.class);
+                boolean hasStateChanged = false;
+                if (patchBody.capacityMBytes != 0
+                        && patchBody.capacityMBytes != currentState.capacityMBytes) {
+                    currentState.capacityMBytes = patchBody.capacityMBytes;
+                    hasStateChanged = true;
+                }
+                return hasStateChanged;
+            }
+        };
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), customPatchHandler);
     }
 
     @Override

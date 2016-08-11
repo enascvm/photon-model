@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
@@ -289,59 +290,57 @@ public class ComputeService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ComputeState currentState = getState(patch);
-        boolean hasStateChanged = false;
+        Function<Operation, Boolean> customPatchHandler = new Function<Operation, Boolean>() {
+            @Override
+            public Boolean apply(Operation t) {
+                boolean hasStateChanged = false;
+                ComputeState patchBody = patch.getBody(ComputeState.class);
+                if (patchBody.address != null
+                        && !patchBody.address.equals(currentState.address)) {
+                    InetAddressValidator.getInstance().isValidInet4Address(
+                            patchBody.address);
+                    currentState.address = patchBody.address;
+                    hasStateChanged = true;
+                }
 
-        // handle the patch when body type is CollectionRemovalRequest
-        hasStateChanged = ResourceUtils.handleCollectionRemovalRequest(currentState, patch);
+                if (patchBody.powerState != null
+                        && patchBody.powerState != PowerState.UNKNOWN
+                        && patchBody.powerState != currentState.powerState) {
+                    currentState.powerState = patchBody.powerState;
+                    hasStateChanged = true;
+                }
 
-        // handle the patch when body type is ComputeState
-        ComputeState patchBody = patch.getBody(ComputeState.class);
-        hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(), currentState, patchBody);
-
-        if (patchBody.address != null
-                && !patchBody.address.equals(currentState.address)) {
-            InetAddressValidator.getInstance().isValidInet4Address(
-                    patchBody.address);
-            currentState.address = patchBody.address;
-            hasStateChanged = true;
-        }
-
-        if (patchBody.powerState != null
-                && patchBody.powerState != PowerState.UNKNOWN
-                && patchBody.powerState != currentState.powerState) {
-            currentState.powerState = patchBody.powerState;
-            hasStateChanged = true;
-        }
-
-        if (patchBody.diskLinks != null) {
-            if (currentState.diskLinks == null) {
-                currentState.diskLinks = patchBody.diskLinks;
-                hasStateChanged = true;
-            } else {
-                for (String link : patchBody.diskLinks) {
-                    if (!currentState.diskLinks.contains(link)) {
-                        currentState.diskLinks.add(link);
+                if (patchBody.diskLinks != null) {
+                    if (currentState.diskLinks == null) {
+                        currentState.diskLinks = patchBody.diskLinks;
                         hasStateChanged = true;
+                    } else {
+                        for (String link : patchBody.diskLinks) {
+                            if (!currentState.diskLinks.contains(link)) {
+                                currentState.diskLinks.add(link);
+                                hasStateChanged = true;
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        if (patchBody.networkLinks != null) {
-            if (currentState.networkLinks == null) {
-                currentState.networkLinks = patchBody.networkLinks;
-                hasStateChanged = true;
-            } else {
-                for (String link : patchBody.networkLinks) {
-                    if (!currentState.networkLinks.contains(link)) {
-                        currentState.networkLinks.add(link);
+                if (patchBody.networkLinks != null) {
+                    if (currentState.networkLinks == null) {
+                        currentState.networkLinks = patchBody.networkLinks;
                         hasStateChanged = true;
+                    } else {
+                        for (String link : patchBody.networkLinks) {
+                            if (!currentState.networkLinks.contains(link)) {
+                                currentState.networkLinks.add(link);
+                                hasStateChanged = true;
+                            }
+                        }
                     }
                 }
+                return hasStateChanged;
             }
-        }
-
-        ResourceUtils.completePatchOperation(patch, hasStateChanged);
+        };
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), customPatchHandler);
     }
 
     @Override

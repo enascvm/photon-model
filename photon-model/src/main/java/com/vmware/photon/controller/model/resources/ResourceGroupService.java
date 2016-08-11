@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.resources;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -82,12 +83,7 @@ public class ResourceGroupService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ResourceGroupState currentState = getState(patch);
-        ResourceGroupState patchBody = getBody(patch);
-
-        boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(),
-                currentState, patchBody);
-        ResourceUtils.completePatchOperation(patch, hasStateChanged);
-
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), null);
     }
 
     @Override

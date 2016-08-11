@@ -19,6 +19,7 @@ import java.util.UUID;
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -140,11 +141,7 @@ public class NetworkService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         NetworkState currentState = getState(patch);
-        NetworkState patchBody = getBody(patch);
-
-        boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(),
-                currentState, patchBody);
-        ResourceUtils.completePatchOperation(patch, hasStateChanged);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), null);
     }
 
     @Override

@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -332,10 +333,7 @@ public class ComputeDescriptionService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ComputeDescription currentState = getState(patch);
-        ComputeDescription patchBody = getBody(patch);
-
-        boolean hasStateChanged = ResourceUtils.mergeWithState(getStateDescription(), currentState, patchBody);
-        ResourceUtils.completePatchOperation(patch, hasStateChanged);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), null);
     }
 
     @Override
