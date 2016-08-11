@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.4.3-SNAPSHOT
+## 0.4.3
+
+* Add support for adding and removing collections from resource services
 
 ## 0.4.2
 
