@@ -24,7 +24,6 @@ import org.apache.commons.validator.routines.InetAddressValidator;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -67,9 +66,13 @@ public class ComputeService extends StatefulService {
         public static final String FIELD_NAME_ID = "id";
         public static final String FIELD_NAME_DESCRIPTION_LINK = "descriptionLink";
         public static final String FIELD_NAME_RESOURCE_POOL_LINK = "resourcePoolLink";
+        public static final String FIELD_NAME_ADDRESS = "address";
+        public static final String FIELD_NAME_PRIMARY_MAC = "primaryMAC";
+        public static final String FIELD_NAME_POWER_STATE = "powerState";
         public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
         public static final String FIELD_NAME_PARENT_LINK = "parentLink";
-        public static final String CUSTOM_PROPERTY_NAME_RUNTIME_INFO = "runtimeInfo";
+        public static final String FIELD_NAME_DISK_LINKS = "diskLinks";
+        public static final String FIELD_NAME_NETWORK_LINKS = "networkLinks";
 
         /**
          * Identifier of this compute instance.
