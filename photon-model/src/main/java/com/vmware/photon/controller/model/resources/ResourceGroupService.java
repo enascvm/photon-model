@@ -17,6 +17,7 @@ import com.vmware.photon.controller.model.UriPaths;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
@@ -39,6 +40,7 @@ public class ResourceGroupService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @UsageOption(option = PropertyUsageOption.REQUIRED)
+        @PropertyOptions(indexing = PropertyIndexingOption.SORT)
         public String name;
     }
 
