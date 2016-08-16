@@ -82,12 +82,12 @@ public class AWSInstanceService extends StatelessService {
     private static final String AWS_TERMINATED_NAME = "terminated";
 
     public AWSInstanceService() {
-        this.clientManager = AWSClientManagerFactory.getClientManager(false);
+        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, false);
+        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 

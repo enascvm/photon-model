@@ -57,7 +57,7 @@ public class AWSFirewallService extends StatelessService {
     private AWSClientManager clientManager;
 
     public AWSFirewallService() {
-        this.clientManager = AWSClientManagerFactory.getClientManager(false);
+        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     /**
@@ -85,7 +85,7 @@ public class AWSFirewallService extends StatelessService {
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, false);
+        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 

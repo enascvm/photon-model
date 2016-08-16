@@ -60,7 +60,7 @@ public class AWSStatsService extends StatelessService {
 
     public AWSStatsService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory.getClientManager(true);
+        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.CLOUD_WATCH);
     }
 
     public static final String SELF_LINK = AWSUriPaths.AWS_STATS_ADAPTER;
@@ -120,7 +120,7 @@ public class AWSStatsService extends StatelessService {
 
     @Override
     public void handleStop(Operation delete) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, true);
+        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.CLOUD_WATCH);
         super.handleStop(delete);
     }
 

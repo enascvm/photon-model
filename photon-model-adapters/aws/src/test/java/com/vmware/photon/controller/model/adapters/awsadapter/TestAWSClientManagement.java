@@ -16,9 +16,9 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.getClientManager;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.getEc2ClientReferenceCount;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.getStatsClientReferenceCount;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.getClientReferenceCount;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
 
 import java.util.ArrayList;
@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.s3.transfer.TransferManager;
 
 import org.junit.After;
 import org.junit.Before;
@@ -47,7 +48,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  *are shutdown.
  *
  */
-@Ignore("https://jira-hzn.eng.vmware.com/browse/VSYM-1398")
 public class TestAWSClientManagement extends BasicReusableHostTestCase {
     public static final int count1 = 1;
     public static final int count2 = 2;
@@ -95,16 +95,16 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         }
     }
 
-    //
+    @Ignore("https://jira-hzn.eng.vmware.com/browse/VSYM-1398")
     @Test
     public void testAWSClientManagement() throws Throwable {
         this.host.setTimeoutSeconds(60);
-        assertEquals(count1, getEc2ClientReferenceCount());
-        assertEquals(count1, getStatsClientReferenceCount());
+        assertEquals(count1, getClientReferenceCount(AwsClientType.EC2));
+        assertEquals(count1, getClientReferenceCount(AwsClientType.CLOUD_WATCH));
 
         // Getting a reference to the client manager in the test
-        AWSClientManager clientManager = getClientManager(false);
-        assertEquals(count2, getEc2ClientReferenceCount());
+        AWSClientManager clientManager = getClientManager(AwsClientType.EC2);
+        assertEquals(count2, getClientReferenceCount(AwsClientType.EC2));
 
         // Getting an AWSclient from the client manager
         this.creds = new AuthCredentialsServiceState();
@@ -113,13 +113,13 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
 
         this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.zoneId,
                 this.instanceService, null, false);
-        assertEquals(count1, clientManager.getCacheCount(false));
+        assertEquals(count1, clientManager.getCacheCount());
 
         // Requesting another AWS client with the same set of credentials will not
         // create a new entry in the cache
         this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.zoneId,
                 this.instanceService, null, false);
-        assertEquals(count1, clientManager.getCacheCount(false));
+        assertEquals(count1, clientManager.getCacheCount());
 
         // Saving a reference to the executor associated with the client to chec
         // if it is shutdown when no references remain
@@ -130,18 +130,37 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         // cleaned up as expected.
         this.host.sendAndWaitExpectSuccess(
                 Operation.createDelete(UriUtils.buildUri(this.host, AWSInstanceService.SELF_LINK)));
-        assertEquals(count1, getEc2ClientReferenceCount());
+        assertEquals(count1, getClientReferenceCount(AwsClientType.EC2));
         this.host.sendAndWaitExpectSuccess(
                 Operation.createDelete(UriUtils.buildUri(this.host, AWSStatsService.SELF_LINK)));
-        assertEquals(count0, getStatsClientReferenceCount());
+        assertEquals(count0, getClientReferenceCount(AwsClientType.CLOUD_WATCH));
 
         // Returning the references from the test
-        returnClientManager(clientManager, false);
-        assertEquals(count0, getEc2ClientReferenceCount());
+        returnClientManager(clientManager, AwsClientType.EC2);
+        assertEquals(count0, getClientReferenceCount(AwsClientType.EC2));
 
         // Asserts that when all the references to the common cache has been returned back then the
         // executor is shutDown
         assertTrue(executorService.isShutdown());
 
+    }
+
+    @Test public void testAwsS3ClientManagement() throws Throwable {
+
+        // Get a reference to the client manager in the test
+        AWSClientManager s3ClientManager = getClientManager(AwsClientType.S3);
+        assertEquals(count1, getClientReferenceCount(AwsClientType.S3));
+
+        AuthCredentialsServiceState testCreds = new AuthCredentialsServiceState();
+        testCreds.privateKey = this.accessKey;
+        testCreds.privateKeyId = this.secretKey;
+
+        TransferManager s3Client = s3ClientManager
+                .getOrCreateS3AsyncClient(testCreds, TestAWSSetupUtils.zoneId, this.statsService, null);
+        assertEquals(count1, s3ClientManager.getCacheCount());
+
+        // Return the references from the test
+        returnClientManager(s3ClientManager, AwsClientType.S3);
+        assertEquals(count0, getClientReferenceCount(AwsClientType.S3));
     }
 }

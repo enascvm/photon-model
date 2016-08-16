@@ -50,12 +50,12 @@ public class AWSEndpointAdapterService extends StatelessService {
     private AWSClientManager clientManager;
 
     public AWSEndpointAdapterService() {
-        this.clientManager = AWSClientManagerFactory.getClientManager(false);
+        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, false);
+        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 

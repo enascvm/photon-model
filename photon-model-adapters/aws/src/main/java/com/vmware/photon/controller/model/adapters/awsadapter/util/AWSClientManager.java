@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CLIENT_CACHE_INITIAL_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CLIENT_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.THREAD_POOL_CACHE_INITIAL_SIZE;
@@ -29,6 +30,7 @@ import java.util.logging.Logger;
 
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.s3.transfer.TransferManager;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -44,27 +46,35 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 public class AWSClientManager {
 
     private static final Logger logger = Logger.getLogger(AWSClientManager.class.getName());
-    // Flag for determining if the client manager needs to manage the EC2 client cache or the
-    // CloudWatch cache. If the stats mode is set, the cloud watch client cache is maintained in
-    // this class.
-    private boolean statsFlag;
+    // Flag for determining the type of AWS client managed by this client manager.
+    private AwsClientType awsClientType;
     private LRUCache<String, AmazonEC2AsyncClient> ec2ClientCache;
     private LRUCache<String, AmazonCloudWatchAsyncClient> cloudWatchClientCache;
+    private LRUCache<String, TransferManager> s3ClientCache;
     private LRUCache<URI, ExecutorService> executorCache;
 
     public AWSClientManager() {
-        this(false);
+        this(AwsClientType.EC2);
     }
 
-    public AWSClientManager(boolean statsFlag) {
-        this.statsFlag = statsFlag;
-        if (statsFlag) {
-            this.cloudWatchClientCache = new LRUCache<String, AmazonCloudWatchAsyncClient>(
-                    CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
+    public AWSClientManager(AwsClientType awsClientType) {
+        this.awsClientType = awsClientType;
+        switch (awsClientType) {
+        case EC2:
+            this.ec2ClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
             return;
+        case CLOUD_WATCH:
+            this.cloudWatchClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
+                    CLIENT_CACHE_MAX_SIZE);
+            return;
+        case S3:
+            this.s3ClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
+            return;
+        default:
+            String msg = "The specified AWS client type " + awsClientType
+                    + " is not supported by this client manager.";
+            throw new UnsupportedOperationException(msg);
         }
-        this.ec2ClientCache = new LRUCache<String, AmazonEC2AsyncClient>(CLIENT_CACHE_INITIAL_SIZE,
-                CLIENT_CACHE_MAX_SIZE);
     }
 
     /**
@@ -74,15 +84,14 @@ public class AWSClientManager {
      * @param credentials The auth credentials to be used for the client creation
      * @param regionId The region of the AWS client
      * @param service The stateless service making the request and for which the executor pool needs to be allocated.
-     * @param callbackTaskReference The callbackTaskReference where the error (if any) needs to be reported.
      * @return The AWSClient
      */
     public synchronized AmazonEC2AsyncClient getOrCreateEC2Client(
             AuthCredentialsServiceState credentials,
             String regionId, StatelessService service, URI parentTaskLink, boolean isEnumeration) {
-        if (this.statsFlag) {
+        if (this.awsClientType != AwsClientType.EC2) {
             throw new UnsupportedOperationException(
-                    "Cannot get AWS EC2 Client in Stats mode.");
+                    "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
         AmazonEC2AsyncClient amazonEC2Client = null;
         String cacheKey = credentials.documentSelfLink + TILDA + regionId;
@@ -111,7 +120,6 @@ public class AWSClientManager {
      * @param credentials The auth credentials to be used for the client creation
      * @param regionId The region of the AWS client
      * @param service The stateless service for which the operation is being performed.
-     * @param callbackTaskReference The callbackTaskReference where the error (if any) needs to be reported.
      * @param isMock Indicates if this a mock request
      * @return
      */
@@ -119,9 +127,9 @@ public class AWSClientManager {
             AuthCredentialsServiceState credentials,
             String regionId, StatelessService service,
             URI parentTaskLink, boolean isMock) {
-        if (!this.statsFlag) {
+        if (this.awsClientType != AwsClientType.CLOUD_WATCH) {
             throw new UnsupportedOperationException(
-                    "Cannot get AWS CloudWatch without Stats mode.");
+                    "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
         String cacheKey = credentials.documentSelfLink + TILDA + regionId;
         AmazonCloudWatchAsyncClient amazonCloudWatchClient = null;
@@ -140,23 +148,53 @@ public class AWSClientManager {
         return amazonCloudWatchClient;
     }
 
+    public synchronized TransferManager getOrCreateS3AsyncClient(
+            AuthCredentialsServiceState credentials,
+            String regionId, StatelessService service, URI parentTaskLink) {
+        if (this.awsClientType != AwsClientType.S3) {
+            throw new UnsupportedOperationException(
+                    "This client manager supports only AWS " + this.awsClientType + " clients.");
+        }
+        String cacheKey = credentials.documentSelfLink + TILDA + regionId;
+        if (this.s3ClientCache.containsKey(cacheKey)) {
+            return this.s3ClientCache.get(cacheKey);
+        }
+        try {
+            TransferManager s3AsyncClient = AWSUtils
+                    .getS3AsyncClient(credentials, regionId, getExecutor(service.getHost()));
+            this.s3ClientCache.put(cacheKey, s3AsyncClient);
+            return s3AsyncClient;
+        } catch (Throwable t) {
+            service.logSevere(t);
+            AdapterUtils.sendFailurePatchToProvisioningTask(service, parentTaskLink, t);
+            return null;
+        }
+    }
+
     /**
      * Clears out the client cache and all the resources associated with each of the AWS clients.
      */
-    public void cleanUp() {
-        if (this.statsFlag) {
-            for (AmazonCloudWatchAsyncClient client : this.cloudWatchClientCache.values()) {
-                client.shutdown();
-            }
-            cleanupExecutorCache();
+    public synchronized void cleanUp() {
+        switch (this.awsClientType) {
+        case CLOUD_WATCH:
+            this.cloudWatchClientCache.values().forEach(c -> c.shutdown());
             this.cloudWatchClientCache.clear();
-            return;
-        }
-        for (AmazonEC2AsyncClient client : this.ec2ClientCache.values()) {
-            client.shutdown();
+            break;
+
+        case EC2:
+            this.ec2ClientCache.values().forEach(c -> c.shutdown());
+            this.ec2ClientCache.clear();
+            break;
+
+        case S3:
+            this.s3ClientCache.values().forEach(c -> c.shutdownNow());
+            this.s3ClientCache.clear();
+            break;
+
+        default:
+            throw new UnsupportedOperationException("AWS client type not supported by this client manager");
         }
         cleanupExecutorCache();
-        this.ec2ClientCache.clear();
     }
 
     /**
@@ -210,16 +248,26 @@ public class AWSClientManager {
     }
 
     /**
-     * Returns the count of the clients that are cached in the client cache.
+     * Returns the count of the clients that are cached in the client cache for the specified client type.
      */
-    public int getCacheCount(boolean statsFlag) {
-        if (statsFlag) {
+    public int getCacheCount() {
+        switch (this.awsClientType) {
+        case EC2:
+            if (this.ec2ClientCache != null) {
+                return this.ec2ClientCache.size();
+            }
+            break;
+        case CLOUD_WATCH:
             if (this.cloudWatchClientCache != null) {
                 return this.cloudWatchClientCache.size();
             }
-        }
-        if (this.ec2ClientCache != null) {
-            return this.ec2ClientCache.size();
+            break;
+        case S3:
+            if (this.s3ClientCache != null) {
+                return this.s3ClientCache.size();
+            }
+            break;
+        default:
         }
         return 0;
     }

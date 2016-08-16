@@ -72,7 +72,7 @@ public class AWSNetworkService extends StatelessService {
     private AWSClientManager clientManager;
 
     public AWSNetworkService() {
-        this.clientManager = AWSClientManagerFactory.getClientManager(false);
+        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     /**
@@ -99,7 +99,7 @@ public class AWSNetworkService extends StatelessService {
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, false);
+        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 

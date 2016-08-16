@@ -13,34 +13,38 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
+
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Holds instances of the client manager to be shared by all the AWS adapters to avoid the
  * creation of caches on a per adapter level. Holds two instances of the client manager
  * mapping to the EC2 client Cache and the CloudWatch client cache.
  */
 public class AWSClientManagerFactory {
-    private static AWSClientManager ec2ClientManager;
-    private static AWSClientManager statsClientManager;
-    private static int ec2ClientReferenceCount = 0;
-    private static int statsClientReferenceCount = 0;
+
+    private static Map<AwsClientType, AwsClientManagerEntry> clientManagersByType = new HashMap<>();
+
+    private static class AwsClientManagerEntry {
+        private AWSClientManager clientManager;
+        private int clientReferenceCount = 0;
+    }
 
     /**
-     * Returns a reference to an EC2 client manager instance if it exists. Creates a new one
+     * Returns a reference to the client manager instance managing the specified type of client if it exists. Creates a new one
      * if it does not exist.
      */
-    public static synchronized AWSClientManager getClientManager(boolean statsFlag) {
-        if (statsFlag) {
-            if (statsClientManager == null) {
-                statsClientManager = new AWSClientManager(true);
-            }
-            statsClientReferenceCount++;
-            return statsClientManager;
+    public static synchronized AWSClientManager getClientManager(AwsClientType awsClientType) {
+        AwsClientManagerEntry clientManagerEntry = clientManagersByType.get(awsClientType);
+        if (clientManagerEntry == null) {
+            clientManagerEntry = new AwsClientManagerEntry();
+            clientManagerEntry.clientManager = new AWSClientManager(awsClientType);
+            clientManagersByType.put(awsClientType, clientManagerEntry);
         }
-        if (ec2ClientManager == null) {
-            ec2ClientManager = new AWSClientManager();
-        }
-        ec2ClientReferenceCount++;
-        return ec2ClientManager;
+        clientManagerEntry.clientReferenceCount++;
+        return clientManagerEntry.clientManager;
     }
 
     /**
@@ -48,43 +52,22 @@ public class AWSClientManagerFactory {
      * the shared cache is cleared out.
      */
     public static synchronized void returnClientManager(AWSClientManager clientManager,
-            boolean statsFlag) {
-        if (statsFlag) {
-            if (clientManager != statsClientManager) {
-                throw new IllegalArgumentException(
-                        "Incorrect client manager reference passed to the method.");
+            AwsClientType awsClientType) {
+        AwsClientManagerEntry clientManagerHolder = clientManagersByType.get(awsClientType);
+        if (clientManagerHolder != null) {
+            if (clientManager != clientManagerHolder.clientManager) {
+                throw new IllegalArgumentException("Incorrect client manager reference passed to the method.");
             }
-            statsClientReferenceCount--;
-            return;
-        }
-        if (clientManager != ec2ClientManager) {
-            throw new IllegalArgumentException(
-                    "Incorrect client manager reference passed to the method.");
-        }
-        ec2ClientReferenceCount--;
-        // check to shut down the individual clients as the clients share a common executor pool.
-        if (ec2ClientReferenceCount == 0 && statsClientReferenceCount == 0) {
-            cleanupClientManager(false);
+            clientManagerHolder.clientReferenceCount--;
+            if (clientManagerHolder.clientReferenceCount == 0) {
+                // cleanup code on the client manager once they are not referenced by any of the adapters.
+                clientManagerHolder.clientManager.cleanUp();
+            }
         }
     }
 
-    /**
-     * Invokes the cleanup code on the client manager once they are not referenced by any of the adapters.
-     */
-    private static void cleanupClientManager(boolean statsFlag) {
-        if (statsFlag) {
-            statsClientManager.cleanUp();
-            return;
-        }
-        ec2ClientManager.cleanUp();
+    public static int getClientReferenceCount(AwsClientType awsClientType) {
+        AwsClientManagerEntry clientManagerEntry = clientManagersByType.get(awsClientType);
+        return clientManagerEntry == null ? 0 : clientManagerEntry.clientReferenceCount;
     }
-
-    public static int getEc2ClientReferenceCount() {
-        return ec2ClientReferenceCount;
-    }
-
-    public static int getStatsClientReferenceCount() {
-        return statsClientReferenceCount;
-    }
-
 }

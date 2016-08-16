@@ -87,6 +87,11 @@ public class AWSConstants {
 
     public static final String WINDOWS_PLATFORM = "windows";
 
+    // AWS client types
+    public enum AwsClientType {
+        EC2, CLOUD_WATCH, S3
+    }
+
     public static void setQueryPageSize(int size) {
         QUERY_PAGE_SIZE = size;
     }

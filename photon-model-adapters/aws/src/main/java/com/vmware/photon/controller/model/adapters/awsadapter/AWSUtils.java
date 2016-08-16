@@ -56,6 +56,9 @@ import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagDescription;
 import com.amazonaws.services.ec2.model.Vpc;
 
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.transfer.TransferManager;
+
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
@@ -133,6 +136,14 @@ public class AWSUtils {
             client.describeAlarms();
         }
         return client;
+    }
+
+    public static TransferManager getS3AsyncClient(AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService) {
+        AmazonS3Client amazonS3Client = new AmazonS3Client(
+                new BasicAWSCredentials(credentials.privateKeyId, credentials.privateKey));
+        amazonS3Client.setRegion(Region.getRegion(Regions.fromName(region)));
+        return new TransferManager(amazonS3Client, executorService);
     }
 
     /**
