@@ -22,7 +22,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_VM_SIZE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LINUX_OPERATING_SYSTEM;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VM_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
@@ -97,7 +96,6 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -250,11 +248,10 @@ public class AzureEnumerationAdapterService extends StatelessService {
             String enumKey = getEnumKey(ctx);
             switch (ctx.enumRequest.enumerationAction) {
             case START:
-                if (this.ongoingEnumerations.contains(enumKey)) {
+                if (!this.ongoingEnumerations.add(enumKey)) {
                     logInfo("Enumeration service has already been started for %s", enumKey);
                     return;
                 }
-                this.ongoingEnumerations.add(enumKey);
                 logInfo("Launching enumeration service for %s", enumKey);
                 ctx.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 ctx.enumRequest.enumerationAction = EnumerationAction.REFRESH;
@@ -265,9 +262,8 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 handleSubStage(ctx);
                 break;
             case STOP:
-                if (this.ongoingEnumerations.contains(enumKey)) {
+                if (this.ongoingEnumerations.remove(enumKey)) {
                     logInfo("Enumeration service will be stopped for %s", enumKey);
-                    this.ongoingEnumerations.remove(enumKey);
                 } else {
                     logInfo("Enumeration service is not running or has already been stopped for %s",
                             enumKey);
@@ -291,6 +287,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         case ERROR:
             cleanUpHttpClient(this, ctx.httpClient);
             logWarning("Enumeration error for %s", getEnumKey(ctx));
+            this.ongoingEnumerations.remove(getEnumKey(ctx));
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     ctx.enumRequest.taskReference, ctx.error);
             break;
@@ -298,6 +295,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
             cleanUpHttpClient(this, ctx.httpClient);
             String msg = String.format("Unknown Azure enumeration stage %s ", ctx.stage.toString());
             logSevere(msg);
+            this.ongoingEnumerations.remove(getEnumKey(ctx));
             ctx.error = new IllegalStateException(msg);
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     ctx.enumRequest.taskReference, ctx.error);
@@ -758,13 +756,13 @@ public class AzureEnumerationAdapterService extends StatelessService {
         computeDescription.authCredentialsLink = authLink;
         computeDescription.documentSelfLink = computeDescription.id;
         computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
+        computeDescription.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
         computeDescription.instanceAdapterReference = UriUtils
                 .buildUri(getHost(), AzureUriPaths.AZURE_INSTANCE_ADAPTER);
         computeDescription.statsAdapterReference = UriUtils
                 .buildUri(getHost(), AzureUriPaths.AZURE_STATS_ADAPTER);
         computeDescription.customProperties = new HashMap<>();
-        computeDescription.customProperties
-                .put(AZURE_VM_SIZE, virtualMachine.properties.hardwareProfile.getVmSize());
+
         String diagnosticStorageAccountName = null;
         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1452
         if (virtualMachine.properties.diagnosticsProfile != null) {

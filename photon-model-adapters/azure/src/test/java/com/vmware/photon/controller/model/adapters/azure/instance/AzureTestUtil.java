@@ -182,9 +182,9 @@ public class AzureTestUtil {
         azureVMDesc.regionId = AZURE_RESOURCE_GROUP_LOCATION;
         azureVMDesc.authCredentialsLink = authLink;
         azureVMDesc.documentSelfLink = azureVMDesc.id;
+        azureVMDesc.instanceType = AZURE_VM_SIZE;
         azureVMDesc.environmentName = ENVIRONMENT_NAME_AZURE;
         azureVMDesc.customProperties = new HashMap<>();
-        azureVMDesc.customProperties.put(AzureConstants.AZURE_VM_SIZE, AZURE_VM_SIZE);
 
         // set the create service to the azure instance service
         azureVMDesc.instanceAdapterReference = UriUtils.buildUri(host,
