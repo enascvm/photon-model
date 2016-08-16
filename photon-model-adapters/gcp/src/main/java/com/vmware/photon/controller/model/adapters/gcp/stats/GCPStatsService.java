@@ -177,9 +177,9 @@ public class GCPStatsService extends StatelessService {
         dateFormat.setTimeZone(TimeZone.getTimeZone(GCPConstants.UTC_TIMEZONE_ID));
 
         /*
-         * Subtract 11 minutes 30 seconds from current time.
-         * Currently, 10 minutes old metrics are obtained to account for latency.
-         * Request for more recent metrics sometimes returns empty response body.
+         * Subtract 4 minutes from current time.
+         * Currently, 3 minutes old metrics are obtained to account for latency.
+         * Request for more recent metrics mostly results in empty response body.
          */
         Date date = new Date(TimeUnit.MICROSECONDS.toMillis(Utils.getNowMicrosUtc()) - GCPConstants.START_TIME_MILLIS);
         return dateFormat.format(date);
@@ -196,10 +196,10 @@ public class GCPStatsService extends StatelessService {
         dateFormat.setTimeZone(TimeZone.getTimeZone(GCPConstants.UTC_TIMEZONE_ID));
 
         /*
-         * Subtract 10 minutes from current time.
-         * Data points are ideally spaced 60 seconds apart. Interval of 120 seconds ensures exactly
-         * one data point is retrieved.
-         * Shorter interval sometimes results in empty response body.
+         * Subtract 3 minutes from current time.
+         * Data points collected by the monitoring API are spaced 60 seconds apart, hence we set
+         * interval to 60 seconds to obtain one data point at the most.
+         * This sometimes results in empty response body, if the interval contains no data points.
          */
         Date date = new Date(TimeUnit.MICROSECONDS.toMillis(Utils.getNowMicrosUtc()) - GCPConstants.END_TIME_MILLIS);
         return dateFormat.format(date);
@@ -548,19 +548,23 @@ public class GCPStatsService extends StatelessService {
      */
     private void storeAndSendStats(GCPStatsDataHolder statsData, String[] metricInfo,
             GCPMetricResponse response, StatsCollectionStage nextStage) {
-        TimeSeries ts = response.timeSeries[0];
         ServiceStat stat = new ServiceStat();
-        stat.latestValue = ts.points[0].value.int64Value == null ?
-                Double.parseDouble(ts.points[0].value.doubleValue) :
-                Double.parseDouble(ts.points[0].value.int64Value);
-        stat.unit = GCPStatsNormalizer.getNormalizedUnitValue(metricInfo[1]);
-        try {
-            stat.sourceTimeMicrosUtc = getTimestampInMicros(ts.points[0].interval.startTime);
-        } catch (ParseException e) {
-            handleError(statsData, e);
-            return;
+        List<ServiceStat> datapoint = new ArrayList<ServiceStat>();
+        if (response.timeSeries != null) {
+            TimeSeries ts = response.timeSeries[0];
+            stat.latestValue = ts.points[0].value.int64Value == null ?
+                    Double.parseDouble(ts.points[0].value.doubleValue) :
+                    Double.parseDouble(ts.points[0].value.int64Value);
+            stat.unit = GCPStatsNormalizer.getNormalizedUnitValue(metricInfo[1]);
+            try {
+                stat.sourceTimeMicrosUtc = getTimestampInMicros(ts.points[0]
+                        .interval.startTime);
+            } catch (ParseException e) {
+                handleError(statsData, e);
+                return;
+            }
+            datapoint = Collections.singletonList(stat);
         }
-        List<ServiceStat> datapoint = Collections.singletonList(stat);
         statsData.statsResponse.statValues.put(GCPStatsNormalizer.getNormalizedStatKeyValue
                 (metricInfo[0]), datapoint);
 

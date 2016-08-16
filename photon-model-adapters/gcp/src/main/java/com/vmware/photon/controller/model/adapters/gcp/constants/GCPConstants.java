@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.gcp.constants;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 
 import com.google.api.services.compute.ComputeScopes;
 
@@ -129,10 +130,10 @@ public class GCPConstants {
     public static final String INSTANCE_NAME_FILTER = "resource.label.instance_id";
     public static final String RESPONSE_PAGE_SIZE = "pageSize";
     public static final String TIME_INTERVAL_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'";
-    // To subtract 11 minutes 30 seconds from the current time and get start time.
-    public static final long START_TIME_MILLIS = 690000;
-    // To subtract 10 minutes from the current time and get end time.
-    public static final long END_TIME_MILLIS = 600000;
+    // To subtract 4 minutes from the current time and get start time.
+    public static final long START_TIME_MILLIS = TimeUnit.MINUTES.toMillis(4);
+    // To subtract 3 minutes from the current time and get end time.
+    public static final long END_TIME_MILLIS = TimeUnit.MINUTES.toMillis(3);
 
     // GCP Aggregation Related Metric Filter Constants
     public static final String AGGREGATION_ALIGNMENT_PERIOD = "aggregation.alignmentPeriod";
@@ -141,7 +142,7 @@ public class GCPConstants {
     // Parameter specifying the duration for aggregation.
     // Value is slightly more than the interval to ensure aggregation results in exactly one data
     // point.
-    public static final String AGGREGATION_ALIGNMENT_PERIOD_VALUE = "91s";
+    public static final String AGGREGATION_ALIGNMENT_PERIOD_VALUE = "61s";
     // Aggregation enum values for CPU Utilization
     public static final String CPU_UTIL_PER_SERIES_ALIGNER_VALUE = "ALIGN_MEAN";
     public static final String CPU_UTIL_CROSS_SERIES_REDUCER_VALUE = "REDUCE_MEAN";
