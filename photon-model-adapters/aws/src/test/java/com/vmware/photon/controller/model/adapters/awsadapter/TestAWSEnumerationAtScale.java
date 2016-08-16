@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getBaseLineInstanceCount;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
@@ -31,14 +32,18 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.g
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
+import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.BaseLineState;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
@@ -46,6 +51,10 @@ import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceStats;
+import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -56,6 +65,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
     private static final float HUNDERED = 100.0f;
+    private static final int MOCK_STATS_SIZE = 4;
     public ComputeService.ComputeState vmState;
     public ResourcePoolState outPool;
     public ComputeService.ComputeState outComputeHost;
@@ -103,10 +113,15 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             AWSAdapters.startServices(this.host);
+            // start the aws mock stats service
+            this.host.startService(
+                    Operation.createPost(UriUtils.buildUri(this.host, AWSMockStatsService.class)),
+                    new AWSMockStatsService());
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
             this.host.waitForServiceAvailable(AWSAdapters.LINKS);
+            this.host.waitForServiceAvailable(AWSMockStatsService.SELF_LINK);
 
             // TODO: VSYM-992 - improve test/remove arbitrary timeout
             this.host.setTimeoutSeconds(200);
@@ -208,6 +223,31 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                     TEST_CASE_INITIAL_RUN_AT_SCALE);
 
+            this.vmState = getComputeByAWSId(this.host, instanceIds.get(0));
+
+            if (this.isAwsClientMock) {
+                this.host.setTimeoutSeconds(600);
+
+                this.host.waitFor("Error waiting for stats", () -> {
+                    try {
+                        issueMockStatsRequest(this.vmState);
+                    } catch (Throwable t) {
+                        return false;
+                    }
+                    return true;
+                });
+
+                this.host.waitFor("Error waiting for host stats", () -> {
+                    try {
+                        issueMockStatsRequest(this.outComputeHost);
+                    } catch (Throwable t) {
+                        return false;
+                    }
+                    return true;
+                });
+
+            }
+
             // UPDATE some percent of the spawned instances to have a tag
             int instancesToTagCount = (int) ((this.instanceCountAtScale / HUNDERED) * this.modifyRate);
             this.host.log("Updating %d instances", instancesToTagCount);
@@ -230,6 +270,68 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     TEST_CASE_DISCOVER_DELETES_AT_SCALE);
         } else {
             // Do nothing. Basic enumeration logic tested in functional test.
+        }
+    }
+
+    /**
+     * Verify whether the mock stats gathered are correct or not.
+     * @param vm The AWS VM compute state.
+     * @throws Throwable
+     */
+    private void issueMockStatsRequest(ComputeService.ComputeState vm) throws Throwable {
+        // spin up a stateless service that acts as the parent link to patch back to
+        StatelessService parentService = new StatelessService() {
+            @Override
+            public void handleRequest(Operation op) {
+                if (op.getAction() == Action.PATCH) {
+                    ComputeStatsResponse resp = op.getBody(ComputeStatsResponse.class);
+                    if (resp.statsList.size() != 1) {
+                        TestAWSEnumerationAtScale.this.host.failIteration(
+                                new IllegalStateException("response size was incorrect."));
+                        return;
+                    }
+                    if (resp.statsList.get(0).statValues.size() != MOCK_STATS_SIZE) {
+                        TestAWSEnumerationAtScale.this.host.failIteration(
+                                new IllegalStateException("incorrect number of metrics received."));
+                        return;
+                    }
+                    if (!resp.statsList.get(0).computeLink.equals(vm.documentSelfLink)) {
+                        TestAWSEnumerationAtScale.this.host.failIteration(
+                                new IllegalStateException("Incorrect resourceReference returned."));
+                        return;
+                    }
+                    verifyCollectedMockStats(resp);
+
+                    TestAWSEnumerationAtScale.this.host.completeIteration();
+                }
+            }
+        };
+        String servicePath = UUID.randomUUID().toString();
+        Operation startOp = Operation.createPost(UriUtils.buildUri(this.host, servicePath));
+        this.host.startService(startOp, parentService);
+        ComputeStatsRequest statsRequest = new ComputeStatsRequest();
+        statsRequest.resourceReference = UriUtils.buildUri(this.host, vm.documentSelfLink);
+        statsRequest.isMockRequest = this.isMock;
+        statsRequest.taskReference = UriUtils.buildUri(this.host, servicePath);
+        this.host.sendAndWait(Operation.createPatch(UriUtils.buildUri(
+                this.host, AWSMockStatsService.SELF_LINK))
+                .setBody(statsRequest)
+                .setReferer(this.host.getUri()));
+    }
+
+    /**
+     * Verify whether the mock stats gathered are correct or not.
+     * @param response The stats response.
+     */
+    private void verifyCollectedMockStats(ComputeStatsResponse response) {
+        ComputeStatsResponse.ComputeStats computeStats = response.statsList.get(0);
+        Assert.assertTrue("Compute Link is empty", !computeStats.computeLink.isEmpty());
+        // Check that stat values are accompanied with Units.
+        for (String key : computeStats.statValues.keySet()) {
+            List<ServiceStats.ServiceStat> stats = computeStats.statValues.get(key);
+            for (ServiceStats.ServiceStat stat : stats) {
+                Assert.assertTrue("Unit is empty", !stat.unit.isEmpty());
+            }
         }
     }
 

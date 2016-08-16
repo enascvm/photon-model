@@ -39,6 +39,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getBaseLineInstanceCount;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionMachine;
@@ -82,8 +83,6 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
-import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -322,14 +321,14 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                 TEST_CASE_INITIAL);
 
-        ComputeState linuxCompute = getComputeByAWSId(linuxVMId);
+        ComputeState linuxCompute = getComputeByAWSId(this.host, linuxVMId);
         assertNotNull(linuxCompute);
         assertNotNull(linuxCompute.customProperties);
         String linuxOSType = linuxCompute.customProperties.get(CUSTOM_OS_TYPE);
         assertNotNull(linuxOSType);
         assertEquals(OSType.LINUX.toString(), linuxOSType);
 
-        ComputeState winCompute = getComputeByAWSId(windowsVMId);
+        ComputeState winCompute = getComputeByAWSId(this.host, windowsVMId);
         assertNotNull(winCompute);
         assertNotNull(winCompute.customProperties);
         String winOSType = winCompute.customProperties.get(CUSTOM_OS_TYPE);
@@ -382,7 +381,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return null;
         }
 
-        ComputeState taggedComputeState = getComputeByAWSId(computeState.id);
+        ComputeState taggedComputeState = getComputeByAWSId(this.host, computeState.id);
 
         assertEquals(taggedComputeState.descriptionLink, computeState.descriptionLink);
         assertTrue(taggedComputeState.networkLinks != null);
@@ -414,7 +413,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return null;
         }
 
-        ComputeState computeState = getComputeByAWSId(awsId);
+        ComputeState computeState = getComputeByAWSId(this.host, awsId);
 
         // verify conversion from AWS_TAGS to CUSTOM_DISPLAY_NAME
         String tagNameValue = computeState.customProperties.get(CUSTOM_DISPLAY_NAME);
@@ -484,7 +483,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
 
-        ComputeState stoppedComputeState = getComputeByAWSId(instanceId);
+        ComputeState stoppedComputeState = getComputeByAWSId(this.host, instanceId);
         assertNotNull(stoppedComputeState);
         // make sure that the stopped instance has no public network interface
         for (String networkLink: stoppedComputeState.networkLinks) {
@@ -506,25 +505,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
                 this.accessKey, this.secretKey, this.isAwsClientMock, this.awsMockEndpointReference);
 
-    }
-
-    /**
-     * Lookup a Compute by aws Id
-     */
-    private ComputeState getComputeByAWSId(String awsId) throws Throwable {
-
-        URI computesURI = UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK);
-        computesURI = UriUtils.buildExpandLinksQueryUri(computesURI);
-        computesURI = UriUtils.appendQueryParam(computesURI, "$filter",
-                String.format("id eq %s", awsId));
-
-        Operation op = host.waitForResponse(Operation.createGet(computesURI));
-        ServiceDocumentQueryResult result = op.getBody(ServiceDocumentQueryResult.class);
-        assertNotNull(result);
-        assertNotNull(result.documents);
-        assertEquals(1, result.documents.size());
-
-        return Utils.fromJson(result.documents.values().iterator().next(), ComputeState.class);
     }
 
     private void teardownAwsVMs() {

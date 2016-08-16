@@ -73,6 +73,7 @@ import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -1057,6 +1058,25 @@ public class TestAWSSetupUtils {
             }
             this.responseReceived = true;
         }
+    }
+
+    /**
+     * Lookup a Compute by aws Id
+     */
+    public static ComputeState getComputeByAWSId(VerificationHost host, String awsId) throws Throwable {
+
+        URI computesURI = UriUtils.buildUri(host, ComputeService.FACTORY_LINK);
+        computesURI = UriUtils.buildExpandLinksQueryUri(computesURI);
+        computesURI = UriUtils.appendQueryParam(computesURI, "$filter",
+                String.format("id eq %s", awsId));
+
+        Operation op = host.waitForResponse(Operation.createGet(computesURI));
+        ServiceDocumentQueryResult result = op.getBody(ServiceDocumentQueryResult.class);
+        assertNotNull(result);
+        assertNotNull(result.documents);
+        assertEquals(1, result.documents.size());
+
+        return Utils.fromJson(result.documents.values().iterator().next(), ComputeState.class);
     }
 
 }
