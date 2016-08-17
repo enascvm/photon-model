@@ -608,6 +608,9 @@ public class AWSInstanceService extends StatelessService {
         if (computeDesc.diskLinks != null) {
             resourcesToDelete.addAll(computeDesc.diskLinks);
         }
+        if (computeDesc.networkLinks != null) {
+            resourcesToDelete.addAll(computeDesc.networkLinks);
+        }
         AtomicInteger deleteCallbackCount = new AtomicInteger(0);
         CompletionHandler deletionKickoffCompletion = (sendDeleteOp,
                 sendDeleteEx) -> {

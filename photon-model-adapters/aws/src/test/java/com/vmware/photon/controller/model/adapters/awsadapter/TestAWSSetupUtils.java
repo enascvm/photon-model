@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
@@ -62,6 +63,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
@@ -469,6 +471,31 @@ public class TestAWSSetupUtils {
         Operation response = host
                 .waitForResponse(Operation.createGet(host, computeLink));
         return response.getBody(ComputeState.class);
+    }
+
+    /**
+     * Method to get ResourceState.
+     * @throws Throwable
+     */
+    private static ResourceState getResourceState(VerificationHost host, String resourceLink)
+            throws Throwable {
+        Operation response = host
+                .waitForResponse(Operation.createGet(host, resourceLink));
+        return response.getBody(ResourceState.class);
+    }
+
+    /**
+     * Validates the documents of ResourceState have been removed.
+     * @throws Throwable
+     */
+    public static void verifyRemovalOfResourceState(VerificationHost host,
+            List<String> resourceStateLinks) throws Throwable {
+        for (String resourceLink : resourceStateLinks) {
+            ResourceState resourceState = getResourceState(host, resourceLink);
+            assertNotNull(resourceState);
+            // make sure the document has been removed.
+            assertNull(resourceState.documentSelfLink);
+        }
     }
 
     /**

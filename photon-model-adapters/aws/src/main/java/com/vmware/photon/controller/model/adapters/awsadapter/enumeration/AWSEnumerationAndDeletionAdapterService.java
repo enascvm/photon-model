@@ -443,7 +443,9 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
 
     /**
      * Creates operations for the deletion of all the compute states and networks from the local system for which
-     * the AWS instance has been terminated from the remote instance.Kicks off the deletion of all the identified compute states and networks for which the actual AWS instance has been terminated.
+     * the AWS instance has been terminated from the remote instance.
+     * Kicks off the deletion of all the identified compute states, also the networks and disks for which
+     * the actual AWS instance has been terminated.
      */
     private void deleteComputeStates(EnumerationDeletionContext context,
             AWSEnumerationDeletionSubStage next) {
@@ -457,12 +459,26 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             context.deleteOperations.add(deleteComputeStateOperation);
             // Create delete operations for all the network links associated with each of the
             // compute states.
-            for (String networkLinkTodelete : computeStateToDelete.networkLinks) {
-                Operation deleteNetworkOperation = Operation
-                        .createDelete(UriUtils.buildUri(this.getHost(),
-                                networkLinkTodelete))
-                        .setReferer(getHost().getUri());
-                context.deleteOperations.add(deleteNetworkOperation);
+            if (computeStateToDelete.networkLinks != null) {
+                for (String networkLinkToDelete : computeStateToDelete.networkLinks) {
+                    Operation deleteNetworkOperation = Operation
+                            .createDelete(UriUtils.buildUri(this.getHost(),
+                                    networkLinkToDelete))
+                            .setReferer(getHost().getUri());
+                    context.deleteOperations.add(deleteNetworkOperation);
+                }
+            }
+
+            // Create delete operations for all the disk links associated with each of the
+            // compute states.
+            if (computeStateToDelete.diskLinks != null) {
+                for (String diskLinkToDelete : computeStateToDelete.diskLinks) {
+                    Operation deleteDiskOperation = Operation
+                            .createDelete(UriUtils.buildUri(this.getHost(),
+                                    diskLinkToDelete))
+                            .setReferer(getHost().getUri());
+                    context.deleteOperations.add(deleteDiskOperation);
+                }
             }
         }
         // Kick off deletion operations with a join handler.

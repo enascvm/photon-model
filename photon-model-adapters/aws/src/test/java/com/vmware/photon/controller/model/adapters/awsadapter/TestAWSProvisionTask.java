@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.util.ArrayList;
@@ -180,8 +181,20 @@ public class TestAWSProvisionTask {
             return true;
         });
 
+        // store the network links and disk links for removal check later
+        List<String> resourcesToDelete = new ArrayList<>();
+        if (this.vmState.diskLinks != null) {
+            resourcesToDelete.addAll(this.vmState.diskLinks);
+        }
+        if (this.vmState.networkLinks != null) {
+            resourcesToDelete.addAll(this.vmState.networkLinks);
+        }
+
         // delete vm
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
+
+        // validates the local documents of network links and disk links have been removed
+        verifyRemovalOfResourceState(this.host, resourcesToDelete);
 
         // create another AWS VM
         List<String> instanceIdList = new ArrayList<String>();
