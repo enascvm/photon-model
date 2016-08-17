@@ -13,8 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.net.URI;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 
 import org.junit.After;
 import org.junit.Before;
@@ -30,8 +34,12 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -132,6 +140,20 @@ public class BaseVSphereAdapterTest {
     protected ComputeState getComputeState(ComputeState vm) throws Throwable {
         return this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, vm.documentSelfLink));
+    }
+
+    protected void snapshotFactoryState(String tag, Class<? extends StatefulService> factoryClass)
+            throws ExecutionException, InterruptedException, IOException {
+        URI uri = UriUtils.buildFactoryUri(this.host, factoryClass);
+        uri = UriUtils.extendUriWithQuery(uri, "expand", "true");
+        Operation res = this.host
+                .sendWithFuture(Operation.createGet(uri).setReferer(this.host.getPublicUri()))
+                .get();
+
+        File out = new File("target", factoryClass.getSimpleName() + "-" + tag + ".json");
+        try (FileWriter writer = new FileWriter(out)) {
+            writer.write(Utils.toJsonHtml(res.getBody(ServiceDocumentQueryResult.class)));
+        }
     }
 
     protected ResourcePoolState createResourcePool()

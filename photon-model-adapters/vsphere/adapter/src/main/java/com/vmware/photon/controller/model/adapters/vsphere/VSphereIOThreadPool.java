@@ -91,6 +91,15 @@ public class VSphereIOThreadPool {
         sender.sendRequest(op);
     }
 
+    /**
+     * Submits a generic task to this executor/thread-pool.
+     *
+     * @param task
+     */
+    public void submit(Runnable task) {
+        this.executorService.submit(task);
+    }
+
     private void execute(URI adapterReference, AuthCredentialsServiceState auth,
             ConnectionCallback callback) {
         BasicConnection connection = new BasicConnection();

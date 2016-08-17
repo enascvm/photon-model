@@ -13,13 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 
 import org.junit.Test;
 
@@ -36,11 +31,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceDocumentQueryResult;
-import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -76,20 +67,6 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
         // do a second refresh to test update path
         doRefresh();
-    }
-
-    private void snapshotFactoryState(String tag, Class<? extends StatefulService> factoryClass)
-            throws ExecutionException, InterruptedException, IOException {
-        URI uri = UriUtils.buildFactoryUri(this.host, factoryClass);
-        uri = UriUtils.extendUriWithQuery(uri, "expand", "true");
-        Operation res = this.host
-                .sendWithFuture(Operation.createGet(uri).setReferer(this.host.getPublicUri()))
-                .get();
-
-        File out = new File("target", factoryClass.getSimpleName() + "-" + tag + ".json");
-        try (FileWriter writer = new FileWriter(out)) {
-            writer.write(Utils.toJsonHtml(res.getBody(ServiceDocumentQueryResult.class)));
-        }
     }
 
     private void doRefresh() throws Throwable {
