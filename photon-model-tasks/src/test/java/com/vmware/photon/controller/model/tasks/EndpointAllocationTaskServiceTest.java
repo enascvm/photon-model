@@ -183,6 +183,7 @@ public class EndpointAllocationTaskServiceTest extends Suite {
     private static EndpointState createEndpointState() {
         EndpointState endpoint = new EndpointState();
         endpoint.endpointType = "aws";
+        endpoint.name = "aws_endpoint";
         endpoint.endpointProperties = new HashMap<>();
         endpoint.endpointProperties.put(REGION_KEY, "test-regionId");
         endpoint.endpointProperties.put(PRIVATE_KEY_KEY, "test-secreteKey");

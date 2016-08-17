@@ -179,6 +179,7 @@ public class TestAWSSetupUtils {
         ComputeService.ComputeState awsComputeHost = new ComputeService.ComputeState();
 
         awsComputeHost.id = UUID.randomUUID().toString();
+        awsComputeHost.name = awshostDescription.name;
         awsComputeHost.documentSelfLink = awsComputeHost.id;
         awsComputeHost.descriptionLink = UriUtils.buildUriPath(
                 ComputeDescriptionService.FACTORY_LINK, awshostDescription.id);
@@ -281,6 +282,7 @@ public class TestAWSSetupUtils {
 
         ComputeService.ComputeState resource = new ComputeService.ComputeState();
         resource.id = UUID.randomUUID().toString();
+        resource.name = awsVMDesc.name;
         resource.parentLink = parentLink;
         resource.descriptionLink = vmComputeDesc.documentSelfLink;
         resource.resourcePoolLink = resourcePoolLink;

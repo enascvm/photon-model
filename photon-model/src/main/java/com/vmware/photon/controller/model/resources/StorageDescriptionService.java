@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.resources;
 import java.net.URI;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
@@ -40,26 +39,12 @@ public class StorageDescriptionService extends StatefulService {
      */
     public static class StorageDescription extends ResourceState {
         public static final String FIELD_NAME_ADAPTER_REFERENCE = "adapterManagementReference";
-        public static final String FIELD_NAME_NAME = "name";
-        /**
-         * Identifier of the Storage service Instance
-         */
-        @UsageOption(option = PropertyUsageOption.ID)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String id;
 
         /**
          * Region or the Location the storage belongs to.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String regionId;
-
-        /**
-         * Name of the Storage description.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String name;
 
         /**
          * Type of Storage.
@@ -120,6 +105,9 @@ public class StorageDescriptionService extends StatefulService {
         }
         StorageDescription state = op.getBody(StorageDescription.class);
         Utils.validateState(getStateDescription(), state);
+        if (state.name == null) {
+            throw new IllegalArgumentException("name is required.");
+        }
         return state;
     }
 

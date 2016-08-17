@@ -36,7 +36,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionServiceTest;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
-
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
@@ -92,6 +91,7 @@ public class ResourceEnumerationTaskServiceTest extends Suite {
             throws Throwable {
         ComputeService.ComputeState cs = new ComputeService.ComputeStateWithDescription();
         cs.id = UUID.randomUUID().toString();
+        cs.name = cd.name;
         cs.descriptionLink = cd.documentSelfLink;
         cs.resourcePoolLink = null;
         cs.address = "10.0.0.1";

@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
-import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
@@ -120,6 +119,7 @@ public class AzureTestUtil {
 
         ComputeDescription azureHostDescription = new ComputeDescription();
         azureHostDescription.id = UUID.randomUUID().toString();
+        azureHostDescription.name = azureHostDescription.id;
         azureHostDescription.documentSelfLink = azureHostDescription.id;
         azureHostDescription.supportedChildren = new ArrayList<>();
         azureHostDescription.supportedChildren.add(ComputeType.VM_GUEST.name());
@@ -136,6 +136,7 @@ public class AzureTestUtil {
 
         ComputeState azureComputeHost = new ComputeState();
         azureComputeHost.id = UUID.randomUUID().toString();
+        azureComputeHost.name = azureHostDescription.name;
         azureComputeHost.documentSelfLink = azureComputeHost.id;
         azureComputeHost.descriptionLink = UriUtils.buildUriPath(
                 ComputeDescriptionService.FACTORY_LINK, azureHostDescription.id);
@@ -216,13 +217,13 @@ public class AzureTestUtil {
 
         ComputeState resource = new ComputeState();
         resource.id = UUID.randomUUID().toString();
+        resource.name = azureVMName;
         resource.parentLink = parentLink;
         resource.descriptionLink = vmComputeDesc.documentSelfLink;
         resource.resourcePoolLink = resourcePoolLink;
         resource.diskLinks = vmDisks;
         resource.documentSelfLink = resource.id;
         resource.customProperties = new HashMap<>();
-        resource.customProperties.put(CUSTOM_DISPLAY_NAME, azureVMName);
         resource.customProperties.put(RESOURCE_GROUP_NAME, azureVMName);
 
         ComputeState vmComputeState = TestUtils.doPost(host, resource, ComputeState.class,

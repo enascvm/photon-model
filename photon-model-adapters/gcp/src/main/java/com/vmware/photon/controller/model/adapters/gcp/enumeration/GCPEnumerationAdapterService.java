@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.gcp.enumeration;
 
-import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.DEFAULT_DISK_CAPACITY;
@@ -497,13 +496,13 @@ public class GCPEnumerationAdapterService extends StatelessService {
         // Create compute state
         ComputeState resource = new ComputeState();
         resource.id = virtualMachine.id.toString();
+        resource.name = virtualMachine.name;
         resource.parentLink = ctx.enumRequest.resourceLink();
         resource.descriptionLink = UriUtils.buildUriPath(
                 ComputeDescriptionService.FACTORY_LINK, computeDescription.documentSelfLink);
         resource.resourcePoolLink = ctx.enumRequest.resourcePoolLink;
         resource.diskLinks = vmDisks;
         resource.customProperties = new HashMap<>();
-        resource.customProperties.put(CUSTOM_DISPLAY_NAME, virtualMachine.name);
         String osType = getNormalizedOSType(virtualMachine);
         if (osType != null) {
             resource.customProperties.put(CUSTOM_OS_TYPE, osType);

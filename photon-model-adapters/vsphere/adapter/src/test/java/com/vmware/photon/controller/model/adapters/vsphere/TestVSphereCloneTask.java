@@ -103,8 +103,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeDesc.networkId = this.networkId;
 
         CustomProperties.of(computeDesc)
-                .put(CustomProperties.TEMPLATE_LINK, templateComputeLink)
-                .put(ComputeProperties.CUSTOM_DISPLAY_NAME, computeDesc.id);
+                .put(CustomProperties.TEMPLATE_LINK, templateComputeLink);
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
@@ -118,6 +117,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeState.descriptionLink = vmDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
         computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.name = vmDescription.name;
 
         computeState.powerState = PowerState.ON;
 
@@ -130,8 +130,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeState.diskLinks.add(createDisk("A", DiskType.FLOPPY, null).documentSelfLink);
 
         CustomProperties.of(computeState)
-                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
-                .put(ComputeProperties.CUSTOM_DISPLAY_NAME, this.vcFolder);
+                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,
@@ -156,7 +155,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
     private ComputeDescription createVmDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
-        computeDesc.id = "vm-" + UUID.randomUUID().toString();
+        computeDesc.id = "vm-" + String.valueOf(System.currentTimeMillis());
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils
@@ -177,6 +176,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
     private ComputeState createComputeHost() throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = UUID.randomUUID().toString();
+        computeState.name = this.computeHostDescription.name;
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
@@ -192,6 +192,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         ComputeDescription computeDesc = new ComputeDescription();
 
         computeDesc.id = UUID.randomUUID().toString();
+        computeDesc.name = computeDesc.id;
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());

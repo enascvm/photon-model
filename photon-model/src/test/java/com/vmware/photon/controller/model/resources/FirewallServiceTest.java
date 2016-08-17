@@ -34,7 +34,6 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.UriUtils;
@@ -60,6 +59,7 @@ public class FirewallServiceTest extends Suite {
     private static FirewallService.FirewallState buildValidStartState() {
         FirewallService.FirewallState firewallState = new FirewallService.FirewallState();
         firewallState.id = UUID.randomUUID().toString();
+        firewallState.name = firewallState.id;
         firewallState.networkDescriptionLink = "http://networkDescriptionLink";
         firewallState.tenantLinks = new ArrayList<>();
         firewallState.tenantLinks.add("tenant-linkA");

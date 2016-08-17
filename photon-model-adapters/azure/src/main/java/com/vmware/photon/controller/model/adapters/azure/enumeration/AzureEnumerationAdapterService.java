@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
-import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME;
@@ -885,13 +884,13 @@ public class AzureEnumerationAdapterService extends StatelessService {
         resource.documentSelfLink = UUID.randomUUID().toString();
         resource.creationTimeMicros = Utils.getNowMicrosUtc();
         resource.id = virtualMachine.id.toLowerCase();
+        resource.name = virtualMachine.name;
         resource.parentLink = ctx.enumRequest.resourceLink();
         resource.descriptionLink = UriUtils.buildUriPath(
                 ComputeDescriptionService.FACTORY_LINK, computeDescription.id);
         resource.resourcePoolLink = ctx.enumRequest.resourcePoolLink;
         resource.diskLinks = vmDisks;
         resource.customProperties = new HashMap<>();
-        resource.customProperties.put(CUSTOM_DISPLAY_NAME, virtualMachine.name);
         resource.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
         resource.tenantLinks = ctx.computeHostDesc.tenantLinks;
         resource.networkLinks = networkLinks;
@@ -949,7 +948,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
     private void patchAdditionalFieldsHelper(EnumerationContext ctx, ComputeState resource,
             AtomicInteger numOfPatches) {
         String resourceGroupName = getResourceGroupName(resource.id);
-        String vmName = resource.customProperties.get(CUSTOM_DISPLAY_NAME);
+        String vmName = resource.name;
         patchVMInstanceDetails(ctx, resource, resourceGroupName, vmName, numOfPatches);
         patchVMNetworkDetails(ctx, resource, resourceGroupName, vmName, numOfPatches);
     }

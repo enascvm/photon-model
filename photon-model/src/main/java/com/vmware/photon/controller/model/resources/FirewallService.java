@@ -22,7 +22,6 @@ import java.util.function.Function;
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -42,15 +41,6 @@ public class FirewallService extends StatefulService {
      * Firewall State document.
      */
     public static class FirewallState extends ResourceState {
-        @UsageOption(option = PropertyUsageOption.ID)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String id;
-
-        /**
-         * Name of the firewall instance
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String name;
 
         /**
          * Region identifier of this firewall service instance.

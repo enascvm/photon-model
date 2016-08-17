@@ -22,8 +22,10 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import java.util.Map;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.StatefulService;
+import com.vmware.xenon.common.Utils;
 
 /**
  * Represents a endpoint resource.
@@ -36,9 +38,6 @@ public class EndpointService extends StatefulService {
      * This class represents the document state associated with a {@link EndpointService} task.
      */
     public static class EndpointState extends ResourceState {
-        @Documentation(description = "Name of the endpoint instance.")
-        @PropertyOptions(usage = { AUTO_MERGE_IF_NOT_NULL, REQUIRED })
-        public String name;
 
         @Documentation(description = "Endpoint type of the endpoint instance,e.g. aws,azure,...")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, REQUIRED })
@@ -70,5 +69,45 @@ public class EndpointService extends StatefulService {
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
+    }
+
+    @Override
+    public void handleStart(Operation start) {
+        try {
+            processInput(start);
+            start.complete();
+        } catch (Throwable t) {
+            start.fail(t);
+        }
+    }
+
+    @Override
+    public void handlePut(Operation put) {
+        try {
+            EndpointState returnState = processInput(put);
+            setState(put, returnState);
+            put.complete();
+        } catch (Throwable t) {
+            put.fail(t);
+        }
+    }
+
+    @Override
+    public void handlePatch(Operation patch) {
+        EndpointState currentState = getState(patch);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+                currentState.getClass(), null);
+    }
+
+    private EndpointState processInput(Operation op) {
+        if (!op.hasBody()) {
+            throw (new IllegalArgumentException("body is required"));
+        }
+        EndpointState state = op.getBody(EndpointState.class);
+        Utils.validateState(getStateDescription(), state);
+        if (state.name == null) {
+            throw new IllegalArgumentException("name is required.");
+        }
+        return state;
     }
 }

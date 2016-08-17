@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.gcp;
 
-import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.CPU_PLATFORM;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.DEFAULT_AUTH_TYPE;
 import static com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants.DEFAULT_CPU_PLATFORM;
@@ -170,6 +169,7 @@ public class GCPTestUtil {
         ComputeDescriptionService.ComputeDescription gcpHostDescription = new
                 ComputeDescriptionService.ComputeDescription();
         gcpHostDescription.id = UUID.randomUUID().toString();
+        gcpHostDescription.name = gcpHostDescription.id;
         gcpHostDescription.documentSelfLink = gcpHostDescription.id;
         gcpHostDescription.enumerationAdapterReference = UriUtils.buildUri(host,
                 GCPUriPaths.GCP_ENUMERATION_ADAPTER);
@@ -184,6 +184,7 @@ public class GCPTestUtil {
 
         ComputeService.ComputeState gcpComputeHost = new ComputeService.ComputeState();
         gcpComputeHost.id = UUID.randomUUID().toString();
+        gcpComputeHost.name = gcpHostDescription.name;
         gcpComputeHost.documentSelfLink = gcpComputeHost.id;
         gcpComputeHost.descriptionLink = UriUtils.buildUriPath(
                 ComputeDescriptionService.FACTORY_LINK, gcpHostDescription.id);
@@ -259,6 +260,7 @@ public class GCPTestUtil {
 
         ComputeService.ComputeState resource = new ComputeService.ComputeState();
         resource.id = String.valueOf(new Random().nextLong());
+        resource.name = gcpVMName;
         resource.documentUpdateTimeMicros = Utils.getNowMicrosUtc();
         resource.parentLink = parentLink;
         resource.descriptionLink = vmComputeDesc.documentSelfLink;
@@ -266,7 +268,6 @@ public class GCPTestUtil {
         resource.diskLinks = vmDisks;
         resource.documentSelfLink = resource.id;
         resource.customProperties = new HashMap<>();
-        resource.customProperties.put(CUSTOM_DISPLAY_NAME, gcpVMName);
 
         return TestUtils.doPost(host, resource, ComputeService.ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
@@ -664,7 +665,7 @@ public class GCPTestUtil {
                         queryTask.results.documents.values().forEach(s -> {
                             ComputeState computeState = Utils.fromJson(s, ComputeState.class);
                             if (computeState.powerState == powerState) {
-                                instanceNames.remove(computeState.customProperties.get(CUSTOM_DISPLAY_NAME));
+                                instanceNames.remove(computeState.name);
                             }
                         });
                     }

@@ -40,7 +40,6 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.ResourceDescriptionService;
 import com.vmware.photon.controller.model.tasks.ResourceAllocationTaskService.ResourceAllocationTaskState;
-
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.TaskState;
@@ -96,6 +95,7 @@ public class ResourceAllocationTaskServiceTest extends Suite {
         // Create parent Compute
         ComputeService.ComputeState cs = new ComputeService.ComputeState();
         cs.id = UUID.randomUUID().toString();
+        cs.name = cd.name;
         cs.descriptionLink = cd1.documentSelfLink;
         cs.resourcePoolLink = resourcePool;
         cs.adapterManagementReference = URI

@@ -116,6 +116,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
     private ComputeState createComputeHost() throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = UUID.randomUUID().toString();
+        computeState.name = this.computeHostDescription.name;
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
@@ -131,6 +132,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         ComputeDescription computeDesc = new ComputeDescription();
 
         computeDesc.id = UUID.randomUUID().toString();
+        computeDesc.name = computeDesc.id;
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());

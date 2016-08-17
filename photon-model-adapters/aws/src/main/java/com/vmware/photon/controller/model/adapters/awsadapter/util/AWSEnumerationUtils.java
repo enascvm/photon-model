@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
-import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAGS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
@@ -44,7 +43,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -171,6 +169,7 @@ public class AWSEnumerationUtils {
             List<String> tenantLinks) {
         ComputeService.ComputeState computeState = new ComputeService.ComputeState();
         computeState.id = instance.getInstanceId();
+        computeState.name = instance.getInstanceId();
         computeState.parentLink = parentComputeLink;
 
         computeState.resourcePoolLink = resourcePoolLink;
@@ -189,8 +188,10 @@ public class AWSEnumerationUtils {
 
         if (!instance.getTags().isEmpty()) {
             // start with custom tag mapping(s)
-            computeState.customProperties.put(CUSTOM_DISPLAY_NAME,
-                    getTagValue(instance, AWS_TAG_NAME));
+            String nameTag = getTagValue(instance, AWS_TAG_NAME);
+            if (nameTag != null) {
+                computeState.name = nameTag;
+            }
 
             // map all aws tags under the AWS_TAGS placeholder
             computeState.customProperties.put(AWS_TAGS,

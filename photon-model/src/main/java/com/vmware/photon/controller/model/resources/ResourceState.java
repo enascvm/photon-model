@@ -29,10 +29,26 @@ public class ResourceState extends ServiceDocument {
     public static final String FIELD_NAME_GROUP_LINKS = "groupLinks";
     public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
     public static final String FIELD_NAME_TENANT_LINKS = "tenantLinks";
+    public static final String FIELD_NAME_ID = "id";
+    public static final String FIELD_NAME_NAME = "name";
 
     /**
-     * Custom property bag that can be used to store disk specific
-     * properties.
+     * Identifier of this resource instance
+     */
+    @UsageOption(option = PropertyUsageOption.ID)
+    @UsageOption(option = PropertyUsageOption.REQUIRED)
+    @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+    public String id;
+
+    /**
+     * Name of the resource instance
+     */
+    @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+    @PropertyOptions(indexing = PropertyIndexingOption.SORT)
+    public String name;
+
+    /**
+     * Custom property bag that can be used to store disk specific properties.
      */
     @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
     @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND,

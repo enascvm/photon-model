@@ -571,6 +571,7 @@ public class EndpointAllocationTaskService
     private ComputeState configureCompute(EndpointState state) {
         ComputeState computeHost = new ComputeState();
         computeHost.id = UUID.randomUUID().toString();
+        computeHost.name = state.name;
         computeHost.tenantLinks = state.tenantLinks;
         computeHost.customProperties = new HashMap<>();
         if (state.customProperties != null) {

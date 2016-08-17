@@ -163,6 +163,7 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
     private EndpointState createEndpointState() {
         EndpointState endpoint = new EndpointState();
         endpoint.endpointType = EndpointType.aws.name();
+        endpoint.name = EndpointType.aws.name();
         endpoint.endpointProperties = new HashMap<>();
         endpoint.endpointProperties.put(REGION_KEY, this.regionId);
         endpoint.endpointProperties.put(PRIVATE_KEY_KEY, this.secretKey);

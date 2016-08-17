@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -47,10 +46,8 @@ public class ComputeDescriptionService extends StatefulService {
         public static final String FIELD_NAME_RESOURCE_POOL_ID = "resourcePoolId";
         public static final String FIELD_NAME_SUPPORTED_CHILDREN = "supportedChildren";
         public static final String FIELD_NAME_ZONE_ID = "zoneId";
-        public static final String FIELD_NAME_ID = "id";
         public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
         public static final String FIELD_NAME_ENVIRONMENT_NAME = "environmentName";
-        public static final String FIELD_NAME_NAME = "name";
         public static final String ENVIRONMENT_NAME_ON_PREMISE = "On premise";
         public static final String ENVIRONMENT_NAME_VCLOUD_AIR = "VMware vCloud Air";
         public static final String ENVIRONMENT_NAME_GCP = "Google Cloud Platform";
@@ -65,19 +62,6 @@ public class ComputeDescriptionService extends StatefulService {
         public static enum ComputeType {
             VM_HOST, VM_GUEST, DOCKER_CONTAINER, PHYSICAL, OS_ON_PHYSICAL
         }
-
-        /**
-         * Identifier of this description service instance.
-         */
-        @UsageOption(option = PropertyUsageOption.ID)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String id;
-
-        /**
-         * Name of this description service instance.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String name;
 
         /**
          * Region identifier of this description service instance.
@@ -250,6 +234,10 @@ public class ComputeDescriptionService extends StatefulService {
 
     public void validateState(ComputeDescription state) {
         Utils.validateState(getStateDescription(), state);
+
+        if (state.name == null) {
+            throw new IllegalArgumentException("name is required.");
+        }
 
         if (state.environmentName == null) {
             state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;

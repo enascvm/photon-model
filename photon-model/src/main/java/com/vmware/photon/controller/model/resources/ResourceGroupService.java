@@ -14,11 +14,8 @@
 package com.vmware.photon.controller.model.resources;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
-import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
 
@@ -35,13 +32,6 @@ public class ResourceGroupService extends StatefulService {
      * {@link com.vmware.photon.controller.model.resources.ResourceGroupService}.
      */
     public static class ResourceGroupState extends ResourceState {
-        /**
-         * name of the resource group instance
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        @PropertyOptions(indexing = PropertyIndexingOption.SORT)
-        public String name;
     }
 
     public ResourceGroupService() {
@@ -79,6 +69,9 @@ public class ResourceGroupService extends StatefulService {
         }
         ResourceGroupState state = op.getBody(ResourceGroupState.class);
         Utils.validateState(getStateDescription(), state);
+        if (state.name == null) {
+            throw new IllegalArgumentException("name is required.");
+        }
         return state;
     }
 

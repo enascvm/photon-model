@@ -63,7 +63,6 @@ public class ComputeService extends StatefulService {
      * Compute State document.
      */
     public static class ComputeState extends ResourceState {
-        public static final String FIELD_NAME_ID = "id";
         public static final String FIELD_NAME_DESCRIPTION_LINK = "descriptionLink";
         public static final String FIELD_NAME_RESOURCE_POOL_LINK = "resourcePoolLink";
         public static final String FIELD_NAME_ADDRESS = "address";
@@ -73,14 +72,6 @@ public class ComputeService extends StatefulService {
         public static final String FIELD_NAME_PARENT_LINK = "parentLink";
         public static final String FIELD_NAME_NETWORK_LINKS = "networkLinks";
         public static final String CUSTOM_PROPERTY_NAME_RUNTIME_INFO = "runtimeInfo";
-
-        /**
-         * Identifier of this compute instance.
-         */
-        @UsageOption(option = PropertyUsageOption.ID)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String id;
 
         /**
          * URI reference to corresponding ComputeDescription.
@@ -162,6 +153,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.address = currentState.address;
             chsWithDesc.diskLinks = currentState.diskLinks;
             chsWithDesc.id = currentState.id;
+            chsWithDesc.name = currentState.name;
             chsWithDesc.parentLink = currentState.parentLink;
             chsWithDesc.powerState = currentState.powerState;
             chsWithDesc.primaryMAC = currentState.primaryMAC;

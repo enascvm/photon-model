@@ -510,6 +510,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             ComputeEnumerateResourceRequest request,
             ComputeResourceOverlay cr) {
         ComputeDescription res = new ComputeDescription();
+        res.name = cr.getName();
         res.documentSelfLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.cpuCount = cr.getTotalCpuCores();
@@ -541,10 +542,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.id = cr.getId().getValue();
         state.adapterManagementReference = request.adapterManagementReference;
         state.parentLink = request.resourceLink();
+        state.name = cr.getName();
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, cr.getId())
-                .put(CustomProperties.TYPE, cr.getId().getType())
-                .put(ComputeProperties.CUSTOM_DISPLAY_NAME, cr.getName());
+                .put(CustomProperties.TYPE, cr.getId().getType());
         return state;
     }
 
@@ -619,6 +620,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private ComputeDescription makeDescriptionForHost(ComputeEnumerateResourceRequest request,
             HostSystemOverlay hs) {
         ComputeDescription res = new ComputeDescription();
+        res.name = hs.getName();
         res.documentSelfLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.cpuCount = hs.getCoreCount();
@@ -634,10 +636,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.id = hs.getHardwareUuid();
         state.adapterManagementReference = request.adapterManagementReference;
         state.parentLink = request.resourceLink();
+        state.name = hs.getName();
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
-                .put(CustomProperties.TYPE, hs.getId().getType())
-                .put(ComputeProperties.CUSTOM_DISPLAY_NAME, hs.getName());
+                .put(CustomProperties.TYPE, hs.getId().getType());
         return state;
     }
 
@@ -698,6 +700,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private ComputeDescription makeDescriptionForVm(ComputeEnumerateResourceRequest request,
             VmOverlay vm, ComputeStateWithDescription parent) {
         ComputeDescription res = new ComputeDescription();
+        res.name = vm.getName();
         res.documentSelfLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.powerAdapterReference = parent.description.powerAdapterReference;
@@ -729,12 +732,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.powerState = vm.getPowerState();
         state.primaryMAC = vm.getPrimaryMac();
         state.id = vm.getInstanceUuid();
+        state.name = vm.getName();
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
                 .put(CustomProperties.TEMPLATE, vm.isTempalte())
-                .put(CustomProperties.TYPE, VimNames.TYPE_VM)
-                .put(ComputeProperties.CUSTOM_DISPLAY_NAME, vm.getName());
+                .put(CustomProperties.TYPE, VimNames.TYPE_VM);
         return state;
     }
 

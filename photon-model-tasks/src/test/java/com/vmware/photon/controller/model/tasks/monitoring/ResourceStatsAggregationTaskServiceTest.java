@@ -71,11 +71,13 @@ public class ResourceStatsAggregationTaskServiceTest extends BaseModelTest {
                 ResourcePoolState.class);
 
         ComputeDescription cDesc = new ComputeDescription();
+        cDesc.name = rpState.name;
         cDesc.statsAdapterReference = UriUtils.buildUri(this.host, MockStatsAdapter.SELF_LINK);
         ComputeDescription descReturnState = postServiceSynchronously(
                 ComputeDescriptionService.FACTORY_LINK, cDesc,
                 ComputeDescription.class);
         ComputeState computeState = new ComputeState();
+        computeState.name = rpState.name;
         computeState.descriptionLink = descReturnState.documentSelfLink;
         computeState.resourcePoolLink = rpReturnState.documentSelfLink;
         List<String> computeLinks = new ArrayList<String>();

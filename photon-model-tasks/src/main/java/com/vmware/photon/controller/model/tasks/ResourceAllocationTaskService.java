@@ -46,16 +46,24 @@ import com.vmware.xenon.services.common.TaskService;
 /**
  * Resource allocation task service.
  */
-public class ResourceAllocationTaskService extends TaskService<ResourceAllocationTaskService.ResourceAllocationTaskState> {
+public class ResourceAllocationTaskService
+        extends TaskService<ResourceAllocationTaskService.ResourceAllocationTaskState> {
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/resource-allocation-tasks";
 
     public static final String ID_DELIMITER_CHAR = "-";
+
+    private static final String DEFAULT_NAME_PREFIX = "vm";
 
     /**
      * SubStage.
      */
     public enum SubStage {
-        QUERYING_AVAILABLE_COMPUTE_RESOURCES, PROVISIONING_PHYSICAL, PROVISIONING_VM_GUESTS, PROVISIONING_CONTAINERS, FINISHED, FAILED
+        QUERYING_AVAILABLE_COMPUTE_RESOURCES,
+        PROVISIONING_PHYSICAL,
+        PROVISIONING_VM_GUESTS,
+        PROVISIONING_CONTAINERS,
+        FINISHED,
+        FAILED
     }
 
     /**
@@ -64,14 +72,14 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
     public static class ResourceAllocationTaskState extends TaskService.TaskServiceState {
 
         /**
-         * Mock requests are used for testing. If set, the alloc task will set
-         * the isMockRequest bool in the provision task.
+         * Mock requests are used for testing. If set, the alloc task will set the isMockRequest
+         * bool in the provision task.
          */
         public boolean isMockRequest = false;
 
         /**
-         * Specifies the allowed percentage (between 0 and 1.0) of resources
-         * requested to fail before setting the task status to FAILED.
+         * Specifies the allowed percentage (between 0 and 1.0) of resources requested to fail
+         * before setting the task status to FAILED.
          */
         public double errorThreshold = 0;
 
@@ -81,14 +89,12 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
         public long resourceCount;
 
         /**
-         * Specifies the resource pool that will be associated with all
-         * allocated resources.
+         * Specifies the resource pool that will be associated with all allocated resources.
          */
         public String resourcePoolLink;
 
         /**
-         * Type of compute to create. Used to find Computes which can create
-         * this child.
+         * Type of compute to create. Used to find Computes which can create this child.
          */
         public String computeType;
 
@@ -98,14 +104,12 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
         public String computeDescriptionLink;
 
         /**
-         * The disk descriptions used as a templates to create a disk per
-         * resource.
+         * The disk descriptions used as a templates to create a disk per resource.
          */
         public List<String> diskDescriptionLinks;
 
         /**
-         * The network descriptions used to associate network resources with
-         * compute resources.
+         * The network descriptions used to associate network resources with compute resources.
          */
         public List<String> networkDescriptionLinks;
 
@@ -115,9 +119,8 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
         public Map<String, String> customProperties;
 
         /**
-         * Link to the resource description which overrides the public fields
-         * above. This can be used to instantiate the alloc task with a template
-         * resource description.
+         * Link to the resource description which overrides the public fields above. This can be
+         * used to instantiate the alloc task with a template resource description.
          */
         public String resourceDescriptionLink;
 
@@ -127,8 +130,7 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
         public SubStage taskSubStage;
 
         /**
-         * List of eligible compute hosts for resource creation requests. Set by
-         * the run-time.
+         * List of eligible compute hosts for resource creation requests. Set by the run-time.
          */
         public List<String> parentLinks;
 
@@ -285,9 +287,8 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
     }
 
     /**
-     * Perform a two stage query: Find all compute descriptions that meet our
-     * criteria for parent hosts, then find all compute hosts that use any of
-     * those descriptions.
+     * Perform a two stage query: Find all compute descriptions that meet our criteria for parent
+     * hosts, then find all compute hosts that use any of those descriptions.
      *
      * @param desc
      * @param currentState
@@ -319,7 +320,8 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
             QueryTask.Query hostTypeClause = new QueryTask.Query()
                     .setTermPropertyName(
                             QueryTask.QuerySpecification
-                                    .buildCollectionItemName(ComputeDescriptionService.ComputeDescription.FIELD_NAME_SUPPORTED_CHILDREN))
+                                    .buildCollectionItemName(
+                                            ComputeDescriptionService.ComputeDescription.FIELD_NAME_SUPPORTED_CHILDREN))
                     .setTermMatchValue(currentState.computeType);
             q.querySpec.query.addBooleanClause(hostTypeClause);
 
@@ -495,10 +497,12 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
 
         logInfo("Creating %d provision tasks, reporting through sub task %s",
                 currentState.resourceCount, subTaskLink);
-        String name = "";
+        String name;
         if (currentState.customProperties != null
                 && currentState.customProperties.get(CUSTOM_DISPLAY_NAME) != null) {
             name = currentState.customProperties.get(CUSTOM_DISPLAY_NAME);
+        } else {
+            name = DEFAULT_NAME_PREFIX + String.valueOf(System.currentTimeMillis());
         }
 
         for (int i = 0; i < currentState.resourceCount; i++) {
@@ -517,20 +521,18 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
             // to finish will call the create call with the arrays filled in. If
             // there are none, an
             // empty array is passed to jump out of the create calls.
-            if (!name.isEmpty()) {
-                currentState.customProperties
-                        .put(CUSTOM_DISPLAY_NAME, name + i);
-            }
+            String computeName = currentState.resourceCount > 1 ? name + i : name;
+
             createComputeResource(
                     currentState,
                     parentIterator.next(),
-                    computeResourceId,
+                    computeResourceId, computeName,
                     currentState.diskDescriptionLinks == null
                             || currentState.diskDescriptionLinks.isEmpty() ? new ArrayList<>()
-                            : null,
+                                    : null,
                     currentState.networkDescriptionLinks == null
                             || currentState.networkDescriptionLinks.isEmpty() ? new ArrayList<>()
-                            : null);
+                                    : null);
 
             // as long as you can predict the document self link of a service,
             // you can start services that depend on each other in parallel!
@@ -569,8 +571,7 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
     }
 
     /**
-     * we create a sub task that will track the ProvisionComputeHostTask
-     * completions.
+     * we create a sub task that will track the ProvisionComputeHostTask completions.
      */
     private void createSubTaskForProvisionCallbacks(
             ResourceAllocationTaskState currentState,
@@ -601,9 +602,9 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
                             ComputeSubTaskService.ComputeSubTaskState body = o
                                     .getBody(ComputeSubTaskService.ComputeSubTaskState.class);
                             // continue, passing the sub task link
-                        doComputeResourceProvisioning(currentState, desc,
-                                body.documentSelfLink);
-                    });
+                            doComputeResourceProvisioning(currentState, desc,
+                                    body.documentSelfLink);
+                        });
         getHost().startService(startPost, new ComputeSubTaskService());
     }
 
@@ -613,29 +614,30 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
     // links set.
     private void createComputeResource(
             ResourceAllocationTaskState currentState, String parentLink,
-            String computeResourceId, List<String> diskLinks,
+            String computeResourceId, String name, List<String> diskLinks,
             List<String> networkLinks) {
         if (diskLinks == null) {
-            createDiskResources(currentState, parentLink, computeResourceId,
+            createDiskResources(currentState, parentLink, computeResourceId, name,
                     networkLinks);
             return;
         }
 
         if (networkLinks == null) {
-            createNetworkResources(currentState, parentLink, computeResourceId,
+            createNetworkResources(currentState, parentLink, computeResourceId, name,
                     diskLinks);
             return;
         }
 
-        createComputeHost(currentState, parentLink, computeResourceId,
+        createComputeHost(currentState, parentLink, computeResourceId, name,
                 diskLinks, networkLinks);
     }
 
     private void createComputeHost(ResourceAllocationTaskState currentState,
-            String parentLink, String computeResourceId,
+            String parentLink, String computeResourceId, String name,
             List<String> diskLinks, List<String> networkLinks) {
         ComputeService.ComputeState resource = new ComputeService.ComputeState();
         resource.id = computeResourceId;
+        resource.name = name;
         resource.parentLink = parentLink;
         resource.descriptionLink = currentState.computeDescriptionLink;
         resource.resourcePoolLink = currentState.resourcePoolLink;
@@ -658,19 +660,19 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
                                 return;
                             }
                             // nothing to do
-                    }));
+                        }));
     }
 
     /**
-     * Create disks to attach to the compute resource. Use the disk description
-     * links to figure out what type of disks to create.
+     * Create disks to attach to the compute resource. Use the disk description links to figure out
+     * what type of disks to create.
      *
      * @param currentState
      * @param parentLink
      * @param computeResourceId
      */
     private void createDiskResources(ResourceAllocationTaskState currentState,
-            String parentLink, String computeResourceId,
+            String parentLink, String computeResourceId, String name,
             List<String> networkLinks) {
 
         List<String> diskLinks = new ArrayList<>();
@@ -693,7 +695,7 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
 
             // we have created all the disks. Now create the compute host
             // resource
-            createComputeResource(currentState, parentLink, computeResourceId,
+            createComputeResource(currentState, parentLink, computeResourceId, name,
                     diskLinks, networkLinks);
         };
 
@@ -714,20 +716,20 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
                                 .getBody(DiskService.DiskState.class);
                         // create a new disk based off the template but use a
                         // unique ID
-                    templateDisk.id = UUID.randomUUID().toString();
-                    templateDisk.documentSelfLink = templateDisk.id;
-                    templateDisk.tenantLinks = currentState.tenantLinks;
-                    sendRequest(Operation
-                            .createPost(this, DiskService.FACTORY_LINK)
-                            .setBody(templateDisk)
-                            .setCompletion(diskCreateCompletion));
-                }));
+                        templateDisk.id = UUID.randomUUID().toString();
+                        templateDisk.documentSelfLink = templateDisk.id;
+                        templateDisk.tenantLinks = currentState.tenantLinks;
+                        sendRequest(Operation
+                                .createPost(this, DiskService.FACTORY_LINK)
+                                .setBody(templateDisk)
+                                .setCompletion(diskCreateCompletion));
+                    }));
         }
     }
 
     private void createNetworkResources(
             ResourceAllocationTaskState currentState, String parentLink,
-            String computeResourceId, List<String> diskLinks) {
+            String computeResourceId, String name, List<String> diskLinks) {
         List<String> networkLinks = new ArrayList<>();
         CompletionHandler networkInterfaceCreateCompletion = (o, e) -> {
             if (e != null) {
@@ -749,7 +751,7 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
 
             // we have created all the networks. Now create the compute host
             // resource
-            createComputeResource(currentState, parentLink, computeResourceId,
+            createComputeResource(currentState, parentLink, computeResourceId, name,
                     diskLinks, networkLinks);
         };
 
@@ -770,7 +772,8 @@ public class ResourceAllocationTaskService extends TaskService<ResourceAllocatio
                                 }
 
                                 NetworkInterfaceService.NetworkInterfaceState templateNetwork = o
-                                        .getBody(NetworkInterfaceService.NetworkInterfaceState.class);
+                                        .getBody(
+                                                NetworkInterfaceService.NetworkInterfaceState.class);
                                 templateNetwork.id = UUID.randomUUID().toString();
                                 templateNetwork.documentSelfLink = templateNetwork.id;
                                 templateNetwork.tenantLinks = currentState.tenantLinks;

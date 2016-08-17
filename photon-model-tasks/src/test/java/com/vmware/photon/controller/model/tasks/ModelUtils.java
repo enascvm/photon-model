@@ -56,6 +56,7 @@ public class ModelUtils {
             throws Throwable {
         ComputeService.ComputeState cs = new ComputeService.ComputeStateWithDescription();
         cs.id = UUID.randomUUID().toString();
+        cs.name = cd.name;
         cs.descriptionLink = cd.documentSelfLink;
         cs.resourcePoolLink = null;
         cs.address = "10.0.0.1";

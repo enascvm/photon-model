@@ -19,7 +19,6 @@ import java.util.UUID;
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -38,17 +37,6 @@ public class NetworkService extends StatefulService {
      */
     public static class NetworkState extends ResourceState {
         public static final String FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE = "adapterManagementReference";
-        public static final String FIELD_NAME_NAME = "name";
-
-        @UsageOption(option = PropertyUsageOption.ID)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String id;
-
-        /**
-         * Name of the network instance
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String name;
 
         /**
          * Subnet CIDR

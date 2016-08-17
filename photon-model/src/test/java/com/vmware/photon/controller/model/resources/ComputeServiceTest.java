@@ -40,7 +40,6 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
@@ -76,6 +75,7 @@ public class ComputeServiceTest extends Suite {
         cs.descriptionLink = cd.documentSelfLink;
         cs.resourcePoolLink = null;
         cs.address = "10.0.0.1";
+        cs.name = "testVM";
         cs.primaryMAC = "01:23:45:67:89:ab";
         cs.powerState = ComputeService.PowerState.ON;
         cs.adapterManagementReference = URI

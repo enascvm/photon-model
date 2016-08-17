@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.resources;
 import java.util.EnumSet;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -45,20 +44,6 @@ public class ResourcePoolService extends StatefulService {
         public enum ResourcePoolProperty {
             ELASTIC, HYBRID
         }
-
-        /**
-         * Identifier of this resource pool.
-         */
-        @UsageOption(option = PropertyUsageOption.ID)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String id;
-
-        /**
-         * Name of this resource pool.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String name;
 
         /**
          * Project name of this resource pool.
@@ -181,6 +166,10 @@ public class ResourcePoolService extends StatefulService {
 
     public void validateState(ResourcePoolState state) {
         Utils.validateState(getStateDescription(), state);
+
+        if (state.name == null) {
+            throw new IllegalArgumentException("name is required.");
+        }
 
         if (state.properties == null) {
             state.properties = EnumSet

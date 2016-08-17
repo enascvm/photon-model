@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
-import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
@@ -105,7 +104,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
-
 import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -1027,11 +1025,8 @@ public class AzureInstanceService extends StatelessService {
     private void getVMDescription(AzureAllocationContext ctx, AzureStages next) {
         Consumer<Operation> onSuccess = (op) -> {
             ctx.child = op.getBody(ComputeService.ComputeStateWithDescription.class);
-            ctx.vmName = ctx.child.id;
-            if (ctx.child.customProperties != null) {
-                ctx.vmName = ctx.child.customProperties
-                        .getOrDefault(CUSTOM_DISPLAY_NAME, ctx.vmName);
-            }
+            ctx.vmName = ctx.child.name != null ? ctx.child.name : ctx.child.id;
+
             ctx.stage = next;
             logInfo(ctx.child.id);
             handleAllocation(ctx);

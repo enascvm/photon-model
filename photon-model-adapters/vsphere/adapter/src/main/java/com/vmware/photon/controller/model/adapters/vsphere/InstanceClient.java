@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
@@ -153,8 +152,8 @@ public class InstanceClient extends BaseHelper {
         cloneSpec.setPowerOn(true);
         cloneSpec.setTemplate(false);
 
-        String displayName = getCustomProperty(ComputeProperties.CUSTOM_DISPLAY_NAME,
-                this.state.description.name);
+        String displayName = this.state.name;
+
         ManagedObjectReference cloneTask = getVimPort()
                 .cloneVMTask(template, folder, displayName, cloneSpec);
 
@@ -548,11 +547,11 @@ public class InstanceClient extends BaseHelper {
         state.id = vm.getInstanceUuid();
         state.primaryMAC = vm.getPrimaryMac();
         state.powerState = vm.getPowerState();
+        state.name = vm.getName();
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, ref)
-                .put(CustomProperties.TYPE, VimNames.TYPE_VM)
-                .put(ComputeProperties.CUSTOM_DISPLAY_NAME, vm.getName());
+                .put(CustomProperties.TYPE, VimNames.TYPE_VM);
     }
 
     /**
@@ -628,8 +627,8 @@ public class InstanceClient extends BaseHelper {
      */
     private VirtualMachineConfigSpec buildVirtualMachineConfigSpec(String datastoreName)
             throws InvalidPropertyFaultMsg, FinderException, RuntimeFaultFaultMsg {
-        String displayName = getCustomProperty(ComputeProperties.CUSTOM_DISPLAY_NAME,
-                this.state.description.name);
+        String displayName = this.state.name;
+
         VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
         spec.setName(displayName);
         spec.setNumCPUs((int) this.state.description.cpuCount);
@@ -753,24 +752,6 @@ public class InstanceClient extends BaseHelper {
         }
 
         return parentResourcePool.object;
-    }
-
-    /**
-     * Reads the value for the given custPropKey from the ComputeState.description.customProperties.
-     *
-     * @param custPropKey
-     * @param defaultValue
-     * @return
-     */
-    private String getCustomProperty(String custPropKey, String defaultValue) {
-        if (this.state.description.customProperties != null) {
-            String s = this.state.description.customProperties.get(custPropKey);
-            if (s != null) {
-                return s;
-            }
-        }
-
-        return defaultValue;
     }
 
     /**

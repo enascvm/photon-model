@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.resources;
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
@@ -33,12 +32,6 @@ public class NetworkInterfaceService extends StatefulService {
      * Represents the state of a network interface.
      */
     public static class NetworkInterfaceState extends ResourceState {
-        /**
-         * The name or id of the interface on the compute.
-         */
-        @UsageOption(option = PropertyUsageOption.ID)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String id;
 
         /**
          * The description for the interface. If this is an interface which uses

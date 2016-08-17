@@ -62,7 +62,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         this.resourcePool = createResourcePool();
         this.auth = createAuth();
 
-        this.computeHostDescription = createComputeDescription();
+        this.computeHostDescription = createComputeHostDescription();
         this.computeHost = createComputeHost();
 
         ComputeDescription vmDescription = createVmDescription();
@@ -141,6 +141,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         computeState.descriptionLink = vmDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
         computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.name = vmDescription.name;
 
         computeState.powerState = PowerState.ON;
 
@@ -155,8 +156,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
                 .add(createDisk("cd", DiskType.CDROM, this.cdromUri).documentSelfLink);
 
         CustomProperties.of(computeState)
-                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
-                .put(ComputeProperties.CUSTOM_DISPLAY_NAME, this.vcFolder);
+                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
 
         ComputeService.ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeService.ComputeState.class,
@@ -181,7 +181,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
     private ComputeDescription createVmDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
-        computeDesc.id = "vm-" + UUID.randomUUID().toString();
+        computeDesc.id = getVmName();
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils
@@ -202,6 +202,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
     private ComputeService.ComputeState createComputeHost() throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = UUID.randomUUID().toString();
+        computeState.name = this.computeHostDescription.name;
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
@@ -213,10 +214,11 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         return returnState;
     }
 
-    private ComputeDescription createComputeDescription() throws Throwable {
+    private ComputeDescription createComputeHostDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
         computeDesc.id = UUID.randomUUID().toString();
+        computeDesc.name = computeDesc.id;
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
@@ -247,5 +249,9 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         } else {
             return URI.create(diskUri);
         }
+    }
+
+    private String getVmName() {
+        return "vm-" + String.valueOf(System.currentTimeMillis());
     }
 }

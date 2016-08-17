@@ -19,7 +19,6 @@ import java.util.UUID;
 import java.util.function.Function;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -52,12 +51,6 @@ public class DiskService extends StatefulService {
      * {@link com.vmware.photon.controller.model.resources.DiskService} task.
      */
     public static class DiskState extends ResourceState {
-        /**
-         * Identifier of this disk service instance.
-         */
-        @UsageOption(option = PropertyUsageOption.ID)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String id;
 
         /**
          * Identifier of the zone associated with this disk service instance.
@@ -100,13 +93,6 @@ public class DiskService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public DiskType type;
-
-        /**
-         * Name of this disk service instance.
-         */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String name;
 
         /**
          * Status of this disk service instance.
@@ -239,6 +225,10 @@ public class DiskService extends StatefulService {
 
     private void validateState(DiskState state) {
         Utils.validateState(getStateDescription(), state);
+
+        if (state.name == null) {
+            throw new IllegalArgumentException("name is required.");
+        }
 
         if (state.capacityMBytes <= 1 && state.sourceImageReference == null
                 && state.customizationServiceReference == null) {

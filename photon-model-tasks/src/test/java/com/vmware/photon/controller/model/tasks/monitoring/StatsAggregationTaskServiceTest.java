@@ -32,7 +32,6 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService.StatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
@@ -69,11 +68,13 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
                 ResourcePoolService.FACTORY_LINK, rpState,
                 ResourcePoolState.class);
         ComputeDescription cDesc = new ComputeDescription();
+        cDesc.name = rpState.name;
         cDesc.statsAdapterReference = UriUtils.buildUri(this.host, MockStatsAdapter.SELF_LINK);
         ComputeDescription descReturnState = postServiceSynchronously(
                 ComputeDescriptionService.FACTORY_LINK, cDesc,
                 ComputeDescription.class);
         ComputeState computeState = new ComputeState();
+        computeState.name = rpState.name;
         computeState.descriptionLink = descReturnState.documentSelfLink;
         computeState.resourcePoolLink = rpReturnState.documentSelfLink;
         List<String> computeLinks = new ArrayList<String>();

@@ -172,6 +172,7 @@ public class ScheduledTaskServiceTest extends Suite {
 
             ComputeService.ComputeState computeHost = new ComputeService.ComputeState();
             computeHost.id = UUID.randomUUID().toString();
+            computeHost.name = computeDescription.name;
             computeHost.descriptionLink = outDesc.documentSelfLink;
             computeHost.resourcePoolLink = returnPool.documentSelfLink;
             ComputeService.ComputeState returnComputeState = TestUtils.doPost(this.host, computeHost,

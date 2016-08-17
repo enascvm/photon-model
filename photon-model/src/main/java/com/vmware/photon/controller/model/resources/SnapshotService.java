@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.resources;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -34,19 +33,6 @@ public class SnapshotService extends StatefulService {
      * {@link SnapshotService} task.
      */
     public static class SnapshotState extends ResourceState {
-        /**
-         * Identifier of this snapshot.
-         */
-        @UsageOption(option = PropertyUsageOption.ID)
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String id;
-
-        /**
-         * Name of this snapshot.
-         */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String name;
 
         /**
          * Description of this snapshot.
@@ -97,6 +83,9 @@ public class SnapshotService extends StatefulService {
         }
         SnapshotState state = op.getBody(SnapshotState.class);
         Utils.validateState(getStateDescription(), state);
+        if (state.name == null) {
+            throw new IllegalArgumentException("name is required.");
+        }
         return state;
     }
 

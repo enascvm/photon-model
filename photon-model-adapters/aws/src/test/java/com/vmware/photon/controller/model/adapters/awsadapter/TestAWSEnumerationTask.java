@@ -18,7 +18,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLAY_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID;
@@ -80,7 +79,6 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
-
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.UriUtils;
@@ -88,11 +86,12 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * Test to enumerate instances on AWS and tear it down. The test creates VM using the Provisioning task as well as
- * directly creating instances on AWS using the EC2 client.It then invokes the AWS enumeration adapter to enumerate
- * all the resources on the AWS endpoint and validates that all the updates to the local state are as expected.If the 'isMock'
- * flag is set to true the test runs the adapter in mock mode and does not actually create a VM.
- * Minimally the accessKey and secretKey for AWS must be specified to run the test.
+ * Test to enumerate instances on AWS and tear it down. The test creates VM using the Provisioning
+ * task as well as directly creating instances on AWS using the EC2 client.It then invokes the AWS
+ * enumeration adapter to enumerate all the resources on the AWS endpoint and validates that all the
+ * updates to the local state are as expected.If the 'isMock' flag is set to true the test runs the
+ * adapter in mock mode and does not actually create a VM. Minimally the accessKey and secretKey for
+ * AWS must be specified to run the test.
  *
  */
 public class TestAWSEnumerationTask extends BasicTestCase {
@@ -262,7 +261,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         // Because one public NIC and its document are removed,
         // the totalNetworkInterfaceStateCount should go down by 1
-        validateRemovalOfPublicNetworkInterface(instanceIdsToStop, totalNetworkInterfaceStateCount - 1);
+        validateRemovalOfPublicNetworkInterface(instanceIdsToStop,
+                totalNetworkInterfaceStateCount - 1);
 
         // Provision an additional VM with a different instance type. It should re-use the
         // existing compute description created by the enumeration task above.
@@ -367,12 +367,13 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
     }
 
-
     /**
-     * Verifies if the tag information exists for a given resource. And that private and public IP addresses
-     * are mapped to separate NICs.Also, checks that the compute description mapping is not changed in an updated scenario.
-     * Currently, this method is being invoked for a VM provisioned from Xenon, so the check is to make sure
-     * that during discovery it is not re-mapped to a system generated compute description.
+     * Verifies if the tag information exists for a given resource. And that private and public IP
+     * addresses are mapped to separate NICs.Also, checks that the compute description mapping is
+     * not changed in an updated scenario. Currently, this method is being invoked for a VM
+     * provisioned from Xenon, so the check is to make sure that during discovery it is not
+     * re-mapped to a system generated compute description.
+     *
      * @throws Throwable
      */
     private String validateTagAndNetworkAndComputeDescriptionInformation(ComputeState computeState)
@@ -389,7 +390,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         URI[] networkLinkURIs = new URI[2];
         for (int i = 0; i < taggedComputeState.networkLinks.size(); i++) {
-            networkLinkURIs[i] = UriUtils.buildUri(this.host, taggedComputeState.networkLinks.get(i));
+            networkLinkURIs[i] = UriUtils.buildUri(this.host,
+                    taggedComputeState.networkLinks.get(i));
         }
 
         // Assert that both the public and private IP addresses have been mapped to separated NICs
@@ -416,7 +418,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         ComputeState computeState = getComputeByAWSId(this.host, awsId);
 
         // verify conversion from AWS_TAGS to CUSTOM_DISPLAY_NAME
-        String tagNameValue = computeState.customProperties.get(CUSTOM_DISPLAY_NAME);
+        String tagNameValue = computeState.name;
         assertNotNull("'displayName' property should be present", tagNameValue);
         assertEquals(vmName, tagNameValue);
 
@@ -435,8 +437,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     }
 
     /**
-     * Validates that the VPC information discovered from AWS has all the desired set of fields and the association
-     * between a compute state and a network state is established correctly.
+     * Validates that the VPC information discovered from AWS has all the desired set of fields and
+     * the association between a compute state and a network state is established correctly.
+     *
      * @throws Throwable
      */
     private void validateVPCInformation(String vpCId) throws Throwable {
@@ -464,7 +467,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     /**
      * Validates the network interface count matches an expected number.
      */
-    private void validateNetworkInterfaceCount(int totalNetworkInterfaceStateCount) throws Throwable {
+    private void validateNetworkInterfaceCount(int totalNetworkInterfaceStateCount)
+            throws Throwable {
         if (this.isAwsClientMock) {
             return;
         }
@@ -475,10 +479,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
     /**
      * Validates the public network interface and its document have been removed.
+     *
      * @throws Throwable
      */
     private void validateRemovalOfPublicNetworkInterface(String instanceId,
-             int desiredNetworkInterfaceStateCount) throws Throwable {
+            int desiredNetworkInterfaceStateCount) throws Throwable {
         if (this.isAwsClientMock) {
             return;
         }
@@ -486,7 +491,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         ComputeState stoppedComputeState = getComputeByAWSId(this.host, instanceId);
         assertNotNull(stoppedComputeState);
         // make sure that the stopped instance has no public network interface
-        for (String networkLink: stoppedComputeState.networkLinks) {
+        for (String networkLink : stoppedComputeState.networkLinks) {
             assertFalse(networkLink.contains(PUBLIC_INTERFACE));
         }
 
@@ -495,6 +500,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
     /**
      * Creates the state associated with the resource pool, compute host and the VM to be created.
+     *
      * @throws Throwable
      */
     private void initResourcePoolAndComputeHost() throws Throwable {
@@ -503,7 +509,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         // create a compute host for the AWS EC2 VM
         this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
-                this.accessKey, this.secretKey, this.isAwsClientMock, this.awsMockEndpointReference);
+                this.accessKey, this.secretKey, this.isAwsClientMock,
+                this.awsMockEndpointReference);
 
     }
 
