@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.gcp.constants;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.concurrent.TimeUnit;
 
 import com.google.api.services.compute.ComputeScopes;
 
@@ -77,6 +76,7 @@ public class GCPConstants {
 
     // GCP Time Constants
     public static final long ONE_HOUR_IN_SECOND = 3600L;
+    public static final String VM_CREATION_TIMESTAMP_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX";
 
     // GCP Operation Constants
     public static final String OPERATION_STATUS_DONE = "DONE";
@@ -131,9 +131,9 @@ public class GCPConstants {
     public static final String RESPONSE_PAGE_SIZE = "pageSize";
     public static final String TIME_INTERVAL_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'";
     // To subtract 4 minutes from the current time and get start time.
-    public static final long START_TIME_MILLIS = TimeUnit.MINUTES.toMillis(4);
+    public static final long START_TIME_MILLIS = 240000;
     // To subtract 3 minutes from the current time and get end time.
-    public static final long END_TIME_MILLIS = TimeUnit.MINUTES.toMillis(3);
+    public static final long END_TIME_MILLIS = 180000;
 
     // GCP Aggregation Related Metric Filter Constants
     public static final String AGGREGATION_ALIGNMENT_PERIOD = "aggregation.alignmentPeriod";

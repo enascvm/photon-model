@@ -27,13 +27,16 @@ import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getVMCo
 import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -54,6 +57,7 @@ import com.google.api.services.compute.model.InstanceList;
 import com.google.api.services.compute.model.NetworkInterface;
 import com.google.api.services.compute.model.ServiceAccount;
 
+import com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants;
 import com.vmware.photon.controller.model.adapters.gcp.enumeration.GCPEnumerationAdapterService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -79,7 +83,7 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class GCPTestUtil {
-    private static final String ENUMERATION_TEST_INSTANCE = "adapter-test-instance-";
+    private static final String ADAPTER_TEST_INSTANCE = "adapter-test-instance-";
     private static final String ENUMERATION_TEST_MACHINE_TYPE = "https://www.googleapis" +
             ".com/compute/v1/projects/%s/zones/%s/machineTypes/f1-micro";
     private static final String NETWORK_INTERFACE = "https://www.googleapis" +
@@ -91,6 +95,7 @@ public class GCPTestUtil {
     private static final String BOOT_DISK_NAME_SUFFIX = "-boot-disk";
     private static final String DISK_TYPE = "https://www.googleapis" +
             ".com/compute/v1/projects/%s/zones/%s/diskTypes/pd-standard";
+    private static final long ONE_HOUR_DIFFERENCE = TimeUnit.SECONDS.toMicros(3600);
     private static final long WAIT_INTERVAL = 1000;
     private static final int MIN_CPU_COUNT = 1;
     private static final int MIN_MEMORY_BYTES = 1024;
@@ -173,6 +178,8 @@ public class GCPTestUtil {
         gcpHostDescription.documentSelfLink = gcpHostDescription.id;
         gcpHostDescription.enumerationAdapterReference = UriUtils.buildUri(host,
                 GCPUriPaths.GCP_ENUMERATION_ADAPTER);
+        gcpHostDescription.statsAdapterReference = UriUtils.buildUri(host,
+                GCPUriPaths.GCP_STATS_ADAPTER);
         gcpHostDescription.zoneId = zoneId;
         gcpHostDescription.authCredentialsLink = authLink;
         gcpHostDescription.groupLinks = new HashSet<>();
@@ -418,7 +425,7 @@ public class GCPTestUtil {
         Instance instance = createInstanceTemplate(userEmail, projectId, zoneId, scopes);
 
         for (int i = 0;i < n;i++) {
-            String instanceName = ENUMERATION_TEST_INSTANCE + i;
+            String instanceName = ADAPTER_TEST_INSTANCE + UUID.randomUUID().toString();
             instanceNames.add(instanceName);
             ops[i] = provisionOneInstance(compute, instance, instanceName, projectId, zoneId);
             zones[i] = ops[i].getZone();
@@ -564,7 +571,7 @@ public class GCPTestUtil {
      * @param projectId The project id.
      * @param zoneId The zone id.
      * @return The number of instances.
-     * @throws Throwable Exception during query the number of instances.
+     * @throws Throwable Exception during querying the instances
      */
     public static int getInstanceNumber(Compute compute, String projectId, String zoneId) throws Throwable {
         Instances instanceList = compute.instances();
@@ -575,6 +582,42 @@ public class GCPTestUtil {
             return 0;
         }
         return instances.size();
+    }
+
+    /**
+     * Get the names of all stale instances remaining from previous runs due to read timeout
+     * failures.
+     * @param compute The GCE client object.
+     * @param projectId The project id.
+     * @param zoneId The zone id.
+     * @return Names of stale instances
+     * @throws Throwable Exception during querying the instances
+     */
+    public static List<String> getStaleInstanceNames(Compute compute, String projectId,
+            String zoneId) throws Throwable {
+        Instances instanceList = compute.instances();
+        Instances.List list = instanceList.list(projectId, zoneId);
+        InstanceList ins = list.execute();
+        List<Instance> instances = ins.getItems();
+        List<String> names = new ArrayList<String>();
+
+        if (instances == null) {
+            return null;
+        }
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat(GCPConstants.VM_CREATION_TIMESTAMP_FORMAT);
+        dateFormat.setTimeZone(TimeZone.getTimeZone(GCPConstants.UTC_TIMEZONE_ID));
+
+        for (Instance i : instances) {
+            Date date = dateFormat.parse(i.getCreationTimestamp());
+            long time = TimeUnit.MILLISECONDS.toMicros(date.getTime());
+            if (Utils.getNowMicrosUtc() - time > ONE_HOUR_DIFFERENCE && i.getName()
+                    .startsWith("adapter-test-instance")) {
+                names.add(i.getName());
+            }
+        }
+
+        return names;
     }
 
     /**

@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.delete
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.generateRandomName;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.getGoogleComputeClient;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.getInstanceNumber;
+import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.getStaleInstanceNames;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.performResourceEnumeration;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.provisionInstances;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.stopInstances;
@@ -88,6 +89,7 @@ public class TestGCPEnumerationTask extends BasicReusableHostTestCase {
     private ComputeService.ComputeState vmState;
     private Compute compute;
     private List<String> instancesToCleanUp;
+    private List<String> staleInstanceNames;
 
     /**
      * Do some preparation before running enumeration test. It will generate
@@ -166,37 +168,54 @@ public class TestGCPEnumerationTask extends BasicReusableHostTestCase {
             return;
         }
 
+        // Gets names of stale instances remaining on GCP due to read time out failures
+        this.staleInstanceNames = getStaleInstanceNames(this.compute, this.projectID,
+                this.zoneID);
+
         int baseLineInstanceNumber = getInstanceNumber(this.compute, this.projectID, this.zoneID);
         host.log(Level.INFO, String.format("Found %d base line instances.", baseLineInstanceNumber));
 
         // There should be only one compute host left.
         // Test deletes.
         ProvisioningUtils.queryComputeInstances(host, baseLineInstanceNumber + NUMBER_OF_COMPUTE_HOST);
+
         // Provision several vms on the cloud and run enumeration again.
         host.log(Level.INFO, "Provisioning instances...");
         List<String> provisionedInstanceNames = provisionInstances(this.host, this.compute, this.userEmail,
                 this.projectID, this.zoneID, PROVISION_NUMBER_OF_VMS, this.batchSize, this.waitIntervalInMillisecond);
         runEnumeration();
+
         // There should be one compute host with several synchronized vms.
         // Test creates.
         ProvisioningUtils.queryComputeInstances(host, baseLineInstanceNumber + RESULT_NUMBER_OF_VMS);
+
         // Make sure that all power states are on.
         syncQueryComputeStatesWithPowerState(this.host, this.outPool, this.computeHost,
                 PowerState.ON, new HashSet<>(provisionedInstanceNames));
+
         // Stop all vms on the cloud and run enumeration again.
         host.log(Level.INFO, "Stopping instances...");
         stopInstances(this.host, this.compute, this.projectID, this.zoneID, provisionedInstanceNames,
                 this.batchSize, this.waitIntervalInMillisecond);
         runEnumeration();
+
         // Check the number of local vms and their power states, which should be OFF.
         // Test updates.
         syncQueryComputeStatesWithPowerState(this.host, this.outPool, this.computeHost,
                 PowerState.OFF, new HashSet<>(provisionedInstanceNames));
+
         // Delete all vms on the cloud and run enumeration again.
         host.log(Level.INFO, "Deleting instances...");
         this.instancesToCleanUp = deleteInstances(this.host, this.compute, this.projectID, this.zoneID,
                 provisionedInstanceNames, this.batchSize, this.waitIntervalInMillisecond);
         runEnumeration();
+
+        if (this.staleInstanceNames != null) {
+            host.log(Level.INFO, "Deleting " + this.staleInstanceNames.size()
+                    + " stale instances from previous test runs...");
+            this.instancesToCleanUp.addAll(this.staleInstanceNames);
+        }
+
         // There should be only one compute host left.
         // Test deletes.
         ProvisioningUtils.queryComputeInstances(host, baseLineInstanceNumber + NUMBER_OF_COMPUTE_HOST);

@@ -21,12 +21,14 @@ import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.delete
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.enumerateResources;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.getGoogleComputeClient;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.getInstanceNumber;
+import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.getStaleInstanceNames;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.provisionInstances;
 import static com.vmware.photon.controller.model.adapters.gcp.GCPTestUtil.stopInstances;
 import static com.vmware.photon.controller.model.tasks.TestUtils.createResourceEnumerationTask;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.logging.Level;
 
 import com.google.api.services.compute.Compute;
 import com.google.api.services.compute.ComputeScopes;
@@ -65,7 +67,7 @@ public class TestGCPEnumerationAtScale extends BasicReusableHostTestCase {
     public String projectID = "projectID";
     public String zoneID = "zoneID";
     public int gcpAccountLimit = 20;
-    public int instanceCountAtScale = 1000;
+    public int instanceCountAtScale = 5;
     public int batchSize = 20;
     public long waitIntervalInMillisecond = 1000;
     public int modifyRate = 10;
@@ -74,6 +76,7 @@ public class TestGCPEnumerationAtScale extends BasicReusableHostTestCase {
     private ComputeState computeHost;
     private Compute compute;
     private List<String> instancesToCleanUp;
+    private List<String> staleInstanceNames;
 
     @Before
     public void setUp() throws Throwable {
@@ -132,6 +135,10 @@ public class TestGCPEnumerationAtScale extends BasicReusableHostTestCase {
                 return;
             }
 
+            // Gets names of stale instances remaining on GCP due to read time out failures
+            this.staleInstanceNames = getStaleInstanceNames(this.compute, this.projectID,
+                    this.zoneID);
+
             ResourceEnumerationTaskState enumTask = createResourceEnumerationTask(this.outPool.documentSelfLink, this.computeHost.documentSelfLink,
                     GCPEnumerationAdapterService.SELF_LINK, this.isMock, this.computeHost.tenantLinks);
             enumerateResources(this.host, null, enumTask, TEST_CASE_BASELINE_VMS);
@@ -168,6 +175,12 @@ public class TestGCPEnumerationAtScale extends BasicReusableHostTestCase {
             this.instancesToCleanUp.addAll(instancesLeft);
             // Record time spent in enumeration to discover the deleted instances and delete them.
             enumerateResources(this.host, null, enumTask, TEST_CASE_DISCOVER_DELETES_AT_SCALE);
+
+            if (this.staleInstanceNames != null) {
+                host.log(Level.INFO, "Deleting " + this.staleInstanceNames.size()
+                        + " stale instances from previous test runs...");
+                this.instancesToCleanUp.addAll(this.staleInstanceNames);
+            }
         }
     }
 
