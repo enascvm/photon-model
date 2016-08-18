@@ -235,10 +235,6 @@ public class ComputeDescriptionService extends StatefulService {
     public void validateState(ComputeDescription state) {
         Utils.validateState(getStateDescription(), state);
 
-        if (state.name == null) {
-            throw new IllegalArgumentException("name is required.");
-        }
-
         if (state.environmentName == null) {
             state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         }
