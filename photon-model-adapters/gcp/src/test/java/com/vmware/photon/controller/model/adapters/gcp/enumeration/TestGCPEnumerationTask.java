@@ -39,7 +39,6 @@ import com.google.api.services.compute.ComputeScopes;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
@@ -158,7 +157,6 @@ public class TestGCPEnumerationTask extends BasicReusableHostTestCase {
      * @throws Throwable Exception during running test case.
      */
     @Test
-    @Ignore("https://jira-hzn.eng.vmware.com/browse/VSYM-1732")
     public void testEnumeration() throws Throwable {
         // There are one compute host and one stale compute state.
         ProvisioningUtils.queryComputeInstances(host, NUMBER_OF_COMPUTE_HOST + INITIAL_NUMBER_OF_VMS);
@@ -210,6 +208,7 @@ public class TestGCPEnumerationTask extends BasicReusableHostTestCase {
                 provisionedInstanceNames, this.batchSize, this.waitIntervalInMillisecond);
         runEnumeration();
 
+        // Deleting stale instances from failed test runs.
         if (this.staleInstanceNames != null) {
             host.log(Level.INFO, "Deleting " + this.staleInstanceNames.size()
                     + " stale instances from previous test runs...");

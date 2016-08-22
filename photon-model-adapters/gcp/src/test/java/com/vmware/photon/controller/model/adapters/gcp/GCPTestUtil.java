@@ -95,7 +95,7 @@ public class GCPTestUtil {
     private static final String BOOT_DISK_NAME_SUFFIX = "-boot-disk";
     private static final String DISK_TYPE = "https://www.googleapis" +
             ".com/compute/v1/projects/%s/zones/%s/diskTypes/pd-standard";
-    private static final long ONE_HOUR_DIFFERENCE = TimeUnit.SECONDS.toMicros(3600);
+    private static final long ONE_HOUR_DIFFERENCE_MICROS = TimeUnit.HOURS.toMicros(1);
     private static final long WAIT_INTERVAL = 1000;
     private static final int MIN_CPU_COUNT = 1;
     private static final int MIN_MEMORY_BYTES = 1024;
@@ -611,7 +611,7 @@ public class GCPTestUtil {
         for (Instance i : instances) {
             Date date = dateFormat.parse(i.getCreationTimestamp());
             long time = TimeUnit.MILLISECONDS.toMicros(date.getTime());
-            if (Utils.getNowMicrosUtc() - time > ONE_HOUR_DIFFERENCE && i.getName()
+            if (Utils.getNowMicrosUtc() - time > ONE_HOUR_DIFFERENCE_MICROS && i.getName()
                     .startsWith("adapter-test-instance")) {
                 names.add(i.getName());
             }

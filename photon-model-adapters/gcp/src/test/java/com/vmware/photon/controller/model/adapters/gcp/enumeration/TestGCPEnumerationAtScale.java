@@ -176,6 +176,7 @@ public class TestGCPEnumerationAtScale extends BasicReusableHostTestCase {
             // Record time spent in enumeration to discover the deleted instances and delete them.
             enumerateResources(this.host, null, enumTask, TEST_CASE_DISCOVER_DELETES_AT_SCALE);
 
+            // Deleting stale instances from failed test runs.
             if (this.staleInstanceNames != null) {
                 host.log(Level.INFO, "Deleting " + this.staleInstanceNames.size()
                         + " stale instances from previous test runs...");
