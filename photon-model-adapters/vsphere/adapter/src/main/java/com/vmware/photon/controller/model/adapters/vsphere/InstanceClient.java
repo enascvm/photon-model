@@ -15,14 +15,18 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 
+import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
+import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfParser;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
@@ -42,9 +46,11 @@ import com.vmware.vim25.InsufficientResourcesFaultFaultMsg;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
 import com.vmware.vim25.InvalidNameFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
+import com.vmware.vim25.KeyValue;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.MethodFault;
 import com.vmware.vim25.OptionValue;
+import com.vmware.vim25.OvfNetworkMapping;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
@@ -200,15 +206,22 @@ public class InstanceClient extends BaseHelper {
      * @return
      */
     public ComputeState createInstance() throws Exception {
-        ManagedObjectReference vm = createVm();
+        ManagedObjectReference vm;
 
-        if (vm == null) {
-            // vm was created by someone else
-            return null;
+        if (isOvfDeploy()) {
+            vm = deployOvf();
+            this.vm = vm;
+        } else {
+            vm = createVm();
+
+            if (vm == null) {
+                // vm was created by someone else
+                return null;
+            }
+
+            // store reference to created vm for further processing
+            this.vm = vm;
         }
-
-        // store reference to created vm for further processing
-        this.vm = vm;
 
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils
@@ -217,6 +230,39 @@ public class InstanceClient extends BaseHelper {
         enrichStateFromVm(state, vm);
 
         return state;
+    }
+
+    private boolean isOvfDeploy() {
+        return CustomProperties.of(this.state.description).getString(OvfParser.PROP_OVF_URI, null)
+                != null;
+    }
+
+    private ManagedObjectReference deployOvf() throws Exception {
+        OvfDeployer deployer = new OvfDeployer(this.connection);
+        CustomProperties cust = CustomProperties.of(this.state.description);
+
+        URI ovfUri = URI.create(cust.getString(OvfParser.PROP_OVF_URI));
+        ManagedObjectReference host = null;
+        ManagedObjectReference folder = getVmFolder();
+        String vmName = this.state.name;
+        List<OvfNetworkMapping> network = Collections.emptyList();
+        ManagedObjectReference ds = getDatastore();
+
+        List<KeyValue> props = new ArrayList<>();
+        for (Map.Entry<String, String> e : this.state.customProperties.entrySet()) {
+            String s = OvfParser.stripPrefix(e.getKey());
+            if (s != null) {
+                KeyValue kv = new KeyValue();
+                kv.setKey(s);
+                kv.setValue(e.getValue());
+                props.add(kv);
+            }
+        }
+
+        String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
+        ManagedObjectReference rp = getResourcePoolForVm();
+
+        return deployer.deployOvf(ovfUri, host, folder, vmName, network, ds, props, config, rp);
     }
 
     /**

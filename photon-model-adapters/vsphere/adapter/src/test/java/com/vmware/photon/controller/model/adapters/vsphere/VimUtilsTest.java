@@ -18,6 +18,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
+import java.io.IOException;
 import java.net.URI;
 
 import javax.xml.datatype.XMLGregorianCalendar;
@@ -160,5 +161,26 @@ public class VimUtilsTest {
         XMLGregorianCalendar calendar = VimUtils.convertMillisToXmlCalendar(now);
 
         assertEquals(now, calendar.toGregorianCalendar().getTimeInMillis());
+    }
+
+    @Test
+    public void convertToFault() {
+        DuplicateName fault = new DuplicateName();
+        String msg = "msg";
+        Exception e = new DuplicateNameFaultMsg(msg, fault);
+
+        LocalizedMethodFault lmf = VimUtils.convertExceptionToFault(e);
+        assertSame(fault, lmf.getFault());
+        assertSame(msg, lmf.getLocalizedMessage());
+    }
+
+    @Test
+    public void convertToFaultGeneric() {
+        String msg = "test";
+        IOException e = new IOException(msg);
+
+        LocalizedMethodFault lmf = VimUtils.convertExceptionToFault(e);
+        assertNull(lmf.getFault());
+        assertSame(msg, lmf.getLocalizedMessage());
     }
 }

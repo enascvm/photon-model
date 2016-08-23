@@ -145,6 +145,10 @@ public class VSphereAdapterInstanceService extends StatelessService {
     }
 
     private OperationJoin createDiskPatch(List<DiskState> disks) {
+        if (disks == null || disks.isEmpty()) {
+            return null;
+        }
+
         return OperationJoin.create()
                 .setOperations(disks.stream().map(this::selfPatch));
     }
@@ -167,13 +171,17 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         InstanceClient client = new InstanceClient(conn, ctx.child, ctx.parent);
                         client.deleteInstance();
 
-                        OperationJoin deleteComputeState = createComputeStateDelete(ctx);
                         Operation finishTask = mgr.createTaskPatch(TaskStage.FINISHED);
 
-                        OperationSequence
-                                .create(finishTask)
-                                .next(deleteComputeState)
-                                .setCompletion(ctx.logOnError())
+                        OperationSequence seq = OperationSequence
+                                .create(finishTask);
+
+                        OperationJoin deleteComputeState = createComputeStateDelete(ctx);
+                        if (deleteComputeState != null) {
+                            seq = seq.next(deleteComputeState);
+                        }
+
+                        seq.setCompletion(ctx.logOnError())
                                 .sendWith(this);
                     } catch (Exception e) {
                         ctx.fail(e);
@@ -185,11 +193,15 @@ public class VSphereAdapterInstanceService extends StatelessService {
             ProvisionContext ctx) {
         // clean up the compute state
         if (req.requestType == InstanceRequestType.DELETE) {
+            OperationSequence seq = OperationSequence
+                    .create(mgr.createTaskPatch(TaskStage.FINISHED));
+
             OperationJoin deleteComputeState = createComputeStateDelete(ctx);
-            OperationSequence
-                    .create(mgr.createTaskPatch(TaskStage.FINISHED))
-                    .next(deleteComputeState)
-                    .setCompletion(ctx.logOnError())
+            if (deleteComputeState != null) {
+                seq = seq.next(deleteComputeState);
+            }
+
+            seq.setCompletion(ctx.logOnError())
                     .sendWith(this);
         } else {
             mgr.patchTask(TaskStage.FINISHED);
@@ -205,8 +217,11 @@ public class VSphereAdapterInstanceService extends StatelessService {
             }
         }
 
-
-        return OperationJoin.create(deleteOps)
-                .setCompletion(ctx.logOnError());
+        if (deleteOps.isEmpty()) {
+            return null;
+        } else {
+            return OperationJoin.create(deleteOps)
+                    .setCompletion(ctx.logOnError());
+        }
     }
 }

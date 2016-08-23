@@ -449,7 +449,7 @@ public class GetMoRef extends BaseHelper {
 
         init();
 
-        final HashMap<String, Object> retVal = new HashMap<String, Object>();
+        final HashMap<String, Object> retVal = new HashMap<>();
 
         // Create PropertyFilterSpec using the PropertySpec and ObjectPec
         PropertyFilterSpec[] propertyFilterSpecs = {

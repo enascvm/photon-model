@@ -31,6 +31,8 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -42,10 +44,10 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.xenon.common.Utils;
 
 public class OvfParser {
-    private static final String PROP_OVF_CONFIGURATION = "ovf.configuration";
+    public static final String PROP_OVF_CONFIGURATION = "ovf.configuration";
     public static final String PROP_OVF_URI = "ovf.uri";
-    private static final String PREFIX_OVF_PROP = "ovf.prop:";
-    private static final String PREFIX_OVF_NET = "ovf.net:";
+    public static final String PREFIX_OVF_PROP = "ovf.prop:";
+    public static final String PREFIX_OVF_NET = "ovf.net:";
 
     private XPath xpath;
 
@@ -213,7 +215,7 @@ public class OvfParser {
     }
 
     /**
-     * Returns a single string mathing the xpath expression
+     * Returns a single string matching the xpath expression
      * @param root
      * @param xpathExpr
      * @return
@@ -228,7 +230,13 @@ public class OvfParser {
 
     public Document retrieveDescriptor(URI uri) throws IOException, SAXException {
         DocumentBuilder documentBuilder = newDocumentBuilder();
-        return documentBuilder.parse(uri.toURL().openStream());
+
+        CloseableHttpClient client = OvfRetriever.newInsecureClient();
+        try {
+            return documentBuilder.parse(new OvfRetriever(client).retrieveAsStream(uri));
+        } finally {
+            IOUtils.closeQuietly(client);
+        }
     }
 
     /**
@@ -334,5 +342,22 @@ public class OvfParser {
         }
 
         return this.xpath;
+    }
+
+    /**
+     * Coverts the string ovf.prop:abc into abc. If the propame is not prefixed return null.
+     * @param propName
+     * @return
+     */
+    public static String stripPrefix(String propName) {
+        if (propName == null) {
+            return null;
+        }
+
+        if (propName.startsWith(PREFIX_OVF_PROP)) {
+            return propName.substring(PREFIX_OVF_NET.length() + 1);
+        }
+
+        return null;
     }
 }

@@ -11,8 +11,6 @@
   <artifactId>photon-vsphere-adapter</artifactId>
 
   <properties>
-    <vsphere.sdk.version>6.0.0-3634981</vsphere.sdk.version>
-    <bc.version>1.50</bc.version>
   </properties>
 
   <dependencies>
@@ -57,8 +55,11 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
-
-
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>4.3.6</version>
+    </dependency>
     <dependency>
       <groupId>com.vmware.photon.controller</groupId>
       <artifactId>photon-vsphere-adapter-util</artifactId>

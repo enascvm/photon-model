@@ -14,6 +14,8 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.GregorianCalendar;
 
@@ -29,6 +31,7 @@ import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.LocalizedMethodFault;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.MethodFault;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
@@ -242,6 +245,32 @@ public final class VimUtils {
         }
 
         return VimNames.TYPE_DATASTORE.equals(obj.getType());
+    }
+
+    /**
+     * Converts arbitrary exception to a fault. If the exception has a fault it is returned
+     * without modification.
+     *
+     * @param e
+     * @return
+     */
+    public static LocalizedMethodFault convertExceptionToFault(Exception e) {
+        LocalizedMethodFault lmf = new LocalizedMethodFault();
+
+        try {
+            Method m = e.getClass().getMethod("getFaultInfo");
+            MethodFault mf = (MethodFault) m.invoke(e);
+            lmf.setFault(mf);
+            lmf.setLocalizedMessage(e.getLocalizedMessage());
+            return lmf;
+        } catch (NoSuchMethodException e1) {
+            lmf.setLocalizedMessage(e.getMessage());
+            lmf.setLocalizedMessage(e.getLocalizedMessage());
+            return lmf;
+        } catch (InvocationTargetException | IllegalAccessException e1) {
+            lmf.setLocalizedMessage(e.getMessage());
+            return lmf;
+        }
     }
 }
 
