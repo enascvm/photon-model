@@ -23,6 +23,7 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -74,6 +75,7 @@ public class EndpointAdapterUtils {
                 descEnhancer.accept(cd, r);
 
                 ComputeState cs = new ComputeState();
+                cs.powerState = PowerState.ON;
                 compEnhancer.accept(cs, r);
 
                 Stream<Operation> operations = Stream.of(

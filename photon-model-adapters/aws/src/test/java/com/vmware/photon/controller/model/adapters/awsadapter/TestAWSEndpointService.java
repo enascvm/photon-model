@@ -33,6 +33,7 @@ import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
@@ -139,6 +140,7 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
         ComputeState cs = getServiceSynchronously(endpoint.computeLink, ComputeState.class);
         assertNotNull(cs);
         assertNotNull(cs.adapterManagementReference);
+        assertEquals(PowerState.ON, cs.powerState);
     }
 
     @Test
