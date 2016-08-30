@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model;
 
+import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -28,6 +29,7 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.TagService;
+
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -50,6 +52,7 @@ public class PhotonModelServices {
             ResourceMetricService.FACTORY_LINK,
             ResourceAggregateMetricsService.FACTORY_LINK,
             EndpointService.FACTORY_LINK,
+            ResourceAggregateMetricService.FACTORY_LINK,
             TagService.FACTORY_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
@@ -69,5 +72,6 @@ public class PhotonModelServices {
         host.startFactory(new TagService());
         host.startFactory(ResourceMetricService.class, ResourceMetricService::createFactory);
         host.startFactory(ResourceAggregateMetricsService.class, ResourceAggregateMetricsService::createFactory);
+        host.startFactory(ResourceAggregateMetricService.class, ResourceAggregateMetricService::createFactory);
     }
 }

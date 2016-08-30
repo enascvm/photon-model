@@ -36,7 +36,13 @@ public class MockStatsAdapter extends StatelessService {
     public static final String UNIT_1 = "unit1";
     public static final String UNIT_2 = "unit2";
 
-    private static double counter = 0;
+    private double counter = 0;
+
+    @Override
+    public void handleStart(Operation startPost) {
+        this.counter = 0.0;
+        super.handleStart(startPost);
+    }
 
     @Override
     public void handleRequest(Operation op) {
@@ -50,14 +56,14 @@ public class MockStatsAdapter extends StatelessService {
             ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
             ComputeStatsResponse statsResponse = new ComputeStatsResponse();
             Map<String, List<ServiceStat>> statValues = new HashMap<String, List<ServiceStat>>();
-            counter++;
+            this.counter++;
             ServiceStat key1 = new ServiceStat();
-            key1.latestValue = counter;
+            key1.latestValue = this.counter;
             key1.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
             key1.unit = UNIT_1;
             statValues.put(KEY_1, Collections.singletonList(key1));
             ServiceStat key2 = new ServiceStat();
-            key2.latestValue = counter;
+            key2.latestValue = this.counter;
             key2.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
             key2.unit = UNIT_2;
             statValues.put(KEY_2, Collections.singletonList(key2));

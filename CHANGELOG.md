@@ -5,6 +5,7 @@
 * Support multiple stats adapter per compute. Also enhance
   StatsCollectionTaskState to accept a stats adapter reference. This
   will allow to collect stats for specific stats adapter.
+* Support historical aggregation of stats data
 
 ## 0.4.3
 

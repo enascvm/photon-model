@@ -284,7 +284,7 @@ public class SingleResourceStatsCollectionTaskService
                     hourStats.unit = entry.unit;
                     hourStats.timeSeriesStats = new TimeSeriesStats(
                             StatsConstants.NUM_BUCKETS_HOURLY_DATA,
-                            StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS,
+                            StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS,
                             EnumSet.allOf(AggregationType.class));
                     operations.add(Operation.createPost(statsUri)
                             .setBody(hourStats));
@@ -299,7 +299,7 @@ public class SingleResourceStatsCollectionTaskService
                     dailyStats.unit = entry.unit;
                     dailyStats.timeSeriesStats = new TimeSeriesStats(
                             StatsConstants.NUM_BUCKETS_DAILY_DATA,
-                            StatsConstants.BUCKET_SIZE_DAYS_IN_MILLS,
+                            StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS,
                             EnumSet.allOf(AggregationType.class));
                     operations.add(Operation.createPost(statsUri)
                             .setBody(dailyStats));

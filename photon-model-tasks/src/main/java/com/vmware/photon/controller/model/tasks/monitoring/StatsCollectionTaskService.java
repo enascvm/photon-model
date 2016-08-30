@@ -113,13 +113,6 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         case STARTED:
             handleStagePatch(patch, currentState);
             break;
-        case FINISHED:
-        case FAILED:
-        case CANCELLED:
-            // this is a one shot task, self delete
-            sendRequest(Operation
-                    .createDelete(getUri()));
-            break;
         default:
             break;
         }

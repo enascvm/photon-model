@@ -260,13 +260,13 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
             long currentTime = Utils.getNowMicrosUtc();
             // we are dealing with hourly buckets at this time; this scheme can be extended to deal with other
             // bucket ranges (day, week etc. as well)
-            long bucketForCurrentInterval = normalizeTimestamp(currentTime, StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS);
+            long bucketForCurrentInterval = normalizeTimestamp(currentTime, StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS);
             long bucketForPreviousInterval = normalizeTimestamp(currentTime - TimeUnit.HOURS.toMicros(1),
-                    StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS);
+                    StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS);
             // Variables for daily buckets.
-            long bucketForCurrentDay = normalizeTimestamp(currentTime, StatsConstants.BUCKET_SIZE_DAYS_IN_MILLS);
+            long bucketForCurrentDay = normalizeTimestamp(currentTime, StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS);
             long bucketForPreviousDay = normalizeTimestamp(currentTime - TimeUnit.HOURS.toMicros(1),
-                    StatsConstants.BUCKET_SIZE_DAYS_IN_MILLS);
+                    StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS);
 
             ResourceAggregateMetricsState aggrMetricStateForCurrentInterval =
                     buildResourceAggregateMetricsState(computeServiceLink, computeToTenantLinksMap.get(computeServiceLink),
