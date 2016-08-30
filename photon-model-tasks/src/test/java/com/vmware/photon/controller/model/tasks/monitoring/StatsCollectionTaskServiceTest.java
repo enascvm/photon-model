@@ -42,6 +42,7 @@ import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
@@ -53,7 +54,7 @@ import com.vmware.xenon.common.Utils;
 
 public class StatsCollectionTaskServiceTest extends BaseModelTest {
 
-    public int numResources = 200;
+    public int numResources = 100;
 
     @Override
     protected void startRequiredServices() throws Throwable {
@@ -105,7 +106,6 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
-        statsCollectionTaskState.intervalMicros = TimeUnit.MILLISECONDS.toMicros(250);
         postServiceSynchronously(
                 ScheduledTaskService.FACTORY_LINK, statsCollectionTaskState,
                 ScheduledTaskState.class);

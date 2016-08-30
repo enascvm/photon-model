@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.HYPHEN;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
@@ -39,7 +40,9 @@ import java.util.stream.Collectors;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Tag;
+
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -59,6 +62,7 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -89,6 +93,8 @@ public class TestAWSProvisionTask {
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
     private AmazonEC2AsyncClient client;
+    public int timeElapsedSinceLastCollectionInMinutes = 4;
+
 
     @Before
     public void setUp() throws Exception {
@@ -160,8 +166,7 @@ public class TestAWSProvisionTask {
 
         provisionTask.computeLink = this.vmState.documentSelfLink;
         provisionTask.isMockRequest = this.isMock;
-        provisionTask.taskSubStage =
-                ProvisionComputeTaskState.SubStage.CREATING_HOST;
+        provisionTask.taskSubStage = ProvisionComputeTaskState.SubStage.CREATING_HOST;
         // Wait for default request timeout in minutes for the machine to be powered ON before
         // reporting failure to the parent task.
         provisionTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
@@ -186,9 +191,11 @@ public class TestAWSProvisionTask {
         }
 
         this.host.setTimeoutSeconds(600);
-        this.host.waitFor("Error waiting for stats", () -> {
+        this.host.waitFor("Error waiting for stats with default collection windows", () -> {
             try {
-                issueStatsRequest(this.vmState);
+                this.host.log(Level.INFO,
+                        "Issuing stats request for VM with default collection window.");
+                issueStatsRequest(this.vmState, null);
             } catch (Throwable t) {
                 return false;
             }
@@ -197,7 +204,23 @@ public class TestAWSProvisionTask {
 
         this.host.waitFor("Error waiting for host stats", () -> {
             try {
-                issueStatsRequest(outComputeHost);
+                this.host.log(Level.INFO,
+                        "Issuing stats request for compute host with default collection window.");
+                issueStatsRequest(outComputeHost, null);
+            } catch (Throwable t) {
+                return false;
+            }
+            return true;
+        });
+
+        this.host.waitFor("Error waiting for stats with explicit collection window", () -> {
+            try {
+                this.host.log(Level.INFO,
+                        "Issuing stats request for compute host with explicit collection window.");
+                Long currentTime = Utils.getNowMicrosUtc();
+                Long lastCollectionTimeInMicros = currentTime
+                        - TimeUnit.MINUTES.toMicros(this.timeElapsedSinceLastCollectionInMinutes);
+                issueStatsRequest(outComputeHost, lastCollectionTimeInMicros);
             } catch (Throwable t) {
                 return false;
             }
@@ -230,6 +253,7 @@ public class TestAWSProvisionTask {
                 .collect(Collectors.toSet());
         this.vmState = TestAWSSetupUtils.createAWSVMResource(this.host, outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(), tagLinks);
+
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
 
         BaseLineState remoteStateBefore = null;
@@ -251,12 +275,12 @@ public class TestAWSProvisionTask {
             try {
                 BaseLineState remoteStateAfter = TestAWSSetupUtils
                         .getBaseLineInstanceCount(this.host, this.client, null);
-                assertEquals(remoteStateBefore.baselineVMCount, remoteStateAfter.baselineVMCount);
+
             } finally {
                 TestAWSSetupUtils.deleteVMsUsingEC2Client(this.client, this.host, instanceIdList);
             }
         }
-        this.vmState  = null;
+        this.vmState = null;
     }
 
     private void assertTags(Set<TagState> expectedTagStates, Instance instance,
@@ -293,7 +317,7 @@ public class TestAWSProvisionTask {
         return result;
     }
 
-    private void issueStatsRequest(ComputeState vm) throws Throwable {
+    private void issueStatsRequest(ComputeState vm, Long lastCollectionTime) throws Throwable {
         // spin up a stateless service that acts as the parent link to patch back to
         StatelessService parentService = new StatelessService() {
             @Override
@@ -302,19 +326,36 @@ public class TestAWSProvisionTask {
                     if (!TestAWSProvisionTask.this.isMock) {
                         ComputeStatsResponse resp = op.getBody(ComputeStatsResponse.class);
                         if (resp.statsList.size() != 1) {
-                            TestAWSProvisionTask.this.host.failIteration(new IllegalStateException("response size was incorrect."));
+                            TestAWSProvisionTask.this.host.failIteration(
+                                    new IllegalStateException("response size was incorrect."));
                             return;
                         }
-                        // Size == 1, because APICallCount is always added.
-                        if (resp.statsList.get(0).statValues.size() == 1) {
-                            TestAWSProvisionTask.this.host.failIteration(new IllegalStateException("incorrect number of metrics received."));
+                        // Size == 1, because APICallCount and the lastStatsCollectionTime is always
+                        // added.
+                        if (resp.statsList.get(0).statValues.size() == 2) {
+                            TestAWSProvisionTask.this.host.failIteration(new IllegalStateException(
+                                    "incorrect number of metrics received."));
                             return;
+                        }
+                        // If the last collection time was set to collect stats for previous windows
+                        // and they are not collected then fail the current iteration
+                        if (lastCollectionTime != null) {
+                            if (resp.statsList.get(0).statValues
+                                    .get(PhotonModelConstants.CPU_UTILIZATION_PERCENT)
+                                    .size() < 2) {
+                                TestAWSProvisionTask.this.host
+                                        .failIteration(new IllegalStateException(
+                                                "incorrect number of data points received when collection window is specified."));
+                                return;
+                            }
+
                         }
                         if (!resp.statsList.get(0).computeLink.equals(vm.documentSelfLink)) {
-                            TestAWSProvisionTask.this.host.failIteration(new IllegalStateException("Incorrect resourceReference returned."));
+                            TestAWSProvisionTask.this.host.failIteration(new IllegalStateException(
+                                    "Incorrect resourceReference returned."));
                             return;
                         }
-                        verifyCollectedStats(resp);
+                        verifyCollectedStats(resp, lastCollectionTime);
                     }
                     TestAWSProvisionTask.this.host.completeIteration();
                 }
@@ -327,22 +368,41 @@ public class TestAWSProvisionTask {
         statsRequest.resourceReference = UriUtils.buildUri(this.host, vm.documentSelfLink);
         statsRequest.isMockRequest = this.isMock;
         statsRequest.taskReference = UriUtils.buildUri(this.host, servicePath);
+        if (lastCollectionTime != null) {
+            statsRequest.lastCollectionTimeMicrosUtc = lastCollectionTime;
+        }
         this.host.sendAndWait(Operation.createPatch(UriUtils.buildUri(
                 this.host, AWSUriPaths.AWS_STATS_ADAPTER))
                 .setBody(statsRequest)
                 .setReferer(this.host.getUri()));
     }
 
-    private void verifyCollectedStats(ComputeStatsResponse response) {
+    private void verifyCollectedStats(ComputeStatsResponse response, Long lastCollectionTime) {
         ComputeStats computeStats = response.statsList.get(0);
         assertTrue("Compute Link is empty", !computeStats.computeLink.isEmpty());
         assertTrue("APICallCount is not present", computeStats.statValues.keySet()
                 .contains(PhotonModelConstants.API_CALL_COUNT));
+        String lastCollectionTimeKey = AWSStatsService.SELF_LINK + HYPHEN
+                + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
+        Assert.assertTrue("Last collection time is not present", computeStats.statValues.keySet()
+                .contains(lastCollectionTimeKey));
         // Check that stat values are accompanied with Units.
         for (String key : computeStats.statValues.keySet()) {
             List<ServiceStat> stats = computeStats.statValues.get(key);
             for (ServiceStat stat : stats) {
                 assertTrue("Unit is empty", !stat.unit.isEmpty());
+            }
+            // If the statsCollectionTime was set to sometime in the past, the adapter should be
+            // collecting more than one value for the same metric. Using cpu utilization as an
+            // example case as the number
+            // of data points can vary across metrics even if the window is set when requesting data
+            // from the provider.
+            if (lastCollectionTime != null
+                    && key.equalsIgnoreCase(PhotonModelConstants.CPU_UTILIZATION_PERCENT)) {
+                assertTrue(
+                        "incorrect number of data points received when collection window is specified for metric ."
+                                + key,
+                        stats.size() > 1);
             }
         }
     }

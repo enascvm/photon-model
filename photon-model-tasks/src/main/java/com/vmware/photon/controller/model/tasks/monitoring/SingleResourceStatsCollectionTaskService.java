@@ -23,13 +23,17 @@ import java.util.Map.Entry;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricService.ResourceMetric;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -39,6 +43,10 @@ import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
@@ -50,6 +58,7 @@ import com.vmware.xenon.services.common.TaskService;
 public class SingleResourceStatsCollectionTaskService
         extends TaskService<SingleResourceStatsCollectionTaskState> {
 
+    private static final String HYPHEN = "-";
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";
 
@@ -91,6 +100,7 @@ public class SingleResourceStatsCollectionTaskService
 
         @Documentation(description = "The stats adapter reference")
         public URI statsAdapterReference;
+
     }
 
     public SingleResourceStatsCollectionTaskService() {
@@ -215,10 +225,11 @@ public class SingleResourceStatsCollectionTaskService
 
                             ComputeDescription description = computeStateWithDesc.description;
                             URI statsAdapterReference = null;
-
+                            List<String> tenantLinks = new ArrayList<>();
                             if (description != null) {
-
-                                // Only look in adapter references if statsAdapterReference is provided
+                                tenantLinks = description.tenantLinks;
+                                // Only look in adapter references if statsAdapterReference is
+                                // provided
                                 if (currentState.statsAdapterReference == null) {
                                     statsAdapterReference = description.statsAdapterReference;
                                 } else if (description.statsAdapterReferences != null) {
@@ -237,7 +248,8 @@ public class SingleResourceStatsCollectionTaskService
                                         .buildUri(getHost(), computeStateWithDesc.documentSelfLink);
                                 statsRequest.taskReference = getUri();
                                 patchUri = statsAdapterReference;
-                                patchBody = statsRequest;
+                                populateLastCollectionTimeForMetricsInStatsRequest(currentState,
+                                        statsRequest, patchUri, tenantLinks);
                             } else {
                                 // no adapter associated with this resource, just patch completion
                                 SingleResourceStatsCollectionTaskState nextStageState = new SingleResourceStatsCollectionTaskState();
@@ -245,14 +257,10 @@ public class SingleResourceStatsCollectionTaskService
                                 nextStageState.taskInfo.stage = TaskStage.FINISHED;
                                 patchUri = getUri();
                                 patchBody = nextStageState;
+                                sendStatsRequestToAdapter(currentState,
+                                        patchUri, patchBody);
                             }
-                            sendRequest(Operation.createPatch(patchUri)
-                                    .setBody(patchBody)
-                                    .setCompletion((patchOp, patchEx) -> {
-                                        if (patchEx != null) {
-                                            TaskUtils.sendFailurePatch(this, currentState, patchEx);
-                                        }
-                                    }));
+
                         }));
     }
 
@@ -339,9 +347,143 @@ public class SingleResourceStatsCollectionTaskService
         ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1391
         // Set the documentSelfLink to <computeId>-<metricName>
-        stat.documentSelfLink = UriUtils.getLastPathSegment(computeLink) + "-" + metricName;
+        stat.documentSelfLink = UriUtils.getLastPathSegment(computeLink) + HYPHEN + metricName;
         stat.value = serviceStat.latestValue;
         stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
         sendRequest(Operation.createPost(persistStatsUri).setBodyNoCloning(stat));
     }
+
+    /**
+     * Gets the last collection for a compute for a given adapter URI.
+     * As a first step, the in memory stats for the compute are queried and if the metric
+     * for the last collection time is found, then the timestamp for that is returned.
+     *
+     * Else, the ResoureMetric table is queried and the latest version of the metric is used
+     * to determine the last collection time for the stats.
+     */
+    private void populateLastCollectionTimeForMetricsInStatsRequest(
+            SingleResourceStatsCollectionTaskState currentState,
+            ComputeStatsRequest computeStatsRequest, URI patchUri, List<String> tenantLinks) {
+        URI computeStatsUri = UriUtils
+                .buildStatsUri(UriUtils.buildUri(getHost(), currentState.computeLink));
+        Operation.createGet(computeStatsUri)
+                .setCompletion(
+                        (o, e) -> {
+                            if (e != null) {
+                                logSevere(
+                                        "Could not get the last collection time from in memory stats: %s",
+                                        Utils.toString(e));
+                                // get the value from the persisted store.
+                                populateLastCollectionTimeFromPersistenceStore(currentState,
+                                        computeStatsRequest, patchUri, tenantLinks);
+                            }
+                            ServiceStats serviceStats = o.getBody(ServiceStats.class);
+                            String statsAdapterLink = getAdapterLinkFromURI(patchUri);
+                            String lastSuccessfulRunMetricKey = getLastCollectionMetricKeyForAdapterLink(
+                                    statsAdapterLink, true);
+                            if (serviceStats.entries.containsKey(lastSuccessfulRunMetricKey)) {
+                                ServiceStat lastRunStat = serviceStats.entries
+                                        .get(lastSuccessfulRunMetricKey);
+                                computeStatsRequest.lastCollectionTimeMicrosUtc = lastRunStat.sourceTimeMicrosUtc;
+                                sendStatsRequestToAdapter(currentState, patchUri,
+                                        computeStatsRequest);
+                            } else {
+                                populateLastCollectionTimeFromPersistenceStore(currentState,
+                                        computeStatsRequest, patchUri, tenantLinks);
+                            }
+                        })
+                .sendWith(this);
+
+    }
+
+    /**
+     * Queries the metric for the last successful run and sets that value in the compute stats request.
+     * This value is used to determine the window size for which the stats collection happens from the provider.
+     */
+    private void populateLastCollectionTimeFromPersistenceStore(
+            SingleResourceStatsCollectionTaskState currentState,
+            ComputeStatsRequest computeStatsRequest, URI patchUri, List<String> tenantLinks) {
+        String statsAdapterLink = getAdapterLinkFromURI(patchUri);
+        String lastSuccessfulRunMetricKey = getLastCollectionMetricKeyForAdapterLink(
+                statsAdapterLink, false);
+        String metricSelfLink = UriUtils.getLastPathSegment(currentState.computeLink) + HYPHEN
+                + lastSuccessfulRunMetricKey;
+        Query.Builder builder = Query.Builder.create();
+        builder.addKindFieldClause(ResourceMetric.class);
+        builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
+                        metricSelfLink));
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.BROADCAST)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .setQuery(builder.build()).build();
+        task.tenantLinks = tenantLinks;
+        Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+                .setBody(task)
+                .setConnectionSharing(true)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logSevere(
+                                "Could not get the last collection time from persisted metrics: %s",
+                                Utils.toString(e));
+                        // Still continue calling into the adapter if the last known time for
+                        // successful collection is not known
+                        sendStatsRequestToAdapter(currentState,
+                                patchUri, computeStatsRequest);
+                        return;
+                    }
+                    // If the persisted metric can be found, use the value of the last successful
+                    // collection time otherwise do not set any value for the last collection time
+                    // while sending the request to the adapter.
+                    QueryTask responseTask = o.getBody(QueryTask.class);
+                    if (responseTask.results.documentCount > 0) {
+                        Object rawMetricObj = responseTask.results.documents
+                                .get(responseTask.results.documentLinks.get(0));
+                        ResourceMetric rawMetric = Utils.fromJson(rawMetricObj,
+                                ResourceMetric.class);
+                        computeStatsRequest.lastCollectionTimeMicrosUtc = rawMetric.timestampMicrosUtc;
+                    }
+                    sendStatsRequestToAdapter(currentState,
+                            patchUri, computeStatsRequest);
+                })
+                .sendWith(this);
+    }
+
+    /**
+     * Sends the Stats request to the Stats adapter
+     */
+    private void sendStatsRequestToAdapter(SingleResourceStatsCollectionTaskState currentState,
+            URI patchUri, Object patchBody) {
+        sendRequest(Operation.createPatch(patchUri)
+                .setBody(patchBody)
+                .setCompletion((patchOp, patchEx) -> {
+                    if (patchEx != null) {
+                        TaskUtils.sendFailurePatch(this, currentState, patchEx);
+                    }
+                }));
+    }
+
+    /**
+     * Forms the key to be used for looking up the last collection time for a given stats adapter.
+     */
+    private String getLastCollectionMetricKeyForAdapterLink(String statsAdapterLink ,boolean appendBucketSuffix) {
+        String lastSuccessfulRunMetricKey = statsAdapterLink
+                + HYPHEN
+                + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
+        if (appendBucketSuffix) {
+            lastSuccessfulRunMetricKey = lastSuccessfulRunMetricKey + StatsConstants.HOUR_SUFFIX;
+        }
+        return lastSuccessfulRunMetricKey;
+    }
+
+    /**
+     * Splits the passed in URI to extract the adapter link from the complete well formed URI with the host link.
+     */
+    private String getAdapterLinkFromURI(URI patchUri) {
+        String[] split = patchUri.toString()
+                .split(getHost().getUri().toString());
+        String statsAdapterLink = split[1];
+        return statsAdapterLink;
+    }
+
 }

@@ -48,11 +48,13 @@ public class PhotonModelConstants {
     public static final String UNIT_BYTES = "Bytes";
     public static final String UNIT_PERCENT = "Percent";
     public static final String UNIT_SECONDS = "Seconds";
+    public static final String UNIT_MICROSECONDS = "MicroSeconds";
     public static final String UNIT_COST = "USD";
 
     // Photon-Model specific constants
     public static final String API_CALL_COUNT = "APICallCount";
     public static final String SOURCE_TASK_LINK = "SourceTaskLink";
+    public static final String LAST_SUCCESSFUL_STATS_COLLECTION_TIME = "LastSuccessfulCollectionTimeInMicros";
 
     public static final int CLOUD_CONFIG_DEFAULT_FILE_INDEX = 0;
 

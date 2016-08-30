@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.HYPHEN;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,6 +45,7 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -60,7 +63,8 @@ public class AWSStatsService extends StatelessService {
 
     public AWSStatsService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.CLOUD_WATCH);
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.CLOUD_WATCH);
     }
 
     public static final String SELF_LINK = AWSUriPaths.AWS_STATS_ADAPTER;
@@ -83,7 +87,10 @@ public class AWSStatsService extends StatelessService {
     private static final String[] STATISTICS = { "Average", "SampleCount" };
     private static final String NAMESPACE = "AWS/EC2";
     private static final String DIMENSION_INSTANCE_ID = "InstanceId";
-    private static final int METRIC_COLLECTION_WINDOW_IN_MINUTES = 1;
+    // This is the maximum window size for which stats should be collected in case the last
+    // collection time is not specified.
+    // Defaulting to 1 hr.
+    private static final int MAX_METRIC_COLLECTION_WINDOW_IN_MINUTES = 60;
     private static final int METRIC_COLLECTION_PERIOD_IN_SECONDS = 60;
 
     // Cost
@@ -120,7 +127,8 @@ public class AWSStatsService extends StatelessService {
 
     @Override
     public void handleStop(Operation delete) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.CLOUD_WATCH);
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.CLOUD_WATCH);
         super.handleStop(delete);
     }
 
@@ -212,15 +220,13 @@ public class AWSStatsService extends StatelessService {
     private void getEC2Stats(AWSStatsDataHolder statsData, String[] metricNames,
             boolean isAggregateStats) {
         getAWSAsyncStatsClient(statsData);
-        long endTimeMicros = Utils.getNowMicrosUtc();
-
         for (String metricName : metricNames) {
             GetMetricStatisticsRequest metricRequest = new GetMetricStatisticsRequest();
-            // get datapoint for the last minute
-            metricRequest.setEndTime(new Date(TimeUnit.MICROSECONDS.toMillis(endTimeMicros)));
-            metricRequest.setStartTime(new Date(
-                    TimeUnit.MICROSECONDS.toMillis(endTimeMicros) -
-                            TimeUnit.MINUTES.toMillis(METRIC_COLLECTION_WINDOW_IN_MINUTES)));
+            // get datapoint for the for the passed in time window.
+            setRequestCollectionWindow(
+                    TimeUnit.MINUTES.toMicros(MAX_METRIC_COLLECTION_WINDOW_IN_MINUTES),
+                    statsData.statsRequest.lastCollectionTimeMicrosUtc,
+                    metricRequest);
             metricRequest.setPeriod(METRIC_COLLECTION_PERIOD_IN_SECONDS);
             metricRequest.setStatistics(Arrays.asList(STATISTICS));
             metricRequest.setNamespace(NAMESPACE);
@@ -250,15 +256,12 @@ public class AWSStatsService extends StatelessService {
         Dimension dimension = new Dimension();
         dimension.setName(DIMENSION_CURRENCY);
         dimension.setValue(DIMENSION_CURRENCY_VALUE);
-
-        long endTimeMicros = Utils.getNowMicrosUtc();
         GetMetricStatisticsRequest request = new GetMetricStatisticsRequest();
         // AWS pushes billing metrics every 4 hours.
         // Get at least 2 metrics to calculate the recent value and the burn rate
-        request.setEndTime(new Date(TimeUnit.MICROSECONDS.toMillis(endTimeMicros)));
-        request.setStartTime(new Date(
-                TimeUnit.MICROSECONDS.toMillis(endTimeMicros) -
-                        TimeUnit.DAYS.toMillis(COST_COLLECTION_WINDOW_IN_DAYS)));
+        setRequestCollectionWindow(TimeUnit.DAYS.toMicros(COST_COLLECTION_WINDOW_IN_DAYS),
+                statsData.statsRequest.lastCollectionTimeMicrosUtc,
+                request);
         request.setPeriod(COST_COLLECTION_PERIOD_IN_SECONDS);
         request.setStatistics(Arrays.asList(STATISTICS));
         request.setNamespace(BILLING_NAMESPACE);
@@ -269,6 +272,46 @@ public class AWSStatsService extends StatelessService {
         AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler = new AWSBillingStatsHandler(
                 this, statsData);
         statsData.billingClient.getMetricStatisticsAsync(request, resultHandler);
+    }
+
+    /**
+     * Sets the window of time for the statistics collection. If the last collection time is passed in the compute stats request
+     * then that value is used for getting the stats data from the provider else the default configured window for cost stats
+     * collection is used.
+     *
+     * Also, if the last collection time is really a long time ago, then the maximum collection window is honored to collect
+     * the stats from the provider.
+     */
+    private void setRequestCollectionWindow(Long defaultStartWindowMicros,
+            Long lastCollectionTimeMicros,
+            GetMetricStatisticsRequest request) {
+        long endTimeMicros = Utils.getNowMicrosUtc();
+        request.setEndTime(new Date(TimeUnit.MICROSECONDS.toMillis(endTimeMicros)));
+        Long maxCollectionWindowStartTime = TimeUnit.MICROSECONDS.toMillis(endTimeMicros) -
+                TimeUnit.MICROSECONDS.toMillis(defaultStartWindowMicros);
+        // If the last collection time is available, then the stats data from the provider will be
+        // fetched from that time onwards. Else, the stats collection is performed starting from the
+        // default configured window.
+        if (lastCollectionTimeMicros == null) {
+            request.setStartTime(new Date(maxCollectionWindowStartTime));
+            return;
+        }
+        if (lastCollectionTimeMicros != 0) {
+            if (lastCollectionTimeMicros > endTimeMicros) {
+                throw new IllegalArgumentException(
+                        "The last stats collection time cannot be in the future.");
+                // Check if the last collection time calls for collection to earlier than the
+                // maximum defined windows size.
+                // In that case default to the maximum collection window.
+            } else if (TimeUnit.MICROSECONDS
+                    .toMillis(lastCollectionTimeMicros) < maxCollectionWindowStartTime) {
+                request.setStartTime(new Date(maxCollectionWindowStartTime));
+                return;
+            }
+            request.setStartTime(new Date(
+                    TimeUnit.MICROSECONDS.toMillis(lastCollectionTimeMicros)));
+
+        }
     }
 
     private void getAWSAsyncStatsClient(AWSStatsDataHolder statsData) {
@@ -327,7 +370,8 @@ public class AWSStatsService extends StatelessService {
                     ServiceStat stat = new ServiceStat();
                     stat.latestValue = dp.getAverage();
                     stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(dp.getTimestamp().getTime());
+                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS
+                            .toMicros(dp.getTimestamp().getTime());
                     estimatedChargesDatapoints.add(stat);
                 }
 
@@ -349,7 +393,8 @@ public class AWSStatsService extends StatelessService {
                     - oldestDatapoint.getAverage())
                     / getDateDifference(oldestDatapoint.getTimestamp(),
                             latestDatapoint.getTimestamp(), TimeUnit.HOURS);
-            averageBurnRate.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+            averageBurnRate.unit = AWSStatsNormalizer
+                    .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
             averageBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
             this.statsData.statsResponse.statValues.put(
                     AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.AVERAGE_BURN_RATE),
@@ -364,10 +409,12 @@ public class AWSStatsService extends StatelessService {
                         - dayOldDatapoint.getAverage())
                         / getDateDifference(dayOldDatapoint.getTimestamp(),
                                 latestDatapoint.getTimestamp(), TimeUnit.HOURS);
-                currentBurnRate.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                currentBurnRate.unit = AWSStatsNormalizer
+                        .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
                 currentBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
                 this.statsData.statsResponse.statValues.put(
-                        AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.CURRENT_BURN_RATE),
+                        AWSStatsNormalizer
+                                .getNormalizedStatKeyValue(AWSConstants.CURRENT_BURN_RATE),
                         Collections.singletonList(currentBurnRate));
             }
         }
@@ -414,12 +461,14 @@ public class AWSStatsService extends StatelessService {
                     ServiceStat stat = new ServiceStat();
                     stat.latestValue = dp.getAverage();
                     stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(dp.getUnit());
-                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(dp.getTimestamp().getTime());
+                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS
+                            .toMicros(dp.getTimestamp().getTime());
                     statDatapoints.add(stat);
                 }
 
                 this.statsData.statsResponse.statValues
-                        .put(AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()), statDatapoints);
+                        .put(AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()),
+                                statDatapoints);
             }
 
             if (this.statsData.numResponses.incrementAndGet() == this.numOfMetrics) {
@@ -435,6 +484,16 @@ public class AWSStatsService extends StatelessService {
                 this.statsData.statsResponse.statValues.put(PhotonModelConstants.API_CALL_COUNT,
                         Collections.singletonList(apiCallCountStat));
 
+                // Put the last collection time as a stat
+                ServiceStat lastCollectionTimeStat = new ServiceStat();
+                lastCollectionTimeStat.latestValue = apiCallCountStat.sourceTimeMicrosUtc;
+                lastCollectionTimeStat.sourceTimeMicrosUtc = apiCallCountStat.sourceTimeMicrosUtc;
+                lastCollectionTimeStat.unit = PhotonModelConstants.UNIT_MICROSECONDS;
+                String lastCollectionTimeKey = AWSStatsService.SELF_LINK + HYPHEN
+                        + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
+                this.statsData.statsResponse.statValues.put(lastCollectionTimeKey,
+                        Collections.singletonList(lastCollectionTimeStat));
+
                 ComputeStatsResponse respBody = new ComputeStatsResponse();
                 this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;
                 respBody.taskStage = this.statsData.statsRequest.nextStage;
@@ -442,7 +501,7 @@ public class AWSStatsService extends StatelessService {
                 respBody.statsList.add(this.statsData.statsResponse);
                 this.service.sendRequest(
                         Operation.createPatch(this.statsData.statsRequest.taskReference)
-                        .setBody(respBody));
+                                .setBody(respBody));
             }
         }
     }

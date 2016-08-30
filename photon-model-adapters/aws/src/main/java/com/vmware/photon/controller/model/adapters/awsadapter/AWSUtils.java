@@ -473,5 +473,4 @@ public class AWSUtils {
         }
         return subnet;
     }
-
 }
