@@ -37,6 +37,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
@@ -262,7 +263,35 @@ public class InstanceClient extends BaseHelper {
         String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
         ManagedObjectReference rp = getResourcePoolForVm();
 
-        return deployer.deployOvf(ovfUri, host, folder, vmName, network, ds, props, config, rp);
+        ManagedObjectReference vm = deployer
+                .deployOvf(ovfUri, host, folder, vmName, network, ds, props, config, rp);
+
+        // Sometimes ComputeDescriptions created from an OVF can be modified. For such
+        // cases one more reconfiguration is needed to set the cpu/mem correctly.
+        reconfigure(vm);
+
+        if (this.state.powerState == PowerState.ON) {
+            new PowerStateClient(this.connection).changePowerState(vm, PowerState.ON, null, 0);
+        }
+
+        return vm;
+    }
+
+    /**
+     * Sets the cpu count/memory properties of a powered-off VM to the desired values.
+     * @param vm
+     * @throws Exception
+     */
+    private void reconfigure(ManagedObjectReference vm) throws Exception {
+        VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
+        spec.setNumCPUs((int) this.state.description.cpuCount);
+        spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
+
+        ManagedObjectReference reconfigTask = getVimPort().reconfigVMTask(vm, spec);
+        TaskInfo taskInfo = VimUtils.waitTaskEnd(this.connection, reconfigTask);
+        if (taskInfo.getState() == TaskInfoState.ERROR) {
+            VimUtils.rethrow(taskInfo.getError());
+        }
     }
 
     /**
