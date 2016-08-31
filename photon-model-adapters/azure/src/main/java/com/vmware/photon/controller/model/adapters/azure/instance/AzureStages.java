@@ -99,6 +99,11 @@ public enum AzureStages {
     ERROR,
 
     /**
+     * Stage to get public IP address.
+     */
+    GET_PUBLIC_IP_ADDRESS,
+
+    /**
      * Stage to get storage account keys.
      */
     GET_STORAGE_KEYS,

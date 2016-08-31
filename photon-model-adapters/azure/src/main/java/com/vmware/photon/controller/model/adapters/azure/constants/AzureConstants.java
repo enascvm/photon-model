@@ -55,9 +55,9 @@ public class AzureConstants {
     public static final String AZURE_SECURITY_GROUP_DESTINATION_ADDRESS_PREFIX = "*";
 
     // Azure Linux Security Group constants
-    public static final String AZURE_LINUX_SECURITY_GROUP_NAME = "default-allow-ssh";
-    public static final String AZURE_LINUX_SECURITY_GROUP_DESCRIPTION = "Allow SSH (TCP/22)";
-    public static final String AZURE_LINUX_SECURITY_GROUP_DESTINATION_PORT_RANGE = "22";
+    public static final String AZURE_LINUX_SECURITY_GROUP_NAME = "default-allow-all";
+    public static final String AZURE_LINUX_SECURITY_GROUP_DESCRIPTION = "Allow ALL";
+    public static final String AZURE_LINUX_SECURITY_GROUP_DESTINATION_PORT_RANGE = "*";
 
     // Azure Windows Security Group constants
     public static final String AZURE_WINDOWS_SECURITY_GROUP_NAME = "default-allow-rdp";

@@ -27,11 +27,14 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.io.File;
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -100,6 +103,7 @@ import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.Azure
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
@@ -281,7 +285,7 @@ public class AzureInstanceService extends StatelessService {
             initNIC(ctx, AzureStages.CREATE);
             break;
         case CREATE:
-            createVM(ctx, AzureStages.GET_STORAGE_KEYS);
+            createVM(ctx, AzureStages.GET_PUBLIC_IP_ADDRESS);
             break;
         // TODO VSYM-620: Enable monitoring on Azure VMs
         case ENABLE_MONITORING:
@@ -291,6 +295,9 @@ public class AzureInstanceService extends StatelessService {
                 this.handleError(ctx, e);
                 return;
             }
+            break;
+        case GET_PUBLIC_IP_ADDRESS:
+            getPublicIpAddress(ctx, AzureStages.GET_STORAGE_KEYS);
             break;
         case GET_STORAGE_KEYS:
             getStorageKeys(ctx, AzureStages.FINISHED);
@@ -359,7 +366,7 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        String resourceGroupName = ctx.vmName;
+        String resourceGroupName = getResourceGroupName(ctx);
 
         if (resourceGroupName == null || resourceGroupName.isEmpty()) {
             throw new IllegalArgumentException("Resource group name is required");
@@ -417,18 +424,7 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private void initResourceGroup(AzureAllocationContext ctx, AzureStages nextStage) {
-        String resourceGroupName = null;
-        if (ctx.child.customProperties != null) {
-            resourceGroupName = ctx.child.customProperties.get(RESOURCE_GROUP_NAME);
-        }
-
-        if (resourceGroupName == null && ctx.child.description.customProperties != null) {
-            resourceGroupName = ctx.child.description.customProperties.get(RESOURCE_GROUP_NAME);
-        }
-
-        if (resourceGroupName == null || resourceGroupName.isEmpty()) {
-            resourceGroupName = DEFAULT_GROUP_PREFIX + String.valueOf(System.currentTimeMillis());
-        }
+        String resourceGroupName = getResourceGroupName(ctx);
 
         logInfo("Creating resource group with name [%s]", resourceGroupName);
 
@@ -513,8 +509,10 @@ public class AzureInstanceService extends StatelessService {
                                         handleError(ctx, e);
                                         return;
                                     }
-                                    StorageDescription resultDesc = o.getBody(StorageDescription.class);
-                                    logInfo("Successfully created the StorageDescription [%s]", resultDesc.name);
+                                    StorageDescription resultDesc = o
+                                            .getBody(StorageDescription.class);
+                                    logInfo("Successfully created the StorageDescription [%s]",
+                                            resultDesc.name);
                                     ctx.storageDescription = resultDesc;
                                     ctx.bootDisk.storageDescriptionLink = resultDesc.documentSelfLink;
                                     Operation patch = Operation
@@ -721,6 +719,12 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
+        String cloudConfig = null;
+        if (bootDisk.bootConfig != null
+                && bootDisk.bootConfig.files.length > CLOUD_CONFIG_DEFAULT_FILE_INDEX) {
+            cloudConfig = bootDisk.bootConfig.files[CLOUD_CONFIG_DEFAULT_FILE_INDEX].contents;
+        }
+
         VirtualMachine request = new VirtualMachine();
         request.setLocation(ctx.resourceGroup.getLocation());
 
@@ -730,6 +734,15 @@ public class AzureInstanceService extends StatelessService {
         osProfile.setComputerName(vmName);
         osProfile.setAdminUsername(ctx.childAuth.userEmail);
         osProfile.setAdminPassword(ctx.childAuth.privateKey);
+        if (cloudConfig != null) {
+            try {
+                osProfile.setCustomData(Base64.getEncoder()
+                        .encodeToString(cloudConfig.getBytes(Utils.CHARSET)));
+            } catch (UnsupportedEncodingException e) {
+                logWarning("Error encoding user data");
+                return;
+            }
+        }
         request.setOsProfile(osProfile);
 
         // Set hardware profile.
@@ -810,6 +823,51 @@ public class AzureInstanceService extends StatelessService {
                                         .setReferer(getHost().getUri()));
                     }
                 });
+    }
+
+    /**
+     * Gets the public IP address from the VM and patches the compute state.
+     */
+    private void getPublicIpAddress(AzureAllocationContext ctx, AzureStages nextStage) {
+        NetworkManagementClient client = getNetworkManagementClient(ctx);
+        client.getPublicIPAddressesOperations().getAsync(ctx.resourceGroup.getName(),
+                ctx.publicIP.getName(),
+                null, new AzureAsyncCallback<PublicIPAddress>() {
+
+                    @Override
+                    public void onError(Throwable e) {
+                        handleError(ctx, e);
+                    }
+
+                    @Override
+                    public void onSuccess(
+                            ServiceResponse<PublicIPAddress> result) {
+                        ctx.publicIP = result.getBody();
+                        patchComputeResource(ctx, nextStage);
+                    }
+                });
+    }
+
+    private void patchComputeResource(AzureAllocationContext ctx, AzureStages nextStage) {
+        ComputeState resource = new ComputeState();
+        resource.address = ctx.publicIP.getIpAddress();
+
+        Operation computePatchOp = Operation
+                .createPatch(ctx.computeRequest.resourceReference)
+                .setBody(resource)
+                .setCompletion((ox, exc) -> {
+                    if (exc != null) {
+                        logSevere(exc);
+                        ctx.stage = AzureStages.ERROR;
+                        ctx.error = exc;
+                        handleAllocation(ctx);
+                        return;
+                    }
+                    logInfo("Finished patching compute state with VM PublicIP address");
+                    ctx.stage = nextStage;
+                    handleAllocation(ctx);
+                });
+        sendRequest(computePatchOp);
     }
 
     /**
@@ -1218,7 +1276,8 @@ public class AzureInstanceService extends StatelessService {
                         }
 
                         @Override
-                        public void onSuccess(ServiceResponse<List<VirtualMachineImageResource>> result) {
+                        public void onSuccess(
+                                ServiceResponse<List<VirtualMachineImageResource>> result) {
                             List<VirtualMachineImageResource> resource = result.getBody();
                             if (resource == null || resource.get(0) == null) {
                                 handleError(ctx,
@@ -1340,5 +1399,21 @@ public class AzureInstanceService extends StatelessService {
         } catch (Exception e) {
             handleError(ctx, e);
         }
+    }
+
+    private String getResourceGroupName(AzureAllocationContext ctx) {
+        String resourceGroupName = null;
+        if (ctx.child.customProperties != null) {
+            resourceGroupName = ctx.child.customProperties.get(RESOURCE_GROUP_NAME);
+        }
+
+        if (resourceGroupName == null && ctx.child.description.customProperties != null) {
+            resourceGroupName = ctx.child.description.customProperties.get(RESOURCE_GROUP_NAME);
+        }
+
+        if (resourceGroupName == null || resourceGroupName.isEmpty()) {
+            resourceGroupName = DEFAULT_GROUP_PREFIX + String.valueOf(System.currentTimeMillis());
+        }
+        return resourceGroupName;
     }
 }

@@ -54,6 +54,8 @@ public class PhotonModelConstants {
     public static final String API_CALL_COUNT = "APICallCount";
     public static final String SOURCE_TASK_LINK = "SourceTaskLink";
 
+    public static final int CLOUD_CONFIG_DEFAULT_FILE_INDEX = 0;
+
     private static final Map<String, String> METRIC_UNIT_MAP;
 
     static {
