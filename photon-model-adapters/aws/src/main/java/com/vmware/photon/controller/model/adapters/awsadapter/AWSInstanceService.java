@@ -665,7 +665,7 @@ public class AWSInstanceService extends StatelessService {
     }
 
     private void validateAWSCredentials(final AWSAllocation aws) {
-        if (aws.computeRequest.isMockRequest) {
+        if (aws.computeRequest.isMockRequest || AWSUtils.isAwsClientMock()) {
             aws.awsOperation.complete();
             return;
         }
@@ -684,8 +684,8 @@ public class AWSInstanceService extends StatelessService {
                                 ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
                                 r.statusCode = STATUS_CODE_UNAUTHORIZED;
                                 aws.awsOperation.fail(e, r);
+                                return;
                             }
-                            return;
                         }
 
                         aws.awsOperation.fail(e);
