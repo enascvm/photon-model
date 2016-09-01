@@ -15,11 +15,13 @@ package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -59,7 +61,7 @@ public class ComputeDescriptionService extends StatefulService {
         /**
          * Types of Compute hosts.
          */
-        public static enum ComputeType {
+        public enum ComputeType {
             VM_HOST, VM_GUEST, DOCKER_CONTAINER, PHYSICAL, OS_ON_PHYSICAL
         }
 
@@ -186,6 +188,10 @@ public class ComputeDescriptionService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI statsAdapterReference;
 
+        @Documentation(description = "Set of URIs for stats adapters of this host")
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Set<URI> statsAdapterReferences;
+
         /**
          * URI reference to the adapter used to enumerate instances of this
          * host.
@@ -256,10 +262,8 @@ public class ComputeDescriptionService extends StatefulService {
             return;
         }
 
-        Iterator<String> childIterator = state.supportedChildren.iterator();
-        while (childIterator.hasNext()) {
-            ComputeDescription.ComputeType type = ComputeDescription.ComputeType
-                    .valueOf(childIterator.next());
+        for (String supportedChild : state.supportedChildren) {
+            ComputeType type = ComputeType.valueOf(supportedChild);
             switch (type) {
             case PHYSICAL:
             case VM_HOST:
@@ -289,10 +293,8 @@ public class ComputeDescriptionService extends StatefulService {
         if (state.supportedChildren == null) {
             return;
         }
-        Iterator<String> childIterator = state.supportedChildren.iterator();
-        while (childIterator.hasNext()) {
-            ComputeDescription.ComputeType type = ComputeDescription.ComputeType
-                    .valueOf(childIterator.next());
+        for (String supportedChild : state.supportedChildren) {
+            ComputeType type = ComputeType.valueOf(supportedChild);
             switch (type) {
             case VM_HOST:
                 if (state.instanceAdapterReference == null) {
@@ -335,6 +337,8 @@ public class ComputeDescriptionService extends StatefulService {
                 "/healthAdapterReference");
         template.statsAdapterReference = UriUtils.buildUri(this.getHost(),
                 "/statsAdapterReference");
+        template.statsAdapterReferences = Collections.singleton(UriUtils.buildUri(
+                this.getHost(), "/customStatsAdapterReference"));
         template.enumerationAdapterReference = UriUtils.buildUri(
                 this.getHost(), "/enumerationAdapterReference");
 

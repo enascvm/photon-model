@@ -24,6 +24,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
@@ -39,7 +40,6 @@ import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.TaskService;
-import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 /**
  * Task service to kick off stats collection at a resource level.
@@ -47,18 +47,18 @@ import com.vmware.xenon.services.common.TaskService.TaskServiceState;
  * data for a set of resources
  *
  */
-public class SingleResourceStatsCollectionTaskService extends TaskService<SingleResourceStatsCollectionTaskState> {
+public class SingleResourceStatsCollectionTaskService
+        extends TaskService<SingleResourceStatsCollectionTaskState> {
 
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";
-
-
 
     public enum SingleResourceTaskCollectionStage {
         GET_DESCRIPTIONS, UPDATE_STATS
     }
 
-    public static class SingleResourceStatsCollectionTaskState extends TaskServiceState {
+    public static class SingleResourceStatsCollectionTaskState
+            extends TaskService.TaskServiceState {
         /**
          * compute resource link
          */
@@ -88,6 +88,9 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
          */
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public List<ComputeStats> statsList;
+
+        @Documentation(description = "The stats adapter reference")
+        public URI statsAdapterReference;
     }
 
     public SingleResourceStatsCollectionTaskService() {
@@ -177,7 +180,8 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
         }
     }
 
-    private void handleStagePatch(Operation op, SingleResourceStatsCollectionTaskState currentState) {
+    private void handleStagePatch(Operation op,
+            SingleResourceStatsCollectionTaskState currentState) {
         switch (currentState.taskStage) {
         case GET_DESCRIPTIONS:
             getDescriptions(op, currentState);
@@ -190,24 +194,49 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
         }
     }
 
-    private void getDescriptions(Operation op, SingleResourceStatsCollectionTaskState currentState) {
+    private void getDescriptions(Operation op,
+            SingleResourceStatsCollectionTaskState currentState) {
         URI computeDescUri = UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
                 currentState.computeLink));
         sendRequest(Operation
                 .createGet(computeDescUri)
                 .setCompletion(
                         (getOp, getEx) -> {
+                            if (getEx != null) {
+                                TaskUtils.sendFailurePatch(this, currentState, getEx);
+                                return;
+                            }
+
                             ComputeStateWithDescription computeStateWithDesc = getOp
                                     .getBody(ComputeStateWithDescription.class);
                             ComputeStatsRequest statsRequest = new ComputeStatsRequest();
                             URI patchUri = null;
                             Object patchBody = null;
-                            if (computeStateWithDesc.description != null &&
-                                    computeStateWithDesc.description.statsAdapterReference != null) {
+
+                            ComputeDescription description = computeStateWithDesc.description;
+                            URI statsAdapterReference = null;
+
+                            if (description != null) {
+
+                                // Only look in adapter references if statsAdapterReference is provided
+                                if (currentState.statsAdapterReference == null) {
+                                    statsAdapterReference = description.statsAdapterReference;
+                                } else if (description.statsAdapterReferences != null) {
+                                    for (URI uri : description.statsAdapterReferences) {
+                                        if (uri.equals(currentState.statsAdapterReference)) {
+                                            statsAdapterReference = uri;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (statsAdapterReference != null) {
                                 statsRequest.nextStage = SingleResourceTaskCollectionStage.UPDATE_STATS;
-                                statsRequest.resourceReference = UriUtils.buildUri(getHost(),computeStateWithDesc.documentSelfLink);
+                                statsRequest.resourceReference = UriUtils
+                                        .buildUri(getHost(), computeStateWithDesc.documentSelfLink);
                                 statsRequest.taskReference = getUri();
-                                patchUri = computeStateWithDesc.description.statsAdapterReference;
+                                patchUri = statsAdapterReference;
                                 patchBody = statsRequest;
                             } else {
                                 // no adapter associated with this resource, just patch completion
@@ -221,13 +250,14 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
                                     .setBody(patchBody)
                                     .setCompletion((patchOp, patchEx) -> {
                                         if (patchEx != null) {
-                                            TaskUtils.sendFailurePatch(this, new SingleResourceStatsCollectionTaskState(), patchEx);
+                                            TaskUtils.sendFailurePatch(this, currentState, patchEx);
                                         }
                                     }));
                         }));
     }
 
-    private void updateAndPersistStats(Operation op, SingleResourceStatsCollectionTaskState currentState) {
+    private void updateAndPersistStats(Operation op,
+            SingleResourceStatsCollectionTaskState currentState) {
         Collection<Operation> operations = new ArrayList<>();
         for (ComputeStats stats : currentState.statsList) {
             URI statsUri = UriUtils.buildStatsUri(getHost(), stats.computeLink);
@@ -236,32 +266,41 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
             for (Entry<String, List<ServiceStat>> entries : stats.statValues.entrySet()) {
                 for (ServiceStat entry : entries.getValue()) {
                     ServiceStats.ServiceStat minuteStats = new ServiceStats.ServiceStat();
-                    minuteStats.name = new StringBuilder(entries.getKey()).append(StatsConstants.MIN_SUFFIX).toString();
+                    minuteStats.name = new StringBuilder(entries.getKey())
+                            .append(StatsConstants.MIN_SUFFIX).toString();
                     minuteStats.latestValue = entry.latestValue;
                     minuteStats.sourceTimeMicrosUtc = entry.sourceTimeMicrosUtc;
                     minuteStats.unit = entry.unit;
-                    minuteStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_MINUTE_DATA,
-                            StatsConstants.BUCKET_SIZE_MINUTES_IN_MILLIS, EnumSet.allOf(AggregationType.class));
+                    minuteStats.timeSeriesStats = new TimeSeriesStats(
+                            StatsConstants.NUM_BUCKETS_MINUTE_DATA,
+                            StatsConstants.BUCKET_SIZE_MINUTES_IN_MILLIS,
+                            EnumSet.allOf(AggregationType.class));
 
                     ServiceStats.ServiceStat hourStats = new ServiceStats.ServiceStat();
-                    hourStats.name = new StringBuilder(entries.getKey()).append(StatsConstants.HOUR_SUFFIX).toString();
+                    hourStats.name = new StringBuilder(entries.getKey())
+                            .append(StatsConstants.HOUR_SUFFIX).toString();
                     hourStats.latestValue = entry.latestValue;
                     hourStats.sourceTimeMicrosUtc = entry.sourceTimeMicrosUtc;
                     hourStats.unit = entry.unit;
-                    hourStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_HOURLY_DATA,
-                            StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS, EnumSet.allOf(AggregationType.class));
+                    hourStats.timeSeriesStats = new TimeSeriesStats(
+                            StatsConstants.NUM_BUCKETS_HOURLY_DATA,
+                            StatsConstants.BUCKET_SIZE_HOURS_IN_MILLS,
+                            EnumSet.allOf(AggregationType.class));
                     operations.add(Operation.createPost(statsUri)
                             .setBody(hourStats));
                     operations.add(Operation.createPost(statsUri)
                             .setBody(minuteStats));
 
                     ServiceStats.ServiceStat dailyStats = new ServiceStats.ServiceStat();
-                    dailyStats.name = new StringBuilder(entries.getKey()).append(StatsConstants.DAILY_SUFFIX).toString();
+                    dailyStats.name = new StringBuilder(entries.getKey())
+                            .append(StatsConstants.DAILY_SUFFIX).toString();
                     dailyStats.latestValue = entry.latestValue;
                     dailyStats.sourceTimeMicrosUtc = entry.sourceTimeMicrosUtc;
                     dailyStats.unit = entry.unit;
-                    dailyStats.timeSeriesStats = new TimeSeriesStats(StatsConstants.NUM_BUCKETS_DAILY_DATA,
-                            StatsConstants.BUCKET_SIZE_DAYS_IN_MILLS, EnumSet.allOf(AggregationType.class));
+                    dailyStats.timeSeriesStats = new TimeSeriesStats(
+                            StatsConstants.NUM_BUCKETS_DAILY_DATA,
+                            StatsConstants.BUCKET_SIZE_DAYS_IN_MILLS,
+                            EnumSet.allOf(AggregationType.class));
                     operations.add(Operation.createPost(statsUri)
                             .setBody(dailyStats));
                     operations.add(Operation.createPost(statsUri)
@@ -284,7 +323,8 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
                 .setCompletion(
                         (ops, exc) -> {
                             if (exc != null) {
-                                TaskUtils.sendFailurePatch(this, new SingleResourceStatsCollectionTaskState(), exc.values());
+                                TaskUtils.sendFailurePatch(this,
+                                        new SingleResourceStatsCollectionTaskState(), exc.values());
                                 return;
                             }
                             SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
@@ -294,16 +334,14 @@ public class SingleResourceStatsCollectionTaskService extends TaskService<Single
         operationJoin.sendWith(this);
     }
 
-    private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat, String computeLink) {
+    private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat,
+            String computeLink) {
         ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1391
         // Set the documentSelfLink to <computeId>-<metricName>
         stat.documentSelfLink = UriUtils.getLastPathSegment(computeLink) + "-" + metricName;
         stat.value = serviceStat.latestValue;
         stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
-        getHost().sendRequest(Operation
-                        .createPost(persistStatsUri)
-                        .setReferer(getUri())
-                        .setBodyNoCloning(stat));
+        sendRequest(Operation.createPost(persistStatsUri).setBodyNoCloning(stat));
     }
 }

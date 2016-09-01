@@ -21,9 +21,11 @@ import static org.junit.Assert.assertNotNull;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.Before;
@@ -35,7 +37,6 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.UriUtils;
@@ -141,8 +142,8 @@ public class ComputeDescriptionServiceTest extends Suite {
             ComputeDescriptionService.ComputeDescription startState = buildValidStartState();
             ComputeDescriptionService.ComputeDescription returnState = postServiceSynchronously(
                     ComputeDescriptionService.FACTORY_LINK,
-                            startState,
-                            ComputeDescriptionService.ComputeDescription.class);
+                    startState,
+                    ComputeDescriptionService.ComputeDescription.class);
 
             assertNotNull(returnState);
             assertThat(returnState.id, is(startState.id));
@@ -157,16 +158,16 @@ public class ComputeDescriptionServiceTest extends Suite {
             ComputeDescriptionService.ComputeDescription startState = buildValidStartState();
             ComputeDescriptionService.ComputeDescription returnState = postServiceSynchronously(
                     ComputeDescriptionService.FACTORY_LINK,
-                            startState,
-                            ComputeDescriptionService.ComputeDescription.class);
+                    startState,
+                    ComputeDescriptionService.ComputeDescription.class);
 
             assertNotNull(returnState);
             assertThat(returnState.name, is(startState.name));
             startState.name = "new-name";
             returnState = postServiceSynchronously(
                     ComputeDescriptionService.FACTORY_LINK,
-                            startState,
-                            ComputeDescriptionService.ComputeDescription.class);
+                    startState,
+                    ComputeDescriptionService.ComputeDescription.class);
             assertThat(returnState.name, is(startState.name));
         }
 
@@ -177,8 +178,8 @@ public class ComputeDescriptionServiceTest extends Suite {
 
             ComputeDescriptionService.ComputeDescription returnState = postServiceSynchronously(
                     ComputeDescriptionService.FACTORY_LINK,
-                            startState,
-                            ComputeDescriptionService.ComputeDescription.class);
+                    startState,
+                    ComputeDescriptionService.ComputeDescription.class);
 
             assertNotNull(returnState);
             assertNotNull(returnState.id);
@@ -228,12 +229,12 @@ public class ComputeDescriptionServiceTest extends Suite {
 
             ComputeDescriptionService.ComputeDescription returnState = postServiceSynchronously(
                     ComputeDescriptionService.FACTORY_LINK,
-                            startState, ComputeDescriptionService.ComputeDescription.class);
+                    startState, ComputeDescriptionService.ComputeDescription.class);
 
             ComputeDescriptionService.ComputeDescription patchState = new ComputeDescriptionService.ComputeDescription();
-            patchState.tenantLinks = new ArrayList<String>();
+            patchState.tenantLinks = new ArrayList<>();
             patchState.tenantLinks.add("tenant1");
-            patchState.groupLinks = new HashSet<String>();
+            patchState.groupLinks = new HashSet<>();
             patchState.groupLinks.add("group1");
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
@@ -246,7 +247,48 @@ public class ComputeDescriptionServiceTest extends Suite {
             assertEquals(returnState.groupLinks, patchState.groupLinks);
 
         }
+
+        @Test
+        public void testCustomStatsAdapterPatch() throws Throwable {
+            ComputeDescriptionService.ComputeDescription startState = buildValidStartState();
+
+            ComputeDescriptionService.ComputeDescription returnState = postServiceSynchronously(
+                    ComputeDescriptionService.FACTORY_LINK,
+                    startState, ComputeDescriptionService.ComputeDescription.class);
+
+            Set<URI> customStatsAdapterReferences = new HashSet<>();
+            ComputeDescriptionService.ComputeDescription patchState = new ComputeDescriptionService.ComputeDescription();
+            patchState.statsAdapterReferences = new HashSet<>(
+                    Collections.singletonList(UriUtils.buildUri(this.host, "/mock-stats-adapter")));
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            customStatsAdapterReferences.addAll(patchState.statsAdapterReferences);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    ComputeDescriptionService.ComputeDescription.class);
+
+            assertEquals(customStatsAdapterReferences,
+                    returnState.statsAdapterReferences);
+
+            patchState = new ComputeDescriptionService.ComputeDescription();
+            patchState.statsAdapterReferences = new HashSet<>(
+                    Collections.singletonList(UriUtils.buildUri(this.host, "/foo-stats-adapter")));
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            customStatsAdapterReferences.addAll(patchState.statsAdapterReferences);
+
+            returnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    ComputeDescriptionService.ComputeDescription.class);
+
+            assertEquals(customStatsAdapterReferences,
+                    returnState.statsAdapterReferences);
+        }
     }
+
     /**
      * This class implements tests for query.
      */
@@ -263,7 +305,7 @@ public class ComputeDescriptionServiceTest extends Suite {
 
             ComputeDescriptionService.ComputeDescription startState = postServiceSynchronously(
                     ComputeDescriptionService.FACTORY_LINK, disk,
-                            ComputeDescriptionService.ComputeDescription.class);
+                    ComputeDescriptionService.ComputeDescription.class);
 
             String kind = Utils
                     .buildKind(ComputeDescriptionService.ComputeDescription.class);
@@ -318,14 +360,15 @@ public class ComputeDescriptionServiceTest extends Suite {
             String kind = Utils
                     .buildKind(ComputeDescriptionService.ComputeDescription.class);
             String propertyName = QueryTask.QuerySpecification
-                    .buildCollectionItemName(ComputeDescriptionService.ComputeDescription.FIELD_NAME_SUPPORTED_CHILDREN);
+                    .buildCollectionItemName(
+                            ComputeDescriptionService.ComputeDescription.FIELD_NAME_SUPPORTED_CHILDREN);
 
             // Query computes with newCustomPropClause and expect 1 instance
             QueryTask q = createDirectQueryTask(
-                            kind,
-                            propertyName,
-                            ComputeDescriptionService.ComputeDescription.ComputeType.DOCKER_CONTAINER
-                                    .toString());
+                    kind,
+                    propertyName,
+                    ComputeDescriptionService.ComputeDescription.ComputeType.DOCKER_CONTAINER
+                            .toString());
             queryComputes(q, 1);
         }
 

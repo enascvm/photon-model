@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks.monitoring;
 
+import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,7 +24,6 @@ import com.vmware.photon.controller.model.tasks.ComputeSubTaskService;
 import com.vmware.photon.controller.model.tasks.ComputeSubTaskService.ComputeSubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.TaskState.TaskStage;
@@ -33,7 +33,6 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService;
-import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 /**
  * Service to collect stats from compute instances under the resource pool. This task is a one shot
@@ -57,7 +56,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
      * This class defines the document state associated with a single StatsCollectionTaskService
      * instance.
      */
-    public static class StatsCollectionTaskState extends TaskServiceState {
+    public static class StatsCollectionTaskState extends TaskService.TaskServiceState {
 
         /**
          * Reference URI to the resource pool.
@@ -65,6 +64,8 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         public String resourcePoolLink;
 
         public StatsCollectionStage taskStage;
+
+        public URI statsAdapterReference;
 
         /**
          * cursor for obtaining compute services
@@ -247,16 +248,18 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                     // kick off a collection task for each resource and track completion
                     // via the compute subtask
                     for (String computeLink : computeResources) {
-                        createSingleResourceComputeTask(computeLink, body.documentSelfLink);
+                        createSingleResourceComputeTask(computeLink, body.documentSelfLink, currentState.statsAdapterReference);
                     }
                 });
         getHost().startService(startPost, new ComputeSubTaskService());
     }
 
-    private void createSingleResourceComputeTask(String computeLink, String subtaskLink) {
+    private void createSingleResourceComputeTask(String computeLink, String subtaskLink,
+            URI statsAdapterReference) {
         SingleResourceStatsCollectionTaskState initState = new SingleResourceStatsCollectionTaskState();
         initState.parentLink = subtaskLink;
         initState.computeLink = computeLink;
+        initState.statsAdapterReference = statsAdapterReference;
         ComputeSubTaskState patchState = new ComputeSubTaskState();
         patchState.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
         initState.parentPatchBody = patchState;
