@@ -27,6 +27,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -48,7 +49,8 @@ public class PhotonModelServices {
             StorageDescriptionService.FACTORY_LINK,
             ResourceMetricService.FACTORY_LINK,
             ResourceAggregateMetricsService.FACTORY_LINK,
-            EndpointService.FACTORY_LINK };
+            EndpointService.FACTORY_LINK,
+            TagService.FACTORY_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
 
@@ -64,6 +66,7 @@ public class PhotonModelServices {
         host.startFactory(new FirewallService());
         host.startFactory(new StorageDescriptionService());
         host.startFactory(new EndpointService());
+        host.startFactory(new TagService());
         host.startFactory(ResourceMetricService.class, ResourceMetricService::createFactory);
         host.startFactory(ResourceAggregateMetricsService.class, ResourceAggregateMetricsService::createFactory);
     }

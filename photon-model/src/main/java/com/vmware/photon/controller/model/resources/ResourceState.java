@@ -26,11 +26,12 @@ import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
  */
 public class ResourceState extends ServiceDocument {
 
-    public static final String FIELD_NAME_GROUP_LINKS = "groupLinks";
-    public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
-    public static final String FIELD_NAME_TENANT_LINKS = "tenantLinks";
     public static final String FIELD_NAME_ID = "id";
     public static final String FIELD_NAME_NAME = "name";
+    public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
+    public static final String FIELD_NAME_TENANT_LINKS = "tenantLinks";
+    public static final String FIELD_NAME_GROUP_LINKS = "groupLinks";
+    public static final String FIELD_NAME_TAG_LINKS = "tagLinks";
 
     /**
      * Identifier of this resource instance
@@ -56,15 +57,24 @@ public class ResourceState extends ServiceDocument {
     public Map<String, String> customProperties;
 
     /**
-     * A list of tenant links can access this disk resource.
+     * A list of tenant links that can access this resource.
      */
     @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
     public List<String> tenantLinks;
 
     /**
      * Set of groups the resource belongs to
+     *
+     * @see ResourceGroupService
      */
     @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
     public Set<String> groupLinks;
 
+    /**
+     * Set of tags set on this resource.
+     *
+     * @see TagService
+     */
+    @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
+    public Set<String> tagLinks;
 }

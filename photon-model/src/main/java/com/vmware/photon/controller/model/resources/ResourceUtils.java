@@ -67,10 +67,8 @@ public class ResourceUtils {
             ResourceState source, ResourceState patch) {
         boolean isChanged = Utils.mergeWithState(description, source, patch);
 
-        if (patch.tenantLinks != null
-                && !patch.tenantLinks.isEmpty()) {
-            if (source.tenantLinks == null
-                    || source.tenantLinks.isEmpty()) {
+        if (patch.tenantLinks != null && !patch.tenantLinks.isEmpty()) {
+            if (source.tenantLinks == null || source.tenantLinks.isEmpty()) {
                 source.tenantLinks = patch.tenantLinks;
                 isChanged = true;
             } else {
@@ -83,10 +81,8 @@ public class ResourceUtils {
             }
         }
 
-        if (patch.groupLinks != null
-                && !patch.groupLinks.isEmpty()) {
-            if (source.groupLinks == null
-                    || source.groupLinks.isEmpty()) {
+        if (patch.groupLinks != null && !patch.groupLinks.isEmpty()) {
+            if (source.groupLinks == null || source.groupLinks.isEmpty()) {
                 source.groupLinks = patch.groupLinks;
                 isChanged = true;
             } else {
@@ -95,6 +91,18 @@ public class ResourceUtils {
                 }
             }
         }
+
+        if (patch.tagLinks != null && !patch.tagLinks.isEmpty()) {
+            if (source.tagLinks == null || source.tagLinks.isEmpty()) {
+                source.tagLinks = patch.tagLinks;
+                isChanged = true;
+            } else {
+                if (source.tagLinks.addAll(patch.tagLinks)) {
+                    isChanged = true;
+                }
+            }
+        }
+
         return isChanged;
     }
 }
