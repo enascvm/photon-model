@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.4.5-SNAPSHOT
+
 ## 0.4.4
 
 * Support multiple stats adapter per compute. Also enhance
