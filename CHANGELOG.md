@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.4.4-SNAPSHOT
+## 0.4.4
 
 * Support multiple stats adapter per compute. Also enhance
   StatsCollectionTaskState to accept a stats adapter reference. This
