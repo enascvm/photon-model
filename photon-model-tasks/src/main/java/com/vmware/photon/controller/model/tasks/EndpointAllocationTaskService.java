@@ -40,9 +40,11 @@ import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationSequence;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
@@ -90,6 +92,10 @@ public class EndpointAllocationTaskService
         @Documentation(description = "URI reference to the adapter used to validate and enhance the endpoint data.")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
         public URI adapterReference;
+
+        @Documentation(description = " List of tenants that can access this task.")
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = { PropertyIndexingOption.EXPAND })
+        public List<String> tenantLinks;
 
         @Documentation(description = "Task's options")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)

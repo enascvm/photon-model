@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINK;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SERVICE_USE;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
@@ -31,6 +32,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
@@ -85,7 +87,7 @@ public class EndpointRemovalTaskService
         public SubStage taskSubStage;
 
         @Documentation(description = "A list of tenant links which can access this task.")
-        @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = { PropertyIndexingOption.EXPAND })
         public List<String> tenantLinks;
 
         /**

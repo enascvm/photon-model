@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 
@@ -38,6 +39,7 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
+
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
@@ -178,6 +180,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         endpoint.endpointProperties.put(REGION_KEY, "test-regionId");
         endpoint.endpointProperties.put(PRIVATE_KEY_KEY, "test-secreteKey");
         endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, "test-accessKey");
+        endpoint.tenantLinks = Collections.singletonList("tenant-1");
         return endpoint;
     }
 
@@ -185,6 +188,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
             EndpointState endpoint) {
         EndpointAllocationTaskState endpointAllocationTaskState = new EndpointAllocationTaskState();
         endpointAllocationTaskState.endpointState = endpoint;
+        endpointAllocationTaskState.tenantLinks = endpoint.tenantLinks;
         return endpointAllocationTaskState;
     }
 
