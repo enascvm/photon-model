@@ -21,6 +21,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -98,7 +99,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(connection, ctx.child,
-                                ctx.parent);
+                                ctx.parent, ctx.disks);
 
                         ComputeState state;
 
@@ -119,6 +120,13 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             // assume they will patch the task if they have provisioned the vm
                             return;
                         }
+
+                        // power on machine before enrichment
+                        if (ctx.child.powerState == PowerState.ON) {
+                            new PowerStateClient(connection).changePowerState(client.getVm(), PowerState.ON, null, 0);
+                        }
+
+                        client.enrichStateFromVm(state);
 
                         Operation patchResource = createComputeResourcePatch(state,
                                 ctx.computeReference);
@@ -168,7 +176,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
                     }
 
                     try {
-                        InstanceClient client = new InstanceClient(conn, ctx.child, ctx.parent);
+                        InstanceClient client = new InstanceClient(conn, ctx.child, ctx.parent,
+                                ctx.disks);
                         client.deleteInstance();
 
                         Operation finishTask = mgr.createTaskPatch(TaskStage.FINISHED);

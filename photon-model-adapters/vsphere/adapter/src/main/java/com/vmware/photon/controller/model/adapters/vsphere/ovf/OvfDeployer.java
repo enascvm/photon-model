@@ -59,8 +59,8 @@ public class OvfDeployer extends BaseHelper {
     private static final Logger logger = Logger.getLogger(OvfDeployer.class.getName());
     private static final String PROP_INFO = "info";
 
-    private static final String TRANSPORT_GUESTINFO = "com.vmware.guestInfo";
-    private static final String TRANSPORT_ISO = "iso";
+    public static final String TRANSPORT_GUESTINFO = "com.vmware.guestInfo";
+    public static final String TRANSPORT_ISO = "iso";
 
     public OvfDeployer(Connection connection) throws ClientException, FinderException {
         super(connection);

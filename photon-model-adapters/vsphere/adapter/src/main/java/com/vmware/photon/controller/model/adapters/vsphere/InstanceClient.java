@@ -18,10 +18,12 @@ import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROU
 import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -37,11 +39,12 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.vim25.ArrayOfVirtualDevice;
+import com.vmware.vim25.ArrayUpdateOperation;
 import com.vmware.vim25.FileAlreadyExists;
 import com.vmware.vim25.InsufficientResourcesFaultFaultMsg;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
@@ -55,6 +58,8 @@ import com.vmware.vim25.OvfNetworkMapping;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
+import com.vmware.vim25.VAppPropertyInfo;
+import com.vmware.vim25.VAppPropertySpec;
 import com.vmware.vim25.VirtualCdrom;
 import com.vmware.vim25.VirtualCdromAtapiBackingInfo;
 import com.vmware.vim25.VirtualCdromIsoBackingInfo;
@@ -84,6 +89,7 @@ import com.vmware.vim25.VirtualMachineRelocateSpec;
 import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSCSISharing;
 import com.vmware.vim25.VirtualSIOController;
+import com.vmware.vim25.VmConfigSpec;
 
 /**
  * A simple client for vsphere. Consist of a valid connection and some context.
@@ -95,8 +101,11 @@ public class InstanceClient extends BaseHelper {
     private static final Logger logger = Logger.getLogger(InstanceClient.class.getName());
     public static final String CONFIG_DESC_LINK = "photon.descriptionLink";
     public static final String CONFIG_PARENT_LINK = "photon.parentLink";
+    private static final String CLOUD_CONFIG_PROPERTY_USER_DATA = "user-data";
+    private static final String CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS = "public-keys";
     private final ComputeStateWithDescription state;
     private final ComputeStateWithDescription parent;
+    private final List<DiskState> disks;
 
     private final GetMoRef get;
     private final Finder finder;
@@ -105,12 +114,13 @@ public class InstanceClient extends BaseHelper {
 
     public InstanceClient(Connection connection,
             ComputeStateWithDescription resource,
-            ComputeStateWithDescription parent)
+            ComputeStateWithDescription parent, List<DiskState> disks)
             throws ClientException, FinderException {
         super(connection);
 
         this.state = resource;
         this.parent = parent;
+        this.disks = disks;
 
         // the datacenterId is used as a ref to a vSphere datacenter name
         String id = resource.description.datacenterId;
@@ -129,6 +139,16 @@ public class InstanceClient extends BaseHelper {
             throws Exception {
         ManagedObjectReference vm = cloneVm(template);
 
+        VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
+        if (populateCloudConfig(spec)) {
+            ManagedObjectReference task = getVimPort().reconfigVMTask(vm, spec);
+            TaskInfo info = waitTaskEnd(task);
+
+            if (info.getState() == TaskInfoState.ERROR) {
+                return VimUtils.rethrow(info.getError());
+            }
+        }
+
         if (vm == null) {
             // vm was created by someone else
             return null;
@@ -140,8 +160,6 @@ public class InstanceClient extends BaseHelper {
         ComputeState state = new ComputeState();
         state.resourcePoolLink = VimUtils
                 .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
-
-        enrichStateFromVm(state, vm);
 
         return state;
     }
@@ -156,7 +174,7 @@ public class InstanceClient extends BaseHelper {
 
         VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
         cloneSpec.setLocation(relocSpec);
-        cloneSpec.setPowerOn(true);
+        cloneSpec.setPowerOn(false);
         cloneSpec.setTemplate(false);
 
         String displayName = this.state.name;
@@ -228,8 +246,6 @@ public class InstanceClient extends BaseHelper {
         state.resourcePoolLink = VimUtils
                 .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
 
-        enrichStateFromVm(state, vm);
-
         return state;
     }
 
@@ -269,10 +285,6 @@ public class InstanceClient extends BaseHelper {
         // Sometimes ComputeDescriptions created from an OVF can be modified. For such
         // cases one more reconfiguration is needed to set the cpu/mem correctly.
         reconfigure(vm);
-
-        if (this.state.powerState == PowerState.ON) {
-            new PowerStateClient(this.connection).changePowerState(vm, PowerState.ON, null, 0);
-        }
 
         return vm;
     }
@@ -606,26 +618,25 @@ public class InstanceClient extends BaseHelper {
      * in the {@link ComputeState#customProperties}
      *
      * @param state
-     * @param ref
      * @throws InvalidPropertyFaultMsg
      * @throws RuntimeFaultFaultMsg
      */
-    private void enrichStateFromVm(ComputeState state, ManagedObjectReference ref)
+    public void enrichStateFromVm(ComputeState state)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-        Map<String, Object> props = this.get.entityProps(ref,
+        Map<String, Object> props = this.get.entityProps(this.vm,
                 VimPath.vm_config_instanceUuid,
                 VimPath.vm_config_name,
                 VimPath.vm_config_hardware_device,
                 VimPath.vm_runtime_powerState);
 
-        VmOverlay vm = new VmOverlay(ref, props);
+        VmOverlay vm = new VmOverlay(this.vm, props);
         state.id = vm.getInstanceUuid();
         state.primaryMAC = vm.getPrimaryMac();
         state.powerState = vm.getPowerState();
         state.name = vm.getName();
 
         CustomProperties.of(state)
-                .put(CustomProperties.MOREF, ref)
+                .put(CustomProperties.MOREF, this.vm)
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
     }
 
@@ -646,6 +657,7 @@ public class InstanceClient extends BaseHelper {
         String datastoreName = this.get.entityProp(datastore, "name");
         VirtualMachineConfigSpec spec = buildVirtualMachineConfigSpec(datastoreName);
 
+        populateCloudConfig(spec);
         ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool, null);
 
         TaskInfo info = waitTaskEnd(vmTask);
@@ -661,6 +673,77 @@ public class InstanceClient extends BaseHelper {
         }
 
         return (ManagedObjectReference) info.getResult();
+    }
+
+    /**
+     * Puts the cloud-config user data in the OVF environment
+     * @param spec
+     */
+    private boolean populateCloudConfig(VirtualMachineConfigSpec spec) {
+        if (this.disks == null || this.disks.size() == 0) {
+            return false;
+        }
+
+        DiskState bootDisk = this.disks.stream().filter(d -> d.type == DiskType.HDD)
+                .findFirst().orElse(null);
+
+        if (bootDisk == null) {
+            return false;
+        }
+
+        boolean customizationsApplied = false;
+
+        VmConfigSpec vapp = new VmConfigSpec();
+        vapp.getOvfEnvironmentTransport().add(OvfDeployer.TRANSPORT_ISO);
+
+        String cloudConfig = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_USER_DATA);
+        if (cloudConfig != null) {
+            VAppPropertySpec property = new VAppPropertySpec();
+            property.setOperation(ArrayUpdateOperation.ADD);
+            VAppPropertyInfo userDataInfo = new VAppPropertyInfo();
+            userDataInfo.setType("string");
+            userDataInfo.setUserConfigurable(true);
+            userDataInfo.setId(CLOUD_CONFIG_PROPERTY_USER_DATA);
+            userDataInfo.setValue(Base64.getEncoder().encodeToString(cloudConfig.getBytes()));
+            property.setInfo(userDataInfo);
+            vapp.getProperty().add(property);
+            customizationsApplied = true;
+        }
+
+        String publicKeys = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
+        if (publicKeys != null) {
+            VAppPropertySpec property = new VAppPropertySpec();
+            property.setOperation(ArrayUpdateOperation.ADD);
+            VAppPropertyInfo publicKeysInfo = new VAppPropertyInfo();
+            if (customizationsApplied) {
+                publicKeysInfo.setKey(1);
+            }
+            publicKeysInfo.setType("string");
+            publicKeysInfo.setUserConfigurable(true);
+            publicKeysInfo.setId(CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
+            publicKeysInfo.setValue(publicKeys);
+            property.setInfo(publicKeysInfo);
+            vapp.getProperty().add(property);
+            customizationsApplied = true;
+        }
+
+        if (customizationsApplied) {
+            spec.setVAppConfig(vapp);
+        }
+
+        return customizationsApplied;
+    }
+
+    private String getFileItemByPath(DiskState bootDisk, String fileName) {
+        if (bootDisk != null && bootDisk.bootConfig != null && bootDisk.bootConfig.files != null) {
+            for (FileEntry e : bootDisk.bootConfig.files) {
+                if (Objects.equals(fileName, e.path)) {
+                    return e.contents;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -846,6 +929,10 @@ public class InstanceClient extends BaseHelper {
         } else {
             return this.finder.defaultNetwork().object;
         }
+    }
+
+    public ManagedObjectReference getVm() {
+        return this.vm;
     }
 
     public static class ClientException extends Exception {
