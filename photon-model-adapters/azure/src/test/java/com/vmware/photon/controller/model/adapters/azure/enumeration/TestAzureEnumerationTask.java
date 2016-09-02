@@ -23,7 +23,6 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.UUID;
-import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -226,7 +225,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 }
                 return true;
             });
-        } catch (TimeoutException te) {
+        } catch (Throwable te) {
             this.host.log(Level.SEVERE, te.getMessage());
         }
 
