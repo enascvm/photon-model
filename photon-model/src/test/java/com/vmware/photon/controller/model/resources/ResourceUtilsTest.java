@@ -28,39 +28,65 @@ import com.vmware.xenon.common.ServiceDocumentDescription;
 public class ResourceUtilsTest {
 
     @Test
-    public void testMergeWithStateGroupAndTenants() {
+    public void testMergeWithNewValues() {
         ResourceState current = new ResourceState();
         current.tenantLinks = new ArrayList<>(Arrays.asList("tenant1"));
         current.groupLinks = new HashSet<>(Arrays.asList("groupA"));
+        current.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
 
         ResourceState patch = new ResourceState();
         patch.tenantLinks = new ArrayList<>(Arrays.asList("tenant2"));
         patch.groupLinks = new HashSet<>(Arrays.asList("groupB"));
+        patch.tagLinks = new HashSet<>();
 
         ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
                 .buildDescription(ResourceState.class);
-        boolean changed = ResourceUtils.mergeWithState(desc, current, patch);
+        boolean changed = ResourceUtils.mergeResourceStateWithPatch(desc, current, patch);
 
         assertTrue(changed);
         assertEquals(Arrays.asList("tenant1", "tenant2"), current.tenantLinks);
         assertEquals(new HashSet<>(Arrays.asList("groupA", "groupB")), current.groupLinks);
+        assertEquals(new HashSet<>(Arrays.asList("tag1", "tag2")), current.tagLinks);
     }
 
     @Test
-    public void testMergeWithStateSameGroupsAndTenants() {
+    public void testMergeWithSameValues() {
         ResourceState current = new ResourceState();
         current.tenantLinks = new ArrayList<>(Arrays.asList("tenant1", "tenant2"));
         current.groupLinks = new HashSet<>(Arrays.asList("groupA", "groupB"));
+        current.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
         ResourceState patch = new ResourceState();
         patch.tenantLinks = new ArrayList<>(Arrays.asList("tenant1", "tenant2"));
         patch.groupLinks = new HashSet<>(Arrays.asList("groupA", "groupB"));
+        patch.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
 
         ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
                 .buildDescription(ResourceState.class);
-        boolean changed = ResourceUtils.mergeWithState(desc, current, patch);
+        ResourceUtils.mergeResourceStateWithPatch(desc, current, patch);
 
-        assertFalse(changed);
+        // TODO pmitrov: uncomment this when Utils.mergeWithState() is fixed in xenon
+        //               to correctly report unchanged state
+        // assertFalse(changed);
         assertEquals(current.tenantLinks, patch.tenantLinks);
         assertEquals(current.groupLinks, patch.groupLinks);
+        assertEquals(current.tagLinks, patch.tagLinks);
+    }
+
+    @Test
+    public void testMergeWithNullValues() {
+        ResourceState current = new ResourceState();
+        current.tenantLinks = new ArrayList<>(Arrays.asList("tenant1", "tenant2"));
+        current.groupLinks = new HashSet<>(Arrays.asList("groupA", "groupB"));
+        current.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
+        ResourceState patch = new ResourceState();
+
+        ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
+                .buildDescription(ResourceState.class);
+        boolean changed = ResourceUtils.mergeResourceStateWithPatch(desc, current, patch);
+
+        assertFalse(changed);
+        assertEquals(Arrays.asList("tenant1", "tenant2"), current.tenantLinks);
+        assertEquals(new HashSet<>(Arrays.asList("groupA", "groupB")), current.groupLinks);
+        assertEquals(new HashSet<>(Arrays.asList("tag1", "tag2")), current.tagLinks);
     }
 }

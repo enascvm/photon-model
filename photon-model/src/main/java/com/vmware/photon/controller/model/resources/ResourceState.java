@@ -59,7 +59,7 @@ public class ResourceState extends ServiceDocument {
     /**
      * A list of tenant links that can access this resource.
      */
-    @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
+    @UsageOption(option = PropertyUsageOption.LINKS)
     public List<String> tenantLinks;
 
     /**
@@ -67,7 +67,8 @@ public class ResourceState extends ServiceDocument {
      *
      * @see ResourceGroupService
      */
-    @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
+    @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+    @UsageOption(option = PropertyUsageOption.LINKS)
     public Set<String> groupLinks;
 
     /**
@@ -75,6 +76,7 @@ public class ResourceState extends ServiceDocument {
      *
      * @see TagService
      */
-    @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
+    @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+    @UsageOption(option = PropertyUsageOption.LINKS)
     public Set<String> tagLinks;
 }

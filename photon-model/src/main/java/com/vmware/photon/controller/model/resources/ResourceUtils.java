@@ -32,8 +32,10 @@ public class ResourceUtils {
      * @param stateClass Service state class
      * @param customPatchHandler custom callback handler
      */
-    public static void handlePatch(Operation op, ResourceState currentState, ServiceDocumentDescription description,
-            Class<? extends ResourceState> stateClass, Function<Operation, Boolean> customPatchHandler) {
+    public static void handlePatch(Operation op, ResourceState currentState,
+            ServiceDocumentDescription description,
+            Class<? extends ResourceState> stateClass,
+            Function<Operation, Boolean> customPatchHandler) {
         boolean hasStateChanged = false;
         try {
             if (Utils.mergeWithState(currentState, op)) {
@@ -41,7 +43,8 @@ public class ResourceUtils {
             } else {
                 ResourceState patchBody = op.getBody(stateClass);
                 hasStateChanged =
-                        ResourceUtils.mergeWithState(description, currentState, patchBody) |
+                        ResourceUtils.mergeResourceStateWithPatch(
+                                description, currentState, patchBody) |
                         (customPatchHandler != null ? customPatchHandler.apply(op) : false);
             }
             if (!hasStateChanged) {
@@ -54,19 +57,21 @@ public class ResourceUtils {
             return;
         }
     }
-
     /**
-     * Update the state of the service based on the input patch
+     * Updates the state of the service based on the input patch.
      *
      * @param description service document description
      * @param source currentState of the service
      * @param patch patch state
-     * @return
+     * @return whether the state has changed or not
      */
-    public static boolean mergeWithState(ServiceDocumentDescription description,
+    protected static boolean mergeResourceStateWithPatch(ServiceDocumentDescription description,
             ResourceState source, ResourceState patch) {
+        // do default merging based on field usage options
         boolean isChanged = Utils.mergeWithState(description, source, patch);
 
+        // tenantLinks requires special handling so that although it is a list, duplicate items
+        // are not allowed (i.e. it should behave as a set)
         if (patch.tenantLinks != null && !patch.tenantLinks.isEmpty()) {
             if (source.tenantLinks == null || source.tenantLinks.isEmpty()) {
                 source.tenantLinks = patch.tenantLinks;
@@ -77,28 +82,6 @@ public class ResourceUtils {
                         source.tenantLinks.add(e);
                         isChanged = true;
                     }
-                }
-            }
-        }
-
-        if (patch.groupLinks != null && !patch.groupLinks.isEmpty()) {
-            if (source.groupLinks == null || source.groupLinks.isEmpty()) {
-                source.groupLinks = patch.groupLinks;
-                isChanged = true;
-            } else {
-                if (source.groupLinks.addAll(patch.groupLinks)) {
-                    isChanged = true;
-                }
-            }
-        }
-
-        if (patch.tagLinks != null && !patch.tagLinks.isEmpty()) {
-            if (source.tagLinks == null || source.tagLinks.isEmpty()) {
-                source.tagLinks = patch.tagLinks;
-                isChanged = true;
-            } else {
-                if (source.tagLinks.addAll(patch.tagLinks)) {
-                    isChanged = true;
                 }
             }
         }
