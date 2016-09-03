@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.ComputeProperties.ENDPOINT_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.getAdapterUri;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.sendFailurePatch;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
@@ -38,9 +39,10 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ResourcePoolService;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationSequence;
@@ -62,7 +64,6 @@ public class EndpointAllocationTaskService
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/endpoint-tasks";
 
     public static final String CUSTOM_PROP_ENPOINT_TYPE = "__endpointType";
-    public static final String CUSTOM_PROP_ENPOINT_LINK = "__endpointLink";
 
     private static final Long DEFAULT_SCHEDULED_TASK_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
 
@@ -94,7 +95,8 @@ public class EndpointAllocationTaskService
         public URI adapterReference;
 
         @Documentation(description = " List of tenants that can access this task.")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = { PropertyIndexingOption.EXPAND })
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = {
+                PropertyIndexingOption.EXPAND })
         public List<String> tenantLinks;
 
         @Documentation(description = "Task's options")
@@ -187,7 +189,11 @@ public class EndpointAllocationTaskService
                             ? SubStage.COMPLETED : SubStage.CREATE_UPDATE_ENDPOINT);
             break;
         case CREATE_UPDATE_ENDPOINT:
-            createOrUpdateEndpoint(currentState);
+            if (currentState.endpointState.documentSelfLink != null) {
+                updateEndpoint(currentState);
+            } else {
+                createEndpoint(currentState);
+            }
             break;
         case INVOKE_ADAPTER:
             invokeAdapter(currentState, currentState.enumerationRequest != null
@@ -257,21 +263,19 @@ public class EndpointAllocationTaskService
                 }));
     }
 
-    private void createOrUpdateEndpoint(EndpointAllocationTaskState currentState) {
+    private void createEndpoint(EndpointAllocationTaskState currentState) {
 
         EndpointState es = currentState.endpointState;
 
-        Operation op;
-        if (es.documentSelfLink != null) {
-            op = Operation.createPut(this, es.documentSelfLink);
-        } else {
-            op = Operation.createPost(this, EndpointService.FACTORY_LINK);
-        }
+        Operation op = Operation.createPost(this, EndpointService.FACTORY_LINK);
 
         ComputeDescription computeDescription = configureDescription(es);
         ComputeState computeState = configureCompute(es);
+        ResourcePoolState pool = configureResourcePool(es);
         Operation cdOp = Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK);
         Operation compOp = Operation.createPost(this, ComputeService.FACTORY_LINK);
+        Operation poolOp = Operation.createPost(this, ResourcePoolService.FACTORY_LINK)
+                .setBody(pool);
 
         OperationSequence sequence;
         if (es.authCredentialsLink == null) {
@@ -295,9 +299,9 @@ public class EndpointAllocationTaskService
                         es.authCredentialsLink = authState.documentSelfLink;
                         cdOp.setBody(computeDescription);
                     })
-                    .next(cdOp);
+                    .next(cdOp, poolOp);
         } else {
-            sequence = OperationSequence.create(cdOp);
+            sequence = OperationSequence.create(cdOp, poolOp);
         }
 
         sequence
@@ -313,8 +317,11 @@ public class EndpointAllocationTaskService
                     Operation o = ops.get(cdOp.getId());
                     ComputeDescription desc = o.getBody(ComputeDescription.class);
                     computeState.descriptionLink = desc.documentSelfLink;
-                    es.computeDescriptionLink = desc.documentSelfLink;
                     compOp.setBody(computeState);
+
+                    ResourcePoolState poolState = poolOp.getBody(ResourcePoolState.class);
+                    es.resourcePoolLink = poolState.documentSelfLink;
+                    es.computeDescriptionLink = desc.documentSelfLink;
                 })
                 .next(compOp)
                 .setCompletion(
@@ -349,6 +356,26 @@ public class EndpointAllocationTaskService
                 }).sendWith(this);
     }
 
+    private void updateEndpoint(EndpointAllocationTaskState currentState) {
+
+        EndpointState es = currentState.endpointState;
+
+        Operation.createPatch(this, es.documentSelfLink)
+                .setBody(es)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        sendFailurePatch(this, currentState, e);
+                        return;
+                    }
+                    EndpointState endpoint = o.getBody(EndpointState.class);
+                    EndpointAllocationTaskState state = createUpdateSubStageTask(
+                            SubStage.INVOKE_ADAPTER);
+                    state.endpointState = endpoint;
+                    sendSelfPatch(state);
+                })
+                .sendWith(this);
+    }
+
     private void validateCredentials(EndpointAllocationTaskState currentState, SubStage next) {
         EndpointConfigRequest req = new EndpointConfigRequest();
         req.requestType = RequestType.VALIDATE;
@@ -378,10 +405,23 @@ public class EndpointAllocationTaskService
                                 sendFailurePatch(this, currentState, e);
                                 return;
                             }
+                            if (currentState.enumerationRequest.resourcePoolLink == null) {
+                                currentState.enumerationRequest.resourcePoolLink = currentState.endpointState.resourcePoolLink;
+                            }
                             doTriggerEnumeration(currentState, next,
                                     o.getBody(ComputeState.class).adapterManagementReference);
                         })
                 .sendWith(this);
+    }
+
+    private ResourcePoolState configureResourcePool(EndpointState state) {
+        ResourcePoolState poolState = new ResourcePoolState();
+        String name = String.format("%s-%s-%s", state.id, state.endpointType, "pool");
+        poolState.name = name;
+        poolState.id = poolState.name;
+        poolState.tenantLinks = state.tenantLinks;
+
+        return poolState;
     }
 
     private void doTriggerEnumeration(EndpointAllocationTaskState currentState, SubStage next,
@@ -408,7 +448,7 @@ public class EndpointAllocationTaskService
         scheduledTaskState.intervalMicros = intervalMicros;
         scheduledTaskState.tenantLinks = endpoint.tenantLinks;
         scheduledTaskState.customProperties = new HashMap<>();
-        scheduledTaskState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+        scheduledTaskState.customProperties.put(ENDPOINT_LINK_PROP_NAME,
                 endpoint.documentSelfLink);
 
         Operation.createPost(this, ScheduledTaskService.FACTORY_LINK)

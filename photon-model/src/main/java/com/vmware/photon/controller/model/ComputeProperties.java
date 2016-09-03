@@ -36,6 +36,11 @@ public class ComputeProperties {
     public static final String ON_PREMISE_DATACENTER = "datacenterId";
 
     /**
+     * Custom property to hold the link to the endpoint.
+     */
+    public static final String ENDPOINT_LINK_PROP_NAME = "__endpointLink";
+
+    /**
      * The normalized OS type of the compute resource.
      * See {@link OSType} for a list of possible values.
      */

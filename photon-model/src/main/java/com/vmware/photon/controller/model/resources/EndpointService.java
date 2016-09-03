@@ -55,12 +55,17 @@ public class EndpointService extends StatefulService {
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK }, indexing = STORE_ONLY)
         public String computeDescriptionLink;
 
+        @Documentation(description = "The link to the resource pool that is default for an endpoint.")
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK }, indexing = STORE_ONLY)
+        public String resourcePoolLink;
+
         @Documentation(description = "Endpoint specfic properties. The specific endpoint adapter will extract "
                 + "them and enhance the linked Credentials,Compute and ComputeDescription.")
         @PropertyOptions(usage = { AUTO_MERGE_IF_NOT_NULL }, indexing = {
                 PropertyIndexingOption.EXPAND,
                 PropertyIndexingOption.FIXED_ITEM_NAME })
         public Map<String, String> endpointProperties;
+
     }
 
     public EndpointService() {
