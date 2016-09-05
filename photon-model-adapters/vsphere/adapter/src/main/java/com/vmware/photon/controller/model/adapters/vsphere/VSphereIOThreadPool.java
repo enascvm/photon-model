@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.net.URI;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -47,19 +48,45 @@ public class VSphereIOThreadPool {
     }
 
     /**
-     * This method will execute the provided callback in a managed threadpool and give it
-     * a connection authenticated with the credentials found in the parentAuthLink.
-     * @param  sender
-     * @param adapterReference SDK url of vSpehere host, usually found in
-     *      {@link com.vmware.photon.controller.model.resources.ComputeService.ComputeState#adapterManagementReference}.
-     *      Probably looks like https://hostname:443/sdk
-     * @param auth authorization object used to authenticate against vsphere host
-     * @param callback non-null callback
+     * This method will execute the provided callback in a managed threadpool and give it a
+     * connection authenticated with the credentials found in the parentAuthLink.
+     *
+     * @param sender
+     * @param adapterReference
+     *            SDK url of vSpehere host, usually found in
+     *            {@link com.vmware.photon.controller.model.resources.ComputeService.ComputeState#adapterManagementReference}
+     *            . Probably looks like https://hostname:443/sdk
+     * @param auth
+     *            authorization object used to authenticate against vsphere host
+     * @param callback
+     *            non-null callback
      */
     public void submit(Service sender, URI adapterReference, AuthCredentialsServiceState auth,
             ConnectionCallback callback) {
 
-        execute(adapterReference, auth, callback);
+        execute(adapterReference, auth, callback, null);
+    }
+
+    /**
+     * This method will execute the provided callback in a managed threadpool and give it a
+     * connection authenticated with the credentials found in the parentAuthLink.
+     *
+     * @param sender
+     * @param adapterReference
+     *            SDK url of vSpehere host, usually found in
+     *            {@link com.vmware.photon.controller.model.resources.ComputeService.ComputeState#adapterManagementReference}
+     *            . Probably looks like https://hostname:443/sdk
+     * @param auth
+     *            authorization object used to authenticate against vsphere host
+     * @param callback
+     *            non-null callback
+     * @param connectionEnhacer
+     *            not-null connection enhancer
+     */
+    public void submit(Service sender, URI adapterReference, AuthCredentialsServiceState auth,
+            ConnectionCallback callback, Consumer<Connection> connectionEnhancer) {
+
+        execute(adapterReference, auth, callback, connectionEnhancer);
     }
 
     /**
@@ -67,7 +94,8 @@ public class VSphereIOThreadPool {
      *
      * @param sender
      * @param adapterReference
-     * @param authLink where to look for the credentials
+     * @param authLink
+     *            where to look for the credentials
      * @param callback
      */
     public void submit(Service sender, URI adapterReference, String authLink,
@@ -85,7 +113,7 @@ public class VSphereIOThreadPool {
                     }
 
                     AuthCredentialsServiceState auth = o.getBody(AuthCredentialsServiceState.class);
-                    execute(adapterReference, auth, callback);
+                    execute(adapterReference, auth, callback, null);
                 });
 
         sender.sendRequest(op);
@@ -101,7 +129,7 @@ public class VSphereIOThreadPool {
     }
 
     private void execute(URI adapterReference, AuthCredentialsServiceState auth,
-            ConnectionCallback callback) {
+            ConnectionCallback callback, Consumer<Connection> connectionEnhancer) {
         BasicConnection connection = new BasicConnection();
 
         // TODO control sslErrors policy externally
@@ -111,6 +139,10 @@ public class VSphereIOThreadPool {
         connection.setPassword(auth.privateKey);
 
         connection.setURI(adapterReference);
+
+        if (connectionEnhancer != null) {
+            connectionEnhancer.accept(connection);
+        }
 
         // don't connect now, but as late as possible as the session can expire
         executeCallback(connection, callback);
@@ -146,8 +178,10 @@ public class VSphereIOThreadPool {
     public interface ConnectionCallback {
         /**
          *
-         * @param connection connection to use for useful work
-         * @param error only set if there was an error creating a connection
+         * @param connection
+         *            connection to use for useful work
+         * @param error
+         *            only set if there was an error creating a connection
          */
         void doInConnection(Connection connection, ConnectionException error);
     }

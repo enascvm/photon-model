@@ -416,7 +416,7 @@ public class EndpointAllocationTaskService
 
     private ResourcePoolState configureResourcePool(EndpointState state) {
         ResourcePoolState poolState = new ResourcePoolState();
-        String name = String.format("%s-%s-%s", state.id, state.endpointType, "pool");
+        String name = String.format("%s-%s-%s", state.name, state.endpointType, "pool");
         poolState.name = name;
         poolState.id = poolState.name;
         poolState.tenantLinks = state.tenantLinks;

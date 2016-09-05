@@ -43,6 +43,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
@@ -64,9 +65,9 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
- * Handles enumeration for vsphere endpoints. It supports up to {@link #MAX_CONCURRENT_ENUM_PROCESSES}
- * concurrent long-running enumeration processes. Attempts to start more processes than that will result
- * in error.
+ * Handles enumeration for vsphere endpoints. It supports up to
+ * {@link #MAX_CONCURRENT_ENUM_PROCESSES} concurrent long-running enumeration processes. Attempts to
+ * start more processes than that will result in error.
  */
 public class VSphereAdapterResourceEnumerationService extends StatelessService {
     public static final String SELF_LINK = VSphereUriPaths.ENUMERATION_SERVICE;
@@ -382,7 +383,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         QuerySpecification.buildCompositeFieldName(
                                 ResourcePoolState.FIELD_NAME_CUSTOM_PROPERTIES,
                                 ComputeProperties.ON_PREMISE_DATACENTER),
-                        datacenterId).build());
+                        datacenterId)
+                .build());
 
         return QueryTask
                 .create(qs)
@@ -453,23 +455,26 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         qs.query.addBooleanClause(Query.Builder.create()
                 .addFieldClause(StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
-                        adapterManagementReference.toString()).build());
+                        adapterManagementReference.toString())
+                .build());
 
         qs.query.addBooleanClause(Query.Builder.create()
                 .addFieldClause(
                         QuerySpecification.buildCompositeFieldName(
                                 ResourcePoolState.FIELD_NAME_CUSTOM_PROPERTIES,
                                 ComputeProperties.ON_PREMISE_DATACENTER),
-                        datacenterId).build());
+                        datacenterId)
+                .build());
         return QueryTask
                 .create(qs)
                 .setDirect(true);
     }
 
     /**
-     * Either creates a new Compute or update an already existing one. Existence is checked by querying
-     * for a compute with id equals to moref value of a cluster whose parent is the Compute from the
-     * request.
+     * Either creates a new Compute or update an already existing one. Existence is checked by
+     * querying for a compute with id equals to moref value of a cluster whose parent is the Compute
+     * from the request.
+     *
      * @param request
      * @param cr
      */
@@ -517,6 +522,13 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.cpuMhzPerCore = cr.getTotalCpuMhz() / cr.getTotalCpuCores();
         res.totalMemoryBytes = cr.getEffectiveMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
+
+        res.instanceAdapterReference = UriUtils.buildUri(getHost(),
+                VSphereUriPaths.INSTANCE_SERVICE);
+        res.enumerationAdapterReference = UriUtils.buildUri(getHost(),
+                VSphereUriPaths.ENUMERATION_SERVICE);
+        res.statsAdapterReference = UriUtils.buildUri(getHost(), VSphereUriPaths.STATS_SERVICE);
+
         return res;
     }
 
@@ -542,7 +554,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.id = cr.getId().getValue();
         state.adapterManagementReference = request.adapterManagementReference;
         state.parentLink = request.resourceLink();
+        state.resourcePoolLink = request.resourcePoolLink;
         state.name = cr.getName();
+        state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, cr.getId())
                 .put(CustomProperties.TYPE, cr.getId().getType());
@@ -627,6 +641,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.cpuMhzPerCore = hs.getCpuMhz();
         res.totalMemoryBytes = hs.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
+        res.instanceAdapterReference = UriUtils.buildUri(getHost(),
+                VSphereUriPaths.INSTANCE_SERVICE);
+        res.enumerationAdapterReference = UriUtils.buildUri(getHost(),
+                VSphereUriPaths.ENUMERATION_SERVICE);
+        res.statsAdapterReference = UriUtils.buildUri(getHost(), VSphereUriPaths.STATS_SERVICE);
+
         return res;
     }
 
@@ -636,7 +656,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.id = hs.getHardwareUuid();
         state.adapterManagementReference = request.adapterManagementReference;
         state.parentLink = request.resourceLink();
+        state.resourcePoolLink = request.resourcePoolLink;
         state.name = hs.getName();
+        // TODO: retrieve host power state
+        state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
                 .put(CustomProperties.TYPE, hs.getId().getType());
@@ -703,10 +726,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.name = vm.getName();
         res.documentSelfLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
-        res.powerAdapterReference = parent.description.powerAdapterReference;
-        res.enumerationAdapterReference = parent.description.enumerationAdapterReference;
-        res.instanceAdapterReference = parent.description.instanceAdapterReference;
-        res.statsAdapterReference = parent.description.statsAdapterReference;
+        res.instanceAdapterReference = UriUtils.buildUri(getHost(),
+                VSphereUriPaths.INSTANCE_SERVICE);
+        res.enumerationAdapterReference = UriUtils.buildUri(getHost(),
+                VSphereUriPaths.ENUMERATION_SERVICE);
+        res.statsAdapterReference = UriUtils.buildUri(getHost(), VSphereUriPaths.STATS_SERVICE);
+        res.powerAdapterReference = UriUtils.buildUri(getHost(), VSphereUriPaths.POWER_SERVICE);
 
         res.datacenterId = parent.description.datacenterId;
 
@@ -764,7 +789,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     /**
-     * Builds a query for finding a ComputeState by instanceUuid from vsphere and parent compute link.
+     * Builds a query for finding a ComputeState by instanceUuid from vsphere and parent compute
+     * link.
      *
      * @param parentComputeLink
      * @param instanceUuid

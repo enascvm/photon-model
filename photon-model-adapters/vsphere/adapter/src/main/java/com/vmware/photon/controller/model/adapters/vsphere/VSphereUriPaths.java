@@ -31,4 +31,5 @@ public class VSphereUriPaths {
     public static final String HEALTH_SERVICE = PROVISIONING + "/health-adapter";
     public static final String ENUMERATION_SERVICE = PROVISIONING + "/enumeration-adapter";
     public static final String STATS_SERVICE = PROVISIONING + "/stats-adapter";
+    public static final String ENDPOINT_CONFIG_ADAPTER = PROVISIONING + "/endpoint-config-adapter";
 }

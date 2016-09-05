@@ -29,6 +29,7 @@ public class VSphereAdapters {
             VSphereAdapterResourceEnumerationService.SELF_LINK,
             VSphereAdapterStatsService.SELF_LINK,
             OvfImporterService.SELF_LINK,
+            VSphereEndpointAdapterService.SELF_LINK
     };
 
     public static void startServices(ServiceHost host) throws Throwable {
@@ -38,5 +39,6 @@ public class VSphereAdapters {
         host.startService(new VSphereAdapterResourceEnumerationService());
         host.startService(new VSphereAdapterStatsService());
         host.startService(new OvfImporterService());
+        host.startService(new VSphereEndpointAdapterService());
     }
 }

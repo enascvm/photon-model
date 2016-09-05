@@ -67,6 +67,9 @@ public class VSphereAdapterInstanceService extends StatelessService {
             case DELETE:
                 handleDeleteInstance(ctx);
                 break;
+            case DELETE_DOCUMENTS_ONLY:
+                deleteStatesOnly(mgr, ctx);
+                break;
             default:
                 Throwable error = new IllegalStateException(
                         "Unsupported requestType " + request.requestType);
@@ -201,20 +204,25 @@ public class VSphereAdapterInstanceService extends StatelessService {
     private void handleMockRequest(TaskManager mgr, ComputeInstanceRequest req,
             ProvisionContext ctx) {
         // clean up the compute state
-        if (req.requestType == InstanceRequestType.DELETE) {
-            OperationSequence seq = OperationSequence
-                    .create(mgr.createTaskPatch(TaskStage.FINISHED));
-
-            OperationJoin deleteComputeState = createComputeStateDelete(ctx);
-            if (deleteComputeState != null) {
-                seq = seq.next(deleteComputeState);
-            }
-
-            seq.setCompletion(ctx.logOnError())
-                    .sendWith(this);
+        if (req.requestType == InstanceRequestType.DELETE
+                || req.requestType == InstanceRequestType.DELETE_DOCUMENTS_ONLY) {
+            deleteStatesOnly(mgr, ctx);
         } else {
             mgr.patchTask(TaskStage.FINISHED);
         }
+    }
+
+    private void deleteStatesOnly(TaskManager mgr, ProvisionContext ctx) {
+        OperationSequence seq = OperationSequence
+                .create(mgr.createTaskPatch(TaskStage.FINISHED));
+
+        OperationJoin deleteComputeState = createComputeStateDelete(ctx);
+        if (deleteComputeState != null) {
+            seq = seq.next(deleteComputeState);
+        }
+
+        seq.setCompletion(ctx.logOnError())
+                .sendWith(this);
     }
 
     private OperationJoin createComputeStateDelete(ProvisionContext ctx) {

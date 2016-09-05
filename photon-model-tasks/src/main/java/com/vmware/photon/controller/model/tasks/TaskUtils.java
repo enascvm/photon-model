@@ -41,7 +41,8 @@ public class TaskUtils {
     /**
      * Verify if IP string is an IPv4 address.
      *
-     * @param IP IP to verify
+     * @param IP
+     *            IP to verify
      * @throws IllegalArgumentException
      */
     public static void isValidInetAddress(String IP) throws IllegalArgumentException {
@@ -68,9 +69,8 @@ public class TaskUtils {
     }
 
     /*
-     * method takes a string that can either be a subnet or
-     * ip address and ensures that it falls in the range of
-     * RFC-1918 addresses
+     * method takes a string that can either be a subnet or ip address and ensures that it falls in
+     * the range of RFC-1918 addresses
      */
     public static void isRFC1918(String subnetAddress) throws IllegalArgumentException {
         String address = null;
@@ -114,7 +114,8 @@ public class TaskUtils {
     /**
      * Verify if CIDR string is a valid CIDR address.
      *
-     * @param network CIDR to verify
+     * @param network
+     *            CIDR to verify
      * @throws IllegalArgumentException
      */
     public static void isCIDR(String network) throws IllegalArgumentException {
@@ -133,8 +134,11 @@ public class TaskUtils {
 
     /**
      * Issue a patch request to the specified service
-     * @param service Service to issue the patch to
-     * @param body Patch body
+     *
+     * @param service
+     *            Service to issue the patch to
+     * @param body
+     *            Patch body
      */
     public static void sendPatch(StatefulService service, Object body) {
         Operation patch = Operation
@@ -145,12 +149,16 @@ public class TaskUtils {
 
     /**
      * Patch a service to failure after logging all errors
-     * @param service Service to patch
-     * @param tList List of throwable objects
+     *
+     * @param service
+     *            Service to patch
+     * @param tList
+     *            List of throwable objects
      */
-    public static void sendFailurePatch(StatefulService service, TaskServiceState taskState, Collection<Throwable> tList) {
+    public static void sendFailurePatch(StatefulService service, TaskServiceState taskState,
+            Collection<Throwable> tList) {
         Throwable errorToPatch = null;
-        for (Throwable t: tList) {
+        for (Throwable t : tList) {
             errorToPatch = t;
             service.logWarning("Operation failed: %s", Utils.toString(t));
         }
@@ -159,10 +167,14 @@ public class TaskUtils {
 
     /**
      * Patch a service to failure
-     * @param service Service to patch
-     * @param t Throwable object
+     *
+     * @param service
+     *            Service to patch
+     * @param t
+     *            Throwable object
      */
-    public static void sendFailurePatch(StatefulService service, TaskServiceState taskState, Throwable t) {
+    public static void sendFailurePatch(StatefulService service, TaskServiceState taskState,
+            Throwable t) {
         TaskState state = new TaskState();
         state.stage = TaskStage.FAILED;
         state.failure = Utils.toServiceErrorResponse(t);
@@ -173,7 +185,9 @@ public class TaskUtils {
 
     /**
      * Create a TaskState object with the specified stage
-     * @param stage Stage for the TaskState object
+     *
+     * @param stage
+     *            Stage for the TaskState object
      * @return
      */
     public static TaskState createTaskState(TaskStage stage) {
@@ -316,8 +330,9 @@ public class TaskUtils {
      *            Exception
      */
     private static void sendFailureSelfPatch(StatefulService service, Throwable e) {
-        TaskServiceState body = new TaskServiceState() {
-        };
+        // It looks like Xenon can't handle correctly serializing abstract classes, so we have to
+        // use a simple class which extend the abstract.
+        StatefulTaskDocument body = new StatefulTaskDocument();
         body.taskInfo = new TaskState();
         body.taskInfo.stage = TaskStage.FAILED;
         body.taskInfo.failure = Utils.toServiceErrorResponse(e);
@@ -325,4 +340,6 @@ public class TaskUtils {
         sendPatch(service, body);
     }
 
+    private static class StatefulTaskDocument extends TaskServiceState {
+    }
 }

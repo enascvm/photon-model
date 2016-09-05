@@ -302,12 +302,12 @@ public class EndpointRemovalTaskService
                                     deletionState.documentSelfLink, deletionState.taskInfo,
                                     1, createPatchSubStageTask(TaskStage.STARTED, next, null),
                                     finishedTaskLinks,
-                                    false);
+                                    true);
                         }
                     };
-                    TaskUtils.subscribeToNotifications(this, onSuccess,
-                            UriUtils.buildUriPath(ResourceRemovalTaskService.FACTORY_LINK,
-                                    removalServiceState.documentSelfLink));
+
+                    TaskUtils.subscribeToNotifications(this, onSuccess, resourcePostOp
+                            .getBody(ResourceRemovalTaskState.class).documentSelfLink);
                 }).sendWith(this);
     }
 
