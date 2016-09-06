@@ -167,17 +167,18 @@ public class AWSNetworkUtils {
             StatelessService service) {
         List<Operation> createOperations = new ArrayList<Operation>();
         // NIC - Private
-        NetworkInterfaceState privateNICState = mapIPAddressToNetworkInterfaceState(
-                instance, false, tenantLinks, null);
-        Operation postPrivateNetworkInterface = createPostOperation(
-                service, privateNICState, NetworkInterfaceService.FACTORY_LINK);
-        createOperations.add(postPrivateNetworkInterface);
-        // Compute State Network Links
-        resultDesc.networkLinks = new ArrayList<String>();
-        resultDesc.networkLinks.add(UriUtils.buildUriPath(
-                NetworkInterfaceService.FACTORY_LINK,
-                privateNICState.documentSelfLink));
-
+        if (instance.getPrivateIpAddress() != null) {
+            NetworkInterfaceState privateNICState = mapIPAddressToNetworkInterfaceState(
+                    instance, false, tenantLinks, null);
+            Operation postPrivateNetworkInterface = createPostOperation(
+                    service, privateNICState, NetworkInterfaceService.FACTORY_LINK);
+            createOperations.add(postPrivateNetworkInterface);
+            // Compute State Network Links
+            resultDesc.networkLinks = new ArrayList<String>();
+            resultDesc.networkLinks.add(UriUtils.buildUriPath(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    privateNICState.documentSelfLink));
+        }
         // NIC - Public
         if (instance.getPublicIpAddress() != null) {
             NetworkInterfaceState publicNICState = mapIPAddressToNetworkInterfaceState(

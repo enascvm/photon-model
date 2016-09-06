@@ -318,7 +318,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
         // Network State. Create one network state mapping to each VPC that is discovered during
         // enumeration.
-        if (!context.discoveredVpcNetworkStateMap.containsKey(instance.getVpcId())) {
+        if (instance.getVpcId() != null
+                && !context.discoveredVpcNetworkStateMap.containsKey(instance.getVpcId())) {
             NetworkState networkState = mapVPCToNetworkState(instance,
                     context.computeState.regionId,
                     context.computeState.resourcePoolLink,
@@ -352,19 +353,21 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 existingComputeState.descriptionLink,
                 context.computeState.tenantLinks);
 
+        String existingNICLink = null;
         // NIC - Private
-        String existingNICLink = getExistingNetworkInterfaceLink(existingComputeState, false);
-        NetworkInterfaceState privateNICState = mapIPAddressToNetworkInterfaceState(instance,
-                false, context.computeState.tenantLinks, existingNICLink);
-
-        Operation privateNICOperation = createOperationToUpdateOrCreateNetworkInterface(
-                existingComputeState, privateNICState,
-                context.computeState.tenantLinks, this, false);
-        context.enumerationOperations.add(privateNICOperation);
-        computeState.networkLinks = new ArrayList<String>();
-        computeState.networkLinks.add(UriUtils.buildUriPath(
-                NetworkInterfaceService.FACTORY_LINK,
-                privateNICState.documentSelfLink));
+        if (instance.getPrivateIpAddress() != null) {
+            existingNICLink = getExistingNetworkInterfaceLink(existingComputeState, false);
+            NetworkInterfaceState privateNICState = mapIPAddressToNetworkInterfaceState(instance,
+                    false, context.computeState.tenantLinks, existingNICLink);
+            Operation privateNICOperation = createOperationToUpdateOrCreateNetworkInterface(
+                    existingComputeState, privateNICState,
+                    context.computeState.tenantLinks, this, false);
+            context.enumerationOperations.add(privateNICOperation);
+            computeState.networkLinks = new ArrayList<String>();
+            computeState.networkLinks.add(UriUtils.buildUriPath(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    privateNICState.documentSelfLink));
+        }
 
         // NIC - Public
         if (instance.getPublicIpAddress() != null) {
