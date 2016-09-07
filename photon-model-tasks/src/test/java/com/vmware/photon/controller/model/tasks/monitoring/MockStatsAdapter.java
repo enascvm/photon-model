@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
@@ -36,11 +37,11 @@ public class MockStatsAdapter extends StatelessService {
     public static final String UNIT_1 = "unit1";
     public static final String UNIT_2 = "unit2";
 
-    private double counter = 0;
+    private AtomicLong counter = new AtomicLong(0);
 
     @Override
     public void handleStart(Operation startPost) {
-        this.counter = 0.0;
+        this.counter = new AtomicLong(0);
         super.handleStart(startPost);
     }
 
@@ -56,14 +57,14 @@ public class MockStatsAdapter extends StatelessService {
             ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
             ComputeStatsResponse statsResponse = new ComputeStatsResponse();
             Map<String, List<ServiceStat>> statValues = new HashMap<String, List<ServiceStat>>();
-            this.counter++;
+            double currentCounter = this.counter.incrementAndGet();
             ServiceStat key1 = new ServiceStat();
-            key1.latestValue = this.counter;
+            key1.latestValue = currentCounter;
             key1.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
             key1.unit = UNIT_1;
             statValues.put(KEY_1, Collections.singletonList(key1));
             ServiceStat key2 = new ServiceStat();
-            key2.latestValue = this.counter;
+            key2.latestValue = currentCounter;
             key2.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
             key2.unit = UNIT_2;
             statValues.put(KEY_2, Collections.singletonList(key2));

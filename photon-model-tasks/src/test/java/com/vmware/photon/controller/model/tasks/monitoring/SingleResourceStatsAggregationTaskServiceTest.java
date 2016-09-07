@@ -33,15 +33,24 @@ import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAg
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
 
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
+
 
 
 public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest {
+
+    private static final int NUM_COMPUTE_RESOURCES = 200;
+    private static final int NUM_COLLECTIONS = 5;
 
     @Override
     protected void startRequiredServices() throws Throwable {
@@ -66,24 +75,27 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                 ResourcePoolService.FACTORY_LINK, rpState,
                 ResourcePoolState.class);
 
-        ComputeDescription cDesc = new ComputeDescription();
-        cDesc.name = rpState.name;
-        cDesc.statsAdapterReference = UriUtils.buildUri(this.host, MockStatsAdapter.SELF_LINK);
-        ComputeDescription descReturnState = postServiceSynchronously(
-                ComputeDescriptionService.FACTORY_LINK, cDesc,
-                ComputeDescription.class);
-        ComputeState computeState = new ComputeState();
-        computeState.name = rpState.name;
-        computeState.descriptionLink = descReturnState.documentSelfLink;
-        computeState.resourcePoolLink = rpReturnState.documentSelfLink;
-        ComputeState resComputeState = postServiceSynchronously(
+        ComputeState[] computeStateArray = new ComputeState[NUM_COMPUTE_RESOURCES];
+        for (int i = 0; i < NUM_COMPUTE_RESOURCES; i++) {
+            ComputeDescription cDesc = new ComputeDescription();
+            cDesc.name = rpState.name;
+            cDesc.statsAdapterReference = UriUtils.buildUri(this.host, MockStatsAdapter.SELF_LINK);
+            ComputeDescription descReturnState = postServiceSynchronously(
+                    ComputeDescriptionService.FACTORY_LINK, cDesc,
+                    ComputeDescription.class);
+            ComputeState computeState = new ComputeState();
+            computeState.name = rpState.name;
+            computeState.descriptionLink = descReturnState.documentSelfLink;
+            computeState.resourcePoolLink = rpReturnState.documentSelfLink;
+            computeStateArray[i] = postServiceSynchronously(
                     ComputeService.FACTORY_LINK, computeState,
                     ComputeState.class);
+        }
 
         StatsCollectionTaskState collectionTaskState = new StatsCollectionTaskState();
         collectionTaskState.resourcePoolLink = rpReturnState.documentSelfLink;
         int counter = 0;
-        while (counter < 5) {
+        while (counter < NUM_COLLECTIONS) {
             StatsCollectionTaskState returnState = this
                     .postServiceSynchronously(
                             StatsCollectionTaskService.FACTORY_LINK,
@@ -93,14 +105,16 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             counter++;
         }
         // wait for stats to be populated
-        String statsUriPath = UriUtils.buildUriPath(resComputeState.documentSelfLink,
-                    ServiceHost.SERVICE_URI_SUFFIX_STATS);
         this.host.waitFor("Error waiting for stats", () -> {
-            ServiceStats resStats = getServiceSynchronously(statsUriPath, ServiceStats.class);
             boolean returnStatus = false;
-            for (ServiceStat stat : resStats.entries.values()) {
-                if (stat.latestValue == 5) {
-                    returnStatus = true;
+            for (int i = 0; i < NUM_COMPUTE_RESOURCES; i++) {
+                String statsUriPath = UriUtils.buildUriPath(computeStateArray[i].documentSelfLink,
+                            ServiceHost.SERVICE_URI_SUFFIX_STATS);
+                ServiceStats resStats = getServiceSynchronously(statsUriPath, ServiceStats.class);
+                for (ServiceStat stat : resStats.entries.values()) {
+                    if (stat.latestValue == ((NUM_COLLECTIONS  * NUM_COMPUTE_RESOURCES) - 1) ) {
+                        returnStatus = true;
+                    }
                 }
             }
             return returnStatus;
@@ -108,7 +122,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
 
         // kick off an aggregation task
         SingleResourceStatsAggregationTaskState aggregationTaskState = new SingleResourceStatsAggregationTaskState();
-        aggregationTaskState.resourceLink = resComputeState.documentSelfLink;
+        aggregationTaskState.resourceLink = computeStateArray[0].documentSelfLink;
         aggregationTaskState.metricNames = new HashSet<>(
                 Arrays.asList("key-1", "key-2"));
         postServiceSynchronously(SingleResourceStatsAggregationTaskService.FACTORY_LINK,
@@ -135,9 +149,38 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             boolean rightVersion = true;
             for (Object aggrDocument: result.documents.values()) {
                 ResourceAggregateMetric aggrMetric = Utils.fromJson(aggrDocument, ResourceAggregateMetric.class);
-                if (aggrMetric.documentVersion == 1 && (aggrMetric.timeBin.count == 5) &&
-                        aggrMetric.timeBin.avg == 3.0 && aggrMetric.timeBin.max == 5.0 &&
-                        aggrMetric.timeBin.min == 1.0) {
+                if (aggrMetric.documentVersion == 1 && (aggrMetric.timeBin.count == NUM_COLLECTIONS)) {
+                    continue;
+                }
+                rightVersion = false;
+            }
+            return rightVersion;
+        });
+
+        // kick off an aggregation task with a query that resolves to all resources with the specified resource pool link;
+        // ensure that we have aggregated data over all raw metric versions
+        aggregationTaskState = new SingleResourceStatsAggregationTaskState();
+        aggregationTaskState.resourceLink = rpReturnState.documentSelfLink;
+        aggregationTaskState.metricNames = new HashSet<>(
+                Arrays.asList("key-1", "key-2"));
+        aggregationTaskState.query =
+                Query.Builder.create().addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
+                        rpReturnState.documentSelfLink).build();
+        postServiceSynchronously(SingleResourceStatsAggregationTaskService.FACTORY_LINK,
+                aggregationTaskState,
+                SingleResourceStatsAggregationTaskState.class);
+        this.host.waitFor("Error waiting for rolled up stats", () -> {
+            QuerySpecification querySpec = new QuerySpecification();
+            querySpec.query = Query.Builder.create().addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                    UriUtils.buildUriPath(ResourceAggregateMetricService.FACTORY_LINK,
+                            UriUtils.getLastPathSegment(rpReturnState.documentSelfLink) + "*"),
+                            MatchType.WILDCARD).build();
+            querySpec.options.add(QueryOption.EXPAND_CONTENT);
+            ServiceDocumentQueryResult result = this.host.createAndWaitSimpleDirectQuery(querySpec, 4, 4);
+            boolean rightVersion = true;
+            for (Object aggrDocument: result.documents.values()) {
+                ResourceAggregateMetric aggrMetric = Utils.fromJson(aggrDocument, ResourceAggregateMetric.class);
+                if (aggrMetric.documentVersion == 0 && (aggrMetric.timeBin.count == NUM_COLLECTIONS * NUM_COMPUTE_RESOURCES)) {
                     continue;
                 }
                 rightVersion = false;
