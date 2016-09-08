@@ -34,9 +34,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-
 import com.vmware.xenon.common.Service;
-import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -245,7 +243,7 @@ public class NetworkServiceTest extends Suite {
 
             String kind = Utils.buildKind(NetworkService.NetworkState.class);
             String propertyName = QueryTask.QuerySpecification
-                    .buildCollectionItemName(ServiceDocumentDescription.FIELD_NAME_TENANT_LINKS);
+                    .buildCollectionItemName(ResourceState.FIELD_NAME_TENANT_LINKS);
 
             QueryTask q = createDirectQueryTask(kind, propertyName,
                     networkState.tenantLinks.get(0));
