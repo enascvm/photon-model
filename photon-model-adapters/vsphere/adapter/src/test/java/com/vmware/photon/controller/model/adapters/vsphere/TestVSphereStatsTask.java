@@ -149,7 +149,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
                 VSphereUriPaths.STATS_SERVICE);
 
         computeDesc.zoneId = this.zoneId;
-        computeDesc.datacenterId = this.datacenterId;
+        computeDesc.regionId = this.datacenterId;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,

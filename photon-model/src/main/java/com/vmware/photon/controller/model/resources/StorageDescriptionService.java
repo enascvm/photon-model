@@ -39,6 +39,7 @@ public class StorageDescriptionService extends StatefulService {
      */
     public static class StorageDescription extends ResourceState {
         public static final String FIELD_NAME_ADAPTER_REFERENCE = "adapterManagementReference";
+        public static final String FIELD_NAME_REGION_ID = "regionId";
 
         /**
          * Region or the Location the storage belongs to.

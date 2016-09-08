@@ -122,8 +122,8 @@ public class InstanceClient extends BaseHelper {
         this.parent = parent;
         this.disks = disks;
 
-        // the datacenterId is used as a ref to a vSphere datacenter name
-        String id = resource.description.datacenterId;
+        // the regionId is used as a ref to a vSphere datacenter name
+        String id = resource.description.regionId;
 
         try {
             this.finder = new Finder(connection, id);
@@ -627,12 +627,15 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_config_instanceUuid,
                 VimPath.vm_config_name,
                 VimPath.vm_config_hardware_device,
-                VimPath.vm_runtime_powerState);
+                VimPath.vm_runtime_powerState,
+                VimPath.vm_summary_guest_ipAddress,
+                VimPath.vm_summary_guest_hostName);
 
         VmOverlay vm = new VmOverlay(this.vm, props);
         state.id = vm.getInstanceUuid();
         state.primaryMAC = vm.getPrimaryMac();
         state.powerState = vm.getPowerState();
+        state.address = vm.getIpAddressOrHostName();
         state.name = vm.getName();
 
         CustomProperties.of(state)

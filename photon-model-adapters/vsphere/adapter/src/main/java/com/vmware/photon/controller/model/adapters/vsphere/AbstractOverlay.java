@@ -55,6 +55,10 @@ public abstract class AbstractOverlay {
         return res;
     }
 
+    protected Object get(String name) {
+        return this.props.get(name);
+    }
+
     protected void ensureType(String type) {
         if (!type.equals(this.ref.getType())) {
             String msg = String.format("Cannot overlay type '%s' on top of %s", type, VimUtils

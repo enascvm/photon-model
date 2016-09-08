@@ -47,8 +47,6 @@ import com.vmware.vim25.WaitOptions;
 public class EnumerationClient extends BaseHelper {
     public static final int DEFAULT_FETCH_PAGE_SIZE = 100;
 
-    private final ComputeStateWithDescription parent;
-
     private final Finder finder;
 
     private final GetMoRef get;
@@ -57,10 +55,8 @@ public class EnumerationClient extends BaseHelper {
             throws FinderException, ClientException {
         super(connection);
 
-        this.parent = parent;
-
-        // the datacenterId is used as a ref to a vSphere datacenter name
-        String id = parent.description.datacenterId;
+        // the regionId is used as a ref to a vSphere datacenter name
+        String id = parent.description.regionId;
 
         try {
             this.finder = new Finder(connection, id);
@@ -231,7 +227,9 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.vm_config_template,
                 VimPath.vm_runtime_powerState,
                 VimPath.vm_runtime_maxCpuUsage,
-                VimPath.vm_runtime_maxMemoryUsage
+                VimPath.vm_runtime_maxMemoryUsage,
+                VimPath.vm_summary_guest_ipAddress,
+                VimPath.vm_summary_guest_hostName
         ));
 
         PropertySpec hostSpec = new PropertySpec();

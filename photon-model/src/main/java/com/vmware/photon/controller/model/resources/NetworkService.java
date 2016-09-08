@@ -37,6 +37,7 @@ public class NetworkService extends StatefulService {
      */
     public static class NetworkState extends ResourceState {
         public static final String FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE = "adapterManagementReference";
+        public static final String FIELD_NAME_REGION_ID = "regionId";
 
         /**
          * Subnet CIDR

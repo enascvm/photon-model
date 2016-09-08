@@ -121,7 +121,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
 
         computeDesc.zoneId = this.zoneId;
-        computeDesc.datacenterId = this.datacenterId;
+        computeDesc.regionId = this.datacenterId;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,

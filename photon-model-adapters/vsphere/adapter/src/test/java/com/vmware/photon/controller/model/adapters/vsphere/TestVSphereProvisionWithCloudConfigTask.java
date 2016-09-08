@@ -256,7 +256,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeDesc.enumerationAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
         computeDesc.zoneId = this.zoneId;
-        computeDesc.datacenterId = this.datacenterId;
+        computeDesc.regionId = this.datacenterId;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,

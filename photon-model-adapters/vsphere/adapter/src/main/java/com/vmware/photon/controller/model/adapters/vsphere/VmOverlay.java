@@ -93,6 +93,14 @@ public class VmOverlay extends AbstractOverlay {
         return null;
     }
 
+    public String getIpAddressOrHostName() {
+        String ip = (String) get(VimPath.vm_summary_guest_ipAddress);
+        if (ip != null) {
+            return ip;
+        }
+        return (String) get(VimPath.vm_summary_guest_hostName);
+    }
+
     public int getNumCpu() {
         return (int) getOrFail(VimPath.vm_summary_config_numCpu);
     }

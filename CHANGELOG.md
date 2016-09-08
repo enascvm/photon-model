@@ -2,6 +2,9 @@
 
 ## 0.4.5-SNAPSHOT
 
+* Field `datacenterId` is removed from ComputeDescription. Adapters using it,
+  should move to use `regionId`.
+
 ## 0.4.4
 
 * Support multiple stats adapter per compute. Also enhance
