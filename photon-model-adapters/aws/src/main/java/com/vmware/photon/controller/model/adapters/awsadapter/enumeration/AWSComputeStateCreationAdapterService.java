@@ -23,6 +23,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnu
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getKeyForComputeDescriptionFromInstance;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRepresentativeListOfCDsFromInstanceList;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.mapInstanceToComputeState;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.mapTagToTagState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.createOperationToUpdateOrCreateNetworkInterface;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.getExistingNetworkInterfaceLink;
@@ -39,6 +40,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
@@ -69,7 +72,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -91,7 +94,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     private AWSClientManager clientManager;
 
     public static enum AWSComputeStateCreationStage {
-        GET_RELATED_COMPUTE_DESCRIPTIONS, POPULATE_COMPUTESTATES, CREATE_NETWORK_STATE, CREATE_COMPUTESTATES, SIGNAL_COMPLETION,
+        GET_RELATED_COMPUTE_DESCRIPTIONS, POPULATE_COMPUTESTATES, CREATE_NETWORK_STATE, CREATE_COMPUTESTATES, SIGNAL_COMPLETION, CREATE_TAGS,
     }
 
     public static enum AWSNetworkCreationStage {
@@ -197,7 +200,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         switch (context.creationStage) {
         case GET_RELATED_COMPUTE_DESCRIPTIONS:
             getRelatedComputeDescriptions(context,
-                    AWSComputeStateCreationStage.POPULATE_COMPUTESTATES);
+                    AWSComputeStateCreationStage.CREATE_TAGS);
+            break;
+        case CREATE_TAGS:
+            createTags(context, AWSComputeStateCreationStage.POPULATE_COMPUTESTATES);
             break;
         case POPULATE_COMPUTESTATES:
             populateOperations(context, AWSComputeStateCreationStage.CREATE_NETWORK_STATE);
@@ -218,6 +224,48 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     context.computeState.parentTaskLink, t);
             break;
+        }
+    }
+
+    private void createTags(
+            AWSComputeServiceCreationContext context,
+            AWSComputeStateCreationStage next) {
+        // Get all tags from the instances to be created and the instances to be updated
+        Set<Tag> create = context.computeState.instancesToBeCreated.stream()
+                .flatMap(i -> i.getTags().stream())
+                .collect(Collectors.toSet());
+
+        Set<Tag> update = context.computeState.instancesToBeUpdated.values().stream()
+                .flatMap(i -> i.getTags().stream())
+                .collect(Collectors.toSet());
+
+        // Put them in a set to remove the duplicates
+        Set<Tag> allTags = new HashSet<>();
+        allTags.addAll(create);
+        allTags.addAll(update);
+
+        // POST each of the tags. If a tag exists it won't be created again. We don't want the name
+        // tags, so filter them out
+        List<Operation> operations = allTags.stream()
+                .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
+                .map(t -> mapTagToTagState(t, context.computeState.tenantLinks))
+                .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
+                        .setBody(tagState)).collect(Collectors.toList());
+
+        if (operations.isEmpty()) {
+            context.creationStage = next;
+            handleComputeStateCreateOrUpdate(context);
+        } else {
+            OperationJoin.create(operations).setCompletion((ops, exs) -> {
+                if (exs != null && !exs.isEmpty()) {
+                    AdapterUtils.sendFailurePatchToEnumerationTask(this,
+                            context.computeState.parentTaskLink, exs.values().iterator().next());
+                    return;
+                }
+
+                context.creationStage = next;
+                handleComputeStateCreateOrUpdate(context);
+            }).sendWith(this);
         }
     }
 

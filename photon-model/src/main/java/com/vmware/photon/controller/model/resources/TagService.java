@@ -28,7 +28,9 @@ import com.vmware.xenon.common.Utils;
  * Tags are assigned to resources through the {@link ResourceState#tagLinks} field.
  */
 public class TagService extends StatefulService {
+
     public static final String FACTORY_LINK = UriPaths.RESOURCES + "/tags";
+
 
     /**
      * This class represents the document state associated with a
@@ -72,19 +74,22 @@ public class TagService extends StatefulService {
 
     @Override
     public void handlePatch(Operation patch) {
-        TagState currentState = getState(patch);
-        TagState patchState = processInput(patch);
+        patch.fail(new UnsupportedOperationException("Tags may not be modified"));
+    }
 
-        // auto-merge properties
-        boolean hasStateChanged = Utils.mergeWithState(
-                getStateDescription(), currentState, patchState);
+    @Override
+    public void handlePut(Operation put) {
+        TagState currentState = getState(put);
+        TagState newTagState = put.getBody(TagState.class);
 
-        if (!hasStateChanged) {
-            patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+        if (!ServiceDocument.equals(getStateDescription(), currentState, newTagState)) {
+            put.fail(new UnsupportedOperationException("Tags may not be modified"));
         } else {
-            patch.setBody(currentState);
+            //Do nothing
+            put.setBody(currentState);
+            put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+            put.complete();
         }
-        patch.complete();
     }
 
     @Override

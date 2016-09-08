@@ -33,14 +33,14 @@ import org.junit.runners.model.RunnerBuilder;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.xenon.common.Service;
 
-
 /**
  * This class implements tests for the {@link TagService} class.
  */
 @RunWith(TagServiceTest.class)
 @SuiteClasses({ TagServiceTest.ConstructorTest.class,
         TagServiceTest.HandleStartTest.class,
-        TagServiceTest.HandlePatchTest.class})
+        TagServiceTest.HandlePatchTest.class,
+        TagServiceTest.HandlePutTest.class })
 public class TagServiceTest extends Suite {
 
     public TagServiceTest(Class<?> klass, RunnerBuilder builder)
@@ -148,13 +148,29 @@ public class TagServiceTest extends Suite {
             assertThat(newState.key, is(startState.key));
             assertThat(newState.value, is(startState.value));
         }
+
+        @Test
+        public void testIdempotentPost() throws Throwable {
+            TagService.TagState startState = buildValidStartState();
+
+            TagService.TagState returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+
+            TagService.TagState newReturnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+
+            assertThat(newReturnState.documentSelfLink, is(returnState.documentSelfLink));
+            assertThat(newReturnState.documentVersion, is(0L));
+        }
     }
 
     /**
      * This class implements tests for the handlePatch method.
      */
     public static class HandlePatchTest extends BaseModelTest {
-        @Test
+        @Test(expected = UnsupportedOperationException.class)
         public void testPatchTag() throws Throwable {
             TagService.TagState startState = postServiceSynchronously(
                     TagService.FACTORY_LINK, buildValidStartState(),
@@ -165,13 +181,39 @@ public class TagServiceTest extends Suite {
             patchState.value = "";
             patchState.tenantLinks = new ArrayList<>(Arrays.asList("tenant2"));
             patchServiceSynchronously(startState.documentSelfLink, patchState);
+        }
+    }
 
-            TagService.TagState newState = getServiceSynchronously(
+    /**
+     * This class implements tests for the handlePut method.
+     */
+    public static class HandlePutTest extends BaseModelTest {
+        @Test(expected = UnsupportedOperationException.class)
+        public void testPutTagDifferentValues() throws Throwable {
+            TagService.TagState startState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, buildValidStartState(),
+                    TagService.TagState.class);
+
+            startState.key = "newKey";
+            startState.value = "newValue";
+            putServiceSynchronously(startState.documentSelfLink, startState);
+        }
+
+        @Test
+        public void testPutTagSameValues() throws Throwable {
+            TagService.TagState startState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, buildValidStartState(),
+                    TagService.TagState.class);
+
+            TagService.TagState newState = buildValidStartState();
+            putServiceSynchronously(startState.documentSelfLink, newState);
+
+            newState = getServiceSynchronously(
                     startState.documentSelfLink,
                     TagService.TagState.class);
-            assertThat(newState.key, is(patchState.key));
-            assertThat(newState.value, is(patchState.value));
-            assertEquals(newState.tenantLinks, patchState.tenantLinks);
+            assertThat(newState.key, is(startState.key));
+            assertThat(newState.value, is(startState.value));
+            assertEquals(newState.tenantLinks, startState.tenantLinks);
         }
     }
 }

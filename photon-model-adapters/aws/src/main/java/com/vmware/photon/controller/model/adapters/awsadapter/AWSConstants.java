@@ -18,7 +18,6 @@ import com.vmware.photon.controller.model.UriPaths;
 public class AWSConstants {
     public static final String AWS_SECURITY_GROUP = "awsSecurityGroup";
     public static final String AWS_SECURITY_GROUP_ID = "awsSecurityGroupId";
-    public static final String AWS_TAGS = "awsTags";
     public static final String AWS_TAG_NAME = "Name";
     public static final String AWS_VPC_ID = "awsVpcId";
     public static final String AWS_SUBNET_ID = "awsSubnetId";

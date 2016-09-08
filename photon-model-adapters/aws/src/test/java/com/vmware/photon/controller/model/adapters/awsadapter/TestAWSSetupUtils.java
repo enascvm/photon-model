@@ -239,10 +239,10 @@ public class TestAWSSetupUtils {
         awsVMDesc.id = instanceType_t2_micro;
         awsVMDesc.name = instanceType_t2_micro;
 
-        awsVMDesc.supportedChildren = new ArrayList<String>();
+        awsVMDesc.supportedChildren = new ArrayList<>();
         awsVMDesc.supportedChildren.add(ComputeType.DOCKER_CONTAINER.name());
 
-        awsVMDesc.customProperties = new HashMap<String, String>();
+        awsVMDesc.customProperties = new HashMap<>();
         awsVMDesc.customProperties
                 .put(AWSConstants.AWS_SECURITY_GROUP, securityGroup);
         awsVMDesc.environmentName = AWSInstanceService.AWS_ENVIRONMENT_NAME;
@@ -263,7 +263,7 @@ public class TestAWSSetupUtils {
                 ComputeDescriptionService.ComputeDescription.class,
                 UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
         // Step 3: create boot disk
-        List<String> vmDisks = new ArrayList<String>();
+        List<String> vmDisks = new ArrayList<>();
         DiskState rootDisk = new DiskState();
         rootDisk.id = UUID.randomUUID().toString();
         rootDisk.documentSelfLink = rootDisk.id;
@@ -523,6 +523,7 @@ public class TestAWSSetupUtils {
             return checkInstanceIdsReturnedFromAWS(numberOfInstance, creationHandler.instanceIds);
 
         });
+
         return creationHandler.instanceIds;
     }
 
@@ -684,8 +685,7 @@ public class TestAWSSetupUtils {
      */
     public static void enumerateResources(VerificationHost host, boolean isMock,
             String resourcePoolLink, String computeHostLinkDescription, String computeHostLink,
-            String testCase)
-            throws Throwable, InterruptedException, TimeoutException {
+            String testCase) throws Throwable {
         enumerateResources(host, null, isMock, resourcePoolLink, computeHostLinkDescription,
                 computeHostLink, testCase, null);
     }
@@ -695,8 +695,7 @@ public class TestAWSSetupUtils {
      */
     public static void enumerateResources(VerificationHost host, URI peerURI, boolean isMock,
             String resourcePoolLink, String computeHostLinkDescription, String computeHostLink,
-            String testCase, List<String> tenantLinks)
-            throws Throwable, InterruptedException, TimeoutException {
+            String testCase, List<String> tenantLinks) throws Throwable {
         // Perform resource enumeration on the AWS end point. Pass the references to the AWS compute
         // host.
         host.log("Performing resource enumeration");
@@ -746,14 +745,11 @@ public class TestAWSSetupUtils {
      * @param parentComputeLink The compute state associated with the AWS host.
      * @return
      * @throws Throwable
-     * @throws InterruptedException
-     * @throws TimeoutException
      */
     public static ResourceEnumerationTaskService.ResourceEnumerationTaskState performResourceEnumeration(
             VerificationHost host, URI peerURI, boolean isMock,
             String resourcePoolLink, String computeDescriptionLink, String parentComputeLink,
-            List<String> tenantLinks)
-            throws Throwable, InterruptedException, TimeoutException {
+            List<String> tenantLinks) throws Throwable {
         // Kick of a Resource Enumeration task to enumerate the instances on the AWS endpoint
         ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskService.ResourceEnumerationTaskState();
 
@@ -931,7 +927,7 @@ public class TestAWSSetupUtils {
      */
     public static void waitForInstancesToBeStopped(AmazonEC2AsyncClient client,
             VerificationHost host, List<String> instanceIdsToStop) throws Throwable {
-        ArrayList<Boolean> stopFlags = new ArrayList<Boolean>(instanceIdsToStop.size());
+        ArrayList<Boolean> stopFlags = new ArrayList<>(instanceIdsToStop.size());
         for (int i = 0; i < instanceIdsToStop.size(); i++) {
             stopFlags.add(i, Boolean.FALSE);
         }

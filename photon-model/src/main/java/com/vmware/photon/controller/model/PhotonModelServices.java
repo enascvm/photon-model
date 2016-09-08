@@ -28,8 +28,8 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
-
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -69,7 +69,7 @@ public class PhotonModelServices {
         host.startFactory(new FirewallService());
         host.startFactory(new StorageDescriptionService());
         host.startFactory(new EndpointService());
-        host.startFactory(new TagService());
+        host.startFactory(TagService.class, TagFactoryService::new);
         host.startFactory(ResourceMetricService.class, ResourceMetricService::createFactory);
         host.startFactory(ResourceAggregateMetricsService.class, ResourceAggregateMetricsService::createFactory);
         host.startFactory(ResourceAggregateMetricService.class, ResourceAggregateMetricService::createFactory);

@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAGS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.WINDOWS_PLATFORM;
@@ -31,21 +30,23 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Tag;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService.AWSTags;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.TagFactoryService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
@@ -98,8 +99,7 @@ public class AWSEnumerationUtils {
      * From the list of instances that are received from AWS arrive at the minimal set of compute descriptions that need
      * to be created locally to represent them.The compute descriptions are represented as regionId~instanceType
      * and put into a hashset. As a result, a representative set is created to represent all the discovered VMs.
-     * @param context
-     * @param next
+     * @param instanceList
      */
     public static HashSet<String> getRepresentativeListOfCDsFromInstanceList(
             Collection<Instance> instanceList) {
@@ -120,7 +120,6 @@ public class AWSEnumerationUtils {
      * - Created from the enumeration task.
      * Compute hosts are modeled to support VM guests.So excluding them from the query to get
      * compute descriptions for VMs.
-     * @param instance The instance returned from the AWS endpoint.
      */
     public static QueryTask getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
             Set<String> representativeComputeDescriptionSet, List<String> tenantLinks,
@@ -187,15 +186,19 @@ public class AWSEnumerationUtils {
                 getNormalizedOSType(instance));
 
         if (!instance.getTags().isEmpty()) {
-            // start with custom tag mapping(s)
+
+            // we have already made sure that the tags exist and we can build their links ourselves
+            computeState.tagLinks = instance.getTags().stream()
+                    .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
+                    .map(t -> mapTagToTagState(t, tenantLinks))
+                    .map(TagFactoryService::generateSelfLink)
+                    .collect(Collectors.toSet());
+
+            // The name of the compute state is the value of the AWS_TAG_NAME tag
             String nameTag = getTagValue(instance, AWS_TAG_NAME);
             if (nameTag != null) {
                 computeState.name = nameTag;
             }
-
-            // map all aws tags under the AWS_TAGS placeholder
-            computeState.customProperties.put(AWS_TAGS,
-                    Utils.toJson(new AWSTags(instance.getTags())));
         }
         computeState.customProperties.put(SOURCE_TASK_LINK,
                 ResourceEnumerationTaskService.FACTORY_LINK);
@@ -212,6 +215,15 @@ public class AWSEnumerationUtils {
         computeState.customProperties.put(AWS_VPC_ID,
                 instance.getVpcId());
         return computeState;
+    }
+
+    public static TagState mapTagToTagState(Tag tag, List<String> tenantLinks) {
+        TagState tagState = new TagState();
+        tagState.key = tag.getKey() == null ? "" : tag.getKey();
+        tagState.value = tag.getValue();
+        tagState.tenantLinks = tenantLinks;
+
+        return tagState;
     }
 
     /**
