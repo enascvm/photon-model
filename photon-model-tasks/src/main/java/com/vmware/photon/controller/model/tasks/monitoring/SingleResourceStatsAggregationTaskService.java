@@ -89,7 +89,12 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
         @Documentation(description = "The query to lookup resources for stats aggregation."
                 + " If no query is specified, the aggregation is performed on the resource"
                 + " identified by the resourceLink parameter")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
         public Query query;
+
+        @Documentation(description = "Task to patch back to")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        public String parentLink;
 
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
@@ -162,6 +167,22 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
             break;
         case STARTED:
             handleStagePatch(patch, currentState);
+            break;
+        case FINISHED:
+        case FAILED:
+        case CANCELLED:
+            if (currentState.parentLink != null) {
+                sendRequest(Operation
+                        .createPatch(UriUtils.buildUri(getHost(), currentState.parentLink))
+                        .setBody(currentState)
+                        .setCompletion(
+                            (patchOp, patchEx) -> {
+                                if (patchEx != null) {
+                                    logWarning("Patching parent task failed %s",
+                                            Utils.toString(patchEx));
+                                }
+                            }));
+            }
             break;
         default:
             break;

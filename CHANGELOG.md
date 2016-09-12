@@ -5,6 +5,17 @@
 * Field `datacenterId` is removed from ComputeDescription. Adapters using it,
   should move to use `regionId`.
 
+* Rename ComputeSubTaskService to SubTaskService to reflect its functionality
+  better
+
+* Remove ResourceStatsAggregationTaskService and merge its functionality
+  with StatsAggregationTaskService
+
+* Remove ResourceAggregateMetricsService as it has been replaced by
+ResourceAggregateMetricService
+
+* Support a query in StatsAggregationTaskService to identify resources to aggregate
+
 ## 0.4.4
 
 * Support multiple stats adapter per compute. Also enhance

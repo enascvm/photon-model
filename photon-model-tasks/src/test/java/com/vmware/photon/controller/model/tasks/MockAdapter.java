@@ -27,6 +27,8 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
+import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.ServiceHost;
@@ -84,7 +86,7 @@ public class MockAdapter {
             case PATCH:
                 ComputeInstanceRequest request = op
                         .getBody(ComputeInstanceRequest.class);
-                ComputeSubTaskService.ComputeSubTaskState computeSubTaskState = new ComputeSubTaskService.ComputeSubTaskState();
+                SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = new TaskState();
                 computeSubTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation.createPatch(
@@ -114,7 +116,7 @@ public class MockAdapter {
             case PATCH:
                 ComputeInstanceRequest request = op
                         .getBody(ComputeInstanceRequest.class);
-                ComputeSubTaskService.ComputeSubTaskState computeSubTaskState = new ComputeSubTaskService.ComputeSubTaskState();
+                SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
@@ -143,7 +145,7 @@ public class MockAdapter {
             case PATCH:
                 ComputeBootRequest request = op
                         .getBody(ComputeBootRequest.class);
-                ComputeSubTaskService.ComputeSubTaskState computeSubTaskState = new ComputeSubTaskService.ComputeSubTaskState();
+                SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = new TaskState();
                 computeSubTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation.createPatch(
@@ -173,7 +175,7 @@ public class MockAdapter {
             case PATCH:
                 ComputeBootRequest request = op
                         .getBody(ComputeBootRequest.class);
-                ComputeSubTaskService.ComputeSubTaskState computeSubTaskState = new ComputeSubTaskService.ComputeSubTaskState();
+                SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = new TaskState();
                 computeSubTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation.createPatch(
@@ -260,7 +262,7 @@ public class MockAdapter {
             switch (op.getAction()) {
             case PATCH:
                 SnapshotRequest request = op.getBody(SnapshotRequest.class);
-                ComputeSubTaskService.ComputeSubTaskState computeSubTaskState = new ComputeSubTaskService.ComputeSubTaskState();
+                SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = new TaskState();
                 computeSubTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation
@@ -290,7 +292,7 @@ public class MockAdapter {
             switch (op.getAction()) {
             case PATCH:
                 SnapshotRequest request = op.getBody(SnapshotRequest.class);
-                ComputeSubTaskService.ComputeSubTaskState computeSubTaskState = new ComputeSubTaskService.ComputeSubTaskState();
+                SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation
                         .createPatch(request.taskReference).setBody(

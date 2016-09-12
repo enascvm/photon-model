@@ -14,42 +14,28 @@
 package com.vmware.photon.controller.model.tasks.monitoring;
 
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.TimeUnit;
+import java.util.Set;
+import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricsService;
-import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricsService.ResourceAggregateMetricsState;
-import com.vmware.photon.controller.model.resources.ComputeService;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAggregationTaskService.SingleResourceStatsAggregationTaskState;
 
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
-import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.ServiceStats;
-import com.vmware.xenon.common.ServiceStats.ServiceStat;
-import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.TimeBin;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
- * Task to aggregate resource stats. Resources associated with a resource pool are
- * queried in a paginated fashion and the in memory stats associated with a resource
- * is fetched and persisted for the resource
+ * Task to aggregate resource stats for a set of resources specified by a query.
  */
 public class StatsAggregationTaskService extends TaskService<StatsAggregationTaskService.StatsAggregationTaskState> {
 
@@ -60,9 +46,12 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
     public static class StatsAggregationTaskState extends TaskService.TaskServiceState {
 
-        @Documentation(description = "Resource pool to invoke stats aggregation on")
+        @Documentation(description = "The set of metric names to aggregate on")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public String resourcePoolLink;
+        public Set<String> metricNames;
+
+        @Documentation(description = "The query to lookup resources for stats aggregation")
+        public Query query;
 
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
@@ -87,26 +76,26 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            if (!start.hasBody()) {
-                start.fail(new IllegalArgumentException("body is required"));
-                return;
-            }
-            StatsAggregationTaskState state = start
-                    .getBody(StatsAggregationTaskState.class);
-
-            validateState(state);
-            state.taskInfo = TaskUtils.createTaskState(TaskStage.CREATED);
-            start.setBody(state)
-                .setStatusCode(Operation.STATUS_CODE_ACCEPTED)
-                .complete();
-            state.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-            state.taskStage = StatsAggregationStage.INIT;
-            sendSelfPatch(state);
-        } catch (Throwable e) {
-            start.fail(e);
+    protected StatsAggregationTaskState validateStartPost(Operation postOp) {
+        StatsAggregationTaskState state = super.validateStartPost(postOp);
+        if (state == null) {
+            return null;
         }
+        if (state.query == null) {
+            postOp.fail(new IllegalArgumentException("query needs to be specified"));
+            return null;
+        }
+        if (state.metricNames == null || state.metricNames.isEmpty()) {
+            postOp.fail(new IllegalStateException("metricNames should not be null or empty"));
+            return null;
+        }
+        return state;
+    }
+
+    @Override
+    protected void initializeState(StatsAggregationTaskState state, Operation postOp) {
+        super.initializeState(state, postOp);
+        state.taskStage = StatsAggregationStage.INIT;
     }
 
     @Override
@@ -119,26 +108,11 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         patch.complete();
 
         switch (currentState.taskInfo.stage) {
-        case CREATED:
-            break;
         case STARTED:
             handleStagePatch(patch, currentState);
             break;
-        case FINISHED:
-        case FAILED:
-        case CANCELLED:
-            // this is a one shot task, self delete
-            sendRequest(Operation
-                    .createDelete(getUri()));
-            break;
         default:
             break;
-        }
-    }
-
-    private void validateState(StatsAggregationTaskState state) {
-        if (state.resourcePoolLink == null) {
-            throw new IllegalStateException("resourcePoolLink should not be null");
         }
     }
 
@@ -158,13 +132,8 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
     private void initializeQuery(Operation op, StatsAggregationTaskState currentState) {
 
         int resultLimit = Integer.getInteger(STATS_QUERY_RESULT_LIMIT, DEFAULT_QUERY_RESULT_LIMIT);
-        Query query = Query.Builder.create()
-                .addKindFieldClause(ComputeService.ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK, currentState.resourcePoolLink)
-                .build();
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
-                .setQuery(query).setResultLimit(resultLimit).addOption(QueryOption.EXPAND_CONTENT);
-
+                .setQuery(currentState.query).setResultLimit(resultLimit);
         sendRequest(Operation
                 .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
                 .setBody(queryTaskBuilder.build())
@@ -203,160 +172,58 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                                 return;
                             }
                             // process resources
-                            List<Operation> statsOperations = new ArrayList<Operation>();
-                            for (String computeLink: page.results.documentLinks) {
-                                statsOperations.add(Operation.createGet(UriUtils.buildStatsUri(getHost(), computeLink))
-                                        .setReferer(getHost().getUri()));
-                            }
-                            OperationJoin.JoinedCompletionHandler joinCompletion = (ops,exc) -> {
-                                if (exc != null) {
-                                    sendSelfFailurePatch(currentState, exc.values().iterator().next().getMessage());
-                                    return;
-                                }
-                                createResourceAggregationStats(op, currentState, ops.values(), page);
-                            };
-                            OperationJoin joinOp = OperationJoin.create(statsOperations);
-                            joinOp.setCompletion(joinCompletion);
-                            joinOp.sendWith(getHost());
+                            createSubTask(page.results.documentLinks, page.results.nextPageLink,
+                                    currentState);
                         }));
     }
 
-    private long normalizeTimestamp(long timestampMicros, long bucketDurationMillis) {
-        long timeMillis = TimeUnit.MICROSECONDS.toMillis(timestampMicros);
-        timeMillis -= (timeMillis % bucketDurationMillis);
-        return timeMillis;
-    }
-
-    private ResourceAggregateMetricsState buildResourceAggregateMetricsState(String computeServiceLink,
-            List<String> tenantLinks, long bucketForInterval) {
-        ResourceAggregateMetricsState aggrMetricState = new ResourceAggregateMetricsState();
-        aggrMetricState.computeServiceLink = computeServiceLink;
-        aggrMetricState.aggregations = new HashMap<String, TimeBin>();
-        aggrMetricState.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(bucketForInterval);
-        aggrMetricState.tenantLinks = tenantLinks;
-        aggrMetricState.documentSelfLink = new StringBuilder().append(UriUtils.getLastPathSegment(computeServiceLink))
-                .append("-").append(Long.toString(bucketForInterval)).toString();
-        return aggrMetricState;
-    }
-
-    private void createResourceAggregationStats(Operation op, StatsAggregationTaskState currentState,
-            Collection<Operation> statsOps, QueryTask page) {
-        List<Operation> postResourceOps = new ArrayList<Operation>();
-        Map<String, List<String>> computeToTenantLinksMap = new HashMap<String, List<String>>();
-        for (Object computeServiceObject: page.results.documents.values()) {
-            ComputeState computeState = Utils.fromJson(computeServiceObject, ComputeState.class);
-            computeToTenantLinksMap.put(computeState.documentSelfLink, computeState.tenantLinks);
-        }
-        for (Operation resultOp : statsOps) {
-            if (!resultOp.hasBody()) {
-                continue;
-            }
-            ServiceStats stats = resultOp.getBody(ServiceStats.class);
-            if (stats.documentSelfLink == null) {
-                continue;
-            }
-            String computeServiceLink = stats.documentSelfLink.replace(ServiceHost.SERVICE_URI_SUFFIX_STATS, "");
-            // normalize the collection time such that it aligns with a bucket boundary used for time series stats
-            long currentTime = Utils.getNowMicrosUtc();
-            // we are dealing with hourly buckets at this time; this scheme can be extended to deal with other
-            // bucket ranges (day, week etc. as well)
-            long bucketForCurrentInterval = normalizeTimestamp(currentTime, StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS);
-            long bucketForPreviousInterval = normalizeTimestamp(currentTime - TimeUnit.HOURS.toMicros(1),
-                    StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS);
-            // Variables for daily buckets.
-            long bucketForCurrentDay = normalizeTimestamp(currentTime, StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS);
-            long bucketForPreviousDay = normalizeTimestamp(currentTime - TimeUnit.HOURS.toMicros(1),
-                    StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS);
-
-            ResourceAggregateMetricsState aggrMetricStateForCurrentInterval =
-                    buildResourceAggregateMetricsState(computeServiceLink, computeToTenantLinksMap.get(computeServiceLink),
-                            bucketForCurrentInterval);
-            ResourceAggregateMetricsState aggrMetricStateForPreviousInterval =
-                    buildResourceAggregateMetricsState(computeServiceLink, computeToTenantLinksMap.get(computeServiceLink),
-                            bucketForPreviousInterval);
-
-            for (Entry<String, ServiceStat> entry : stats.entries.entrySet() ) {
-                ServiceStat stat = entry.getValue();
-                // if the stat is maintained at a minute granularity, skip it as we don't want to aggregate the time
-                // series data at this granularity
-                if (stat.name.endsWith(StatsConstants.MIN_SUFFIX)) {
-                    continue;
-                } else if (stat.name.endsWith(StatsConstants.HOUR_SUFFIX)) {
-                    populateAggregareMetricState(entry, bucketForCurrentInterval,
-                            bucketForPreviousInterval, aggrMetricStateForCurrentInterval,
-                            aggrMetricStateForPreviousInterval);
-                } else if (stat.name.endsWith(StatsConstants.DAILY_SUFFIX)) {
-                    populateAggregareMetricState(entry, bucketForCurrentDay,
-                            bucketForPreviousDay, aggrMetricStateForCurrentInterval,
-                            aggrMetricStateForPreviousInterval);
-                }
-            }
-            postResourceOps.add(
-                    Operation.createPost(UriUtils.buildUri(getHost(), ResourceAggregateMetricsService.FACTORY_LINK))
-                    .setBody(aggrMetricStateForCurrentInterval)
-                    .setReferer(getHost().getUri()));
-            postResourceOps.add(
-                    Operation.createPost(UriUtils.buildUri(getHost(), ResourceAggregateMetricsService.FACTORY_LINK))
-                    .setBody(aggrMetricStateForPreviousInterval)
-                    .setReferer(getHost().getUri()));
-        }
-        if (postResourceOps.size() == 0) {
-            sendSelfPatch(page);
-            return;
-        }
-        OperationJoin.JoinedCompletionHandler postJoinCompletion = (postOps,
-                postExList) -> {
-            if (postExList != null) {
-                sendSelfFailurePatch(currentState, postExList.values().iterator().next().getMessage());
-                return;
-            }
-            sendSelfPatch(page);
-        };
-        OperationJoin postJoinOp = OperationJoin.create(postResourceOps);
-        postJoinOp.setCompletion(postJoinCompletion);
-        postJoinOp.sendWith(getHost());
-    }
-
-    /**
-     * Create a StatsAggregation patch body and send self patch.
-     */
-    private void sendSelfPatch(QueryTask page) {
+    private void createSubTask(List<String> computeResources, String nextPageLink,
+            StatsAggregationTaskState currentState) {
         StatsAggregationTaskState patchBody = new StatsAggregationTaskState();
-        if (page.results.nextPageLink == null) {
-            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-        } else {
+        if (nextPageLink != null) {
             patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
             patchBody.taskStage = StatsAggregationStage.GET_RESOURCES;
-            patchBody.queryResultLink = page.results.nextPageLink;
+            patchBody.queryResultLink = nextPageLink;
+        } else {
+            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
         }
-        sendSelfPatch(patchBody);
+        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
+        subTaskInitState.parentPatchBody = Utils.toJson(patchBody);
+        subTaskInitState.errorThreshold = 0;
+        subTaskInitState.completionsRemaining = computeResources.size();
+        subTaskInitState.parentTaskLink = getSelfLink();
+        Operation startPost = Operation
+                .createPost(this, UUID.randomUUID().toString())
+                .setBody(subTaskInitState)
+                .setCompletion((postOp, postEx) -> {
+                    if (postEx != null) {
+                        TaskUtils.sendFailurePatch(this, new StatsAggregationTaskState(), postEx);
+                        return;
+                    }
+                    SubTaskService.SubTaskState body = postOp
+                            .getBody(SubTaskService.SubTaskState.class);
+                    // kick off a aggregation task for each resource and track completion
+                    // via the compute subtask
+                    for (String computeLink : computeResources) {
+                        createSingleResourceComputeTask(computeLink, body.documentSelfLink, currentState);
+                    }
+                });
+        getHost().startService(startPost, new SubTaskService());
     }
 
-    /**
-     * Populate aggregate metrics based on the provided interval buckets.
-     */
-    private void populateAggregareMetricState(Entry<String, ServiceStat> entry,
-            long bucketForCurrentInterval, long bucketForPreviousInterval,
-            ResourceAggregateMetricsState aggrMetricStateForCurrentInterval,
-            ResourceAggregateMetricsState aggrMetricStateForPreviousInterval) {
-        ServiceStat stat = entry.getValue();
-        if (!stat.timeSeriesStats.bins.isEmpty()) {
-            long latestBucket = stat.timeSeriesStats.bins.lastKey();
-            if (latestBucket == bucketForCurrentInterval) {
-                aggrMetricStateForCurrentInterval.aggregations.put(entry.getKey(),
-                        stat.timeSeriesStats.bins.get(latestBucket));
-            }
-            // remove the latest bucket, so that we can look the the closed bucket for the last interval
-            stat.timeSeriesStats.bins.remove(latestBucket);
-        }
-        // we really need to do this only if the task ran for the first time after the active bucket changed;
-        // doing this unconditionally for now and can be optimized later
-        if (!stat.timeSeriesStats.bins.isEmpty()) {
-            long previousBucket = stat.timeSeriesStats.bins.lastKey();
-            if (previousBucket == bucketForPreviousInterval) {
-                aggrMetricStateForPreviousInterval.aggregations.put(entry.getKey(),
-                        stat.timeSeriesStats.bins.get(previousBucket));
-            }
-        }
+    private void createSingleResourceComputeTask(String resourceLink, String subtaskLink, StatsAggregationTaskState currentState ) {
+        SingleResourceStatsAggregationTaskState initState = new SingleResourceStatsAggregationTaskState();
+        initState.resourceLink = resourceLink;
+        initState.metricNames = currentState.metricNames;
+        initState.parentLink = subtaskLink;
+        sendRequest(Operation
+                    .createPost(this,
+                            SingleResourceStatsAggregationTaskService.FACTORY_LINK)
+                    .setBody(initState)
+                    .setCompletion((factoryPostOp, factoryPostEx) -> {
+                        if (factoryPostEx != null) {
+                            TaskUtils.sendFailurePatch(this, new StatsAggregationTaskState(), factoryPostEx);
+                        }
+                    }));
     }
 }

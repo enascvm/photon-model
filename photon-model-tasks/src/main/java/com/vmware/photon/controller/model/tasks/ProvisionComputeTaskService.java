@@ -417,7 +417,7 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
         patchBody.taskInfo.stage = TaskStage.STARTED;
         patchBody.taskSubStage = nextStage;
 
-        ComputeSubTaskService.ComputeSubTaskState subTaskInitState = new ComputeSubTaskService.ComputeSubTaskState();
+        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
         subTaskInitState.parentPatchBody = Utils.toJson(patchBody);
         subTaskInitState.errorThreshold = 0;
         subTaskInitState.parentTaskLink = getSelfLink();
@@ -426,7 +426,7 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
         Operation startPost = Operation
                 .createPost(this, UUID.randomUUID().toString())
                 .setBody(subTaskInitState).setCompletion(c);
-        getHost().startService(startPost, new ComputeSubTaskService());
+        getHost().startService(startPost, new SubTaskService());
     }
 
     private void sendHostServiceRequest(Object body, URI adapterReference) {

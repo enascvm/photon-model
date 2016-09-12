@@ -20,8 +20,8 @@ import java.util.UUID;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.tasks.ComputeSubTaskService;
-import com.vmware.photon.controller.model.tasks.ComputeSubTaskService.ComputeSubTaskState;
+import com.vmware.photon.controller.model.tasks.SubTaskService;
+import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.xenon.common.Operation;
@@ -223,7 +223,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         } else {
             patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
         }
-        ComputeSubTaskService.ComputeSubTaskState subTaskInitState = new ComputeSubTaskService.ComputeSubTaskState();
+        SubTaskState subTaskInitState = new SubTaskState();
         subTaskInitState.parentPatchBody = Utils.toJson(patchBody);
         subTaskInitState.errorThreshold = 0;
         subTaskInitState.completionsRemaining = computeResources.size();
@@ -236,15 +236,15 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                         TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), postEx);
                         return;
                     }
-                    ComputeSubTaskService.ComputeSubTaskState body = postOp
-                            .getBody(ComputeSubTaskService.ComputeSubTaskState.class);
+                    SubTaskState body = postOp
+                            .getBody(SubTaskState.class);
                     // kick off a collection task for each resource and track completion
                     // via the compute subtask
                     for (String computeLink : computeResources) {
                         createSingleResourceComputeTask(computeLink, body.documentSelfLink, currentState.statsAdapterReference);
                     }
                 });
-        getHost().startService(startPost, new ComputeSubTaskService());
+        getHost().startService(startPost, new SubTaskService());
     }
 
     private void createSingleResourceComputeTask(String computeLink, String subtaskLink,
@@ -253,7 +253,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         initState.parentLink = subtaskLink;
         initState.computeLink = computeLink;
         initState.statsAdapterReference = statsAdapterReference;
-        ComputeSubTaskState patchState = new ComputeSubTaskState();
+        SubTaskState patchState = new SubTaskState();
         patchState.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
         initState.parentPatchBody = patchState;
         sendRequest(Operation

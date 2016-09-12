@@ -576,7 +576,7 @@ public class ResourceAllocationTaskService
     private void createSubTaskForProvisionCallbacks(
             ResourceAllocationTaskState currentState,
             ComputeDescriptionService.ComputeDescription desc) {
-        ComputeSubTaskService.ComputeSubTaskState subTaskInitState = new ComputeSubTaskService.ComputeSubTaskState();
+        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
         ResourceAllocationTaskState subTaskPatchBody = new ResourceAllocationTaskState();
         subTaskPatchBody.taskInfo = new TaskState();
         subTaskPatchBody.taskSubStage = SubStage.FINISHED;
@@ -599,13 +599,13 @@ public class ResourceAllocationTaskService
                                 sendFailureSelfPatch(e);
                                 return;
                             }
-                            ComputeSubTaskService.ComputeSubTaskState body = o
-                                    .getBody(ComputeSubTaskService.ComputeSubTaskState.class);
+                            SubTaskService.SubTaskState body = o
+                                    .getBody(SubTaskService.SubTaskState.class);
                             // continue, passing the sub task link
                             doComputeResourceProvisioning(currentState, desc,
                                     body.documentSelfLink);
                         });
-        getHost().startService(startPost, new ComputeSubTaskService());
+        getHost().startService(startPost, new SubTaskService());
     }
 
     // Create all the dependencies, then create the compute document. createDisk

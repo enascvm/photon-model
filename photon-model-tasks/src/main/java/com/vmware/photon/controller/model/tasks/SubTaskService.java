@@ -22,17 +22,19 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
- * Task tracking the progress of a single request to the host power or boot
- * service. When the host service completes the operation it issues a PATCH to
+ * Utility task that waits for multiple tasks to complete
+ * When those tasks have completed the operation they issue a PATCH to
  * this service with the taskInfo.stage set to FINISHED, or if the operation
- * fails, set to FAILED
+ * fails, set to FAILED.
+ * The subtask service then issues one PATCH to the service referenced via
+ * parentTaskLink
  */
-public class ComputeSubTaskService extends TaskService<ComputeSubTaskService.ComputeSubTaskState> {
+public class SubTaskService extends TaskService<SubTaskService.SubTaskState> {
 
     /**
-     * Represent the state of a compute subtask.
+     * Represent the state of subtask service.
      */
-    public static class ComputeSubTaskState extends TaskService.TaskServiceState {
+    public static class SubTaskState extends TaskService.TaskServiceState {
         /**
          * Number of tasks to track.
          */
@@ -69,15 +71,15 @@ public class ComputeSubTaskService extends TaskService<ComputeSubTaskService.Com
         public List<String> tenantLinks;
     }
 
-    public ComputeSubTaskService() {
-        super(ComputeSubTaskState.class);
+    public SubTaskService() {
+        super(SubTaskState.class);
     }
 
     @Override
     public void handlePatch(Operation patch) {
-        ComputeSubTaskState patchBody = patch
-                .getBody(ComputeSubTaskState.class);
-        ComputeSubTaskState currentState = getState(patch);
+        SubTaskState patchBody = patch
+                .getBody(SubTaskState.class);
+        SubTaskState currentState = getState(patch);
 
         if (patchBody.taskInfo == null || patchBody.taskInfo.stage == null) {
             String error = "taskInfo, taskInfo.stage are required";

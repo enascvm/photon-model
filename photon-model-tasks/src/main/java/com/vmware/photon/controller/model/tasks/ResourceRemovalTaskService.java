@@ -285,7 +285,7 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
     private void createSubTaskForDeleteCallbacks(
             ResourceRemovalTaskState currentState, int resourceCount,
             QueryTask queryTask) {
-        ComputeSubTaskService.ComputeSubTaskState subTaskInitState = new ComputeSubTaskService.ComputeSubTaskState();
+        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
         ResourceRemovalTaskState subTaskPatchBody = new ResourceRemovalTaskState();
         subTaskPatchBody.taskInfo = new TaskState();
         subTaskPatchBody.taskInfo.stage = TaskState.TaskStage.FINISHED;
@@ -309,13 +309,13 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
                                         SubStage.FAILED, e);
                                 return;
                             }
-                            ComputeSubTaskService.ComputeSubTaskState body = o
-                                    .getBody(ComputeSubTaskService.ComputeSubTaskState.class);
+                            SubTaskService.SubTaskState body = o
+                                    .getBody(SubTaskService.SubTaskState.class);
                             // continue with deletes, passing the sub task link
                             doInstanceDeletes(currentState, queryTask,
                                     body.documentSelfLink);
                         });
-        getHost().startService(startPost, new ComputeSubTaskService());
+        getHost().startService(startPost, new SubTaskService());
     }
 
     private void sendInstanceDelete(String resourceLink, String subTaskLink,

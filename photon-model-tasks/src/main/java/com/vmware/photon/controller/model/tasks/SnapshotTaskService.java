@@ -219,7 +219,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
     }
 
     private void createSubTaskForSnapshotCallback(SnapshotTaskState currentState) {
-        ComputeSubTaskService.ComputeSubTaskState subTaskInitState = new ComputeSubTaskService.ComputeSubTaskState();
+        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
         SnapshotTaskState subTaskPatchBody = new SnapshotTaskState();
         subTaskPatchBody.taskInfo = new TaskState();
         subTaskPatchBody.taskInfo.stage = TaskState.TaskStage.FINISHED;
@@ -238,11 +238,11 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
                                         e);
                                 return;
                             }
-                            ComputeSubTaskService.ComputeSubTaskState body = o
-                                    .getBody(ComputeSubTaskService.ComputeSubTaskState.class);
+                            SubTaskService.SubTaskState body = o
+                                    .getBody(SubTaskService.SubTaskState.class);
                             createSnapshot(currentState, body.documentSelfLink);
                         });
-        getHost().startService(startPost, new ComputeSubTaskService());
+        getHost().startService(startPost, new SubTaskService());
     }
 
     public boolean validateStageTransition(Operation patch,

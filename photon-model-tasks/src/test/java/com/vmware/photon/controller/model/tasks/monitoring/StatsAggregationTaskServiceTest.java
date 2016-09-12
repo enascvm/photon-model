@@ -13,16 +13,14 @@
 
 package com.vmware.photon.controller.model.tasks.monitoring;
 
-import static org.junit.Assert.assertTrue;
-
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricsService;
-import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricsService.ResourceAggregateMetricsState;
+import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -32,13 +30,11 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService.StatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
-import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.ServiceStats;
-import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 public class StatsAggregationTaskServiceTest extends BaseModelTest {
 
@@ -54,7 +50,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
                 new MockStatsAdapter());
 
         this.host.waitForServiceAvailable(StatsCollectionTaskService.FACTORY_LINK);
-        this.host.waitForServiceAvailable(SingleResourceStatsCollectionTaskService.FACTORY_LINK);
+        this.host.waitForServiceAvailable(SingleResourceStatsAggregationTaskService.FACTORY_LINK);
         this.host.waitForServiceAvailable(StatsAggregationTaskService.FACTORY_LINK);
         this.host.waitForServiceAvailable(MockStatsAdapter.SELF_LINK);
     }
@@ -84,20 +80,20 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
                     ComputeState.class);
             computeLinks.add(res.documentSelfLink);
         }
-        StatsCollectionTaskState collectionTaskState = new StatsCollectionTaskState();
-        collectionTaskState.resourcePoolLink = rpReturnState.documentSelfLink;
-        postServiceSynchronously(
-                StatsCollectionTaskService.FACTORY_LINK, collectionTaskState,
-                StatsCollectionTaskState.class);
-
         // kick off an aggregation task when stats are not populated
         StatsAggregationTaskState aggregationTaskState = new StatsAggregationTaskState();
-        aggregationTaskState.resourcePoolLink =  rpReturnState.documentSelfLink;
-        postServiceSynchronously(StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
+        Query taskQuery = Query.Builder.create()
+                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK, rpReturnState.documentSelfLink).build();
+        aggregationTaskState.query =  taskQuery;
+        aggregationTaskState.metricNames = Collections.singleton("key-1");
+        StatsAggregationTaskState returnState  = postServiceSynchronously(
+                StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
                 StatsAggregationTaskState.class);
+        waitForFinishedTask(StatsAggregationTaskState.class,
+                returnState.documentSelfLink);
         this.host.waitFor("Error waiting for stats", () -> {
             ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
-                        ResourceAggregateMetricsService.FACTORY_LINK));
+                        ResourceAggregateMetricService.FACTORY_LINK));
             // Expect 0 stats because they're not collected yet
             if (aggrRes.documentCount == 0) {
                 return true;
@@ -105,50 +101,29 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
             return false;
         });
 
-        // wait for stats to be populated for all resources
-        for (int i = 0; i < this.numResources; i++) {
-            String statsUriPath = UriUtils.buildUriPath(computeLinks.get(i),
-                    ServiceHost.SERVICE_URI_SUFFIX_STATS);
-            this.host.waitFor("Error waiting for stats", () -> {
-                ServiceStats resStats = getServiceSynchronously(statsUriPath, ServiceStats.class);
-                boolean returnStatus = false;
-                for (ServiceStat stat : resStats.entries.values()) {
-                    if (stat.latestValue >= 1 ) {
-                        returnStatus = true;
-                    }
-                }
-                return returnStatus;
-            });
-        }
+        StatsCollectionTaskState collectionTaskState = new StatsCollectionTaskState();
+        collectionTaskState.resourcePoolLink = rpReturnState.documentSelfLink;
+        StatsCollectionTaskState colelctionReturnState = postServiceSynchronously(
+                StatsCollectionTaskService.FACTORY_LINK, collectionTaskState,
+                StatsCollectionTaskState.class);
+        waitForFinishedTask(StatsCollectionTaskState.class,
+                colelctionReturnState.documentSelfLink);
+
         // kick off an aggregation task
         aggregationTaskState = new StatsAggregationTaskState();
-        aggregationTaskState.resourcePoolLink =  rpReturnState.documentSelfLink;
-        postServiceSynchronously(StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
+        aggregationTaskState.query =  taskQuery;
+        aggregationTaskState.metricNames = Collections.singleton("key-1");
+        returnState  = postServiceSynchronously(StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
                 StatsAggregationTaskState.class);
+        waitForFinishedTask(StatsAggregationTaskState.class,
+                returnState.documentSelfLink);
         this.host.waitFor("Error waiting for stats", () -> {
             ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
-                        ResourceAggregateMetricsService.FACTORY_LINK));
-            if (aggrRes.documentCount == (2 * this.numResources)) {
+                        ResourceAggregateMetricService.FACTORY_LINK));
+            if (aggrRes.documentCount ==  (2 * this.numResources)) {
                 return true;
             }
             return false;
         });
-        ServiceDocumentQueryResult aggrRes = this.host.getExpandedFactoryState(UriUtils.buildUri(this.host,
-                ResourceAggregateMetricsService.FACTORY_LINK));
-        assertTrue(aggrRes.documentCount == (2 * this.numResources));
-        int countOfCurrentMetrics = 0;
-        int countOfPreviousMetrics = 0;
-        for (Object aggrStatDoc : aggrRes.documents.values()) {
-            ResourceAggregateMetricsState aggrMetricState = Utils.fromJson(aggrStatDoc, ResourceAggregateMetricsState.class);
-            assertTrue((computeLinks.contains(aggrMetricState.computeServiceLink)));
-            if (aggrMetricState.aggregations.size() == 4) {
-                countOfCurrentMetrics++;
-            } else if (aggrMetricState.aggregations.size() == 0) {
-                // test does not have any metrics for the previous interval
-                countOfPreviousMetrics++;
-            }
-        }
-        assertTrue(countOfCurrentMetrics == this.numResources);
-        assertTrue(countOfPreviousMetrics == this.numResources);
     }
 }
