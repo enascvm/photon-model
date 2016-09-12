@@ -49,7 +49,7 @@ public class ResourceAggregateMetricService extends StatefulService {
         public static final int VERSION_RETENTION_LIMIT = Integer.getInteger(
                 UriPaths.PROPERTY_PREFIX + ResourceAggregateMetric.class.getSimpleName()
                 + ".VERSION_RETENTION_LIMIT", 50000);
-        public static final String FIELD_NAME_TIMESTAMP = "currentIntervalStampMicrosUtc";
+        public static final String FIELD_NAME_TIMESTAMP = "currentIntervalTimeStampMicrosUtc";
         public static final String FIELD_NAME_TIMEBIN = "timeBin";
 
         @Documentation(description = "TimeBin for the current interval")
