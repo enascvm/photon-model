@@ -893,7 +893,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         resource.customProperties = new HashMap<>();
         resource.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
         resource.tenantLinks = ctx.computeHostDesc.tenantLinks;
-        resource.networkLinks = networkLinks;
+        resource.networkInterfaceLinks = networkLinks;
 
         ctx.computeStatesForPatching.put(resource.id, resource);
 
@@ -997,8 +997,8 @@ public class AzureEnumerationAdapterService extends StatelessService {
     private void patchVMNetworkDetails(EnumerationContext ctx,
             ComputeState resource, String resourceGroupName, String vmName, AtomicInteger numOfPatches) {
         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1473
-        if (resource.networkLinks != null) {
-            String networkLink = resource.networkLinks.get(0);
+        if (resource.networkInterfaceLinks != null) {
+            String networkLink = resource.networkInterfaceLinks.get(0);
             Operation.createGet(getHost(), networkLink).setCompletion((o, e) -> {
                 if (e != null) {
                     logSevere(e.getMessage());

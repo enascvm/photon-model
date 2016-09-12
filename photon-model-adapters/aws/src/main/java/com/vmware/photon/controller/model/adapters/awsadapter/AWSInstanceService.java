@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.allocateSecurityGroup;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.allocateSecurityGroups;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapInstanceIPAddressToNICCreationOperations;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
@@ -23,12 +23,14 @@ import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.handlers.AsyncHandler;
@@ -49,6 +51,8 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.xenon.common.Operation;
@@ -145,7 +149,7 @@ public class AWSInstanceService extends StatelessService {
             // now that we have a client lets move onto the next step
             switch (aws.computeRequest.requestType) {
             case CREATE:
-                aws.stage = AWSStages.VMDISKS;
+                aws.stage = AWSStages.VM_DISKS;
                 handleAllocation(aws);
                 break;
             case DELETE:
@@ -166,11 +170,17 @@ public class AWSInstanceService extends StatelessService {
         case DELETE:
             deleteInstance(aws);
             break;
-        case VMDISKS:
-            getVMDisks(aws, AWSStages.FIREWALL);
+        case VM_DISKS:
+            getVMDisks(aws, AWSStages.VM_NETWORK_INTERFACES);
             break;
-        case FIREWALL:
-            aws.securityGroupId = allocateSecurityGroup(aws);
+        case VM_NETWORK_INTERFACES:
+            getVMNetworkInterfaces(aws, AWSStages.VM_FIREWALLS);
+            break;
+        case VM_FIREWALLS:
+            getVMFirewalls(aws, AWSStages.SECURITY_GROUPS_ALLOCATION);
+            break;
+        case SECURITY_GROUPS_ALLOCATION:
+            aws.securityGroupIds = allocateSecurityGroups(aws);
             aws.subnetId = getSubnetId(aws);
             aws.stage = AWSStages.CREATE;
             handleAllocation(aws);
@@ -303,6 +313,89 @@ public class AWSInstanceService extends StatelessService {
         operationJoin.sendWith(this);
     }
 
+    /*
+     * method will retrieve network interfaces for targeted image
+     */
+    private void getVMNetworkInterfaces(AWSAllocation aws, AWSStages next) {
+        if (aws.child.networkInterfaceLinks == null || aws.child.networkInterfaceLinks.size() == 0) {
+            aws.stage = next;
+            handleAllocation(aws);
+            return;
+        }
+        Collection<Operation> operations = new ArrayList<>();
+        // iterate thru networkInterfaces and create operations
+        for (String link : aws.child.networkInterfaceLinks) {
+            operations.add(Operation.createGet(UriUtils.buildUri(
+                    this.getHost(), link)));
+        }
+
+        OperationJoin operationJoin = OperationJoin.create(operations)
+                .setCompletion(
+                        (ops, exc) -> {
+                            if (exc != null) {
+                                aws.error = new IllegalStateException(
+                                        "Error getting network interface information");
+                                aws.stage = AWSStages.ERROR;
+                                handleAllocation(aws);
+                                return;
+                            }
+
+                            aws.networkInterfaces = new ArrayList<>();
+                            for (Operation op : ops.values()) {
+                                NetworkInterfaceState networkInterface = op
+                                        .getBody(NetworkInterfaceState.class);
+                                aws.networkInterfaces.add(networkInterface);
+                            }
+                            aws.stage = next;
+                            handleAllocation(aws);
+                        });
+        operationJoin.sendWith(this);
+    }
+
+    /*
+     * method will retrieve firewalls for targeted image
+     */
+    private void getVMFirewalls(AWSAllocation aws, AWSStages next) {
+        if (aws.networkInterfaces == null || aws.networkInterfaces.size() == 0) {
+            aws.stage = next;
+            handleAllocation(aws);
+            return;
+        }
+
+        Stream<Operation> firewallOps = aws.networkInterfaces.stream()
+                .filter(n -> (n.firewallLinks != null && !n.firewallLinks.isEmpty()))
+                .flatMap(ni -> ni.firewallLinks.stream())
+                .map(link -> Operation.createGet(UriUtils.buildUri(this.getHost(), link)));
+
+        if (!firewallOps.iterator().hasNext()) {
+            aws.stage = next;
+            handleAllocation(aws);
+            return;
+        }
+
+        OperationJoin operationJoin = OperationJoin.create(firewallOps)
+                .setCompletion(
+                        (ops, exc) -> {
+                            if (exc != null) {
+                                aws.error = new IllegalStateException(
+                                        "Error getting firewalls information");
+                                aws.stage = AWSStages.ERROR;
+                                handleAllocation(aws);
+                                return;
+                            }
+
+                            aws.childFirewalls = new HashMap<>();
+                            for (Operation op : ops.values()) {
+                                FirewallState firewall = op
+                                        .getBody(FirewallState.class);
+                                aws.childFirewalls.put(firewall.name, firewall);
+                            }
+                            aws.stage = next;
+                            handleAllocation(aws);
+                        });
+        operationJoin.sendWith(this);
+    }
+
     private void createInstance(AWSAllocation aws) {
         if (aws.computeRequest.isMockRequest) {
             AdapterUtils.sendPatchToProvisioningTask(this,
@@ -359,14 +452,16 @@ public class AWSInstanceService extends StatelessService {
         // get retrieved during the firewall stage
         //
         // This will be removed in EN-1251
-        if (aws.securityGroupId == null) {
-            aws.securityGroupId = getSecurityGroup(aws.amazonEC2Client).getGroupId();
+        if (aws.securityGroupIds == null) {
+            String securityGroupId = getSecurityGroup(aws.amazonEC2Client).getGroupId();
             // if we still don't have it kill allocation
-            if (aws.securityGroupId == null) {
+            if (securityGroupId == null) {
                 aws.error = new IllegalStateException("SecurityGroup not found");
                 aws.stage = AWSStages.ERROR;
                 handleAllocation(aws);
                 return;
+            } else {
+                aws.securityGroupIds = Arrays.asList(securityGroupId);
             }
         }
 
@@ -374,7 +469,7 @@ public class AWSInstanceService extends StatelessService {
                 .withImageId(imageId.toString()).withInstanceType(instanceType)
                 .withMinCount(1).withMaxCount(1)
                 .withMonitoring(true)
-                .withSecurityGroupIds(aws.securityGroupId);
+                .withSecurityGroupIds(aws.securityGroupIds);
 
         // use the subnet if provided
         if (aws.subnetId != null) {
@@ -609,8 +704,8 @@ public class AWSInstanceService extends StatelessService {
         if (computeDesc.diskLinks != null) {
             resourcesToDelete.addAll(computeDesc.diskLinks);
         }
-        if (computeDesc.networkLinks != null) {
-            resourcesToDelete.addAll(computeDesc.networkLinks);
+        if (computeDesc.networkInterfaceLinks != null) {
+            resourcesToDelete.addAll(computeDesc.networkInterfaceLinks);
         }
         AtomicInteger deleteCallbackCount = new AtomicInteger(0);
         CompletionHandler deletionKickoffCompletion = (sendDeleteOp,
@@ -647,7 +742,7 @@ public class AWSInstanceService extends StatelessService {
         if (aws.child == null) {
             regionId = aws.computeRequest.regionId;
         } else {
-            regionId = aws.child.description.zoneId;
+            regionId = aws.child.description.regionId;
         }
         return regionId;
     }

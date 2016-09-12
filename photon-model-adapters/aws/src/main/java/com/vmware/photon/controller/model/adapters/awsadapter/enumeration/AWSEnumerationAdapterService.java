@@ -21,7 +21,6 @@ import java.util.function.Consumer;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -56,14 +55,14 @@ public class AWSEnumerationAdapterService extends StatelessService {
     public static class AWSEnumerationRequest {
         public ComputeEnumerateResourceRequest computeEnumerateResourceRequest;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-        public ComputeDescription computeHostDescription;
+        public ComputeStateWithDescription parentCompute;
 
         public AWSEnumerationRequest(ComputeEnumerateResourceRequest request,
                 AuthCredentialsService.AuthCredentialsServiceState parentAuth,
-                ComputeDescription computeHostDescription) {
+                ComputeStateWithDescription parentCompute) {
             this.computeEnumerateResourceRequest = request;
             this.parentAuth = parentAuth;
-            this.computeHostDescription = computeHostDescription;
+            this.parentCompute = parentCompute;
 
         }
     }
@@ -75,7 +74,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
 
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-        public ComputeDescription computeHostDescription;
+        public ComputeStateWithDescription parentCompute;
         public AWSEnumerationStages stage;
         public List<Operation> enumerationOperations;
         public Throwable error;
@@ -187,7 +186,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
             AWSEnumerationStages next) {
         AWSEnumerationRequest awsEnumerationRequest = new AWSEnumerationRequest(
                 context.computeEnumerationRequest, context.parentAuth,
-                context.computeHostDescription);
+                context.parentCompute);
 
         Operation patchAWSCreationAdapterService = Operation
                 .createPatch(this, AWSEnumerationAndCreationAdapterService.SELF_LINK)
@@ -240,14 +239,13 @@ public class AWSEnumerationAdapterService extends StatelessService {
             AWSEnumerationStages next) {
         Consumer<Operation> onSuccess = (op) -> {
             ComputeStateWithDescription csd = op.getBody(ComputeStateWithDescription.class);
-            aws.computeHostDescription = csd.description;
+            aws.parentCompute = csd;
             aws.stage = next;
             handleEnumerationRequest(aws);
         };
 
         URI computeUri = UriUtils
-                .extendUriWithQuery(
-                        UriUtils.buildUri(this.getHost(), aws.computeEnumerationRequest.resourceLink()),
+                .extendUriWithQuery(aws.computeEnumerationRequest.resourceReference,
                         UriUtils.URI_PARAM_ODATA_EXPAND,
                         Boolean.TRUE.toString());
 
@@ -264,7 +262,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
             aws.stage = next;
             handleEnumerationRequest(aws);
         };
-        AdapterUtils.getServiceState(this, aws.computeHostDescription.authCredentialsLink,
+        AdapterUtils.getServiceState(this, aws.parentCompute.description.authCredentialsLink,
                 onSuccess, getFailureConsumer(aws));
     }
 

@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnu
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -32,6 +33,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -39,7 +41,6 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
@@ -50,7 +51,8 @@ import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
- * Utility class to hold methods used across different enumeration classes for creating network states and NICs etc.
+ * Utility class to hold methods used across different enumeration classes for creating network
+ * states and NICs etc.
  */
 public class AWSNetworkUtils {
 
@@ -76,12 +78,40 @@ public class AWSNetworkUtils {
         return networkState;
     }
 
+    public static NetworkState mapVPCToNetworkState(Vpc vpc, String regionId,
+            String resourcePoolLink, String authCredentialsLink, List<String> tenantLinks,
+            URI adapterUri) {
+        if (vpc == null) {
+            throw new IllegalArgumentException("Cannot map VPC to network state for null instance");
+        }
+        NetworkState networkState = new NetworkState();
+        networkState.id = vpc.getVpcId();
+        networkState.documentSelfLink = networkState.id;
+        networkState.name = vpc.getVpcId();
+        networkState.subnetCIDR = vpc.getCidrBlock();
+        networkState.regionId = regionId;
+        networkState.resourcePoolLink = resourcePoolLink;
+        networkState.authCredentialsLink = authCredentialsLink;
+        networkState.instanceAdapterReference = adapterUri;
+        networkState.tenantLinks = tenantLinks;
+        networkState.customProperties = new HashMap<String, String>();
+        networkState.customProperties.put("defaultInstance", String.valueOf(vpc.isDefault()));
+
+        return networkState;
+    }
+
     /**
-     * Maps the IP address on the EC2 instance to the corresponding Network Interface Cards in the local system.
-     * @param instance The EC2 instance for which the NICs are to be created.
-     * @param publicInterfaceFlag The flag that indicates if this a public or private IP address
-     * @param tenantLinks The tenants that can access this entity once persisted in the system.
-     * @param existingLink The link to the NIC that is already associated with the compute state.
+     * Maps the IP address on the EC2 instance to the corresponding Network Interface Cards in the
+     * local system.
+     *
+     * @param instance
+     *            The EC2 instance for which the NICs are to be created.
+     * @param publicInterfaceFlag
+     *            The flag that indicates if this a public or private IP address
+     * @param tenantLinks
+     *            The tenants that can access this entity once persisted in the system.
+     * @param existingLink
+     *            The link to the NIC that is already associated with the compute state.
      * @return
      */
     public static NetworkInterfaceState mapIPAddressToNetworkInterfaceState(Instance instance,
@@ -115,12 +145,11 @@ public class AWSNetworkUtils {
     }
 
     /**
-     *Compares the IP addresses of the instance on AWS and maps those to the network interfaces in the
-     *system.
-     *1) If an existing mapping is found for a private or public interface then it is updated.
-     *2) Else a new mapping is creating.
-     *3) The string "public-interface/private-interfaces" is embedded in the document self link
-     *along with the UUID to avoid collisions while save some extra lookups during updates.
+     * Compares the IP addresses of the instance on AWS and maps those to the network interfaces in
+     * the system. 1) If an existing mapping is found for a private or public interface then it is
+     * updated. 2) Else a new mapping is creating. 3) The string
+     * "public-interface/private-interfaces" is embedded in the document self link along with the
+     * UUID to avoid collisions while save some extra lookups during updates.
      */
     public static Operation createOperationToUpdateOrCreateNetworkInterface(
             ComputeState existingComputeState, NetworkInterfaceState networkInterface,
@@ -140,14 +169,14 @@ public class AWSNetworkUtils {
     }
 
     /**
-     * Returns the link to the existing network interface based on the public/private identifier embedded
-     * in the documentSelfLink
+     * Returns the link to the existing network interface based on the public/private identifier
+     * embedded in the documentSelfLink
      */
     public static String getExistingNetworkInterfaceLink(ComputeState existingComputeState,
             boolean isPublic) {
         String existingInterfaceLink = null;
         // Determine the URI representing the existing public/private interfaces.
-        for (String networkLink : existingComputeState.networkLinks) {
+        for (String networkLink : existingComputeState.networkInterfaceLinks) {
             if (isPublic && networkLink.contains(PUBLIC_INTERFACE)) {
                 existingInterfaceLink = networkLink;
                 break;
@@ -160,7 +189,8 @@ public class AWSNetworkUtils {
     }
 
     /**
-     * Maps the ip addresses of the instances on AWS to create operations for the network interface cards.
+     * Maps the ip addresses of the instances on AWS to create operations for the network interface
+     * cards.
      */
     public static List<Operation> mapInstanceIPAddressToNICCreationOperations(
             Instance instance, ComputeState resultDesc, List<String> tenantLinks,
@@ -174,8 +204,8 @@ public class AWSNetworkUtils {
                     service, privateNICState, NetworkInterfaceService.FACTORY_LINK);
             createOperations.add(postPrivateNetworkInterface);
             // Compute State Network Links
-            resultDesc.networkLinks = new ArrayList<String>();
-            resultDesc.networkLinks.add(UriUtils.buildUriPath(
+            resultDesc.networkInterfaceLinks = new ArrayList<String>();
+            resultDesc.networkInterfaceLinks.add(UriUtils.buildUriPath(
                     NetworkInterfaceService.FACTORY_LINK,
                     privateNICState.documentSelfLink));
         }
@@ -186,7 +216,7 @@ public class AWSNetworkUtils {
             Operation postPublicNetworkInterface = createPostOperation(
                     service, publicNICState, NetworkInterfaceService.FACTORY_LINK);
             createOperations.add(postPublicNetworkInterface);
-            resultDesc.networkLinks.add(UriUtils.buildUriPath(
+            resultDesc.networkInterfaceLinks.add(UriUtils.buildUriPath(
                     NetworkInterfaceService.FACTORY_LINK,
                     publicNICState.documentSelfLink));
         }
@@ -224,20 +254,26 @@ public class AWSNetworkUtils {
 
     /**
      * Remove a compute state's networkLink and delete the link's corresponding document
-     * @param service Service to issue the patch to.
-     * @param computeState The compute state to be updated.
-     * @param networkLink The network link need to be removed.
-     * @param enumerationOperations The operation list to store the operations.
+     *
+     * @param service
+     *            Service to issue the patch to.
+     * @param computeState
+     *            The compute state to be updated.
+     * @param networkLink
+     *            The network link need to be removed.
+     * @param enumerationOperations
+     *            The operation list to store the operations.
      * @return
      */
-    public static void removeNetworkLinkAndDocument(StatelessService service, ComputeState computeState,
+    public static void removeNetworkLinkAndDocument(StatelessService service,
+            ComputeState computeState,
             String networkLink, List<Operation> enumerationOperations) {
         // create a PATCH to remove one ComputeState's networkLink
         Map<String, Collection<Object>> collectionsMap = new HashMap<>();
         Collection<Object> networkLinksToBeRemoved = new ArrayList<>(Arrays.asList(networkLink));
         collectionsMap.put(ComputeState.FIELD_NAME_NETWORK_LINKS, networkLinksToBeRemoved);
-        ServiceStateCollectionUpdateRequest collectionRemovalBody =
-                ServiceStateCollectionUpdateRequest.create(null, collectionsMap);
+        ServiceStateCollectionUpdateRequest collectionRemovalBody = ServiceStateCollectionUpdateRequest
+                .create(null, collectionsMap);
 
         Operation removeNetworkLinkOperation = Operation
                 .createPatch(UriUtils.buildUri(service.getHost(), computeState.documentSelfLink))

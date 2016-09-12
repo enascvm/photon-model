@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import java.util.List;
+
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -56,6 +58,13 @@ public class NetworkInterfaceService extends StatefulService {
          * The bridge this interface will be instantiated on. Optional.
          */
         public String networkBridgeLink;
+
+        /**
+         * Firewalls with which this compute instance is associated.
+         */
+        @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+                PropertyUsageOption.LINKS })
+        public List<String> firewallLinks;
     }
 
     public NetworkInterfaceService() {

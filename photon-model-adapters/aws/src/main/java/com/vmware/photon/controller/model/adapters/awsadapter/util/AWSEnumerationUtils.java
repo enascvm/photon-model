@@ -140,7 +140,7 @@ public class AWSEnumerationUtils {
                 .addKindFieldClause(ComputeDescription.class)
                 .addFieldClause(ComputeDescription.FIELD_NAME_ENVIRONMENT_NAME,
                         AWSInstanceService.AWS_ENVIRONMENT_NAME)
-                .addFieldClause(ComputeDescription.FIELD_NAME_ZONE_ID, regionId)
+                .addFieldClause(ComputeDescription.FIELD_NAME_REGION_ID, regionId)
                 .build().addBooleanClause(customPropClause);
 
         // Instance type should fall in one of the passed in values

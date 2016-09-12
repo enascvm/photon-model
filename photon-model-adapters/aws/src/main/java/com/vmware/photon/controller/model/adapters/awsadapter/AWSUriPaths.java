@@ -40,6 +40,8 @@ public class AWSUriPaths {
             + "/compute-description-creation-adapter";
     public static final String AWS_COMPUTE_STATE_CREATION_ADAPTER = PROVISIONING_AWS
             + "/compute-state-creation-adapter";
+    public static final String AWS_NETWORK_STATE_CREATION_ADAPTER = PROVISIONING_AWS
+            + "/network-state-creation-adapter";
     public static final String AWS_ENDPOINT_CONFIG_ADAPTER = PROVISIONING_AWS
             + "/endpoint-config-adapter";
 }

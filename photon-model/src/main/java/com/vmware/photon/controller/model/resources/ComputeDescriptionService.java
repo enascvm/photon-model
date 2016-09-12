@@ -48,6 +48,7 @@ public class ComputeDescriptionService extends StatefulService {
         public static final String FIELD_NAME_RESOURCE_POOL_ID = "resourcePoolId";
         public static final String FIELD_NAME_SUPPORTED_CHILDREN = "supportedChildren";
         public static final String FIELD_NAME_ZONE_ID = "zoneId";
+        public static final String FIELD_NAME_REGION_ID = "regionId";
         public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
         public static final String FIELD_NAME_ENVIRONMENT_NAME = "environmentName";
         public static final String ENVIRONMENT_NAME_ON_PREMISE = "On premise";

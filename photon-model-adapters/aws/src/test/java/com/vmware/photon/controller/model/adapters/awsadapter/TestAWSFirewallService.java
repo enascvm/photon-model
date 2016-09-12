@@ -21,7 +21,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DE
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_PROTOCOL;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_SECURITY_GROUP_DESC;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_SECURITY_GROUP_NAME;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.allocateSecurityGroup;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.allocateSecurityGroups;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.buildRules;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getDefaultRules;
@@ -45,7 +45,6 @@ import org.junit.rules.ExpectedException;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
@@ -181,7 +180,7 @@ public class TestAWSFirewallService {
      */
     @Test
     public void testAllocateSecurityGroup() throws Throwable {
-        allocateSecurityGroup(this.aws);
+        allocateSecurityGroups(this.aws);
         SecurityGroup group = getSecurityGroup(this.client);
         validateDefaultRules(group.getIpPermissions());
         this.svc.deleteSecurityGroup(this.client);
@@ -202,7 +201,7 @@ public class TestAWSFirewallService {
                 .withToPort(22)
                 .withIpRanges(DEFAULT_ALLOWED_NETWORK));
         updateIngressRules(this.client, groupId, rules);
-        allocateSecurityGroup(this.aws);
+        allocateSecurityGroups(this.aws);
         SecurityGroup updatedGroup = getSecurityGroup(this.client, DEFAULT_SECURITY_GROUP_NAME);
         validateDefaultRules(updatedGroup.getIpPermissions());
         this.svc.deleteSecurityGroup(this.client);

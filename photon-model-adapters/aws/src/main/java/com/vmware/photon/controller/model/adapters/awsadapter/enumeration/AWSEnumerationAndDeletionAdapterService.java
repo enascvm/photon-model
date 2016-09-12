@@ -42,6 +42,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -86,7 +87,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         public AmazonEC2AsyncClient amazonEC2Client;
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-        public ComputeDescription computeHostDescription;
+        public ComputeStateWithDescription parentCompute;
         public ComputeState hostComputeState;
         public AWSEnumerationDeletionStages stage;
         public AWSEnumerationDeletionSubStage subStage;
@@ -110,7 +111,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             this.computeEnumerationRequest = request.computeEnumerateResourceRequest;
             this.awsAdapterOperation = op;
             this.parentAuth = request.parentAuth;
-            this.computeHostDescription = request.computeHostDescription;
+            this.parentCompute = request.parentCompute;
             this.enumerationHostMap = new ConcurrentSkipListMap<String, Boolean>();
             this.localInstanceIds = new ConcurrentSkipListMap<String, ComputeState>();
             this.remoteInstanceIds = new HashSet<String>();
@@ -155,31 +156,31 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             switch (aws.computeEnumerationRequest.enumerationAction) {
             case START:
                 if (aws.enumerationHostMap
-                        .containsKey(getHostEnumKey(aws.computeHostDescription))) {
+                        .containsKey(getHostEnumKey(aws.parentCompute.description))) {
                     logInfo("Enumeration for deletion already started for %s",
-                            aws.computeHostDescription.environmentName);
+                            aws.parentCompute.description.environmentName);
                 } else {
-                    aws.enumerationHostMap.put(getHostEnumKey(aws.computeHostDescription), true);
+                    aws.enumerationHostMap.put(getHostEnumKey(aws.parentCompute.description), true);
                     logInfo("Started deletion enumeration for %s",
-                            aws.computeHostDescription.environmentName);
+                            aws.parentCompute.description.environmentName);
                 }
                 aws.computeEnumerationRequest.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequestForDeletion(aws);
                 break;
             case REFRESH:
                 logInfo("Running enumeration service for deletion in refresh mode for %s",
-                        aws.computeHostDescription.environmentName);
+                        aws.parentCompute.description.environmentName);
                 deleteResourcesInLocalSystem(aws);
                 break;
             case STOP:
                 if (!aws.enumerationHostMap
-                        .containsKey(getHostEnumKey(aws.computeHostDescription))) {
+                        .containsKey(getHostEnumKey(aws.parentCompute.description))) {
                     logInfo("Enumeration for deletion is not running or has already been stopped for %s",
-                            aws.computeHostDescription.environmentName);
+                            aws.parentCompute.description.environmentName);
                 } else {
-                    aws.enumerationHostMap.remove(getHostEnumKey(aws.computeHostDescription));
+                    aws.enumerationHostMap.remove(getHostEnumKey(aws.parentCompute.description));
                     logInfo("Stopping deletion enumeration service for %s",
-                            aws.computeHostDescription.environmentName);
+                            aws.parentCompute.description.environmentName);
                 }
                 setOperationDurationStat(aws.awsAdapterOperation);
                 aws.awsAdapterOperation.complete();
@@ -289,7 +290,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         queryTaskBuilder.addOption(QueryOption.EXPAND_CONTENT);
 
         QueryTask queryTask = queryTaskBuilder.build();
-        queryTask.tenantLinks = queryTask.tenantLinks = aws.computeHostDescription.tenantLinks;
+        queryTask.tenantLinks = queryTask.tenantLinks = aws.parentCompute.tenantLinks;
 
         // create the query to find resources
         sendRequest(Operation
@@ -352,7 +353,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> resultHandler = new AWSEnumerationAsyncHandler(
                 this, aws, next);
         aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
-                aws.computeHostDescription.zoneId, this,
+                aws.parentCompute.description.regionId, this,
                 aws.computeEnumerationRequest.taskReference, true);
         aws.amazonEC2Client.describeInstancesAsync(request,
                 resultHandler);
@@ -460,8 +461,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             context.deleteOperations.add(deleteComputeStateOperation);
             // Create delete operations for all the network links associated with each of the
             // compute states.
-            if (computeStateToDelete.networkLinks != null) {
-                for (String networkLinkToDelete : computeStateToDelete.networkLinks) {
+            if (computeStateToDelete.networkInterfaceLinks != null) {
+                for (String networkLinkToDelete : computeStateToDelete.networkInterfaceLinks) {
                     Operation deleteNetworkOperation = Operation
                             .createDelete(UriUtils.buildUri(this.getHost(),
                                     networkLinkToDelete))

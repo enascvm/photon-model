@@ -642,7 +642,7 @@ public class ResourceAllocationTaskService
         resource.descriptionLink = currentState.computeDescriptionLink;
         resource.resourcePoolLink = currentState.resourcePoolLink;
         resource.diskLinks = diskLinks;
-        resource.networkLinks = networkLinks;
+        resource.networkInterfaceLinks = networkLinks;
         resource.customProperties = currentState.customProperties;
         resource.tenantLinks = currentState.tenantLinks;
         resource.documentSelfLink = resource.id;

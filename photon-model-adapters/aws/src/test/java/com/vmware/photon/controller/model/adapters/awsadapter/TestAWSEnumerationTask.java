@@ -61,6 +61,7 @@ import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Tag;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -457,13 +458,13 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         ComputeState taggedComputeState = getComputeByAWSId(this.host, computeState.id);
 
         assertEquals(taggedComputeState.descriptionLink, computeState.descriptionLink);
-        assertTrue(taggedComputeState.networkLinks != null);
-        assertTrue(taggedComputeState.networkLinks.size() == 2);
+        assertTrue(taggedComputeState.networkInterfaceLinks != null);
+        assertTrue(taggedComputeState.networkInterfaceLinks.size() == 2);
 
         URI[] networkLinkURIs = new URI[2];
-        for (int i = 0; i < taggedComputeState.networkLinks.size(); i++) {
+        for (int i = 0; i < taggedComputeState.networkInterfaceLinks.size(); i++) {
             networkLinkURIs[i] = UriUtils.buildUri(this.host,
-                    taggedComputeState.networkLinks.get(i));
+                    taggedComputeState.networkInterfaceLinks.get(i));
         }
 
         // Assert that both the public and private IP addresses have been mapped to separated NICs
@@ -522,7 +523,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         assertNotNull(networkState.customProperties.get(AWS_GATEWAY_ID));
         assertNotNull(networkState.customProperties.get(AWS_SUBNET_ID));
         assertNotNull(networkState.customProperties.get(AWS_VPC_ROUTE_TABLE_ID));
-        assertNotNull(networkState.customProperties.get(AWS_VPC_ID));
     }
 
     /**
@@ -552,7 +552,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         ComputeState stoppedComputeState = getComputeByAWSId(this.host, instanceId);
         assertNotNull(stoppedComputeState);
         // make sure that the stopped instance has no public network interface
-        for (String networkLink : stoppedComputeState.networkLinks) {
+        for (String networkLink : stoppedComputeState.networkInterfaceLinks) {
             assertFalse(networkLink.contains(PUBLIC_INTERFACE));
         }
 

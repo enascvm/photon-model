@@ -85,7 +85,7 @@ public class ResourceAllocationTaskServiceTest extends Suite {
         cd.totalMemoryBytes = Integer.MAX_VALUE;
         cd.id = UUID.randomUUID().toString();
         cd.name = "friendly-name";
-        cd.regionId = "provider-specific-regions";
+        cd.regionId = zoneId;
         cd.zoneId = zoneId;
         ComputeDescriptionService.ComputeDescription cd1 = test
                 .postServiceSynchronously(

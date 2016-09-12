@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import java.util.List;
 import java.util.Map;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
@@ -21,7 +22,8 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-
+import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 
@@ -39,10 +41,14 @@ public class AWSAllocation {
     public AmazonEC2AsyncClient amazonEC2Client;
     public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
     public Map<DiskType, DiskState> childDisks;
-    public String securityGroupId;
+    public List<String> securityGroupIds;
     public String subnetId;
     public Throwable error;
     public long taskExpirationMicros;
+
+    public Map<String, FirewallState> childFirewalls;
+
+    public List<NetworkInterfaceState> networkInterfaces;
 
     /**
      * Initialize with request info and first stage.

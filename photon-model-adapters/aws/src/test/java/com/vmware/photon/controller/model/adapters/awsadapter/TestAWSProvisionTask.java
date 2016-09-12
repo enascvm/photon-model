@@ -186,8 +186,8 @@ public class TestAWSProvisionTask {
         if (this.vmState.diskLinks != null) {
             resourcesToDelete.addAll(this.vmState.diskLinks);
         }
-        if (this.vmState.networkLinks != null) {
-            resourcesToDelete.addAll(this.vmState.networkLinks);
+        if (this.vmState.networkInterfaceLinks != null) {
+            resourcesToDelete.addAll(this.vmState.networkInterfaceLinks);
         }
 
         // delete vm

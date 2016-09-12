@@ -66,8 +66,8 @@ public class ModelUtils {
                 .create("https://esxhost-01:443/sdk");
         cs.diskLinks = new ArrayList<>();
         cs.diskLinks.add("http://disk");
-        cs.networkLinks = new ArrayList<>();
-        cs.networkLinks.add("http://network");
+        cs.networkInterfaceLinks = new ArrayList<>();
+        cs.networkInterfaceLinks.add("http://network");
         cs.customProperties = new HashMap<>();
         cs.customProperties.put(TEST_DESC_PROPERTY_NAME,
                 TEST_DESC_PROPERTY_VALUE);

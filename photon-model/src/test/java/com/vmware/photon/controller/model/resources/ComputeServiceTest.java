@@ -81,8 +81,8 @@ public class ComputeServiceTest extends Suite {
                 .create("https://esxhost-01:443/sdk");
         cs.diskLinks = new ArrayList<>();
         cs.diskLinks.add("http://disk");
-        cs.networkLinks = new ArrayList<>();
-        cs.networkLinks.add("http://network");
+        cs.networkInterfaceLinks = new ArrayList<>();
+        cs.networkInterfaceLinks.add("http://network");
         cs.customProperties = new HashMap<>();
         cs.customProperties.put(TEST_DESC_PROPERTY_NAME,
                 TEST_DESC_PROPERTY_VALUE);
@@ -355,10 +355,10 @@ public class ComputeServiceTest extends Suite {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .createComputeDescription(this);
             ComputeService.ComputeState startState = buildValidStartState(cd);
-            // startState has four networkLinks: network, network1, network2, network3
-            startState.networkLinks.add("http://network1");
-            startState.networkLinks.add("http://network2");
-            startState.networkLinks.add("http://network3");
+            // startState has four networkInterfaceLinks: network, network1, network2, network3
+            startState.networkInterfaceLinks.add("http://network1");
+            startState.networkInterfaceLinks.add("http://network2");
+            startState.networkInterfaceLinks.add("http://network3");
 
             ComputeService.ComputeState returnState = postServiceSynchronously(
                     ComputeService.FACTORY_LINK,
@@ -373,11 +373,11 @@ public class ComputeServiceTest extends Suite {
             Map<String, Collection<Object>>collectionsMap = new HashMap<>();
             Collection<Object> networkLinksToBeRemoved = new ArrayList<>(Arrays.asList(
                     "http://network1", "http://network3"));
-            collectionsMap.put("networkLinks", networkLinksToBeRemoved);
+            collectionsMap.put("networkInterfaceLinks", networkLinksToBeRemoved);
             ServiceStateCollectionUpdateRequest collectionRemovalBody =
                     ServiceStateCollectionUpdateRequest.create(null, collectionsMap);
 
-            // send PATCH to remove networkLinks: network1, network3
+            // send PATCH to remove networkInterfaceLinks: network1, network3
             patchServiceSynchronously(returnState.documentSelfLink,
                     collectionRemovalBody);
 
@@ -389,7 +389,7 @@ public class ComputeServiceTest extends Suite {
                     "http://network", "http://network2"));
 
             assertThat(getState.id, is(startState.id));
-            assertEquals(getState.networkLinks, expectedNetworkLinks);
+            assertEquals(getState.networkInterfaceLinks, expectedNetworkLinks);
         }
     }
 
@@ -426,8 +426,8 @@ public class ComputeServiceTest extends Suite {
             newState.groupLinks.add("group1");
             newState.diskLinks = new ArrayList<>();
             newState.diskLinks.add("http://disk1");
-            newState.networkLinks = new ArrayList<>();
-            newState.networkLinks.add("http://network1");
+            newState.networkInterfaceLinks = new ArrayList<>();
+            newState.networkInterfaceLinks.add("http://network1");
 
             putServiceSynchronously(returnState.documentSelfLink,
                     newState);
@@ -449,7 +449,7 @@ public class ComputeServiceTest extends Suite {
             assertEquals(getState.tenantLinks, newState.tenantLinks);
             assertEquals(getState.groupLinks, newState.groupLinks);
             assertEquals(getState.diskLinks, newState.diskLinks);
-            assertEquals(getState.networkLinks, newState.networkLinks);
+            assertEquals(getState.networkInterfaceLinks, newState.networkInterfaceLinks);
             // make sure launchTimeMicros was preserved
             assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
         }

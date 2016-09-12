@@ -42,21 +42,27 @@ public class ComputeService extends StatefulService {
      * Power State.
      */
     public enum PowerState {
-        ON, OFF, UNKNOWN, SUSPEND
+        ON,
+        OFF,
+        UNKNOWN,
+        SUSPEND
     }
 
     /**
      * Power Transition.
      */
     public enum PowerTransition {
-        SOFT, HARD
+        SOFT,
+        HARD
     }
 
     /**
      * Boot Device.
      */
     public enum BootDevice {
-        CDROM, DISK, NETWORK
+        CDROM,
+        DISK,
+        NETWORK
     }
 
     /**
@@ -70,7 +76,7 @@ public class ComputeService extends StatefulService {
         public static final String FIELD_NAME_POWER_STATE = "powerState";
         public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
         public static final String FIELD_NAME_PARENT_LINK = "parentLink";
-        public static final String FIELD_NAME_NETWORK_LINKS = "networkLinks";
+        public static final String FIELD_NAME_NETWORK_LINKS = "networkInterfaceLinks";
         public static final String CUSTOM_PROPERTY_NAME_RUNTIME_INFO = "runtimeInfo";
 
         /**
@@ -121,12 +127,14 @@ public class ComputeService extends StatefulService {
         /**
          * Disks associated with this compute instance.
          */
+        @PropertyOptions(usage = PropertyUsageOption.LINKS)
         public List<String> diskLinks;
 
         /**
          * Network interfaces associated with this compute instance.
          */
-        public List<String> networkLinks;
+        @PropertyOptions(usage = PropertyUsageOption.LINKS)
+        public List<String> networkInterfaceLinks;
 
         /**
          * Compute creation time in micros since epoch.
@@ -165,7 +173,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.resourcePoolLink = currentState.resourcePoolLink;
             chsWithDesc.adapterManagementReference = currentState.adapterManagementReference;
             chsWithDesc.customProperties = currentState.customProperties;
-            chsWithDesc.networkLinks = currentState.networkLinks;
+            chsWithDesc.networkInterfaceLinks = currentState.networkInterfaceLinks;
             chsWithDesc.tenantLinks = currentState.tenantLinks;
             chsWithDesc.creationTimeMicros = currentState.creationTimeMicros;
 
@@ -324,14 +332,14 @@ public class ComputeService extends StatefulService {
                     }
                 }
 
-                if (patchBody.networkLinks != null) {
-                    if (currentState.networkLinks == null) {
-                        currentState.networkLinks = patchBody.networkLinks;
+                if (patchBody.networkInterfaceLinks != null) {
+                    if (currentState.networkInterfaceLinks == null) {
+                        currentState.networkInterfaceLinks = patchBody.networkInterfaceLinks;
                         hasStateChanged = true;
                     } else {
-                        for (String link : patchBody.networkLinks) {
-                            if (!currentState.networkLinks.contains(link)) {
-                                currentState.networkLinks.add(link);
+                        for (String link : patchBody.networkInterfaceLinks) {
+                            if (!currentState.networkInterfaceLinks.contains(link)) {
+                                currentState.networkInterfaceLinks.add(link);
                                 hasStateChanged = true;
                             }
                         }
@@ -340,7 +348,8 @@ public class ComputeService extends StatefulService {
                 return hasStateChanged;
             }
         };
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), customPatchHandler);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+                currentState.getClass(), customPatchHandler);
     }
 
     @Override

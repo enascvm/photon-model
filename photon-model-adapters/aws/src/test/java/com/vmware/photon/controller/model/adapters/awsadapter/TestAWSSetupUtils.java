@@ -173,6 +173,7 @@ public class TestAWSSetupUtils {
                 AWSUriPaths.AWS_STATS_ADAPTER);
 
         awshostDescription.zoneId = zoneId;
+        awshostDescription.regionId = zoneId;
         awshostDescription.authCredentialsLink = authLink;
         TestUtils.doPost(host, awshostDescription,
                 ComputeDescriptionService.ComputeDescription.class,
@@ -249,6 +250,7 @@ public class TestAWSSetupUtils {
 
         // set zone to east
         awsVMDesc.zoneId = zoneId;
+        awsVMDesc.regionId = zoneId;
 
         awsVMDesc.authCredentialsLink = authCredentialsLink;
 

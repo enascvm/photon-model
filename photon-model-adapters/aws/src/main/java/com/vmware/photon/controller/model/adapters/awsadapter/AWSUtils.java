@@ -55,14 +55,12 @@ import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagDescription;
 import com.amazonaws.services.ec2.model.Vpc;
-
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.transfer.TransferManager;
 
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
-
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -259,15 +257,25 @@ public class AWSUtils {
      * to function. It will return the security group id that is required during instance
      * provisioning.
      */
-    public static String allocateSecurityGroup(AWSAllocation aws) {
+    public static List<String> allocateSecurityGroups(AWSAllocation aws) {
         String groupId;
         SecurityGroup group;
+        List<String> groupIds = new ArrayList<>();
 
+        if (aws.childFirewalls != null && !aws.childFirewalls.isEmpty()) {
+            List<SecurityGroup> securityGroups = getSecurityGroups(aws.amazonEC2Client,
+                    new ArrayList<>(aws.childFirewalls.keySet()));
+            for (SecurityGroup securityGroup : securityGroups) {
+                aws.childFirewalls.remove(securityGroup.getGroupName());
+                groupIds.add(securityGroup.getGroupId());
+            }
+            return groupIds;
+        }
         // use the security group provided in the description properties
         String sgId = getFromCustomProperties(aws.child.description,
                 AWSConstants.AWS_SECURITY_GROUP_ID);
         if (sgId != null) {
-            return sgId;
+            return Arrays.asList(sgId);
         }
 
         // if the group doesn't exist an exception is thrown. We won't throw a
@@ -276,7 +284,7 @@ public class AWSUtils {
         try {
             group = getSecurityGroup(aws.amazonEC2Client);
             if (group != null) {
-                return group.getGroupId();
+                return Arrays.asList(group.getGroupId());
             }
         } catch (AmazonServiceException t) {
             if (!t.getMessage().contains(
@@ -309,13 +317,23 @@ public class AWSUtils {
         } catch (AmazonServiceException t) {
             if (t.getMessage().contains(
                     DEFAULT_SECURITY_GROUP_NAME)) {
-                return getSecurityGroup(aws.amazonEC2Client).getGroupId();
+                groupId = getSecurityGroup(aws.amazonEC2Client).getGroupId();
             } else {
                 throw t;
             }
         }
 
-        return groupId;
+        return Arrays.asList(groupId);
+    }
+
+    public static List<SecurityGroup> getSecurityGroups(AmazonEC2AsyncClient client,
+            List<String> names) {
+
+        DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest()
+                .withFilters(new Filter("group-name", names));
+        DescribeSecurityGroupsResult groups = client
+                .describeSecurityGroups(req);
+        return groups != null ? groups.getSecurityGroups() : Collections.emptyList();
     }
 
     public static String getSubnetFromDescription(AWSAllocation aws) {
