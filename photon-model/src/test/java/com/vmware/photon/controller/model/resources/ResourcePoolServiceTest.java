@@ -16,7 +16,10 @@ package com.vmware.photon.controller.model.resources;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -33,10 +36,12 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState.ResourcePoolProperty;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.TenantService;
 
 /**
@@ -45,6 +50,7 @@ import com.vmware.xenon.services.common.TenantService;
 @RunWith(ResourcePoolServiceTest.class)
 @SuiteClasses({ ResourcePoolServiceTest.ConstructorTest.class,
         ResourcePoolServiceTest.HandleStartTest.class,
+        ResourcePoolServiceTest.HandlePutTest.class,
         ResourcePoolServiceTest.HandlePatchTest.class,
         ResourcePoolServiceTest.QueryTest.class })
 public class ResourcePoolServiceTest extends Suite {
@@ -126,6 +132,8 @@ public class ResourcePoolServiceTest extends Suite {
                     is(startState.maxCpuCostPerMinute));
             assertThat(returnState.maxDiskCapacityBytes,
                     is(startState.maxDiskCapacityBytes));
+            assertNotNull(returnState.query);
+            assertFalse(returnState.query.booleanClauses.isEmpty());
         }
 
         @Test
@@ -161,6 +169,83 @@ public class ResourcePoolServiceTest extends Suite {
 
             assertNotNull(returnState);
             assertNotNull(returnState.id);
+        }
+
+        @Test
+        public void testElastic() throws Throwable {
+            ResourcePoolService.ResourcePoolState startState = buildValidStartState();
+            startState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+            startState.query = Query.Builder.create().build();
+            ResourcePoolService.ResourcePoolState returnState = postServiceSynchronously(
+                    ResourcePoolService.FACTORY_LINK, startState,
+                    ResourcePoolService.ResourcePoolState.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.query);
+            assertNull(returnState.query.booleanClauses);
+        }
+
+        @Test
+        public void testElasticNoQuery() throws Throwable {
+            ResourcePoolService.ResourcePoolState startState = buildValidStartState();
+            startState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+            postServiceSynchronously(
+                    ResourcePoolService.FACTORY_LINK, startState,
+                    ResourcePoolService.ResourcePoolState.class, IllegalArgumentException.class);
+        }
+
+        @Test
+        public void testNonElasticWithQuery() throws Throwable {
+            ResourcePoolService.ResourcePoolState startState = buildValidStartState();
+            startState.query = Query.Builder.create().build();
+            postServiceSynchronously(
+                    ResourcePoolService.FACTORY_LINK, startState,
+                    ResourcePoolService.ResourcePoolState.class, IllegalArgumentException.class);
+        }
+    }
+
+    /**
+     * This class implements tests for the handlePut method.
+     */
+    public static class HandlePutTest extends BaseModelTest {
+        @Test
+        public void testPutToNonElastic() throws Throwable {
+            // create elastic
+            ResourcePoolService.ResourcePoolState startState = buildValidStartState();
+            startState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+            startState.query = Query.Builder.create().build();
+            startState = postServiceSynchronously(
+                    ResourcePoolService.FACTORY_LINK, startState,
+                    ResourcePoolService.ResourcePoolState.class);
+
+            // replace with non-elastic
+            startState.properties = EnumSet.noneOf(ResourcePoolProperty.class);
+            startState.query = null;
+            putServiceSynchronously(startState.documentSelfLink, startState);
+
+            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
+                    startState.documentSelfLink,
+                    ResourcePoolService.ResourcePoolState.class);
+            assertThat(newState.documentSelfLink, is(startState.documentSelfLink));
+            assertTrue(newState.properties.isEmpty());
+            assertNotNull(newState.query);
+            assertFalse(newState.query.booleanClauses.isEmpty());
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutToNonElasticWithQuery() throws Throwable {
+            // create elastic
+            ResourcePoolService.ResourcePoolState startState = buildValidStartState();
+            startState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+            startState.query = Query.Builder.create().build();
+            startState = postServiceSynchronously(
+                    ResourcePoolService.FACTORY_LINK, startState,
+                    ResourcePoolService.ResourcePoolState.class);
+
+            // replace with non-elastic
+            startState.properties = EnumSet.noneOf(ResourcePoolProperty.class);
+            startState.query = Query.Builder.create().build();
+            putServiceSynchronously(startState.documentSelfLink, startState);
         }
     }
 
@@ -250,6 +335,56 @@ public class ResourcePoolServiceTest extends Suite {
             assertThat(newState.maxCpuCount, is(startState.maxCpuCount));
         }
 
+        @Test
+        public void testPatchToElastic() throws Throwable {
+            ResourcePoolService.ResourcePoolState startState = createResourcePoolService();
+
+            ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
+            patchState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+            patchState.query = Query.Builder.create().build();
+            patchServiceSynchronously(startState.documentSelfLink, patchState);
+
+            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
+                    startState.documentSelfLink,
+                    ResourcePoolService.ResourcePoolState.class);
+            assertThat(newState.properties, is(EnumSet.of(ResourcePoolProperty.ELASTIC)));
+            assertNotNull(newState.query);
+            assertNull(newState.query.booleanClauses);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPatchToElasticNoQuery() throws Throwable {
+            ResourcePoolService.ResourcePoolState startState = createResourcePoolService();
+
+            ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
+            patchState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+            patchServiceSynchronously(startState.documentSelfLink, patchState);
+        }
+
+        @Test
+        public void testPatchToNonElastic() throws Throwable {
+            // create elastic
+            ResourcePoolService.ResourcePoolState startState = buildValidStartState();
+            startState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+            startState.query = Query.Builder.create().build();
+            startState = postServiceSynchronously(
+                    ResourcePoolService.FACTORY_LINK, startState,
+                    ResourcePoolService.ResourcePoolState.class);
+
+            // patch with non-elastic
+            ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
+            patchState.properties = EnumSet.noneOf(ResourcePoolProperty.class);
+            patchServiceSynchronously(startState.documentSelfLink, patchState);
+
+            // verify RP is still elastic -- set items cannot be removed by a patch
+            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
+                    startState.documentSelfLink,
+                    ResourcePoolService.ResourcePoolState.class);
+            assertThat(newState.properties, is(EnumSet.of(ResourcePoolProperty.ELASTIC)));
+            assertNotNull(newState.query);
+            assertNull(newState.query.booleanClauses);
+        }
+
         private ResourcePoolService.ResourcePoolState createResourcePoolService()
                 throws Throwable {
             ResourcePoolService.ResourcePoolState startState = buildValidStartState();
@@ -308,9 +443,7 @@ public class ResourcePoolServiceTest extends Suite {
                     ComputeService.FACTORY_LINK,
                     cs, ComputeService.ComputeState.class);
 
-            QueryTask q = new QueryTask();
-            q.querySpec = startState.querySpecification;
-            q.taskInfo.isDirect = true;
+            QueryTask q = QueryTask.Builder.createDirectTask().setQuery(startState.query).build();
             QueryTask qr = querySynchronously(q);
 
             assertNotNull(qr.results.documentLinks);

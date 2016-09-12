@@ -81,7 +81,12 @@ public class ComputeService extends StatefulService {
         public String descriptionLink;
 
         /**
-         * URI reference to corresponding resource pool.
+         * Optional URI reference to the non-elastic resource pool which this compute contributes
+         * capacity to. Based on dynamic queries in elastic resource pools this compute may
+         * participate in other pools too.
+         *
+         * <p>It is recommended to use {@code ResourcePoolState.query} instead which works for
+         * both elastic and non-elastic resource pools.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String resourcePoolLink;
