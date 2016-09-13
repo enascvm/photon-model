@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.util.HashMap;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
 
@@ -32,6 +33,7 @@ import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -130,8 +132,11 @@ public class AzureEndpointAdapterService extends StatelessService {
 
     private BiConsumer<ComputeDescription, Retriever> computeDesc() {
         return (cd, r) -> {
-            cd.regionId = r.getRequired(REGION_KEY);
-            cd.zoneId = cd.regionId;
+            Optional<String> regionId = r.get(REGION_KEY);
+            if (regionId.isPresent()) {
+                cd.regionId = regionId.get();
+                cd.zoneId = cd.regionId;
+            }
 
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
             cd.instanceAdapterReference = UriUtils.buildUri(getHost(),
