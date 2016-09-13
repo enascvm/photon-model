@@ -23,8 +23,12 @@ import static org.junit.Assert.assertTrue;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.Before;
@@ -36,8 +40,10 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState.ResourcePoolProperty;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -376,13 +382,40 @@ public class ResourcePoolServiceTest extends Suite {
             patchState.properties = EnumSet.noneOf(ResourcePoolProperty.class);
             patchServiceSynchronously(startState.documentSelfLink, patchState);
 
-            // verify RP is still elastic -- set items cannot be removed by a patch
+            // verify RP is still elastic - set items cannot be removed through a patch request
             ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
                     startState.documentSelfLink,
                     ResourcePoolService.ResourcePoolState.class);
             assertThat(newState.properties, is(EnumSet.of(ResourcePoolProperty.ELASTIC)));
             assertNotNull(newState.query);
             assertNull(newState.query.booleanClauses);
+        }
+
+        @Test
+        public void testPatchToNonElasticThroughCollectionUpdate() throws Throwable {
+            // create elastic
+            ResourcePoolService.ResourcePoolState startState = buildValidStartState();
+            startState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+            startState.query = Query.Builder.create().build();
+            startState = postServiceSynchronously(
+                    ResourcePoolService.FACTORY_LINK, startState,
+                    ResourcePoolService.ResourcePoolState.class);
+
+            // patch with a collection update request that removed the ELASTIC property
+            Map<String, Collection<Object>> itemsToRemove = new HashMap<>();
+            List<Object> propertiesToRemove = new ArrayList<>();
+            propertiesToRemove.add(ResourcePoolProperty.ELASTIC);
+            itemsToRemove.put(ResourcePoolState.FIELD_NAME_PROPERTIES, propertiesToRemove);
+            patchServiceSynchronously(startState.documentSelfLink,
+                    ServiceStateCollectionUpdateRequest.create(null, itemsToRemove));
+
+            // verify RP is now non-elastic
+            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
+                    startState.documentSelfLink,
+                    ResourcePoolService.ResourcePoolState.class);
+            assertThat(newState.properties, is(EnumSet.noneOf(ResourcePoolProperty.class)));
+            assertNotNull(newState.query);
+            assertFalse(newState.query.booleanClauses.isEmpty());
         }
 
         private ResourcePoolService.ResourcePoolState createResourcePoolService()

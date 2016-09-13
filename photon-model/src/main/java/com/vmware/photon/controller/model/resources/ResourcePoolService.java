@@ -46,6 +46,8 @@ public class ResourcePoolService extends StatefulService {
      */
     public static class ResourcePoolState extends ResourceState {
 
+        public static final String FIELD_NAME_PROPERTIES = "properties";
+
         /**
          * Enumeration used to define properties of the resource pool.
          */
@@ -178,9 +180,9 @@ public class ResourcePoolService extends StatefulService {
 
     @Override
     public void handlePatch(Operation patch) {
-        // clean auto-generated query in current state, if any
         ResourcePoolState currentState = getState(patch);
         if (!currentState.properties.contains(ResourcePoolProperty.ELASTIC)) {
+            // clean auto-generated query to catch patches with unexpected query
             currentState.query = null;
         }
 
@@ -189,6 +191,13 @@ public class ResourcePoolService extends StatefulService {
         try {
             if (Utils.mergeWithState(currentState, patch)) {
                 hasStateChanged = true;
+
+                // automatically remove the query if the ELASTIC flag was removed in order to
+                // keep the state consistent (the collection update request itself cannot update
+                // the query)
+                if (!currentState.properties.contains(ResourcePoolProperty.ELASTIC)) {
+                    currentState.query = null;
+                }
             } else {
                 hasStateChanged = ResourceUtils.mergeResourceStateWithPatch(getStateDescription(),
                         currentState, patch.getBody(ResourcePoolState.class));
