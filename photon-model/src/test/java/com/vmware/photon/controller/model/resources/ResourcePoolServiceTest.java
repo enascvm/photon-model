@@ -238,19 +238,17 @@ public class ResourcePoolServiceTest extends Suite {
             assertFalse(newState.query.booleanClauses.isEmpty());
         }
 
-        @Test(expected = IllegalArgumentException.class)
-        public void testPutToNonElasticWithQuery() throws Throwable {
-            // create elastic
+        @Test
+        public void testPutNonElasticWithQuery() throws Throwable {
+            // create non-elastic
             ResourcePoolService.ResourcePoolState startState = buildValidStartState();
-            startState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
-            startState.query = Query.Builder.create().build();
+            startState.properties = EnumSet.noneOf(ResourcePoolProperty.class);
             startState = postServiceSynchronously(
                     ResourcePoolService.FACTORY_LINK, startState,
                     ResourcePoolService.ResourcePoolState.class);
 
-            // replace with non-elastic
-            startState.properties = EnumSet.noneOf(ResourcePoolProperty.class);
-            startState.query = Query.Builder.create().build();
+            // in a put action, passing the query is ok for non-elastic pools (no exception)
+            startState.maxCpuCount = 12;
             putServiceSynchronously(startState.documentSelfLink, startState);
         }
     }

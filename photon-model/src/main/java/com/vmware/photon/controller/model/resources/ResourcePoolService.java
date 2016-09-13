@@ -170,7 +170,7 @@ public class ResourcePoolService extends StatefulService {
             throw (new IllegalArgumentException("body is required"));
         }
         ResourcePoolState state = op.getBody(ResourcePoolState.class);
-        validateState(state);
+        validateState(state, Action.PUT.equals(op.getAction()));
 
         if (!state.properties.contains(ResourcePoolProperty.ELASTIC)) {
             state.query = generateResourcePoolQuery(state);
@@ -208,7 +208,7 @@ public class ResourcePoolService extends StatefulService {
         }
 
         // check state and re-generate the query, if needed
-        validateState(currentState);
+        validateState(currentState, true);
         if (!currentState.properties.contains(ResourcePoolProperty.ELASTIC)) {
             currentState.query = generateResourcePoolQuery(currentState);
         }
@@ -219,7 +219,7 @@ public class ResourcePoolService extends StatefulService {
         patch.complete();
     }
 
-    public void validateState(ResourcePoolState state) {
+    public void validateState(ResourcePoolState state, boolean isUpdateAction) {
         Utils.validateState(getStateDescription(), state);
 
         if (state.name == null) {
@@ -236,7 +236,7 @@ public class ResourcePoolService extends StatefulService {
                 throw new IllegalArgumentException("Query is required for elastic resource pools.");
             }
         } else {
-            if (state.query != null) {
+            if (state.query != null && !isUpdateAction) {
                 throw new IllegalArgumentException("Query is auto-generated for " +
                         "non-elastic resource pools.");
             }
