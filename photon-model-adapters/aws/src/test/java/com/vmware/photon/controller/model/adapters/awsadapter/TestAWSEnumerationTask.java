@@ -36,7 +36,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsOnThisEndpoint;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getBaseLineInstanceCount;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
@@ -68,7 +67,6 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.BaseLineState;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -81,6 +79,7 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -131,7 +130,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private AmazonEC2AsyncClient client;
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
-    private BaseLineState baseLineState;
 
     public boolean isMock = true;
     public String accessKey = "accessKey";
@@ -198,14 +196,12 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // so the latency numbers maybe higher from this test due to low page size.
         setQueryPageSize(DEFAULT_TEST_PAGE_SIZE);
         setQueryResultLimit(DEFAULT_TEST_PAGE_SIZE);
-        this.baseLineState = getBaseLineInstanceCount(this.host, this.client,
-                testComputeDescriptions);
-        this.host.log(this.baseLineState.toString());
+
         // Provision a single VM . Check initial state.
         vmState = provisionMachine(this.host, vmState, this.isMock, this.instancesToCleanUp);
         queryComputeInstances(this.host, count2);
         queryDocumentsAndAssertExpectedCount(this.host, count2,
-                ComputeDescriptionService.FACTORY_LINK);
+                ComputeDescriptionService.FACTORY_LINK, false);
 
         // CREATION directly on AWS
         List<String> instanceIdsToDeleteFirstTime = provisionAWSVMWithEC2Client(this.client,
@@ -229,20 +225,20 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // linking of discovered resources to user defined compute descriptions. So a new system
         // generated compute description will be created for "t2.micro"
         queryDocumentsAndAssertExpectedCount(this.host,
-                count4 + this.baseLineState.baselineComputeDescriptionCount,
-                ComputeDescriptionService.FACTORY_LINK);
-        queryComputeInstances(this.host,
-                count7 + this.baseLineState.baselineVMCount);
+                count4,
+                ComputeDescriptionService.FACTORY_LINK, false);
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count7, ComputeService.FACTORY_LINK, false);
 
         // Update Scenario : Check that the tag information is present for the VM tagged above.
         String vpCId = validateTagAndNetworkAndComputeDescriptionInformation(vmState);
         validateVPCInformation(vpCId);
         // Count should be 2 NICs per discovered VM
-        int totalNetworkInterfaceStateCount = (count6 + this.baseLineState.baselineVMCount) * 2;
+        int totalNetworkInterfaceStateCount = count6 * 2;
         validateNetworkInterfaceCount(totalNetworkInterfaceStateCount);
         // One VPC should be discovered in the test.
         queryDocumentsAndAssertExpectedCount(this.host, count1,
-                NetworkService.FACTORY_LINK);
+                NetworkService.FACTORY_LINK, false);
 
         // Verify stop flow
         // The first instance of instanceIdsToDeleteFirstTime will be stopped.
@@ -274,14 +270,14 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                 this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                 TEST_CASE_ADDITIONAL_VM);
-        // One additional compute state and and one additional compute description should be
+        // One additional compute state and no additional compute description should be
         // created. 1) compute host CD 2) t2.nano-system generated 3) t2.micro-system generated
         // 4) t2.micro-created from test code.
         queryDocumentsAndAssertExpectedCount(this.host,
-                count4 + this.baseLineState.baselineComputeDescriptionCount,
-                ComputeDescriptionService.FACTORY_LINK);
-        queryComputeInstances(this.host,
-                count8 + this.baseLineState.baselineVMCount);
+                count4,
+                ComputeDescriptionService.FACTORY_LINK, false);
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count8, ComputeService.FACTORY_LINK, false);
 
         // Verify Deletion flow
         // Delete 5 VMs spawned above of type T2_NANO
@@ -290,8 +286,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                 TEST_CASE_DELETE_VMS);
         // Counts should go down 5 compute states.
-        queryComputeInstances(this.host,
-                count3 + this.baseLineState.baselineVMCount);
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count3, ComputeService.FACTORY_LINK, false);
 
         // Delete 1 VMs spawned above of type T2_Micro
         deleteVMsUsingEC2Client(this.client, this.host, instanceIdsToDeleteSecondTime);
@@ -299,8 +295,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                 TEST_CASE_DELETE_VM);
         // Compute state count should go down by 1
-        queryComputeInstances(this.host,
-                count2 + this.baseLineState.baselineVMCount);
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count2, ComputeService.FACTORY_LINK, false);
     }
 
     @Test
@@ -412,7 +408,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // instancesToCleanUp.size() are name tags, which are skipped. This means we should have
         // allTags.size() TagState documents
         ServiceDocumentQueryResult serviceDocumentQueryResult = queryDocumentsAndAssertExpectedCount(
-                this.host, allTags.size(), TagService.FACTORY_LINK);
+                this.host, allTags.size(), TagService.FACTORY_LINK, true);
 
         Map<Tag, String> tagLinks = new HashMap<>();
 
@@ -535,7 +531,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         }
 
         queryDocumentsAndAssertExpectedCount(this.host, totalNetworkInterfaceStateCount,
-                NetworkInterfaceService.FACTORY_LINK);
+                NetworkInterfaceService.FACTORY_LINK, false);
     }
 
     /**

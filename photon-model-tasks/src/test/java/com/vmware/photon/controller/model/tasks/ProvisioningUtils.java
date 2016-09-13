@@ -25,6 +25,7 @@ import java.util.concurrent.TimeoutException;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -113,19 +114,22 @@ public class ProvisioningUtils {
     }
 
     public static ServiceDocumentQueryResult queryDocumentsAndAssertExpectedCount(
-            VerificationHost host, int desiredCount, String factoryLink) throws Throwable {
+            VerificationHost host, int desiredCount, String factoryLink, boolean exactCountFlag)
+            throws Throwable {
         return queryDocumentsAndAssertExpectedCount(
-                host, host.getUri(), desiredCount, factoryLink);
+                host, host.getUri(), desiredCount, factoryLink, exactCountFlag);
     }
 
     public static ServiceDocumentQueryResult queryDocumentsAndAssertExpectedCount(
             VerificationHost host, URI peerURI,
-            int desiredCount, String factoryLink) throws Throwable {
+            int desiredCount, String factoryLink, boolean exactCountFlag) throws Throwable {
         ServiceDocumentQueryResult res;
         res = host.getFactoryState(UriUtils
                 .buildExpandLinksQueryUri(createServiceURI(host, peerURI,
                         factoryLink)));
-        if (res.documents.size() == desiredCount) {
+        if (exactCountFlag && res.documents.size() == desiredCount) {
+            return res;
+        } else if (res.documents.size() >= desiredCount) {
             return res;
         }
         throw new Exception("Desired number of documents not found in " + factoryLink
