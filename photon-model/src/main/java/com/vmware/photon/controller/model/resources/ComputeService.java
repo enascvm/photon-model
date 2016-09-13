@@ -175,6 +175,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.customProperties = currentState.customProperties;
             chsWithDesc.networkInterfaceLinks = currentState.networkInterfaceLinks;
             chsWithDesc.tenantLinks = currentState.tenantLinks;
+            chsWithDesc.tagLinks = currentState.tagLinks;
             chsWithDesc.creationTimeMicros = currentState.creationTimeMicros;
 
             chsWithDesc.description = desc;

@@ -48,7 +48,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
@@ -345,6 +344,6 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
 
         // create a compute host for the AWS EC2 VM
         this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink, this.accessKey,
-                this.secretKey, this.isAwsClientMock, this.awsMockEndpointReference);
+                this.secretKey, this.isAwsClientMock, this.awsMockEndpointReference, null);
     }
 }

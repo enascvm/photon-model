@@ -28,8 +28,10 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.amazonaws.AmazonServiceException;
@@ -40,6 +42,7 @@ import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
+import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
@@ -53,6 +56,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.xenon.common.Operation;
@@ -493,8 +497,7 @@ public class AWSInstanceService extends StatelessService {
         AsyncHandler<RunInstancesRequest, RunInstancesResult> creationHandler = buildCreationCallbackHandler(
                 this, aws.computeRequest, aws.child, aws.amazonEC2Client,
                 aws.taskExpirationMicros);
-        aws.amazonEC2Client.runInstancesAsync(runInstancesRequest,
-                creationHandler);
+        aws.amazonEC2Client.runInstancesAsync(runInstancesRequest, creationHandler);
     }
 
     private static class AWSCreationHandler implements
@@ -539,6 +542,7 @@ public class AWSInstanceService extends StatelessService {
                             new IllegalStateException("Error getting instance EC2 instance"));
                     return;
                 }
+
                 ComputeStateWithDescription resultDesc = new ComputeStateWithDescription();
                 resultDesc.address = instance.getPublicIpAddress();
                 resultDesc.powerState = AWSUtils.mapToPowerState(instance.getState());
@@ -583,11 +587,52 @@ public class AWSInstanceService extends StatelessService {
 
             String instanceId = result.getReservation().getInstances().get(0)
                     .getInstanceId();
-            AWSTaskStatusChecker.create(this.amazonEC2Client, instanceId,
-                    AWSInstanceService.AWS_RUNNING_NAME, consumer, this.computeReq,
-                    this.service, this.taskExpirationTimeMicros).start();
+
+            tagInstanceAndStartStatusChecker(instanceId, this.computeDesc.tagLinks, consumer);
         }
 
+        private void tagInstanceAndStartStatusChecker(String instanceId, Set<String> tagLinks,
+                Consumer<Instance> consumer) {
+
+            final List<Tag> tagsToCreate = new ArrayList<>();
+            Tag nameTag = new Tag(AWSConstants.AWS_TAG_NAME, this.computeDesc.name);
+            tagsToCreate.add(nameTag);
+
+            Runnable proceed = () -> {
+                AWSUtils.tagResources(this.amazonEC2Client, tagsToCreate, instanceId);
+
+                AWSTaskStatusChecker
+                        .create(this.amazonEC2Client, instanceId,
+                                AWSInstanceService.AWS_RUNNING_NAME, consumer, this.computeReq,
+                                this.service, this.taskExpirationTimeMicros).start();
+            };
+
+            // add the name tag only if there are no tag links
+            if (tagLinks == null || tagLinks.isEmpty()) {
+                proceed.run();
+                return;
+            }
+
+            // if there are tag links get the TagStates and convert to amazon Tags
+            OperationJoin.JoinedCompletionHandler joinedCompletionHandler = (ops, exs) -> {
+                if (exs != null && !exs.isEmpty()) {
+                    AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
+                            this.computeReq.taskReference, exs.values().iterator().next());
+                }
+
+                tagsToCreate.addAll(ops.values().stream()
+                        .map(op -> op.getBody(TagState.class))
+                        .map(tagState -> new Tag(tagState.key, tagState.value))
+                        .collect(Collectors.toList()));
+
+                proceed.run();
+            };
+
+            Stream<Operation> getTagOperations = tagLinks.stream()
+                    .map(tagLink -> Operation.createGet(this.service, tagLink));
+            OperationJoin.create(getTagOperations).setCompletion(joinedCompletionHandler)
+                    .sendWith(this.service);
+        }
     }
 
     // callback to be invoked when a VM creation operation returns

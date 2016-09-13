@@ -60,7 +60,6 @@ import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Tag;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -79,7 +78,6 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
-
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -94,7 +92,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  * updates to the local state are as expected.If the 'isMock' flag is set to true the test runs the
  * adapter in mock mode and does not actually create a VM. Minimally the accessKey and secretKey for
  * AWS must be specified to run the test.
- *
  */
 public class TestAWSEnumerationTask extends BasicTestCase {
     private static final int ZERO = 0;
@@ -179,7 +176,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     @Test
     public void testEnumeration() throws Throwable {
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
-                this.outPool.documentSelfLink, TestAWSSetupUtils.class);
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
@@ -567,7 +564,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // create a compute host for the AWS EC2 VM
         this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
                 this.accessKey, this.secretKey, this.isAwsClientMock,
-                this.awsMockEndpointReference);
+                this.awsMockEndpointReference, null);
 
     }
 

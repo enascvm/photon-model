@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
@@ -144,7 +145,8 @@ public class TestAWSSetupUtils {
      * Create a compute host description for an AWS instance
      */
     public static ComputeService.ComputeState createAWSComputeHost(VerificationHost host, String resourcePoolLink,
-            String accessKey, String secretKey, boolean isAwsClientMock, String awsMockEndpointReference)
+            String accessKey, String secretKey, boolean isAwsClientMock,
+            String awsMockEndpointReference, Set<String> tagLinks)
             throws Throwable {
 
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
@@ -187,6 +189,7 @@ public class TestAWSSetupUtils {
         awsComputeHost.descriptionLink = UriUtils.buildUriPath(
                 ComputeDescriptionService.FACTORY_LINK, awshostDescription.id);
         awsComputeHost.resourcePoolLink = resourcePoolLink;
+        awsComputeHost.tagLinks = tagLinks;
 
         if (isAwsClientMock) {
             awsComputeHost.adapterManagementReference = UriUtils.buildUri(awsMockEndpointReference);
@@ -219,7 +222,8 @@ public class TestAWSSetupUtils {
      * Create a compute resource for an AWS instance
      */
     public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
-            String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz)
+            String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
+            Set<String> tagLinks)
             throws Throwable {
 
         // Step 1: Create an auth credential to login to the VM
@@ -291,6 +295,7 @@ public class TestAWSSetupUtils {
         resource.descriptionLink = vmComputeDesc.documentSelfLink;
         resource.resourcePoolLink = resourcePoolLink;
         resource.diskLinks = vmDisks;
+        resource.tagLinks = tagLinks;
 
         ComputeService.ComputeState vmComputeState = TestUtils.doPost(host, resource,
                 ComputeService.ComputeState.class,
@@ -468,7 +473,7 @@ public class TestAWSSetupUtils {
         return provisionCompute;
     }
 
-    private static ComputeState getCompute(VerificationHost host, String computeLink)
+    public static ComputeState getCompute(VerificationHost host, String computeLink)
             throws Throwable {
         Operation response = host
                 .waitForResponse(Operation.createGet(host, computeLink));
@@ -527,6 +532,27 @@ public class TestAWSSetupUtils {
         });
 
         return creationHandler.instanceIds;
+    }
+
+    /**
+     * Method to get Instance details directly from Amazon
+     *
+     * @throws Throwable
+     */
+    public static List<Instance> getAwsInstancesByIds(AmazonEC2AsyncClient client,
+            VerificationHost host, List<String> instanceIds)
+            throws Throwable {
+        host.log("Getting instances with ids " + instanceIds
+                + " from the AWS endpoint using the EC2 client.");
+
+        DescribeInstancesRequest describeInstancesRequest = new DescribeInstancesRequest()
+                .withInstanceIds(instanceIds);
+
+        DescribeInstancesResult describeInstancesResult = client
+                .describeInstances(describeInstancesRequest);
+
+        return describeInstancesResult.getReservations().stream()
+                .flatMap(r -> r.getInstances().stream()).collect(Collectors.toList());
     }
 
     public static String provisionAWSVMWithEC2Client(AmazonEC2Client client, String ami) {

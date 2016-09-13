@@ -14,24 +14,32 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getAwsInstancesByIds;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getCompute;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.Tag;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -44,6 +52,8 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -78,12 +88,17 @@ public class TestAWSProvisionTask {
     public boolean isMock = true;
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
+    private AmazonEC2AsyncClient client;
 
     @Before
     public void setUp() throws Exception {
         CommandLineArgumentParser.parseFromProperties(this);
 
         setAwsClientMockInfo(this.isAwsClientMock, this.awsMockEndpointReference);
+        AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
+        creds.privateKey = this.secretKey;
+        creds.privateKeyId = this.accessKey;
+        this.client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.zoneId, getExecutor());
         this.host = VerificationHost.create(0);
         try {
             this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(250));
@@ -133,11 +148,12 @@ public class TestAWSProvisionTask {
         // create a compute host for the AWS EC2 VM
         ComputeService.ComputeState outComputeHost = createAWSComputeHost(this.host,
                 outPool.documentSelfLink, this.accessKey, this.secretKey,
-                this.isAwsClientMock, this.awsMockEndpointReference);
+                this.isAwsClientMock, this.awsMockEndpointReference, null);
 
         // create a AWS VM compute resoruce
+
         this.vmState = createAWSVMResource(this.host, outComputeHost.documentSelfLink,
-                outPool.documentSelfLink, this.getClass());
+                outPool.documentSelfLink, this.getClass(), null);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
@@ -161,6 +177,13 @@ public class TestAWSProvisionTask {
 
         // check that the VM has been created
         ProvisioningUtils.queryComputeInstances(this.host, 2);
+
+        if (!this.isMock) {
+            ComputeState compute = getCompute(this.host, this.vmState.documentSelfLink);
+            List<Instance> instances = getAwsInstancesByIds(this.client, this.host,
+                    Collections.singletonList(compute.id));
+            assertTags(Collections.emptySet(), instances.get(0), this.vmState.name);
+        }
 
         this.host.setTimeoutSeconds(600);
         this.host.waitFor("Error waiting for stats", () -> {
@@ -197,31 +220,77 @@ public class TestAWSProvisionTask {
         verifyRemovalOfResourceState(this.host, resourcesToDelete);
 
         // create another AWS VM
-        List<String> instanceIdList = new ArrayList<String>();
+        List<String> instanceIdList = new ArrayList<>();
+
+        Set<TagState> tags = createTags(null,
+                "testProvisionKey1", "testProvisionValue1",
+                "testProvisionKey2", "testProvisionValue2");
+
+        Set<String> tagLinks = tags.stream().map(t -> t.documentSelfLink)
+                .collect(Collectors.toSet());
         this.vmState = TestAWSSetupUtils.createAWSVMResource(this.host, outComputeHost.documentSelfLink,
-                outPool.documentSelfLink, this.getClass());
+                outPool.documentSelfLink, this.getClass(), tagLinks);
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
-        AmazonEC2AsyncClient client = null;
+
         BaseLineState remoteStateBefore = null;
         if (!this.isMock) {
+            ComputeState compute = getCompute(this.host, this.vmState.documentSelfLink);
+
+            List<Instance> instances = getAwsInstancesByIds(this.client, this.host,
+                    Collections.singletonList(compute.id));
+            assertTags(tags, instances.get(0), this.vmState.name);
+
             // reach out to AWS and get the current state
-            AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
-            creds.privateKey = this.secretKey;
-            creds.privateKeyId = this.accessKey;
-            client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.zoneId, getExecutor());
-            remoteStateBefore = TestAWSSetupUtils.getBaseLineInstanceCount(this.host, client, null);
+            remoteStateBefore = TestAWSSetupUtils
+                    .getBaseLineInstanceCount(this.host, this.client, null);
         }
+
         // delete just the local representation of the resource
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host, true);
         if (!this.isMock) {
             try {
-                BaseLineState remoteStateAfter = TestAWSSetupUtils.getBaseLineInstanceCount(this.host, client, null);
+                BaseLineState remoteStateAfter = TestAWSSetupUtils
+                        .getBaseLineInstanceCount(this.host, this.client, null);
                 assertEquals(remoteStateBefore.baselineVMCount, remoteStateAfter.baselineVMCount);
             } finally {
-                TestAWSSetupUtils.deleteVMsUsingEC2Client(client, this.host, instanceIdList);
+                TestAWSSetupUtils.deleteVMsUsingEC2Client(this.client, this.host, instanceIdList);
             }
         }
         this.vmState  = null;
+    }
+
+    private void assertTags(Set<TagState> expectedTagStates, Instance instance,
+            String instanceName) {
+        Set<Tag> expectedTags = expectedTagStates.stream().map(ts -> new Tag(ts.key, ts.value))
+                .collect(Collectors.toSet());
+
+        Set<Tag> actualTags = new HashSet<>(instance.getTags());
+        // account for the name tag
+        assertEquals(expectedTags.size() + 1, actualTags.size());
+        assertTrue(actualTags.containsAll(expectedTags));
+
+        Tag nameTag = new Tag(AWSConstants.AWS_TAG_NAME, instanceName);
+        assertTrue(actualTags.contains(nameTag));
+    }
+
+    private Set<TagState> createTags(List<String> tenantLinks, String... keyValue)
+            throws Throwable {
+
+        Set<TagState> result = new HashSet<>();
+
+        for (int i = 0; i <= keyValue.length - 2; i = i + 2) {
+            TagState tagState = new TagState();
+            tagState.tenantLinks = tenantLinks;
+            tagState.key = keyValue[i];
+            tagState.value = keyValue[i + 1];
+
+            TagState response = TestUtils.doPost(this.host, tagState, TagState.class,
+                    UriUtils.buildUri(this.host, TagService.FACTORY_LINK));
+
+            result.add(response);
+        }
+
+        return result;
     }
 
     private void issueStatsRequest(ComputeState vm) throws Throwable {
@@ -266,14 +335,14 @@ public class TestAWSProvisionTask {
 
     private void verifyCollectedStats(ComputeStatsResponse response) {
         ComputeStats computeStats = response.statsList.get(0);
-        Assert.assertTrue("Compute Link is empty", !computeStats.computeLink.isEmpty());
-        Assert.assertTrue("APICallCount is not present", computeStats.statValues.keySet()
+        assertTrue("Compute Link is empty", !computeStats.computeLink.isEmpty());
+        assertTrue("APICallCount is not present", computeStats.statValues.keySet()
                 .contains(PhotonModelConstants.API_CALL_COUNT));
         // Check that stat values are accompanied with Units.
         for (String key : computeStats.statValues.keySet()) {
             List<ServiceStat> stats = computeStats.statValues.get(key);
             for (ServiceStat stat : stats) {
-                Assert.assertTrue("Unit is empty", !stat.unit.isEmpty());
+                assertTrue("Unit is empty", !stat.unit.isEmpty());
             }
         }
     }
