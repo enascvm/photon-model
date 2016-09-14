@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.4.5-SNAPSHOT
+## 0.4.5
+
+* Support a query to resolve resource pool membership
 
 * Field `datacenterId` is removed from ComputeDescription. Adapters using it,
   should move to use `regionId`.
