@@ -41,6 +41,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
@@ -176,6 +177,9 @@ public class AWSNetworkUtils {
             boolean isPublic) {
         String existingInterfaceLink = null;
         // Determine the URI representing the existing public/private interfaces.
+        if (existingComputeState.networkInterfaceLinks == null) {
+            return existingInterfaceLink;
+        }
         for (String networkLink : existingComputeState.networkInterfaceLinks) {
             if (isPublic && networkLink.contains(PUBLIC_INTERFACE)) {
                 existingInterfaceLink = networkLink;

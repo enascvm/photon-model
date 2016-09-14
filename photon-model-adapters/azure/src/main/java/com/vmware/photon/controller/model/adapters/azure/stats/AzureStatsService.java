@@ -24,7 +24,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -35,6 +34,8 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -194,9 +195,10 @@ public class AzureStatsService extends StatelessService {
 
         // No children found. Send an empty response back.
         if (computeCount <= 0) {
-            ComputeStatsResponse response = new ComputeStatsResponse();
-            response.taskStage = statsData.statsRequest.nextStage;
+            SingleResourceStatsCollectionTaskState response = new SingleResourceStatsCollectionTaskState();
+            response.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
             response.statsList = new ArrayList<>();
+            response.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
             this.sendRequest(
                     Operation.createPatch(statsData.statsRequest.taskReference)
                             .setBody(response));
@@ -234,8 +236,10 @@ public class AzureStatsService extends StatelessService {
             }
 
             // Aggregate all the responses into a single response
-            ComputeStatsResponse response = aggregateComputeStatsResponses(statsData, items);
-            response.taskStage = statsData.statsRequest.nextStage;
+            SingleResourceStatsCollectionTaskState response = aggregateComputeStatsResponses(
+                    statsData, items);
+            response.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
+            response.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
             this.sendRequest(
                     Operation.createPatch(statsData.statsRequest.taskReference)
                             .setBody(response)
@@ -248,7 +252,7 @@ public class AzureStatsService extends StatelessService {
     /**
      * Aggregates stats from all the compute VMs to make up compute Host stats.
      */
-    private ComputeStatsResponse aggregateComputeStatsResponses(
+    private SingleResourceStatsCollectionTaskState aggregateComputeStatsResponses(
             AzureStatsDataHolder statsData, List<QueryTask> items) {
         int numberOfComputeResponse = items.size();
         ComputeStats computeStats = new ComputeStats();
@@ -283,12 +287,12 @@ public class AzureStatsService extends StatelessService {
             computeStats.statValues.put(key, Collections.singletonList(serviceStatValue));
         }
 
-        ComputeStatsResponse computeStatsResponse = new ComputeStatsResponse();
-        computeStatsResponse.statsList = new ArrayList<>();
+        SingleResourceStatsCollectionTaskState statsResponse = new SingleResourceStatsCollectionTaskState();
+        statsResponse.statsList = new ArrayList<>();
         if (computeStats.statValues.size() > 0) {
-            computeStatsResponse.statsList.add(computeStats);
+            statsResponse.statsList.add(computeStats);
         }
-        return computeStatsResponse;
+        return statsResponse;
     }
 
     /**

@@ -19,7 +19,6 @@ import java.util.HashMap;
 import java.util.List;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.CustomProperties;
@@ -27,6 +26,8 @@ import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPoolAllocator;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereUriPaths;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
@@ -35,6 +36,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
+import com.vmware.xenon.common.UriUtils;
 
 public class VSphereAdapterStatsService extends StatelessService {
 
@@ -129,10 +131,11 @@ public class VSphereAdapterStatsService extends StatelessService {
             cs.statValues.put(stat.name, Collections.singletonList(stat));
         }
 
-        ComputeStatsResponse respBody = new ComputeStatsResponse();
+        SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
         respBody.statsList = new ArrayList<>();
         respBody.statsList.add(cs);
-        respBody.taskStage = statsRequest.nextStage;
+        respBody.taskStage = (SingleResourceTaskCollectionStage) statsRequest.nextStage;
+        respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
 
         this.sendRequest(Operation.createPatch(statsRequest.taskReference)
                 .setBody(respBody));

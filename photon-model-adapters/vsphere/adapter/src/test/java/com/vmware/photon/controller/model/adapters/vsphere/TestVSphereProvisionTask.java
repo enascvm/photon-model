@@ -20,6 +20,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.UUID;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -41,7 +42,9 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.SnapshotTaskService;
 import com.vmware.photon.controller.model.tasks.SnapshotTaskService.SnapshotTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
 import com.vmware.vim25.ManagedObjectReference;
+
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -56,6 +59,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
 
+    @Ignore("VSYM-2247")
     @Test
     public void createInstanceSnapshotItAndDeleteIt() throws Throwable {
         // Create a resource pool where the VM will be housed

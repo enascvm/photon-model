@@ -58,7 +58,7 @@ import com.vmware.xenon.services.common.TaskService;
 public class SingleResourceStatsCollectionTaskService
         extends TaskService<SingleResourceStatsCollectionTaskState> {
 
-    private static final String HYPHEN = "-";
+    public static final String HYPHEN = "-";
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";
 
@@ -188,6 +188,9 @@ public class SingleResourceStatsCollectionTaskService
         if (patchState.statsList != null) {
             currentState.statsList = patchState.statsList;
         }
+        if (patchState.statsAdapterReference != null) {
+            currentState.statsAdapterReference = patchState.statsAdapterReference;
+        }
     }
 
     private void handleStagePatch(Operation op,
@@ -266,54 +269,33 @@ public class SingleResourceStatsCollectionTaskService
 
     private void updateAndPersistStats(Operation op,
             SingleResourceStatsCollectionTaskState currentState) {
+        if (currentState.statsAdapterReference == null) {
+            throw new IllegalStateException("stats adapter reference should not be null");
+        }
+        URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
         Collection<Operation> operations = new ArrayList<>();
+        // Push the last collection metric to the in memory stats available at the
+        // compute-link/stats URI.
+        ServiceStats.ServiceStat minuteStats = new ServiceStats.ServiceStat();
+        String statsLink = getAdapterLinkFromURI(currentState.statsAdapterReference);
+        minuteStats.name = getLastCollectionMetricKeyForAdapterLink(statsLink, true);
+        minuteStats.latestValue = Utils.getNowMicrosUtc();
+        minuteStats.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+        minuteStats.unit = PhotonModelConstants.UNIT_MICROSECONDS;
+        minuteStats.timeSeriesStats = new TimeSeriesStats(
+                StatsConstants.NUM_BUCKETS_MINUTE_DATA,
+                StatsConstants.BUCKET_SIZE_MINUTES_IN_MILLIS,
+                EnumSet.allOf(AggregationType.class));
+        URI statsUri = UriUtils.buildStatsUri(getHost(), currentState.computeLink);
+        operations.add(Operation.createPost(statsUri)
+                .setBody(minuteStats));
+        persistStat(persistStatsUri, getLastCollectionMetricKeyForAdapterLink(statsLink, false),
+                minuteStats, currentState.computeLink);
+
         for (ComputeStats stats : currentState.statsList) {
-            URI statsUri = UriUtils.buildStatsUri(getHost(), stats.computeLink);
-            URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
             for (Entry<String, List<ServiceStat>> entries : stats.statValues.entrySet()) {
                 for (ServiceStat entry : entries.getValue()) {
-                    ServiceStats.ServiceStat minuteStats = new ServiceStats.ServiceStat();
-                    minuteStats.name = new StringBuilder(entries.getKey())
-                            .append(StatsConstants.MIN_SUFFIX).toString();
-                    minuteStats.latestValue = entry.latestValue;
-                    minuteStats.sourceTimeMicrosUtc = entry.sourceTimeMicrosUtc;
-                    minuteStats.unit = entry.unit;
-                    minuteStats.timeSeriesStats = new TimeSeriesStats(
-                            StatsConstants.NUM_BUCKETS_MINUTE_DATA,
-                            StatsConstants.BUCKET_SIZE_MINUTES_IN_MILLIS,
-                            EnumSet.allOf(AggregationType.class));
-
-                    ServiceStats.ServiceStat hourStats = new ServiceStats.ServiceStat();
-                    hourStats.name = new StringBuilder(entries.getKey())
-                            .append(StatsConstants.HOUR_SUFFIX).toString();
-                    hourStats.latestValue = entry.latestValue;
-                    hourStats.sourceTimeMicrosUtc = entry.sourceTimeMicrosUtc;
-                    hourStats.unit = entry.unit;
-                    hourStats.timeSeriesStats = new TimeSeriesStats(
-                            StatsConstants.NUM_BUCKETS_HOURLY_DATA,
-                            StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS,
-                            EnumSet.allOf(AggregationType.class));
-                    operations.add(Operation.createPost(statsUri)
-                            .setBody(hourStats));
-                    operations.add(Operation.createPost(statsUri)
-                            .setBody(minuteStats));
-
-                    ServiceStats.ServiceStat dailyStats = new ServiceStats.ServiceStat();
-                    dailyStats.name = new StringBuilder(entries.getKey())
-                            .append(StatsConstants.DAILY_SUFFIX).toString();
-                    dailyStats.latestValue = entry.latestValue;
-                    dailyStats.sourceTimeMicrosUtc = entry.sourceTimeMicrosUtc;
-                    dailyStats.unit = entry.unit;
-                    dailyStats.timeSeriesStats = new TimeSeriesStats(
-                            StatsConstants.NUM_BUCKETS_DAILY_DATA,
-                            StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS,
-                            EnumSet.allOf(AggregationType.class));
-                    operations.add(Operation.createPost(statsUri)
-                            .setBody(dailyStats));
-                    operations.add(Operation.createPost(statsUri)
-                            .setBody(minuteStats));
-
                     // Persist every datapoint
                     persistStat(persistStatsUri, entries.getKey(), entry, currentState.computeLink);
                 }
@@ -466,12 +448,13 @@ public class SingleResourceStatsCollectionTaskService
     /**
      * Forms the key to be used for looking up the last collection time for a given stats adapter.
      */
-    private String getLastCollectionMetricKeyForAdapterLink(String statsAdapterLink ,boolean appendBucketSuffix) {
+    public String getLastCollectionMetricKeyForAdapterLink(String statsAdapterLink,
+            boolean appendBucketSuffix) {
         String lastSuccessfulRunMetricKey = statsAdapterLink
                 + HYPHEN
                 + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
         if (appendBucketSuffix) {
-            lastSuccessfulRunMetricKey = lastSuccessfulRunMetricKey + StatsConstants.HOUR_SUFFIX;
+            lastSuccessfulRunMetricKey = lastSuccessfulRunMetricKey + StatsConstants.MIN_SUFFIX;
         }
         return lastSuccessfulRunMetricKey;
     }

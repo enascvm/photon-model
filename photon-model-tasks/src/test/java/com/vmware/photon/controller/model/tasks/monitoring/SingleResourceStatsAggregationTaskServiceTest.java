@@ -112,8 +112,10 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                             ServiceHost.SERVICE_URI_SUFFIX_STATS);
                 ServiceStats resStats = getServiceSynchronously(statsUriPath, ServiceStats.class);
                 for (ServiceStat stat : resStats.entries.values()) {
-                    if (stat.latestValue == ((NUM_COLLECTIONS  * NUM_COMPUTE_RESOURCES) - 1) ) {
+                    if (stat.name.startsWith(MockStatsAdapter.SELF_LINK)
+                            && stat.timeSeriesStats.bins.size() > 0) {
                         returnStatus = true;
+                        break;
                     }
                 }
             }

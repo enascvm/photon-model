@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -33,6 +34,7 @@ import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
+
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -50,6 +52,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
 
+    @Ignore("VSYM-2247")
     @Test
     public void testCollectStats() throws Throwable {
         // Create a resource pool where the VM will be housed

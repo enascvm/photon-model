@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.HYPHEN;
-
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,7 +33,6 @@ import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
@@ -45,6 +42,8 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -484,19 +483,10 @@ public class AWSStatsService extends StatelessService {
                 this.statsData.statsResponse.statValues.put(PhotonModelConstants.API_CALL_COUNT,
                         Collections.singletonList(apiCallCountStat));
 
-                // Put the last collection time as a stat
-                ServiceStat lastCollectionTimeStat = new ServiceStat();
-                lastCollectionTimeStat.latestValue = apiCallCountStat.sourceTimeMicrosUtc;
-                lastCollectionTimeStat.sourceTimeMicrosUtc = apiCallCountStat.sourceTimeMicrosUtc;
-                lastCollectionTimeStat.unit = PhotonModelConstants.UNIT_MICROSECONDS;
-                String lastCollectionTimeKey = AWSStatsService.SELF_LINK + HYPHEN
-                        + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
-                this.statsData.statsResponse.statValues.put(lastCollectionTimeKey,
-                        Collections.singletonList(lastCollectionTimeStat));
-
-                ComputeStatsResponse respBody = new ComputeStatsResponse();
+                SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
                 this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;
-                respBody.taskStage = this.statsData.statsRequest.nextStage;
+                respBody.taskStage = (SingleResourceTaskCollectionStage) this.statsData.statsRequest.nextStage;
+                respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
                 respBody.statsList = new ArrayList<>();
                 respBody.statsList.add(this.statsData.statsResponse);
                 this.service.sendRequest(

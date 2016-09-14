@@ -45,7 +45,6 @@ import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
@@ -63,6 +62,8 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -321,9 +322,10 @@ public class AzureStatsGatherer extends StatelessService {
 
     private void patchEmptyResponse(AzureStatsDataHolder statsData) {
         // Patch back to the Parent with empty response
-        ComputeStatsResponse respBody = new ComputeStatsResponse();
+        SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
         statsData.statsResponse.computeLink = statsData.computeDesc.documentSelfLink;
-        respBody.taskStage = statsData.statsRequest.nextStage;
+        respBody.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
+        respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
         respBody.statsList = new ArrayList<>();
         this.sendRequest(Operation.createPatch(statsData.statsRequest.taskReference)
                 .setBody(respBody));
@@ -390,11 +392,12 @@ public class AzureStatsGatherer extends StatelessService {
             }
 
             if (this.statsData.numResponses.incrementAndGet() == METRIC_NAMES.length) {
-                ComputeStatsResponse respBody = new ComputeStatsResponse();
+                SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
                 this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;
-                respBody.taskStage = this.statsData.statsRequest.nextStage;
+                respBody.taskStage = (SingleResourceTaskCollectionStage) this.statsData.statsRequest.nextStage;
                 respBody.statsList = new ArrayList<>();
                 respBody.statsList.add(this.statsData.statsResponse);
+                respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
                 this.service.sendRequest(
                         Operation.createPatch(this.statsData.statsRequest.taskReference)
                         .setBody(respBody));

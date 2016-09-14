@@ -22,12 +22,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.UriUtils;
 
 public class MockStatsAdapter extends StatelessService {
 
@@ -55,7 +57,7 @@ public class MockStatsAdapter extends StatelessService {
         case PATCH:
             op.complete();
             ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
-            ComputeStatsResponse statsResponse = new ComputeStatsResponse();
+            SingleResourceStatsCollectionTaskState statsResponse = new SingleResourceStatsCollectionTaskState();
             Map<String, List<ServiceStat>> statValues = new HashMap<String, List<ServiceStat>>();
             double currentCounter = this.counter.incrementAndGet();
             ServiceStat key1 = new ServiceStat();
@@ -73,7 +75,8 @@ public class MockStatsAdapter extends StatelessService {
             cStat.computeLink = statsRequest.resourceReference.getPath();
             statsResponse.statsList = new ArrayList<ComputeStats>();
             statsResponse.statsList.add(cStat);
-            statsResponse.taskStage = statsRequest.nextStage;
+            statsResponse.taskStage = (SingleResourceTaskCollectionStage) statsRequest.nextStage;
+            statsResponse.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
             this.sendRequest(Operation.createPatch(statsRequest.taskReference)
                     .setBody(statsResponse));
             break;

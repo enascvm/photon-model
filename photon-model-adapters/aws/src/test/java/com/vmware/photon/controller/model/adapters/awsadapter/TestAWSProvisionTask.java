@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.HYPHEN;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
@@ -42,7 +41,6 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Tag;
 
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -330,9 +328,8 @@ public class TestAWSProvisionTask {
                                     new IllegalStateException("response size was incorrect."));
                             return;
                         }
-                        // Size == 1, because APICallCount and the lastStatsCollectionTime is always
-                        // added.
-                        if (resp.statsList.get(0).statValues.size() == 2) {
+                        // Size == 1, because APICallCount
+                        if (resp.statsList.get(0).statValues.size() == 1) {
                             TestAWSProvisionTask.this.host.failIteration(new IllegalStateException(
                                     "incorrect number of metrics received."));
                             return;
@@ -382,10 +379,6 @@ public class TestAWSProvisionTask {
         assertTrue("Compute Link is empty", !computeStats.computeLink.isEmpty());
         assertTrue("APICallCount is not present", computeStats.statValues.keySet()
                 .contains(PhotonModelConstants.API_CALL_COUNT));
-        String lastCollectionTimeKey = AWSStatsService.SELF_LINK + HYPHEN
-                + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
-        Assert.assertTrue("Last collection time is not present", computeStats.statValues.keySet()
-                .contains(lastCollectionTimeKey));
         // Check that stat values are accompanied with Units.
         for (String key : computeStats.statValues.keySet()) {
             List<ServiceStat> stats = computeStats.statValues.get(key);
@@ -394,7 +387,7 @@ public class TestAWSProvisionTask {
             }
             // If the statsCollectionTime was set to sometime in the past, the adapter should be
             // collecting more than one value for the same metric. Using cpu utilization as an
-            // example case as the number
+            // representative case as the number
             // of data points can vary across metrics even if the window is set when requesting data
             // from the provider.
             if (lastCollectionTime != null

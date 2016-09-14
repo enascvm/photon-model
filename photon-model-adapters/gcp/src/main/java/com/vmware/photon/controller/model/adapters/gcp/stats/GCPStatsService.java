@@ -30,7 +30,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.gcp.GCPUriPaths;
 import com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants;
@@ -43,6 +42,9 @@ import com.vmware.photon.controller.model.adapters.gcp.utils.JSONWebToken;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
@@ -570,12 +572,13 @@ public class GCPStatsService extends StatelessService {
 
         // After all the metrics are collected, send them as a response to the caller task.
         if (statsData.numResponses.incrementAndGet() == METRIC_NAMES_UNITS.length) {
-            ComputeStatsResponse respBody = new ComputeStatsResponse();
+            SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
             statsData.statsResponse.computeLink = statsData.computeDesc.documentSelfLink;
-            respBody.taskStage = statsData.statsRequest.nextStage;
+            respBody.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
             respBody.statsList = Collections.singletonList(statsData.statsResponse);
             setOperationDurationStat(statsData.gcpStatsCollectionOperation);
             statsData.gcpStatsCollectionOperation.complete();
+            respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
             this.sendRequest(Operation.createPatch(statsData.statsRequest.taskReference)
                     .setBody(respBody));
         }

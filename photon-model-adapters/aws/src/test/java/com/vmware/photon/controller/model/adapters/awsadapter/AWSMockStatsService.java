@@ -23,13 +23,15 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
@@ -166,9 +168,10 @@ public class AWSMockStatsService extends StatelessService {
             }
         }
 
-        ComputeStatsResponse respBody = new ComputeStatsResponse();
+        SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
         statsData.statsResponse.computeLink = statsData.computeState.documentSelfLink;
-        respBody.taskStage = statsData.statsRequest.nextStage;
+        respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
+        respBody.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
         respBody.statsList = new ArrayList<>();
         respBody.statsList.add(statsData.statsResponse);
 
