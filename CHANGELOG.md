@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.4.6-SNAPSHOT
+
 ## 0.4.5
 
 * Support a query to resolve resource pool membership
