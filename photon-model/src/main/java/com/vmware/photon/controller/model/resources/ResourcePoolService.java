@@ -145,12 +145,12 @@ public class ResourcePoolService extends StatefulService {
     }
 
     @Override
-    public void handleStart(Operation start) {
+    public void handleCreate(Operation createPost) {
         try {
-            processInput(start);
-            start.complete();
+            processInput(createPost);
+            createPost.complete();
         } catch (Throwable t) {
-            start.fail(t);
+            createPost.fail(t);
         }
     }
 
