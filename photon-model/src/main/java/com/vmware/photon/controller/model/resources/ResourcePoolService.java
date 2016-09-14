@@ -215,6 +215,8 @@ public class ResourcePoolService extends StatefulService {
 
         if (!hasStateChanged) {
             patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+        } else {
+            patch.setBody(currentState);
         }
         patch.complete();
     }

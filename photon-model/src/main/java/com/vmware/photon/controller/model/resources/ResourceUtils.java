@@ -25,7 +25,12 @@ public class ResourceUtils {
      * This method handles merging of state for patch requests. It first checks to see if the
      * patch body is for updating collections. If not it invokes the mergeWithState() method.
      * Finally, users can specify a custom callback method to perform service specific merge
-     * operations
+     * operations.
+     *
+     * <p>If no changes are made to the current state, a response code {@code NOT_MODIFIED} is
+     * returned with no body. If changes are made, the response body contains the full updated
+     * state.
+     *
      * @param op Input PATCH operation
      * @param currentState The current state of the service
      * @param description The service description
@@ -49,6 +54,8 @@ public class ResourceUtils {
             }
             if (!hasStateChanged) {
                 op.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+            } else {
+                op.setBody(currentState);
             }
             op.complete();
             return;

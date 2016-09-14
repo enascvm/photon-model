@@ -42,6 +42,7 @@ import org.junit.runners.model.RunnerBuilder;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState.ResourcePoolProperty;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.UriUtils;
@@ -276,6 +277,40 @@ public class ResourcePoolServiceTest extends Suite {
             assertThat(newState.name, is(patchState.name));
             assertEquals(newState.tenantLinks, patchState.tenantLinks);
             assertEquals(newState.groupLinks, patchState.groupLinks);
+            assertNotNull(newState.query);
+        }
+
+        @Test
+        public void testPatchResponseBody() throws Throwable {
+            ResourcePoolService.ResourcePoolState startState = createResourcePoolService();
+
+            ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
+            patchState.name = UUID.randomUUID().toString();
+            ResourcePoolService.ResourcePoolState returnedState = patchServiceSynchronously(
+                    startState.documentSelfLink, patchState,
+                    ResourcePoolService.ResourcePoolState.class);
+
+            assertThat(returnedState.name, is(patchState.name));
+
+            // test full state is returned
+            assertNotNull(returnedState.query);
+        }
+
+        @Test
+        public void testPatchResponseBodyNoChange() throws Throwable {
+            ResourcePoolService.ResourcePoolState startState = createResourcePoolService();
+
+            ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
+            patchState.name = startState.name;
+            Operation patchOp = Operation
+                    .createPatch(UriUtils.buildUri(this.host, startState.documentSelfLink))
+                    .setBody(patchState);
+            Operation returnedOp = sendOperationSynchronously(patchOp);
+
+            assertThat(returnedOp.getStatusCode(), is(Operation.STATUS_CODE_NOT_MODIFIED));
+
+            // test full state is not returned (the original patch state is returned)
+            assertNull(returnedOp.getBody(ResourcePoolService.ResourcePoolState.class).query);
         }
 
         @Test

@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.helpers;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -25,7 +26,6 @@ import org.junit.Before;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService;
-
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -127,6 +127,29 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
         this.host.testWait(ctx);
     }
 
+    public <T> T patchServiceSynchronously(
+            String serviceUri, T patchBody, Class<T> type) throws Throwable {
+        final List<T> responseObj = Arrays.asList((T)null);
+        TestContext ctx = this.host.testCreate(1);
+        Operation patchOperation = Operation
+                .createPatch(UriUtils.buildUri(this.host, serviceUri))
+                .setBody(patchBody)
+                .setCompletion(
+                        (operation, throwable) -> {
+                            if (throwable != null) {
+                                ctx.failIteration(throwable);
+                            } else {
+                                responseObj.set(0, operation.getBody(type));
+                                ctx.completeIteration();
+                            }
+                        });
+
+        this.host.send(patchOperation);
+        this.host.testWait(ctx);
+
+        return responseObj.get(0);
+    }
+
     public <T extends ServiceDocument> void putServiceSynchronously(
             String serviceUri, T putBody) throws Throwable {
 
@@ -139,6 +162,24 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
 
         this.host.send(putOperation);
         this.host.testWait(ctx);
+    }
+
+    public Operation sendOperationSynchronously(Operation op) throws Throwable {
+        final Operation[] returnedOp = { null };
+        TestContext ctx = this.host.testCreate(1);
+        op.setCompletion(
+                (operation, throwable) -> {
+                    returnedOp[0] = operation;
+                    if (throwable != null) {
+                        ctx.failIteration(throwable);
+                    } else {
+                        ctx.completeIteration();
+                    }
+                });
+
+        this.host.send(op);
+        this.host.testWait(ctx);
+        return returnedOp[0];
     }
 
     public void testStart(int count) {

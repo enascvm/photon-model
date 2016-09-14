@@ -23,9 +23,15 @@ import java.util.HashSet;
 
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription;
+import com.vmware.xenon.common.UriUtils;
 
-public class ResourceUtilsTest {
+/**
+ * Tests for the {@link ResourceUtils} class.
+ */
+public class ResourceUtilsTest extends BaseModelTest {
 
     @Test
     public void testMergeWithNewValues() {
@@ -88,5 +94,51 @@ public class ResourceUtilsTest {
         assertEquals(Arrays.asList("tenant1", "tenant2"), current.tenantLinks);
         assertEquals(new HashSet<>(Arrays.asList("groupA", "groupB")), current.groupLinks);
         assertEquals(new HashSet<>(Arrays.asList("tag1", "tag2")), current.tagLinks);
+    }
+
+    @Test
+    public void testOperationPatchNoChanges() {
+        ResourceState current = new ResourceState();
+        current.tenantLinks = new ArrayList<>(Arrays.asList("tenant1", "tenant2"));
+        current.groupLinks = new HashSet<>(Arrays.asList("groupA", "groupB"));
+        current.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
+
+        ResourceState patch = new ResourceState();
+        Operation patchOperation = Operation
+                .createPatch(UriUtils.buildUri(this.host, "/resource"))
+                .setBody(patch);
+
+        ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
+                .buildDescription(ResourceState.class);
+
+        ResourceUtils.handlePatch(patchOperation, current, desc, ResourceState.class, null);
+
+        assertEquals(Operation.STATUS_CODE_NOT_MODIFIED, patchOperation.getStatusCode());
+    }
+
+    @Test
+    public void testOperationPatchWithChanges() {
+        ResourceState current = new ResourceState();
+        current.tenantLinks = new ArrayList<>(Arrays.asList("tenant1", "tenant2"));
+        current.groupLinks = new HashSet<>(Arrays.asList("groupA", "groupB"));
+        current.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
+
+        ResourceState patch = new ResourceState();
+        patch.tagLinks = new HashSet<>(Arrays.asList("tag3"));
+        Operation patchOperation = Operation
+                .createPatch(UriUtils.buildUri(this.host, "/resource"))
+                .setBody(patch);
+
+        ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
+                .buildDescription(ResourceState.class);
+
+        ResourceUtils.handlePatch(patchOperation, current, desc, ResourceState.class, null);
+
+        assertTrue(patchOperation.hasBody());
+        assertEquals(Operation.STATUS_CODE_OK, patchOperation.getStatusCode());
+        ResourceState returnedState = patchOperation.getBody(ResourceState.class);
+        assertEquals(current.tenantLinks, returnedState.tenantLinks);
+        assertEquals(current.groupLinks, returnedState.groupLinks);
+        assertEquals(current.tagLinks, returnedState.tagLinks);
     }
 }
