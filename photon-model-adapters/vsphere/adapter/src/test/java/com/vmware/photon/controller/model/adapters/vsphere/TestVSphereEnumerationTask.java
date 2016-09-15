@@ -28,6 +28,7 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -64,6 +65,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         snapshotFactoryState("refresh", ResourcePoolService.class);
         snapshotFactoryState("refresh", StorageDescriptionService.class);
         snapshotFactoryState("refresh", NetworkService.class);
+        snapshotFactoryState("refresh", TagService.class);
 
         // do a second refresh to test update path
         doRefresh();

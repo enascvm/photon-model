@@ -190,7 +190,7 @@ public class BaseVSphereAdapterTest {
     }
 
     protected void deleteVmAndWait(ComputeState vm) throws Throwable {
-        // now delete the clone
+        // now logout the clone
         ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
         deletionState.isMockRequest = isMock();
         QuerySpecification resourceQuerySpec = new QuerySpecification();

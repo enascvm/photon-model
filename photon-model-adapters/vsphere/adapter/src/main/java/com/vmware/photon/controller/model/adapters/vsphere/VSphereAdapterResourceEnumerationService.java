@@ -15,10 +15,14 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT;
 
+import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -29,13 +33,21 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
+
+import org.codehaus.jackson.node.ObjectNode;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.adapters.vsphere.tagging.TagCache;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
+import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
+import com.vmware.photon.controller.model.adapters.vsphere.vapi.TaggingClient;
+import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -47,10 +59,15 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.TagFactoryService;
+import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.UpdateSet;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
@@ -83,12 +100,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      */
     private final ExecutorService enumerationThreadPool;
 
+    private final TagCache tagCache;
+
     public VSphereAdapterResourceEnumerationService() {
         this.enumerationThreadPool = new ThreadPoolExecutor(MAX_CONCURRENT_ENUM_PROCESSES,
                 MAX_CONCURRENT_ENUM_PROCESSES,
                 0L, TimeUnit.MILLISECONDS,
                 new SynchronousQueue<>(),
                 new AbortPolicy());
+
+        this.tagCache = new TagCache();
     }
 
     @Override
@@ -264,7 +285,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
-                processFoundObjects(request, page, parent);
+                processFoundObjects(request, page, parent, connection);
             }
         } catch (Exception e) {
             String msg = "Error processing PropertyCollector results";
@@ -276,25 +297,42 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     /**
-     * @see #processFoundCluster(ComputeEnumerateResourceRequest, ComputeResourceOverlay)
+     * @see #processFoundCluster(ComputeEnumerateResourceRequest, ComputeResourceOverlay, VapiConnection)
      * @param request
      * @param objects
      * @param parent
+     * @param connection
      */
     private void processFoundObjects(ComputeEnumerateResourceRequest request,
-            List<ObjectContent> objects, ComputeStateWithDescription parent) {
+            List<ObjectContent> objects, ComputeStateWithDescription parent,
+            Connection connection) {
+
+        VapiConnection endpoint = new VapiConnection(getVapiUri(connection.getURI()));
+        endpoint.setUsername(connection.getUsername());
+        endpoint.setPassword(connection.getPassword());
+
+        // TODO managed truststore globally
+        endpoint.setClient(VapiConnection.newUnsecureClient());
+
+        try {
+            endpoint.login();
+        } catch (IOException | RpcException e) {
+            logInfo("Cannot login into vAPI endpoint");
+        }
+
         for (ObjectContent cont : objects) {
             if (VimUtils.isVirtualMachine(cont.getObj())) {
                 VmOverlay vm = new VmOverlay(cont);
-                processFoundVm(request, vm, parent);
+                processFoundVm(request, vm, parent, endpoint);
             } else if (VimUtils.isResourcePool(cont.getObj())) {
-                logInfo("Ignoring ResourcePool %s", cont.getObj());
+                logInfo("Ignoring ResourcePool %s",
+                        VimUtils.convertMoRefToString(cont.getObj()));
             } else if (VimUtils.isHost(cont.getObj())) {
                 HostSystemOverlay hs = new HostSystemOverlay(cont);
-                processFoundHostSystem(request, hs);
+                processFoundHostSystem(request, hs, endpoint);
             } else if (VimUtils.isComputeResource(cont.getObj())) {
                 ComputeResourceOverlay cr = new ComputeResourceOverlay(cont);
-                processFoundCluster(request, cr);
+                processFoundCluster(request, cr, endpoint);
             } else if (VimUtils.isDatastore(cont.getObj())) {
                 DatastoreOverlay ds = new DatastoreOverlay(cont);
                 processFoundDatastore(request, ds, parent.description.regionId);
@@ -303,6 +341,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 processFoundNetwork(request, net, parent);
             }
         }
+    }
+
+    private URI getVapiUri(URI uri) {
+        //TODO use lookup service
+        return URI.create(uri.toString().replace("/sdk", "/api"));
     }
 
     private void processFoundNetwork(ComputeEnumerateResourceRequest request, NetworkOverlay net,
@@ -465,30 +508,32 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * Either creates a new Compute or update an already existing one. Existence is checked by
      * querying for a compute with id equals to moref value of a cluster whose parent is the Compute
      * from the request.
-     *
-     * @param request
+     *  @param request
      * @param cr
+     * @param endpoint
      */
     private void processFoundCluster(ComputeEnumerateResourceRequest request,
-            ComputeResourceOverlay cr) {
+            ComputeResourceOverlay cr, VapiConnection endpoint) {
         QueryTask task = queryForCluster(request.resourceLink(),
                 cr.getId().getValue());
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewCluster(request, cr);
+                createNewCluster(request, cr, endpoint);
             } else {
                 ComputeState oldDocument = Utils
                         .fromJson(result.documents.values().iterator().next(), ComputeState.class);
-                updateCluster(oldDocument, request, cr);
+                updateCluster(oldDocument, request, cr, endpoint);
             }
         });
     }
 
     private void updateCluster(ComputeState oldDocument,
-            ComputeEnumerateResourceRequest request, ComputeResourceOverlay cr) {
+            ComputeEnumerateResourceRequest request, ComputeResourceOverlay cr,
+            VapiConnection endpoint) {
         ComputeState state = makeClusterFromResults(request, cr);
         state.documentSelfLink = oldDocument.documentSelfLink;
+        populateTags(cr, endpoint, state);
 
         logInfo("Syncing ComputeResource %s", oldDocument.documentSelfLink);
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
@@ -524,7 +569,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void createNewCluster(ComputeEnumerateResourceRequest request,
-            ComputeResourceOverlay cr) {
+            ComputeResourceOverlay cr, VapiConnection endpoint) {
         ComputeDescription desc = makeDescriptionForCluster(request, cr);
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(desc)
@@ -532,11 +577,90 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         ComputeState state = makeClusterFromResults(request, cr);
         state.descriptionLink = desc.documentSelfLink;
+        populateTags(cr, endpoint, state);
 
         logInfo("Found new ComputeResource %s", cr.getId().getValue());
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .sendWith(this);
+    }
+
+    /**
+     * After the tags for the ref are retrieved from the endpoint they are posted to the tag service
+     * and the selfLinks are collected ready to be used in a {@link ComputeState#tagLinks}.
+     * @param endpoint
+     * @param ref
+     * @return
+     */
+    private Set<String> retrieveTagLinksAndCreateTagsAsync(VapiConnection endpoint,
+            ManagedObjectReference ref) {
+        List<TagState> tags = null;
+        try {
+            tags = retrieveAttachedTags(endpoint, ref);
+        } catch (IOException | RpcException e) {
+
+        }
+
+        if (tags == null || tags.isEmpty()) {
+            return new HashSet<>();
+        }
+
+        OperationJoin.create(
+                tags.stream()
+                        .map(s -> Operation
+                                .createPost(UriUtils.buildFactoryUri(getHost(), TagService.class))
+                                .setReferer(getUri())
+                                .setBody(s)))
+                .sendWith(this);
+
+        return tags.stream().map(s -> s.documentSelfLink).collect(Collectors.toSet());
+    }
+
+    /**
+     * Retreives all tags for a MoRef from an endpoint.
+     * @param endpoint
+     * @param ref
+     * @return empty list if no tags found, never null
+     */
+    private List<TagState> retrieveAttachedTags(VapiConnection endpoint,
+            ManagedObjectReference ref) throws IOException, RpcException {
+        TaggingClient taggingClient = endpoint.newTaggingClient();
+        List<String> tagIds = taggingClient.getAttachedTags(ref);
+
+        List<TagState> res = new ArrayList<>();
+        for (String id : tagIds) {
+            TagState state = this.tagCache.get(id, newTagRetriever(taggingClient));
+            if (state != null) {
+                res.add(state);
+            }
+        }
+
+        return res;
+    }
+
+    /**
+     * Builds a function to retrieve tags given and endpoint.
+     * @param client
+     * @return
+     */
+    private Function<String, TagState> newTagRetriever(TaggingClient client) {
+        return (tagId) -> {
+            try {
+                ObjectNode tagModel = client.getTagModel(tagId);
+                if (tagModel == null) {
+                    return null;
+                }
+
+                TagState res = new TagState();
+                res.value = tagModel.get("name").asText();
+                res.key = client.getCategoryName(tagModel.get("category_id").asText());
+
+                res.documentSelfLink = TagFactoryService.generateSelfLink(res);
+                return res;
+            } catch (IOException | RpcException e) {
+                return null;
+            }
+        };
     }
 
     private ComputeState makeClusterFromResults(ComputeEnumerateResourceRequest request,
@@ -569,29 +693,30 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     /**
-     * @see #processFoundCluster(ComputeEnumerateResourceRequest, ComputeResourceOverlay)
+     * @see #processFoundCluster(ComputeEnumerateResourceRequest, ComputeResourceOverlay, VapiConnection)
      * @param request
      * @param hs
      */
     private void processFoundHostSystem(ComputeEnumerateResourceRequest request,
-            HostSystemOverlay hs) {
+            HostSystemOverlay hs, VapiConnection endpoint) {
         QueryTask task = queryForHostSystem(request.resourceLink(),
                 hs.getHardwareUuid());
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewHostSystem(request, hs);
+                createNewHostSystem(request, hs, endpoint);
             } else {
                 ComputeState oldDocument = Utils
                         .fromJson(result.documents.values().iterator().next(), ComputeState.class);
-                updateHostSystem(oldDocument, request, hs);
+                updateHostSystem(oldDocument, request, hs, endpoint);
             }
         });
     }
 
     private void updateHostSystem(ComputeState oldDocument, ComputeEnumerateResourceRequest request,
-            HostSystemOverlay hs) {
+            HostSystemOverlay hs, VapiConnection endpoint) {
         ComputeState state = makeHostSystemFromResults(request, hs);
         state.documentSelfLink = oldDocument.documentSelfLink;
+        populateTags(hs, endpoint, state);
 
         logInfo("Syncing HostSystem %s", oldDocument.documentSelfLink);
         Operation.createPatch(UriUtils.buildUri(getHost(), state.documentSelfLink))
@@ -606,7 +731,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void createNewHostSystem(ComputeEnumerateResourceRequest request,
-            HostSystemOverlay hs) {
+            HostSystemOverlay hs, VapiConnection endpoint) {
 
         ComputeDescription desc = makeDescriptionForHost(request, hs);
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
@@ -615,11 +740,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         ComputeState state = makeHostSystemFromResults(request, hs);
         state.descriptionLink = desc.documentSelfLink;
+        populateTags(hs, endpoint, state);
 
         logInfo("Found new HostSystem %s", hs.getName());
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .sendWith(this);
+    }
+
+    private void populateTags(AbstractOverlay obj, VapiConnection endpoint, ComputeState state) {
+        state.tagLinks = retrieveTagLinksAndCreateTagsAsync(endpoint, obj.getId());
     }
 
     private ComputeDescription makeDescriptionForHost(ComputeEnumerateResourceRequest request,
@@ -658,30 +788,32 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     /**
-     * @see #processFoundCluster(ComputeEnumerateResourceRequest, ComputeResourceOverlay)
+     * @see #processFoundCluster(ComputeEnumerateResourceRequest, ComputeResourceOverlay, VapiConnection)
      * @param request
      * @param vm
      * @param parent
+     * @param endpoint
      */
     private void processFoundVm(ComputeEnumerateResourceRequest request, VmOverlay vm,
-            ComputeStateWithDescription parent) {
+            ComputeStateWithDescription parent, VapiConnection endpoint) {
         QueryTask task = queryForVm(request.resourceLink(), vm.getInstanceUuid());
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewVm(request, vm, parent);
+                createNewVm(request, vm, parent, endpoint);
             } else {
                 ComputeState oldDocument = Utils
                         .fromJson(result.documents.values().iterator().next(),
                                 ComputeState.class);
-                updateVm(oldDocument, request, vm, parent);
+                updateVm(oldDocument, request, vm, parent, endpoint);
             }
         });
     }
 
     private void updateVm(ComputeState oldDocument, ComputeEnumerateResourceRequest request,
-            VmOverlay vm, ComputeStateWithDescription parent) {
+            VmOverlay vm, ComputeStateWithDescription parent, VapiConnection endpoint) {
         ComputeState state = makeVmFromResults(request, vm);
         state.documentSelfLink = oldDocument.documentSelfLink;
+        populateTags(vm, endpoint, state);
 
         logInfo("Syncing VM %s", state.documentSelfLink);
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
@@ -696,7 +828,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void createNewVm(ComputeEnumerateResourceRequest request, VmOverlay vm,
-            ComputeStateWithDescription parent) {
+            ComputeStateWithDescription parent, VapiConnection endpoint) {
         ComputeDescription desc = makeDescriptionForVm(request, vm, parent);
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(desc)
@@ -704,6 +836,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         ComputeState state = makeVmFromResults(request, vm);
         state.descriptionLink = desc.documentSelfLink;
+        populateTags(vm, endpoint, state);
 
         logInfo("Found new VM %s", vm.getInstanceUuid());
         Operation.createPost(this, ComputeService.FACTORY_LINK)

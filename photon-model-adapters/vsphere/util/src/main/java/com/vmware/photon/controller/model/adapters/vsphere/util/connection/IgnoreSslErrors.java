@@ -28,7 +28,7 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import javax.xml.ws.BindingProvider;
 
-class IgnoreSslErrors {
+public class IgnoreSslErrors {
     /**
      * com.sun.xml.internal.ws.developer.JAXWSProperties
      */
@@ -40,20 +40,24 @@ class IgnoreSslErrors {
     public static void ignoreErrors(BindingProvider bp) {
         Map<String, Object> requestContext = bp.getRequestContext();
 
-        requestContext.put(SSL_SOCKET_FACTORY, getTrustingSSLSocketFactory());
-        requestContext.put(HOSTNAME_VERIFIER, new NonVerifyingHostnameVerifier());
+        requestContext.put(SSL_SOCKET_FACTORY, getInsecureSSLSocketFactory());
+        requestContext.put(HOSTNAME_VERIFIER, newNonVerifyingHostnameVerifier());
     }
 
-    private static SSLSocketFactory getTrustingSSLSocketFactory() {
+    public static HostnameVerifier newNonVerifyingHostnameVerifier() {
+        return new NonVerifyingHostnameVerifier();
+    }
+
+    private static SSLSocketFactory getInsecureSSLSocketFactory() {
         // harmless race
         SSLSocketFactory factory = socketFactory;
         if (factory == null) {
-            factory = socketFactory = createSSLSocketFactory("TLS");
+            factory = socketFactory = newInsecureSslContext("TLS").getSocketFactory();
         }
         return factory;
     }
 
-    private static SSLSocketFactory createSSLSocketFactory(String protocol) {
+    public static SSLContext newInsecureSslContext(String protocol) {
         TrustManager[] trustManagers = new TrustManager[] {
                 new AllTrustingTrustManager()
         };
@@ -61,7 +65,7 @@ class IgnoreSslErrors {
         try {
             SSLContext sslContext = SSLContext.getInstance(protocol);
             sslContext.init(new KeyManager[0], trustManagers, new SecureRandom());
-            return sslContext.getSocketFactory();
+            return sslContext;
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }

@@ -97,7 +97,7 @@ public class TagService extends StatefulService {
         ServiceDocument td = super.getDocumentTemplate();
         TagState template = (TagState) td;
         template.key = "key-1";
-        template.key = "value-1";
+        template.value = "value-1";
         return template;
     }
 
