@@ -14,10 +14,13 @@
 package com.vmware.photon.controller.model.resources;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
  * Describes a resource group instance. A resource group is a grouping
@@ -32,6 +35,10 @@ public class ResourceGroupService extends StatefulService {
      * {@link com.vmware.photon.controller.model.resources.ResourceGroupService}.
      */
     public static class ResourceGroupState extends ResourceState {
+
+        @Documentation(description = "Query used to define resource group membership")
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Query query;
     }
 
     public ResourceGroupService() {

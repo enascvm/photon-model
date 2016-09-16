@@ -20,12 +20,10 @@ import java.util.concurrent.TimeUnit;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
-
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
-import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -228,12 +226,5 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             state.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                     + DEFAULT_TIMEOUT_MICROS;
         }
-    }
-
-    @Override
-    public ServiceDocument getDocumentTemplate() {
-        ServiceDocument td = super.getDocumentTemplate();
-        ServiceDocumentDescription.expandTenantLinks(td.documentDescription);
-        return td;
     }
 }

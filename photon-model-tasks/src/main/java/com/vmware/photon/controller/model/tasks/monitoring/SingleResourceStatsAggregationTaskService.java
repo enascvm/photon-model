@@ -521,6 +521,11 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
         } else {
             inputBin.avg = ((inputBin.avg * inputBin.count) + value) / (inputBin.count + 1);
         }
+        if (inputBin.sum == null) {
+            inputBin.sum = value;
+        } else {
+            inputBin.sum += value;
+        }
         inputBin.count++;
         return inputBin;
     }

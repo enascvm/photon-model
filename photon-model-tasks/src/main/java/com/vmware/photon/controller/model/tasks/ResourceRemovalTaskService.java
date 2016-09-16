@@ -22,10 +22,9 @@ import java.util.concurrent.TimeUnit;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
-import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -451,12 +450,5 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
             state.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                     + DEFAULT_TIMEOUT_MICROS;
         }
-    }
-
-    @Override
-    public ServiceDocument getDocumentTemplate() {
-        ServiceDocument td = super.getDocumentTemplate();
-        ServiceDocumentDescription.expandTenantLinks(td.documentDescription);
-        return td;
     }
 }

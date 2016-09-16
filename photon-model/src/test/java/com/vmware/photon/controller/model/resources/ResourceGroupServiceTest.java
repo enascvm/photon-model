@@ -34,6 +34,7 @@ import org.junit.runners.model.RunnerBuilder;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 
 /**
@@ -148,6 +149,7 @@ public class ResourceGroupServiceTest extends Suite {
             patchState.customProperties.put("key2", "value2");
             patchState.tenantLinks = new ArrayList<String>();
             patchState.tenantLinks.add("tenant1");
+            patchState.query = Query.Builder.create().build();
             patchServiceSynchronously(startState.documentSelfLink,
                     patchState);
 
@@ -157,6 +159,7 @@ public class ResourceGroupServiceTest extends Suite {
             assertThat(newState.name, is(patchState.name));
             assertEquals(newState.tenantLinks, patchState.tenantLinks);
             assertEquals(newState.customProperties.size(), 2);
+            assertNotNull(newState.query);
         }
     }
 }

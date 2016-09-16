@@ -21,9 +21,8 @@ import java.util.concurrent.TimeUnit;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
 import com.vmware.photon.controller.model.resources.SnapshotService;
+
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -284,12 +283,5 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
     private void failTask(Throwable e) {
         logWarning("Self patching to FAILED, task failure: %s", e.toString());
         sendSelfPatch(TaskState.TaskStage.FAILED, e);
-    }
-
-    @Override
-    public ServiceDocument getDocumentTemplate() {
-        ServiceDocument td = super.getDocumentTemplate();
-        ServiceDocumentDescription.expandTenantLinks(td.documentDescription);
-        return td;
     }
 }

@@ -27,10 +27,9 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.Inst
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.BootDevice;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
-import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -521,10 +520,4 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
         }
     }
 
-    @Override
-    public ServiceDocument getDocumentTemplate() {
-        ServiceDocument td = super.getDocumentTemplate();
-        ServiceDocumentDescription.expandTenantLinks(td.documentDescription);
-        return td;
-    }
 }

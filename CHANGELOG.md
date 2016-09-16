@@ -2,6 +2,8 @@
 
 ## 0.4.6-SNAPSHOT
 
+* Support a query to define resource group membership
+
 ## 0.4.5
 
 * Support a query to resolve resource pool membership

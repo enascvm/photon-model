@@ -19,6 +19,7 @@ import java.util.Map;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
@@ -149,9 +150,6 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                 .get(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES);
         pdCustomProperties.indexingOptions = EnumSet
                 .of(ServiceDocumentDescription.PropertyIndexingOption.EXPAND);
-
-        ServiceDocumentDescription.expandTenantLinks(td.documentDescription);
-
         ScheduledTaskState template = (ScheduledTaskState) td;
         return template;
     }

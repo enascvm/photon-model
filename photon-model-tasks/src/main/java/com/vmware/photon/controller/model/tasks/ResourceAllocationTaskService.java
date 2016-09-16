@@ -30,10 +30,10 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.ResourceDescriptionService;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -933,12 +933,5 @@ public class ResourceAllocationTaskService
             state.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                     + DEFAULT_TIMEOUT_MICROS;
         }
-    }
-
-    @Override
-    public ServiceDocument getDocumentTemplate() {
-        ServiceDocument td = super.getDocumentTemplate();
-        ServiceDocumentDescription.expandTenantLinks(td.documentDescription);
-        return td;
     }
 }
