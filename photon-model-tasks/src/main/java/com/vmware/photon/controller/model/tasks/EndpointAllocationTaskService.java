@@ -190,7 +190,7 @@ public class EndpointAllocationTaskService
             break;
         case CREATE_UPDATE_ENDPOINT:
             if (currentState.endpointState.documentSelfLink != null) {
-                updateEndpoint(currentState);
+                updateOrCreateEndpoint(currentState);
             } else {
                 createEndpoint(currentState);
             }
@@ -356,7 +356,7 @@ public class EndpointAllocationTaskService
                 }).sendWith(this);
     }
 
-    private void updateEndpoint(EndpointAllocationTaskState currentState) {
+    private void updateOrCreateEndpoint(EndpointAllocationTaskState currentState) {
 
         EndpointState es = currentState.endpointState;
 
@@ -364,7 +364,14 @@ public class EndpointAllocationTaskService
                 .setBody(es)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        sendFailurePatch(this, currentState, e);
+                        if (o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
+                            logFine("Endpoint %s not found, creating new.", es.documentSelfLink);
+                            createEndpoint(currentState);
+                        } else {
+                            logSevere("Failed to update endpoint %s : %s",
+                                    es.documentSelfLink, e.getMessage());
+                            sendFailurePatch(this, currentState, e);
+                        }
                         return;
                     }
                     EndpointState endpoint = o.getBody(EndpointState.class);

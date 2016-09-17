@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.tasks;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
@@ -33,11 +34,12 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
-
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -153,6 +155,42 @@ public class EndpointAllocationTaskServiceTest extends Suite {
 
             assertThat(completeState.taskInfo.stage,
                     is(TaskState.TaskStage.FINISHED));
+        }
+
+        @Test
+        public void testShouldCreateNewEndpointWithPredefinedSelfLink() throws Throwable {
+            EndpointState endpoint = createEndpointState();
+            endpoint.documentSelfLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
+                    "test-endpoint");
+
+            // Check endpoint doesn't exists
+            this.host.sendAndWaitExpectFailure(
+                    Operation.createGet(UriUtils.buildUri(this.host, endpoint.documentSelfLink)));
+
+            EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
+            startState.adapterReference = UriUtils.buildUri(getHost(),
+                    MockSuccessEndpointAdapter.SELF_LINK);
+
+            EndpointAllocationTaskState returnState = this
+                    .postServiceSynchronously(
+                            EndpointAllocationTaskService.FACTORY_LINK,
+                            startState, EndpointAllocationTaskState.class);
+
+            EndpointAllocationTaskState completeState = this
+                    .waitForServiceState(
+                            EndpointAllocationTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                    .ordinal());
+
+            assertThat(completeState.taskInfo.stage,
+                    is(TaskState.TaskStage.FINISHED));
+
+            assertEquals(endpoint.documentSelfLink, completeState.endpointState.documentSelfLink);
+
+            // Check endpoint was created
+            this.host.sendAndWaitExpectSuccess(
+                    Operation.createGet(UriUtils.buildUri(this.host, endpoint.documentSelfLink)));
         }
 
         @Test
