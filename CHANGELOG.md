@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.4.7-SNAPSHOT
+
+
 ## 0.4.6
 
 * Support a query to define resource group membership
