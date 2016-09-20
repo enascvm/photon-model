@@ -249,8 +249,7 @@ public class AWSInstanceService extends StatelessService {
             aws.stage = next;
             handleAllocation(aws);
         };
-        URI parentURI = UriUtils
-                .buildExpandLinksQueryUri(UriUtils.buildUri(this.getHost(), aws.child.parentLink));
+        URI parentURI = ComputeStateWithDescription.buildUri(UriUtils.buildUri(getHost(), aws.child.parentLink));
         AdapterUtils.getServiceState(this, parentURI, onSuccess, getFailureConsumer(aws));
     }
 

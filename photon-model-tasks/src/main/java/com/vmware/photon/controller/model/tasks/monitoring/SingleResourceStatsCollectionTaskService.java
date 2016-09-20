@@ -209,8 +209,7 @@ public class SingleResourceStatsCollectionTaskService
 
     private void getDescriptions(Operation op,
             SingleResourceStatsCollectionTaskState currentState) {
-        URI computeDescUri = UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(getHost(),
-                currentState.computeLink));
+        URI computeDescUri = ComputeStateWithDescription.buildUri(UriUtils.buildUri(getHost(), currentState.computeLink));
         sendRequest(Operation
                 .createGet(computeDescUri)
                 .setCompletion(

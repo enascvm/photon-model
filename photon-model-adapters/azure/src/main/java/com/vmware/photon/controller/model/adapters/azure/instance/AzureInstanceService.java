@@ -90,7 +90,6 @@ import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
-
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -108,6 +107,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+
 import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -1104,8 +1104,7 @@ public class AzureInstanceService extends StatelessService {
             ctx.stage = next;
             handleAllocation(ctx);
         };
-        URI parentURI = UriUtils
-                .buildExpandLinksQueryUri(UriUtils.buildUri(this.getHost(), ctx.child.parentLink));
+        URI parentURI = ComputeStateWithDescription.buildUri(UriUtils.buildUri(getHost(), ctx.child.parentLink));
         AdapterUtils.getServiceState(this, parentURI, onSuccess, getFailureConsumer(ctx));
     }
 

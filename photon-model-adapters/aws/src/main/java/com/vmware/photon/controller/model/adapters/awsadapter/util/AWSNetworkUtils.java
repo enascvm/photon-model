@@ -87,7 +87,6 @@ public class AWSNetworkUtils {
         }
         NetworkState networkState = new NetworkState();
         networkState.id = vpc.getVpcId();
-        networkState.documentSelfLink = networkState.id;
         networkState.name = vpc.getVpcId();
         networkState.subnetCIDR = vpc.getCidrBlock();
         networkState.regionId = regionId;
