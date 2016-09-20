@@ -460,13 +460,9 @@ public class SingleResourceStatsCollectionTaskService
     }
 
     /**
-     * Splits the passed in URI to extract the adapter link from the complete well formed URI with the host link.
+     * Returns the path from the patchUri.
      */
     private String getAdapterLinkFromURI(URI patchUri) {
-        String[] split = patchUri.toString()
-                .split(getHost().getUri().toString());
-        String statsAdapterLink = split[1];
-        return statsAdapterLink;
+        return patchUri.getPath();
     }
-
 }
