@@ -1,6 +1,7 @@
 # CHANGELOG
 
-## 0.4.7-SNAPSHOT
+## 0.4.7
+
 * The stats URI for computes available at /compute/stats
 no longer have the raw metrics (CPU utilization, memory) etc
 available at this endpoint. The only in-memory metric available 
