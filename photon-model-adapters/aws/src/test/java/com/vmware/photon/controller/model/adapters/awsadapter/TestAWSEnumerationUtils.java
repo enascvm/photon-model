@@ -15,16 +15,19 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getInstanceTypeFromComputeDescriptionKey;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getKeyForComputeDescriptionFromInstance;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRegionIdFromComputeDescriptionKey;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Placement;
 
 import org.junit.Test;
+
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
 
 public class TestAWSEnumerationUtils {
 
@@ -33,11 +36,14 @@ public class TestAWSEnumerationUtils {
     public static final String AWS_ZONE_ID = "us-east-1b";
     public static final String AWS_VPC_ID = "vpc-4567";
     public static final String AWS_INSTANCE_TYPE = "t2.micro";
-    public static final String AWS_COMPUTE_DESCRIPTION_KEY = AWS_REGION_ID + TILDA
-            + AWS_INSTANCE_TYPE;
+    public static final InstanceDescKey AWS_COMPUTE_DESCRIPTION_KEY = InstanceDescKey
+            .build(AWS_REGION_ID, AWS_ZONE_ID, AWS_INSTANCE_TYPE);
 
     @Test
     public void testGetComputeDescriptionKeyFromAWSInstance() throws Throwable {
+        Map<String, ZoneData> zones = new HashMap<>();
+        zones.put(AWS_ZONE_ID, ZoneData.build(AWS_REGION_ID, AWS_ZONE_ID, ""));
+
         Instance awsInstance = new Instance();
         awsInstance.setInstanceId(AWS_INSTANCE_ID);
         Placement placement = new Placement();
@@ -47,18 +53,9 @@ public class TestAWSEnumerationUtils {
         awsInstance.setInstanceType(AWS_INSTANCE_TYPE);
         awsInstance.setVpcId(AWS_VPC_ID);
         assertEquals(AWS_REGION_ID, regionId);
-        String computeDescriptionKey = getKeyForComputeDescriptionFromInstance(awsInstance);
+        InstanceDescKey computeDescriptionKey = getKeyForComputeDescriptionFromInstance(awsInstance,
+                zones);
         assertEquals(AWS_COMPUTE_DESCRIPTION_KEY, computeDescriptionKey);
-    }
-
-    @Test
-    public void testGetIndividualAttributesFromComputeDescriptionKey() throws Throwable {
-        String instanceType = getInstanceTypeFromComputeDescriptionKey(AWS_COMPUTE_DESCRIPTION_KEY);
-        assertEquals(AWS_INSTANCE_TYPE, instanceType);
-
-        String regionID = getRegionIdFromComputeDescriptionKey(AWS_COMPUTE_DESCRIPTION_KEY);
-        assertEquals(AWS_REGION_ID, regionID);
-
     }
 
 }

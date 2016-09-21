@@ -15,14 +15,22 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.AvailabilityZone;
+import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
+import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.Filter;
@@ -38,14 +46,22 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSCom
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService.AWSEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumeration;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.NetworkEnumerationResponse;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -66,15 +82,24 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     private AWSClientManager clientManager;
 
     public static enum AWSEnumerationCreationStages {
-        CLIENT, ENUMERATE, ERROR
+        CLIENT,
+        ENUMERATE,
+        ERROR
     }
 
     public static enum AWSComputeEnumerationCreationSubStage {
-        QUERY_LOCAL_RESOURCES, COMPARE, CREATE_COMPUTE_DESCRIPTIONS, CREATE_COMPUTE_STATES, GET_NEXT_PAGE, ENUMERATION_STOP
+        QUERY_LOCAL_RESOURCES,
+        COMPARE,
+        CREATE_COMPUTE_DESCRIPTIONS,
+        CREATE_COMPUTE_STATES,
+        GET_NEXT_PAGE,
+        ENUMERATION_STOP
     }
 
     private static enum AWSEnumerationRefreshSubStage {
-        VCP, COMPUTE
+        ZONES,
+        VCP,
+        COMPUTE
     }
 
     public AWSEnumerationAndCreationAdapterService() {
@@ -114,6 +139,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         public Operation awsAdapterOperation;
         public Map<String, String> vpcs;
         public Map<String, String> subnets;
+        public Map<String, ZoneData> zones;
 
         public EnumerationCreationContext(AWSEnumerationRequest request, Operation op) {
             this.awsAdapterOperation = op;
@@ -125,8 +151,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             this.computeStatesToBeUpdated = new ConcurrentSkipListMap<String, ComputeState>();
             this.remoteAWSInstances = new ConcurrentSkipListMap<String, Instance>();
             this.instancesToBeCreated = new ArrayList<Instance>();
+            this.zones = new HashMap<>();
             this.stage = AWSEnumerationCreationStages.CLIENT;
-            this.refreshSubStage = AWSEnumerationRefreshSubStage.VCP;
+            this.refreshSubStage = AWSEnumerationRefreshSubStage.ZONES;
             this.subStage = AWSComputeEnumerationCreationSubStage.QUERY_LOCAL_RESOURCES;
             this.pageNo = 1;
         }
@@ -245,6 +272,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
     private void processRefreshSubStages(EnumerationCreationContext aws) {
         switch (aws.refreshSubStage) {
+        case ZONES:
+            collectAvailabilityZones(aws, AWSEnumerationRefreshSubStage.VCP);
+            break;
         case VCP:
             refreshVPCInformation(aws, AWSEnumerationRefreshSubStage.COMPUTE);
             break;
@@ -268,6 +298,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     aws.computeEnumerationRequest.taskReference, aws.error);
             break;
         }
+
     }
 
     /**
@@ -337,6 +368,182 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                         return;
                     }
                 }));
+    }
+
+    private void collectAvailabilityZones(EnumerationCreationContext aws,
+            AWSEnumerationRefreshSubStage next) {
+        DescribeAvailabilityZonesRequest azRequest = new DescribeAvailabilityZonesRequest();
+        AWSAvailabilityZoneAsyncHandler asyncHandler = new AWSAvailabilityZoneAsyncHandler(this,
+                aws, next);
+        aws.amazonEC2Client.describeAvailabilityZonesAsync(azRequest, asyncHandler);
+    }
+
+    /**
+     * The async handler to handle the success and errors received after invoking the describe
+     * AvailabilityZones API on AWS
+     */
+    private static class AWSAvailabilityZoneAsyncHandler extends
+            AWSAsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult> {
+
+        private AWSEnumerationAndCreationAdapterService service;
+        private EnumerationCreationContext context;
+        private AWSEnumerationRefreshSubStage next;
+
+        private AWSAvailabilityZoneAsyncHandler(AWSEnumerationAndCreationAdapterService service,
+                EnumerationCreationContext context, AWSEnumerationRefreshSubStage next) {
+            super();
+            this.service = service;
+            this.context = context;
+            this.next = next;
+        }
+
+        @Override
+        public void handleSuccess(DescribeAvailabilityZonesRequest request,
+                DescribeAvailabilityZonesResult result) {
+
+            List<AvailabilityZone> zones = result.getAvailabilityZones();
+            if (zones == null || zones.isEmpty()) {
+                this.service.logInfo(
+                        "No AvailabilityZones discovered on the remote system. Nothing to be created locally");
+                this.context.refreshSubStage = this.next;
+                this.service.processRefreshSubStages(this.context);
+                return;
+            }
+
+            loadLocalResources(this.service, this.context,
+                    zones.stream().map(z -> z.getZoneName()).collect(Collectors.toList()),
+                    cm -> createMissingLocalInstances(zones, cm));
+        }
+
+        private void proceedWithRefresh() {
+            this.context.refreshSubStage = this.next;
+            this.service.processRefreshSubStages(this.context);
+        }
+
+        private void createMissingLocalInstances(List<AvailabilityZone> zones,
+                Map<String, ComputeState> cm) {
+            zones.stream()
+                    .filter(z -> cm.containsKey(z.getZoneName()))
+                    .forEach(z -> {
+                        ComputeState c = cm.get(z.getZoneName());
+                        this.context.zones.put(c.id,
+                                ZoneData.build(this.context.parentCompute.description.regionId,
+                                        c.id, c.documentSelfLink));
+                    });
+            List<Operation> descOps = zones.stream()
+                    .filter(z -> !cm.containsKey(z.getZoneName()))
+                    .map(z -> createComputeDescription(z))
+                    .map(cd -> Operation
+                            .createPost(this.service, ComputeDescriptionService.FACTORY_LINK)
+                            .setBody(cd))
+                    .collect(Collectors.toList());
+
+            if (descOps.isEmpty()) {
+                proceedWithRefresh();
+                return;
+            }
+
+            OperationJoin.create(descOps)
+                    .setCompletion((ops, exs) -> {
+                        if (exs != null) {
+                            this.service.logSevere(
+                                    "Error creating a compute descriptions for discovered AvailabilityZone: %s",
+                                    Utils.toString(exs));
+                            AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
+                                    this.context.computeEnumerationRequest.taskReference,
+                                    exs.values().iterator().next());
+                            return;
+                        }
+                        List<Operation> computeOps = ops.values().stream()
+                                .map(o -> o.getBody(ComputeDescription.class))
+                                .map(cd -> createComputeInstace(cd))
+                                .map(c -> Operation
+                                        .createPost(this.service, ComputeService.FACTORY_LINK)
+                                        .setBody(c))
+                                .collect(Collectors.toList());
+
+                        invokeComputeOps(computeOps);
+                    })
+                    .sendWith(this.service);
+        }
+
+        private void invokeComputeOps(List<Operation> computeOps) {
+            if (computeOps.isEmpty()) {
+                proceedWithRefresh();
+                return;
+            }
+
+            OperationJoin.create(computeOps)
+                    .setCompletion((ops, exs) -> {
+                        if (exs != null) {
+                            this.service.logSevere(
+                                    "Error creating a compute states for discovered AvailabilityZone: %s",
+                                    Utils.toString(exs));
+                            AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
+                                    this.context.computeEnumerationRequest.taskReference,
+                                    exs.values().iterator().next());
+                            return;
+                        }
+                        ops.values().stream()
+                                .map(o -> o.getBody(ComputeState.class))
+                                .forEach(c -> {
+                                    this.context.zones.put(c.id,
+                                            ZoneData.build(
+                                                    this.context.parentCompute.description.regionId,
+                                                    c.id, c.documentSelfLink));
+                                });
+
+                        proceedWithRefresh();
+                    })
+                    .sendWith(this.service);
+        }
+
+        private ComputeState createComputeInstace(ComputeDescription cd) {
+            ComputeService.ComputeState computeState = new ComputeService.ComputeState();
+            computeState.name = cd.name;
+            computeState.id = cd.id;
+            computeState.adapterManagementReference = this.context.parentCompute.adapterManagementReference;
+            computeState.parentLink = this.context.parentCompute.documentSelfLink;
+            computeState.resourcePoolLink = this.context.computeEnumerationRequest.resourcePoolLink;
+            computeState.descriptionLink = cd.documentSelfLink;
+
+            computeState.powerState = PowerState.ON;
+
+            computeState.customProperties = this.context.parentCompute.customProperties;
+            if (computeState.customProperties == null) {
+                computeState.customProperties = new HashMap<>();
+            }
+            computeState.customProperties.put(SOURCE_TASK_LINK,
+                    ResourceEnumerationTaskService.FACTORY_LINK);
+
+            computeState.tenantLinks = this.context.parentCompute.tenantLinks;
+            return computeState;
+        }
+
+        private ComputeDescription createComputeDescription(AvailabilityZone z) {
+            ComputeDescriptionService.ComputeDescription cd = Utils
+                    .clone(this.context.parentCompute.description);
+            cd.documentSelfLink = null;
+            cd.id = z.getZoneName();
+            cd.zoneId = z.getZoneName();
+            cd.name = z.getZoneName();
+            // Book keeping information about the creation of the compute description in the system.
+            if (cd.customProperties == null) {
+                cd.customProperties = new HashMap<String, String>();
+            }
+            cd.customProperties.put(SOURCE_TASK_LINK,
+                    ResourceEnumerationTaskService.FACTORY_LINK);
+
+            return cd;
+        }
+
+        @Override
+        protected void handleError(Exception exception) {
+            AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
+                    this.context.computeEnumerationRequest.taskReference,
+                    exception);
+        }
+
     }
 
     /**
@@ -456,52 +663,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
          * Query the local data store and retrieve all the the compute states that exist filtered by
          * the instanceIds that are received in the enumeration data from AWS.
          */
-        public void getLocalResources(AWSComputeEnumerationCreationSubStage next) {
-            // query all ComputeState resources for the cluster filtered by the received set of
-            // instance Ids
-            Query query = Query.Builder.create()
-                    .addKindFieldClause(ComputeState.class)
-                    .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
-                            this.context.computeEnumerationRequest.resourceLink())
-                    .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
-                            this.context.computeEnumerationRequest.resourcePoolLink)
-                    .build();
-
-            Query instanceIdFilterParentQuery = new Query();
-            instanceIdFilterParentQuery.occurance = Occurance.MUST_OCCUR;
-            for (String instanceId : this.context.remoteAWSInstances.keySet()) {
-                Query instanceIdFilter = new Query()
-                        .setTermPropertyName(ComputeState.FIELD_NAME_ID)
-                        .setTermMatchValue(instanceId);
-                instanceIdFilter.occurance = Query.Occurance.SHOULD_OCCUR;
-                instanceIdFilterParentQuery.addBooleanClause(instanceIdFilter);
-            }
-
-            query.addBooleanClause(instanceIdFilterParentQuery);
-
-            QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                    .setQuery(query)
-                    .addOption(QueryOption.EXPAND_CONTENT)
-                    .addOption(QueryOption.TOP_RESULTS)
-                    .setResultLimit(this.context.remoteAWSInstances.size())
-                    .build();
-
-            QueryUtils.startQueryTask(this.service, queryTask)
-                    .whenComplete((qrt, e) -> {
-                        if (e != null) {
-                            this.service.logSevere("Failure retrieving query results: %s",
-                                    e.toString());
-                            signalErrorToEnumerationAdapter(e);
-                            return;
-                        }
-
-                        for (Object s : qrt.results.documents.values()) {
-                            ComputeState localInstance = Utils.fromJson(s, ComputeState.class);
-                            this.context.localAWSInstanceMap.put(localInstance.id, localInstance);
-                        }
-                        this.service.logInfo(
-                                "Got result of the query to get local resources. There are %d instances known to the system.",
-                                qrt.results.documentCount);
+        private void getLocalResources(AWSComputeEnumerationCreationSubStage next) {
+            loadLocalResources(this.service, this.context, this.context.remoteAWSInstances.keySet(),
+                    lcsm -> {
+                        this.context.localAWSInstanceMap.putAll(lcsm);
                         this.context.subStage = next;
                         handleReceivedEnumerationData();
                     });
@@ -515,7 +680,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         private void compareLocalStateWithEnumerationData(
                 AWSComputeEnumerationCreationSubStage next) {
             // No remote instances
-            if (this.context.remoteAWSInstances == null || this.context.remoteAWSInstances.size() == 0) {
+            if (this.context.remoteAWSInstances == null
+                    || this.context.remoteAWSInstances.size() == 0) {
                 this.service.logInfo(
                         "No resources discovered on the remote system. Nothing to be created locally");
                 // no local instances
@@ -529,7 +695,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             } else {
                 for (String key : this.context.remoteAWSInstances.keySet()) {
                     if (!this.context.localAWSInstanceMap.containsKey(key)) {
-                        this.context.instancesToBeCreated.add(this.context.remoteAWSInstances.get(key));
+                        this.context.instancesToBeCreated
+                                .add(this.context.remoteAWSInstances.get(key));
                         // A map of the local compute state id and the corresponding latest
                         // state on AWS
                     } else {
@@ -554,6 +721,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.authCredentiaslLink = this.context.parentAuth.documentSelfLink;
             cd.tenantLinks = this.context.parentCompute.tenantLinks;
             cd.parentDescription = this.context.parentCompute.description;
+            cd.regionId = this.context.parentCompute.description.regionId;
+            cd.zones = this.context.zones;
 
             this.service.sendRequest(Operation
                     .createPatch(this.service,
@@ -595,6 +764,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.regionId = this.context.parentCompute.description.regionId;
             awsComputeState.vpcs = this.context.vpcs;
             awsComputeState.subnets = this.context.subnets;
+            awsComputeState.zones = this.context.zones;
 
             this.service.sendRequest(Operation
                     .createPatch(this.service, AWSComputeStateCreationAdapterService.SELF_LINK)
@@ -652,4 +822,76 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         }
     }
 
+    /**
+     * Signals error to the AWS enumeration adapter. The adapter will in turn clean up resources and
+     * signal error to the parent task.
+     */
+    private static void signalErrorToEnumerationAdapter(Throwable t, EnumerationCreationContext aws,
+            AWSEnumerationAndCreationAdapterService service) {
+        aws.error = t;
+        aws.stage = AWSEnumerationCreationStages.ERROR;
+        service.handleEnumerationRequest(aws);
+    }
+
+    /**
+     * Query the local data store and retrieve all the the compute states that exist filtered by the
+     * instanceIds that are received in the enumeration data from AWS.
+     */
+    private static void loadLocalResources(AWSEnumerationAndCreationAdapterService service,
+            EnumerationCreationContext context, Collection<String> remoteIds,
+            Consumer<Map<String, ComputeState>> successHandler) {
+
+        // query all ComputeState resources for the cluster filtered by the received set of
+        // instance Ids
+        Query query = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
+                        context.computeEnumerationRequest.resourceLink())
+                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
+                        context.computeEnumerationRequest.resourcePoolLink)
+                .build();
+
+        Query instanceIdFilterParentQuery = new Query();
+        instanceIdFilterParentQuery.occurance = Occurance.MUST_OCCUR;
+
+        remoteIds.forEach(instanceId -> {
+            Query instanceIdFilter = new Query()
+                    .setTermPropertyName(ComputeState.FIELD_NAME_ID)
+                    .setTermMatchValue(instanceId);
+            instanceIdFilter.occurance = Query.Occurance.SHOULD_OCCUR;
+            instanceIdFilterParentQuery.addBooleanClause(instanceIdFilter);
+        });
+
+        query.addBooleanClause(instanceIdFilterParentQuery);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(remoteIds.size())
+                .build();
+
+        QueryUtils.startQueryTask(service, queryTask)
+                .whenComplete((qrt, e) -> {
+                    if (e != null) {
+                        service.logSevere("Failure retrieving query results: %s",
+                                e.toString());
+                        signalErrorToEnumerationAdapter(e, context, service);
+                        return;
+                    }
+
+                    service.logInfo(
+                            "Got result of the query to get local resources. There are %d instances known to the system.",
+                            qrt.results.documentCount);
+
+                    Map<String, ComputeState> localInstances = new HashMap<>();
+                    for (Object s : qrt.results.documents.values()) {
+                        ComputeState localInstance = Utils.fromJson(s, ComputeState.class);
+                        localInstances.put(localInstance.id, localInstance);
+                    }
+
+                    successHandler.accept(localInstances);
+                    return;
+                });
+    }
 }

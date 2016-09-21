@@ -17,15 +17,16 @@ import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYP
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.WINDOWS_PLATFORM;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.xenon.common.UriUtils.URI_PATH_CHAR;
 
+import java.net.URI;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Tag;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
@@ -44,7 +46,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
@@ -63,34 +65,21 @@ public class AWSEnumerationUtils {
      * TODO harden key as more logic is realized in the enumeration
      * service.
      */
-    public static String getKeyForComputeDescriptionFromInstance(Instance i) {
-        // Representing the compute-description as a key regionId~instanceType
-        return getRegionId(i).concat(TILDA).concat(i.getInstanceType());
-    }
+    public static InstanceDescKey getKeyForComputeDescriptionFromInstance(Instance i,
+            Map<String, ZoneData> zones) {
 
-    /**
-     * Returns the key that includes the attributes that define this compute description. This key is
-     * used to link the compute states to the correct compute descriptions.
-     */
-    public static String getKeyForComputeDescriptionFromCD(ComputeDescription computeDescription) {
-        // Representing the compute-description as a key regionId~instanceType
-        return computeDescription.regionId.concat(TILDA).concat(computeDescription.instanceType);
-    }
+        String zoneId = i.getPlacement().getAvailabilityZone();
+        String regionId = zones.get(zoneId).regionId;
 
-    /**
-     * Returns the instanceType from the compute description key which is created to look like
-     * regionId~instanceType
-     */
-    public static String getInstanceTypeFromComputeDescriptionKey(String computeDescriptionKey) {
-        return computeDescriptionKey.substring(computeDescriptionKey.indexOf(TILDA) + 1);
-
+        return InstanceDescKey.build(regionId, zoneId, i.getInstanceType());
     }
 
     /**
      * Returns the regionId from the compute description key that looks like  regionId~instanceType
      */
-    public static String getRegionIdFromComputeDescriptionKey(String computeDescriptionKey) {
-        return computeDescriptionKey.substring(0, computeDescriptionKey.indexOf(TILDA));
+    public static InstanceDescKey getKeyForComputeDescriptionFromCD(ComputeDescription cd) {
+        // Representing the compute-description as a key regionId~zone~instanceType
+        return InstanceDescKey.build(cd.regionId, cd.zoneId, cd.instanceType);
     }
 
     /**
@@ -99,11 +88,11 @@ public class AWSEnumerationUtils {
      * and put into a hashset. As a result, a representative set is created to represent all the discovered VMs.
      * @param instanceList
      */
-    public static HashSet<String> getRepresentativeListOfCDsFromInstanceList(
-            Collection<Instance> instanceList) {
-        HashSet<String> representativeCDSet = new HashSet<String>();
+    public static Set<InstanceDescKey> getRepresentativeListOfCDsFromInstanceList(
+            Collection<Instance> instanceList, Map<String, ZoneData> zones) {
+        HashSet<InstanceDescKey> representativeCDSet = new HashSet<>();
         for (Instance instance : instanceList) {
-            representativeCDSet.add(getKeyForComputeDescriptionFromInstance(instance));
+            representativeCDSet.add(getKeyForComputeDescriptionFromInstance(instance, zones));
         }
         return representativeCDSet;
     }
@@ -120,8 +109,8 @@ public class AWSEnumerationUtils {
      * compute descriptions for VMs.
      */
     public static QueryTask getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
-            Set<String> representativeComputeDescriptionSet, List<String> tenantLinks,
-            String regionId) {
+            Set<InstanceDescKey> descriptionsSet, List<String> tenantLinks,
+            StatelessService service, URI parentTaskLink, String regionId) {
         String sourceTaskName = QueryTask.QuerySpecification
                 .buildCompositeFieldName(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         SOURCE_TASK_LINK);
@@ -134,24 +123,33 @@ public class AWSEnumerationUtils {
                 .addFieldClause(sourceTaskName, ResourceEnumerationTaskService.FACTORY_LINK)
                 .build();
 
-        // Instance type should fall in one of the passed in values
-        Query instanceTypeFilterParentQuery = new Query();
-        instanceTypeFilterParentQuery.occurance = Occurance.MUST_OCCUR;
-        for (String key : representativeComputeDescriptionSet) {
-            Query instanceTypeFilter = new Query()
+        // Instance type and zone should fall in one of the passed in values
+        Query groupFilter = new Query();
+        groupFilter.occurance = Occurance.MUST_OCCUR;
+        for (InstanceDescKey key : descriptionsSet) {
+            Query itf = new Query()
                     .setTermPropertyName(ComputeDescription.FIELD_NAME_ID)
-                    .setTermMatchValue(getInstanceTypeFromComputeDescriptionKey(key));
-            instanceTypeFilter.occurance = Occurance.SHOULD_OCCUR;
-            instanceTypeFilterParentQuery.addBooleanClause(instanceTypeFilter);
+                    .setTermMatchValue(key.instanceType);
+            itf.occurance = Occurance.MUST_OCCUR;
+            Query zf = new Query()
+                    .setTermPropertyName(ComputeDescription.FIELD_NAME_ZONE_ID)
+                    .setTermMatchValue(key.zoneId);
+            zf.occurance = Occurance.MUST_OCCUR;
+
+            Query d = new Query();
+            d.occurance = Occurance.SHOULD_OCCUR;
+            d.addBooleanClause(itf);
+            d.addBooleanClause(zf);
+            groupFilter.addBooleanClause(d);
         }
 
-        query.addBooleanClause(instanceTypeFilterParentQuery);
+        query.addBooleanClause(groupFilter);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(query)
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(representativeComputeDescriptionSet.size())
+                .setResultLimit(descriptionsSet.size())
                 .build();
 
         queryTask.documentSelfLink = UUID.randomUUID().toString();
@@ -164,7 +162,8 @@ public class AWSEnumerationUtils {
      * Maps the instance discovered on AWS to a local compute state that will be persisted.
      */
     public static ComputeState mapInstanceToComputeState(Instance instance,
-            String parentComputeLink, String resourcePoolLink, String computeDescriptionLink,
+            String parentComputeLink, String placementComputeLink, String resourcePoolLink,
+            String computeDescriptionLink,
             List<String> tenantLinks) {
         ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
@@ -174,8 +173,7 @@ public class AWSEnumerationUtils {
 
         computeState.resourcePoolLink = resourcePoolLink;
         // Compute descriptions are looked up by the instanceType in the local list of CDs.
-        computeState.descriptionLink = UriUtils
-                .buildUriPath(computeDescriptionLink);
+        computeState.descriptionLink = computeDescriptionLink;
 
         // TODO VSYM-375 for adding disk information
 
@@ -203,6 +201,7 @@ public class AWSEnumerationUtils {
         }
         computeState.customProperties.put(SOURCE_TASK_LINK,
                 ResourceEnumerationTaskService.FACTORY_LINK);
+        computeState.customProperties.put(ComputeProperties.PLACEMENT_LINK, placementComputeLink);
 
         if (instance.getLaunchTime() != null) {
             computeState.creationTimeMicros = TimeUnit.MILLISECONDS
@@ -257,6 +256,61 @@ public class AWSEnumerationUtils {
             return OSType.WINDOWS.toString();
         } else { // else assume Linux
             return OSType.LINUX.toString();
+        }
+    }
+
+    /**
+     * This class is used represent a discovered AvailabilityZone unique information.
+     */
+    public static class ZoneData {
+        public String computeLink;
+        public String regionId;
+        public String zoneId;
+
+        public static ZoneData build(String regionId, String zoneId, String computeLink) {
+            ZoneData key = new ZoneData();
+            key.regionId = regionId;
+            key.zoneId = zoneId;
+            key.computeLink = computeLink;
+            return key;
+        }
+    }
+
+    /**
+     * This class is used represent a discovered ComputeDescription unique information.
+     */
+    public static class InstanceDescKey {
+        public String instanceType;
+        public String regionId;
+        public String zoneId;
+
+        public static InstanceDescKey build(String regionId, String zoneId, String instanceType) {
+            InstanceDescKey key = new InstanceDescKey();
+            key.regionId = regionId;
+            key.zoneId = zoneId;
+            key.instanceType = instanceType;
+            return key;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(this.regionId, this.zoneId, this.instanceType);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == this) {
+                return true;
+            }
+
+            if (o instanceof InstanceDescKey) {
+                InstanceDescKey that = (InstanceDescKey) o;
+                return Objects.equals(this.instanceType, that.instanceType)
+                        && Objects.equals(this.regionId, that.regionId)
+                        && Objects.equals(this.zoneId, that.zoneId);
+            }
+
+            return false;
         }
     }
 }

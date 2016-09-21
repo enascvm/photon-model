@@ -14,9 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getInstanceTypeFromComputeDescriptionKey;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getKeyForComputeDescriptionFromCD;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRegionIdFromComputeDescriptionKey;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRepresentativeListOfCDsFromInstanceList;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 
@@ -24,7 +22,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,6 +32,9 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSCostStatsService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
+import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -56,7 +56,12 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
     public static final String SELF_LINK = AWSUriPaths.AWS_COMPUTE_DESCRIPTION_CREATION_ADAPTER;
 
     public static enum AWSComputeDescCreationStage {
-        GET_REPRESENTATIVE_LIST, QUERY_LOCAL_COMPUTE_DESCRIPTIONS, COMPARE, POPULATE_COMPUTEDESC, CREATE_COMPUTEDESC, SIGNAL_COMPLETION
+        GET_REPRESENTATIVE_LIST,
+        QUERY_LOCAL_COMPUTE_DESCRIPTIONS,
+        COMPARE,
+        POPULATE_COMPUTEDESC,
+        CREATE_COMPUTEDESC,
+        SIGNAL_COMPLETION
     }
 
     public AWSComputeDescriptionCreationAdapterService() {
@@ -68,10 +73,12 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
      */
     public static class AWSComputeDescriptionCreationState {
         public List<Instance> instancesToBeCreated;
+        public String regionId;
         public URI parentTaskLink;
         public String authCredentiaslLink;
         public boolean isMock;
         public List<String> tenantLinks;
+        public Map<String, ZoneData> zones;
         public ComputeDescription parentDescription;
     }
 
@@ -81,10 +88,10 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
      */
     public static class AWSComputeDescriptionCreationServiceContext {
         public List<Operation> createOperations;
-        public Map<String, String> localComputeDescriptionMap;
-        public Set<String> representativeComputeDescriptionSet;
+        public Map<InstanceDescKey, String> localComputeDescriptionMap;
+        public Set<InstanceDescKey> representativeComputeDescriptionSet;
         public int instanceToBeCreatedCounter = 0;
-        public List<String> computeDescriptionsToBeCreatedList;
+        public List<InstanceDescKey> computeDescriptionsToBeCreatedList;
         public AWSComputeDescCreationStage creationStage;
         public AWSComputeDescriptionCreationState cdState;
         // Cached operation to signal completion to the AWS instance adapter once all the compute
@@ -94,9 +101,9 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         public AWSComputeDescriptionCreationServiceContext(AWSComputeDescriptionCreationState cdState,
                 Operation op) {
             this.cdState = cdState;
-            this.localComputeDescriptionMap = new HashMap<String, String>();
-            this.representativeComputeDescriptionSet = new HashSet<String>();
-            this.computeDescriptionsToBeCreatedList = new ArrayList<String>();
+            this.localComputeDescriptionMap = new HashMap<>();
+            this.representativeComputeDescriptionSet = new HashSet<>();
+            this.computeDescriptionsToBeCreatedList = new ArrayList<>();
             this.createOperations = new ArrayList<Operation>();
             this.creationStage = AWSComputeDescCreationStage.GET_REPRESENTATIVE_LIST;
             this.awsAdapterOperation = op;
@@ -185,7 +192,7 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
     private void getRepresentativeListOfComputeDescriptions(
             AWSComputeDescriptionCreationServiceContext context, AWSComputeDescCreationStage next) {
         context.representativeComputeDescriptionSet = getRepresentativeListOfCDsFromInstanceList(
-                context.cdState.instancesToBeCreated);
+                context.cdState.instancesToBeCreated, context.cdState.zones);
         context.creationStage = next;
         handleComputeDescriptionCreation(context);
     }
@@ -201,7 +208,7 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
             AWSComputeDescCreationStage next) {
         QueryTask queryTask = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
                 context.representativeComputeDescriptionSet, context.cdState.tenantLinks,
-                context.cdState.parentDescription.regionId);
+                this, context.cdState.parentTaskLink, context.cdState.regionId);
 
         // create the query to find an existing compute description
         QueryUtils.startQueryTask(this, queryTask)
@@ -233,13 +240,13 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
     }
 
     /**
-    *
+     *
     *Compares the locally known compute descriptions with the new list of compute descriptions to be created.
     *Identifies only the ones that do not exist locally and need to be created.
-    *
+     *
     * @param context The compute description service context to be used for the creation of the compute descriptions.
     * @param next The next stage in the workflow for the compute description creation.
-    */
+     */
     private void compareLocalStateWithEnumerationData(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {
         if (context.representativeComputeDescriptionSet == null
@@ -248,19 +255,14 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         } else if (context.localComputeDescriptionMap == null
                 || context.localComputeDescriptionMap.size() == 0) {
             logInfo("No compute descriptions found in the local system. Need to create all of them");
-            Iterator<String> iterator = context.representativeComputeDescriptionSet.iterator();
-            while (iterator.hasNext()) {
-                String key = iterator.next();
-                context.computeDescriptionsToBeCreatedList.add(key);
-            }
+
+            context.representativeComputeDescriptionSet
+                    .forEach(cd -> context.computeDescriptionsToBeCreatedList.add(cd));
         } else { // compare and add the ones that do not exist locally
-            Iterator<String> i = context.representativeComputeDescriptionSet.iterator();
-            while (i.hasNext()) {
-                String key = i.next();
-                if (!context.localComputeDescriptionMap.containsKey(key)) {
-                    context.computeDescriptionsToBeCreatedList.add(key);
-                }
-            }
+            context.representativeComputeDescriptionSet.stream()
+                    .filter(d -> !context.localComputeDescriptionMap.containsKey(d))
+                    .forEach(d -> context.computeDescriptionsToBeCreatedList.add(d));
+
             logInfo("%d additional compute descriptions are required to be created in the system.",
                     context.computeDescriptionsToBeCreatedList.size());
         }
@@ -274,7 +276,7 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
     private void populateComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {
         if (context.computeDescriptionsToBeCreatedList == null
-                || context.computeDescriptionsToBeCreatedList.size() == 0) {
+                || context.computeDescriptionsToBeCreatedList.isEmpty()) {
             logInfo("No compute descriptions needed to be created in the local system");
             context.creationStage = AWSComputeDescCreationStage.SIGNAL_COMPLETION;
             handleComputeDescriptionCreation(context);
@@ -282,10 +284,10 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         }
         logInfo("Need to create %d compute descriptions in the local system",
                 context.computeDescriptionsToBeCreatedList.size());
-        for (int i = 0; i < context.computeDescriptionsToBeCreatedList.size(); i++) {
-            context.instanceToBeCreatedCounter = i;
-            createComputeDescriptionOperations(context);
-        }
+        context.computeDescriptionsToBeCreatedList.stream()
+                .map(dk -> createComputeDescriptionOperation(dk, context.cdState))
+                .forEach(o -> context.createOperations.add(o));
+
         context.creationStage = next;
         handleComputeDescriptionCreation(context);
     }
@@ -294,30 +296,30 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
      * Creates a compute description based on the VM instance information received from AWS. Futher creates an operation
      * that will post to the compute description service for the creation of the compute description.
      */
-    public void createComputeDescriptionOperations(AWSComputeDescriptionCreationServiceContext cd) {
+    private Operation createComputeDescriptionOperation(InstanceDescKey cd,
+            AWSComputeDescriptionCreationState cdState) {
         // Create a compute description for the AWS instance at hand
-        String key = cd.computeDescriptionsToBeCreatedList.get(cd.instanceToBeCreatedCounter);
         ComputeDescriptionService.ComputeDescription computeDescription = new ComputeDescriptionService.ComputeDescription();
-
-        computeDescription.instanceAdapterReference = cd.cdState.parentDescription.instanceAdapterReference;
-        computeDescription.enumerationAdapterReference = cd.cdState.parentDescription.enumerationAdapterReference;
-        computeDescription.statsAdapterReference = cd.cdState.parentDescription.statsAdapterReference;
+        computeDescription.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
+                AWSUriPaths.AWS_INSTANCE_ADAPTER);
+        computeDescription.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
+                AWSUriPaths.AWS_ENUMERATION_CREATION_ADAPTER);
+        computeDescription.statsAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
+                AWSUriPaths.AWS_STATS_ADAPTER);
         // We don't want cost adapter to run for each instance. Remove it from the list of stats adapter.
-        if (cd.cdState.parentDescription.statsAdapterReferences != null) {
-            computeDescription.statsAdapterReferences = cd.cdState.parentDescription.statsAdapterReferences
+        if (cdState.parentDescription.statsAdapterReferences != null) {
+            computeDescription.statsAdapterReferences = cdState.parentDescription.statsAdapterReferences
                     .stream().filter(uri -> !uri.getPath().endsWith(AWSCostStatsService.SELF_LINK))
                     .collect(Collectors.toSet());
         }
 
         computeDescription.environmentName = AWSInstanceService.AWS_ENVIRONMENT_NAME;
-        // Change this once we make the overarching change to correctly use zoneId and regionId from
-        // AWS.
-        computeDescription.zoneId = getRegionIdFromComputeDescriptionKey(key);
-        computeDescription.regionId = getRegionIdFromComputeDescriptionKey(key);
-        computeDescription.id = getInstanceTypeFromComputeDescriptionKey(key);
-        computeDescription.instanceType = computeDescription.id;
-        computeDescription.name = computeDescription.id;
-        computeDescription.tenantLinks = cd.cdState.tenantLinks;
+        computeDescription.zoneId = cd.zoneId;
+        computeDescription.regionId = cd.regionId;
+        computeDescription.id = cd.instanceType;
+        computeDescription.instanceType = cd.instanceType;
+        computeDescription.name = cd.instanceType;
+        computeDescription.tenantLinks = cdState.tenantLinks;
         // Book keeping information about the creation of the compute description in the system.
         computeDescription.customProperties = new HashMap<String, String>();
         computeDescription.customProperties.put(SOURCE_TASK_LINK,
@@ -325,10 +327,9 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
 
         // security group is not being returned currently in the VM. Add additional logic VSYM-326.
 
-        Operation createCD = Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
+        return Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(computeDescription)
                 .setReferer(getHost().getUri());
-        cd.createOperations.add(createCD);
     }
 
     /**

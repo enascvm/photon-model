@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getKeyForComputeDescriptionFromCD;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getKeyForComputeDescriptionFromInstance;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRepresentativeListOfCDsFromInstanceList;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.mapInstanceToComputeState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.mapTagToTagState;
@@ -45,6 +44,8 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -98,6 +99,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public Map<String, String> vpcs;
         // Map AWS Subnet id to subnet state link for the discovered Subnets
         public Map<String, String> subnets;
+        public Map<String, ZoneData> zones;
         public String resourcePoolLink;
         public String parentComputeLink;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
@@ -120,7 +122,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public AWSComputeStateCreationStage creationStage;
         // Holds the mapping between the instanceType (t2.micro etc) and the document self link to
         // that compute description.
-        public Map<String, String> computeDescriptionMap;
+        public Map<InstanceDescKey, String> computeDescriptionMap;
         // Map for local network states. The key is the vpc-id.
         public Map<String, NetworkState> localNetworkStateMap;
         // Cached operation to signal completion to the AWS instance adapter once all the compute
@@ -132,7 +134,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             this.computeState = computeState;
             this.enumerationOperations = new ArrayList<Operation>();
             this.localNetworkStateMap = new HashMap<String, NetworkState>();
-            this.computeDescriptionMap = new HashMap<String, String>();
+            this.computeDescriptionMap = new HashMap<>();
             this.creationStage = AWSComputeStateCreationStage.GET_RELATED_COMPUTE_DESCRIPTIONS;
             this.awsAdapterOperation = op;
         }
@@ -239,14 +241,15 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             AWSComputeStateCreationStage next) {
         // Get the related compute descriptions for all the compute states are to be updated and
         // created.
-        HashSet<String> representativeCDSet = getRepresentativeListOfCDsFromInstanceList(
-                context.computeState.instancesToBeCreated);
+        Set<InstanceDescKey> representativeCDSet = getRepresentativeListOfCDsFromInstanceList(
+                context.computeState.instancesToBeCreated, context.computeState.zones);
         representativeCDSet.addAll(getRepresentativeListOfCDsFromInstanceList(
-                context.computeState.instancesToBeUpdated.values()));
+                context.computeState.instancesToBeUpdated.values(), context.computeState.zones));
 
         QueryTask queryTask = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
                 representativeCDSet,
                 context.computeState.tenantLinks,
+                this, context.computeState.parentTaskLink,
                 context.computeState.regionId);
         queryTask.querySpec.expectedResultCount = (long) representativeCDSet.size();
         queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
@@ -319,16 +322,18 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     private void populateComputeStateAndNetworksForCreation(
             AWSComputeServiceCreationContext context,
             Instance instance) {
-        String descLink = context.computeDescriptionMap.get(getKeyForComputeDescriptionFromInstance(instance));
-        // a compute desc that has just been created might not have replicated to all nodes
-        // don't create a compute for those resources this time around - they will be created
-        // in the next enumeration cycle
-        if (descLink == null) {
-            return;
-        }
+        String zoneId = instance.getPlacement().getAvailabilityZone();
+        ZoneData zoneData = context.computeState.zones.get(zoneId);
+        String regionId = zoneData.regionId;
+
+        InstanceDescKey descKey = InstanceDescKey.build(regionId, zoneId,
+                instance.getInstanceType());
+
         ComputeService.ComputeState computeState = mapInstanceToComputeState(instance,
-                context.computeState.parentComputeLink, context.computeState.resourcePoolLink,
-                descLink, context.computeState.tenantLinks);
+                context.computeState.parentComputeLink, zoneData.computeLink,
+                context.computeState.resourcePoolLink,
+                context.computeDescriptionMap.get(descKey),
+                context.computeState.tenantLinks);
 
         // Create operations
         List<Operation> networkOperations = mapInstanceIPAddressToNICCreationOperations(
@@ -348,9 +353,13 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      */
     private void populateComputeStateAndNetworksForUpdates(AWSComputeServiceCreationContext context,
             Instance instance, ComputeState existingComputeState) {
+        String zoneId = instance.getPlacement().getAvailabilityZone();
+        ZoneData zoneData = context.computeState.zones.get(zoneId);
+
         // Operation for update to compute state.
         ComputeService.ComputeState computeState = mapInstanceToComputeState(instance,
-                context.computeState.parentComputeLink, context.computeState.resourcePoolLink,
+                context.computeState.parentComputeLink, zoneData.computeLink,
+                context.computeState.resourcePoolLink,
                 existingComputeState.descriptionLink,
                 context.computeState.tenantLinks);
 
