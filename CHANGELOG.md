@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.4.8-SNAPSHOT
+
 ## 0.4.7
 
 * The stats URI for computes available at /compute/stats
