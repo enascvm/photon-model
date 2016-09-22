@@ -436,8 +436,7 @@ public class EndpointAllocationTaskService
         EndpointState endpoint = currentState.endpointState;
 
         long intervalMicros = currentState.enumerationRequest.refreshIntervalMicros != null
-                ? TimeUnit.MILLISECONDS
-                        .toMicros(currentState.enumerationRequest.refreshIntervalMicros)
+                ? currentState.enumerationRequest.refreshIntervalMicros
                 : DEFAULT_SCHEDULED_TASK_INTERVAL_MICROS;
 
         ResourceEnumerationTaskState enumTaskState = new ResourceEnumerationTaskState();

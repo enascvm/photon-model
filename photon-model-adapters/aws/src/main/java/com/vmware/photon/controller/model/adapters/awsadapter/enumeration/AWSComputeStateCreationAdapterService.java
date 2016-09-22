@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
@@ -52,6 +53,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.TagService;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -69,6 +71,7 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 public class AWSComputeStateCreationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_COMPUTE_STATE_CREATION_ADAPTER;
+    private static final long QUERY_TASK_EXPIRY_MICROS = TimeUnit.MINUTES.toMicros(1);
     private AWSClientManager clientManager;
 
     public static enum AWSComputeStateCreationStage {
@@ -245,7 +248,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         QueryTask q = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(representativeCDSet,
                 context.computeState.tenantLinks,
                 this, context.computeState.parentTaskLink, context.computeState.regionId);
-
+        q.querySpec.expectedResultCount = new Long(representativeCDSet.size());
+        q.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
         // create the query to find an existing compute description
         sendRequest(Operation
                 .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
@@ -319,11 +323,16 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     private void populateComputeStateAndNetworksForCreation(
             AWSComputeServiceCreationContext context,
             Instance instance) {
+        String descLink = context.computeDescriptionMap.get(getKeyForComputeDescriptionFromInstance(instance));
+        // a compute desc that has just been created might not have replicated to all nodes
+        // don't create a compute for those resources this time around - they will be created
+        // in the next enumeration cycle
+        if (descLink == null) {
+            return;
+        }
         ComputeService.ComputeState computeState = mapInstanceToComputeState(instance,
                 context.computeState.parentComputeLink, context.computeState.resourcePoolLink,
-                context.computeDescriptionMap
-                        .get(getKeyForComputeDescriptionFromInstance(instance)),
-                context.computeState.tenantLinks);
+                descLink, context.computeState.tenantLinks);
 
         // Create operations
         List<Operation> networkOperations = mapInstanceIPAddressToNICCreationOperations(
