@@ -425,14 +425,14 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         } else if (aws.remoteInstanceIds == null || aws.remoteInstanceIds.size() == 0) {
             logInfo("No resources discovered on the remote system. Everything (if existing) on the local system should be deleted.");
             aws.instancesToBeDeleted.addAll(aws.localInstanceIds.values());
-            logInfo("====Deleting compute state for instance Ids %s ====",
+            logFine("====Deleting compute state for instance Ids %s ====",
                     aws.localInstanceIds.keySet().toString());
         } else { // compare and mark the instances for deletion that have been terminated from the
                  // AWS endpoint.
             for (String key : aws.localInstanceIds.keySet()) {
                 if (!aws.remoteInstanceIds.contains(key)) {
                     aws.instancesToBeDeleted.add(aws.localInstanceIds.get(key));
-                    logInfo("====Deleting compute state for instance Id %s ====", key);
+                    logFine("====Deleting compute state for instance Id %s ====", key);
                 }
             }
             logInfo("%d instances need to be deleted from the local system as they have been terminated on the remote endpoint.",
