@@ -277,9 +277,7 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
     }
 
     /**
-     * Method to create Compute States associated with the instances received from the AWS host.
-     * @param next
-     * @param instancesToBeCreated
+     * Method to create compute descriptions associated with the instances received from the AWS host.
      */
     private void populateComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {

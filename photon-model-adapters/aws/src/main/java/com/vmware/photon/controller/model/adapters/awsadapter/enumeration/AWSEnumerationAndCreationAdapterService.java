@@ -41,10 +41,10 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNet
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.StatelessService;
@@ -69,23 +69,15 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     private AWSClientManager clientManager;
 
     public static enum AWSEnumerationCreationStages {
-        CLIENT,
-        ENUMERATE,
-        ERROR
+        CLIENT, ENUMERATE, ERROR
     }
 
     public static enum AWSComputeEnumerationCreationSubStage {
-        QUERY_LOCAL_RESOURCES,
-        COMPARE,
-        CREATE_COMPUTE_DESCRIPTIONS,
-        CREATE_COMPUTE_STATES,
-        GET_NEXT_PAGE,
-        ENUMERATION_STOP
+        QUERY_LOCAL_RESOURCES, COMPARE, CREATE_COMPUTE_DESCRIPTIONS, CREATE_COMPUTE_STATES, GET_NEXT_PAGE, ENUMERATION_STOP
     }
 
     private static enum AWSEnumerationRefreshSubStage {
-        VCP,
-        COMPUTE
+        VCP, COMPUTE
     }
 
     public AWSEnumerationAndCreationAdapterService() {
@@ -115,9 +107,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         // Mappings of the instanceId ,the local compute state and the associated instance on AWS.
         public Map<String, Instance> instancesToBeUpdated;
         public Map<String, ComputeState> computeStatesToBeUpdated;
-        // Synchronized map to keep track if an enumeration service has been started in listening
-        // mode for a host
-        public Map<String, Boolean> enumerationHostMap;
         // The request object that is populated and sent to AWS to get the list of instances.
         public DescribeInstancesRequest describeInstancesRequest;
         // The async handler that works with the response received from AWS
@@ -133,7 +122,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             this.computeEnumerationRequest = request.computeEnumerateResourceRequest;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
-            this.enumerationHostMap = new ConcurrentSkipListMap<String, Boolean>();
             this.localAWSInstanceMap = new ConcurrentSkipListMap<String, ComputeState>();
             this.instancesToBeUpdated = new ConcurrentSkipListMap<String, Instance>();
             this.computeStatesToBeUpdated = new ConcurrentSkipListMap<String, ComputeState>();
@@ -229,15 +217,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         case ENUMERATE:
             switch (aws.computeEnumerationRequest.enumerationAction) {
             case START:
-                if (aws.enumerationHostMap
-                        .containsKey(getHostEnumKey(aws.parentCompute.description))) {
-                    logInfo("Enumeration for creation already started for %s",
-                            aws.parentCompute.description.environmentName);
-                } else {
-                    aws.enumerationHostMap.put(getHostEnumKey(aws.parentCompute.description), true);
-                    logInfo("Started enumeration for creation for %s",
-                            aws.parentCompute.description.environmentName);
-                }
+                logInfo("Started enumeration for creation for %s",
+                        aws.computeEnumerationRequest.resourceReference);
                 aws.computeEnumerationRequest.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequest(aws);
                 break;
@@ -245,15 +226,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 processRefreshSubStages(aws);
                 break;
             case STOP:
-                if (!aws.enumerationHostMap
-                        .containsKey(getHostEnumKey(aws.parentCompute.description))) {
-                    logInfo("Enumeration for creation is not running or has already been stopped for %s",
-                            aws.parentCompute.description.environmentName);
-                } else {
-                    aws.enumerationHostMap.remove(getHostEnumKey(aws.parentCompute.description));
-                    logInfo("Stopping enumeration service for creation for %s",
-                            aws.parentCompute.description.environmentName);
-                }
+                logInfo("Stopping enumeration service for creation for %s",
+                        aws.computeEnumerationRequest.resourceReference);
                 setOperationDurationStat(aws.awsAdapterOperation);
                 aws.awsAdapterOperation.complete();
                 break;
@@ -313,19 +287,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 aws.computeEnumerationRequest.taskReference, true);
         aws.stage = next;
         handleEnumerationRequest(aws);
-    }
-
-    /**
-     * Method that generates a string key to represent the host for which the enumeration task is
-     * being performed.
-     *
-     * @param computeHost
-     *            The compute host representing the Amzon EC2 cloud.
-     * @return
-     */
-    private String getHostEnumKey(ComputeDescription computeHost) {
-        return ("hostLink:" + computeHost.documentSelfLink + "-enumerationAdapterReference:"
-                + computeHost.enumerationAdapterReference);
     }
 
     /**

@@ -40,10 +40,10 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnu
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -77,7 +77,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
 
     public AWSEnumerationAndDeletionAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     /**
@@ -99,9 +100,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         public Set<String> remoteInstanceIds;
         // Map of Instance Ids and compute states that have to be deleted from the local system.
         public List<ComputeState> instancesToBeDeleted;
-        // Synchronized map to keep track if an enumeration service has been started in listening
-        // mode for a host
-        public Map<String, Boolean> enumerationHostMap;
         public Operation awsAdapterOperation;
         public List<Operation> deleteOperations;
         // The next page link for the next set of results to fetch from the local system.
@@ -113,7 +111,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             this.awsAdapterOperation = op;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
-            this.enumerationHostMap = new ConcurrentSkipListMap<String, Boolean>();
             this.localInstanceIds = new ConcurrentSkipListMap<String, ComputeState>();
             this.remoteInstanceIds = new HashSet<String>();
             this.instancesToBeDeleted = new ArrayList<ComputeState>();
@@ -125,7 +122,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 
@@ -156,15 +154,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         case ENUMERATE:
             switch (aws.computeEnumerationRequest.enumerationAction) {
             case START:
-                if (aws.enumerationHostMap
-                        .containsKey(getHostEnumKey(aws.parentCompute.description))) {
-                    logInfo("Enumeration for deletion already started for %s",
-                            aws.parentCompute.description.environmentName);
-                } else {
-                    aws.enumerationHostMap.put(getHostEnumKey(aws.parentCompute.description), true);
-                    logInfo("Started deletion enumeration for %s",
-                            aws.parentCompute.description.environmentName);
-                }
+                logInfo("Started deletion enumeration for %s",
+                        aws.computeEnumerationRequest.resourceReference);
                 aws.computeEnumerationRequest.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequestForDeletion(aws);
                 break;
@@ -174,15 +165,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 deleteResourcesInLocalSystem(aws);
                 break;
             case STOP:
-                if (!aws.enumerationHostMap
-                        .containsKey(getHostEnumKey(aws.parentCompute.description))) {
-                    logInfo("Enumeration for deletion is not running or has already been stopped for %s",
-                            aws.parentCompute.description.environmentName);
-                } else {
-                    aws.enumerationHostMap.remove(getHostEnumKey(aws.parentCompute.description));
-                    logInfo("Stopping deletion enumeration service for %s",
-                            aws.parentCompute.description.environmentName);
-                }
+                logInfo("Stopping deletion enumeration service for %s",
+                        aws.computeEnumerationRequest.resourceReference);
                 setOperationDurationStat(aws.awsAdapterOperation);
                 aws.awsAdapterOperation.complete();
                 break;
@@ -204,16 +188,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             signalErrorToEnumerationAdapter(aws, t);
             break;
         }
-    }
-
-    /**
-     * Method that generates a string key to represent the host for which the enumeration task is being performed.
-     * @param computeHost The compute host representing the Amzon EC2 cloud.
-     * @return
-     */
-    private String getHostEnumKey(ComputeDescription computeHost) {
-        return ("hostLink:" + computeHost.documentSelfLink + "-enumerationAdapterReference:"
-                + computeHost.enumerationAdapterReference);
     }
 
     /**

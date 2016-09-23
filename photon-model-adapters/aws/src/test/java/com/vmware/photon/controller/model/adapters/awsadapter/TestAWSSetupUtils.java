@@ -50,6 +50,7 @@ import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSBlockStorageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
@@ -74,6 +75,7 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -113,6 +115,7 @@ public class TestAWSSetupUtils {
     public static final String BASELINE_COMPUTE_DESCRIPTION_COUNT = " Baseline Compute Description Count ";
     private static final float HUNDERED = 100.0f;
     public static final int AWS_VM_REQUEST_TIMEOUT_MINUTES = 5;
+    public static final String AWS_INSTANCE_PREFIX = "i-";
 
     public static final String EC2_LINUX_AMI = "ami-0d4cfd66";
     public static final String EC2_WINDOWS_AMI = "ami-3c32b12b";
@@ -390,6 +393,9 @@ public class TestAWSSetupUtils {
             // Instance Ids in List of instance Ids to delete
             QueryTask.Query instanceIdFilterParentQuery = new QueryTask.Query();
             for (String instanceId : instanceIdsToDelete) {
+                if (!instanceId.startsWith(AWS_INSTANCE_PREFIX)) {
+                    continue;
+                }
                 QueryTask.Query instanceIdFilter = new QueryTask.Query()
                         .setTermPropertyName(ComputeState.FIELD_NAME_ID)
                         .setTermMatchValue(instanceId);
@@ -765,6 +771,12 @@ public class TestAWSSetupUtils {
                         .buildStatsUri(createServiceURI(host, peerURI,
                                 AWSEnumerationAndDeletionAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(deletionEnumerationStats));
+        host.log("\n==Total Time Spent in Storage Enumeration Workflow==\n");
+        ServiceStats storageEnumerationStats = host.getServiceState(null, ServiceStats.class,
+                UriUtils
+                        .buildStatsUri(createServiceURI(host, peerURI,
+                                AWSBlockStorageEnumerationAdapterService.SELF_LINK)));
+        host.log(Utils.toJsonHtml(storageEnumerationStats));
     }
 
     /**

@@ -38,6 +38,8 @@ public class AWSUriPaths {
             + "/enumeration-creation-adapter";
     public static final String AWS_ENUMERATION_DELETION_ADAPTER = PROVISIONING_AWS
             + "/enumeration-deletion-adapter";
+    public static final String AWS_STORAGE_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AWS
+            + "/storage-enumeration-adapter";
     public static final String AWS_COMPUTE_DESCRIPTION_CREATION_ADAPTER = PROVISIONING_AWS
             + "/compute-description-creation-adapter";
     public static final String AWS_COMPUTE_STATE_CREATION_ADAPTER = PROVISIONING_AWS

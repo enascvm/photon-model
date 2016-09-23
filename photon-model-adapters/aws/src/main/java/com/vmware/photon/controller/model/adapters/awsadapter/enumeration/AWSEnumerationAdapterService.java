@@ -22,6 +22,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -128,10 +129,17 @@ public class AWSEnumerationAdapterService extends StatelessService {
                         AWSEnumerationAndDeletionAdapterService.SELF_LINK))
                 .setReferer(this.getUri());
 
+        Operation patchAWSStorageEnumerationService = Operation.createPatch(
+                UriUtils.buildUri(this.getHost(),
+                        AWSBlockStorageEnumerationAdapterService.SELF_LINK))
+                .setReferer(this.getUri());
+
         this.getHost().startService(patchAWSEnumerationCreationService,
                 new AWSEnumerationAndCreationAdapterService());
         this.getHost().startService(patchAWSEnumerationDeletionService,
                 new AWSEnumerationAndDeletionAdapterService());
+        this.getHost().startService(patchAWSStorageEnumerationService,
+                new AWSBlockStorageEnumerationAdapterService());
 
         getHost().registerForServiceAvailability((o, e) -> {
             if (e != null) {
@@ -142,7 +150,8 @@ public class AWSEnumerationAdapterService extends StatelessService {
             this.logInfo(
                     "Successfully started up all the services related to the AWS Enumeration Adapter Service");
         }, AWSEnumerationAndCreationAdapterService.SELF_LINK,
-                AWSEnumerationAndDeletionAdapterService.SELF_LINK);
+                AWSEnumerationAndDeletionAdapterService.SELF_LINK,
+                AWSBlockStorageEnumerationAdapterService.SELF_LINK);
     }
 
     /**
@@ -199,8 +208,15 @@ public class AWSEnumerationAdapterService extends StatelessService {
                 .setBody(awsEnumerationRequest)
                 .setReferer(getHost().getUri());
 
+        Operation patchAWSStorageAdapterService = Operation
+                .createPatch(this,
+                        AWSBlockStorageEnumerationAdapterService.SELF_LINK)
+                .setBody(awsEnumerationRequest)
+                .setReferer(getHost().getUri());
+
         context.enumerationOperations.add(patchAWSCreationAdapterService);
         context.enumerationOperations.add(patchAWSDeletionAdapterService);
+        context.enumerationOperations.add(patchAWSStorageAdapterService);
 
         if (context.enumerationOperations == null || context.enumerationOperations.size() == 0) {
             logInfo("There are no enumeration tasks to run.");
@@ -219,7 +235,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
                         exc.values().iterator().next());
 
             }
-            logInfo("Successfully completed the enumeration workflows for creation and deletion.");
+            logInfo("Successfully completed the enumeration workflows for creation, deletion of compute states and storage.");
             context.stage = next;
             handleEnumerationRequest(context);
             return;
@@ -227,7 +243,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
         OperationJoin joinOp = OperationJoin.create(context.enumerationOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(getHost());
-        logInfo("Kicked off enumeration creation and deletion workflows for AWS");
+        logInfo("Kicked off enumeration creation,deletion and storage workflows for AWS");
 
     }
 

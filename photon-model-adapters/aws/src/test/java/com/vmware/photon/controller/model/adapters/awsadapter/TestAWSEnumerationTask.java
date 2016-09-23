@@ -44,7 +44,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.stopVMsUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getNetworkStates;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
@@ -60,6 +59,7 @@ import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Tag;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -69,6 +69,7 @@ import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -78,6 +79,7 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -115,10 +117,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private static final String VM_NAME = "TestAWSEnumerationTask-create";
     private static final String VM_STOPPED_NAME = "TestAWSEnumerationTask-stop";
     private static final String VM_UPDATED_NAME = "TestAWSEnumerationTask-update";
-
-    private static List<String> testComputeDescriptions = new ArrayList<>(
-            Arrays.asList(zoneId + "~" + T2_NANO_INSTANCE_TYPE,
-                    zoneId + "~" + instanceType_t2_micro));
 
     private ResourcePoolState outPool;
     private ComputeService.ComputeState outComputeHost;
@@ -226,6 +224,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 ComputeDescriptionService.FACTORY_LINK, false);
         queryDocumentsAndAssertExpectedCount(this.host,
                 count7, ComputeService.FACTORY_LINK, false);
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count7, DiskService.FACTORY_LINK, false);
 
         // Update Scenario : Check that the tag information is present for the VM tagged above.
         String vpCId = validateTagAndNetworkAndComputeDescriptionInformation(vmState);
@@ -275,6 +275,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 ComputeDescriptionService.FACTORY_LINK, false);
         queryDocumentsAndAssertExpectedCount(this.host,
                 count8, ComputeService.FACTORY_LINK, false);
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count8, DiskService.FACTORY_LINK, false);
 
         // Verify Deletion flow
         // Delete 5 VMs spawned above of type T2_NANO
@@ -282,18 +284,22 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                 this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                 TEST_CASE_DELETE_VMS);
-        // Counts should go down 5 compute states.
+        // Counts should go down. 5 compute states and 5 disk states.
         queryDocumentsAndAssertExpectedCount(this.host,
                 count3, ComputeService.FACTORY_LINK, false);
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count3, DiskService.FACTORY_LINK, false);
 
         // Delete 1 VMs spawned above of type T2_Micro
         deleteVMsUsingEC2Client(this.client, this.host, instanceIdsToDeleteSecondTime);
         enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                 this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                 TEST_CASE_DELETE_VM);
-        // Compute state count should go down by 1
+        // Compute state and disk state count should go down by 1
         queryDocumentsAndAssertExpectedCount(this.host,
                 count2, ComputeService.FACTORY_LINK, false);
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count2, DiskService.FACTORY_LINK, false);
     }
 
     @Test

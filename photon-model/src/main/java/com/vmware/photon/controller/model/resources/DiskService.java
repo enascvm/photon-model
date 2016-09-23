@@ -19,6 +19,7 @@ import java.util.UUID;
 import java.util.function.Function;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -51,6 +52,9 @@ public class DiskService extends StatefulService {
      * {@link com.vmware.photon.controller.model.resources.DiskService} task.
      */
     public static class DiskState extends ResourceState {
+
+        public static final String FIELD_NAME_RESOURCE_POOL_LINK = "resourcePoolLink";
+        public static final String FIELD_NAME_AUTH_CREDENTIALS_LINK = "authCredentialsLink";
 
         /**
          * Identifier of the zone associated with this disk service instance.
@@ -143,9 +147,16 @@ public class DiskService extends StatefulService {
         public String currencyUnit;
 
         /**
+         * Disk creation time in micros since epoch.
+         */
+        @UsageOption(option = PropertyUsageOption.REQUIRED)
+        public Long creationTimeMicros;
+
+        /**
          * This class represents the boot configuration for the disk service
          * instance.
          */
+
         public static class BootConfig {
             /**
              * Label of the disk.
@@ -224,6 +235,10 @@ public class DiskService extends StatefulService {
     }
 
     private void validateState(DiskState state) {
+        if (state.creationTimeMicros == null) {
+            state.creationTimeMicros = Utils.getNowMicrosUtc();
+        }
+
         Utils.validateState(getStateDescription(), state);
 
         if (state.name == null) {
