@@ -55,7 +55,11 @@ public class LeaseProgressUpdater {
             long total) {
         this.connection = connection;
         this.nfcLease = nfcLease;
-        this.total = total;
+        if (total != 0) {
+            this.total = total;
+        } else {
+            this.total = 1;
+        }
         this.get = new GetMoRef(this.connection);
     }
 

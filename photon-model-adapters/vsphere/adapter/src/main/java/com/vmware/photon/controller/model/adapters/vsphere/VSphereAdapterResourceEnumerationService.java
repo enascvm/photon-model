@@ -555,7 +555,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.documentSelfLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.cpuCount = cr.getTotalCpuCores();
-        res.cpuMhzPerCore = cr.getTotalCpuMhz() / cr.getTotalCpuCores();
+        if (cr.getTotalCpuCores() != 0) {
+            res.cpuMhzPerCore = cr.getTotalCpuMhz() / cr.getTotalCpuCores();
+        }
         res.totalMemoryBytes = cr.getEffectiveMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
 
