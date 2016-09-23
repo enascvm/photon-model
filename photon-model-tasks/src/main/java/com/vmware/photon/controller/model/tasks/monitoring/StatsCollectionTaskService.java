@@ -89,6 +89,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                     .getBody(StatsCollectionTaskState.class);
 
             validateState(state);
+            logInfo("Starting stats collection task for :" + state.resourcePoolLink);
             start.complete();
             state.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
             state.taskStage = StatsCollectionStage.INIT;

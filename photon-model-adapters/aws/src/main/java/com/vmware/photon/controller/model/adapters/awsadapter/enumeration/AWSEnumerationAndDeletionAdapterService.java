@@ -397,7 +397,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             // Print the details of the instances discovered on the AWS endpoint
             for (Reservation r : result.getReservations()) {
                 for (Instance i : r.getInstances()) {
-                    this.service.logInfo("%d=====Instance details %s =====",
+                    this.service.logFine("%d=====Instance details %s =====",
                             ++totalNumberOfInstances,
                             i.getInstanceId());
                     this.aws.remoteInstanceIds.add(i.getInstanceId());
