@@ -88,10 +88,11 @@ public class AzureStatsGatherer extends StatelessService {
     private static final String PARTITION_KEY = "PartitionKey";
     private static final String COUNTER_NAME_KEY = "CounterName";
     private static final String TIMESTAMP = "Timestamp";
-    private static final String[] METRIC_NAMES = { AzureConstants.NETWORK_BYTES_IN,
+    public static final String[] METRIC_NAMES = { AzureConstants.NETWORK_BYTES_IN,
             AzureConstants.NETWORK_BYTES_OUT, AzureConstants.DISK_WRITES_PER_SECOND,
             AzureConstants.DISK_READS_PER_SECOND, AzureConstants.CPU_UTILIZATION,
             AzureConstants.MEMORY_AVAILABLE, AzureConstants.MEMORY_USED,
+            AzureConstants.PERCENT_MEMORY_AVAILABLE, AzureConstants.PERCENT_MEMORY_USED,
             AzureConstants.DISK_READ_BYTES_PER_SECOND, AzureConstants.DISK_WRITE_BYTES_PER_SECOND };
 
     private ExecutorService executorService;

@@ -97,6 +97,8 @@ public class AzureConstants {
     public static final String CPU_UTILIZATION = "\\Processor\\PercentProcessorTime";
     public static final String MEMORY_AVAILABLE = "\\Memory\\AvailableMemory";
     public static final String MEMORY_USED = "\\Memory\\UsedMemory";
+    public static final String PERCENT_MEMORY_AVAILABLE = "\\Memory\\PercentAvailableMemory";
+    public static final String PERCENT_MEMORY_USED = "\\Memory\\PercentUsedMemory";
     public static final String DISK_READ_BYTES_PER_SECOND = "\\PhysicalDisk\\ReadBytesPerSecond";
     public static final String DISK_WRITE_BYTES_PER_SECOND = "\\PhysicalDisk\\WriteBytesPerSecond";
 

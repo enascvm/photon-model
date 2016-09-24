@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import java.net.URI;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -34,6 +35,7 @@ import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
 import com.microsoft.rest.ServiceResponse;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -43,6 +45,8 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.stats.AzureStatsGatherer;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureStatsNormalizer;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
@@ -328,6 +332,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                                             "Incorrect resourceReference returned."));
                             return;
                         }
+                        // Verify all the stats are obtained
+                        verifyStats(resp);
                         // Persist stats on Verification Host for testing the computeHost stats.
                         URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
                         for (String key : resp.statsList.get(0).statValues.keySet()) {
@@ -352,6 +358,17 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 this.host, AzureUriPaths.AZURE_STATS_ADAPTER))
                 .setBody(statsRequest)
                 .setReferer(this.host.getUri()));
+    }
+
+    private void verifyStats(ComputeStatsResponse resp) {
+        Set<String> obtainedMetricKeys = resp.statsList.get(0).statValues.keySet();
+
+        for (String inputMetricName : AzureStatsGatherer.METRIC_NAMES) {
+            String normalizedMetricName = AzureStatsNormalizer
+                    .getNormalizedStatKeyValue(inputMetricName);
+            Assert.assertTrue("Metric not found: " + normalizedMetricName,
+                    obtainedMetricKeys.contains(normalizedMetricName));
+        }
     }
 
     private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat, String computeLink) {

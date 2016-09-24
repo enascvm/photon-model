@@ -42,6 +42,8 @@ public class PhotonModelConstants {
     public static final String DISK_READ_TIME_SECONDS = "DiskReadTimeSeconds";
     public static final String MEMORY_AVAILABLE_BYTES = "MemoryAvailableBytes";
     public static final String MEMORY_USED_BYTES = "MemoryUsedBytes";
+    public static final String MEMORY_AVAILABLE_PERCENT = "MemoryAvailablePercent";
+    public static final String MEMORY_USED_PERCENT = "MemoryUsedPercent";
 
     // Photon-Model Metric Unit related constants
     public static final String UNIT_COUNT = "Count";

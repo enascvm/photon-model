@@ -53,6 +53,10 @@ public class AzureStatsNormalizer {
                 PhotonModelConstants.MEMORY_AVAILABLE_BYTES);
         statMap.put(AzureConstants.MEMORY_USED,
                 PhotonModelConstants.MEMORY_USED_BYTES);
+        statMap.put(AzureConstants.PERCENT_MEMORY_AVAILABLE,
+                PhotonModelConstants.MEMORY_AVAILABLE_PERCENT);
+        statMap.put(AzureConstants.PERCENT_MEMORY_USED,
+                PhotonModelConstants.MEMORY_USED_PERCENT);
         statMap.put(AzureConstants.DISK_READ_BYTES_PER_SECOND,
                 PhotonModelConstants.DISK_READ_BYTES);
         statMap.put(AzureConstants.DISK_WRITE_BYTES_PER_SECOND,
