@@ -1,6 +1,14 @@
 # CHANGELOG
 
-## 0.4.8-SNAPSHOT
+## 0.4.9-SNAPSHOT
+
+## 0.4.8
+
+* Bug fixes - Various minor fixes including updating
+  EndpointAllocationTaskService to kick off enumeration
+  at the right intervals, fix computation errors in
+  the vSphere adapter for empty clusters and noisy log
+  messages supressed
 
 ## 0.4.7
 
