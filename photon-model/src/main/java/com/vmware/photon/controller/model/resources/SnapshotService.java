@@ -92,7 +92,8 @@ public class SnapshotService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         SnapshotState currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), null);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), SnapshotState.class,
+                null);
     }
 
     @Override

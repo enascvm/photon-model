@@ -108,7 +108,8 @@ public class NetworkInterfaceService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         NetworkInterfaceState currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), null);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+                NetworkInterfaceState.class, null);
     }
 
     private void validateState(NetworkInterfaceState state) {

@@ -101,7 +101,7 @@ public class EndpointService extends StatefulService {
     public void handlePatch(Operation patch) {
         EndpointState currentState = getState(patch);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                currentState.getClass(), null);
+                EndpointState.class, null);
     }
 
     private EndpointState processInput(Operation op) {

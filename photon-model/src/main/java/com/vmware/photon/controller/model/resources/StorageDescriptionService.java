@@ -115,6 +115,7 @@ public class StorageDescriptionService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         StorageDescription currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), null);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+                StorageDescription.class, null);
     }
 }

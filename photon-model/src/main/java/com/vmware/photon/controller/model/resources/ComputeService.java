@@ -350,7 +350,7 @@ public class ComputeService extends StatefulService {
             }
         };
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                currentState.getClass(), customPatchHandler);
+                ComputeState.class, customPatchHandler);
     }
 
     @Override

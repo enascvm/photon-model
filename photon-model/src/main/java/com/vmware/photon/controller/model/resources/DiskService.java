@@ -266,7 +266,8 @@ public class DiskService extends StatefulService {
                 return hasStateChanged;
             }
         };
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), customPatchHandler);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), DiskState.class,
+                customPatchHandler);
     }
 
     @Override

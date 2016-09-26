@@ -45,9 +45,7 @@ public class ResourceUtilsTest extends BaseModelTest {
         patch.groupLinks = new HashSet<>(Arrays.asList("groupB"));
         patch.tagLinks = new HashSet<>();
 
-        ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
-                .buildDescription(ResourceState.class);
-        boolean changed = ResourceUtils.mergeResourceStateWithPatch(desc, current, patch);
+        boolean changed = handlePatch(current, patch).getStatusCode() == Operation.STATUS_CODE_OK;
 
         assertTrue(changed);
         assertEquals(Arrays.asList("tenant1", "tenant2"), current.tenantLinks);
@@ -66,13 +64,9 @@ public class ResourceUtilsTest extends BaseModelTest {
         patch.groupLinks = new HashSet<>(Arrays.asList("groupA", "groupB"));
         patch.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
 
-        ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
-                .buildDescription(ResourceState.class);
-        ResourceUtils.mergeResourceStateWithPatch(desc, current, patch);
+        boolean changed = handlePatch(current, patch).getStatusCode() == Operation.STATUS_CODE_OK;
 
-        // TODO pmitrov: uncomment this when Utils.mergeWithState() is fixed in xenon
-        //               to correctly report unchanged state
-        // assertFalse(changed);
+        assertFalse(changed);
         assertEquals(current.tenantLinks, patch.tenantLinks);
         assertEquals(current.groupLinks, patch.groupLinks);
         assertEquals(current.tagLinks, patch.tagLinks);
@@ -86,9 +80,7 @@ public class ResourceUtilsTest extends BaseModelTest {
         current.tagLinks = new HashSet<>(Arrays.asList("tag1", "tag2"));
         ResourceState patch = new ResourceState();
 
-        ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
-                .buildDescription(ResourceState.class);
-        boolean changed = ResourceUtils.mergeResourceStateWithPatch(desc, current, patch);
+        boolean changed = handlePatch(current, patch).getStatusCode() == Operation.STATUS_CODE_OK;
 
         assertFalse(changed);
         assertEquals(Arrays.asList("tenant1", "tenant2"), current.tenantLinks);
@@ -125,14 +117,8 @@ public class ResourceUtilsTest extends BaseModelTest {
 
         ResourceState patch = new ResourceState();
         patch.tagLinks = new HashSet<>(Arrays.asList("tag3"));
-        Operation patchOperation = Operation
-                .createPatch(UriUtils.buildUri(this.host, "/resource"))
-                .setBody(patch);
 
-        ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
-                .buildDescription(ResourceState.class);
-
-        ResourceUtils.handlePatch(patchOperation, current, desc, ResourceState.class, null);
+        Operation patchOperation = handlePatch(current, patch);
 
         assertTrue(patchOperation.hasBody());
         assertEquals(Operation.STATUS_CODE_OK, patchOperation.getStatusCode());
@@ -140,5 +126,18 @@ public class ResourceUtilsTest extends BaseModelTest {
         assertEquals(current.tenantLinks, returnedState.tenantLinks);
         assertEquals(current.groupLinks, returnedState.groupLinks);
         assertEquals(current.tagLinks, returnedState.tagLinks);
+    }
+
+    private Operation handlePatch(ResourceState currentState, ResourceState patchState) {
+        Operation patchOperation = Operation
+                .createPatch(UriUtils.buildUri(this.host, "/resource"))
+                .setBody(patchState);
+
+        ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
+                .buildDescription(ResourceState.class);
+
+        ResourceUtils.handlePatch(patchOperation, currentState, desc, ResourceState.class, null);
+
+        return patchOperation;
     }
 }

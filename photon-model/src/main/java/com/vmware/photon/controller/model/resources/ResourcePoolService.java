@@ -186,39 +186,27 @@ public class ResourcePoolService extends StatefulService {
             currentState.query = null;
         }
 
-        // apply default merge (including collection update requests)
-        boolean hasStateChanged = false;
-        try {
-            if (Utils.mergeWithState(currentState, patch)) {
-                hasStateChanged = true;
+        // use standard resource merging with an additional custom handler for the query
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+                ResourcePoolState.class,
+                op -> {
+                    // automatically remove the query if the ELASTIC flag was removed in order to
+                    // keep the state consistent (the collection update request itself cannot update
+                    // the query)
+                    if (!currentState.properties.contains(ResourcePoolProperty.ELASTIC)) {
+                        currentState.query = null;
+                    }
 
-                // automatically remove the query if the ELASTIC flag was removed in order to
-                // keep the state consistent (the collection update request itself cannot update
-                // the query)
-                if (!currentState.properties.contains(ResourcePoolProperty.ELASTIC)) {
-                    currentState.query = null;
-                }
-            } else {
-                hasStateChanged = ResourceUtils.mergeResourceStateWithPatch(getStateDescription(),
-                        currentState, patch.getBody(ResourcePoolState.class));
-            }
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            patch.fail(e);
-            return;
-        }
+                    // check state and re-generate the query, if needed
+                    validateState(currentState, true);
+                    if (!currentState.properties.contains(ResourcePoolProperty.ELASTIC)) {
+                        currentState.query = generateResourcePoolQuery(currentState);
+                    }
 
-        // check state and re-generate the query, if needed
-        validateState(currentState, true);
-        if (!currentState.properties.contains(ResourcePoolProperty.ELASTIC)) {
-            currentState.query = generateResourcePoolQuery(currentState);
-        }
-
-        if (!hasStateChanged) {
-            patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
-        } else {
-            patch.setBody(currentState);
-        }
-        patch.complete();
+                    // don't report a state change, it is already reported if resource pool type has
+                    // changed
+                    return false;
+                });
     }
 
     public void validateState(ResourcePoolState state, boolean isUpdateAction) {

@@ -288,7 +288,8 @@ public class FirewallService extends StatefulService {
                 return hasStateChanged;
             }
         };
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), customPatchHandler);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), FirewallState.class,
+                customPatchHandler);
     }
 
     @Override

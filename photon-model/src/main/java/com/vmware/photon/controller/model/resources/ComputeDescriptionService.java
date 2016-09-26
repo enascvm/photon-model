@@ -314,7 +314,8 @@ public class ComputeDescriptionService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ComputeDescription currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), currentState.getClass(), null);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+                ComputeDescription.class, null);
     }
 
     @Override
