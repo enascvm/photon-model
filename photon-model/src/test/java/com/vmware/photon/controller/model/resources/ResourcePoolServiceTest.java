@@ -67,7 +67,7 @@ public class ResourcePoolServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static ResourcePoolService.ResourcePoolState buildValidStartState()
+    public static ResourcePoolService.ResourcePoolState buildValidStartState()
             throws Throwable {
         ResourcePoolService.ResourcePoolState rp = new ResourcePoolService.ResourcePoolState();
         rp.id = UUID.randomUUID().toString();
