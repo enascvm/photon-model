@@ -821,12 +821,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .sendWith(this);
-
-        ComputeDescription desc = makeDescriptionForVm(request, vm, parent);
-        desc.documentSelfLink = state.descriptionLink;
-        Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
-                .setBody(desc)
-                .sendWith(this);
     }
 
     private void createNewVm(ComputeEnumerateResourceRequest request, VmOverlay vm,
