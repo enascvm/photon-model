@@ -30,7 +30,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
@@ -58,7 +57,6 @@ import com.vmware.xenon.services.common.TaskService;
 public class SingleResourceStatsCollectionTaskService
         extends TaskService<SingleResourceStatsCollectionTaskState> {
 
-    public static final String HYPHEN = "-";
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";
 
@@ -326,9 +324,8 @@ public class SingleResourceStatsCollectionTaskService
     private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat,
             String computeLink) {
         ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
-        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1391
         // Set the documentSelfLink to <computeId>-<metricName>
-        stat.documentSelfLink = UriUtils.getLastPathSegment(computeLink) + HYPHEN + metricName;
+        stat.documentSelfLink = StatsUtil.getMetricKey(computeLink, metricName);
         stat.value = serviceStat.latestValue;
         stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
         sendRequest(Operation.createPost(persistStatsUri).setBodyNoCloning(stat));
@@ -387,8 +384,8 @@ public class SingleResourceStatsCollectionTaskService
         String statsAdapterLink = getAdapterLinkFromURI(patchUri);
         String lastSuccessfulRunMetricKey = getLastCollectionMetricKeyForAdapterLink(
                 statsAdapterLink, false);
-        String metricSelfLink = UriUtils.getLastPathSegment(currentState.computeLink) + HYPHEN
-                + lastSuccessfulRunMetricKey;
+        String metricSelfLink = StatsUtil
+                .getMetricKey(currentState.computeLink, lastSuccessfulRunMetricKey);
         Query.Builder builder = Query.Builder.create();
         builder.addKindFieldClause(ResourceMetric.class);
         builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
@@ -449,9 +446,8 @@ public class SingleResourceStatsCollectionTaskService
      */
     public String getLastCollectionMetricKeyForAdapterLink(String statsAdapterLink,
             boolean appendBucketSuffix) {
-        String lastSuccessfulRunMetricKey = statsAdapterLink
-                + HYPHEN
-                + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
+        String lastSuccessfulRunMetricKey = StatsUtil.getMetricKey(statsAdapterLink,
+                PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME);
         if (appendBucketSuffix) {
             lastSuccessfulRunMetricKey = lastSuccessfulRunMetricKey + StatsConstants.MIN_SUFFIX;
         }

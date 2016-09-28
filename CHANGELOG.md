@@ -2,6 +2,9 @@
 
 ## 0.4.9-SNAPSHOT
 
+* Support for latest value aggregation and per metric aggregation type
+  in SingleResourceStatsAggregationTask.
+
 ## 0.4.8
 
 * Bug fixes - Various minor fixes including updating

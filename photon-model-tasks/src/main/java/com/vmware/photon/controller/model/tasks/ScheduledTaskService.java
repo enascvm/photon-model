@@ -97,7 +97,6 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
     @Override
     public void handlePatch(Operation patch) {
         patch.complete();
-        return;
     }
 
     @Override

@@ -13,10 +13,11 @@
 
 package com.vmware.photon.controller.model.tasks.monitoring;
 
-
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -33,13 +34,13 @@ import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricServ
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService.ResourceMetric;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.AggregationType;
 import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.TimeBin;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -68,15 +69,19 @@ import com.vmware.xenon.services.common.TaskService;
  * Aggregations are based on the the query that is specified. All resources that resolve to the query will be used for aggregation.
  * If no query is specified the aggregation will happen on the resource specified in resourceLink
  */
-public class SingleResourceStatsAggregationTaskService extends TaskService<SingleResourceStatsAggregationTaskService.SingleResourceStatsAggregationTaskState> {
+public class SingleResourceStatsAggregationTaskService extends
+        TaskService<SingleResourceStatsAggregationTaskService.SingleResourceStatsAggregationTaskState> {
 
-    public static final String FACTORY_LINK = UriPaths.MONITORING + "/single-resource-stats-aggregation";
+    public static final String FACTORY_LINK =
+            UriPaths.MONITORING + "/single-resource-stats-aggregation";
 
     public static final String STATS_QUERY_RESULT_LIMIT =
-            UriPaths.PROPERTY_PREFIX + "SingleResourceStatsAggregationTaskService.query.resultLimit";
+            UriPaths.PROPERTY_PREFIX
+                    + "SingleResourceStatsAggregationTaskService.query.resultLimit";
     private static final int DEFAULT_QUERY_RESULT_LIMIT = 100;
 
-    public static class SingleResourceStatsAggregationTaskState extends TaskService.TaskServiceState {
+    public static class SingleResourceStatsAggregationTaskState
+            extends TaskService.TaskServiceState {
 
         @Documentation(description = "Resource to invoke stats aggregation on")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
@@ -90,7 +95,18 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
                 + " If no query is specified, the aggregation is performed on the resource"
                 + " identified by the resourceLink parameter")
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Query query;
+
+        @Documentation(description = "Metrics to be aggregated on latest value only")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Set<String> latestValueOnly;
+
+        @Documentation(description = "Aggregation type per metric name")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Map<String, Set<AggregationType>> aggregations;
 
         @Documentation(description = "Task to patch back to")
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
@@ -119,7 +135,7 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
     }
 
     public enum StatsAggregationStage {
-       GET_LAST_ROLLUP_TIME, INIT_RESOURCE_QUERY, PROCESS_RESOURCES, PUBLISH_METRICS
+        GET_LAST_ROLLUP_TIME, INIT_RESOURCE_QUERY, PROCESS_RESOURCES, PUBLISH_METRICS
     }
 
     public SingleResourceStatsAggregationTaskService() {
@@ -140,17 +156,27 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
             postOp.fail(new IllegalArgumentException("metricNames needs to be specified"));
             return null;
         }
-        if (state.query == null) {
-            state.query = Query.Builder.create().addFieldClause(
-                   ServiceDocument.FIELD_NAME_SELF_LINK, state.resourceLink).build();
-        }
         return state;
     }
 
     @Override
-    protected void initializeState(SingleResourceStatsAggregationTaskState state, Operation postOp) {
+    protected void initializeState(SingleResourceStatsAggregationTaskState state,
+            Operation postOp) {
         super.initializeState(state, postOp);
         state.taskStage = StatsAggregationStage.GET_LAST_ROLLUP_TIME;
+
+        if (state.query == null) {
+            state.query = Query.Builder.create().addFieldClause(
+                    ServiceDocument.FIELD_NAME_SELF_LINK, state.resourceLink).build();
+        }
+
+        if (state.aggregations == null) {
+            state.aggregations = Collections.emptyMap();
+        }
+
+        if (state.latestValueOnly == null) {
+            state.latestValueOnly = Collections.emptySet();
+        }
     }
 
     @Override
@@ -166,7 +192,7 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
         case CREATED:
             break;
         case STARTED:
-            handleStagePatch(patch, currentState);
+            handleStagePatch(currentState);
             break;
         case FINISHED:
         case FAILED:
@@ -176,12 +202,12 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
                         .createPatch(UriUtils.buildUri(getHost(), currentState.parentLink))
                         .setBody(currentState)
                         .setCompletion(
-                            (patchOp, patchEx) -> {
-                                if (patchEx != null) {
-                                    logWarning("Patching parent task failed %s",
-                                            Utils.toString(patchEx));
-                                }
-                            }));
+                                (patchOp, patchEx) -> {
+                                    if (patchEx != null) {
+                                        logWarning("Patching parent task failed %s",
+                                                Utils.toString(patchEx));
+                                    }
+                                }));
             }
             break;
         default:
@@ -189,75 +215,79 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
         }
     }
 
-    private void handleStagePatch(Operation op, SingleResourceStatsAggregationTaskState currentState) {
+    private void handleStagePatch(SingleResourceStatsAggregationTaskState currentState) {
         switch (currentState.taskStage) {
         case GET_LAST_ROLLUP_TIME:
-            getLastRollupTime(op, currentState);
+            getLastRollupTime(currentState);
             break;
         case INIT_RESOURCE_QUERY:
-            initializeQuery(op, currentState);
+            initializeQuery(currentState);
             break;
         case PROCESS_RESOURCES:
-            getResources(op, currentState);
+            getResources(currentState);
             break;
         case PUBLISH_METRICS:
-            publishMetrics(op, currentState);
+            publishMetrics(currentState);
             break;
         default:
             break;
         }
     }
 
-    private void getLastRollupTime(Operation op, SingleResourceStatsAggregationTaskState currentState) {
+    private void getLastRollupTime(SingleResourceStatsAggregationTaskState currentState) {
         Query.Builder builder = Query.Builder.create();
         builder.addKindFieldClause(ResourceAggregateMetric.class);
-        Map<String, Long> lastUpdateMap = new HashMap<String, Long>();
+        Map<String, Long> lastUpdateMap = new HashMap<>();
         // for all metrics, get the last time rollup happened
+        Query.Builder clause = Query.Builder.create();
         for (String metricName : currentState.metricNames) {
             List<String> rollupKeys = buildRollupKeys(metricName);
             for (String rollupKey : rollupKeys) {
-                String serviceKey = buildMetricKey(UriUtils.getLastPathSegment(currentState.resourceLink), rollupKey);
+                String serviceKey = StatsUtil.getMetricKey(currentState.resourceLink, rollupKey);
                 lastUpdateMap.put(rollupKey, null);
-                builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                        UriUtils.buildUriPath(ResourceAggregateMetricService.FACTORY_LINK, serviceKey), Occurance.SHOULD_OCCUR);
+                clause.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                        UriUtils.buildUriPath(ResourceAggregateMetricService.FACTORY_LINK,
+                                serviceKey), Occurance.SHOULD_OCCUR);
             }
         }
+        builder.addClause(clause.build());
+
         sendRequest(Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
-                            .setBody(QueryTask.Builder.createDirectTask()
-                                    .addOption(QueryOption.BROADCAST)
-                                    .addOption(QueryOption.EXPAND_CONTENT)
-                                    .setQuery(builder.build()).build())
-                            .setConnectionSharing(true)
-                            .setCompletion((queryResultOp, queryEx) -> {
-                                if (queryEx != null) {
-                                    sendSelfFailurePatch(currentState, queryEx.getMessage());
-                                    return;
-                                }
-                                QueryTask rsp = queryResultOp.getBody(QueryTask.class);
-                                for (Object aggrObj : rsp.results.documents.values()) {
-                                    ResourceAggregateMetric aggrState = Utils.fromJson(aggrObj, ResourceAggregateMetric.class);
-                                    lastUpdateMap.replace(getMetricKey(UriUtils.getLastPathSegment(aggrState.documentSelfLink),
-                                            UriUtils.getLastPathSegment(currentState.resourceLink)),
-                                            aggrState.currentIntervalTimeStampMicrosUtc);
-                                }
-                                SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
-                                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-                                patchBody.taskStage = StatsAggregationStage.INIT_RESOURCE_QUERY;
-                                patchBody.lastRollupTimeForMetric = lastUpdateMap;
-                                sendSelfPatch(patchBody);
-                            }));
+                .setBody(QueryTask.Builder.createDirectTask()
+                        .addOption(QueryOption.BROADCAST)
+                        .addOption(QueryOption.EXPAND_CONTENT)
+                        .setQuery(builder.build()).build())
+                .setConnectionSharing(true)
+                .setCompletion((queryResultOp, queryEx) -> {
+                    if (queryEx != null) {
+                        sendSelfFailurePatch(currentState, queryEx.getMessage());
+                        return;
+                    }
+                    QueryTask rsp = queryResultOp.getBody(QueryTask.class);
+                    for (Object aggrObj : rsp.results.documents.values()) {
+                        ResourceAggregateMetric aggrState = Utils
+                                .fromJson(aggrObj, ResourceAggregateMetric.class);
+                        String metricKey = StatsUtil.getMetricName(aggrState.documentSelfLink);
+                        lastUpdateMap
+                                .replace(metricKey, aggrState.currentIntervalTimeStampMicrosUtc);
+                    }
+                    SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
+                    patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+                    patchBody.taskStage = StatsAggregationStage.INIT_RESOURCE_QUERY;
+                    patchBody.lastRollupTimeForMetric = lastUpdateMap;
+                    sendSelfPatch(patchBody);
+                }));
     }
 
     /**
      * Initialize query from the task state.
      */
-    private void initializeQuery(Operation op, SingleResourceStatsAggregationTaskState currentState) {
+    private void initializeQuery(SingleResourceStatsAggregationTaskState currentState) {
         int resultLimit = Integer.getInteger(STATS_QUERY_RESULT_LIMIT, DEFAULT_QUERY_RESULT_LIMIT);
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(currentState.query)
                 .setResultLimit(resultLimit)
                 .build();
-
 
         sendRequest(Operation.createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
                 .setBody(queryTask)
@@ -285,7 +315,7 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
      * Gets resources for the given query, fetch raw metrics and compute partial aggregations
      * as one step
      */
-    private void getResources(Operation op, SingleResourceStatsAggregationTaskState currentState) {
+    private void getResources(SingleResourceStatsAggregationTaskState currentState) {
         sendRequest(Operation
                 .createGet(UriUtils.buildUri(getHost(), currentState.queryResultLink))
                 .setCompletion(
@@ -300,24 +330,28 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
                                 sendSelfPatch(currentState);
                                 return;
                             }
-                            getRawMetrics(op, currentState, queryTask);
+                            getRawMetrics(currentState, queryTask);
                         }));
     }
 
-    private void getRawMetrics(Operation op, SingleResourceStatsAggregationTaskState currentState, QueryTask resourceQueryTask) {
-        Set<Operation> rawMericQueryOps = new HashSet<Operation>();
-        Map<String, String> taskUUIDToMetricKeyMap = new HashMap<String, String>();
+    private void getRawMetrics(SingleResourceStatsAggregationTaskState currentState,
+            QueryTask resourceQueryTask) {
+        Set<Operation> rawMericQueryOps = new HashSet<>();
+        Map<String, String> taskUUIDToMetricKeyMap = new HashMap<>();
         for (String resourceLink : resourceQueryTask.results.documentLinks) {
-            for (Entry<String, Long> metricEntry : currentState.lastRollupTimeForMetric.entrySet()) {
+            for (Entry<String, Long> metricEntry : currentState.lastRollupTimeForMetric
+                    .entrySet()) {
                 String resourceRawMetricKey = buildRawMetricKey(resourceLink, metricEntry.getKey());
                 Query.Builder builder = Query.Builder.create();
                 builder.addKindFieldClause(ResourceMetric.class);
                 builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                        UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK, resourceRawMetricKey));
+                        UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
+                                resourceRawMetricKey));
                 if (metricEntry.getValue() != null) {
                     builder.addRangeClause(ResourceMetric.FIELD_NAME_TIMESTAMP,
                             NumericRange.createGreaterThanOrEqualRange(
-                                    computeIntervalBegin((metricEntry.getValue() - 1) , lookupBinSize(metricEntry.getKey()))));
+                                    computeIntervalBegin((metricEntry.getValue() - 1),
+                                            lookupBinSize(metricEntry.getKey()))));
                 }
                 QueryTask task = QueryTask.Builder.createDirectTask()
                         .addOption(QueryOption.BROADCAST)
@@ -326,7 +360,8 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
                         .setQuery(builder.build()).build();
                 String taskId = UUID.randomUUID().toString();
                 task.documentSelfLink = taskId;
-                Operation queryOp = Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+                Operation queryOp = Operation
+                        .createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
                         .setBody(task)
                         .setConnectionSharing(true);
                 rawMericQueryOps.add(queryOp);
@@ -336,7 +371,8 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
         OperationJoin.JoinedCompletionHandler postJoinCompletion = (postOps,
                 postExList) -> {
             if (postExList != null) {
-                sendSelfFailurePatch(currentState, postExList.values().iterator().next().getMessage());
+                sendSelfFailurePatch(currentState,
+                        postExList.values().iterator().next().getMessage());
                 return;
             }
             Map<String, List<ResourceMetric>> rawMetricsForKey = new HashMap<>();
@@ -346,7 +382,7 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
                 String metricKey = taskUUIDToMetricKeyMap.get(taskId);
                 List<ResourceMetric> rawMetricResultSet = rawMetricsForKey.get(metricKey);
                 if (rawMetricResultSet == null) {
-                    rawMetricResultSet = new ArrayList<ResourceMetric>();
+                    rawMetricResultSet = new ArrayList<>();
                     rawMetricsForKey.put(metricKey, rawMetricResultSet);
                 }
                 for (Object aggrObj : rsp.results.documents.values()) {
@@ -354,30 +390,33 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
                     rawMetricResultSet.add(rawMetric);
                 }
             }
-            aggregateMetrics(op, currentState, resourceQueryTask, rawMetricsForKey);
+            aggregateMetrics(currentState, resourceQueryTask, rawMetricsForKey);
         };
         OperationJoin postJoinOp = OperationJoin.create(rawMericQueryOps);
         postJoinOp.setCompletion(postJoinCompletion);
         postJoinOp.sendWith(this);
     }
 
-    private void aggregateMetrics(Operation op, SingleResourceStatsAggregationTaskState currentState,
+    private void aggregateMetrics(SingleResourceStatsAggregationTaskState currentState,
             QueryTask resourceQueryTask, Map<String, List<ResourceMetric>> rawMetricsForKey) {
         // comparator used to sort resource metric PODOs based on document timestamp
-        Comparator<ResourceMetric> comparator = new Comparator<ResourceMetric>() {
-            @Override
-            public int compare(ResourceMetric o1, ResourceMetric o2) {
-                if (o1.timestampMicrosUtc < o2.timestampMicrosUtc) {
-                    return -1;
-                } else if (o1.timestampMicrosUtc > o2.timestampMicrosUtc) {
-                    return 1;
-                }
-                return 0;
+        Comparator<ResourceMetric> comparator = (o1, o2) -> {
+            if (o1.timestampMicrosUtc < o2.timestampMicrosUtc) {
+                return -1;
+            } else if (o1.timestampMicrosUtc > o2.timestampMicrosUtc) {
+                return 1;
             }
+            return 0;
         };
+
         Map<String, Map<Long, TimeBin>> aggregatedTimeBinMap = currentState.aggregatedTimeBinMap;
         for (Entry<String, List<ResourceMetric>> rawMetricListEntry : rawMetricsForKey.entrySet()) {
             List<ResourceMetric> rawMetricList = rawMetricListEntry.getValue();
+
+            if (rawMetricList.isEmpty()) {
+                continue;
+            }
+
             String metricKey = rawMetricListEntry.getKey();
             Collections.sort(rawMetricList, comparator);
 
@@ -386,17 +425,37 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
             }
             Map<Long, TimeBin> timeBinMap = aggregatedTimeBinMap.get(metricKey);
             if (timeBinMap == null) {
-                timeBinMap = new HashMap<Long, TimeBin>();
+                timeBinMap = new HashMap<>();
                 aggregatedTimeBinMap.put(metricKey, timeBinMap);
             }
+
+            String metricName = StatsUtil.getMetricName(rawMetricList.get(0).documentSelfLink);
+
+            Collection<ResourceMetric> metrics = rawMetricList;
+            if (currentState.latestValueOnly.contains(metricName)) {
+                metrics = getLatestMetrics(rawMetricList);
+            }
+
+            Set<AggregationType> aggregationTypes = null;
+
             // iterate over the raw metric values and place it in the right time bin
-            for (ResourceMetric metric : rawMetricList) {
-                long binId = computeIntervalEnd(metric.timestampMicrosUtc, lookupBinSize(metricKey));
+            for (ResourceMetric metric : metrics) {
+                long binId = computeIntervalEnd(metric.timestampMicrosUtc,
+                        lookupBinSize(metricKey));
                 TimeBin bin = timeBinMap.get(binId);
                 if (bin == null) {
                     bin = new TimeBin();
                 }
-                updateBin(bin, metric.value);
+
+                // Figure out the aggregation for the given metric
+                if (aggregationTypes == null) {
+                    aggregationTypes = currentState.aggregations.get(metricName);
+                    if (aggregationTypes == null) {
+                        aggregationTypes = EnumSet.allOf(AggregationType.class);
+                    }
+                }
+
+                updateBin(bin, metric.value, aggregationTypes);
                 timeBinMap.put(binId, bin);
             }
         }
@@ -412,26 +471,55 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
         sendSelfPatch(patchBody);
     }
 
+    /**
+     * Returns the latest metrics from the raw metrics list. Since the list contains all raw metrics
+     * across multiple resource we iterate on the list and pick the latest metric for each resource.
+     */
+    private Collection<ResourceMetric> getLatestMetrics(List<ResourceMetric> metrics) {
+        if (metrics.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<String, ResourceMetric> metricByResourceId = new HashMap<>();
+        for (ResourceMetric metric : metrics) {
+            String resourceId = StatsUtil.getResourceId(metric.documentSelfLink);
+            ResourceMetric existingMetric = metricByResourceId.get(resourceId);
+            if (existingMetric == null) {
+                metricByResourceId.put(resourceId, metric);
+                continue;
+            }
+
+            if (existingMetric.timestampMicrosUtc < metric.timestampMicrosUtc) {
+                metricByResourceId.put(resourceId, metric);
+            }
+        }
+
+        return metricByResourceId.values();
+    }
+
     // publish aggregate metric values
-    private void publishMetrics(Operation op, SingleResourceStatsAggregationTaskState currentState) {
+    private void publishMetrics(SingleResourceStatsAggregationTaskState currentState) {
         if (currentState.aggregatedTimeBinMap == null) {
             sendSelfPatch(currentState, TaskStage.FINISHED, null);
             return;
         }
-        List<Operation> listOfAggrMetrics = new ArrayList<Operation>();
-        for (Entry<String, Map<Long, TimeBin>> aggregateEntries : currentState.aggregatedTimeBinMap.entrySet()) {
+        List<Operation> listOfAggrMetrics = new ArrayList<>();
+        for (Entry<String, Map<Long, TimeBin>> aggregateEntries : currentState.aggregatedTimeBinMap
+                .entrySet()) {
             Map<Long, TimeBin> aggrValue = aggregateEntries.getValue();
-            List<Long> keys = new ArrayList<Long>();
+            List<Long> keys = new ArrayList<>();
             keys.addAll(aggrValue.keySet());
             // create list of operations sorted by the timebin
             Collections.sort(keys);
             for (Long timeKey : keys) {
                 ResourceAggregateMetric aggrMetric = new ResourceAggregateMetric();
                 aggrMetric.timeBin = aggrValue.get(timeKey);
-                aggrMetric.currentIntervalTimeStampMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timeKey);
-                aggrMetric.documentSelfLink = buildMetricKey(
-                        UriUtils.getLastPathSegment(currentState.resourceLink), aggregateEntries.getKey());
-                listOfAggrMetrics.add(Operation.createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
+                aggrMetric.currentIntervalTimeStampMicrosUtc = TimeUnit.MILLISECONDS
+                        .toMicros(timeKey);
+                aggrMetric.documentSelfLink = StatsUtil.getMetricKey(currentState.resourceLink,
+                        aggregateEntries.getKey());
+                listOfAggrMetrics.add(Operation
+                        .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
                         .setBody(aggrMetric));
             }
         }
@@ -453,19 +541,13 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
                 return;
             }
             sendSelfPatch(currentState, TaskStage.FINISHED, null);
-            return;
         });
         opSequence.sendWith(this);
     }
 
-    // extract the metric key from the documentSelfLink of the raw resource metric
-    private String getMetricKey(String resourceMetricKey, String resourceKey) {
-        return resourceMetricKey.replace(resourceKey, "");
-    }
-
     // build the keys used to represent rolled up data. We currently support hourly and daily rollups
     private List<String> buildRollupKeys(String baseKey) {
-        List<String> returnList = new ArrayList<String>();
+        List<String> returnList = new ArrayList<>();
         returnList.add(new StringBuilder(baseKey).append(StatsConstants.HOUR_SUFFIX).toString());
         returnList.add(new StringBuilder(baseKey).append(StatsConstants.DAILY_SUFFIX).toString());
         return returnList;
@@ -481,11 +563,7 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
 
     private String buildRawMetricKey(String resourceId, String rollupMetricKey) {
         String rawKey = getRawMetricKey(rollupMetricKey);
-        return buildMetricKey(resourceId, rawKey);
-    }
-
-    private String buildMetricKey(String resourceId, String metricKey) {
-        return new StringBuilder(UriUtils.getLastPathSegment(resourceId)).append("-").append(metricKey).toString();
+        return StatsUtil.getMetricKey(resourceId, rawKey);
     }
 
     // compute the beginning of the rollup interval
@@ -509,22 +587,34 @@ public class SingleResourceStatsAggregationTaskService extends TaskService<Singl
         return StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS;
     }
 
-    private TimeBin updateBin(TimeBin inputBin, double value) {
-        if (inputBin.max == null || inputBin.max < value) {
-            inputBin.max = value;
+    private TimeBin updateBin(TimeBin inputBin, double value,
+            Set<AggregationType> aggregationTypes) {
+        if (aggregationTypes.contains(AggregationType.MAX)) {
+            if (inputBin.max == null || inputBin.max < value) {
+                inputBin.max = value;
+            }
         }
-        if (inputBin.min == null || inputBin.min > value) {
-            inputBin.min = value;
+
+        if (aggregationTypes.contains(AggregationType.MIN)) {
+            if (inputBin.min == null || inputBin.min > value) {
+                inputBin.min = value;
+            }
         }
-        if (inputBin.avg == null) {
-            inputBin.avg = value;
-        } else {
-            inputBin.avg = ((inputBin.avg * inputBin.count) + value) / (inputBin.count + 1);
+
+        if (aggregationTypes.contains(AggregationType.AVG)) {
+            if (inputBin.avg == null) {
+                inputBin.avg = value;
+            } else {
+                inputBin.avg = ((inputBin.avg * inputBin.count) + value) / (inputBin.count + 1);
+            }
         }
-        if (inputBin.sum == null) {
-            inputBin.sum = value;
-        } else {
-            inputBin.sum += value;
+
+        if (aggregationTypes.contains(AggregationType.SUM)) {
+            if (inputBin.sum == null) {
+                inputBin.sum = value;
+            } else {
+                inputBin.sum += value;
+            }
         }
         inputBin.count++;
         return inputBin;

@@ -30,7 +30,6 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService.StatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
@@ -73,7 +72,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
         computeState.name = rpState.name;
         computeState.descriptionLink = descReturnState.documentSelfLink;
         computeState.resourcePoolLink = rpReturnState.documentSelfLink;
-        List<String> computeLinks = new ArrayList<String>();
+        List<String> computeLinks = new ArrayList<>();
         for (int i = 0; i < this.numResources; i++) {
             ComputeState res = postServiceSynchronously(
                     ComputeService.FACTORY_LINK, computeState,
@@ -85,7 +84,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
         Query taskQuery = Query.Builder.create()
                 .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK, rpReturnState.documentSelfLink).build();
         aggregationTaskState.query =  taskQuery;
-        aggregationTaskState.metricNames = Collections.singleton("key-1");
+        aggregationTaskState.metricNames = Collections.singleton(MockStatsAdapter.KEY_1);
         StatsAggregationTaskState returnState  = postServiceSynchronously(
                 StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
                 StatsAggregationTaskState.class);
@@ -112,7 +111,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
         // kick off an aggregation task
         aggregationTaskState = new StatsAggregationTaskState();
         aggregationTaskState.query =  taskQuery;
-        aggregationTaskState.metricNames = Collections.singleton("key-1");
+        aggregationTaskState.metricNames = Collections.singleton(MockStatsAdapter.KEY_1);
         returnState  = postServiceSynchronously(StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
                 StatsAggregationTaskState.class);
         waitForFinishedTask(StatsAggregationTaskState.class,

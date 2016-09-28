@@ -58,6 +58,7 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -374,7 +375,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat, String computeLink) {
         ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
         // Set the documentSelfLink to <computeId>-<metricName>
-        stat.documentSelfLink = UriUtils.getLastPathSegment(computeLink) + "-" + metricName;
+        stat.documentSelfLink = StatsUtil.getMetricKey(computeLink, metricName);
         stat.value = serviceStat.latestValue;
         stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
         this.host.sendRequest(Operation

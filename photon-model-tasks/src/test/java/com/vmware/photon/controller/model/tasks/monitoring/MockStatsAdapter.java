@@ -34,8 +34,8 @@ import com.vmware.xenon.common.UriUtils;
 public class MockStatsAdapter extends StatelessService {
 
     public static final String SELF_LINK = "/mock-stats-adapter";
-    public static final String KEY_1 = "key-1";
-    public static final String KEY_2 = "key-2";
+    public static final String KEY_1 = "key1";
+    public static final String KEY_2 = "key2";
     public static final String UNIT_1 = "unit1";
     public static final String UNIT_2 = "unit2";
 
@@ -58,7 +58,7 @@ public class MockStatsAdapter extends StatelessService {
             op.complete();
             ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
             SingleResourceStatsCollectionTaskState statsResponse = new SingleResourceStatsCollectionTaskState();
-            Map<String, List<ServiceStat>> statValues = new HashMap<String, List<ServiceStat>>();
+            Map<String, List<ServiceStat>> statValues = new HashMap<>();
             double currentCounter = this.counter.incrementAndGet();
             ServiceStat key1 = new ServiceStat();
             key1.latestValue = currentCounter;
@@ -73,7 +73,7 @@ public class MockStatsAdapter extends StatelessService {
             ComputeStats cStat = new ComputeStats();
             cStat.statValues = statValues;
             cStat.computeLink = statsRequest.resourceReference.getPath();
-            statsResponse.statsList = new ArrayList<ComputeStats>();
+            statsResponse.statsList = new ArrayList<>();
             statsResponse.statsList.add(cStat);
             statsResponse.taskStage = (SingleResourceTaskCollectionStage) statsRequest.nextStage;
             statsResponse.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);

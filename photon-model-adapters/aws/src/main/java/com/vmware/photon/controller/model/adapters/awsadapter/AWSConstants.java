@@ -30,7 +30,6 @@ public class AWSConstants {
     public static final String INSTANCE_STATE_STOPPING = "stopping";
     public static final String INSTANCE_STATE_STOPPED = "stopped";
     public static final String INSTANCE_STATE_SHUTTING_DOWN = "shutting-down";
-    public static final String HYPHEN = "-";
     public static final String PUBLIC_INTERFACE = "public-interface";
     public static final String PRIVATE_INTERFACE = "private-interface";
     public static final String AWS_ATTACHMENT_VPC_FILTER = "attachment.vpc-id";

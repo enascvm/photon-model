@@ -16,8 +16,6 @@ package com.vmware.photon.controller.model.tasks.monitoring;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import static com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.HYPHEN;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -50,7 +48,6 @@ import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTa
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
@@ -143,31 +140,26 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         // check that all the stats retuned from the mock stats adapter are
         // persisted at a per metric level along with the last collection run time
         for (String computeLink : computeLinks) {
-            String metricSelfLink = ResourceMetricService.FACTORY_LINK
-                    + UriUtils.URI_PATH_CHAR
-                    + UriUtils.getLastPathSegment(computeLink) + HYPHEN
-                    + MockStatsAdapter.KEY_1;
+            String metricSelfLink = UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
+                    StatsUtil.getMetricKey(computeLink, MockStatsAdapter.KEY_1));
 
             ResourceMetric metric = getServiceSynchronously(metricSelfLink,
                     ResourceMetric.class);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_1 +
                     " should not be null ", metric);
 
-            String metricSelfLink2 = ResourceMetricService.FACTORY_LINK
-                    + UriUtils.URI_PATH_CHAR
-                    + UriUtils.getLastPathSegment(computeLink) + HYPHEN
-                    + MockStatsAdapter.KEY_2;
+            String metricSelfLink2 = UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
+                    StatsUtil.getMetricKey(computeLink, MockStatsAdapter.KEY_2));
             ResourceMetric metric2 = getServiceSynchronously(metricSelfLink2,
                     ResourceMetric.class);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_2 +
                     "should not be null ", metric2);
 
-            String lastSuccessfulRunMetricKey = MockStatsAdapter.SELF_LINK
-                    + HYPHEN
-                    + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
-            String metricLastSuccessfulRunLink = ResourceMetricService.FACTORY_LINK
-                    + UriUtils.URI_PATH_CHAR + UriUtils.getLastPathSegment(computeLink)
-                    + HYPHEN + lastSuccessfulRunMetricKey;
+            String lastSuccessfulRunMetricKey = StatsUtil.getMetricKey(MockStatsAdapter.SELF_LINK,
+                    PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME);
+            String metricLastSuccessfulRunLink = UriUtils
+                    .buildUriPath(ResourceMetricService.FACTORY_LINK,
+                            StatsUtil.getMetricKey(computeLink, lastSuccessfulRunMetricKey));
             ResourceMetric metricLastRun = getServiceSynchronously(metricLastSuccessfulRunLink,
                     ResourceMetric.class);
             assertNotNull("The resource metric for" + lastSuccessfulRunMetricKey
@@ -215,7 +207,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
-        statsCollectionTaskState.intervalMicros = TimeUnit.MILLISECONDS.toMicros(250);
+        statsCollectionTaskState.intervalMicros = TimeUnit.MILLISECONDS.toMicros(500);
         postServiceSynchronously(
                 ScheduledTaskService.FACTORY_LINK, statsCollectionTaskState,
                 ScheduledTaskState.class);
@@ -225,7 +217,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         assertTrue(res.documents.size() > 0);
 
         // get stats from resources
-        for (int i = 0; i < this.numResources; i++) {
+        for (int i = 0; i < computeLinks.size(); i++) {
             String statsUriPath = UriUtils.buildUriPath(computeLinks.get(i),
                     ServiceHost.SERVICE_URI_SUFFIX_STATS);
             this.host.waitFor("Error waiting for stats", () -> {
@@ -235,7 +227,9 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 // check if custom stats adapter was invoked and the last collection time metric
                 // was populated in the in memory stats
                 for (ServiceStat stat : resStats.entries.values()) {
-                    if (stat.name.startsWith(CustomStatsAdapter.SELF_LINK)
+                    //host.log(Level.INFO, "*****%s", stat.name);
+                    if (stat.name
+                            .startsWith(UriUtils.getLastPathSegment(CustomStatsAdapter.SELF_LINK))
                             && stat.timeSeriesStats.bins.size() > 0) {
                         returnStatus = true;
                         break;
@@ -284,7 +278,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
-        statsCollectionTaskState.intervalMicros = TimeUnit.MILLISECONDS.toMicros(250);
+        statsCollectionTaskState.intervalMicros = TimeUnit.MILLISECONDS.toMicros(500);
         postServiceSynchronously(
                 ScheduledTaskService.FACTORY_LINK, statsCollectionTaskState,
                 ScheduledTaskState.class);
@@ -294,7 +288,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         assertTrue(res.documents.size() > 0);
 
         // get stats from resources
-        for (int i = 0; i < this.numResources; i++) {
+        for (int i = 0; i < computeLinks.size(); i++) {
             String statsUriPath = UriUtils.buildUriPath(computeLinks.get(i),
                     ServiceHost.SERVICE_URI_SUFFIX_STATS);
             this.host.waitFor("Error waiting for stats", () -> {
@@ -304,7 +298,9 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 // check if custom stats adapter was invoked and the last collection value was
                 // populated correctly.
                 for (ServiceStat stat : resStats.entries.values()) {
-                    if (stat.name.startsWith(CustomStatsAdapter.SELF_LINK)) {
+                    //host.log(Level.INFO, "*****%s", stat.name);
+                    if (stat.name.startsWith(
+                            UriUtils.getLastPathSegment(CustomStatsAdapter.SELF_LINK))) {
                         returnStatus = true;
                         break;
                     }

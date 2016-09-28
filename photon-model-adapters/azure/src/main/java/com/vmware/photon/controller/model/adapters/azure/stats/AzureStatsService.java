@@ -36,7 +36,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
+import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
@@ -51,8 +51,6 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class AzureStatsService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_STATS_ADAPTER;
-
-    private static final String HYPHEN = "-";
 
     private class AzureStatsDataHolder {
         public ComputeStateWithDescription computeDesc;
@@ -225,7 +223,7 @@ public class AzureStatsService extends StatelessService {
             Map<Long, Throwable> failures, AzureStatsDataHolder statsData) {
         try {
             if (failures != null) {
-                sendFailurePatch(statsData, failures.get(0));
+                sendFailurePatch(statsData, failures.get(0L));
                 return;
             }
             List<QueryTask> items = new ArrayList<>(ops.size());
@@ -265,7 +263,7 @@ public class AzureStatsService extends StatelessService {
                 for (String key : queryResult.results.documents.keySet()) {
                     ResourceMetric metric = Utils.fromJson(queryResult.results.documents.get(key),
                             ResourceMetric.class);
-                    String metricName = getMetricNameFromSelfLink(metric.documentSelfLink);
+                    String metricName = StatsUtil.getMetricName(metric.documentSelfLink);
                     if (statMap.containsKey(metricName)) {
                         statMap.get(metricName).latestValue += metric.value;
                     } else {
@@ -293,16 +291,6 @@ public class AzureStatsService extends StatelessService {
             statsResponse.statsList.add(computeStats);
         }
         return statsResponse;
-    }
-
-    /**
-     * Self link is of the type /monitoring/metrics/<computeId>-<metricName>
-     * This method extracts and returns the metric name.
-     * TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1272
-     */
-    private String getMetricNameFromSelfLink(String selfLink) {
-        String metricName = UriUtils.getLastPathSegment(selfLink);
-        return metricName.substring(metricName.lastIndexOf(HYPHEN) + 1);
     }
 
     /**
