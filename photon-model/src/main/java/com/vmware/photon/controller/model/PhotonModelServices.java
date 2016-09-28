@@ -29,7 +29,12 @@ import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
+
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.ServiceStats;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * Helper class that starts all the photon model provisioning services
@@ -69,6 +74,34 @@ public class PhotonModelServices {
         host.startFactory(new EndpointService());
         host.startFactory(TagService.class, TagFactoryService::new);
         host.startFactory(ResourceMetricService.class, ResourceMetricService::createFactory);
+        setFactoryToAvailable(host, ResourceMetricService.FACTORY_LINK);
         host.startFactory(ResourceAggregateMetricService.class, ResourceAggregateMetricService::createFactory);
+        setFactoryToAvailable(host, ResourceAggregateMetricService.FACTORY_LINK);
+    }
+
+    /** @see #setFactoryToAvailable(ServiceHost, String, Operation.CompletionHandler) */
+    public static void setFactoryToAvailable(ServiceHost host, String factoryPath) {
+        setFactoryToAvailable(host, factoryPath, null);
+    }
+
+    /**
+     * Helper method to explicitly set a factory to be "available". This is usually unnecessary,
+     * but currently factories that create {@code ON_DEMAND_LOAD} services are not being set to
+     * available... and currently require this work-around.
+     *
+     * @param host the host
+     * @param factoryPath the path of the factory to explicitly set to be available
+     * @param handler an optional completion handler
+     */
+    public static void setFactoryToAvailable(ServiceHost host, String factoryPath, Operation.CompletionHandler handler) {
+        ServiceStats.ServiceStat body = new ServiceStats.ServiceStat();
+        body.name = Service.STAT_NAME_AVAILABLE;
+        body.latestValue = Service.STAT_VALUE_TRUE;
+
+        Operation put = Operation.createPut(UriUtils.buildAvailableUri(host, factoryPath))
+                .setBody(body)
+                .setCompletion(handler)
+                .setReferer(host.getUri());
+        host.sendRequest(put);
     }
 }

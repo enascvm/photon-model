@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNotNull;
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -30,8 +31,8 @@ import org.junit.runners.Suite.SuiteClasses;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
+import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -183,6 +184,22 @@ public class ResourceMetricServiceTest extends Suite {
                                                 }));
                             }));
             this.host.testWait();
+        }
+
+        @Test
+        public void testFactoryAvailable() throws Throwable {
+            this.host.startFactory(new ResourceMetricService());
+            this.host.waitForServiceAvailable(ResourceMetricService.FACTORY_LINK);
+
+            this.host.testStart(1);
+            PhotonModelServices.setFactoryToAvailable(this.host, ResourceMetricService.FACTORY_LINK, this.host.getCompletion());
+            this.host.testWait();
+
+            URI availableUri = UriUtils.buildAvailableUri(this.host, ResourceMetricService.FACTORY_LINK);
+            Operation factoryAvailableOp = Operation.createGet(availableUri)
+                    .setCompletion(this.host.getCompletion());
+            this.host.log(Level.INFO, "Attempting to get factory's availability: %s", availableUri);
+            this.host.sendAndWait(factoryAvailableOp);
         }
     }
 }
