@@ -14,7 +14,10 @@
 package com.vmware.photon.controller.model.resources.util;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.Assert.assertThat;
@@ -89,11 +92,15 @@ public class ResourcePoolQueryHelperTest extends BaseModelTest {
         ResourcePoolQueryHelper.QueryResult qr = runHelperSynchronously(helper);
 
         assertThat(qr.resourcesPools.size(), is(3));
-        assertThat(qr.resourcesPools.get(this.rp1.documentSelfLink).computeStates, hasSize(2));
-        assertThat(qr.resourcesPools.get(this.rp2.documentSelfLink).computeStates, hasSize(1));
-        assertThat(qr.resourcesPools.get(this.rp3.documentSelfLink).computeStates, is(empty()));
+        assertThat(qr.resourcesPools.get(this.rp1.documentSelfLink).computeStateLinks, hasSize(2));
+        assertThat(qr.resourcesPools.get(this.rp2.documentSelfLink).computeStateLinks, hasSize(1));
+        assertThat(qr.resourcesPools.get(this.rp3.documentSelfLink).computeStateLinks, is(empty()));
 
         assertThat(qr.computesByLink.size(), is(4));
+        assertThat(qr.computesByLink.keySet(),
+                containsInAnyOrder(this.c1.documentSelfLink, this.c2.documentSelfLink,
+                        this.c3.documentSelfLink, this.c4.documentSelfLink));
+        assertThat(qr.computesByLink.get(this.c1.documentSelfLink), is(nullValue()));
 
         assertThat(qr.rpLinksByComputeLink.size(), is(4));
         assertThat(qr.rpLinksByComputeLink.get(this.c1.documentSelfLink),
@@ -106,13 +113,31 @@ public class ResourcePoolQueryHelperTest extends BaseModelTest {
     }
 
     @Test
+    public void testAllResourcePoolsWithComputesExpanded() throws Throwable {
+        ResourcePoolQueryHelper helper = ResourcePoolQueryHelper.create(getHost());
+        helper.setExpandComputes(true);
+        ResourcePoolQueryHelper.QueryResult qr = runHelperSynchronously(helper);
+
+        assertThat(qr.resourcesPools.size(), is(3));
+
+        assertThat(qr.computesByLink.size(), is(4));
+        assertThat(qr.computesByLink.keySet(),
+                containsInAnyOrder(this.c1.documentSelfLink, this.c2.documentSelfLink,
+                        this.c3.documentSelfLink, this.c4.documentSelfLink));
+        assertThat(qr.computesByLink.get(this.c1.documentSelfLink), is(not(nullValue())));
+        assertThat(qr.computesByLink.get(this.c2.documentSelfLink), is(not(nullValue())));
+        assertThat(qr.computesByLink.get(this.c3.documentSelfLink), is(not(nullValue())));
+        assertThat(qr.computesByLink.get(this.c4.documentSelfLink), is(not(nullValue())));
+    }
+
+    @Test
     public void testForResourcePool() throws Throwable {
         ResourcePoolQueryHelper helper = ResourcePoolQueryHelper.createForResourcePool(getHost(),
                 this.rp2.documentSelfLink);
         ResourcePoolQueryHelper.QueryResult qr = runHelperSynchronously(helper);
 
         assertThat(qr.resourcesPools.size(), is(1));
-        assertThat(qr.resourcesPools.get(this.rp2.documentSelfLink).computeStates, hasSize(1));
+        assertThat(qr.resourcesPools.get(this.rp2.documentSelfLink).computeStateLinks, hasSize(1));
 
         assertThat(qr.computesByLink.size(), is(1));
 
@@ -128,7 +153,7 @@ public class ResourcePoolQueryHelperTest extends BaseModelTest {
         ResourcePoolQueryHelper.QueryResult qr = runHelperSynchronously(helper);
 
         assertThat(qr.resourcesPools.size(), is(1));
-        assertThat(qr.resourcesPools.get(this.rp1.documentSelfLink).computeStates, hasSize(1));
+        assertThat(qr.resourcesPools.get(this.rp1.documentSelfLink).computeStateLinks, hasSize(1));
 
         assertThat(qr.computesByLink.size(), is(2));
 
@@ -148,9 +173,9 @@ public class ResourcePoolQueryHelperTest extends BaseModelTest {
         ResourcePoolQueryHelper.QueryResult qr = runHelperSynchronously(helper);
 
         assertThat(qr.resourcesPools.size(), is(3));
-        assertThat(qr.resourcesPools.get(this.rp1.documentSelfLink).computeStates, hasSize(1));
-        assertThat(qr.resourcesPools.get(this.rp2.documentSelfLink).computeStates, is(empty()));
-        assertThat(qr.resourcesPools.get(this.rp3.documentSelfLink).computeStates, is(empty()));
+        assertThat(qr.resourcesPools.get(this.rp1.documentSelfLink).computeStateLinks, hasSize(1));
+        assertThat(qr.resourcesPools.get(this.rp2.documentSelfLink).computeStateLinks, is(empty()));
+        assertThat(qr.resourcesPools.get(this.rp3.documentSelfLink).computeStateLinks, is(empty()));
 
         assertThat(qr.computesByLink.size(), is(2));
 
