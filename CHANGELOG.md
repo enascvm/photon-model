@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.4.10-SNAPSHOT
+
 ## 0.4.9
 
 * Support for latest value aggregation and per metric aggregation type
