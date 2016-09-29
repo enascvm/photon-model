@@ -19,6 +19,7 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -42,6 +43,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState.ResourcePoolProperty;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
@@ -49,6 +51,7 @@ import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCo
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
@@ -56,6 +59,7 @@ import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 public class StatsCollectionTaskServiceTest extends BaseModelTest {
     public int numResources = 200;
@@ -80,29 +84,36 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
 
     @Test
     public void testStatsCollectorCreation() throws Throwable {
-        // create a resource pool
-        ResourcePoolState rpState = new ResourcePoolState();
-        rpState.name = UUID.randomUUID().toString();
-        ResourcePoolState rpReturnState = postServiceSynchronously(
-                ResourcePoolService.FACTORY_LINK, rpState,
-                ResourcePoolState.class);
+        // create a compute description for all the computes
         ComputeDescription cDesc = new ComputeDescription();
-        cDesc.name = rpState.name;
+        cDesc.name = UUID.randomUUID().toString();
         cDesc.statsAdapterReference = UriUtils.buildUri(this.host, MockStatsAdapter.SELF_LINK);
         ComputeDescription descReturnState = postServiceSynchronously(
                 ComputeDescriptionService.FACTORY_LINK, cDesc,
                 ComputeDescription.class);
+
+        // create multiple computes
         ComputeState computeState = new ComputeState();
-        computeState.name = rpState.name;
+        computeState.name = UUID.randomUUID().toString();
         computeState.descriptionLink = descReturnState.documentSelfLink;
-        computeState.resourcePoolLink = rpReturnState.documentSelfLink;
-        List<String> computeLinks = new ArrayList<>();
+        List<String> computeLinks = new ArrayList<>(this.numResources);
         for (int i = 0; i < this.numResources; i++) {
             ComputeState res = postServiceSynchronously(
                     ComputeService.FACTORY_LINK, computeState,
                     ComputeState.class);
             computeLinks.add(res.documentSelfLink);
         }
+
+        // create a resource pool including all the created computes
+        ResourcePoolState rpState = new ResourcePoolState();
+        rpState.name = UUID.randomUUID().toString();
+        rpState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+        rpState.query = Query.Builder.create().addKindFieldClause(ComputeState.class)
+                .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, computeLinks).build();
+        ResourcePoolState rpReturnState = postServiceSynchronously(
+                ResourcePoolService.FACTORY_LINK, rpState,
+                ResourcePoolState.class);
+
         // create a stats collection scheduler task
         StatsCollectionTaskState statCollectionState = new StatsCollectionTaskState();
         statCollectionState.resourcePoolLink = rpReturnState.documentSelfLink;

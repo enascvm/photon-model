@@ -345,33 +345,31 @@ public class SingleResourceStatsCollectionTaskService
         URI computeStatsUri = UriUtils
                 .buildStatsUri(UriUtils.buildUri(getHost(), currentState.computeLink));
         Operation.createGet(computeStatsUri)
-                .setCompletion(
-                        (o, e) -> {
-                            if (e != null) {
-                                logSevere(
-                                        "Could not get the last collection time from in memory stats: %s",
-                                        Utils.toString(e));
-                                // get the value from the persisted store.
-                                populateLastCollectionTimeFromPersistenceStore(currentState,
-                                        computeStatsRequest, patchUri, tenantLinks);
-                            }
-                            ServiceStats serviceStats = o.getBody(ServiceStats.class);
-                            String statsAdapterLink = getAdapterLinkFromURI(patchUri);
-                            String lastSuccessfulRunMetricKey = getLastCollectionMetricKeyForAdapterLink(
-                                    statsAdapterLink, true);
-                            if (serviceStats.entries.containsKey(lastSuccessfulRunMetricKey)) {
-                                ServiceStat lastRunStat = serviceStats.entries
-                                        .get(lastSuccessfulRunMetricKey);
-                                computeStatsRequest.lastCollectionTimeMicrosUtc = lastRunStat.sourceTimeMicrosUtc;
-                                sendStatsRequestToAdapter(currentState, patchUri,
-                                        computeStatsRequest);
-                            } else {
-                                populateLastCollectionTimeFromPersistenceStore(currentState,
-                                        computeStatsRequest, patchUri, tenantLinks);
-                            }
-                        })
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logSevere("Could not get the last collection time from in memory stats: %s",
+                                Utils.toString(e));
+                        // get the value from the persisted store.
+                        populateLastCollectionTimeFromPersistenceStore(currentState,
+                                computeStatsRequest, patchUri, tenantLinks);
+                        return;
+                    }
+                    ServiceStats serviceStats = o.getBody(ServiceStats.class);
+                    String statsAdapterLink = getAdapterLinkFromURI(patchUri);
+                    String lastSuccessfulRunMetricKey = getLastCollectionMetricKeyForAdapterLink(
+                            statsAdapterLink, true);
+                    if (serviceStats.entries.containsKey(lastSuccessfulRunMetricKey)) {
+                        ServiceStat lastRunStat = serviceStats.entries
+                                .get(lastSuccessfulRunMetricKey);
+                        computeStatsRequest.lastCollectionTimeMicrosUtc =
+                                lastRunStat.sourceTimeMicrosUtc;
+                        sendStatsRequestToAdapter(currentState, patchUri, computeStatsRequest);
+                    } else {
+                        populateLastCollectionTimeFromPersistenceStore(currentState,
+                                computeStatsRequest, patchUri, tenantLinks);
+                    }
+                })
                 .sendWith(this);
-
     }
 
     /**
@@ -421,8 +419,7 @@ public class SingleResourceStatsCollectionTaskService
                                 ResourceMetric.class);
                         computeStatsRequest.lastCollectionTimeMicrosUtc = rawMetric.timestampMicrosUtc;
                     }
-                    sendStatsRequestToAdapter(currentState,
-                            patchUri, computeStatsRequest);
+                    sendStatsRequestToAdapter(currentState, patchUri, computeStatsRequest);
                 })
                 .sendWith(this);
     }

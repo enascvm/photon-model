@@ -18,8 +18,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.resources.ComputeService;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
@@ -30,7 +29,6 @@ import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService;
 
@@ -142,7 +140,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
     private void handleStagePatch(Operation op, StatsCollectionTaskState currentState) {
         switch (currentState.taskStage) {
         case INIT:
-            initializeQuery(op, currentState);
+            initializeQuery(op, currentState, null);
             break;
         case GET_RESOURCES:
             getResources(op, currentState);
@@ -152,7 +150,23 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         }
     }
 
-    private void initializeQuery(Operation op, StatsCollectionTaskState currentState) {
+    private void initializeQuery(Operation op, StatsCollectionTaskState currentState,
+            ResourcePoolState resourcePoolState) {
+
+        // load the RP state, if not already
+        if (resourcePoolState == null) {
+            sendRequest(Operation.createGet(this, currentState.resourcePoolLink)
+                    .setCompletion((o, e) -> {
+                        if (e != null) {
+                            TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), e);
+                            return;
+                        }
+
+                        ResourcePoolState loadedRpState = o.getBody(ResourcePoolState.class);
+                        initializeQuery(op, currentState, loadedRpState);
+                    }));
+            return;
+        }
 
         int resultLimit = DEFAULT_QUERY_RESULT_LIMIT;
         try {
@@ -164,12 +178,9 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                     " is not a number; Using a default value of " + DEFAULT_QUERY_RESULT_LIMIT);
         }
 
-        Query query = Query.Builder.create()
-                .addKindFieldClause(ComputeService.ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK, currentState.resourcePoolLink)
-                .build();
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
-                .setQuery(query).setResultLimit(resultLimit);
+                .setQuery(resourcePoolState.query)
+                .setResultLimit(resultLimit);
 
         sendRequest(Operation
                 .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
