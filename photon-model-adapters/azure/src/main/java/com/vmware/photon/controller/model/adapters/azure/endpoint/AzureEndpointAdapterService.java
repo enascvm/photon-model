@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
@@ -135,7 +136,7 @@ public class AzureEndpointAdapterService extends StatelessService {
             Optional<String> regionId = r.get(REGION_KEY);
             if (regionId.isPresent()) {
                 cd.regionId = regionId.get();
-                cd.zoneId = cd.regionId;
+                cd.zoneId = r.get(ZONE_KEY).orElse(cd.regionId);
             }
 
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;

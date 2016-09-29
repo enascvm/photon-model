@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.util.function.BiConsumer;
@@ -117,7 +118,7 @@ public class AWSEndpointAdapterService extends StatelessService {
     private BiConsumer<ComputeDescription, Retriever> computeDesc() {
         return (cd, r) -> {
             cd.regionId = r.getRequired(REGION_KEY);
-            cd.zoneId = cd.regionId;
+            cd.zoneId = r.get(ZONE_KEY).orElse(null);
 
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
             cd.instanceAdapterReference = UriUtils.buildUri(getHost(),

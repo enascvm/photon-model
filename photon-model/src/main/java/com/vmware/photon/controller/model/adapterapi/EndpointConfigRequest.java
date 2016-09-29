@@ -30,6 +30,7 @@ public class EndpointConfigRequest extends ResourceRequest {
     public static final String PUBLIC_KEY_KEY = "publicKey";
     public static final String TOKEN_REFERENCE_KEY = "tokenReference";
     public static final String REGION_KEY = "regionId";
+    public static final String ZONE_KEY = "zoneId";
 
     /**
      * Endpoint request type.

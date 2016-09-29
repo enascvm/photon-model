@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_BAD_REQUEST;
 
 import java.net.URI;
@@ -105,10 +106,10 @@ public class VSphereEndpointAdapterService extends StatelessService {
 
     private BiConsumer<ComputeDescription, Retriever> computeDesc() {
         return (cd, r) -> {
-            String id = r.getRequired(REGION_KEY);
+            String id = r.get(REGION_KEY).orElse(null);
             Consumer<String> consumer = (regionId) -> {
                 cd.regionId = regionId;
-                cd.zoneId = cd.regionId;
+                cd.zoneId = r.get(ZONE_KEY).orElse(null);
 
                 cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
                 cd.instanceAdapterReference = UriUtils.buildUri(getHost(),

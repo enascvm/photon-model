@@ -16,10 +16,13 @@ package com.vmware.photon.controller.model.tasks;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 
 import java.util.Collections;
 import java.util.EnumSet;
@@ -34,6 +37,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
@@ -155,6 +159,43 @@ public class EndpointAllocationTaskServiceTest extends Suite {
 
             assertThat(completeState.taskInfo.stage,
                     is(TaskState.TaskStage.FINISHED));
+            assertNotNull(completeState.endpointState);
+            assertNotNull(completeState.endpointState.computeLink);
+            assertNotNull(completeState.endpointState.computeDescriptionLink);
+            ComputeDescription endpointDescr = getServiceSynchronously(
+                    completeState.endpointState.computeDescriptionLink, ComputeDescription.class);
+            assertNull(endpointDescr.zoneId);
+        }
+
+        @Test
+        public void testSuccessWithExplicitZoneSpecified() throws Throwable {
+            EndpointState endpoint = createEndpointState();
+            endpoint.endpointProperties.put(ZONE_KEY, "test-zoneId");
+            EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
+            startState.adapterReference = UriUtils.buildUri(getHost(),
+                    MockSuccessEndpointAdapter.SELF_LINK);
+
+            EndpointAllocationTaskState returnState = this
+                    .postServiceSynchronously(
+                            EndpointAllocationTaskService.FACTORY_LINK,
+                            startState, EndpointAllocationTaskState.class);
+
+            EndpointAllocationTaskState completeState = this
+                    .waitForServiceState(
+                            EndpointAllocationTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                    .ordinal());
+
+            assertThat(completeState.taskInfo.stage,
+                    is(TaskState.TaskStage.FINISHED));
+
+            assertNotNull(completeState.endpointState);
+            assertNotNull(completeState.endpointState.computeLink);
+            assertNotNull(completeState.endpointState.computeDescriptionLink);
+            ComputeDescription endpointDescr = getServiceSynchronously(
+                    completeState.endpointState.computeDescriptionLink, ComputeDescription.class);
+            assertEquals("test-zoneId", endpointDescr.zoneId);
         }
 
         @Test

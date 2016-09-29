@@ -28,7 +28,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.ServiceHost;
@@ -463,6 +462,9 @@ public class MockAdapter {
                             request.resourceLink(),
                             EndpointState.class);
                     ComputeDescription cd = new ComputeDescription();
+                    if (endpoint.endpointProperties.containsKey(EndpointConfigRequest.ZONE_KEY)) {
+                        cd.zoneId = endpoint.endpointProperties.get(EndpointConfigRequest.ZONE_KEY);
+                    }
                     cd.enumerationAdapterReference = UriUtils.buildUri(getHost(),
                             MockSuccessEnumerationAdapter.SELF_LINK);
                     this.test.patchServiceSynchronously(endpoint.computeDescriptionLink, cd);
