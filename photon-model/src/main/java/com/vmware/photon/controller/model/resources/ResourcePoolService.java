@@ -170,7 +170,7 @@ public class ResourcePoolService extends StatefulService {
             throw (new IllegalArgumentException("body is required"));
         }
         ResourcePoolState state = op.getBody(ResourcePoolState.class);
-        validateState(state, Action.PUT.equals(op.getAction()));
+        validateState(state);
 
         if (!state.properties.contains(ResourcePoolProperty.ELASTIC)) {
             state.query = generateResourcePoolQuery(state);
@@ -190,15 +190,8 @@ public class ResourcePoolService extends StatefulService {
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
                 ResourcePoolState.class,
                 op -> {
-                    // automatically remove the query if the ELASTIC flag was removed in order to
-                    // keep the state consistent (the collection update request itself cannot update
-                    // the query)
-                    if (!currentState.properties.contains(ResourcePoolProperty.ELASTIC)) {
-                        currentState.query = null;
-                    }
-
                     // check state and re-generate the query, if needed
-                    validateState(currentState, true);
+                    validateState(currentState);
                     if (!currentState.properties.contains(ResourcePoolProperty.ELASTIC)) {
                         currentState.query = generateResourcePoolQuery(currentState);
                     }
@@ -209,7 +202,7 @@ public class ResourcePoolService extends StatefulService {
                 });
     }
 
-    public void validateState(ResourcePoolState state, boolean isUpdateAction) {
+    public void validateState(ResourcePoolState state) {
         Utils.validateState(getStateDescription(), state);
 
         if (state.name == null) {
@@ -224,11 +217,6 @@ public class ResourcePoolService extends StatefulService {
         if (state.properties.contains(ResourcePoolProperty.ELASTIC)) {
             if (state.query == null) {
                 throw new IllegalArgumentException("Query is required for elastic resource pools.");
-            }
-        } else {
-            if (state.query != null && !isUpdateAction) {
-                throw new IllegalArgumentException("Query is auto-generated for " +
-                        "non-elastic resource pools.");
             }
         }
     }

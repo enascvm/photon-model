@@ -205,9 +205,10 @@ public class ResourcePoolServiceTest extends Suite {
         public void testNonElasticWithQuery() throws Throwable {
             ResourcePoolService.ResourcePoolState startState = buildValidStartState();
             startState.query = Query.Builder.create().build();
-            postServiceSynchronously(
+            ResourcePoolService.ResourcePoolState returnState = postServiceSynchronously(
                     ResourcePoolService.FACTORY_LINK, startState,
-                    ResourcePoolService.ResourcePoolState.class, IllegalArgumentException.class);
+                    ResourcePoolService.ResourcePoolState.class);
+            assertNotNull(returnState.query.booleanClauses);
         }
     }
 
