@@ -38,6 +38,7 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
@@ -255,6 +256,11 @@ public class EndpointAllocationTaskServiceTest extends Suite {
                             returnState.documentSelfLink,
                             state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
                                     .ordinal());
+
+            ComputeState computeState = getServiceSynchronously(
+                    completeState.endpointState.computeLink, ComputeState.class);
+            assertEquals(startState.enumerationRequest.resourcePoolLink,
+                    computeState.resourcePoolLink);
 
             assertThat(completeState.taskInfo.stage,
                     is(TaskState.TaskStage.FINISHED));

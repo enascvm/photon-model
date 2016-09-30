@@ -271,6 +271,13 @@ public class EndpointAllocationTaskService
 
         ComputeDescription computeDescription = configureDescription(es);
         ComputeState computeState = configureCompute(es);
+
+        // TODO VSYM-2484: EndpointAllocationTaskService doesn't tag the compute host with resource pool link
+        if (currentState.enumerationRequest != null
+                && currentState.enumerationRequest.resourcePoolLink != null) {
+            computeState.resourcePoolLink = currentState.enumerationRequest.resourcePoolLink;
+        }
+
         ResourcePoolState pool = configureResourcePool(es);
         Operation cdOp = Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK);
         Operation compOp = Operation.createPost(this, ComputeService.FACTORY_LINK);
