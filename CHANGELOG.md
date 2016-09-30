@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.4.11-SNAPSHOT
+
 ## 0.4.10
 
 * Bug fixes
