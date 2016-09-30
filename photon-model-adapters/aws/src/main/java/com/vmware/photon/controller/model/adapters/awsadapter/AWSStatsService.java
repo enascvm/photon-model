@@ -316,7 +316,7 @@ public class AWSStatsService extends StatelessService {
     private void getAWSAsyncStatsClient(AWSStatsDataHolder statsData) {
         URI parentURI = statsData.statsRequest.taskReference;
         statsData.statsClient = this.clientManager.getOrCreateCloudWatchClient(statsData.parentAuth,
-                statsData.computeDesc.description.zoneId, this, parentURI,
+                statsData.computeDesc.description.regionId, this, parentURI,
                 statsData.statsRequest.isMockRequest);
     }
 
