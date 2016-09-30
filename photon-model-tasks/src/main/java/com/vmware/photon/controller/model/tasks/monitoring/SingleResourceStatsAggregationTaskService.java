@@ -433,7 +433,7 @@ public class SingleResourceStatsAggregationTaskService extends
 
             Collection<ResourceMetric> metrics = rawMetricList;
             if (currentState.latestValueOnly.contains(metricName)) {
-                metrics = getLatestMetrics(rawMetricList);
+                metrics = getLatestMetrics(rawMetricList, metricKey);
             }
 
             Set<AggregationType> aggregationTypes = null;
@@ -473,28 +473,47 @@ public class SingleResourceStatsAggregationTaskService extends
 
     /**
      * Returns the latest metrics from the raw metrics list. Since the list contains all raw metrics
-     * across multiple resource we iterate on the list and pick the latest metric for each resource.
+     * across multiple resource we iterate on the list and pick the latest metric for each resource
+     * per bin depending on the metric key.
+     *
+     * TODO VSYM-2481: Add custom mock stats adapter based test for this.
      */
-    private Collection<ResourceMetric> getLatestMetrics(List<ResourceMetric> metrics) {
+    private Collection<ResourceMetric> getLatestMetrics(List<ResourceMetric> metrics,
+            String metricKeyWithInterval) {
         if (metrics.isEmpty()) {
             return Collections.emptyList();
         }
 
-        Map<String, ResourceMetric> metricByResourceId = new HashMap<>();
+        // Metric link to map of latest value per bin. For example:
+        // /monitoring/metrics/<resource-id>-<key1> -> 1474070400000000, <latest-value-of-key1-in-this-time-bucket>
+        // /monitoring/metrics/<resource-id>-<key2> -> 1474070400000000, <latest-value-of-key2-in-this-time-bucket>
+        Map<String, Map<Long, ResourceMetric>> metricsByLatestValuePerInterval = new HashMap<>();
         for (ResourceMetric metric : metrics) {
-            String resourceId = StatsUtil.getResourceId(metric.documentSelfLink);
-            ResourceMetric existingMetric = metricByResourceId.get(resourceId);
-            if (existingMetric == null) {
-                metricByResourceId.put(resourceId, metric);
+            Map<Long, ResourceMetric> metricsByIntervalEndTime = metricsByLatestValuePerInterval
+                    .get(metric.documentSelfLink);
+            long binId = computeIntervalEnd(metric.timestampMicrosUtc, lookupBinSize(metricKeyWithInterval));
+            if (metricsByIntervalEndTime == null) {
+                metricsByIntervalEndTime = new HashMap<>();
+                metricsByIntervalEndTime.put(binId, metric);
+                metricsByLatestValuePerInterval.put(metric.documentSelfLink, metricsByIntervalEndTime);
                 continue;
             }
 
-            if (existingMetric.timestampMicrosUtc < metric.timestampMicrosUtc) {
-                metricByResourceId.put(resourceId, metric);
+            ResourceMetric existingMetric = metricsByIntervalEndTime.get(binId);
+            if (existingMetric == null
+                    || existingMetric.timestampMicrosUtc < metric.timestampMicrosUtc) {
+                metricsByIntervalEndTime.put(binId, metric);
             }
         }
 
-        return metricByResourceId.values();
+        // Gather all latest values
+        List<ResourceMetric> result = new ArrayList<>();
+        for (Map<Long, ResourceMetric> metricsByIntervalEndTime : metricsByLatestValuePerInterval
+                .values()) {
+            result.addAll(metricsByIntervalEndTime.values());
+        }
+
+        return result;
     }
 
     // publish aggregate metric values
