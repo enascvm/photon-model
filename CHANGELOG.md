@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.4.10-SNAPSHOT
+## 0.4.10
+
+* Bug fixes
 
 ## 0.4.9
 
