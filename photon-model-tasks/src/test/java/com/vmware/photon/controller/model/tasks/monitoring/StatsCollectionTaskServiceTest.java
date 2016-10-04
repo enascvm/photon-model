@@ -52,6 +52,7 @@ import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCo
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription.TypeName;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
@@ -59,7 +60,9 @@ import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 public class StatsCollectionTaskServiceTest extends BaseModelTest {
     public int numResources = 200;
@@ -78,6 +81,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 new CustomStatsAdapter());
         this.host.waitForServiceAvailable(StatsCollectionTaskService.FACTORY_LINK);
         this.host.waitForServiceAvailable(SingleResourceStatsCollectionTaskService.FACTORY_LINK);
+        this.host.waitForServiceAvailable(ResourceMetricService.FACTORY_LINK);
         this.host.waitForServiceAvailable(MockStatsAdapter.SELF_LINK);
         this.host.waitForServiceAvailable(CustomStatsAdapter.SELF_LINK);
     }
@@ -120,7 +124,8 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
-        postServiceSynchronously(
+        statsCollectionTaskState.intervalMicros = TimeUnit.SECONDS.toMicros(2);
+        statsCollectionTaskState = postServiceSynchronously(
                 ScheduledTaskService.FACTORY_LINK, statsCollectionTaskState,
                 ScheduledTaskState.class);
         ServiceDocumentQueryResult res = this.host.getFactoryState(UriUtils
@@ -180,6 +185,42 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         host.log(Level.INFO,
                 "Successfully verified that the required resource metrics are persisted in the resource metrics table");
 
+        // delete the scheduled task to get to a steady state
+        deleteServiceSynchronously(statsCollectionTaskState.documentSelfLink);
+
+        // Verify sorted order of the metrics versions by timestamp
+        for (String computeLink : computeLinks) {
+            // get all versions
+            QueryTask qt = QueryTask.Builder
+                    .createDirectTask()
+                    .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
+                    .addOption(QueryOption.EXPAND_CONTENT)
+                    .addOption(QueryOption.SORT)
+                    .orderAscending(ResourceMetric.FIELD_NAME_VERSION, TypeName.LONG)
+                    .setQuery(
+                            Query.Builder.create().addKindFieldClause(ResourceMetric.class)
+                                    .addFieldClause(ResourceMetric.FIELD_NAME_SELF_LINK,
+                                            UriUtils.buildUriPath(
+                                                    ResourceMetricService.FACTORY_LINK,
+                                                    StatsUtil.getMetricKey(computeLink,
+                                                            MockStatsAdapter.KEY_1)))
+                                    .build()).build();
+            this.host.createQueryTaskService(qt, false, true, qt, null);
+
+            ResourceMetric prevMetric = null;
+            for (String documentLink : qt.results.documentLinks) {
+                ResourceMetric metric = Utils
+                        .fromJson(qt.results.documents.get(documentLink), ResourceMetric.class);
+
+                if (prevMetric == null) {
+                    prevMetric = metric;
+                    continue;
+                }
+
+                assertTrue(prevMetric.documentVersion < metric.documentVersion);
+                assertTrue(prevMetric.timestampMicrosUtc < metric.timestampMicrosUtc);
+            }
+        }
     }
 
     @Test
@@ -219,7 +260,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
         statsCollectionTaskState.intervalMicros = TimeUnit.MILLISECONDS.toMicros(500);
-        postServiceSynchronously(
+        statsCollectionTaskState = postServiceSynchronously(
                 ScheduledTaskService.FACTORY_LINK, statsCollectionTaskState,
                 ScheduledTaskState.class);
         ServiceDocumentQueryResult res = this.host.getFactoryState(UriUtils
@@ -249,6 +290,9 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 return returnStatus;
             });
         }
+
+        //clean up
+        deleteServiceSynchronously(statsCollectionTaskState.documentSelfLink);
     }
 
     @Test
@@ -290,7 +334,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
         statsCollectionTaskState.intervalMicros = TimeUnit.MILLISECONDS.toMicros(500);
-        postServiceSynchronously(
+        statsCollectionTaskState = postServiceSynchronously(
                 ScheduledTaskService.FACTORY_LINK, statsCollectionTaskState,
                 ScheduledTaskState.class);
         ServiceDocumentQueryResult res = this.host.getFactoryState(UriUtils
@@ -319,6 +363,9 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 return returnStatus;
             });
         }
+
+        //clean up
+        deleteServiceSynchronously(statsCollectionTaskState.documentSelfLink);
     }
 
     public static class CustomStatsAdapter extends StatelessService {

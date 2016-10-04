@@ -17,7 +17,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -44,7 +43,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -357,12 +355,8 @@ public class AWSStatsService extends StatelessService {
             OperationContext.restoreOperationContext(this.opContext);
             List<Datapoint> dpList = result.getDatapoints();
             // Sort the data points in increasing order of timestamp to calculate Burn rate
-            Collections.sort(dpList, new Comparator<Datapoint>() {
-                @Override
-                public int compare(Datapoint o1, Datapoint o2) {
-                    return o1.getTimestamp().compareTo(o2.getTimestamp());
-                }
-            });
+            Collections.sort(dpList, (o1, o2) -> o1.getTimestamp().compareTo(o2.getTimestamp()));
+
             List<ServiceStat> estimatedChargesDatapoints = new ArrayList<>();
             if (dpList != null && dpList.size() != 0) {
                 for (Datapoint dp : dpList) {
