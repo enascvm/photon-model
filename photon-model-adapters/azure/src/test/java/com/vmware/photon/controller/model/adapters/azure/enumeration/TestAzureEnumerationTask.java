@@ -13,13 +13,20 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultDiskState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultStorageAccountDescription;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteServiceDocument;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.randomString;
+import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map.Entry;
@@ -34,6 +41,14 @@ import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
 import com.microsoft.azure.management.compute.models.VirtualMachine;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
+import com.microsoft.azure.management.storage.StorageManagementClient;
+import com.microsoft.azure.management.storage.StorageManagementClientImpl;
+import com.microsoft.azure.management.storage.models.StorageAccount;
+import com.microsoft.azure.management.storage.models.StorageAccountKeys;
+import com.microsoft.azure.storage.CloudStorageAccount;
+import com.microsoft.azure.storage.blob.CloudBlobClient;
+import com.microsoft.azure.storage.blob.CloudBlobContainer;
+import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.rest.ServiceResponse;
 
 import org.junit.After;
@@ -47,9 +62,14 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -82,6 +102,8 @@ import com.vmware.xenon.common.Utils;
  */
 public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private static final int STALE_VM_RESOURCES_COUNT = 100;
+    private static final int STALE_STORAGE_ACCOUNTS_COUNT = 5;
+    private static final int STALE_BLOBS_COUNT = 5;
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -91,16 +113,24 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     public String azureVMNamePrefix = "enumtest-";
     public String azureVMName;
     public boolean isMock = true;
+    public String mockedStorageAccountName = randomString(15);
 
     // fields that are used across method calls, stash them as private fields
     private String resourcePoolLink;
     private ComputeState vmState;
     private ComputeState computeHost;
+    private StorageDescription storageDescription;
+    private DiskState diskState;
+
     private ComputeManagementClient computeManagementClient;
     private ResourceManagementClient resourceManagementClient;
+    private StorageManagementClient storageManagementClient;
+
     private String enumeratedComputeLink;
 
     private static final String CUSTOM_DIAGNOSTIC_ENABLED_VM = "EnumTestVM-DoNotDelete";
+
+    private List<StorageAccount> storageAccounts = new ArrayList<>();
 
     @Before
     public void setUp() throws Exception {
@@ -110,7 +140,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             PhotonModelTaskServices.startServices(this.host);
             AzureAdapters.startServices(this.host);
             // TODO: VSYM-992 - improve test/fix arbitrary timeout
-            this.host.setTimeoutSeconds(1200);
+            this.host.setTimeoutSeconds(600);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
@@ -123,6 +153,10 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
             this.resourceManagementClient = new ResourceManagementClientImpl(credentials);
             this.resourceManagementClient.setSubscriptionId(this.subscriptionId);
+
+            this.storageManagementClient = new StorageManagementClientImpl(credentials);
+            this.storageManagementClient.setSubscriptionId(this.subscriptionId);
+
         } catch (Throwable e) {
             throw new Exception(e);
         }
@@ -139,6 +173,24 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 this.host.log(Level.WARNING, "Exception deleting VM - %s", deleteEx.getMessage());
             }
         }
+
+        // try to delete the storageAccounts
+        if (this.storageDescription != null) {
+            try {
+                deleteServiceDocument(this.host, this.storageDescription.documentSelfLink);
+            } catch (Throwable deleteEx) {
+                this.host.log(Level.WARNING, "Exception deleting storage accounts - %s", deleteEx.getMessage());
+            }
+        }
+
+        // try to delete the blobs
+        if (this.diskState != null) {
+            try {
+                deleteServiceDocument(this.host, this.diskState.documentSelfLink);
+            } catch (Throwable deleteEx) {
+                this.host.log(Level.WARNING, "Exception deleting disk states - %s", deleteEx.getMessage());
+            }
+        }
     }
 
     @Test
@@ -148,12 +200,18 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         this.resourcePoolLink = outPool.documentSelfLink;
 
         // create a compute host for the Azure
-        this.computeHost = createDefaultComputeHost(this.host, this.clientID, this.clientKey, this.subscriptionId, this.tenantId,
+        this.computeHost = createDefaultComputeHost(this.host, this.clientID, this.clientKey,
+                this.subscriptionId, this.tenantId, this.resourcePoolLink);
+
+        this.storageDescription = createDefaultStorageAccountDescription(this.host,
+                this.mockedStorageAccountName, this.computeHost.documentSelfLink,
                 this.resourcePoolLink);
 
-        // create a Azure VM compute resoruce
-        this.vmState = createDefaultVMResource(this.host, this.azureVMName, this.computeHost.documentSelfLink,
-                this.resourcePoolLink);
+        this.diskState = createDefaultDiskState(this.host, this.mockedStorageAccountName,
+                this.mockedStorageAccountName, this.resourcePoolLink);
+        // create an Azure VM compute resource (this also creates a disk and a storage account)
+        this.vmState = createDefaultVMResource(this.host, this.azureVMName,
+                this.computeHost.documentSelfLink, this.resourcePoolLink);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();
@@ -168,33 +226,56 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         this.host.waitForFinishedTask(ProvisionComputeTaskState.class, outTask.documentSelfLink);
 
-        // check that the VM has been created
-        // 1 compute host instance + 1 vm compute state
+        // Check resources have been created
+        // expected VM count = 2 (1 compute host instance + 1 vm compute state)
         ProvisioningUtils.queryComputeInstances(this.host, 2);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 1,
+                StorageDescriptionService.FACTORY_LINK, true);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 1, DiskService.FACTORY_LINK,
+                true);
 
         if (this.isMock) {
             runEnumeration();
             deleteVMs(this.host, this.vmState.documentSelfLink, this.isMock);
             this.vmState = null;
             ProvisioningUtils.queryComputeInstances(this.host, 1);
+            deleteServiceDocument(this.host, this.storageDescription.documentSelfLink);
+            this.storageDescription = null;
+            ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 0, StorageDescriptionService.FACTORY_LINK, true);
+            deleteServiceDocument(this.host, this.diskState.documentSelfLink);
+            this.diskState = null;
+            ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 0, DiskService.FACTORY_LINK, true);
             return;
         }
 
-        // create some stale compute states for deletion
+        // create stale resource states for deletion
         // these should be deleted as part of first enumeration cycle.
         createAzureVMResources(STALE_VM_RESOURCES_COUNT);
+        createAzureStorageAccounts(STALE_STORAGE_ACCOUNTS_COUNT);
+        createAzureBlobs(STALE_BLOBS_COUNT);
 
         // stale resources + 1 compute host instance + 1 vm compute state
         ProvisioningUtils.queryComputeInstances(this.host, STALE_VM_RESOURCES_COUNT + 2);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
+                STALE_STORAGE_ACCOUNTS_COUNT + 1, StorageDescriptionService.FACTORY_LINK, true);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_BLOBS_COUNT + 1,
+                DiskService.FACTORY_LINK, true);
 
-        int count = getAzureVMCount();
+        int vmCount = getAzureVMCount();
+        int storageAcctCount = getAzureStorageAcctCount();
+        int blobCount = getAzureBlobsCount();
 
         runEnumeration();
 
-        // VM count + 1 compute host instance
-        count = count + 1;
+        // expect to find as many local accounts and blobs as there are on Azure
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, storageAcctCount,
+                StorageDescriptionService.FACTORY_LINK, true);
+        // TODO: validate the total count of blobs - depending on triggering the adapters in sequence
+        // https://jira-hzn.eng.vmware.com/browse/VSYM-2819
 
-        ServiceDocumentQueryResult result = ProvisioningUtils.queryComputeInstances(this.host, count);
+        // VM count + 1 compute host instance
+        vmCount = vmCount + 1;
+        ServiceDocumentQueryResult result = ProvisioningUtils.queryComputeInstances(this.host, vmCount);
 
         for (Entry<String, Object> key : result.documents.entrySet()) {
             ComputeState document = Utils.fromJson(key.getValue(), ComputeState.class);
@@ -243,8 +324,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         runEnumeration();
 
         // after data collection the deleted vm should go away
-        count = count - 1;
-        ProvisioningUtils.queryComputeInstances(this.host, count);
+        vmCount = vmCount - 1;
+        ProvisioningUtils.queryComputeInstances(this.host, vmCount);
 
         // clean up
         this.vmState = null;
@@ -296,7 +377,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         int count = 0;
         for (VirtualMachine virtualMachine : response.getBody()) {
-            if (AzureEnumerationAdapterService.AZURE_VM_TERMINATION_STATES
+            if (AzureComputeEnumerationAdapterService.AZURE_VM_TERMINATION_STATES
                     .contains(virtualMachine.getProvisioningState())) {
                 continue;
             }
@@ -377,8 +458,64 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         stat.value = serviceStat.latestValue;
         stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
         this.host.sendRequest(Operation
-                        .createPost(persistStatsUri)
-                        .setReferer(this.host.getUri())
-                        .setBodyNoCloning(stat));
+                .createPost(persistStatsUri)
+                .setReferer(this.host.getUri())
+                .setBodyNoCloning(stat));
+    }
+
+    private void createAzureStorageAccounts(int numOfAccts) throws Throwable {
+        for (int i = 0; i < numOfAccts; i++) {
+            String staleAcctName = "staleAcct-" + i;
+            createDefaultStorageAccountDescription(this.host, staleAcctName,
+                    this.computeHost.documentSelfLink, this.resourcePoolLink);
+        }
+    }
+
+    private void createAzureBlobs(int numOfBlobs) throws Throwable {
+        for (int i = 0; i < numOfBlobs; i++) {
+            String staleBlobName = "staleBlob-" + i;
+            createDefaultDiskState(this.host, staleBlobName, this.computeHost.documentSelfLink,
+                    this.resourcePoolLink);
+        }
+    }
+
+    private int getAzureStorageAcctCount() throws Exception {
+        ServiceResponse<List<StorageAccount>> response = this.storageManagementClient.getStorageAccountsOperations().list();
+        this.storageAccounts = response.getBody();
+        int count = this.storageAccounts.size();
+        this.host.log("Storage account count in Azure: %d", count);
+        return count;
+    }
+
+    private int getAzureBlobsCount() throws Throwable {
+        int blobCount = 0;
+        for (StorageAccount storageAcct : this.storageAccounts) {
+            String resourceGroupName = getResourceGroupName(storageAcct.getId());
+            ServiceResponse<StorageAccountKeys> keys = getStorageManagementClient()
+                    .getStorageAccountsOperations().listKeys(resourceGroupName, storageAcct.getName());
+
+            String connectionString = String.format(STORAGE_CONNECTION_STRING, storageAcct.getName(),
+                    keys.getBody().getKey1());
+            CloudStorageAccount storageAccount = null;
+            storageAccount = CloudStorageAccount.parse(connectionString);
+            CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
+            Iterable<CloudBlobContainer> containerList = blobClient.listContainers();
+            for (CloudBlobContainer container : containerList) {
+                for (ListBlobItem blobItem : container.listBlobs()) {
+                    blobCount++;
+                }
+            }
+        }
+        this.host.log("Blob count in Azure: %d", blobCount);
+        return blobCount;
+    }
+
+    private StorageManagementClient getStorageManagementClient() {
+        ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(this.clientID,
+                this.tenantId, this.clientKey,AzureEnvironment.AZURE);
+        this.storageManagementClient = new StorageManagementClientImpl(AzureConstants.BASE_URI,
+                credentials);
+        this.storageManagementClient.setSubscriptionId(this.subscriptionId);
+        return this.storageManagementClient;
     }
 }

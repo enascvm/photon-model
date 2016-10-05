@@ -15,7 +15,14 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_CAPACITY;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_SERVICE_REFERENCE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
 import java.net.URI;
@@ -37,6 +44,8 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
@@ -56,6 +65,7 @@ public class AzureTestUtil {
     public static final String IMAGE_REFERENCE = "Canonical:UbuntuServer:14.04.3-LTS:latest";
     public static final String AZURE_RESOURCE_GROUP_LOCATION = "westus";
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "storage";
+    public static final String AZURE_STORAGE_DISK_NAME = "disk";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_RAGRS";
     public static final String DEFAULT_OS_DISK_CACHING = "None";
 
@@ -81,20 +91,17 @@ public class AzureTestUtil {
         host.testStart(1);
         ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
         QuerySpecification resourceQuerySpec = new QuerySpecification();
-        // query all ComputeState resources for the cluster
+        // query all documents
         resourceQuerySpec.query
                 .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
                 .setTermMatchValue(documentSelfLink);
         deletionState.resourceQuerySpec = resourceQuerySpec;
         deletionState.isMockRequest = isMock;
         host.send(Operation
-                .createPost(
-                        UriUtils.buildUri(host,
-                                ResourceRemovalTaskService.FACTORY_LINK))
-                .setBody(deletionState)
-                .setCompletion(host.getCompletion()));
+                          .createPost(UriUtils.buildUri(host, ResourceRemovalTaskService.FACTORY_LINK))
+                          .setBody(deletionState)
+                          .setCompletion(host.getCompletion()));
         host.testWait();
-        // check that the VMs are gone
         ProvisioningUtils.queryComputeInstances(host, 1);
     }
 
@@ -229,5 +236,57 @@ public class AzureTestUtil {
         ComputeState vmComputeState = TestUtils.doPost(host, resource, ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
         return vmComputeState;
+    }
+
+    public static void deleteServiceDocument(VerificationHost host, String documentSelfLink)
+            throws Throwable {
+        host.testStart(1);
+        host.send(Operation.createDelete(host, documentSelfLink).setCompletion(host.getCompletion()));
+        host.testWait();
+    }
+
+    public static StorageDescription createDefaultStorageAccountDescription(VerificationHost host, String storageAccountName,
+                                                                        String parentLink, String resourcePoolLink) throws Throwable {
+        AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
+        auth.customProperties = new HashMap<>();
+        auth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, randomString(15));
+        auth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, randomString(15));
+        auth.documentSelfLink = UUID.randomUUID().toString();
+
+        TestUtils.doPost(host, auth, AuthCredentialsServiceState.class,
+                                UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
+        String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK, auth.documentSelfLink);
+
+        // Create a storage description
+        StorageDescription storageDesc = new StorageDescription();
+        storageDesc.id = "testStorAcct-" + randomString(4);
+        storageDesc.name = storageAccountName;
+        storageDesc.regionId = AZURE_RESOURCE_GROUP_LOCATION;
+        storageDesc.computeHostLink = parentLink;
+        storageDesc.authCredentialsLink = authLink;
+        storageDesc.resourcePoolLink = resourcePoolLink;
+        storageDesc.documentSelfLink = UUID.randomUUID().toString();
+        storageDesc.customProperties = new HashMap<>();
+        storageDesc.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
+        StorageDescription sDesc = TestUtils.doPost(host, storageDesc, StorageDescription.class,
+                    UriUtils.buildUri(host, StorageDescriptionService.FACTORY_LINK));
+        return sDesc;
+    }
+
+    public static DiskState createDefaultDiskState(VerificationHost host, String storageAccountName,
+                                                   String storageAccountLink, String resourcePoolLink) throws Throwable {
+        // Create a disk state
+        DiskState diskState = new DiskState();
+        diskState.id = UUID.randomUUID().toString();
+        diskState.name = storageAccountName;
+        diskState.resourcePoolLink = resourcePoolLink;
+        diskState.storageDescriptionLink = storageAccountLink;
+        diskState.type = DEFAULT_DISK_TYPE;
+        diskState.capacityMBytes = DEFAULT_DISK_CAPACITY;
+        diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);
+        diskState.documentSelfLink = diskState.id;
+        DiskState dState = TestUtils.doPost(host, diskState, DiskState.class,
+                    UriUtils.buildUri(host, DiskService.FACTORY_LINK));
+        return dState;
     }
 }

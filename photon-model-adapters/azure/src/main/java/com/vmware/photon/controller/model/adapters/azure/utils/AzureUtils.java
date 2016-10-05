@@ -15,6 +15,8 @@ package com.vmware.photon.controller.model.adapters.azure.utils;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.credentials.AzureEnvironment;
@@ -30,6 +32,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AzureUtils {
     private static final int EXECUTOR_SHUTDOWN_INTERVAL_MINUTES = 5;
+    private static final Pattern RESOURCE_GROUP_NAME_PATTERN = Pattern.compile(".*/resourcegroups/([^/]*)");
 
     /**
      * Waits for termination of given executor service.
@@ -78,5 +81,13 @@ public class AzureUtils {
 
         return new ApplicationTokenCredentials(clientId, tenantId, clientKey,
                 AzureEnvironment.AZURE);
+    }
+
+    public static String getResourceGroupName(String storageAcctId) {
+        Matcher matcher = RESOURCE_GROUP_NAME_PATTERN.matcher(storageAcctId.toLowerCase());
+        if (matcher.find()) {
+            return matcher.group(1).toLowerCase();
+        }
+        return storageAcctId;
     }
 }

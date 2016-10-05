@@ -30,6 +30,10 @@ public class AzureUriPaths {
             + "/stats-gatherer";
     public static final String AZURE_ENUMERATION_ADAPTER =
             PROVISIONING_AZURE + "/enumeration-adapter";
+    public static final String AZURE_COMPUTE_ENUMERATION_ADAPTER = PROVISIONING_AZURE
+            + "/compute-enumeration-adapter";
+    public static final String AZURE_STORAGE_ENUMERATION_ADAPTER = PROVISIONING_AZURE
+            + "/storage-enumeration-adapter";
 
     public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = PROVISIONING_AZURE
             + "/endpoint-config-adapter";

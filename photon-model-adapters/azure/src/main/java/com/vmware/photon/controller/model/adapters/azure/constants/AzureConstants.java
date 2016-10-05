@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.constants;
 
+import com.vmware.photon.controller.model.resources.DiskService;
+
 /**
  * Azure related constants.
  */
@@ -26,11 +28,15 @@ public class AzureConstants {
     public static final String AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME = "azureDiagnosticStorageAccountName";
     public static final String AZURE_STORAGE_ACCOUNT_KEY1 = "azureStorageAccountKey1";
     public static final String AZURE_STORAGE_ACCOUNT_KEY2 = "azureStorageAccountKey2";
+    public static final String AZURE_STORAGE_TYPE = "storageType";
 
     // Azure Namespace
     public static final String COMPUTE_NAMESPACE = "Microsoft.Compute";
     public static final String STORAGE_NAMESPACE = "Microsoft.Storage";
     public static final String NETWORK_NAMESPACE = "Microsoft.Network";
+    public static final String AZURE_STORAGE_ACCOUNTS = STORAGE_NAMESPACE + "/storageAccounts";
+    public static final String AZURE_STORAGE_DISKS = STORAGE_NAMESPACE + "/disks";
+    public static final String AZURE_STORAGE_BLOBS = STORAGE_NAMESPACE + "/blobs";
 
     // Azure error code
     public static final String MISSING_SUBSCRIPTION_CODE = "MissingSubscriptionRegistration";
@@ -71,10 +77,15 @@ public class AzureConstants {
     public static final String DIAGNOSTIC_SETTING_API_VERSION = "2014-04-01";
     public static final String DIAGNOSTIC_SETTING_ENDPOINT = "diagnosticSettings";
 
+    // Request Headers
+    public static final String AUTH_HEADER_BEARER_PREFIX = "Bearer ";
+    public static final String AUTH_HEADER_SHARED_KEY_PREFIX = "SharedKey {accountName}:{accountSharedKey}";
+    public static final String X_MS_DATE_HEADER = "x-ms-date";
+    public static final String X_MS_VERSION_HEADER = "x-ms-version";
+
     // Stats Constants
     public static final String QUERY_PARAM_API_VERSION = "api-version";
     public static final String QUERY_PARAM_FILTER = "$filter";
-    public static final String AUTH_HEADER_BEARER_PREFIX = "Bearer ";
     public static final String METRIC_DEFINITIONS_ENDPOINT = "metricDefinitions";
     public static final String METRIC_DEFINITIONS_MEMORY_FILTER = "name.value eq '\\Memory\\AvailableMemory'";
     public static final String METRIC_TIME_GRAIN_1_MINUTE = "PT1M";
@@ -102,13 +113,33 @@ public class AzureConstants {
     public static final String DISK_READ_BYTES_PER_SECOND = "\\PhysicalDisk\\ReadBytesPerSecond";
     public static final String DISK_WRITE_BYTES_PER_SECOND = "\\PhysicalDisk\\WriteBytesPerSecond";
 
+    // Storage credentials related contants
+    public static final String STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=http;" +
+                    "AccountName=%s;" +
+                    "AccountKey=%s;";
+
     // Virtual Machine REST constants
     public static final String VM_REST_API_VERSION = "2016-03-30";
     public static final String LIST_VM_URI = BASE_URI_FOR_REST
             + "/subscriptions/{subscriptionId}/providers/Microsoft.Compute/virtualMachines";
 
+    //Storage accounts REST constants
+    public static final String STORAGE_ACCOUNT_REST_API_VERSION = "2016-01-01";
+    public static final String LIST_STORAGE_ACCOUNTS = BASE_URI_FOR_REST
+            + "/subscriptions/{subscriptionId}/providers/Microsoft.Storage/storageAccounts";
+
+    //Storage containers REST constants
+    public static final String BLOB_BASE_URI_FOR_REST = "https://{accountName}.blob.core.windows.net/";
+    public static final String LIST_STORAGE_CONTAINERS = BLOB_BASE_URI_FOR_REST + "?comp=list&include=metadata";
+
     public static final String UNIT_COST = "USD";
     public static final String UNIT_BYTES = "Bytes";
     public static final String UNIT_COUNT = "Count";
     public static final String UNIT_PERCENT = "Percent";
+
+    // Azure Disk Properties
+    public static final String DEFAULT_DISK_SOURCE_IMAGE = "defaultDiskSourceImage";
+    public static final String DEFAULT_DISK_SERVICE_REFERENCE = "defaultDiskServiceReference";
+    public static final long DEFAULT_DISK_CAPACITY = 10000L;
+    public static final DiskService.DiskType DEFAULT_DISK_TYPE = DiskService.DiskType.HDD;
 }

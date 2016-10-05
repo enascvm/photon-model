@@ -48,7 +48,7 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 /**
  * Stateless service for the creation of compute descriptions that are discovered during the enumeration phase.
  * It first represents all the instances in a representative set of compute descriptions. Further checks if these
- * compute descriptions exist in the system. If they dont exist in the system then creates them in the local document store.
+ * compute descriptions exist in the system. If they don't exist in the system then creates them in the local document store.
  */
 public class AWSComputeDescriptionCreationAdapterService extends StatelessService {
 

@@ -52,9 +52,9 @@ public class DiskService extends StatefulService {
      * {@link com.vmware.photon.controller.model.resources.DiskService} task.
      */
     public static class DiskState extends ResourceState {
-
         public static final String FIELD_NAME_RESOURCE_POOL_LINK = "resourcePoolLink";
         public static final String FIELD_NAME_AUTH_CREDENTIALS_LINK = "authCredentialsLink";
+        public static final String FIELD_NAME_COMPUTE_HOST_LINK = "computeHostLink";
 
         /**
          * Identifier of the zone associated with this disk service instance.
@@ -151,6 +151,12 @@ public class DiskService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public Long creationTimeMicros;
+
+        /**
+         * Link to the compute host the disk belongs too. This property is not used to associate the
+         * diskState with it's compute (VM). That association happens through the compute's diskLinks property.
+         */
+        public String computeHostLink;
 
         /**
          * This class represents the boot configuration for the disk service
