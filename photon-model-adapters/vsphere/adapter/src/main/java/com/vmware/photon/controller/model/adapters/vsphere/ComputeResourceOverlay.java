@@ -38,8 +38,8 @@ public class ComputeResourceOverlay extends AbstractOverlay {
         return (short) getOrFail(VimPath.res_summary_numCpuCores);
     }
 
-    public long getEffectiveMemoryBytes() {
-        return (long) getOrFail(VimPath.res_summary_effectiveMemory) * MB_to_bytes;
+    public long getTotalMemoryBytes() {
+        return (long) getOrFail(VimPath.res_summary_totalMemory);
     }
 
     public int getTotalCpuMhz() {
