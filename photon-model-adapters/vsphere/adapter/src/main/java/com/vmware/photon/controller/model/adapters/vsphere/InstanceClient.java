@@ -637,6 +637,7 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_config_name,
                 VimPath.vm_config_hardware_device,
                 VimPath.vm_runtime_powerState,
+                VimPath.vm_runtime_host,
                 VimPath.vm_summary_guest_ipAddress,
                 VimPath.vm_summary_guest_hostName);
 
@@ -649,6 +650,7 @@ public class InstanceClient extends BaseHelper {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, this.vm)
+                .put(CustomProperties.HOST, vm.getHost())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
     }
 

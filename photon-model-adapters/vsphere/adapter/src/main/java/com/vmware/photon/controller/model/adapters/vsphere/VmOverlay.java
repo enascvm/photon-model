@@ -70,6 +70,10 @@ public class VmOverlay extends AbstractOverlay {
         return (boolean) getOrFail(VimPath.vm_config_template);
     }
 
+    public ManagedObjectReference getHost() {
+        return (ManagedObjectReference) getOrFail(VimPath.vm_runtime_host);
+    }
+
     public String getDescriptionLink() {
         ArrayOfOptionValue arr = (ArrayOfOptionValue) getOrFail(VimPath.vm_config_extraConfig);
         for (OptionValue ov : arr.getOptionValue()) {

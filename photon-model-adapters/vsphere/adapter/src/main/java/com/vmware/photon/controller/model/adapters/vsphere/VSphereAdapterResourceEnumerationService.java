@@ -930,6 +930,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
+                .put(CustomProperties.HOST, vm.getHost())
                 .put(CustomProperties.TEMPLATE, vm.isTempalte())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
         return state;
