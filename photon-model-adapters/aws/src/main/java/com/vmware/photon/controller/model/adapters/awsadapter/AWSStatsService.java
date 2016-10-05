@@ -255,10 +255,12 @@ public class AWSStatsService extends StatelessService {
         dimension.setValue(DIMENSION_CURRENCY_VALUE);
         GetMetricStatisticsRequest request = new GetMetricStatisticsRequest();
         // AWS pushes billing metrics every 4 hours.
-        // Get at least 2 metrics to calculate the recent value and the burn rate
-        setRequestCollectionWindow(TimeUnit.DAYS.toMicros(COST_COLLECTION_WINDOW_IN_DAYS),
-                statsData.statsRequest.lastCollectionTimeMicrosUtc,
-                request);
+        // Get all 14 days worth of cost data.
+        long endTimeMicros = Utils.getNowMicrosUtc();
+        request.setEndTime(new Date(TimeUnit.MICROSECONDS.toMillis(endTimeMicros)));
+        request.setStartTime(new Date(
+                TimeUnit.MICROSECONDS.toMillis(endTimeMicros) -
+                        TimeUnit.DAYS.toMillis(COST_COLLECTION_WINDOW_IN_DAYS)));
         request.setPeriod(COST_COLLECTION_PERIOD_IN_SECONDS);
         request.setStatistics(Arrays.asList(STATISTICS));
         request.setNamespace(BILLING_NAMESPACE);
@@ -360,6 +362,15 @@ public class AWSStatsService extends StatelessService {
             List<ServiceStat> estimatedChargesDatapoints = new ArrayList<>();
             if (dpList != null && dpList.size() != 0) {
                 for (Datapoint dp : dpList) {
+                    // If the datapoint collected is older than the last collection time, skip it.
+                    if (this.statsData.statsRequest.lastCollectionTimeMicrosUtc != null &&
+                            TimeUnit.MILLISECONDS.toMicros(dp.getTimestamp()
+                                    .getTime()) <= this.statsData.statsRequest.lastCollectionTimeMicrosUtc) {
+                        continue;
+                    }
+
+                    // If there is no lastCollectionTime or the datapoint collected in newer
+                    // than the lastCollectionTime, push it.
                     ServiceStat stat = new ServiceStat();
                     stat.latestValue = dp.getAverage();
                     stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
@@ -371,50 +382,35 @@ public class AWSStatsService extends StatelessService {
                 this.statsData.statsResponse.statValues.put(
                         AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()),
                         estimatedChargesDatapoints);
-                calculateBurnRate(dpList);
+
+                // Calculate average burn rate only if there is more than 1 datapoint available.
+                // This will ensure that NaN errors will not occur.
+                if (dpList.size() > 1) {
+                    ServiceStat averageBurnRate = new ServiceStat();
+                    averageBurnRate.latestValue = AWSUtils.calculateAverageBurnRate(dpList);
+                    averageBurnRate.unit = AWSStatsNormalizer
+                            .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                    averageBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+                    this.statsData.statsResponse.statValues.put(
+                            AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.AVERAGE_BURN_RATE),
+                            Collections.singletonList(averageBurnRate));
+                }
+
+                // Calculate current burn rate only if there is more than 1 day worth of data available.
+                if (dpList.size() >= 7) {
+                    ServiceStat currentBurnRate = new ServiceStat();
+                    currentBurnRate.latestValue = AWSUtils.calculateCurrentBurnRate(dpList);
+                    currentBurnRate.unit = AWSStatsNormalizer
+                            .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                    currentBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+                    this.statsData.statsResponse.statValues.put(
+                            AWSStatsNormalizer
+                                    .getNormalizedStatKeyValue(AWSConstants.CURRENT_BURN_RATE),
+                            Collections.singletonList(currentBurnRate));
+                }
             }
 
             getEC2Stats(this.statsData, AGGREGATE_METRIC_NAMES_ACROSS_INSTANCES, true);
-        }
-
-        private void calculateBurnRate(List<Datapoint> dpList) {
-            Datapoint oldestDatapoint = dpList.get(0);
-            Datapoint latestDatapoint = dpList.get(dpList.size() - 1);
-
-            ServiceStat averageBurnRate = new ServiceStat();
-            averageBurnRate.latestValue = (latestDatapoint.getAverage()
-                    - oldestDatapoint.getAverage())
-                    / getDateDifference(oldestDatapoint.getTimestamp(),
-                            latestDatapoint.getTimestamp(), TimeUnit.HOURS);
-            averageBurnRate.unit = AWSStatsNormalizer
-                    .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-            averageBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
-            this.statsData.statsResponse.statValues.put(
-                    AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.AVERAGE_BURN_RATE),
-                    Collections.singletonList(averageBurnRate));
-
-            // Calculate current burn rate only if we have 1 day worth of data.
-            if (dpList.size() >= 7) {
-                Datapoint dayOldDatapoint = dpList.get(dpList.size() - 7);
-
-                ServiceStat currentBurnRate = new ServiceStat();
-                currentBurnRate.latestValue = (latestDatapoint.getAverage()
-                        - dayOldDatapoint.getAverage())
-                        / getDateDifference(dayOldDatapoint.getTimestamp(),
-                                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
-                currentBurnRate.unit = AWSStatsNormalizer
-                        .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-                currentBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
-                this.statsData.statsResponse.statValues.put(
-                        AWSStatsNormalizer
-                                .getNormalizedStatKeyValue(AWSConstants.CURRENT_BURN_RATE),
-                        Collections.singletonList(currentBurnRate));
-            }
-        }
-
-        private long getDateDifference(Date oldDate, Date newDate, TimeUnit timeUnit) {
-            long differenceInMillies = newDate.getTime() - oldDate.getTime();
-            return timeUnit.convert(differenceInMillies, TimeUnit.MILLISECONDS);
         }
     }
 

@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
@@ -32,6 +31,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.ServiceDocument;
@@ -288,9 +288,12 @@ public class SingleResourceStatsCollectionTaskService
         operations.add(Operation.createPost(inMemoryStatsUri).setBody(minuteStats));
 
         URI metricUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
-        operations.add(createResourceMetricOp(metricUri,
+        Operation resourceMetricOp = createResourceMetricOp(metricUri,
                 getLastCollectionMetricKeyForAdapterLink(statsLink, false),
-                minuteStats, currentState.computeLink));
+                minuteStats, currentState.computeLink);
+        if (resourceMetricOp != null) {
+            operations.add(resourceMetricOp);
+        }
 
         for (ComputeStats stats : currentState.statsList) {
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
@@ -299,18 +302,17 @@ public class SingleResourceStatsCollectionTaskService
                 Collections.sort(entries.getValue(),
                         (o1, o2) -> o1.sourceTimeMicrosUtc.compareTo(o2.sourceTimeMicrosUtc));
                 // Persist every data point
-                operations.addAll(entries.getValue().stream()
-                        .map(serviceStat -> {
-                            String computeLink = stats.computeLink;
-                            if (computeLink == null) {
-                                computeLink = currentState.computeLink;
-                            }
-                            return createResourceMetricOp(metricUri,
-                                    entries.getKey(),
-                                    serviceStat,
-                                    computeLink);
-                        })
-                        .collect(Collectors.toList()));
+                for (ServiceStat serviceStat : entries.getValue()) {
+                    String computeLink = stats.computeLink;
+                    if (computeLink == null) {
+                        computeLink = currentState.computeLink;
+                    }
+                    resourceMetricOp = createResourceMetricOp(metricUri, entries.getKey(),
+                            serviceStat, computeLink);
+                    if (resourceMetricOp != null) {
+                        operations.add(resourceMetricOp);
+                    }
+                }
             }
         }
 
@@ -340,6 +342,10 @@ public class SingleResourceStatsCollectionTaskService
     private Operation createResourceMetricOp(URI persistedStatsUri, String metricName,
             ServiceStat serviceStat,
             String computeLink) {
+        if (Double.isNaN(serviceStat.latestValue)) {
+            return null;
+        }
+
         ResourceMetric stat = new ResourceMetric();
         // Set the documentSelfLink to <computeId>-<metricName>
         stat.documentSelfLink = StatsUtil.getMetricKey(computeLink, metricName);

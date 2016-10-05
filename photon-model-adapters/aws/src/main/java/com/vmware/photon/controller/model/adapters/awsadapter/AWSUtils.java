@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +37,7 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
+import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
@@ -61,6 +63,7 @@ import com.amazonaws.services.s3.transfer.TransferManager;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
+
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -473,5 +476,78 @@ public class AWSUtils {
             }
         }
         return subnet;
+    }
+
+    /**
+     * Calculate the average burn rate, given a list of datapoints from Amazon AWS.
+     */
+    public static Double calculateAverageBurnRate(List<Datapoint> dpList) {
+        if (dpList.size() <= 1) {
+            return null;
+        }
+        Datapoint oldestDatapoint = dpList.get(0);
+        Datapoint latestDatapoint = dpList.get(dpList.size() - 1);
+
+        // Adjust oldest datapoint to account for billing cycle when the estimated charges is reset to 0.
+        // Iterate over the sublist from the oldestDatapoint element + 1 to the latestDatapoint element (excluding).
+        // If the oldestDatapoint value is greater than the latestDatapoint value,
+        // move the oldestDatapoint pointer until the oldestDatapoint value is less than the latestDatapoint value.
+        // Eg: 4,5,6,7,0,1,2,3 -> 4 is greater than 3. Move the pointer until 0.
+        // OldestDatapoint value is 0 and the latestDatapoint value is 3.
+        for (Datapoint datapoint : dpList.subList(1, dpList.size() - 1)) {
+            if (latestDatapoint.getAverage() > oldestDatapoint.getAverage()) {
+                break;
+            }
+            oldestDatapoint = datapoint;
+        }
+
+        double averageBurnRate = (latestDatapoint.getAverage()
+                - oldestDatapoint.getAverage())
+                / getDateDifference(oldestDatapoint.getTimestamp(),
+                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+        // If there are only 2 datapoints and the oldestDatapoint is greater than the latestDatapoint, value will be negative.
+        // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
+        // In such cases, set the burn rate value to 0
+        averageBurnRate = (averageBurnRate < 0 ? 0 : averageBurnRate);
+        return averageBurnRate;
+    }
+
+    /**
+     * Calculate the current burn rate, given a list of datapoints from Amazon AWS.
+     */
+    public static Double calculateCurrentBurnRate(List<Datapoint> dpList) {
+        if (dpList.size() <= 7) {
+            return null;
+        }
+        Datapoint dayOldDatapoint = dpList.get(dpList.size() - 7);
+        Datapoint latestDatapoint = dpList.get(dpList.size() - 1);
+
+        // Adjust the dayOldDatapoint to account for billing cycle when the estimated charges is reset to 0.
+        // Iterate over the sublist from the oldestDatapoint element + 1 to the latestDatapoint element.
+        // If the oldestDatapoint value is greater than the latestDatapoint value,
+        // move the oldestDatapoint pointer until the oldestDatapoint value is less than the latestDatapoint value.
+        // Eg: 4,5,6,7,0,1,2,3 -> 4 is greater than 3. Move the pointer until 0.
+        // OldestDatapoint value is 0 and the latestDatapoint value is 3.
+        for (Datapoint datapoint : dpList.subList(dpList.size() - 6, dpList.size() - 1)) {
+            if (latestDatapoint.getAverage() > dayOldDatapoint.getAverage()) {
+                break;
+            }
+            dayOldDatapoint = datapoint;
+        }
+
+        double currentBurnRate = (latestDatapoint.getAverage()
+                - dayOldDatapoint.getAverage())
+                / getDateDifference(dayOldDatapoint.getTimestamp(),
+                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+        // If there are only 2 datapoints and the oldestDatapoint is greater than the latestDatapoint, value will be negative.
+        // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
+        // In such cases, set the burn rate value to 0
+        currentBurnRate = (currentBurnRate < 0 ? 0 : currentBurnRate);
+        return currentBurnRate;
+    }
+
+    private static long getDateDifference(Date oldDate, Date newDate, TimeUnit timeUnit) {
+        long differenceInMillies = newDate.getTime() - oldDate.getTime();
+        return timeUnit.convert(differenceInMillies, TimeUnit.MILLISECONDS);
     }
 }

@@ -384,6 +384,14 @@ public class TestAWSProvisionTask {
             List<ServiceStat> stats = computeStats.statValues.get(key);
             for (ServiceStat stat : stats) {
                 assertTrue("Unit is empty", !stat.unit.isEmpty());
+                // Check if burn rate values are positive.
+                if (key.equalsIgnoreCase(PhotonModelConstants.AVERAGE_BURN_RATE_PER_HOUR)) {
+                    assertTrue("Average burn rate is negative", stat.latestValue >= 0);
+                }
+
+                if (key.equalsIgnoreCase(PhotonModelConstants.CURRENT_BURN_RATE_PER_HOUR)) {
+                    assertTrue("Current burn rate is negative", stat.latestValue >= 0);
+                }
             }
             // If the statsCollectionTime was set to sometime in the past, the adapter should be
             // collecting more than one value for the same metric. Using cpu utilization as an
@@ -396,6 +404,15 @@ public class TestAWSProvisionTask {
                         "incorrect number of data points received when collection window is specified for metric ."
                                 + key,
                         stats.size() > 1);
+            }
+
+            // Check if the datapoints collected are after the lastCollectionTime.
+            if (lastCollectionTime != null
+                    && key.equalsIgnoreCase(PhotonModelConstants.ESTIMATED_CHARGES)) {
+                for (ServiceStat stat : stats) {
+                    assertTrue("The datapoint collected is older than last collection time.",
+                            stat.sourceTimeMicrosUtc >= lastCollectionTime);
+                }
             }
         }
     }
