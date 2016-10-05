@@ -36,12 +36,14 @@ import org.junit.runners.Suite.SuiteClasses;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
 import com.vmware.xenon.common.Operation;
@@ -166,6 +168,12 @@ public class EndpointAllocationTaskServiceTest extends Suite {
             ComputeDescription endpointDescr = getServiceSynchronously(
                     completeState.endpointState.computeDescriptionLink, ComputeDescription.class);
             assertNull(endpointDescr.zoneId);
+
+            ResourcePoolState poolState = getServiceSynchronously(
+                    completeState.endpointState.resourcePoolLink, ResourcePoolState.class);
+            assertNotNull(poolState.customProperties);
+            assertEquals(completeState.endpointState.documentSelfLink,
+                    poolState.customProperties.get(ComputeProperties.ENDPOINT_LINK_PROP_NAME));
         }
 
         @Test

@@ -266,6 +266,10 @@ public class EndpointAllocationTaskService
     private void createEndpoint(EndpointAllocationTaskState currentState) {
 
         EndpointState es = currentState.endpointState;
+        if (es.documentSelfLink == null) {
+            es.documentSelfLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
+                    UUID.randomUUID().toString());
+        }
 
         Operation op = Operation.createPost(this, EndpointService.FACTORY_LINK);
 
@@ -430,10 +434,12 @@ public class EndpointAllocationTaskService
 
     private ResourcePoolState configureResourcePool(EndpointState state) {
         ResourcePoolState poolState = new ResourcePoolState();
-        String name = String.format("%s-%s-%s", state.name, state.endpointType, "pool");
+        String name = String.format("%s-%s", state.endpointType, state.name);
         poolState.name = name;
         poolState.id = poolState.name;
         poolState.tenantLinks = state.tenantLinks;
+        poolState.customProperties = new HashMap<>();
+        poolState.customProperties.put(ENDPOINT_LINK_PROP_NAME, state.documentSelfLink);
 
         return poolState;
     }
