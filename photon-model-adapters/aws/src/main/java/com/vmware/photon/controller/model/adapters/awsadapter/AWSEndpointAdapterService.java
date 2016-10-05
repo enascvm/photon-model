@@ -19,6 +19,9 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
+import java.net.URI;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.function.BiConsumer;
 
 import com.amazonaws.AmazonServiceException;
@@ -119,13 +122,17 @@ public class AWSEndpointAdapterService extends StatelessService {
         return (cd, r) -> {
             cd.regionId = r.getRequired(REGION_KEY);
             cd.zoneId = r.get(ZONE_KEY).orElse(null);
-
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
             cd.instanceAdapterReference = UriUtils.buildUri(getHost(),
                     AWSUriPaths.AWS_INSTANCE_ADAPTER);
             cd.enumerationAdapterReference = UriUtils.buildUri(getHost(),
                     AWSUriPaths.AWS_ENUMERATION_ADAPTER);
-            cd.statsAdapterReference = UriUtils.buildUri(getHost(), AWSUriPaths.AWS_STATS_ADAPTER);
+            URI statsAdapterUri = UriUtils.buildUri(getHost(), AWSUriPaths.AWS_STATS_ADAPTER);
+            URI costStatsAdapterUri = UriUtils.buildUri(getHost(), AWSUriPaths.AWS_COST_STATS_ADAPTER);
+            cd.statsAdapterReferences = new LinkedHashSet<>();
+            cd.statsAdapterReferences.add(costStatsAdapterUri);
+            cd.statsAdapterReferences.add(statsAdapterUri);
+            cd.statsAdapterReference = statsAdapterUri;
         };
     }
 
@@ -136,6 +143,13 @@ public class AWSEndpointAdapterService extends StatelessService {
             b.append(".amazonaws.com");
 
             c.adapterManagementReference = UriUtils.buildUri(b.toString());
+            String billsBucketName = r.get(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY).orElse(null);
+            if (billsBucketName != null) {
+                if (c.customProperties == null) {
+                    c.customProperties = new HashMap<>();
+                }
+                c.customProperties.put(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
+            }
         };
     }
 }

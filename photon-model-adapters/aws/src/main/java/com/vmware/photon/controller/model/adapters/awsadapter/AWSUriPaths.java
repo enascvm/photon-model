@@ -30,6 +30,8 @@ public class AWSUriPaths {
             + "/firewall-adapter";
     public static final String AWS_STATS_ADAPTER = PROVISIONING_AWS
             + "/stats-adapter";
+    public static final String AWS_COST_STATS_ADAPTER = PROVISIONING_AWS
+            + "/cost-stats-adapter";
     public static final String AWS_ENUMERATION_ADAPTER = PROVISIONING_AWS
             + "/enumeration-adapter";
     public static final String AWS_ENUMERATION_CREATION_ADAPTER = PROVISIONING_AWS

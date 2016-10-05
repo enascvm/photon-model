@@ -105,6 +105,7 @@ public class TestAWSSetupUtils {
     public static final String DEFAULT_USER_DATA_FILE = "cloud_config_coreos.yml";
     public static final String DEFAULT_COREOS_USER = "core";
     public static final String DEFAULT_COREOS_PRIVATE_KEY_FILE = "private_coreos.key";
+    public static final String SAMPLE_AWS_BILL = "123456789-aws-billing-detailed-line-items-with-resources-and-tags-2016-09.csv.zip";
 
     public static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
     public static final String DEFAULT_SECURITY_GROUP_NAME = "cell-manager-security-group";

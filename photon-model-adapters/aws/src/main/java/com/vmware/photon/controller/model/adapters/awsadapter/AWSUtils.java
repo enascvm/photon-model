@@ -136,11 +136,12 @@ public class AWSUtils {
         return client;
     }
 
-    public static TransferManager getS3AsyncClient(AuthCredentialsServiceState credentials, String region,
+    public static TransferManager getS3AsyncClient(AuthCredentialsServiceState credentials,
+            String region,
             ExecutorService executorService) {
+        //Ignoring the region parameter for now.
         AmazonS3Client amazonS3Client = new AmazonS3Client(
                 new BasicAWSCredentials(credentials.privateKeyId, credentials.privateKey));
-        amazonS3Client.setRegion(Region.getRegion(Regions.fromName(region)));
         return new TransferManager(amazonS3Client, executorService);
     }
 

@@ -121,6 +121,19 @@ public class TestUtils {
     }
 
     /**
+     * Get the path of a resource
+     * @param clazz
+     * @param file
+     * @return
+     * @throws Throwable
+     */
+    public static Path getTestResourcePath(@SuppressWarnings("rawtypes") Class clazz, String file)
+            throws Throwable {
+        URL url = clazz.getResource(file);
+        return Paths.get(url.toURI());
+    }
+
+    /**
      * Create a resource enumeration task.
      * @param resourcePoolLink Link to the resource pool that hosts all resources.
      * @param parentComputeLink Link to the compute host.

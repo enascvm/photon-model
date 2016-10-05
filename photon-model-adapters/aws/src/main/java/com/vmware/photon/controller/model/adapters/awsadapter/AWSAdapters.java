@@ -28,6 +28,7 @@ public class AWSAdapters {
             AWSInstanceService.SELF_LINK,
             AWSNetworkService.SELF_LINK,
             AWSStatsService.SELF_LINK,
+            AWSCostStatsService.SELF_LINK,
             AWSEnumerationAdapterService.SELF_LINK,
             AWSEndpointAdapterService.SELF_LINK };
 
@@ -37,6 +38,7 @@ public class AWSAdapters {
             host.startService(new AWSInstanceService());
             host.startService(new AWSNetworkService());
             host.startService(new AWSStatsService());
+            host.startService(new AWSCostStatsService());
             host.startService(new AWSEnumerationAdapterService());
             host.startService(new AWSEndpointAdapterService());
 

@@ -34,7 +34,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
-
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
@@ -146,6 +146,9 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
     }
 
     @Test public void testAwsS3ClientManagement() throws Throwable {
+
+        // Ensure that we start with a clean state.
+        AWSClientManagerFactory.cleanUp(AwsClientType.S3);
 
         // Get a reference to the client manager in the test
         AWSClientManager s3ClientManager = getClientManager(AwsClientType.S3);

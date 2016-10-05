@@ -294,7 +294,12 @@ public class SingleResourceStatsCollectionTaskService
             for (Entry<String, List<ServiceStat>> entries : stats.statValues.entrySet()) {
                 for (ServiceStat entry : entries.getValue()) {
                     // Persist every datapoint
-                    persistStat(persistStatsUri, entries.getKey(), entry, currentState.computeLink);
+                    if (stats.computeLink != null) {
+                        persistStat(persistStatsUri, entries.getKey(), entry, stats.computeLink);
+                    } else {
+                        persistStat(persistStatsUri, entries.getKey(), entry,
+                                currentState.computeLink);
+                    }
                 }
             }
         }

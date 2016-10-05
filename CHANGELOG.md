@@ -2,6 +2,8 @@
 
 ## 0.4.11-SNAPSHOT
 
+* AWS Cost Stats Service implementation based on detailed bill report.
+
 ## 0.4.10
 
 * Bug fixes

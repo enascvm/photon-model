@@ -70,4 +70,12 @@ public class AWSClientManagerFactory {
         AwsClientManagerEntry clientManagerEntry = clientManagersByType.get(awsClientType);
         return clientManagerEntry == null ? 0 : clientManagerEntry.clientReferenceCount;
     }
+
+    public static void cleanUp(AwsClientType awsClientType) {
+        AwsClientManagerEntry clientManagerEntry = clientManagersByType.get(awsClientType);
+        if (clientManagerEntry != null) {
+            clientManagerEntry.clientManager.cleanUp();
+            clientManagerEntry.clientReferenceCount = 0;
+        }
+    }
 }
