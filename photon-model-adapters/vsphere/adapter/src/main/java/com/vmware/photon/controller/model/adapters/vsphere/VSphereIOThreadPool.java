@@ -24,6 +24,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Basic
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.ConnectionException;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
@@ -149,7 +150,9 @@ public class VSphereIOThreadPool {
     }
 
     private void executeCallback(BasicConnection connection, ConnectionCallback callback) {
+        OperationContext opContext = OperationContext.getOperationContext();
         this.executorService.submit(() -> {
+            OperationContext.restoreOperationContext(opContext);
             try {
                 // login and session creation
                 connection.connect();
