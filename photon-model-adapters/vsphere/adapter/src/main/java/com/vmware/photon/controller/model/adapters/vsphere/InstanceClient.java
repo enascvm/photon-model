@@ -343,6 +343,8 @@ public class InstanceClient extends BaseHelper {
 
         List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
 
+        boolean cdromAdded = false;
+
         for (DiskState ds : diskStates) {
             String diskPath = VimUtils.uriToDatastorePath(ds.sourceImageReference);
 
@@ -367,6 +369,7 @@ public class InstanceClient extends BaseHelper {
                     insertCdrom((VirtualCdrom) cdrom.getDevice(), diskPath);
                 }
                 newDisks.add(cdrom);
+                cdromAdded = true;
             }
             if (ds.type == DiskType.FLOPPY) {
                 VirtualDeviceConfigSpec floppy = createFloppy(sioController, sioUnit);
@@ -380,6 +383,12 @@ public class InstanceClient extends BaseHelper {
 
             // mark disk as attached
             ds.status = DiskStatus.ATTACHED;
+        }
+
+        // add a cdrom so that ovf transport works
+        if (!cdromAdded) {
+            VirtualDeviceConfigSpec cdrom = createCdrom(ideController, ideUnit);
+            newDisks.add(cdrom);
         }
 
         // add disks one at a time
