@@ -79,6 +79,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         deleteVmAndWait(vm);
 
         if (!isMock()) {
+            assertInternalPropertiesSet(vm);
             BasicConnection connection = createConnection();
 
             GetMoRef get = new GetMoRef(connection);

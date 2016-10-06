@@ -15,10 +15,14 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.ArrayList;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -32,8 +36,16 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  *
@@ -59,7 +71,11 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
         doRefresh();
 
-        Thread.sleep(2000);
+        if (!isMock()) {
+            ComputeState vm = findVm(5, 5000);
+            assertInternalPropertiesSet(vm);
+        }
+
         snapshotFactoryState("refresh", ComputeService.class);
         snapshotFactoryState("refresh", ComputeDescriptionService.class);
         snapshotFactoryState("refresh", ResourcePoolService.class);
@@ -69,6 +85,39 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
         // do a second refresh to test update path
         doRefresh();
+    }
+
+    private ComputeState findVm(int retriesLeft, long sleepMillis)
+            throws InterruptedException, TimeoutException, ExecutionException {
+        QuerySpecification qs = new QuerySpecification();
+        qs.options.add(QueryOption.EXPAND_CONTENT);
+
+        qs.query.addBooleanClause(
+                Query.Builder.create()
+                        .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                CustomProperties.TYPE, VimNames.TYPE_VM)
+                        .addFieldClause(ServiceDocument.FIELD_NAME_KIND,
+                                Utils.buildKind(ComputeState.class))
+                        .build());
+        QueryTask qt = QueryTask.create(qs).setDirect(true);
+
+        Operation op = Operation
+                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
+                .setBody(qt);
+
+        QueryTask result = this.host.sendWithFuture(op).thenApply(o -> o.getBody(QueryTask.class))
+                .get(10, TimeUnit.SECONDS);
+
+        if (result.results.documents.isEmpty()) {
+            if (retriesLeft == 0) {
+                throw new IllegalStateException("Cannot find template within configured timeout");
+            }
+            Thread.sleep(sleepMillis);
+            return findVm(retriesLeft - 1, sleepMillis);
+        }
+
+        return Utils
+                .fromJson(result.results.documents.values().iterator().next(), ComputeState.class);
     }
 
     private void doRefresh() throws Throwable {

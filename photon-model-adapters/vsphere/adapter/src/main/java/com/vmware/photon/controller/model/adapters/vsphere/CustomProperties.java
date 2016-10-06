@@ -31,30 +31,28 @@ public class CustomProperties {
     /**
      * Key for the MoRef of a vm provisioned by the adapter.
      */
-    public static final String MOREF = "moref";
-
-    public static final String ENUMERATED_BY = "enumeratedBy";
+    public static final String MOREF = "__moref";
 
     /**
      * When part of computeDescription, causes a vm to be created as a clone of the
      * compute state.
      */
-    public static final String TEMPLATE_LINK = "templateComputeLink";
+    public static final String TEMPLATE_LINK = "__templateComputeLink";
 
     /**
      * If true, the ComputeState represents a VM template.
      */
-    public static final String TEMPLATE = "isTemplate";
+    public static final String TEMPLATE = "__isTemplate";
 
     /**
      * Track the compute type as seen from vsphere. Can be vm, cluster or host.
      */
-    public static final String TYPE = "computeType";
+    public static final String TYPE = "__computeType";
 
     /**
      * MoRef to host a VM is currently running on.
      */
-    public static final String HOST = "host";
+    public static final String HOST = "__host";
 
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;

@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static org.junit.Assert.assertNotNull;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -105,6 +107,13 @@ public class BaseVSphereAdapterTest {
 
     public boolean isMock() {
         return this.vcUsername == null || this.vcUsername.length() == 0;
+    }
+
+    protected void assertInternalPropertiesSet(ComputeState vm) {
+        CustomProperties props = CustomProperties.of(vm);
+        assertNotNull(props.getMoRef(CustomProperties.HOST));
+        assertNotNull(props.getMoRef(CustomProperties.MOREF));
+        assertNotNull(props.getString(CustomProperties.TYPE));
     }
 
     public BasicConnection createConnection() {
