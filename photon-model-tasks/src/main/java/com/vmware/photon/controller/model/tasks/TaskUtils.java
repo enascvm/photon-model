@@ -24,6 +24,7 @@ import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service.Action;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceSubscriptionState.ServiceSubscriber;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.TaskState;
@@ -198,7 +199,10 @@ public class TaskUtils {
 
     public static URI getAdapterUri(StatefulService service, AdapterTypePath adapterTypePath,
             String endpointType) {
-        return UriUtils.buildUri(service.getHost(), adapterTypePath.adapterLink(endpointType));
+        return UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                service.getHost().getPort(),
+                adapterTypePath.adapterLink(endpointType), null);
     }
 
     public static void subscribeToNotifications(StatefulService service,

@@ -70,6 +70,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -578,11 +579,18 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.totalMemoryBytes = cr.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
 
-        res.instanceAdapterReference = UriUtils.buildUri(getHost(),
-                VSphereUriPaths.INSTANCE_SERVICE);
-        res.enumerationAdapterReference = UriUtils.buildUri(getHost(),
-                VSphereUriPaths.ENUMERATION_SERVICE);
-        res.statsAdapterReference = UriUtils.buildUri(getHost(), VSphereUriPaths.STATS_SERVICE);
+        res.instanceAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.INSTANCE_SERVICE, null);
+        res.enumerationAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.ENUMERATION_SERVICE, null);
+        res.statsAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.STATS_SERVICE, null);
 
         return res;
     }
@@ -800,11 +808,18 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.cpuMhzPerCore = hs.getCpuMhz();
         res.totalMemoryBytes = hs.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
-        res.instanceAdapterReference = UriUtils.buildUri(getHost(),
-                VSphereUriPaths.INSTANCE_SERVICE);
-        res.enumerationAdapterReference = UriUtils.buildUri(getHost(),
-                VSphereUriPaths.ENUMERATION_SERVICE);
-        res.statsAdapterReference = UriUtils.buildUri(getHost(), VSphereUriPaths.STATS_SERVICE);
+        res.instanceAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.INSTANCE_SERVICE, null);
+        res.enumerationAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.ENUMERATION_SERVICE, null);
+        res.statsAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.STATS_SERVICE, null);
 
         return res;
     }
@@ -892,12 +907,22 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.name = vm.getName();
         res.documentSelfLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
-        res.instanceAdapterReference = UriUtils.buildUri(getHost(),
-                VSphereUriPaths.INSTANCE_SERVICE);
-        res.enumerationAdapterReference = UriUtils.buildUri(getHost(),
-                VSphereUriPaths.ENUMERATION_SERVICE);
-        res.statsAdapterReference = UriUtils.buildUri(getHost(), VSphereUriPaths.STATS_SERVICE);
-        res.powerAdapterReference = UriUtils.buildUri(getHost(), VSphereUriPaths.POWER_SERVICE);
+        res.instanceAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.INSTANCE_SERVICE, null);
+        res.enumerationAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.ENUMERATION_SERVICE, null);
+        res.statsAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.STATS_SERVICE, null);
+        res.powerAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                VSphereUriPaths.POWER_SERVICE, null);
 
         res.regionId = parent.description.regionId;
 

@@ -75,6 +75,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -446,10 +447,14 @@ public class GCPEnumerationAdapterService extends StatelessService {
         computeDescription.authCredentialsLink = ctx.parentAuth.documentSelfLink;
         computeDescription.documentSelfLink = computeDescription.id;
         computeDescription.environmentName = ENVIRONMENT_NAME_GCP;
-        computeDescription.instanceAdapterReference = UriUtils
-                .buildUri(getHost(), GCPUriPaths.GCP_INSTANCE_ADAPTER);
-        computeDescription.statsAdapterReference = UriUtils
-                .buildUri(getHost(), GCPUriPaths.GCP_STATS_ADAPTER);
+        computeDescription.instanceAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                GCPUriPaths.GCP_INSTANCE_ADAPTER, null);
+        computeDescription.statsAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                GCPUriPaths.GCP_STATS_ADAPTER, null);
         computeDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
         Operation compDescOp = Operation

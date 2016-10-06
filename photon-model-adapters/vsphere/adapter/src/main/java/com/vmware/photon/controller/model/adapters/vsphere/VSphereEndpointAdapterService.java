@@ -37,6 +37,7 @@ import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -112,14 +113,22 @@ public class VSphereEndpointAdapterService extends StatelessService {
                 cd.zoneId = r.get(ZONE_KEY).orElse(null);
 
                 cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-                cd.instanceAdapterReference = UriUtils.buildUri(getHost(),
-                        VSphereUriPaths.INSTANCE_SERVICE);
-                cd.enumerationAdapterReference = UriUtils.buildUri(getHost(),
-                        VSphereUriPaths.ENUMERATION_SERVICE);
-                cd.statsAdapterReference = UriUtils.buildUri(getHost(),
-                        VSphereUriPaths.STATS_SERVICE);
-                cd.powerAdapterReference = UriUtils.buildUri(getHost(),
-                        VSphereUriPaths.POWER_SERVICE);
+                cd.instanceAdapterReference = UriUtils.buildUri(
+                        ServiceHost.LOCAL_HOST,
+                        this.getHost().getPort(),
+                        VSphereUriPaths.INSTANCE_SERVICE, null);
+                cd.enumerationAdapterReference = UriUtils.buildUri(
+                        ServiceHost.LOCAL_HOST,
+                        this.getHost().getPort(),
+                        VSphereUriPaths.ENUMERATION_SERVICE, null);
+                cd.statsAdapterReference = UriUtils.buildUri(
+                        ServiceHost.LOCAL_HOST,
+                        this.getHost().getPort(),
+                        VSphereUriPaths.STATS_SERVICE, null);
+                cd.powerAdapterReference = UriUtils.buildUri(
+                        ServiceHost.LOCAL_HOST,
+                        this.getHost().getPort(),
+                        VSphereUriPaths.POWER_SERVICE, null);
             };
 
             if (id == null || id.isEmpty()) {

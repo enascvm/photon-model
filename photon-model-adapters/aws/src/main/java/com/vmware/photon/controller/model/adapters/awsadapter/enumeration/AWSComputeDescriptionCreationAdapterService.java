@@ -41,6 +41,7 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -309,12 +310,20 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         // Create a compute description for the AWS instance at hand
         String key = cd.computeDescriptionsToBeCreatedList.get(cd.instanceToBeCreatedCounter);
         ComputeDescriptionService.ComputeDescription computeDescription = new ComputeDescriptionService.ComputeDescription();
-        computeDescription.instanceAdapterReference = UriUtils.buildUri(getHost(),
-                AWSUriPaths.AWS_INSTANCE_ADAPTER);
-        computeDescription.enumerationAdapterReference = UriUtils.buildUri(getHost(),
-                AWSUriPaths.AWS_ENUMERATION_CREATION_ADAPTER);
-        computeDescription.statsAdapterReference = UriUtils.buildUri(getHost(),
-                AWSUriPaths.AWS_STATS_ADAPTER);
+
+        computeDescription.instanceAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                AWSUriPaths.AWS_INSTANCE_ADAPTER, null);
+        computeDescription.enumerationAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                AWSUriPaths.AWS_ENUMERATION_ADAPTER, null);
+        computeDescription.statsAdapterReference = UriUtils.buildUri(
+                ServiceHost.LOCAL_HOST,
+                this.getHost().getPort(),
+                AWSUriPaths.AWS_STATS_ADAPTER, null);
+
         computeDescription.supportedChildren = new ArrayList<>();
         computeDescription.supportedChildren.add(ComputeType.DOCKER_CONTAINER.toString());
         computeDescription.environmentName = AWSInstanceService.AWS_ENVIRONMENT_NAME;
