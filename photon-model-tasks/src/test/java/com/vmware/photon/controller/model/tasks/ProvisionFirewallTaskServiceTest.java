@@ -59,11 +59,11 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
         ProvisionFirewallTaskService.ProvisionFirewallTaskState startState = new ProvisionFirewallTaskService.ProvisionFirewallTaskState();
 
         FirewallState fState = new FirewallState();
-        fState.networkDescriptionLink = "http://networkDescriptionLink";
+        fState.networkDescriptionLink = "/networkLink";
         fState.authCredentialsLink = "authCredentialsLink";
         fState.name = "firewall-name";
         fState.regionId = "regionId";
-        fState.resourcePoolLink = "http://resourcePoolLink";
+        fState.resourcePoolLink = "/resourcePoolLink";
         if (success) {
             fState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
                     MockAdapter.MockFirewallInstanceSuccessAdapter.SELF_LINK);

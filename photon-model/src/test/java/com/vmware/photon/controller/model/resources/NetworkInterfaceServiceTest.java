@@ -58,7 +58,6 @@ public class NetworkInterfaceServiceTest extends Suite {
         NetworkInterfaceService.NetworkInterfaceState networkInterfaceState = new NetworkInterfaceService.NetworkInterfaceState();
         networkInterfaceState.id = UUID.randomUUID().toString();
         networkInterfaceState.address = "10.0.0.0";
-        networkInterfaceState.networkBridgeLink = "network-bridge-link";
         return networkInterfaceState;
     }
 
@@ -101,8 +100,6 @@ public class NetworkInterfaceServiceTest extends Suite {
             assertNotNull(returnState);
             assertThat(returnState.id, is(startState.id));
             assertThat(returnState.address, is(startState.address));
-            assertThat(returnState.networkBridgeLink,
-                    is(startState.networkBridgeLink));
         }
 
         @Test
@@ -114,13 +111,11 @@ public class NetworkInterfaceServiceTest extends Suite {
                     NetworkInterfaceService.NetworkInterfaceState.class);
 
             assertNotNull(returnState);
-            assertThat(returnState.networkBridgeLink, is(startState.networkBridgeLink));
-            startState.networkBridgeLink = "new-bridge";
+
             returnState = postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
                     NetworkInterfaceService.NetworkInterfaceState.class);
-            assertThat(returnState.networkBridgeLink, is(startState.networkBridgeLink));
         }
 
         @Test
@@ -161,7 +156,7 @@ public class NetworkInterfaceServiceTest extends Suite {
         public void testMissingAddressAndDescriptionLink() throws Throwable {
             NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
             startState.address = null;
-            startState.networkDescriptionLink = null;
+            startState.networkLink = null;
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
@@ -173,7 +168,7 @@ public class NetworkInterfaceServiceTest extends Suite {
         public void testHavingAddressAndDescriptionLink() throws Throwable {
             NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
             startState.address = "10.0.0.1";
-            startState.networkDescriptionLink = "10.0.0.2";
+            startState.networkLink = "10.0.0.2";
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,
@@ -197,9 +192,7 @@ public class NetworkInterfaceServiceTest extends Suite {
 
             NetworkInterfaceService.NetworkInterfaceState patchState = new NetworkInterfaceService.NetworkInterfaceState();
             patchState.address = "10.0.0.1";
-            patchState.leaseLink = "10.0.0.2";
-            patchState.networkBridgeLink = "10.0.0.3";
-            patchState.networkDescriptionLink = "10.0.0.4";
+            patchState.networkLink = "10.0.0.4";
             patchState.tenantLinks = new ArrayList<>();
             patchState.tenantLinks.add("tenant-linkA");
             patchState.groupLinks = new HashSet<String>();
@@ -211,13 +204,10 @@ public class NetworkInterfaceServiceTest extends Suite {
                     returnState.documentSelfLink,
                     NetworkInterfaceService.NetworkInterfaceState.class);
 
-            assertThat(returnState.leaseLink, is(patchState.leaseLink));
             // Only leaselink is patched others are not updated
             assertThat(returnState.address, is(startState.address));
-            assertThat(returnState.networkBridgeLink,
-                    is(startState.networkBridgeLink));
-            assertThat(returnState.networkDescriptionLink,
-                    is(startState.networkDescriptionLink));
+            assertThat(returnState.networkLink,
+                    is(startState.networkLink));
             assertEquals(returnState.tenantLinks, patchState.tenantLinks);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
         }

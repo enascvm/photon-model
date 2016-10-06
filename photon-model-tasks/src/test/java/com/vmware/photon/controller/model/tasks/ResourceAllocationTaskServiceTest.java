@@ -161,7 +161,7 @@ public class ResourceAllocationTaskServiceTest extends Suite {
             throws Throwable {
         NetworkInterfaceService.NetworkInterfaceState n = new NetworkInterfaceService.NetworkInterfaceState();
         n.id = UUID.randomUUID().toString();
-        n.networkDescriptionLink = "http://network-description";
+        n.networkLink = "/network/link";
         NetworkInterfaceService.NetworkInterfaceState n1 = test
                 .postServiceSynchronously(
                         NetworkInterfaceService.FACTORY_LINK, n,
@@ -180,7 +180,7 @@ public class ResourceAllocationTaskServiceTest extends Suite {
         rd.computeType = ComputeType.VM_GUEST.toString();
         rd.computeDescriptionLink = cd.documentSelfLink;
         rd.diskDescriptionLinks = diskDescriptionLinks;
-        rd.networkDescriptionLinks = networkDescriptionLinks;
+        rd.networkInterfaceLinks = networkDescriptionLinks;
 
         return test.postServiceSynchronously(
                 ResourceDescriptionService.FACTORY_LINK, rd,
@@ -217,7 +217,7 @@ public class ResourceAllocationTaskServiceTest extends Suite {
         state.resourceDescriptionLink = null;
 
         state.diskDescriptionLinks = diskDescriptionLinks;
-        state.networkDescriptionLinks = networkDescriptionLinks;
+        state.networkInterfaceLinks = networkDescriptionLinks;
 
         return state;
     }

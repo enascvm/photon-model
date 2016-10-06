@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.resources;
 
-import java.net.URI;
 import java.util.List;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -61,18 +60,7 @@ public class ResourceDescriptionService extends StatefulService {
          * The network descriptions used to associate network resources with
          * compute resources.
          */
-        public List<String> networkDescriptionLinks;
-
-        /**
-         * The network bridge descriptions used to associate bridges to the
-         * computes created here. after they are instantiated.
-         */
-        public String networkBridgeDescriptionLink;
-
-        /**
-         * The URI to the network bridge task service.
-         */
-        public URI networkBridgeTaskServiceReference;
+        public List<String> networkInterfaceLinks;
     }
 
     public ResourceDescriptionService() {

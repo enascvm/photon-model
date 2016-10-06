@@ -872,7 +872,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
             networkState.documentSelfLink = UUID.randomUUID().toString();
             networkState.id = networkInterfaceReference.getId();
             // Setting to the same ID since there is nothing obtained during enumeration other than the ID
-            networkState.networkDescriptionLink = networkInterfaceReference.getId();
+            networkState.networkLink = networkInterfaceReference.getId();
             networkState.tenantLinks = ctx.computeHostDesc.tenantLinks;
             Operation networkOp = Operation
                     .createPost(getHost(), NetworkInterfaceService.FACTORY_LINK)

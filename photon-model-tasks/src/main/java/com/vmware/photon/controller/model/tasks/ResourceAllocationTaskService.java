@@ -111,7 +111,7 @@ public class ResourceAllocationTaskService
         /**
          * The network descriptions used to associate network resources with compute resources.
          */
-        public List<String> networkDescriptionLinks;
+        public List<String> networkInterfaceLinks;
 
         /**
          * Custom properties passes in for the resources to be provisioned.
@@ -201,7 +201,7 @@ public class ResourceAllocationTaskService
         ResourceAllocationTaskState state = getBody(start);
         if (state.computeType != null || state.computeDescriptionLink != null
                 || state.diskDescriptionLinks != null
-                || state.networkDescriptionLinks != null
+                || state.networkInterfaceLinks != null
                 || state.customProperties != null) {
             start.fail(new IllegalArgumentException(
                     "ResourceDescription overrides ResourceAllocationTaskState"));
@@ -222,7 +222,7 @@ public class ResourceAllocationTaskService
                             state.computeType = resourceDesc.computeType;
                             state.computeDescriptionLink = resourceDesc.computeDescriptionLink;
                             state.diskDescriptionLinks = resourceDesc.diskDescriptionLinks;
-                            state.networkDescriptionLinks = resourceDesc.networkDescriptionLinks;
+                            state.networkInterfaceLinks = resourceDesc.networkInterfaceLinks;
                             state.customProperties = resourceDesc.customProperties;
 
                             validateAndCompleteStart(start, state);
@@ -530,8 +530,8 @@ public class ResourceAllocationTaskService
                     currentState.diskDescriptionLinks == null
                             || currentState.diskDescriptionLinks.isEmpty() ? new ArrayList<>()
                                     : null,
-                    currentState.networkDescriptionLinks == null
-                            || currentState.networkDescriptionLinks.isEmpty() ? new ArrayList<>()
+                    currentState.networkInterfaceLinks == null
+                            || currentState.networkInterfaceLinks.isEmpty() ? new ArrayList<>()
                                     : null);
 
             // as long as you can predict the document self link of a service,
@@ -743,7 +743,7 @@ public class ResourceAllocationTaskService
                     .getBody(NetworkInterfaceService.NetworkInterfaceState.class);
             synchronized (networkLinks) {
                 networkLinks.add(newInterfaceState.documentSelfLink);
-                if (networkLinks.size() != currentState.networkDescriptionLinks
+                if (networkLinks.size() != currentState.networkInterfaceLinks
                         .size()) {
                     return;
                 }
@@ -758,7 +758,7 @@ public class ResourceAllocationTaskService
         // get all network descriptions first, then create new network
         // interfaces using the
         // description/template
-        for (String networkDescLink : currentState.networkDescriptionLinks) {
+        for (String networkDescLink : currentState.networkInterfaceLinks) {
             sendRequest(Operation
                     .createGet(this, networkDescLink)
                     .setCompletion(

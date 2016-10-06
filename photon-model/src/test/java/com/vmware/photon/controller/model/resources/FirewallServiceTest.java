@@ -59,14 +59,14 @@ public class FirewallServiceTest extends Suite {
         FirewallService.FirewallState firewallState = new FirewallService.FirewallState();
         firewallState.id = UUID.randomUUID().toString();
         firewallState.name = firewallState.id;
-        firewallState.networkDescriptionLink = "http://networkDescriptionLink";
+        firewallState.networkDescriptionLink = "/link/to/desc";
         firewallState.tenantLinks = new ArrayList<>();
         firewallState.tenantLinks.add("tenant-linkA");
         firewallState.ingress = getAllowIngressRules();
         firewallState.egress = getAllowEgressRules();
         firewallState.regionId = "regionId";
-        firewallState.authCredentialsLink = "http://authCredentialsLink";
-        firewallState.resourcePoolLink = "http://resourcePoolLink";
+        firewallState.authCredentialsLink = "/link/to/auth";
+        firewallState.resourcePoolLink = "/link/to/rp";
         try {
             firewallState.instanceAdapterReference = new URI(
                     "http://instanceAdapterReference");

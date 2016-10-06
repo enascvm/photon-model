@@ -655,7 +655,7 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
-     * Creates a VM in vsphere. This method will block untill the CreateVM_Task completes.
+     * Creates a VM in vsphere. This method will block until the CreateVM_Task completes.
      * The path to the .vmx file is explicitly set and its existence is iterpreted as if the VM has
      * been successfully created and returns null.
      *
@@ -663,7 +663,7 @@ public class InstanceClient extends BaseHelper {
      * @throws FinderException
      * @throws Exception
      */
-    private ManagedObjectReference createVm() throws FinderException, Exception {
+    private ManagedObjectReference createVm() throws Exception {
         ManagedObjectReference folder = getVmFolder();
         ManagedObjectReference resourcePool = getResourcePoolForVm();
         ManagedObjectReference datastore = getDatastore();
@@ -839,7 +839,7 @@ public class InstanceClient extends BaseHelper {
         return scsiCtrl;
     }
 
-    private VirtualDevice createNic()
+    private VirtualEthernetCard createNic()
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
 
         ManagedObjectReference network = getNetwork();

@@ -36,28 +36,15 @@ public class NetworkInterfaceService extends StatefulService {
     public static class NetworkInterfaceState extends ResourceState {
 
         /**
-         * The description for the interface. If this is an interface which uses
-         * DHCP to resolve its address, then this is a link to the subnet
-         * document.
+         * Link to the network this nic is connected to.
          */
-        public String networkDescriptionLink;
+        public String networkLink;
 
         /**
-         * The IP information of the interface. Optional.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String leaseLink;
-
-        /**
-         * The static IP of the interface. Optional. If networkDescriptionLink /
-         * leaseLink are defined, this cannot be and vice versa.
+         * The static IP of the interface. Optional. If networkLink
+         * is defined, this cannot be and vice versa.
          */
         public String address;
-
-        /**
-         * The bridge this interface will be instantiated on. Optional.
-         */
-        public String networkBridgeLink;
 
         /**
          * Firewalls with which this compute instance is associated.
@@ -116,18 +103,18 @@ public class NetworkInterfaceService extends StatefulService {
         Utils.validateState(getStateDescription(), state);
 
         if (state.address != null) {
-            if (state.networkDescriptionLink != null) {
+            if (state.networkLink != null) {
                 throw new IllegalArgumentException(
-                        "both networkDescriptionLink and IP cannot be set");
+                        "both networkLink and IP cannot be set");
             }
             if (!InetAddressValidator.getInstance().isValidInet4Address(
                     state.address)) {
                 throw new IllegalArgumentException("IP address is invalid");
             }
 
-        } else if (state.networkDescriptionLink == null) {
+        } else if (state.networkLink == null) {
             throw new IllegalArgumentException(
-                    "either IP or networkDescriptionLink must be set");
+                    "either IP or networkLink must be set");
         }
     }
 }

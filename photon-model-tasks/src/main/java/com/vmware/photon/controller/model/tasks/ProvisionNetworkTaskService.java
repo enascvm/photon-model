@@ -78,7 +78,7 @@ public class ProvisionNetworkTaskService extends TaskService<ProvisionNetworkTas
             if (this.networkDescriptionLink == null
                     || this.networkDescriptionLink.isEmpty()) {
                 throw new IllegalArgumentException(
-                        "networkDescriptionLink required");
+                        "networkLink required");
             }
         }
     }

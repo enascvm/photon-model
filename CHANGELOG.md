@@ -2,6 +2,10 @@
 
 ## 0.4.14-SNAPSHOT
 
+* Rename NetworkState.networkDescriptionLink to networkLink
+
+* Remove NetworkState.networkBridgeLink (breaking change)
+
 ## 0.4.13
 
 * Move to xenon version 1.0.0
@@ -36,7 +40,7 @@
 
 * The stats URI for computes available at /compute/stats
 no longer have the raw metrics (CPU utilization, memory) etc
-available at this endpoint. The only in-memory metric available 
+available at this endpoint. The only in-memory metric available
 at this URI will be the last successful collection time.
 
 ## 0.4.6
