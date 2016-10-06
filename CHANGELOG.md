@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.4.11-SNAPSHOT
+## 0.4.11
 
 * AWS Cost Stats Service implementation based on detailed bill report.
 
