@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import com.vmware.photon.controller.model.UriPaths;
 
 public class AWSConstants {
+    public static final String AWS_INSTANCE_ID_PREFIX = "i-";
     public static final String AWS_SECURITY_GROUP = "awsSecurityGroup";
     public static final String AWS_SECURITY_GROUP_ID = "awsSecurityGroupId";
     public static final String AWS_TAG_NAME = "Name";

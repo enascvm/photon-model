@@ -126,7 +126,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                         // power on machine before enrichment
                         if (ctx.child.powerState == PowerState.ON) {
-                            new PowerStateClient(connection).changePowerState(client.getVm(), PowerState.ON, null, 0);
+                            new PowerStateClient(connection).changePowerState(client.getVm(),
+                                    PowerState.ON, null, 0);
                         }
 
                         client.enrichStateFromVm(state);
@@ -227,6 +228,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
     private OperationJoin createComputeStateDelete(ProvisionContext ctx) {
         List<Operation> deleteOps = new ArrayList<>();
+
+        deleteOps.add(Operation.createDelete(ctx.computeReference));
 
         if (ctx.child.diskLinks != null) {
             for (String link : ctx.child.diskLinks) {

@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_INSTANCE_ID_PREFIX;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 
@@ -323,6 +324,9 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         for (Object s : responseTask.results.documents.values()) {
             ComputeState localInstance = Utils.fromJson(s,
                     ComputeService.ComputeState.class);
+            if (!localInstance.id.startsWith(AWS_INSTANCE_ID_PREFIX)) {
+                continue;
+            }
             aws.localInstanceIds.put(localInstance.id, localInstance);
         }
         aws.pageNo++;
