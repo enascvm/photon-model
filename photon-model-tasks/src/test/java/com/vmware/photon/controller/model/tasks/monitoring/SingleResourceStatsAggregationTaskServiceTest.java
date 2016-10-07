@@ -261,5 +261,17 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             }
             return rightVersion;
         });
+
+        // verify that the aggregation tasks have been deleted
+        this.host.waitFor("Timeout waiting for task to expire", () -> {
+            ServiceDocumentQueryResult res =
+                    this.host.getFactoryState(UriUtils.buildUri(
+                        this.host, SingleResourceStatsAggregationTaskService.FACTORY_LINK));
+            if (res.documentLinks.size() == 0) {
+                return true;
+            }
+            return false;
+        });
+
     }
 }

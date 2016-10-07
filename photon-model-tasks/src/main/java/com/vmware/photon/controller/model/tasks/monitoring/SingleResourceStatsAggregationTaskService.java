@@ -27,6 +27,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
@@ -34,6 +35,7 @@ import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricServ
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService.ResourceMetric;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
@@ -42,6 +44,7 @@ import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.AggregationType;
 import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.TimeBin;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -197,6 +200,10 @@ public class SingleResourceStatsAggregationTaskService extends
         case FINISHED:
         case FAILED:
         case CANCELLED:
+            if (TaskState.isFailed(currentState.taskInfo) ||
+                    TaskState.isCancelled(currentState.taskInfo)) {
+                getHost().log(Level.WARNING, currentState.taskInfo.failure.toString());
+            }
             if (currentState.parentLink != null) {
                 sendRequest(Operation
                         .createPatch(UriUtils.buildUri(getHost(), currentState.parentLink))
@@ -207,7 +214,12 @@ public class SingleResourceStatsAggregationTaskService extends
                                         logWarning("Patching parent task failed %s",
                                                 Utils.toString(patchEx));
                                     }
+                                    sendRequest(Operation
+                                            .createDelete(getUri()));
                                 }));
+            } else {
+                sendRequest(Operation
+                        .createDelete(getUri()));
             }
             break;
         default:
