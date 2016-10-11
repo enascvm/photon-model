@@ -1,6 +1,9 @@
 # CHANGELOG
 
-## 0.4.12-SNAPSHOT
+## 0.4.12
+
+* Bug Fixes - Fixing the burn rate calculation in the AWS Stats
+  service.
 
 ## 0.4.11
 
