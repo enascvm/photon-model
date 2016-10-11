@@ -100,7 +100,6 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
-        computeDesc.networkId = this.networkId;
 
         CustomProperties.of(computeDesc)
                 .put(CustomProperties.TEMPLATE_LINK, templateComputeLink);
@@ -116,7 +115,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = vmDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
         computeState.name = vmDescription.name;
 
         computeState.powerState = PowerState.ON;
@@ -163,7 +162,6 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
-        computeDesc.networkId = this.networkId;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
@@ -180,7 +178,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

@@ -65,7 +65,6 @@ public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
-        computeDesc.networkId = this.networkId;
 
         ImportOvfRequest req = new ImportOvfRequest();
         req.ovfUri = new File("src/test/resources/vcenter.ovf").toURI();
@@ -123,7 +122,7 @@ public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

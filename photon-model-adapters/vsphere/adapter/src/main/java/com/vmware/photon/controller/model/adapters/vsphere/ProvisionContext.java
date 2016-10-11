@@ -28,6 +28,8 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
@@ -35,8 +37,14 @@ import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  */
@@ -53,6 +61,7 @@ public class ProvisionContext {
 
     public ServiceDocument task;
     public List<DiskState> disks;
+    public List<NetworkInterfaceStateWithNetwork> nics;
     public AuthCredentialsServiceState vSphereCredentials;
     public ResourcePoolState resourcePool;
 
@@ -60,6 +69,10 @@ public class ProvisionContext {
     public Consumer<Throwable> errorHandler;
 
     private final InstanceRequestType instanceRequestType;
+
+    public static class NetworkInterfaceStateWithNetwork extends NetworkInterfaceState {
+        public NetworkState network;
+    }
 
     public ProvisionContext(ComputeInstanceRequest req) {
         this.instanceRequestType = req.requestType;
@@ -171,6 +184,55 @@ public class ProvisionContext {
                 ctx.task = op.getBody(ServiceDocument.class);
                 populateContextThen(service, ctx, onSuccess);
             }, ctx.errorHandler);
+            return;
+        }
+
+        if (ctx.nics == null) {
+            if (ctx.child.networkInterfaceLinks == null || ctx.child.networkInterfaceLinks
+                    .isEmpty()) {
+                ctx.nics = Collections.emptyList();
+                populateContextThen(service, ctx, onSuccess);
+                return;
+            }
+
+            ctx.nics = new ArrayList<>();
+
+            Query query = Query.Builder.create()
+                    .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                            ctx.child.networkInterfaceLinks)
+                    .build();
+
+            QueryTask qt = QueryTask.Builder.createDirectTask()
+                    .setQuery(query)
+                    .addOption(QueryOption.EXPAND_CONTENT)
+                    .addOption(QueryOption.EXPAND_LINKS)
+                    .addOption(QueryOption.SELECT_LINKS)
+                    .addLinkTerm(NetworkInterfaceState.FIELD_NAME_NETWORK_LINK)
+                    .build();
+
+            Operation.createPost(service, ServiceUriPaths.CORE_QUERY_TASKS)
+                    .setBody(qt)
+                    .setCompletion((o, e) -> {
+                        if (e != null) {
+                            ctx.errorHandler.accept(e);
+                            return;
+                        }
+
+                        ServiceDocumentQueryResult results = o.getBody(QueryTask.class).results;
+                        for (Object obj : results.documents.values()) {
+                            NetworkInterfaceStateWithNetwork iface = Utils
+                                    .fromJson(obj, NetworkInterfaceStateWithNetwork.class);
+
+                            iface.network = Utils
+                                    .fromJson(results.selectedDocuments.get(iface.networkLink),
+                                            NetworkState.class);
+                            ctx.nics.add(iface);
+                        }
+
+                        populateContextThen(service, ctx, onSuccess);
+                    })
+                    .sendWith(service);
+
             return;
         }
 

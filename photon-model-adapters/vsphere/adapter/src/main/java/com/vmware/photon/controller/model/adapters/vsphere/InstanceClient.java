@@ -27,6 +27,7 @@ import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithNetwork;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfParser;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
@@ -43,6 +44,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayUpdateOperation;
 import com.vmware.vim25.FileAlreadyExists;
@@ -53,7 +55,6 @@ import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.KeyValue;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.MethodFault;
-import com.vmware.vim25.OptionValue;
 import com.vmware.vim25.OvfNetworkMapping;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
@@ -99,13 +100,13 @@ import com.vmware.vim25.VmConfigSpec;
  */
 public class InstanceClient extends BaseHelper {
     private static final Logger logger = Logger.getLogger(InstanceClient.class.getName());
-    public static final String CONFIG_DESC_LINK = "photon.descriptionLink";
-    public static final String CONFIG_PARENT_LINK = "photon.parentLink";
+
     private static final String CLOUD_CONFIG_PROPERTY_USER_DATA = "user-data";
     private static final String CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS = "public-keys";
     private final ComputeStateWithDescription state;
     private final ComputeStateWithDescription parent;
     private final List<DiskState> disks;
+    private final List<NetworkInterfaceStateWithNetwork> nics;
 
     private final GetMoRef get;
     private final Finder finder;
@@ -114,13 +115,14 @@ public class InstanceClient extends BaseHelper {
 
     public InstanceClient(Connection connection,
             ComputeStateWithDescription resource,
-            ComputeStateWithDescription parent, List<DiskState> disks)
+            ComputeStateWithDescription parent, List<DiskState> disks, List<NetworkInterfaceStateWithNetwork> nics)
             throws ClientException, FinderException {
         super(connection);
 
         this.state = resource;
         this.parent = parent;
         this.disks = disks;
+        this.nics = nics;
 
         // the regionId is used as a ref to a vSphere datacenter name
         String id = resource.description.regionId;
@@ -807,27 +809,28 @@ public class InstanceClient extends BaseHelper {
         spec.setGuestId(VirtualMachineGuestOsIdentifier.OTHER_GUEST_64.value());
         spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
 
-        spec.getExtraConfig().add(configEntry(CONFIG_DESC_LINK, this.state.descriptionLink));
-        spec.getExtraConfig().add(configEntry(CONFIG_PARENT_LINK, this.state.parentLink));
-
         VirtualMachineFileInfo files = new VirtualMachineFileInfo();
         // Use a full path to the config file to avoid creating a VM with the same name
         String path = String.format("[%s] %s/%s.vmx", datastoreName, displayName, displayName);
         files.setVmPathName(path);
         spec.setFiles(files);
 
-        VirtualDevice nic = createNic();
-
-        VirtualDevice scsi = createScsiController();
-
-        for (VirtualDevice dev : new VirtualDevice[] { nic, scsi }) {
-            VirtualDeviceConfigSpec change = new VirtualDeviceConfigSpec();
-            change.setDevice(dev);
-            change.setOperation(VirtualDeviceConfigSpecOperation.ADD);
-            spec.getDeviceChange().add(change);
+        for (NetworkInterfaceStateWithNetwork ni: this.nics) {
+            VirtualDevice nic = createNic(ni.network.name);
+            addDeviceToVm(spec, nic);
         }
 
+        VirtualDevice scsi = createScsiController();
+        addDeviceToVm(spec, scsi);
+
         return spec;
+    }
+
+    private void addDeviceToVm(VirtualMachineConfigSpec spec, VirtualDevice dev) {
+        VirtualDeviceConfigSpec change = new VirtualDeviceConfigSpec();
+        change.setDevice(dev);
+        change.setOperation(VirtualDeviceConfigSpecOperation.ADD);
+        spec.getDeviceChange().add(change);
     }
 
     private VirtualDevice createScsiController() {
@@ -839,12 +842,8 @@ public class InstanceClient extends BaseHelper {
         return scsiCtrl;
     }
 
-    private VirtualEthernetCard createNic()
+    private VirtualEthernetCard createNic(String networkName)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-
-        ManagedObjectReference network = getNetwork();
-        String networkName = this.get.entityProp(network, "name");
-
         VirtualEthernetCard nic = new VirtualE1000();
         nic.setAddressType(VirtualEthernetCardMacType.GENERATED.value());
         nic.setKey(-1);
@@ -855,13 +854,6 @@ public class InstanceClient extends BaseHelper {
         nic.setBacking(backing);
 
         return nic;
-    }
-
-    private OptionValue configEntry(String key, String value) {
-        OptionValue res = new OptionValue();
-        res.setKey(key);
-        res.setValue(value);
-        return res;
     }
 
     private Long toMb(long bytes) {
@@ -924,25 +916,6 @@ public class InstanceClient extends BaseHelper {
         }
 
         return parentResourcePool.object;
-    }
-
-    /**
-     * Tries to guess the network the VM has to be part of. If ComputeState.description.networkId is
-     * defined then it's used.
-     *
-     * @return
-     * @throws FinderException
-     * @throws InvalidPropertyFaultMsg
-     * @throws RuntimeFaultFaultMsg
-     */
-    private ManagedObjectReference getNetwork()
-            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-        String id = this.state.description.networkId;
-        if (id != null) {
-            return this.finder.network(id).object;
-        } else {
-            return this.finder.defaultNetwork().object;
-        }
     }
 
     public ManagedObjectReference getVm() {

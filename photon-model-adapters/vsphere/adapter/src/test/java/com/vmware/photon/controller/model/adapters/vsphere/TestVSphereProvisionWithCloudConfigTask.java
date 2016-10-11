@@ -92,7 +92,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
 
         // find the template by vm name
         // template must have vm-tools and cloud-config installed
-        ComputeState template = findTemplate(6);
+        ComputeState template = findTemplate();
 
         // create instance by cloning
         ComputeDescription vmDescription = createVmDescription();
@@ -107,7 +107,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         deleteVmAndWait(vm);
     }
 
-    private ComputeState findTemplate(int retriesLeft)
+    private ComputeState findTemplate()
             throws InterruptedException, ExecutionException, TimeoutException {
         String templateVmName = System.getProperty("vc.templateVmName");
         QuerySpecification qs = new QuerySpecification();
@@ -127,14 +127,6 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
 
         QueryTask result = this.host.sendWithFuture(op).thenApply(o -> o.getBody(QueryTask.class))
                 .get(10, TimeUnit.SECONDS);
-
-        if (result.results.documents.isEmpty()) {
-            if (retriesLeft == 0) {
-                throw new IllegalStateException("Cannot find template within configured timeout");
-            }
-            Thread.sleep(5000);
-            return findTemplate(retriesLeft - 1);
-        }
 
         return Utils
                 .fromJson(result.results.documents.values().iterator().next(), ComputeState.class);
@@ -165,7 +157,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = vmDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
         computeState.name = vmDescription.name;
 
         computeState.powerState = PowerState.ON;
@@ -199,7 +191,8 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         res.bootConfig.files[0].contents = cloudConfig;
 
         res.bootConfig.files[1].path = "public-keys";
-        res.bootConfig.files[1].contents = IOUtils.toString(new File("src/test/resources/testkey.pub").toURI());
+        res.bootConfig.files[1].contents = IOUtils
+                .toString(new File("src/test/resources/testkey.pub").toURI());
 
         return TestUtils.doPost(this.host, res,
                 DiskState.class,
@@ -217,7 +210,6 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
-        computeDesc.networkId = this.networkId;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
@@ -234,7 +226,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

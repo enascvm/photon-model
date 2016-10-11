@@ -55,8 +55,14 @@ public abstract class AbstractOverlay {
         return res;
     }
 
-    protected Object get(String name) {
-        return this.props.get(name);
+    protected Object getOrDefault(String name, Object defValue) {
+        Object res = this.props.get(name);
+
+        if (res == null) {
+            return defValue;
+        } else {
+            return res;
+        }
     }
 
     protected void ensureType(String type) {

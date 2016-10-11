@@ -138,7 +138,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = descriptionLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
 
         computeState.powerState = PowerState.ON;
 
@@ -162,7 +162,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
-        computeDesc.networkId = this.networkId;
+
         return computeDesc;
     }
 
@@ -176,7 +176,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

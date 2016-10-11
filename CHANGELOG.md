@@ -2,6 +2,9 @@
 
 ## 0.4.15-SNAPSHOT
 
+* Remove `ComputeState.networkId`: relationship to a network is expressed
+  with a `networkInterfaceLink`
+
 ## 0.4.14
 
 * Rename NetworkState.networkDescriptionLink to networkLink

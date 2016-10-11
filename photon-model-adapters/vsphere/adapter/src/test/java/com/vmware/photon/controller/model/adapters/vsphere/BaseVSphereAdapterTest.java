@@ -28,6 +28,8 @@ import org.junit.Before;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -65,6 +67,8 @@ public class BaseVSphereAdapterTest {
     public String vcFolder = System.getProperty(TestProperties.VC_FOLDER);
 
     protected VerificationHost host;
+    protected AuthCredentialsServiceState auth;
+    protected ResourcePoolState resourcePool;
 
     @Before
     public void setUp() throws Throwable {
@@ -198,8 +202,30 @@ public class BaseVSphereAdapterTest {
         return result;
     }
 
+    protected NetworkState createNetwork(String name) throws Throwable {
+        if (name == null) {
+            name = "name-not-defined";
+        }
+        NetworkState net = new NetworkState();
+        net.adapterManagementReference = getAdapterManagementReference();
+        net.authCredentialsLink = this.auth.documentSelfLink;
+        net.name = name;
+        net.instanceAdapterReference = UriUtils
+                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
+        net.subnetCIDR = "0.0.0.0/0";
+        net.resourcePoolLink = this.resourcePool.documentSelfLink;
+
+        if (this.datacenterId == null) {
+            net.regionId = "datacenter-not-defined";
+        } else {
+            net.regionId = this.datacenterId;
+        }
+
+        return TestUtils.doPost(this.host, net, NetworkState.class,
+                UriUtils.buildUri(this.host, NetworkService.FACTORY_LINK));
+    }
+
     protected void deleteVmAndWait(ComputeState vm) throws Throwable {
-        // now logout the clone
         ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
         deletionState.isMockRequest = isMock();
         QuerySpecification resourceQuerySpec = new QuerySpecification();
@@ -208,7 +234,6 @@ public class BaseVSphereAdapterTest {
                 .setTermMatchValue(vm.documentSelfLink);
 
         deletionState.resourceQuerySpec = resourceQuerySpec;
-        deletionState.isMockRequest = isMock();
         ResourceRemovalTaskState outDelete = TestUtils.doPost(this.host,
                 deletionState,
                 ResourceRemovalTaskState.class,
@@ -216,5 +241,9 @@ public class BaseVSphereAdapterTest {
                         ResourceRemovalTaskService.FACTORY_LINK));
 
         awaitTaskEnd(outDelete);
+    }
+
+    protected URI getAdapterManagementReference() {
+        return UriUtils.buildUri(this.vcUrl);
     }
 }

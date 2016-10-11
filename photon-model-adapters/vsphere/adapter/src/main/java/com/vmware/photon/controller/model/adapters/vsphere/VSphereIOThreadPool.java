@@ -81,7 +81,7 @@ public class VSphereIOThreadPool {
      *            authorization object used to authenticate against vsphere host
      * @param callback
      *            non-null callback
-     * @param connectionEnhacer
+     * @param connectionEnhancer
      *            not-null connection enhancer
      */
     public void submit(Service sender, URI adapterReference, AuthCredentialsServiceState auth,
@@ -163,6 +163,8 @@ public class VSphereIOThreadPool {
 
             try {
                 callback.doInConnection(connection, null);
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Uncaught exception in vSphere IO Pool", e);
             } finally {
                 closeQuietly(connection);
             }

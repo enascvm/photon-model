@@ -23,6 +23,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.util.EntityUtils;
 import org.codehaus.jackson.map.DeserializationConfig.Feature;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.map.SerializationConfig;
@@ -41,7 +42,6 @@ import com.vmware.vim25.ManagedObjectReference;
  */
 public abstract class VapiClient {
     public static final ObjectMapper MAPPER = new ObjectMapper();
-
 
     static {
         MAPPER.enable(SerializationConfig.Feature.INDENT_OUTPUT);
@@ -90,10 +90,17 @@ public abstract class VapiClient {
         post.setHeader(HttpHeaders.CONTENT_TYPE, "application/json");
 
         post.setEntity(new StringEntity(request.toJsonString()));
-        HttpResponse httpResponse = this.client.execute(post);
+        HttpResponse httpResponse = null;
 
-        InputStream stream = httpResponse.getEntity().getContent();
-        return MAPPER.readValue(stream, RpcResponse.class);
+        try {
+            httpResponse = this.client.execute(post);
+            InputStream stream = httpResponse.getEntity().getContent();
+            return MAPPER.readValue(stream, RpcResponse.class);
+        } finally {
+            if (httpResponse != null) {
+                EntityUtils.consumeQuietly(httpResponse.getEntity());
+            }
+        }
     }
 
     protected ObjectNode newNode() {

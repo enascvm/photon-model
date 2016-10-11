@@ -122,7 +122,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         //computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

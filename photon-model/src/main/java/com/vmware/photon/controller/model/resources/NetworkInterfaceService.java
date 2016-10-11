@@ -35,6 +35,7 @@ public class NetworkInterfaceService extends StatefulService {
      */
     public static class NetworkInterfaceState extends ResourceState {
 
+        public static final String FIELD_NAME_NETWORK_LINK = "networkLink";
         /**
          * Link to the network this nic is connected to.
          */

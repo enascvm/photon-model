@@ -13,17 +13,17 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
-import com.vmware.vim25.ArrayOfOptionValue;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
-import com.vmware.vim25.OptionValue;
-import com.vmware.vim25.VirtualDevice;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualMachinePowerState;
 
@@ -48,25 +48,27 @@ public class VmOverlay extends AbstractOverlay {
     }
 
     public String getInstanceUuid() {
-        return (String) getOrFail(VimPath.vm_config_instanceUuid);
+        return (String) getOrDefault(VimPath.vm_config_instanceUuid, null);
     }
 
     public String getName() {
         return (String) getOrFail(VimPath.vm_config_name);
     }
 
-    public String getParentLink() {
-        ArrayOfOptionValue arr = (ArrayOfOptionValue) getOrFail(VimPath.vm_config_extraConfig);
-        for (OptionValue ov : arr.getOptionValue()) {
-            if (InstanceClient.CONFIG_PARENT_LINK.equals(ov.getKey())) {
-                return (String) ov.getValue();
-            }
+    public List<VirtualEthernetCard> getNics() {
+        ArrayOfVirtualDevice dev = (ArrayOfVirtualDevice) getOrDefault(
+                VimPath.vm_config_hardware_device, null);
+        if (dev == null) {
+            return Collections.emptyList();
         }
 
-        return null;
+        return dev.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualEthernetCard)
+                .map(d -> (VirtualEthernetCard) d)
+                .collect(Collectors.toList());
     }
 
-    public boolean isTempalte() {
+    public boolean isTemplate() {
         return (boolean) getOrFail(VimPath.vm_config_template);
     }
 
@@ -74,35 +76,20 @@ public class VmOverlay extends AbstractOverlay {
         return (ManagedObjectReference) getOrFail(VimPath.vm_runtime_host);
     }
 
-    public String getDescriptionLink() {
-        ArrayOfOptionValue arr = (ArrayOfOptionValue) getOrFail(VimPath.vm_config_extraConfig);
-        for (OptionValue ov : arr.getOptionValue()) {
-            if (InstanceClient.CONFIG_DESC_LINK.equals(ov.getKey())) {
-                return (String) ov.getValue();
-            }
-        }
-
-        return null;
-    }
-
     public String getPrimaryMac() {
-        ArrayOfVirtualDevice devices = (ArrayOfVirtualDevice) getOrFail(
-                VimPath.vm_config_hardware_device);
-        for (VirtualDevice dev : devices.getVirtualDevice()) {
-            if (dev instanceof VirtualEthernetCard) {
-                return ((VirtualEthernetCard) dev).getMacAddress();
-            }
+        for (VirtualEthernetCard dev : getNics()) {
+            return dev.getMacAddress();
         }
 
         return null;
     }
 
     public String getIpAddressOrHostName() {
-        String ip = (String) get(VimPath.vm_summary_guest_ipAddress);
+        String ip = (String) getOrDefault(VimPath.vm_summary_guest_ipAddress, null);
         if (ip != null) {
             return ip;
         }
-        return (String) get(VimPath.vm_summary_guest_hostName);
+        return (String) getOrDefault(VimPath.vm_summary_guest_hostName, null);
     }
 
     public int getNumCpu() {

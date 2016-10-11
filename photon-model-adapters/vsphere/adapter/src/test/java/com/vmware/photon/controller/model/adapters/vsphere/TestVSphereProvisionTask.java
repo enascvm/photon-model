@@ -16,6 +16,8 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
+import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.UUID;
@@ -34,7 +36,9 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -43,18 +47,14 @@ import com.vmware.photon.controller.model.tasks.SnapshotTaskService.SnapshotTask
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
 
     public URI cdromUri = getCdromUri();
 
-    // fields that are used across method calls, stash them as private fields
-    private ResourcePoolState resourcePool;
-
-    private AuthCredentialsServiceState auth;
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
+    private NetworkState network;
 
     @Test
     public void createInstanceSnapshotItAndDeleteIt() throws Throwable {
@@ -62,8 +62,9 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         this.resourcePool = createResourcePool();
         this.auth = createAuth();
 
-        this.computeHostDescription = createComputeHostDescription();
+        this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost();
+        this.network = createNetwork(networkId);
 
         ComputeDescription vmDescription = createVmDescription();
         ComputeState vm = createVmState(vmDescription);
@@ -129,7 +130,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         state.computeLink = vm.documentSelfLink;
         state.description = "description: " + state.name;
 
-        return TestUtils.doPost(this.host, state,
+        return doPost(this.host, state,
                 SnapshotState.class,
                 UriUtils.buildUri(this.host, SnapshotService.FACTORY_LINK));
 
@@ -141,7 +142,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = vmDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
         computeState.name = vmDescription.name;
 
         computeState.powerState = PowerState.ON;
@@ -156,10 +157,14 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         computeState.diskLinks
                 .add(createDisk("cd", DiskType.CDROM, this.cdromUri).documentSelfLink);
 
+        computeState.networkInterfaceLinks = new ArrayList<>(1);
+        computeState.networkInterfaceLinks
+                .add(createNic("nic for " + this.networkId, this.network.documentSelfLink));
+
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
 
-        ComputeService.ComputeState returnState = TestUtils.doPost(this.host, computeState,
+        ComputeService.ComputeState returnState = doPost(this.host, computeState,
                 ComputeService.ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
@@ -174,9 +179,21 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         res.id = res.name = "disk-" + alias;
 
         res.sourceImageReference = sourceImageReference;
-        return TestUtils.doPost(this.host, res,
+        return doPost(this.host, res,
                 DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+    }
+
+    private String createNic(String name, String networkLink) throws Throwable {
+        NetworkInterfaceState nic = new NetworkInterfaceState();
+        nic.name = name;
+        nic.networkLink = networkLink;
+
+        nic = doPost(this.host, nic,
+                NetworkInterfaceState.class,
+                UriUtils.buildUri(this.host, NetworkInterfaceService.FACTORY_LINK));
+
+        return nic.documentSelfLink;
     }
 
     private ComputeDescription createVmDescription() throws Throwable {
@@ -190,9 +207,8 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
-        computeDesc.networkId = this.networkId;
 
-        return TestUtils.doPost(this.host, computeDesc,
+        return doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
@@ -200,22 +216,22 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
     /**
      * Create a compute host representing a vcenter server
      */
-    private ComputeService.ComputeState createComputeHost() throws Throwable {
+    private ComputeState createComputeHost() throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = UUID.randomUUID().toString();
         computeState.name = this.computeHostDescription.name;
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
 
-        ComputeService.ComputeState returnState = TestUtils.doPost(this.host, computeState,
-                ComputeService.ComputeState.class,
+        ComputeState returnState = TestUtils.doPost(this.host, computeState,
+                ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
     }
 
-    private ComputeDescription createComputeHostDescription() throws Throwable {
+    private ComputeDescription createComputeDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
         computeDesc.id = UUID.randomUUID().toString();
@@ -225,9 +241,13 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
+
+        computeDesc.enumerationAdapterReference = UriUtils
+                .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
 
         computeDesc.zoneId = this.zoneId;
+        computeDesc.regionId = this.datacenterId;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,

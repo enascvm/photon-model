@@ -70,7 +70,6 @@ public class ComputeDescriptionServiceTest extends Suite {
         cd.enumerationAdapterReference = new URI(
                 "http://enumerationAdapterReference");
 
-        cd.networkId = null;
         cd.dataStoreId = null;
 
         ArrayList<String> children = new ArrayList<>();

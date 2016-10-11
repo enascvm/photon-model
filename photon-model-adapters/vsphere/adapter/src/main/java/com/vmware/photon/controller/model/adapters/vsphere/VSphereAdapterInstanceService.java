@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
@@ -102,7 +103,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(connection, ctx.child,
-                                ctx.parent, ctx.disks);
+                                ctx.parent, ctx.disks, ctx.nics);
 
                         ComputeState state;
 
@@ -181,7 +182,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(conn, ctx.child, ctx.parent,
-                                ctx.disks);
+                                ctx.disks, ctx.nics);
                         client.deleteInstance();
 
                         Operation finishTask = mgr.createTaskPatch(TaskStage.FINISHED);
@@ -232,9 +233,15 @@ public class VSphereAdapterInstanceService extends StatelessService {
         deleteOps.add(Operation.createDelete(ctx.computeReference));
 
         if (ctx.child.diskLinks != null) {
-            for (String link : ctx.child.diskLinks) {
-                deleteOps.add(Operation.createDelete(UriUtils.buildUri(this.getHost(), link)));
-            }
+            deleteOps.addAll(ctx.child.diskLinks.stream()
+                    .map(link -> Operation.createDelete(UriUtils.buildUri(this.getHost(), link)))
+                    .collect(Collectors.toList()));
+        }
+
+        if (ctx.child.networkInterfaceLinks != null) {
+            deleteOps.addAll(ctx.child.networkInterfaceLinks.stream()
+                    .map(link -> Operation.createDelete(UriUtils.buildUri(this.getHost(), link)))
+                    .collect(Collectors.toList()));
         }
 
         if (deleteOps.isEmpty()) {

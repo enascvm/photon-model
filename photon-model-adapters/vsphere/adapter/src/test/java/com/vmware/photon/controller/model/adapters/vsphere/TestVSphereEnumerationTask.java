@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -28,6 +29,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
@@ -72,22 +74,30 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         doRefresh();
 
         if (!isMock()) {
-            ComputeState vm = findVm(5, 5000);
+            ComputeState vm = findRandomVm();
             assertInternalPropertiesSet(vm);
         }
 
-        snapshotFactoryState("refresh", ComputeService.class);
-        snapshotFactoryState("refresh", ComputeDescriptionService.class);
-        snapshotFactoryState("refresh", ResourcePoolService.class);
-        snapshotFactoryState("refresh", StorageDescriptionService.class);
-        snapshotFactoryState("refresh", NetworkService.class);
-        snapshotFactoryState("refresh", TagService.class);
+        captureFactoryState("initial");
 
         // do a second refresh to test update path
         doRefresh();
+
+        captureFactoryState("updated");
     }
 
-    private ComputeState findVm(int retriesLeft, long sleepMillis)
+    protected void captureFactoryState(String marker)
+            throws ExecutionException, InterruptedException, IOException {
+        snapshotFactoryState(marker, ComputeService.class);
+        snapshotFactoryState(marker, ComputeDescriptionService.class);
+        snapshotFactoryState(marker, ResourcePoolService.class);
+        snapshotFactoryState(marker, StorageDescriptionService.class);
+        snapshotFactoryState(marker, NetworkService.class);
+        snapshotFactoryState(marker, TagService.class);
+        snapshotFactoryState(marker, NetworkInterfaceService.class);
+    }
+
+    private ComputeState findRandomVm()
             throws InterruptedException, TimeoutException, ExecutionException {
         QuerySpecification qs = new QuerySpecification();
         qs.options.add(QueryOption.EXPAND_CONTENT);
@@ -107,14 +117,6 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
         QueryTask result = this.host.sendWithFuture(op).thenApply(o -> o.getBody(QueryTask.class))
                 .get(10, TimeUnit.SECONDS);
-
-        if (result.results.documents.isEmpty()) {
-            if (retriesLeft == 0) {
-                throw new IllegalStateException("Cannot find template within configured timeout");
-            }
-            Thread.sleep(sleepMillis);
-            return findVm(retriesLeft - 1, sleepMillis);
-        }
 
         return Utils
                 .fromJson(result.results.documents.values().iterator().next(), ComputeState.class);
@@ -148,7 +150,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = UriUtils.buildUri(this.vcUrl);
+        computeState.adapterManagementReference = getAdapterManagementReference();
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

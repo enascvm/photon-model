@@ -37,7 +37,7 @@ import com.vmware.xenon.common.Utils;
 public class AdapterUtils {
     /**
      * Checks if the given resource is a compute host or a VM.
-     * @param computeDescription ComputeDescription of the resource.
+     * @param computeDesc ComputeDescription of the resource.
      * @return If the resource is a compute host or not.
      */
     public static boolean isComputeHost(ComputeStateWithDescription computeDesc) {

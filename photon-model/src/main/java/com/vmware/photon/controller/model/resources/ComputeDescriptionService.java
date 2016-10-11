@@ -98,12 +98,6 @@ public class ComputeDescriptionService extends StatefulService {
         public String dataStoreId;
 
         /**
-         * Identifier of the network associated with this compute host.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String networkId;
-
-        /**
          * Self-link to the AuthCredentialsService used to access this compute
          * host.
          */
@@ -338,7 +332,6 @@ public class ComputeDescriptionService extends StatefulService {
         template.enumerationAdapterReference = UriUtils.buildUri(
                 this.getHost(), "/enumerationAdapterReference");
 
-        template.networkId = null;
         template.dataStoreId = null;
 
         ArrayList<String> children = new ArrayList<>();
