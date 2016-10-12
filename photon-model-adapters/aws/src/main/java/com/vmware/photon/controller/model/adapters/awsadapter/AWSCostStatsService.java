@@ -54,6 +54,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -99,6 +100,7 @@ public class AWSCostStatsService extends StatelessService {
         public AWSCostStatsCreationStages stage;
         public Map<String, AwsAccountDetailDto> accountDetailsMap;
         Map<String, ComputeState> awsInstancesById;
+        OperationContext opContext;
 
         public AWSCostStatsCreationContext(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
@@ -107,6 +109,7 @@ public class AWSCostStatsService extends StatelessService {
             this.awsInstancesById = new ConcurrentSkipListMap<String, ComputeState>();
             this.statsResponse = new ComputeStatsResponse();
             this.statsResponse.statsList = new ArrayList<>();
+            this.opContext = OperationContext.getOperationContext();
         }
     }
 
@@ -225,7 +228,7 @@ public class AWSCostStatsService extends StatelessService {
                 .addOption(QueryOption.EXPAND_CONTENT).setQuery(query)
                 .build();
         queryTask.setDirect(true);
-        queryTask.tenantLinks = statsData.computeDesc.description.tenantLinks;
+        queryTask.tenantLinks = statsData.computeDesc.tenantLinks;
         queryTask.documentSelfLink = UUID.randomUUID().toString();
         sendRequest(
                 Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS).setBody(queryTask)
@@ -346,6 +349,7 @@ public class AWSCostStatsService extends StatelessService {
                                 csvBillZipFilePath,
                                 monthDate);
                         deleteTempFiles();
+                        OperationContext.restoreOperationContext(statsData.opContext);
                         statsData.stage = next;
                         handleCostStatsCreationRequest(statsData);
                     } else if (ProgressEventType.TRANSFER_FAILED_EVENT.equals(eventType)) {
