@@ -2,6 +2,8 @@
 
 ## 0.4.13-SNAPSHOT
 
+* Move to xenon version 1.0.0
+
 ## 0.4.12
 
 * Bug Fixes - Fixing the burn rate calculation in the AWS Stats
