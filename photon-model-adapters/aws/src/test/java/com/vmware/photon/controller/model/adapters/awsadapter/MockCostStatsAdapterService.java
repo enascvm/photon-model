@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import java.nio.file.Path;
+import java.util.HashMap;
 
 import org.joda.time.LocalDate;
 
@@ -82,7 +83,8 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
 
         statsData.computeDesc = new ComputeStateWithDescription();
         statsData.computeDesc.documentSelfLink = "accountSelfLink";
-        statsData.awsAccountId = "123456789";
+        statsData.computeDesc.customProperties = new HashMap<>();
+        statsData.computeDesc.customProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, "123456789");
 
         statsData.stage = next;
         handleCostStatsCreationRequest(statsData);

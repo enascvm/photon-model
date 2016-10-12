@@ -25,10 +25,13 @@ import java.util.LinkedHashSet;
 import java.util.function.BiConsumer;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
+import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClient;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -163,6 +166,39 @@ public class AWSEndpointAdapterService extends StatelessService {
                 }
                 c.customProperties.put(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
             }
+
+            String accountId = getAccountId(r.getRequired(PRIVATE_KEYID_KEY),
+                    r.getRequired(PRIVATE_KEY_KEY));
+            if (accountId != null && !accountId.isEmpty()) {
+                c.customProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, accountId);
+            }
         };
+    }
+
+    /**
+     * Method gets the aws accountId from the specified credentials.
+     * @param privateKeyId
+     * @param privateKey
+     * @return account ID
+     */
+    private String getAccountId(String privateKeyId, String privateKey) {
+        AWSCredentials awsCredentials = new BasicAWSCredentials(privateKeyId, privateKey);
+        AmazonIdentityManagementClient iamClient = new AmazonIdentityManagementClient(
+                awsCredentials);
+        String userId = null;
+        try {
+            String arn = iamClient.getUser().getUser().getArn();
+            /*
+             *  arn:aws:service:region:account:resource -> so limiting the split to 6 words and extracting the accountId which is 5th one in list.
+             *  If the user is not authorized to perform iam:GetUser on that resource,still error mesage will have accountId
+             */
+            userId = arn.split(":", 6)[4];
+        } catch (AmazonServiceException ex) {
+            if (ex.getErrorCode().compareTo("AccessDenied") == 0) {
+                String msg = ex.getMessage();
+                userId = msg.split(":", 7)[5];
+            }
+        }
+        return userId;
     }
 }

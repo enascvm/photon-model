@@ -28,13 +28,9 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressEventType;
 import com.amazonaws.event.ProgressListener;
-import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClient;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.transfer.Download;
 import com.amazonaws.services.s3.transfer.TransferManager;
@@ -100,7 +96,6 @@ public class AWSCostStatsService extends StatelessService {
         public ComputeStatsResponse statsResponse;
         public TransferManager s3Client;
         public List<String> ignorableInvoiceCharge;
-        public String awsAccountId;
         public AWSCostStatsCreationStages stage;
         public Map<String, AwsAccountDetailDto> accountDetailsMap;
         Map<String, ComputeState> awsInstancesById;
@@ -206,7 +201,7 @@ public class AWSCostStatsService extends StatelessService {
         String billsBucketName = statsData.computeDesc.customProperties
                 .getOrDefault(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, null);
         if (billsBucketName == null) {
-            logInfo("Bills Bucket name is not configured for this account. Not collecting cost stats.");
+            logWarning("Bills Bucket name is not configured for this account. Not collecting cost stats.");
             return;
         }
         try {
@@ -260,8 +255,9 @@ public class AWSCostStatsService extends StatelessService {
 
         for (String account : statsData.accountDetailsMap.keySet()) {
             AwsAccountDetailDto awsAccountDetailDto = statsData.accountDetailsMap.get(account);
-
-            if (awsAccountDetailDto.id.equalsIgnoreCase(statsData.awsAccountId)) {
+            String accountId = statsData.computeDesc.customProperties
+                    .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
+            if ((accountId != null) && awsAccountDetailDto.id.equalsIgnoreCase(accountId)) {
                 // As of now we are creating stats for the primary account only.
                 // TODO: handle the stats of linked accounts.
                 ComputeStats accountStats = createComputeStatsForAccount(
@@ -323,8 +319,12 @@ public class AWSCostStatsService extends StatelessService {
                 UUID.randomUUID().toString());
         Files.createDirectories(workingDirPath);
 
-        String accountId = getAccountId(statsData.parentAuth);
-        statsData.awsAccountId = accountId;
+        String accountId = statsData.computeDesc.customProperties
+                .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
+        if (accountId == null) {
+            logWarning("Account ID is not set. Not collecting cost stats.");
+            return;
+        }
         AWSCsvBillParser parser = new AWSCsvBillParser();
         final String csvBillZipFileName = parser.getCsvBillFileName(month, year, accountId, true);
 
@@ -403,33 +403,6 @@ public class AWSCostStatsService extends StatelessService {
         accountStats.computeLink = accountComputeLink;
         accountStats.statValues.put(stat.name, Collections.singletonList(stat));
         return accountStats;
-    }
-
-    /**
-     * Method gets the aws accountId from the basic credentials given by user using ARN of the account.
-     * @param credentials
-     * @return
-     */
-    private String getAccountId(AuthCredentialsServiceState credentials) {
-        AWSCredentials awsCredentials = new BasicAWSCredentials(credentials.privateKeyId,
-                credentials.privateKey);
-        AmazonIdentityManagementClient iamClient = new AmazonIdentityManagementClient(
-                awsCredentials);
-        String userId = null;
-        try {
-            String arn = iamClient.getUser().getUser().getArn();
-            /*
-             *  arn:aws:service:region:account:resource -> so limiting the split to 6 words and extracting the accountId which is 5th one in list.
-             *  If the user is not authorized to perform iam:GetUser on that resource,still error mesage will have accountId
-             */
-            userId = arn.split(":", 6)[4];
-        } catch (AmazonServiceException ex) {
-            if (ex.getErrorCode().compareTo("AccessDenied") == 0) {
-                String msg = ex.getMessage();
-                userId = msg.split(":", 7)[5];
-            }
-        }
-        return userId;
     }
 
     private Consumer<Throwable> getFailureConsumer(AWSCostStatsCreationContext statsData) {
