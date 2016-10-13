@@ -43,11 +43,10 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
-import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
-
+import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
@@ -246,14 +245,14 @@ public class EndpointAllocationTaskServiceTest extends Suite {
         }
 
         @Test
-        public void testSuccessWithEnumeration() throws Throwable {
+        public void testSuccessWithEnumerationAndExpliciteResourcePool() throws Throwable {
             EndpointState endpoint = createEndpointState();
+            ResourcePoolState pool = ModelUtils.createResourcePool(this);
             EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
             startState.adapterReference = UriUtils.buildUri(getHost(),
                     MockSuccessEndpointAdapter.SELF_LINK);
             startState.enumerationRequest = new EndpointAllocationTaskService.ResourceEnumerationRequest();
-            startState.enumerationRequest.resourcePoolLink = UriUtils
-                    .buildUriPath(ResourcePoolService.FACTORY_LINK, "fake-pool");
+            startState.enumerationRequest.resourcePoolLink = pool.documentSelfLink;
             startState.enumerationRequest.refreshIntervalMicros = TimeUnit.MILLISECONDS.toMicros(250);
 
             EndpointAllocationTaskState returnState = this
@@ -275,6 +274,52 @@ public class EndpointAllocationTaskServiceTest extends Suite {
 
             assertThat(completeState.taskInfo.stage,
                     is(TaskState.TaskStage.FINISHED));
+            // Check scheduled task was created
+            String schedTaskLink = UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK,
+                    UriUtils.getLastPathSegment(completeState.endpointState.documentSelfLink));
+            ScheduledTaskState scheduledTaskState = getServiceSynchronously(schedTaskLink,
+                    ScheduledTaskState.class);
+            assertNotNull(scheduledTaskState);
+            // delete scheduled task
+            deleteServiceSynchronously(schedTaskLink);
+        }
+
+        @Test
+        public void testSuccessWithEnumerationAndImplicitResourcePool() throws Throwable {
+            EndpointState endpoint = createEndpointState();
+            EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
+            startState.adapterReference = UriUtils.buildUri(getHost(),
+                    MockSuccessEndpointAdapter.SELF_LINK);
+            startState.enumerationRequest = new EndpointAllocationTaskService.ResourceEnumerationRequest();
+            startState.enumerationRequest.refreshIntervalMicros = TimeUnit.MILLISECONDS
+                    .toMicros(250);
+
+            EndpointAllocationTaskState returnState = this
+                    .postServiceSynchronously(
+                            EndpointAllocationTaskService.FACTORY_LINK,
+                            startState, EndpointAllocationTaskState.class);
+
+            EndpointAllocationTaskState completeState = this
+                    .waitForServiceState(
+                            EndpointAllocationTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                    .ordinal());
+
+            ComputeState computeState = getServiceSynchronously(
+                    completeState.endpointState.computeLink, ComputeState.class);
+            assertNotNull(computeState.resourcePoolLink);
+
+            assertThat(completeState.taskInfo.stage,
+                    is(TaskState.TaskStage.FINISHED));
+            // Check scheduled task was created
+            String schedTaskLink = UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK,
+                    UriUtils.getLastPathSegment(completeState.endpointState.documentSelfLink));
+            ScheduledTaskState scheduledTaskState = getServiceSynchronously(schedTaskLink,
+                    ScheduledTaskState.class);
+            assertNotNull(scheduledTaskState);
+            // delete scheduled task
+            deleteServiceSynchronously(schedTaskLink);
         }
     }
 

@@ -4,6 +4,18 @@
 
  * Rename DiskState.datacenterId to regionId for symmetry with ComputeDescription.
 
+* ResourceEnumerationTaskService will pass `TaskOptions.PRESERVE_MISSING_RESOUCES` to adapters, if
+ specified. If specified, the adapters `must` not delete local ComputeStates in case remote instance
+ is missing, but mark ComputeState's `lifecycleState` field to `LifecycleState.RETIRED`.
+
+* Switch ResourceEnumerationTaskService to use TaskOptions.IS_MOCK and
+ TaskOptions.SELF_DELETE_ON_COMPLETION, in place of separate boolean fields `isMockRequest` and
+ `deleteOnCompletion` (breaking change).
+
+* Introduce two new TaskOptions, PRESERVE_MISSING_RESOUCES and SELF_DELETE_ON_COMPLETION.
+
+* Introduce new field `lifecycleState` of type `LifecycleState` on ComputeState.
+
 ## 0.4.16
 
 * Optimize SingleResourceStatsAggregationTaskService to reduce the

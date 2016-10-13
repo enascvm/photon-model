@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
 import java.net.URI;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -56,6 +57,7 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 
@@ -265,7 +267,9 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         enumerationTaskState.adapterManagementReference = UriUtils
                 .buildUri(AzureEnumerationAdapterService.SELF_LINK);
         enumerationTaskState.resourcePoolLink = this.resourcePoolLink;
-        enumerationTaskState.isMockRequest = this.isMock;
+        if (this.isMock) {
+            enumerationTaskState.options = EnumSet.of(TaskOption.IS_MOCK);
+        }
 
         ResourceEnumerationTaskState enumTask = TestUtils
                 .doPost(this.host, enumerationTaskState, ResourceEnumerationTaskState.class,

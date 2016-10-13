@@ -50,6 +50,7 @@ public class MockAdapter {
         host.startService(new MockSuccessBootAdapter());
         host.startService(new MockFailureBootAdapter());
         host.startService(new MockSuccessEnumerationAdapter());
+        host.startService(new MockPreserveMissingEnumerationAdapter());
         host.startService(new MockFailureEnumerationAdapter());
         host.startService(new MockSnapshotSuccessAdapter());
         host.startService(new MockSnapshotFailureAdapter());
@@ -204,6 +205,10 @@ public class MockAdapter {
             case PATCH:
                 ComputeEnumerateResourceRequest request = op
                         .getBody(ComputeEnumerateResourceRequest.class);
+                if (request.preserveMissing) {
+                    op.fail(new IllegalArgumentException(
+                            "preserveMissing must be false by default"));
+                }
                 ResourceEnumerationTaskService.ResourceEnumerationTaskState patchState = new ResourceEnumerationTaskService.ResourceEnumerationTaskState();
                 patchState.taskInfo = new TaskState();
                 patchState.taskInfo.stage = TaskState.TaskStage.FINISHED;
@@ -235,6 +240,41 @@ public class MockAdapter {
                         .getBody(ComputeEnumerateResourceRequest.class);
                 ResourceEnumerationTaskService.ResourceEnumerationTaskState patchState = new ResourceEnumerationTaskService.ResourceEnumerationTaskState();
                 patchState.taskInfo = createFailedTaskInfo();
+                sendRequest(Operation.createPatch(
+                        request.taskReference).setBody(patchState));
+                break;
+            default:
+                super.handleRequest(op);
+            }
+        }
+    }
+
+    /**
+     * Mock Enumeration adapter that tests that
+     * {@link ComputeEnumerateResourceRequest#preserveMissing} is true.
+     */
+    public static class MockPreserveMissingEnumerationAdapter extends StatelessService {
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_preserve_missing_enumeration_adapter";
+
+        @Override
+        public void handleRequest(Operation op) {
+            if (!op.hasBody()) {
+                op.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+            switch (op.getAction()) {
+            case PATCH:
+                ComputeEnumerateResourceRequest request = op
+                        .getBody(ComputeEnumerateResourceRequest.class);
+                if (!request.preserveMissing) {
+                    op.fail(new IllegalArgumentException("preserveMissing must be set to true"));
+                    return;
+                }
+                op.complete();
+                ResourceEnumerationTaskService.ResourceEnumerationTaskState patchState = new ResourceEnumerationTaskService.ResourceEnumerationTaskState();
+                patchState.taskInfo = new TaskState();
+                patchState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(patchState));
                 break;

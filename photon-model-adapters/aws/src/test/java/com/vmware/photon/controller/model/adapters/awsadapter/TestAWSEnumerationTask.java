@@ -36,6 +36,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsOnThisEndpoint;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResourcesPreserveMissing;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
@@ -56,6 +57,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Tag;
@@ -69,6 +71,7 @@ import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -79,7 +82,6 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
-
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -117,6 +119,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private static final String VM_NAME = "TestAWSEnumerationTask-create";
     private static final String VM_STOPPED_NAME = "TestAWSEnumerationTask-stop";
     private static final String VM_UPDATED_NAME = "TestAWSEnumerationTask-update";
+    private static final int DEFAULT_TIMOUT_SECONDS = 200;
 
     private ResourcePoolState outPool;
     private ComputeService.ComputeState outComputeHost;
@@ -129,6 +132,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     public boolean isMock = true;
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
+    public int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
 
     @Before
     public void setUp() throws Throwable {
@@ -145,8 +149,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             PhotonModelTaskServices.startServices(this.host);
             AWSAdapters.startServices(this.host);
 
-            // TODO: VSYM-992 - improve test/fix arbitrary timeout
-            this.host.setTimeoutSeconds(200);
+            this.host.setTimeoutSeconds(this.timeoutSeconds);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
@@ -185,7 +188,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
 
-        this.host.setTimeoutSeconds(600);
+        this.host.setTimeoutSeconds(this.timeoutSeconds);
         // Overriding the page size to test the pagination logic with limited instances on AWS.
         // This is a functional test
         // so the latency numbers maybe higher from this test due to low page size.
@@ -300,6 +303,80 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 count2, ComputeService.FACTORY_LINK, false);
         queryDocumentsAndAssertExpectedCount(this.host,
                 count2, DiskService.FACTORY_LINK, false);
+    }
+
+    @Test
+    public void testEnumerationPreserveLocalStates() throws Throwable {
+        ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null);
+
+        if (this.isMock) {
+            // Just make a call to the enumeration service and make sure that the adapter patches
+            // the parent with completion.
+            enumerateResourcesPreserveMissing(this.host, this.isMock, this.outPool.documentSelfLink,
+                    this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                    TEST_CASE_MOCK_MODE);
+            return;
+        }
+
+        this.host.setTimeoutSeconds(this.timeoutSeconds);
+        // Overriding the page size to test the pagination logic with limited instances on AWS.
+        // This is a functional test
+        // so the latency numbers maybe higher from this test due to low page size.
+        setQueryPageSize(DEFAULT_TEST_PAGE_SIZE);
+        setQueryResultLimit(DEFAULT_TEST_PAGE_SIZE);
+
+        // Provision a single VM . Check initial state.
+        vmState = provisionMachine(this.host, vmState, this.isMock, this.instancesToCleanUp);
+        queryComputeInstances(this.host, count2);
+        queryDocumentsAndAssertExpectedCount(this.host, count2,
+                ComputeDescriptionService.FACTORY_LINK, false);
+
+        // CREATION directly on AWS
+        List<String> instanceIdsToDelete = provisionAWSVMWithEC2Client(this.client,
+                this.host, count4, T2_NANO_INSTANCE_TYPE);
+        List<String> instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, count1,
+                instanceType_t2_micro);
+        instanceIdsToDelete.addAll(instanceIds);
+        this.instancesToCleanUp.addAll(instanceIdsToDelete);
+        waitForProvisioningToComplete(instanceIdsToDelete, this.host, this.client, ZERO);
+
+        // Xenon does not know about the new instances.
+        ProvisioningUtils.queryComputeInstances(this.host, count2);
+
+        enumerateResourcesPreserveMissing(this.host, this.isMock, this.outPool.documentSelfLink,
+                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                TEST_CASE_INITIAL);
+        // 5 new resources should be discovered. Mapping to 2 new compute description and 5 new
+        // compute states.
+        // Even though the "t2.micro" is common to the VM provisioned from Xenon
+        // service and the one directly provisioned on EC2, there is no Compute description
+        // linking of discovered resources to user defined compute descriptions. So a new system
+        // generated compute description will be created for "t2.micro"
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count4,
+                ComputeDescriptionService.FACTORY_LINK, false);
+        queryDocumentsAndAssertExpectedCount(this.host,
+                count7, ComputeService.FACTORY_LINK, false);
+
+        // Verify Deletion flow
+        // Delete 5 VMs spawned above of type T2_NANO
+        deleteVMsUsingEC2Client(this.client, this.host, instanceIdsToDelete);
+        enumerateResourcesPreserveMissing(this.host, this.isMock, this.outPool.documentSelfLink,
+                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                TEST_CASE_DELETE_VMS);
+        // Counts should go down 5 compute states.
+        ServiceDocumentQueryResult queryResult = queryDocumentsAndAssertExpectedCount(this.host,
+                count7, ComputeService.FACTORY_LINK, false);
+
+        List<ComputeState> localInstances = queryResult.documents.values().stream()
+                .map(d -> Utils.fromJson(d, ComputeState.class))
+                .filter(c -> instanceIdsToDelete.contains(c.id)).collect(Collectors.toList());
+
+        assertEquals(instanceIdsToDelete.size(), localInstances.size());
+        for (ComputeState c : localInstances) {
+            assertEquals(LifecycleState.RETIRED, c.lifecycleState);
+        }
     }
 
     @Test

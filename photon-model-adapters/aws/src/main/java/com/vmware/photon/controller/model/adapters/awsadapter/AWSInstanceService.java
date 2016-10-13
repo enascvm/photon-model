@@ -51,7 +51,9 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.Inst
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
@@ -290,8 +292,7 @@ public class AWSInstanceService extends StatelessService {
         Collection<Operation> operations = new ArrayList<>();
         // iterate thru disks and create operations
         for (String disk : aws.child.diskLinks) {
-            operations.add(Operation.createGet(UriUtils.buildUri(
-                    this.getHost(), disk)));
+            operations.add(Operation.createGet(this.getHost(), disk));
         }
 
         OperationJoin operationJoin = OperationJoin.create(operations)
@@ -328,8 +329,7 @@ public class AWSInstanceService extends StatelessService {
         Collection<Operation> operations = new ArrayList<>();
         // iterate thru networkInterfaces and create operations
         for (String link : aws.child.networkInterfaceLinks) {
-            operations.add(Operation.createGet(UriUtils.buildUri(
-                    this.getHost(), link)));
+            operations.add(Operation.createGet(this.getHost(), link));
         }
 
         OperationJoin operationJoin = OperationJoin.create(operations)
@@ -368,7 +368,7 @@ public class AWSInstanceService extends StatelessService {
         Stream<Operation> firewallOps = aws.networkInterfaces.stream()
                 .filter(n -> (n.firewallLinks != null && !n.firewallLinks.isEmpty()))
                 .flatMap(ni -> ni.firewallLinks.stream())
-                .map(link -> Operation.createGet(UriUtils.buildUri(this.getHost(), link)));
+                .map(link -> Operation.createGet(this.getHost(), link));
 
         if (!firewallOps.iterator().hasNext()) {
             aws.stage = next;
@@ -542,28 +542,29 @@ public class AWSInstanceService extends StatelessService {
                     return;
                 }
 
-                ComputeStateWithDescription resultDesc = new ComputeStateWithDescription();
-                resultDesc.address = instance.getPublicIpAddress();
-                resultDesc.powerState = AWSUtils.mapToPowerState(instance.getState());
+                ComputeState cs = new ComputeState();
+                cs.id = instance.getInstanceId();
+                cs.address = instance.getPublicIpAddress();
+                cs.powerState = AWSUtils.mapToPowerState(instance.getState());
                 if (this.computeDesc.customProperties == null) {
-                    resultDesc.customProperties = new HashMap<String, String>();
+                    cs.customProperties = new HashMap<String, String>();
                 } else {
-                    resultDesc.customProperties = this.computeDesc.customProperties;
+                    cs.customProperties = this.computeDesc.customProperties;
                 }
-                resultDesc.customProperties.put(SOURCE_TASK_LINK,
+                cs.customProperties.put(SOURCE_TASK_LINK,
                         ProvisionComputeTaskService.FACTORY_LINK);
-                resultDesc.id = instance.getInstanceId();
-                resultDesc.customProperties.put(AWSConstants.AWS_VPC_ID,
+                cs.customProperties.put(AWSConstants.AWS_VPC_ID,
                         instance.getVpcId());
+                cs.lifecycleState = LifecycleState.READY;
                 // Create operations
                 List<Operation> networkOperations = mapInstanceIPAddressToNICCreationOperations(
-                        instance, resultDesc, this.computeDesc.tenantLinks, this.service);
+                        instance, cs, this.computeDesc.tenantLinks, this.service);
                 if (networkOperations != null && !networkOperations.isEmpty()) {
                     createOperations.addAll(networkOperations);
                 }
                 Operation patchState = Operation
                         .createPatch(this.computeReq.resourceReference)
-                        .setBody(resultDesc)
+                        .setBody(cs)
                         .setReferer(this.service.getHost().getUri());
                 createOperations.add(patchState);
 
@@ -767,9 +768,7 @@ public class AWSInstanceService extends StatelessService {
         };
         for (String resourcetoDelete : resourcesToDelete) {
             sendRequest(Operation
-                    .createDelete(
-                            UriUtils.buildUri(service.getHost(),
-                                    resourcetoDelete))
+                    .createDelete(service.getHost(), resourcetoDelete)
                     .setBody(new ServiceDocument())
                     .setCompletion(deletionKickoffCompletion));
         }

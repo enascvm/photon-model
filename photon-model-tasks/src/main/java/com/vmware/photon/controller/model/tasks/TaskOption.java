@@ -28,5 +28,15 @@ public enum TaskOption {
      * Option indicating whether the service should treat this as a mock request and complete the
      * work flow without involving the underlying compute host infrastructure.
      */
-    IS_MOCK
+    IS_MOCK,
+
+    /**
+     * Option indicating to preserve missing resource during enumeration.
+     */
+    PRESERVE_MISSING_RESOUCES,
+
+    /**
+     * Delete self on completion
+     */
+    SELF_DELETE_ON_COMPLETION
 }

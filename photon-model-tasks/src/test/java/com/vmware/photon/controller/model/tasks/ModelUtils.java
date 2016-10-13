@@ -18,10 +18,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionServiceTest;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ResourcePoolService;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.xenon.common.UriUtils;
 
 /**
@@ -93,5 +96,34 @@ public class ModelUtils {
     public static ComputeService.ComputeStateWithDescription createComputeWithDescription(
             BaseModelTest test) throws Throwable {
         return createComputeWithDescription(test, null, null);
+    }
+
+    public static ResourcePoolState createResourcePool(BaseModelTest test) throws Throwable {
+        return createResourcePool(test, null);
+    }
+
+    public static ResourcePoolState createResourcePool(BaseModelTest test, String endpointLink)
+            throws Throwable {
+        ResourcePoolState poolState = new ResourcePoolState();
+        poolState.name = UUID.randomUUID().toString();
+        poolState.id = poolState.name;
+        poolState.documentSelfLink = poolState.id;
+        poolState.maxCpuCount = 1600;
+        poolState.minCpuCount = 16;
+        poolState.currencyUnit = "Bitcoin";
+        poolState.maxCpuCostPerMinute = 1.0;
+        poolState.maxDiskCostPerMinute = 1.0;
+        poolState.minMemoryBytes = 1024L * 1024L * 1024L * 46L;
+        poolState.maxMemoryBytes = poolState.minMemoryBytes * 2;
+        poolState.minDiskCapacityBytes = poolState.maxDiskCapacityBytes = 1024L * 1024L * 1024L
+                * 1024L;
+        if (endpointLink != null) {
+            poolState.customProperties = new HashMap<>();
+            poolState.customProperties.put(
+                    ComputeProperties.ENDPOINT_LINK_PROP_NAME, endpointLink);
+        }
+
+        return test.postServiceSynchronously(ResourcePoolService.FACTORY_LINK, poolState,
+                ResourcePoolState.class);
     }
 }

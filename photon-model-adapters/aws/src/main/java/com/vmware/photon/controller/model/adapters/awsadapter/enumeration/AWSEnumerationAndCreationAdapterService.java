@@ -44,11 +44,9 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
@@ -170,18 +168,15 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
      */
     private void startHelperServices(Operation startPost) {
         Operation postAWScomputeDescriptionService = Operation
-                .createPost(UriUtils.buildUri(this.getHost(),
-                        AWSComputeDescriptionCreationAdapterService.SELF_LINK))
+                .createPost(this.getHost(), AWSComputeDescriptionCreationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
-        Operation postAWscomputeStateService = Operation.createPost(
-                UriUtils.buildUri(this.getHost(),
-                        AWSComputeStateCreationAdapterService.SELF_LINK))
+        Operation postAWscomputeStateService = Operation
+                .createPost(this.getHost(), AWSComputeStateCreationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
-        Operation postAWsNetworkStateService = Operation.createPost(
-                UriUtils.buildUri(this.getHost(),
-                        AWSNetworkStateCreationAdapterService.SELF_LINK))
+        Operation postAWsNetworkStateService = Operation
+                .createPost(this.getHost(), AWSNetworkStateCreationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
         this.getHost().startService(postAWScomputeDescriptionService,

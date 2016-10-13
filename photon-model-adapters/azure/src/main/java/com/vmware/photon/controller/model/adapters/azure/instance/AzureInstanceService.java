@@ -90,6 +90,7 @@ import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -104,10 +105,10 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
-
 import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -794,15 +795,16 @@ public class AzureInstanceService extends StatelessService {
                         VirtualMachine vm = result.getBody();
                         logInfo("Successfully created vm [%s]", vm.getName());
 
-                        ComputeService.ComputeStateWithDescription resultDesc = new ComputeService.ComputeStateWithDescription();
-                        if (ctx.child.customProperties == null) {
-                            resultDesc.customProperties = new HashMap<>();
-                        } else {
-                            resultDesc.customProperties = ctx.child.customProperties;
-                        }
+                        ComputeState cs = new ComputeState();
                         // Azure for some case changes the case of the vm id.
                         ctx.vmId = vm.getId().toLowerCase();
-                        resultDesc.id = ctx.vmId;
+                        cs.id = ctx.vmId;
+                        cs.lifecycleState = LifecycleState.READY;
+                        if (ctx.child.customProperties == null) {
+                            cs.customProperties = new HashMap<>();
+                        } else {
+                            cs.customProperties = ctx.child.customProperties;
+                        }
 
                         Operation.CompletionHandler completionHandler = (ox,
                                 exc) -> {
@@ -819,7 +821,7 @@ public class AzureInstanceService extends StatelessService {
 
                         sendRequest(
                                 Operation.createPatch(ctx.computeRequest.resourceReference)
-                                        .setBody(resultDesc).setCompletion(completionHandler)
+                                        .setBody(cs).setCompletion(completionHandler)
                                         .setReferer(getHost().getUri()));
                     }
                 });

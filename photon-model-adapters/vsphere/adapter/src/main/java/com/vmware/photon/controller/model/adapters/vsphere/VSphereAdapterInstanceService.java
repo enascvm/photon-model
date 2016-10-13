@@ -22,6 +22,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -155,6 +156,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                         }
 
+                        state.lifecycleState = LifecycleState.READY;
                         Operation patchResource = createComputeResourcePatch(state,
                                 ctx.computeReference);
                         Operation finishTask = mgr.createTaskPatch(TaskStage.FINISHED);

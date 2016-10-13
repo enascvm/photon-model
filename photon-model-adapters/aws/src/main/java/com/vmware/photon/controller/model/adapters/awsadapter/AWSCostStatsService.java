@@ -18,7 +18,6 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -241,8 +240,8 @@ public class AWSCostStatsService extends StatelessService {
         accountState.customProperties = new HashMap<>();
         accountState.customProperties
                 .put(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
-        URI accountUri = UriUtils.buildUri(this.getHost(), statsData.computeDesc.documentSelfLink);
-        sendRequest(Operation.createPatch(accountUri).setBody(accountState));
+        sendRequest(Operation.createPatch(this.getHost(), statsData.computeDesc.documentSelfLink)
+                .setBody(accountState));
     }
 
     protected void queryInstances(AWSCostStatsCreationContext statsData,

@@ -18,6 +18,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.EnumSet;
 import java.util.List;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -153,7 +154,9 @@ public class TestUtils {
         enumerationTaskState.enumerationAction = EnumerationAction.START;
         enumerationTaskState.adapterManagementReference = UriUtils.buildUri(adapterServiceLink);
         enumerationTaskState.resourcePoolLink = resourcePoolLink;
-        enumerationTaskState.isMockRequest = isMock;
+        if (isMock) {
+            enumerationTaskState.options = EnumSet.of(TaskOption.IS_MOCK);
+        }
         if (tenantLinks != null) {
             enumerationTaskState.tenantLinks = tenantLinks;
         }

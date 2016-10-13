@@ -271,22 +271,21 @@ public class EndpointAllocationTaskService
                     UUID.randomUUID().toString());
         }
 
-        Operation op = Operation.createPost(this, EndpointService.FACTORY_LINK);
+        Operation endpointOp = Operation.createPost(this, EndpointService.FACTORY_LINK);
 
         ComputeDescription computeDescription = configureDescription(es);
         ComputeState computeState = configureCompute(es);
 
-        // TODO VSYM-2484: EndpointAllocationTaskService doesn't tag the compute host with resource pool link
+        // TODO VSYM-2484: EndpointAllocationTaskService doesn't tag the compute host with resource
+        // pool link
         if (currentState.enumerationRequest != null
                 && currentState.enumerationRequest.resourcePoolLink != null) {
-            computeState.resourcePoolLink = currentState.enumerationRequest.resourcePoolLink;
+            es.resourcePoolLink = currentState.enumerationRequest.resourcePoolLink;
+            computeState.resourcePoolLink = es.resourcePoolLink;
         }
 
-        ResourcePoolState pool = configureResourcePool(es);
         Operation cdOp = Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK);
         Operation compOp = Operation.createPost(this, ComputeService.FACTORY_LINK);
-        Operation poolOp = Operation.createPost(this, ResourcePoolService.FACTORY_LINK)
-                .setBody(pool);
 
         OperationSequence sequence;
         if (es.authCredentialsLink == null) {
@@ -310,12 +309,13 @@ public class EndpointAllocationTaskService
                         es.authCredentialsLink = authState.documentSelfLink;
                         cdOp.setBody(computeDescription);
                     })
-                    .next(cdOp, poolOp);
+                    .next(cdOp);
         } else {
-            sequence = OperationSequence.create(cdOp, poolOp);
+            cdOp.setBody(computeDescription);
+            sequence = OperationSequence.create(cdOp);
         }
 
-        sequence
+        sequence = sequence
                 .setCompletion((ops, exs) -> {
                     if (exs != null) {
                         long firstKey = exs.keySet().iterator().next();
@@ -328,13 +328,61 @@ public class EndpointAllocationTaskService
                     Operation o = ops.get(cdOp.getId());
                     ComputeDescription desc = o.getBody(ComputeDescription.class);
                     computeState.descriptionLink = desc.documentSelfLink;
-                    compOp.setBody(computeState);
-
-                    ResourcePoolState poolState = poolOp.getBody(ResourcePoolState.class);
-                    es.resourcePoolLink = poolState.documentSelfLink;
                     es.computeDescriptionLink = desc.documentSelfLink;
-                })
-                .next(compOp)
+                });
+
+        // Don't create resource pool, if a resource pool link was passed.
+        if (es.resourcePoolLink == null) {
+            Operation poolOp = createResourcePoolOp(es);
+            sequence = sequence.next(poolOp)
+                    .setCompletion((ops, exs) -> {
+                        if (exs != null) {
+                            long firstKey = exs.keySet().iterator().next();
+                            exs.values().forEach(
+                                    ex -> logWarning("Error creating resource pool: %s",
+                                            ex.getMessage()));
+                            sendFailurePatch(this, currentState, exs.get(firstKey));
+                            return;
+                        }
+                        Operation o = ops.get(poolOp.getId());
+                        ResourcePoolState poolState = o.getBody(ResourcePoolState.class);
+                        es.resourcePoolLink = poolState.documentSelfLink;
+                        computeState.resourcePoolLink = es.resourcePoolLink;
+
+                        compOp.setBody(computeState);
+                    });
+        } else {
+
+            Operation getPoolOp = Operation.createGet(this, es.resourcePoolLink);
+            sequence = sequence.next(getPoolOp)
+                    .setCompletion((ops, exs) -> {
+                        if (exs != null) {
+                            long firstKey = exs.keySet().iterator().next();
+                            exs.values().forEach(
+                                    ex -> logWarning("Error retrieving resource pool: %s",
+                                            ex.getMessage()));
+                            sendFailurePatch(this, currentState, exs.get(firstKey));
+                            return;
+                        }
+                        Operation o = ops.get(getPoolOp.getId());
+                        ResourcePoolState poolState = o.getBody(ResourcePoolState.class);
+                        if (poolState.customProperties != null) {
+                            String endpointLink = poolState.customProperties
+                                    .get(ENDPOINT_LINK_PROP_NAME);
+                            if (endpointLink != null && endpointLink.equals(es.documentSelfLink)) {
+                                sendFailurePatch(this, currentState, new IllegalStateException(
+                                        "Passed resource pool is associated with a different endpoint."));
+                                return;
+                            }
+                        }
+                        es.resourcePoolLink = poolState.documentSelfLink;
+                        computeState.resourcePoolLink = es.resourcePoolLink;
+
+                        compOp.setBody(computeState);
+                    });
+        }
+
+        sequence.next(compOp)
                 .setCompletion(
                         (ops, exs) -> {
                             if (exs != null) {
@@ -347,9 +395,9 @@ public class EndpointAllocationTaskService
                             Operation csOp = ops.get(compOp.getId());
                             ComputeState c = csOp.getBody(ComputeState.class);
                             es.computeLink = c.documentSelfLink;
-                            op.setBody(es);
+                            endpointOp.setBody(es);
                         })
-                .next(op)
+                .next(endpointOp)
                 .setCompletion((ops, exs) -> {
                     if (exs != null) {
                         long firstKey = exs.keySet().iterator().next();
@@ -358,7 +406,7 @@ public class EndpointAllocationTaskService
                         sendFailurePatch(this, currentState, exs.get(firstKey));
                         return;
                     }
-                    Operation esOp = ops.get(op.getId());
+                    Operation esOp = ops.get(endpointOp.getId());
                     EndpointState endpoint = esOp.getBody(EndpointState.class);
                     EndpointAllocationTaskState state = createUpdateSubStageTask(
                             SubStage.INVOKE_ADAPTER);
@@ -385,13 +433,45 @@ public class EndpointAllocationTaskService
                         }
                         return;
                     }
-                    EndpointState endpoint = o.getBody(EndpointState.class);
-                    EndpointAllocationTaskState state = createUpdateSubStageTask(
-                            SubStage.INVOKE_ADAPTER);
-                    state.endpointState = endpoint;
-                    sendSelfPatch(state);
+                    // update endpoint, but first stop current enumeration.
+                    doUpdateEndpoint(o.getBody(EndpointState.class), currentState);
                 })
                 .sendWith(this);
+    }
+
+    private void doUpdateEndpoint(EndpointState es, EndpointAllocationTaskState currentState) {
+        String id = UriUtils.getLastPathSegment(es.documentSelfLink);
+        Operation.createGet(this, UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        if (o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
+                            // there was no enumeration triggered, so simply invoke adapter
+                            EndpointAllocationTaskState state = createUpdateSubStageTask(
+                                    SubStage.INVOKE_ADAPTER);
+                            state.endpointState = es;
+                            sendSelfPatch(state);
+                        } else {
+                            logSevere("Failed to load ScheduleTaskState for endpoint %s : %s",
+                                    es.documentSelfLink, e.getMessage());
+                            sendFailurePatch(this, currentState, e);
+                        }
+                        return;
+                    }
+                    // first delete scheduled task
+                    Operation.createDelete(this,
+                            UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
+                            .setCompletion((od, ed) -> {
+                                EndpointAllocationTaskState state = createUpdateSubStageTask(
+                                        SubStage.INVOKE_ADAPTER);
+                                if (state.enumerationRequest == null) {
+                                    state.enumerationRequest = new ResourceEnumerationRequest();
+                                    state.enumerationRequest.resourcePoolLink = es.resourcePoolLink;
+                                }
+                                state.endpointState = es;
+                                sendSelfPatch(state);
+                            }).sendWith(this);
+                }).sendWith(this);
+
     }
 
     private void validateCredentials(EndpointAllocationTaskState currentState, SubStage next) {
@@ -432,16 +512,15 @@ public class EndpointAllocationTaskService
                 .sendWith(this);
     }
 
-    private ResourcePoolState configureResourcePool(EndpointState state) {
+    private Operation createResourcePoolOp(EndpointState state) {
         ResourcePoolState poolState = new ResourcePoolState();
+        poolState.customProperties = new HashMap<>();
+        poolState.customProperties.put(ENDPOINT_LINK_PROP_NAME, state.documentSelfLink);
         String name = String.format("%s-%s", state.endpointType, state.name);
         poolState.name = name;
         poolState.id = poolState.name;
         poolState.tenantLinks = state.tenantLinks;
-        poolState.customProperties = new HashMap<>();
-        poolState.customProperties.put(ENDPOINT_LINK_PROP_NAME, state.documentSelfLink);
-
-        return poolState;
+        return Operation.createPost(this, ResourcePoolService.FACTORY_LINK).setBody(poolState);
     }
 
     private void doTriggerEnumeration(EndpointAllocationTaskState currentState, SubStage next,
@@ -452,15 +531,26 @@ public class EndpointAllocationTaskService
                 ? currentState.enumerationRequest.refreshIntervalMicros
                 : DEFAULT_SCHEDULED_TASK_INTERVAL_MICROS;
 
+        // Use endpooint documentSelfLink's last part as convention, so that we are able to stop
+        // enumeration during endpoint update.
+        String id = UriUtils.getLastPathSegment(endpoint.documentSelfLink);
+
         ResourceEnumerationTaskState enumTaskState = new ResourceEnumerationTaskState();
         enumTaskState.parentComputeLink = endpoint.computeLink;
         enumTaskState.resourcePoolLink = currentState.enumerationRequest.resourcePoolLink;
         enumTaskState.adapterManagementReference = adapterManagementReference;
         enumTaskState.tenantLinks = endpoint.tenantLinks;
-        enumTaskState.documentSelfLink = UriUtils.getLastPathSegment(currentState.documentSelfLink);
-        enumTaskState.deleteOnCompletion = true;
+        enumTaskState.documentSelfLink = id;
+        enumTaskState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
+        if (currentState.options.contains(TaskOption.IS_MOCK)) {
+            enumTaskState.options.add(TaskOption.IS_MOCK);
+        }
+        if (currentState.options.contains(TaskOption.PRESERVE_MISSING_RESOUCES)) {
+            enumTaskState.options.add(TaskOption.PRESERVE_MISSING_RESOUCES);
+        }
 
         ScheduledTaskState scheduledTaskState = new ScheduledTaskState();
+        scheduledTaskState.documentSelfLink = id;
         scheduledTaskState.factoryLink = ResourceEnumerationTaskService.FACTORY_LINK;
         scheduledTaskState.initialStateJson = Utils.toJson(enumTaskState);
         scheduledTaskState.intervalMicros = intervalMicros;
@@ -545,12 +635,17 @@ public class EndpointAllocationTaskService
             isUpdate = true;
         }
 
+        if (body.enumerationRequest != null) {
+            currentState.enumerationRequest = body.enumerationRequest;
+            isUpdate = true;
+        }
+
         if (body.adapterReference != null) {
             currentState.adapterReference = body.adapterReference;
             isUpdate = true;
         }
 
-        if (body.options != null) {
+        if (body.options != null && !body.options.isEmpty()) {
             currentState.options = body.options;
             isUpdate = true;
         }

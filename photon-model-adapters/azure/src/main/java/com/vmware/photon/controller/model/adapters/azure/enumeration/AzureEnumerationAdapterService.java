@@ -87,6 +87,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -133,7 +134,13 @@ public class AzureEnumerationAdapterService extends StatelessService {
      * Substages to handle Azure VM data collection.
      */
     private enum EnumerationSubStages {
-        LISTVMS, QUERY, UPDATE, CREATE, PATCH_ADDITIONAL_FIELDS, DELETE, FINISHED
+        LISTVMS,
+        QUERY,
+        UPDATE,
+        CREATE,
+        PATCH_ADDITIONAL_FIELDS,
+        DELETE,
+        FINISHED
     }
 
     private ExecutorService executorService;
@@ -374,7 +381,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
             }
 
             ctx.deletionNextPageLink = queryTask.results.nextPageLink;
-            deleteHelper(ctx);
+            deleteOrRetireHelper(ctx);
         };
 
         Query query = Builder.create()
@@ -402,9 +409,10 @@ public class AzureEnumerationAdapterService extends StatelessService {
     /**
      * Helper method to paginate through resources to be deleted.
      */
-    private void deleteHelper(EnumerationContext ctx) {
+    private void deleteOrRetireHelper(EnumerationContext ctx) {
         if (ctx.deletionNextPageLink == null) {
-            logInfo("Finished deletion of compute states for Azure");
+            logInfo("Finished %s of compute states for Azure",
+                    ctx.enumRequest.preserveMissing ? "retiring" : "deletion");
             ctx.subStage = EnumerationSubStages.FINISHED;
             handleSubStage(ctx);
             return;
@@ -431,19 +439,29 @@ public class AzureEnumerationAdapterService extends StatelessService {
                     continue;
                 }
 
-                operations.add(Operation.createDelete(this, computeState.documentSelfLink));
-                logFine("Deleting compute state %s", computeState.documentSelfLink);
+                if (ctx.enumRequest.preserveMissing) {
+                    logFine("Retiring compute state %s", computeState.documentSelfLink);
+                    ComputeState cs = new ComputeState();
+                    cs.powerState = PowerState.OFF;
+                    cs.lifecycleState = LifecycleState.RETIRED;
+                    operations.add(
+                            Operation.createPatch(this, computeState.documentSelfLink).setBody(cs));
+                } else {
+                    operations.add(Operation.createDelete(this, computeState.documentSelfLink));
+                    logFine("Deleting compute state %s", computeState.documentSelfLink);
 
-                if (computeState.diskLinks != null && !computeState.diskLinks.isEmpty()) {
-                    operations.add(Operation
-                            .createDelete(this, computeState.diskLinks.get(0)));
-                    logFine("Deleting disk state %s", computeState.diskLinks.get(0));
+                    if (computeState.diskLinks != null && !computeState.diskLinks.isEmpty()) {
+                        operations.add(Operation
+                                .createDelete(this, computeState.diskLinks.get(0)));
+                        logFine("Deleting disk state %s", computeState.diskLinks.get(0));
+                    }
                 }
             }
 
             if (operations.size() == 0) {
-                logFine("No compute/disk states deleted");
-                deleteHelper(ctx);
+                logFine("No compute/disk states to %s",
+                        ctx.enumRequest.preserveMissing ? "retire" : "delete");
+                deleteOrRetireHelper(ctx);
                 return;
             }
 
@@ -456,11 +474,12 @@ public class AzureEnumerationAdapterService extends StatelessService {
                                     ex -> logWarning("Error: %s", ex.getMessage()));
                         }
 
-                        deleteHelper(ctx);
+                        deleteOrRetireHelper(ctx);
                     })
                     .sendWith(this);
         };
-        logFine("Querying page [%s] for resources to be deleted", ctx.deletionNextPageLink);
+        logFine("Querying page [%s] for resources to be %s", ctx.deletionNextPageLink,
+                ctx.enumRequest.preserveMissing ? "retire" : "delete");
         sendRequest(Operation.createGet(this, ctx.deletionNextPageLink)
                 .setCompletion(completionHandler));
     }
@@ -771,7 +790,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1452
         if (virtualMachine.properties.diagnosticsProfile != null) {
             diagnosticStorageAccountName = getStorageAccountName(virtualMachine.properties.diagnosticsProfile
-                    .getBootDiagnostics().getStorageUri());
+                            .getBootDiagnostics().getStorageUri());
             computeDescription.customProperties.put(AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME,
                     diagnosticStorageAccountName);
         }

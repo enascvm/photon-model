@@ -75,7 +75,6 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -121,8 +120,8 @@ public class TestAWSSetupUtils {
     public static final String EC2_WINDOWS_AMI = "ami-3c32b12b";
 
     /**
-     * Class to hold the baseline counts for the compute states and the compute descriptions that are present on the AWS endpoint
-     * before enumeration starts.
+     * Class to hold the baseline counts for the compute states and the compute descriptions that
+     * are present on the AWS endpoint before enumeration starts.
      */
     public static class BaseLineState {
         public int baselineVMCount;
@@ -148,7 +147,8 @@ public class TestAWSSetupUtils {
     /**
      * Create a compute host description for an AWS instance
      */
-    public static ComputeService.ComputeState createAWSComputeHost(VerificationHost host, String resourcePoolLink,
+    public static ComputeService.ComputeState createAWSComputeHost(VerificationHost host,
+            String resourcePoolLink,
             String accessKey, String secretKey, boolean isAwsClientMock,
             String awsMockEndpointReference, Set<String> tagLinks)
             throws Throwable {
@@ -309,6 +309,7 @@ public class TestAWSSetupUtils {
 
     /**
      * Deletes the VM that is present on an endpoint and represented by the passed in ID.
+     *
      * @param documentSelfLink
      * @param isMock
      * @param host
@@ -321,6 +322,7 @@ public class TestAWSSetupUtils {
 
     /**
      * Deletes the VM that is present on an endpoint and represented by the passed in ID.
+     *
      * @param documentSelfLink
      * @param isMock
      * @param host
@@ -357,17 +359,20 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * A utility method that deletes the VMs on the specified endpoint filtered by the instanceIds that are passed in.
+     * A utility method that deletes the VMs on the specified endpoint filtered by the instanceIds
+     * that are passed in.
+     *
      * @throws Throwable
      */
-    public static void deleteVMsOnThisEndpoint(VerificationHost host,boolean isMock,
+    public static void deleteVMsOnThisEndpoint(VerificationHost host, boolean isMock,
             String parentComputeLink, List<String> instanceIdsToDelete) throws Throwable {
         deleteVMsOnThisEndpoint(host, null, isMock, parentComputeLink, instanceIdsToDelete, null);
     }
 
     /**
-     * A utility method that deletes the VMs on the specified endpoint filtered by the instanceIds that are passed in.
-     * It expects peerURI and tenantLinks to be populated.
+     * A utility method that deletes the VMs on the specified endpoint filtered by the instanceIds
+     * that are passed in. It expects peerURI and tenantLinks to be populated.
+     *
      * @throws Throwable
      */
     public static void deleteVMsOnThisEndpoint(VerificationHost host, URI peerURI, boolean isMock,
@@ -421,8 +426,11 @@ public class TestAWSSetupUtils {
 
     /**
      * Method for deleting a document with the said identifier.
-     * @param host The verification host
-     * @param documentToDelete The identifier of the document to be deleted.
+     *
+     * @param host
+     *            The verification host
+     * @param documentToDelete
+     *            The identifier of the document to be deleted.
      * @throws Throwable
      */
     public static void deleteDocument(VerificationHost host, String documentToDelete)
@@ -449,10 +457,11 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Provisions a machine for which the state was created.Expects the peerURI for the location
-     * of the service.
+     * Provisions a machine for which the state was created.Expects the peerURI for the location of
+     * the service.
      */
-    public static ComputeState provisionMachine(VerificationHost host, URI peerURI, ComputeState vmState,
+    public static ComputeState provisionMachine(VerificationHost host, URI peerURI,
+            ComputeState vmState,
             boolean isMock,
             List<String> instancesToCleanUp)
             throws Throwable, InterruptedException, TimeoutException {
@@ -489,6 +498,7 @@ public class TestAWSSetupUtils {
 
     /**
      * Method to get ResourceState.
+     *
      * @throws Throwable
      */
     private static ResourceState getResourceState(VerificationHost host, String resourceLink)
@@ -500,6 +510,7 @@ public class TestAWSSetupUtils {
 
     /**
      * Validates the documents of ResourceState have been removed.
+     *
      * @throws Throwable
      */
     public static void verifyRemovalOfResourceState(VerificationHost host,
@@ -513,9 +524,10 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Method to directly provision instances on the AWS endpoint without the knowledge of the local system.
-     * This is used to spawn instances and to test that the discovery of items not provisioned by Xenon
-     * happens correctly.
+     * Method to directly provision instances on the AWS endpoint without the knowledge of the local
+     * system. This is used to spawn instances and to test that the discovery of items not
+     * provisioned by Xenon happens correctly.
+     *
      * @throws Throwable
      */
     public static List<String> provisionAWSVMWithEC2Client(AmazonEC2AsyncClient client,
@@ -581,8 +593,8 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Checks if the required number of instanceIds have been returned from AWS for the requested number of resources to be
-     * provisioned.
+     * Checks if the required number of instanceIds have been returned from AWS for the requested
+     * number of resources to be provisioned.
      */
     private static boolean checkInstanceIdsReturnedFromAWS(int numberOfInstance,
             List<String> instanceIds) {
@@ -605,13 +617,17 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Method that sets basic information in {@link AWSUtils} for aws-mock.
-     * Aws-mock is a open-source tool for testing AWS services in a mock EC2 environment.
+     * Method that sets basic information in {@link AWSUtils} for aws-mock. Aws-mock is a
+     * open-source tool for testing AWS services in a mock EC2 environment.
+     *
      * @see <a href="https://github.com/treelogic-swe/aws-mock">aws-mock</a>
-     * @param isAwsClientMock flag to use aws-mock
-     * @param awsMockEndpointReference ec2 endpoint of aws-mock
+     * @param isAwsClientMock
+     *            flag to use aws-mock
+     * @param awsMockEndpointReference
+     *            ec2 endpoint of aws-mock
      */
-    public static void setAwsClientMockInfo(boolean isAwsClientMock, String awsMockEndpointReference) {
+    public static void setAwsClientMockInfo(boolean isAwsClientMock,
+            String awsMockEndpointReference) {
         AWSUtils.setAwsClientMock(isAwsClientMock);
         AWSUtils.setAwsMockEndpointReference(awsMockEndpointReference);
     }
@@ -640,19 +656,23 @@ public class TestAWSSetupUtils {
         public void onSuccess(RunInstancesRequest request, RunInstancesResult result) {
             for (Instance i : result.getReservation().getInstances()) {
                 this.instanceIds.add(i.getInstanceId());
-                this.host.log("Successfully created instances on AWS endpoint %s", i.getInstanceId());
+                this.host.log("Successfully created instances on AWS endpoint %s",
+                        i.getInstanceId());
             }
         }
     }
 
     /**
-     * Checks if all the instances represented by the list of passed in instanceIds have been turned ON.
+     * Checks if all the instances represented by the list of passed in instanceIds have been turned
+     * ON.
+     *
      * @return
      */
     public static void checkInstancesStarted(VerificationHost host, AmazonEC2AsyncClient client,
             List<String> instanceIds, List<Boolean> provisioningFlags) throws Throwable {
         AWSEnumerationAsyncHandler enumerationHandler = new AWSEnumerationAsyncHandler(host,
-                AWSEnumerationAsyncHandler.MODE.CHECK_START, provisioningFlags, null, null, null, null);
+                AWSEnumerationAsyncHandler.MODE.CHECK_START, provisioningFlags, null, null, null,
+                null);
         DescribeInstancesRequest request = new DescribeInstancesRequest()
                 .withInstanceIds(instanceIds);
         client.describeInstancesAsync(request, enumerationHandler);
@@ -662,9 +682,12 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Method that polls to see if the instances provisioned have turned ON.This method accepts an error count
-     * to allow some room for errors in case all the requested resources are not provisioned correctly.
-     * @return boolean if the required instances have been turned ON on AWS with some acceptable error rate.
+     * Method that polls to see if the instances provisioned have turned ON.This method accepts an
+     * error count to allow some room for errors in case all the requested resources are not
+     * provisioned correctly.
+     *
+     * @return boolean if the required instances have been turned ON on AWS with some acceptable
+     *         error rate.
      */
     public static boolean computeInstancesStartedStateWithAcceptedErrorRate(
             AmazonEC2AsyncClient client,
@@ -692,9 +715,11 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Gets the instance count of non-terminated instances on the AWS endpoint. This is used to run the asserts and validate the results
-     * for the data that is collected during enumeration.This also calculates the compute descriptions that will be used to represent
-     * the instances that were discovered on the AWS endpoint. Further factoring in the
+     * Gets the instance count of non-terminated instances on the AWS endpoint. This is used to run
+     * the asserts and validate the results for the data that is collected during enumeration.This
+     * also calculates the compute descriptions that will be used to represent the instances that
+     * were discovered on the AWS endpoint. Further factoring in the
+     *
      * @throws Throwable
      */
     public static BaseLineState getBaseLineInstanceCount(VerificationHost host,
@@ -703,7 +728,8 @@ public class TestAWSSetupUtils {
             throws Throwable {
         BaseLineState baseLineState = new BaseLineState();
         AWSEnumerationAsyncHandler enumerationHandler = new AWSEnumerationAsyncHandler(host,
-                AWSEnumerationAsyncHandler.MODE.GET_COUNT, null, null, null, testComputeDescriptions,
+                AWSEnumerationAsyncHandler.MODE.GET_COUNT, null, null, null,
+                testComputeDescriptions,
                 baseLineState);
         DescribeInstancesRequest request = new DescribeInstancesRequest();
         Filter runningInstanceFilter = getAWSNonTerminatedInstancesFilter();
@@ -718,24 +744,43 @@ public class TestAWSSetupUtils {
     /**
      * Enumerates resources on the AWS endpoint.
      */
+    public static void enumerateResourcesPreserveMissing(VerificationHost host, boolean isMock,
+            String resourcePoolLink, String computeHostLinkDescription, String computeHostLink,
+            String testCase) throws Throwable {
+        EnumSet<TaskOption> options = EnumSet.of(TaskOption.PRESERVE_MISSING_RESOUCES);
+        if (isMock) {
+            options.add(TaskOption.IS_MOCK);
+        }
+        enumerateResources(host, null, options, resourcePoolLink,
+                computeHostLinkDescription,
+                computeHostLink, testCase, null);
+    }
+
+    /**
+     * Enumerates resources on the AWS endpoint.
+     */
     public static void enumerateResources(VerificationHost host, boolean isMock,
             String resourcePoolLink, String computeHostLinkDescription, String computeHostLink,
             String testCase) throws Throwable {
-        enumerateResources(host, null, isMock, resourcePoolLink, computeHostLinkDescription,
+        enumerateResources(host, null, isMock ? EnumSet.of(TaskOption.IS_MOCK) : null,
+                resourcePoolLink,
+                computeHostLinkDescription,
                 computeHostLink, testCase, null);
     }
 
     /**
      * Enumerates resources on the AWS endpoint. Expects a peerURI and the tenantLinks to be set.
      */
-    public static void enumerateResources(VerificationHost host, URI peerURI, boolean isMock,
-            String resourcePoolLink, String computeHostLinkDescription, String computeHostLink,
+    public static void enumerateResources(VerificationHost host, URI peerURI,
+            EnumSet<TaskOption> options, String resourcePoolLink, String computeHostLinkDescription,
+            String computeHostLink,
             String testCase, List<String> tenantLinks) throws Throwable {
         // Perform resource enumeration on the AWS end point. Pass the references to the AWS compute
         // host.
         host.log("Performing resource enumeration");
         ResourceEnumerationTaskService.ResourceEnumerationTaskState enumTask = performResourceEnumeration(
-                host, peerURI, isMock, resourcePoolLink, computeHostLinkDescription,
+                host, peerURI, options, resourcePoolLink,
+                computeHostLinkDescription,
                 computeHostLink,
                 tenantLinks);
         // Wait for the enumeration task to be completed.
@@ -781,14 +826,18 @@ public class TestAWSSetupUtils {
 
     /**
      * Method to perform compute resource enumeration on the AWS endpoint.
-     * @param resourcePoolLink The link to the AWS resource pool.
-     * @param computeDescriptionLink  The link to the compute description for the AWS host.
-     * @param parentComputeLink The compute state associated with the AWS host.
+     *
+     * @param resourcePoolLink
+     *            The link to the AWS resource pool.
+     * @param computeDescriptionLink
+     *            The link to the compute description for the AWS host.
+     * @param parentComputeLink
+     *            The compute state associated with the AWS host.
      * @return
      * @throws Throwable
      */
     public static ResourceEnumerationTaskService.ResourceEnumerationTaskState performResourceEnumeration(
-            VerificationHost host, URI peerURI, boolean isMock,
+            VerificationHost host, URI peerURI, EnumSet<TaskOption> options,
             String resourcePoolLink, String computeDescriptionLink, String parentComputeLink,
             List<String> tenantLinks) throws Throwable {
         // Kick of a Resource Enumeration task to enumerate the instances on the AWS endpoint
@@ -800,7 +849,10 @@ public class TestAWSSetupUtils {
                 .buildUri(AWSEnumerationAdapterService.SELF_LINK);
 
         enumerationTaskState.resourcePoolLink = resourcePoolLink;
-        enumerationTaskState.isMockRequest = isMock;
+        enumerationTaskState.options = EnumSet.noneOf(TaskOption.class);
+        if (options != null) {
+            enumerationTaskState.options = options;
+        }
 
         if (tenantLinks != null) {
             enumerationTaskState.tenantLinks = tenantLinks;
@@ -814,6 +866,7 @@ public class TestAWSSetupUtils {
 
     /**
      * Deletes instances on the AWS endpoint for the set of instance Ids that are passed in.
+     *
      * @param instanceIdsToDelete
      * @throws Throwable
      */
@@ -867,7 +920,9 @@ public class TestAWSSetupUtils {
     }
 
     /**
-     * Method that polls to see if the instances provisioned have been terminated on the AWS endpoint.
+     * Method that polls to see if the instances provisioned have been terminated on the AWS
+     * endpoint.
+     *
      * @param deletionFlags
      */
     public static boolean computeInstancesTerminationState(AmazonEC2AsyncClient client,
@@ -883,13 +938,15 @@ public class TestAWSSetupUtils {
 
     /**
      * Checks if a newly deleted instance has its status set to terminated.
+     *
      * @return
      */
     public static void checkInstancesDeleted(AmazonEC2AsyncClient client,
             VerificationHost host, List<String> instanceIdsToDelete,
             ArrayList<Boolean> deletionFlags) throws Throwable {
         AWSEnumerationAsyncHandler enumerationHandler = new AWSEnumerationAsyncHandler(host,
-                AWSEnumerationAsyncHandler.MODE.CHECK_TERMINATION, null, deletionFlags, null, null, null);
+                AWSEnumerationAsyncHandler.MODE.CHECK_TERMINATION, null, deletionFlags, null, null,
+                null);
         DescribeInstancesRequest request = new DescribeInstancesRequest()
                 .withInstanceIds(instanceIdsToDelete);
         client.describeInstancesAsync(request, enumerationHandler);
@@ -902,6 +959,7 @@ public class TestAWSSetupUtils {
 
     /**
      * Method that polls to see if the instances provisioned have been stopped on the AWS endpoint.
+     *
      * @param client
      * @param host
      * @param instanceIdsToStop
@@ -921,6 +979,7 @@ public class TestAWSSetupUtils {
 
     /**
      * Checks if instances have their status set to stopped.
+     *
      * @param client
      * @param host
      * @param instanceIdsToStop
@@ -944,6 +1003,7 @@ public class TestAWSSetupUtils {
 
     /**
      * Stop instances on the AWS endpoint for the set of instance Ids that are passed in.
+     *
      * @param client
      * @param host
      * @param instanceIdsToStop
@@ -961,6 +1021,7 @@ public class TestAWSSetupUtils {
 
     /**
      * Wait for the instances have their status set to stopped.
+     *
      * @param client
      * @param host
      * @param instanceIdsToStop
@@ -999,19 +1060,19 @@ public class TestAWSSetupUtils {
 
         @Override
         public void onSuccess(StopInstancesRequest request,
-                              StopInstancesResult result) {
+                StopInstancesResult result) {
             this.host.log("Successfully stopped instances from the AWS endpoint %s",
                     result.getStoppingInstances().toString());
         }
     }
 
     /**
-     * Handler to get the state of a provisioned machine. It takes in different mode parameters to arrive at different values
-     * 1) Checks if all the instances with the passed in instance Ids have been powered ON.
-     * 2) Checks if all the instances with the passed in instance Ids have been terminated.
-     * 3) Gets the baseline count of instances on the AWS endpoint before the enumeration algorithm kicks in.
-     * This count is used to keep track of the final expected number of compute states in the system once
-     * enumeration has completed successfully.
+     * Handler to get the state of a provisioned machine. It takes in different mode parameters to
+     * arrive at different values 1) Checks if all the instances with the passed in instance Ids
+     * have been powered ON. 2) Checks if all the instances with the passed in instance Ids have
+     * been terminated. 3) Gets the baseline count of instances on the AWS endpoint before the
+     * enumeration algorithm kicks in. This count is used to keep track of the final expected number
+     * of compute states in the system once enumeration has completed successfully.
      */
     public static class AWSEnumerationAsyncHandler implements
             AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> {
@@ -1030,7 +1091,10 @@ public class TestAWSSetupUtils {
 
         // Flag to indicate whether you want to check if instance has started or stopped.
         public static enum MODE {
-            CHECK_START, CHECK_TERMINATION, CHECK_STOP, GET_COUNT
+            CHECK_START,
+            CHECK_TERMINATION,
+            CHECK_STOP,
+            GET_COUNT
         }
 
         AWSEnumerationAsyncHandler(VerificationHost host, MODE mode,
@@ -1129,7 +1193,8 @@ public class TestAWSSetupUtils {
     /**
      * Lookup a Compute by aws Id
      */
-    public static ComputeState getComputeByAWSId(VerificationHost host, String awsId) throws Throwable {
+    public static ComputeState getComputeByAWSId(VerificationHost host, String awsId)
+            throws Throwable {
 
         URI computesURI = UriUtils.buildUri(host, ComputeService.FACTORY_LINK);
         computesURI = UriUtils.buildExpandLinksQueryUri(computesURI);

@@ -227,7 +227,7 @@ public class ResourceEnumerationTaskServiceTest extends Suite {
             ServiceDocumentQueryResult resBeforeTask =
                     this.host.getFactoryState(UriUtils.buildUri(this.host, ResourceEnumerationTaskService.FACTORY_LINK));
             ResourceEnumerationTaskState postState = buildValidStartState(computeHost);
-            postState.deleteOnCompletion = true;
+            postState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
             startState = this
                     .postServiceSynchronously(
                             ResourceEnumerationTaskService.FACTORY_LINK,
@@ -241,6 +241,34 @@ public class ResourceEnumerationTaskServiceTest extends Suite {
                 }
                 return false;
             });
+        }
+
+        @Test
+        public void testPreserveMissingIsPassedSuccess() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = createComputeDescription(
+                    this,
+                    MockAdapter.MockPreserveMissingEnumerationAdapter.SELF_LINK);
+            ComputeService.ComputeStateWithDescription computeHost = createCompute(
+                    this, cd);
+
+            ResourceEnumerationTaskState enumState = buildValidStartState(computeHost);
+            enumState.options = EnumSet.of(TaskOption.PRESERVE_MISSING_RESOUCES);
+
+            ResourceEnumerationTaskService.ResourceEnumerationTaskState startState = this
+                    .postServiceSynchronously(
+                            ResourceEnumerationTaskService.FACTORY_LINK,
+                            enumState,
+                            ResourceEnumerationTaskService.ResourceEnumerationTaskState.class);
+
+            ResourceEnumerationTaskService.ResourceEnumerationTaskState newState = this
+                    .waitForServiceState(
+                            ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
+                            startState.documentSelfLink,
+                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                    .ordinal());
+            assertThat(newState.taskInfo.stage,
+                    is(TaskState.TaskStage.FINISHED));
+
         }
 
         @Test

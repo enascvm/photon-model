@@ -60,7 +60,6 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -330,10 +329,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
         public void onSuccess(DescribeVpcsRequest request, DescribeVpcsResult result) {
             OperationContext.restoreOperationContext(this.opContext);
 
-            URI adapterUri = UriUtils.buildUri(
-                    ServiceHost.LOCAL_HOST,
-                    this.service.getHost().getPort(),
-                    AWSUriPaths.AWS_INSTANCE_ADAPTER, null);
+            URI adapterUri = UriUtils.buildUri(this.service.getHost(),
+                    AWSUriPaths.AWS_INSTANCE_ADAPTER);
             for (Vpc resultVPC : result.getVpcs()) {
                 NetworkState networkState = AWSNetworkUtils.mapVPCToNetworkState(resultVPC,
                         this.aws.networkRequest.regionId,

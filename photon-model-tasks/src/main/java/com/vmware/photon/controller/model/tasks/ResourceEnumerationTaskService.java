@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.tasks;
 
 import java.net.URI;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -83,17 +84,11 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
          * A list of tenant links which can access this task.
          */
         public List<String> tenantLinks;
-        /**
-         * Value indicating whether the service should treat this as a mock request
-         * and complete the work flow without involving the underlying compute host
-         * infrastructure.
-         */
-        public boolean isMockRequest;
 
         /**
-         * Delete self on completion
+         * Task options
          */
-        public boolean deleteOnCompletion = false;
+        public EnumSet<TaskOption> options;
     }
 
     public ResourceEnumerationTaskService() {
@@ -150,7 +145,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             break;
         case FINISHED:
             logFine("task is complete");
-            if (currentState.deleteOnCompletion) {
+            if (currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
                 sendRequest(Operation
                         .createDelete(getUri()));
             }
@@ -158,7 +153,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         case FAILED:
         case CANCELLED:
             logWarning("Task was canceled or task failed");
-            if (currentState.deleteOnCompletion) {
+            if (currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
                 sendRequest(Operation
                         .createDelete(getUri()));
             }
@@ -190,7 +185,8 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         req.enumerationAction = state.enumerationAction;
         req.taskReference = UriUtils.buildUri(getHost(),
                 state.documentSelfLink);
-        req.isMockRequest = state.isMockRequest;
+        req.isMockRequest = state.options.contains(TaskOption.IS_MOCK);
+        req.preserveMissing = state.options.contains(TaskOption.PRESERVE_MISSING_RESOUCES);
 
         // Patch the enumerate service URI from the CHD
         CompletionHandler descriptionCompletion = (o, ex) -> {
@@ -240,6 +236,10 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         if (state.adapterManagementReference == null) {
             throw new IllegalArgumentException(
                     "adapterManagementReference is required.");
+        }
+
+        if (state.options == null) {
+            state.options = EnumSet.noneOf(TaskOption.class);
         }
 
         if (state.taskInfo == null || state.taskInfo.stage == null) {

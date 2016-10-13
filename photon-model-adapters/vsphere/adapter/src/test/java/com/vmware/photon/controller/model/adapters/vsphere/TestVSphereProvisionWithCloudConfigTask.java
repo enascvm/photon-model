@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -42,6 +43,7 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -136,7 +138,10 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
         task.adapterManagementReference = this.computeHost.adapterManagementReference;
 
-        task.isMockRequest = isMock();
+        if (isMock()) {
+            task.options = EnumSet.of(TaskOption.IS_MOCK);
+        }
+
         task.enumerationAction = EnumerationAction.REFRESH;
         task.parentComputeLink = this.computeHost.documentSelfLink;
         task.resourcePoolLink = this.resourcePool.documentSelfLink;

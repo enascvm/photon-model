@@ -43,12 +43,12 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
+import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
@@ -57,10 +57,11 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
- * Enumeration Adapter for the Amazon Web Services. Performs a list call to the AWS API
- * and reconciles the local state with the state on the remote system. It starts by looking at the local state in the system.
- * Queries the remote endpoint to check if the same instances exist there. In case some items are found to be deleted on the
- * remote endpoint then it goes ahead and deletes them from the local system.
+ * Enumeration Adapter for the Amazon Web Services. Performs a list call to the AWS API and
+ * reconciles the local state with the state on the remote system. It starts by looking at the local
+ * state in the system. Queries the remote endpoint to check if the same instances exist there. In
+ * case some items are found to be deleted on the remote endpoint then it goes ahead and deletes
+ * them from the local system.
  *
  */
 public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
@@ -68,11 +69,17 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     private AWSClientManager clientManager;
 
     public static enum AWSEnumerationDeletionStages {
-        ENUMERATE, ERROR
+        ENUMERATE,
+        ERROR
     }
 
     public static enum AWSEnumerationDeletionSubStage {
-        GET_LOCAL_RESOURCES, GET_REMOTE_RESOURCES, COMPARE, DELETE_COMPUTE_STATES, GET_NEXT_PAGE, ENUMERATION_STOP
+        GET_LOCAL_RESOURCES,
+        GET_REMOTE_RESOURCES,
+        COMPARE,
+        PROCESS_COMPUTE_STATES,
+        GET_NEXT_PAGE,
+        ENUMERATION_STOP
     }
 
     public AWSEnumerationAndDeletionAdapterService() {
@@ -82,8 +89,9 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * The enumeration service context that holds all the information needed to determine the list of instances
-     * that need to be deleted from the system as they have been terminated from the remote instance.
+     * The enumeration service context that holds all the information needed to determine the list
+     * of instances that need to be deleted from the system as they have been terminated from the
+     * remote instance.
      */
     public static class EnumerationDeletionContext {
         public AmazonEC2AsyncClient amazonEC2Client;
@@ -101,7 +109,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         // Map of Instance Ids and compute states that have to be deleted from the local system.
         public List<ComputeState> instancesToBeDeleted;
         public Operation awsAdapterOperation;
-        public List<Operation> deleteOperations;
         // The next page link for the next set of results to fetch from the local system.
         public String nextPageLink;
         public int pageNo = 0;
@@ -114,7 +121,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             this.localInstanceIds = new ConcurrentSkipListMap<String, ComputeState>();
             this.remoteInstanceIds = new HashSet<String>();
             this.instancesToBeDeleted = new ArrayList<ComputeState>();
-            this.deleteOperations = new ArrayList<Operation>();
             this.stage = AWSEnumerationDeletionStages.ENUMERATE;
             this.subStage = AWSEnumerationDeletionSubStage.GET_LOCAL_RESOURCES;
         }
@@ -146,8 +152,9 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * Handles the different steps required to process the local resources , get the corresponding resources from the remote endpoint
-     * and delete the instances from the local system that do not exist on the remote system any longer.
+     * Handles the different steps required to process the local resources , get the corresponding
+     * resources from the remote endpoint and delete the instances from the local system that do not
+     * exist on the remote system any longer.
      */
     private void handleEnumerationRequestForDeletion(EnumerationDeletionContext aws) {
         switch (aws.stage) {
@@ -191,12 +198,14 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * Uses the received enumeration information and compares it against it the state of the local system and then tries to
-     * find and fix the gaps. At a high level this is the sequence of steps that is followed:
-     * 1) Create a query to get the list of local compute states
-     * 2) Compare the list of local resources against the list received from the AWS endpoint.
-     * 3) In case some instances have been terminated on the AWS endpoint, mark those instances for deletion in the local system.
-     * 4) Delete the compute state and network associated with that AWS instance from the local system that have been terminated on AWS.
+     * Uses the received enumeration information and compares it against it the state of the local
+     * system and then tries to find and fix the gaps. At a high level this is the sequence of steps
+     * that is followed: 1) Create a query to get the list of local compute states 2) Compare the
+     * list of local resources against the list received from the AWS endpoint. 3) In case some
+     * instances have been terminated on the AWS endpoint, mark those instances for deletion in the
+     * local system. 4) Delete the compute state and network associated with that AWS instance from
+     * the local system that have been terminated on AWS.
+     *
      * @param aws
      */
     private void deleteResourcesInLocalSystem(EnumerationDeletionContext aws) {
@@ -209,26 +218,25 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             getRemoteInstances(aws, AWSEnumerationDeletionSubStage.COMPARE);
             break;
         case COMPARE:
-            compareResources(aws, AWSEnumerationDeletionSubStage.DELETE_COMPUTE_STATES);
+            compareResources(aws, AWSEnumerationDeletionSubStage.PROCESS_COMPUTE_STATES);
             break;
-        case DELETE_COMPUTE_STATES:
-            AWSEnumerationDeletionSubStage next;
+        case PROCESS_COMPUTE_STATES:
+            if (aws.nextPageLink == null) {
+                aws.subStage = AWSEnumerationDeletionSubStage.ENUMERATION_STOP;
+            } else {
+                aws.subStage = AWSEnumerationDeletionSubStage.GET_NEXT_PAGE;
+            }
+
             if (aws.instancesToBeDeleted == null || aws.instancesToBeDeleted.size() == 0) {
-                logInfo("There are no compute states to be deleted in the system");
-                if (aws.nextPageLink == null) {
-                    aws.subStage = AWSEnumerationDeletionSubStage.ENUMERATION_STOP;
-                } else {
-                    aws.subStage = AWSEnumerationDeletionSubStage.GET_NEXT_PAGE;
-                }
+                logInfo("There are no compute states to be processed in the system");
                 deleteResourcesInLocalSystem(aws);
                 return;
             } else {
-                if (aws.nextPageLink == null) {
-                    next = AWSEnumerationDeletionSubStage.ENUMERATION_STOP;
+                if (aws.computeEnumerationRequest.preserveMissing) {
+                    retireComputeStates(aws);
                 } else {
-                    next = AWSEnumerationDeletionSubStage.GET_NEXT_PAGE;
+                    deleteComputeStates(aws);
                 }
-                deleteComputeStates(aws, next);
             }
             break;
         case GET_NEXT_PAGE:
@@ -245,8 +253,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * Get the list of compute states already known to the local system. Filter them by parent compute
-     * link : AWS.
+     * Get the list of compute states already known to the local system. Filter them by parent
+     * compute link : AWS.
      */
     public void getLocalResources(EnumerationDeletionContext aws,
             AWSEnumerationDeletionSubStage next) {
@@ -338,8 +346,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * The async handler to handle the success and errors received after invoking the describe instances
-     * API on AWS
+     * The async handler to handle the success and errors received after invoking the describe
+     * instances API on AWS
      */
     public static class AWSEnumerationAsyncHandler implements
             AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> {
@@ -391,8 +399,9 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * Compares the state between what is known to the local system and what is retrieved from AWS. If some instances are terminated on the AWS
-     * endpoint then they are marked for deletion on the local system.
+     * Compares the state between what is known to the local system and what is retrieved from AWS.
+     * If some instances are terminated on the AWS endpoint then they are marked for deletion on the
+     * local system.
      */
     public void compareResources(EnumerationDeletionContext aws,
             AWSEnumerationDeletionSubStage next) {
@@ -422,30 +431,28 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * Creates operations for the deletion of all the compute states and networks from the local system for which
-     * the AWS instance has been terminated from the remote instance.
-     * Kicks off the deletion of all the identified compute states, also the networks and disks for which
-     * the actual AWS instance has been terminated.
+     * Creates operations for the deletion of all the compute states and networks from the local
+     * system for which the AWS instance has been terminated from the remote instance. Kicks off the
+     * deletion of all the identified compute states, also the networks and disks for which the
+     * actual AWS instance has been terminated.
      */
-    private void deleteComputeStates(EnumerationDeletionContext context,
-            AWSEnumerationDeletionSubStage next) {
+    private void deleteComputeStates(EnumerationDeletionContext context) {
 
+        List<Operation> deleteOperations = new ArrayList<>();
         // Create delete operations for the compute states that have to be deleted from the system.
         for (ComputeState computeStateToDelete : context.instancesToBeDeleted) {
             Operation deleteComputeStateOperation = Operation
-                    .createDelete(UriUtils.buildUri(this.getHost(),
-                            computeStateToDelete.documentSelfLink))
+                    .createDelete(this.getHost(), computeStateToDelete.documentSelfLink)
                     .setReferer(getHost().getUri());
-            context.deleteOperations.add(deleteComputeStateOperation);
+            deleteOperations.add(deleteComputeStateOperation);
             // Create delete operations for all the network links associated with each of the
             // compute states.
             if (computeStateToDelete.networkInterfaceLinks != null) {
                 for (String networkLinkToDelete : computeStateToDelete.networkInterfaceLinks) {
                     Operation deleteNetworkOperation = Operation
-                            .createDelete(UriUtils.buildUri(this.getHost(),
-                                    networkLinkToDelete))
+                            .createDelete(this.getHost(), networkLinkToDelete)
                             .setReferer(getHost().getUri());
-                    context.deleteOperations.add(deleteNetworkOperation);
+                    deleteOperations.add(deleteNetworkOperation);
                 }
             }
 
@@ -454,17 +461,15 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             if (computeStateToDelete.diskLinks != null) {
                 for (String diskLinkToDelete : computeStateToDelete.diskLinks) {
                     Operation deleteDiskOperation = Operation
-                            .createDelete(UriUtils.buildUri(this.getHost(),
-                                    diskLinkToDelete))
+                            .createDelete(this.getHost(), diskLinkToDelete)
                             .setReferer(getHost().getUri());
-                    context.deleteOperations.add(deleteDiskOperation);
+                    deleteOperations.add(deleteDiskOperation);
                 }
             }
         }
         // Kick off deletion operations with a join handler.
-        if (context.deleteOperations == null || context.deleteOperations.size() == 0) {
+        if (deleteOperations == null || deleteOperations.size() == 0) {
             logInfo("There are no compute states to be deleted from the system.");
-            context.subStage = next;
             deleteResourcesInLocalSystem(context);
             return;
         }
@@ -478,18 +483,61 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
 
             }
             logInfo("Successfully deleted compute states and networks from the local system. Proceeding to next state.");
-            context.subStage = next;
             deleteResourcesInLocalSystem(context);
             return;
         };
-        OperationJoin joinOp = OperationJoin.create(context.deleteOperations);
+        OperationJoin joinOp = OperationJoin.create(deleteOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(getHost());
     }
 
     /**
-     * Signals Enumeration Stop to the AWS enumeration adapter. The AWS enumeration adapter will in turn patch the
-     * parent task to indicate completion.
+     * Creates operations to retire all the compute states in the local system for which the AWS
+     * instance has been terminated/missing from the remote instance.
+     */
+    private void retireComputeStates(EnumerationDeletionContext context) {
+
+        List<Operation> operations = new ArrayList<>();
+        // Create patch operations for the compute states that have to be retired in the system.
+        // We don't modify the lifecycle state for contained objects like NetworkInterfaces and
+        // Disks.
+        for (ComputeState cs : context.instancesToBeDeleted) {
+            ComputeState cps = new ComputeState();
+            cps.powerState = PowerState.OFF;
+            cps.lifecycleState = LifecycleState.RETIRED;
+            Operation operation = Operation
+                    .createPatch(this.getHost(), cs.documentSelfLink)
+                    .setBody(cps)
+                    .setReferer(getHost().getUri());
+            operations.add(operation);
+        }
+        // Kick off patch operations with a join handler.
+        if (operations == null || operations.size() == 0) {
+            logInfo("There are no compute states to be deleted from the system.");
+            deleteResourcesInLocalSystem(context);
+            return;
+        }
+        OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
+                exc) -> {
+            if (exc != null) {
+                logSevere("Failure retiring compute states in the local system",
+                        Utils.toString(exc));
+                signalErrorToEnumerationAdapter(context, exc.values().iterator().next());
+                return;
+
+            }
+            logInfo("Successfully retire compute states in the local system. Proceeding to next state.");
+            deleteResourcesInLocalSystem(context);
+            return;
+        };
+        OperationJoin joinOp = OperationJoin.create(operations);
+        joinOp.setCompletion(joinCompletion);
+        joinOp.sendWith(getHost());
+    }
+
+    /**
+     * Signals Enumeration Stop to the AWS enumeration adapter. The AWS enumeration adapter will in
+     * turn patch the parent task to indicate completion.
      */
     public void stopEnumeration(EnumerationDeletionContext aws) {
         aws.computeEnumerationRequest.enumerationAction = EnumerationAction.STOP;
@@ -497,7 +545,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * Signals error to the AWS enumeration adapter. The adapter will in turn clean up resources and signal error to the parent task.
+     * Signals error to the AWS enumeration adapter. The adapter will in turn clean up resources and
+     * signal error to the parent task.
      */
     public void signalErrorToEnumerationAdapter(EnumerationDeletionContext aws, Throwable t) {
         aws.error = t;
@@ -506,17 +555,17 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     }
 
     /**
-     * Gets the next page from the local system for which the state has to be reconciled after comparison with the remote AWS endpoint.
+     * Gets the next page from the local system for which the state has to be reconciled after
+     * comparison with the remote AWS endpoint.
      */
     private void getNextPageFromLocalSystem(EnumerationDeletionContext aws,
             AWSEnumerationDeletionSubStage next) {
         aws.localInstanceIds.clear();
         aws.remoteInstanceIds.clear();
         aws.instancesToBeDeleted.clear();
-        aws.deleteOperations.clear();
         logInfo("Getting next page of local records.");
         sendRequest(Operation
-                .createGet(UriUtils.buildUri(getHost(), aws.nextPageLink))
+                .createGet(getHost(), aws.nextPageLink)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logSevere("Failure retrieving next page from the local system: %s",

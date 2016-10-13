@@ -49,6 +49,17 @@ public class ComputeService extends StatefulService {
     }
 
     /**
+     * Resource Status.
+     */
+    public enum LifecycleState {
+        PROVISIONING,
+        READY,
+        SUSPEND,
+        STOPPED,
+        RETIRED
+    }
+
+    /**
      * Power Transition.
      */
     public enum PowerTransition {
@@ -112,6 +123,12 @@ public class ComputeService extends StatefulService {
          * Power state of this compute instance.
          */
         public PowerState powerState = PowerState.UNKNOWN;
+
+        /** Lifecycle state indicating runtime state of a resource instance. */
+        @Documentation(description = "Lifecycle state indicating runtime state of a resource instance.")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public LifecycleState lifecycleState = LifecycleState.READY;
 
         /**
          * URI reference to parent compute instance.

@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.EnumSet;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -27,6 +28,7 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -61,7 +63,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
         ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
-        statsCollectionTaskState.intervalMicros = TimeUnit.MINUTES.toMicros(1);
+        statsCollectionTaskState.intervalMicros =   TimeUnit.MINUTES.toMicros(1);
 
         TestUtils.doPost(this.host,
                 statsCollectionTaskState,
@@ -89,7 +91,9 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
         ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
         task.adapterManagementReference = this.computeHost.adapterManagementReference;
 
-        task.isMockRequest = isMock();
+        if (isMock()) {
+            task.options = EnumSet.of(TaskOption.IS_MOCK);
+        }
         task.enumerationAction = EnumerationAction.REFRESH;
         task.parentComputeLink = this.computeHost.documentSelfLink;
         task.resourcePoolLink = this.resourcePool.documentSelfLink;

@@ -40,12 +40,11 @@ import com.vmware.photon.controller.model.resources.FirewallService.FirewallStat
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * Firewall service for AWS. AWS Firewalls are implemented by a SecurityGroup
- * which will be the primary artifact created and managed.
+ * Firewall service for AWS. AWS Firewalls are implemented by a SecurityGroup which will be the
+ * primary artifact created and managed.
  */
 public class AWSFirewallService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_FIREWALL_ADAPTER;
@@ -55,7 +54,8 @@ public class AWSFirewallService extends StatelessService {
     private AWSClientManager clientManager;
 
     public AWSFirewallService() {
-        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     /**
@@ -89,7 +89,8 @@ public class AWSFirewallService extends StatelessService {
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 
@@ -211,22 +212,20 @@ public class AWSFirewallService extends StatelessService {
 
     private void getCredentials(AWSFirewallRequestState requestState,
             FirewallStage next) {
-        URI authURI = UriUtils.buildUri(this.getHost(),
-                requestState.firewall.authCredentialsLink);
-
-        sendRequest(Operation.createGet(authURI).setCompletion(
-                (o, e) -> {
-                    if (e != null) {
-                        requestState.stage = FirewallStage.FAILED;
-                        requestState.error = e;
-                        handleStages(requestState);
-                        return;
-                    }
-                    requestState.credentials = o
-                            .getBody(AuthCredentialsServiceState.class);
-                    requestState.stage = next;
-                    handleStages(requestState);
-                }));
+        sendRequest(Operation.createGet(this.getHost(),
+                requestState.firewall.authCredentialsLink).setCompletion(
+                        (o, e) -> {
+                            if (e != null) {
+                                requestState.stage = FirewallStage.FAILED;
+                                requestState.error = e;
+                                handleStages(requestState);
+                                return;
+                            }
+                            requestState.credentials = o
+                                    .getBody(AuthCredentialsServiceState.class);
+                            requestState.stage = next;
+                            handleStages(requestState);
+                        }));
     }
 
     private void getFirewallState(AWSFirewallRequestState requestState,

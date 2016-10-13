@@ -42,7 +42,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
-import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -58,12 +57,14 @@ public class AWSEndpointAdapterService extends StatelessService {
     private AWSClientManager clientManager;
 
     public AWSEndpointAdapterService() {
-        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 
@@ -128,22 +129,14 @@ public class AWSEndpointAdapterService extends StatelessService {
             cd.zoneId = r.get(ZONE_KEY).orElse(null);
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
 
-            cd.instanceAdapterReference = UriUtils.buildUri(
-                    ServiceHost.LOCAL_HOST,
-                    this.getHost().getPort(),
-                    AWSUriPaths.AWS_INSTANCE_ADAPTER, null);
-            cd.enumerationAdapterReference = UriUtils.buildUri(
-                    ServiceHost.LOCAL_HOST,
-                    this.getHost().getPort(),
-                    AWSUriPaths.AWS_ENUMERATION_ADAPTER, null);
-            URI statsAdapterUri = UriUtils.buildUri(
-                    ServiceHost.LOCAL_HOST,
-                    this.getHost().getPort(),
-                    AWSUriPaths.AWS_STATS_ADAPTER, null);
-            URI costStatsAdapterUri = UriUtils.buildUri(
-                    ServiceHost.LOCAL_HOST,
-                    this.getHost().getPort(),
-                    AWSUriPaths.AWS_COST_STATS_ADAPTER, null);
+            cd.instanceAdapterReference = UriUtils.buildUri(this.getHost(),
+                    AWSUriPaths.AWS_INSTANCE_ADAPTER);
+            cd.enumerationAdapterReference = UriUtils.buildUri(this.getHost(),
+                    AWSUriPaths.AWS_ENUMERATION_ADAPTER);
+            URI statsAdapterUri = UriUtils.buildUri(this.getHost(),
+                    AWSUriPaths.AWS_STATS_ADAPTER);
+            URI costStatsAdapterUri = UriUtils.buildUri(this.getHost(),
+                    AWSUriPaths.AWS_COST_STATS_ADAPTER);
 
             cd.statsAdapterReferences = new LinkedHashSet<>();
             cd.statsAdapterReferences.add(costStatsAdapterUri);
@@ -161,13 +154,17 @@ public class AWSEndpointAdapterService extends StatelessService {
             c.adapterManagementReference = UriUtils.buildUri(b.toString());
             String billsBucketName = r.get(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY).orElse(null);
             if (billsBucketName != null) {
-                addEntryToCustomProperties(c, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
+                addEntryToCustomProperties(c, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
+                        billsBucketName);
             }
 
-            String accountId = getAccountId(r.getRequired(PRIVATE_KEYID_KEY),
-                    r.getRequired(PRIVATE_KEY_KEY));
-            if (accountId != null && !accountId.isEmpty()) {
-                addEntryToCustomProperties(c, AWSConstants.AWS_ACCOUNT_ID_KEY, accountId);
+            Boolean mock = Boolean.valueOf(r.getRequired(EndpointAdapterUtils.MOCK_REQUEST));
+            if (!mock) {
+                String accountId = getAccountId(r.getRequired(PRIVATE_KEYID_KEY),
+                        r.getRequired(PRIVATE_KEY_KEY));
+                if (accountId != null && !accountId.isEmpty()) {
+                    addEntryToCustomProperties(c, AWSConstants.AWS_ACCOUNT_ID_KEY, accountId);
+                }
             }
         };
     }
@@ -181,6 +178,7 @@ public class AWSEndpointAdapterService extends StatelessService {
 
     /**
      * Method gets the aws accountId from the specified credentials.
+     *
      * @param privateKeyId
      * @param privateKey
      * @return account ID
@@ -191,13 +189,14 @@ public class AWSEndpointAdapterService extends StatelessService {
                 awsCredentials);
         String userId = null;
         try {
-            if ((iamClient.getUser() != null) && (iamClient.getUser().getUser() != null) && (
-                    iamClient.getUser().getUser().getArn() != null)) {
+            if ((iamClient.getUser() != null) && (iamClient.getUser().getUser() != null)
+                    && (iamClient.getUser().getUser().getArn() != null)) {
 
                 String arn = iamClient.getUser().getUser().getArn();
                 /*
-                 *  arn:aws:service:region:account:resource -> so limiting the split to 6 words and extracting the accountId which is 5th one in list.
-                 *  If the user is not authorized to perform iam:GetUser on that resource,still error mesage will have accountId
+                 * arn:aws:service:region:account:resource -> so limiting the split to 6 words and
+                 * extracting the accountId which is 5th one in list. If the user is not authorized
+                 * to perform iam:GetUser on that resource,still error mesage will have accountId
                  */
                 userId = arn.split(":", 6)[4];
             }

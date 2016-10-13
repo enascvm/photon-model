@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.util;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -33,6 +34,8 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 public class EndpointAdapterUtils {
+
+    public static final String MOCK_REQUEST = "mockRequest";
 
     public static void handleEndpointRequest(StatelessService service, Operation op,
             EndpointConfigRequest body,
@@ -66,7 +69,10 @@ public class EndpointAdapterUtils {
             EndpointState endpoint = op.getBody(EndpointState.class);
             op.complete();
 
-            Retriever r = Retriever.of(endpoint.endpointProperties);
+            Map<String, String> props = new HashMap<>(endpoint.endpointProperties);
+            props.put(MOCK_REQUEST, String.valueOf(body.isMockRequest));
+
+            Retriever r = Retriever.of(props);
             try {
                 AuthCredentialsServiceState authState = new AuthCredentialsServiceState();
                 credEnhancer.accept(authState, r);

@@ -22,7 +22,6 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -120,18 +119,15 @@ public class AWSEnumerationAdapterService extends StatelessService {
      */
     public void startHelperServices(Operation startPost) {
         Operation patchAWSEnumerationCreationService = Operation
-                .createPatch(UriUtils.buildUri(this.getHost(),
-                        AWSEnumerationAndCreationAdapterService.SELF_LINK))
+                .createPatch(this.getHost(), AWSEnumerationAndCreationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
-        Operation patchAWSEnumerationDeletionService = Operation.createPatch(
-                UriUtils.buildUri(this.getHost(),
-                        AWSEnumerationAndDeletionAdapterService.SELF_LINK))
+        Operation patchAWSEnumerationDeletionService = Operation
+                .createPatch(this.getHost(), AWSEnumerationAndDeletionAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
-        Operation patchAWSStorageEnumerationService = Operation.createPatch(
-                UriUtils.buildUri(this.getHost(),
-                        AWSBlockStorageEnumerationAdapterService.SELF_LINK))
+        Operation patchAWSStorageEnumerationService = Operation.createPatch(this.getHost(),
+                AWSBlockStorageEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
         this.getHost().startService(patchAWSEnumerationCreationService,

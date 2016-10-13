@@ -19,7 +19,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -56,10 +55,8 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService.ProvisionNetworkTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -72,14 +69,28 @@ public class AWSNetworkService extends StatelessService {
     private AWSClientManager clientManager;
 
     public AWSNetworkService() {
-        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     /**
      * Stages for network provisioning.
      */
     public enum NetworkStage {
-        NETWORK_TASK_STATE, CREDENTIALS, AWS_CLIENT, NETWORK_STATE, PROVISION_VPC, REMOVE_VPC, PROVISION_SUBNET, REMOVE_SUBNET, PROVISION_GATEWAY, REMOVE_GATEWAY, PROVISION_ROUTE, REMOVE_ROUTE, FINISHED, FAILED
+        NETWORK_TASK_STATE,
+        CREDENTIALS,
+        AWS_CLIENT,
+        NETWORK_STATE,
+        PROVISION_VPC,
+        REMOVE_VPC,
+        PROVISION_SUBNET,
+        REMOVE_SUBNET,
+        PROVISION_GATEWAY,
+        REMOVE_GATEWAY,
+        PROVISION_ROUTE,
+        REMOVE_ROUTE,
+        FINISHED,
+        FAILED
     }
 
     /**
@@ -99,7 +110,8 @@ public class AWSNetworkService extends StatelessService {
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 
@@ -227,9 +239,25 @@ public class AWSNetworkService extends StatelessService {
 
         aws.network.customProperties.put(key, value);
 
-        URI networkURI = UriUtils.buildUri(this.getHost(),
-                aws.networkTaskState.networkDescriptionLink);
-        sendRequest(Operation.createPatch(networkURI).setBody(aws.network)
+        sendRequest(
+                Operation.createPatch(this.getHost(), aws.networkTaskState.networkDescriptionLink)
+                        .setBody(aws.network)
+                        .setCompletion((o, e) -> {
+                            if (e != null) {
+                                aws.stage = NetworkStage.FAILED;
+                                aws.error = e;
+                                handleStages(aws);
+                                return;
+                            }
+                            aws.stage = next;
+                            handleStages(aws);
+                        }));
+
+    }
+
+    private void getCredentials(AWSNetworkRequestState aws, NetworkStage next) {
+
+        sendRequest(Operation.createGet(this.getHost(), aws.networkRequest.authCredentialsLink)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         aws.stage = NetworkStage.FAILED;
@@ -237,44 +265,26 @@ public class AWSNetworkService extends StatelessService {
                         handleStages(aws);
                         return;
                     }
+                    aws.credentials = o.getBody(AuthCredentialsServiceState.class);
                     aws.stage = next;
                     handleStages(aws);
                 }));
-
-    }
-
-    private void getCredentials(AWSNetworkRequestState aws, NetworkStage next) {
-        URI authURI = UriUtils.buildUri(this.getHost(),
-                aws.networkRequest.authCredentialsLink);
-
-        sendRequest(Operation.createGet(authURI).setCompletion((o, e) -> {
-            if (e != null) {
-                aws.stage = NetworkStage.FAILED;
-                aws.error = e;
-                handleStages(aws);
-                return;
-            }
-            aws.credentials = o.getBody(AuthCredentialsServiceState.class);
-            aws.stage = next;
-            handleStages(aws);
-        }));
     }
 
     private void getNetworkState(AWSNetworkRequestState aws, NetworkStage next) {
-        URI networkURI = UriUtils.buildUri(this.getHost(),
-                aws.networkTaskState.networkDescriptionLink);
 
-        sendRequest(Operation.createGet(networkURI).setCompletion((o, e) -> {
-            if (e != null) {
-                aws.stage = NetworkStage.FAILED;
-                aws.error = e;
-                handleStages(aws);
-                return;
-            }
-            aws.network = o.getBody(NetworkState.class);
-            aws.stage = next;
-            handleStages(aws);
-        }));
+        sendRequest(Operation.createGet(this.getHost(), aws.networkTaskState.networkDescriptionLink)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        aws.stage = NetworkStage.FAILED;
+                        aws.error = e;
+                        handleStages(aws);
+                        return;
+                    }
+                    aws.network = o.getBody(NetworkState.class);
+                    aws.stage = next;
+                    handleStages(aws);
+                }));
     }
 
     private void getNetworkTaskState(AWSNetworkRequestState aws,

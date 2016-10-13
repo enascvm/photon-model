@@ -187,8 +187,8 @@ public class ScheduledTaskServiceTest extends Suite {
             enumTaskState.resourcePoolLink = returnPool.documentSelfLink;
             enumTaskState.adapterManagementReference = UriUtils.buildUri("http://foo.com");
             enumTaskState.documentSelfLink = UUID.randomUUID().toString();
-            enumTaskState.isMockRequest = true;
-            // create a scheduled task to run once every 5 seconds; verify that
+            enumTaskState.options = EnumSet.of(TaskOption.IS_MOCK);
+            // create a scheduled task to run once every 10 minutes; verify that
             // it did run once on service start
             ScheduledTaskState scheduledTaskState = new ScheduledTaskState();
             scheduledTaskState.factoryLink = ResourceEnumerationTaskService.FACTORY_LINK;
@@ -230,7 +230,8 @@ public class ScheduledTaskServiceTest extends Suite {
             // verify that the periodic maintenance handler is invoked for
             // scheduled task
             enumTaskState.documentSelfLink = UUID.randomUUID().toString();
-            enumTaskState.deleteOnCompletion = true;
+            enumTaskState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
+
             ScheduledTaskState periodicTaskState = new ScheduledTaskState();
             periodicTaskState.factoryLink = ResourceEnumerationTaskService.FACTORY_LINK;
             periodicTaskState.initialStateJson = Utils.toJson(enumTaskState);
