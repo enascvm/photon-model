@@ -161,18 +161,22 @@ public class AWSEndpointAdapterService extends StatelessService {
             c.adapterManagementReference = UriUtils.buildUri(b.toString());
             String billsBucketName = r.get(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY).orElse(null);
             if (billsBucketName != null) {
-                if (c.customProperties == null) {
-                    c.customProperties = new HashMap<>();
-                }
-                c.customProperties.put(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
+                addEntryToCustomProperties(c, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
             }
 
             String accountId = getAccountId(r.getRequired(PRIVATE_KEYID_KEY),
                     r.getRequired(PRIVATE_KEY_KEY));
             if (accountId != null && !accountId.isEmpty()) {
-                c.customProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, accountId);
+                addEntryToCustomProperties(c, AWSConstants.AWS_ACCOUNT_ID_KEY, accountId);
             }
         };
+    }
+
+    private void addEntryToCustomProperties(ComputeState c, String key, String value) {
+        if (c.customProperties == null) {
+            c.customProperties = new HashMap<>();
+        }
+        c.customProperties.put(key, value);
     }
 
     /**

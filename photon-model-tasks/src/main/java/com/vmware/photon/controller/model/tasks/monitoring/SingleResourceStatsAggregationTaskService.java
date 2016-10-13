@@ -27,7 +27,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
@@ -202,7 +201,9 @@ public class SingleResourceStatsAggregationTaskService extends
         case CANCELLED:
             if (TaskState.isFailed(currentState.taskInfo) ||
                     TaskState.isCancelled(currentState.taskInfo)) {
-                getHost().log(Level.WARNING, currentState.taskInfo.failure.toString());
+                if (currentState.failureMessage != null) {
+                    logWarning(currentState.failureMessage);
+                }
             }
             if (currentState.parentLink != null) {
                 sendRequest(Operation
