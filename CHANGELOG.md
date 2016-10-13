@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.4.14-SNAPSHOT
+## 0.4.14
 
 * Rename NetworkState.networkDescriptionLink to networkLink
 
