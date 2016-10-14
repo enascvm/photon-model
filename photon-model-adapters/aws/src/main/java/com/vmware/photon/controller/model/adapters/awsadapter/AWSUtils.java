@@ -57,9 +57,13 @@ import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagDescription;
 import com.amazonaws.services.ec2.model.Vpc;
+import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.Bucket;
+import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.transfer.TransferManager;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
@@ -549,5 +553,18 @@ public class AWSUtils {
     private static long getDateDifference(Date oldDate, Date newDate, TimeUnit timeUnit) {
         long differenceInMillies = newDate.getTime() - oldDate.getTime();
         return timeUnit.convert(differenceInMillies, TimeUnit.MILLISECONDS);
+    }
+
+    public static String autoDiscoverBillsBucketName(AmazonS3 s3Client, String awsAccountId) {
+        String billFilePrefix = awsAccountId + AWSCsvBillParser.AWS_DETAILED_BILL_CSV_FILE_NAME_MID;
+        for (Bucket bucket : s3Client.listBuckets()) {
+            // For each bucket accessible to this client, try to search for files with the 'billFilePrefix'
+            ObjectListing objectListing = s3Client.listObjects(bucket.getName(), billFilePrefix);
+            if (!objectListing.getObjectSummaries().isEmpty()) {
+                // This means that this bucket contains zip files representing the detailed csv bills.
+                return bucket.getName();
+            }
+        }
+        return null;
     }
 }

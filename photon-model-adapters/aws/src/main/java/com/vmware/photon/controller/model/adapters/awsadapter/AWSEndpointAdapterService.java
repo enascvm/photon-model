@@ -191,12 +191,16 @@ public class AWSEndpointAdapterService extends StatelessService {
                 awsCredentials);
         String userId = null;
         try {
-            String arn = iamClient.getUser().getUser().getArn();
-            /*
-             *  arn:aws:service:region:account:resource -> so limiting the split to 6 words and extracting the accountId which is 5th one in list.
-             *  If the user is not authorized to perform iam:GetUser on that resource,still error mesage will have accountId
-             */
-            userId = arn.split(":", 6)[4];
+            if ((iamClient.getUser() != null) && (iamClient.getUser().getUser() != null) && (
+                    iamClient.getUser().getUser().getArn() != null)) {
+
+                String arn = iamClient.getUser().getUser().getArn();
+                /*
+                 *  arn:aws:service:region:account:resource -> so limiting the split to 6 words and extracting the accountId which is 5th one in list.
+                 *  If the user is not authorized to perform iam:GetUser on that resource,still error mesage will have accountId
+                 */
+                userId = arn.split(":", 6)[4];
+            }
         } catch (AmazonServiceException ex) {
             if (ex.getErrorCode().compareTo("AccessDenied") == 0) {
                 String msg = ex.getMessage();

@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -201,11 +202,28 @@ public class AWSCostStatsService extends StatelessService {
     protected void scheduleDownload(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
         //Starting creation of cost stats for current month
+
+        String accountId = statsData.computeDesc.customProperties
+                .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
+        if (accountId == null) {
+            logWarning("Account ID is not set for account '{}'. Not collecting cost stats.",
+                    statsData.computeDesc.documentSelfLink);
+            return;
+        }
+
         String billsBucketName = statsData.computeDesc.customProperties
                 .getOrDefault(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, null);
         if (billsBucketName == null) {
-            logWarning("Bills Bucket name is not configured for this account. Not collecting cost stats.");
-            return;
+            billsBucketName = AWSUtils
+                    .autoDiscoverBillsBucketName(statsData.s3Client.getAmazonS3Client(), accountId);
+            if (billsBucketName == null) {
+                logWarning(
+                        "Bills Bucket name is not configured for account '{}'. Not collecting cost stats.",
+                        statsData.computeDesc.documentSelfLink);
+                return;
+            } else {
+                setBillsBucketNameInAccount(statsData, billsBucketName);
+            }
         }
         try {
             downloadAndParse(statsData, billsBucketName, LocalDate.now().getYear(),
@@ -215,6 +233,16 @@ public class AWSCostStatsService extends StatelessService {
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     statsData.statsRequest.taskReference, e);
         }
+    }
+
+    private void setBillsBucketNameInAccount(AWSCostStatsCreationContext statsData,
+            String billsBucketName) {
+        ComputeState accountState = new ComputeState();
+        accountState.customProperties = new HashMap<>();
+        accountState.customProperties
+                .put(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
+        URI accountUri = UriUtils.buildUri(this.getHost(), statsData.computeDesc.documentSelfLink);
+        sendRequest(Operation.createPatch(accountUri).setBody(accountState));
     }
 
     protected void queryInstances(AWSCostStatsCreationContext statsData,
@@ -324,10 +352,6 @@ public class AWSCostStatsService extends StatelessService {
 
         String accountId = statsData.computeDesc.customProperties
                 .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
-        if (accountId == null) {
-            logWarning("Account ID is not set. Not collecting cost stats.");
-            return;
-        }
         AWSCsvBillParser parser = new AWSCsvBillParser();
         final String csvBillZipFileName = parser.getCsvBillFileName(month, year, accountId, true);
 
@@ -383,7 +407,7 @@ public class AWSCostStatsService extends StatelessService {
         List<ServiceStat> resourceServiceStats = new ArrayList<>();
         for (Entry<Long, Double> cost : resourceDetails.directCosts.entrySet()) {
             ServiceStat resourceStat = new ServiceStat();
-            resourceStat.serviceReference = UriUtils.buildUri(resourceComputeLink);
+            resourceStat.serviceReference = UriUtils.buildUri(this.getHost(), resourceComputeLink);
             resourceStat.latestValue = cost.getValue().doubleValue();
             resourceStat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(cost.getKey());
             resourceStat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
@@ -397,7 +421,7 @@ public class AWSCostStatsService extends StatelessService {
     private ComputeStats createComputeStatsForAccount(String accountComputeLink,
             AwsAccountDetailDto awsAccountDetailDto) {
         ServiceStat stat = new ServiceStat();
-        stat.serviceReference = UriUtils.buildUri(accountComputeLink);
+        stat.serviceReference = UriUtils.buildUri(this.getHost(), accountComputeLink);
         stat.latestValue = awsAccountDetailDto.cost;
         stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(awsAccountDetailDto.month);
         stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
