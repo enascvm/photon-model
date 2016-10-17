@@ -23,8 +23,10 @@ import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -111,6 +113,18 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
             break;
         case STARTED:
             handleStagePatch(patch, currentState);
+            break;
+        case FINISHED:
+        case FAILED:
+        case CANCELLED:
+            if (TaskState.isFailed(currentState.taskInfo) ||
+                    TaskState.isCancelled(currentState.taskInfo)) {
+                if (currentState.failureMessage != null) {
+                    logWarning(currentState.failureMessage);
+                }
+            }
+            sendRequest(Operation
+                        .createDelete(getUri()));
             break;
         default:
             break;

@@ -50,6 +50,7 @@ import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTa
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.TypeName;
@@ -221,6 +222,17 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 assertTrue(prevMetric.timestampMicrosUtc < metric.timestampMicrosUtc);
             }
         }
+
+        // verify that the aggregation tasks have been deleted
+        this.host.waitFor("Timeout waiting for task to expire", () -> {
+            ServiceDocumentQueryResult collectRes =
+                    this.host.getFactoryState(UriUtils.buildUri(
+                        this.host, StatsCollectionTaskService.FACTORY_LINK));
+            if (collectRes.documentLinks.size() == 0) {
+                return true;
+            }
+            return false;
+        });
     }
 
     @Test

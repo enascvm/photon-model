@@ -105,6 +105,8 @@ public class SingleResourceStatsCollectionTaskService
 
     public SingleResourceStatsCollectionTaskService() {
         super(SingleResourceStatsCollectionTaskState.class);
+        super.toggleOption(ServiceOption.OWNER_SELECTION, true);
+        super.toggleOption(ServiceOption.REPLICATION, true);
     }
 
     @Override

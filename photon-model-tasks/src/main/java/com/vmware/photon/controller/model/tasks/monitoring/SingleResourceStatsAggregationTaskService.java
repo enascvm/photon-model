@@ -142,6 +142,8 @@ public class SingleResourceStatsAggregationTaskService extends
 
     public SingleResourceStatsAggregationTaskService() {
         super(SingleResourceStatsAggregationTaskState.class);
+        super.toggleOption(ServiceOption.OWNER_SELECTION, true);
+        super.toggleOption(ServiceOption.REPLICATION, true);
     }
 
     @Override

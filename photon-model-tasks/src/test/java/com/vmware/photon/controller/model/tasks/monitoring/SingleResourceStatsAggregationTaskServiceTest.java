@@ -35,6 +35,7 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAggregationTaskService.SingleResourceStatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -42,6 +43,7 @@ import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.AggregationType;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -96,14 +98,12 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
 
         StatsCollectionTaskState collectionTaskState = new StatsCollectionTaskState();
         collectionTaskState.resourcePoolLink = rpReturnState.documentSelfLink;
+        collectionTaskState.taskInfo = TaskState.createDirect();
         int counter = 0;
         while (counter < NUM_COLLECTIONS) {
-            StatsCollectionTaskState returnState = this
-                    .postServiceSynchronously(
+            this.postServiceSynchronously(
                             StatsCollectionTaskService.FACTORY_LINK,
                             collectionTaskState, StatsCollectionTaskState.class);
-            waitForFinishedTask(StatsCollectionTaskState.class,
-                    returnState.documentSelfLink);
             counter++;
         }
         // wait for stats to be populated

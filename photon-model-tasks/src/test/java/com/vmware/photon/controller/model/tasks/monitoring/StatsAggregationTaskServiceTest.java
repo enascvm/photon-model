@@ -30,8 +30,10 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService.StatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask.Query;
 
@@ -85,11 +87,10 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
                 .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK, rpReturnState.documentSelfLink).build();
         aggregationTaskState.query =  taskQuery;
         aggregationTaskState.metricNames = Collections.singleton(MockStatsAdapter.KEY_1);
-        StatsAggregationTaskState returnState  = postServiceSynchronously(
+        aggregationTaskState.taskInfo = TaskState.createDirect();
+        postServiceSynchronously(
                 StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
                 StatsAggregationTaskState.class);
-        waitForFinishedTask(StatsAggregationTaskState.class,
-                returnState.documentSelfLink);
         this.host.waitFor("Error waiting for stats", () -> {
             ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
                         ResourceAggregateMetricService.FACTORY_LINK));
@@ -102,24 +103,33 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
 
         StatsCollectionTaskState collectionTaskState = new StatsCollectionTaskState();
         collectionTaskState.resourcePoolLink = rpReturnState.documentSelfLink;
-        StatsCollectionTaskState colelctionReturnState = postServiceSynchronously(
+        collectionTaskState.taskInfo = TaskState.createDirect();
+        postServiceSynchronously(
                 StatsCollectionTaskService.FACTORY_LINK, collectionTaskState,
                 StatsCollectionTaskState.class);
-        waitForFinishedTask(StatsCollectionTaskState.class,
-                colelctionReturnState.documentSelfLink);
 
         // kick off an aggregation task
         aggregationTaskState = new StatsAggregationTaskState();
         aggregationTaskState.query =  taskQuery;
         aggregationTaskState.metricNames = Collections.singleton(MockStatsAdapter.KEY_1);
-        returnState  = postServiceSynchronously(StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
+        aggregationTaskState.taskInfo = TaskState.createDirect();
+        postServiceSynchronously(StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
                 StatsAggregationTaskState.class);
-        waitForFinishedTask(StatsAggregationTaskState.class,
-                returnState.documentSelfLink);
         this.host.waitFor("Error waiting for stats", () -> {
             ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
                         ResourceAggregateMetricService.FACTORY_LINK));
             if (aggrRes.documentCount ==  (2 * this.numResources)) {
+                return true;
+            }
+            return false;
+        });
+
+        // verify that the aggregation tasks have been deleted
+        this.host.waitFor("Timeout waiting for task to expire", () -> {
+            ServiceDocumentQueryResult res =
+                    this.host.getFactoryState(UriUtils.buildUri(
+                        this.host, StatsAggregationTaskService.FACTORY_LINK));
+            if (res.documentLinks.size() == 0) {
                 return true;
             }
             return false;

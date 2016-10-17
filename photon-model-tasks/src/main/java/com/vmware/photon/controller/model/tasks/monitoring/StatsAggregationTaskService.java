@@ -26,6 +26,7 @@ import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAg
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -110,6 +111,18 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         switch (currentState.taskInfo.stage) {
         case STARTED:
             handleStagePatch(patch, currentState);
+            break;
+        case FINISHED:
+        case FAILED:
+        case CANCELLED:
+            if (TaskState.isFailed(currentState.taskInfo) ||
+                    TaskState.isCancelled(currentState.taskInfo)) {
+                if (currentState.failureMessage != null) {
+                    logWarning(currentState.failureMessage);
+                }
+            }
+            sendRequest(Operation
+                        .createDelete(getUri()));
             break;
         default:
             break;
