@@ -457,8 +457,7 @@ public class EndpointAllocationTaskService
         enumTaskState.resourcePoolLink = currentState.enumerationRequest.resourcePoolLink;
         enumTaskState.adapterManagementReference = adapterManagementReference;
         enumTaskState.tenantLinks = endpoint.tenantLinks;
-        // do not set link, so it gets a random link on each POST
-        enumTaskState.documentSelfLink = null;
+        enumTaskState.documentSelfLink = UriUtils.getLastPathSegment(currentState.documentSelfLink);
         enumTaskState.deleteOnCompletion = true;
 
         ScheduledTaskState scheduledTaskState = new ScheduledTaskState();

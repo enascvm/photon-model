@@ -83,7 +83,6 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
 
     public ResourceEnumerationTaskService() {
         super(ResourceEnumerationTaskState.class);
-        super.toggleOption(ServiceOption.PERSISTENCE, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -155,6 +154,17 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         }
 
         patch.setBody(currentState).complete();
+    }
+
+    @Override
+    public void handlePut(Operation put) {
+        if (put.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_POST_TO_PUT)) {
+            logInfo("Task %s has already started. Ignoring converted PUT.", put.getUri());
+            put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+            put.complete();
+            return;
+        }
+        put.fail(Operation.STATUS_CODE_BAD_METHOD);
     }
 
     private void sendEnumRequest(Operation start, ResourceEnumerationTaskState state) {
