@@ -193,8 +193,12 @@ public class ResourcePoolQueryHelper {
                             .map(json -> Utils.fromJson(json, ResourcePoolState.class))
                             .collect(Collectors.toSet()));
 
-                    // continue by executing the resource pool queries
-                    executeRpQueries();
+                    // continue by executing the resource pool queries, if any
+                    if (!this.result.resourcesPools.isEmpty()) {
+                        executeRpQueries();
+                    } else {
+                        findComputesWithoutPool();
+                    }
                 }));
     }
 
