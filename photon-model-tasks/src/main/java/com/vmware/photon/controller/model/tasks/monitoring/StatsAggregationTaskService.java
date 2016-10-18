@@ -43,7 +43,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
     public static final String FACTORY_LINK = UriPaths.MONITORING + "/stats-aggregation";
 
     public static final String STATS_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX + "StatsAggregationTaskService.query.resultLimit";
-    private static final int DEFAULT_QUERY_RESULT_LIMIT = 100;
+    private static final int DEFAULT_QUERY_RESULT_LIMIT = 50;
 
     public static class StatsAggregationTaskState extends TaskService.TaskServiceState {
 
