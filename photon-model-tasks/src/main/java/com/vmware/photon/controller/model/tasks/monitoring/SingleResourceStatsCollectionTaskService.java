@@ -86,7 +86,7 @@ public class SingleResourceStatsCollectionTaskService
         /**
          * Task to patch back to
          */
-        public String parentLink;
+        public URI parentTaskReference;
 
         /**
          * List of stats; this is maintained as part of the
@@ -106,6 +106,7 @@ public class SingleResourceStatsCollectionTaskService
     public SingleResourceStatsCollectionTaskService() {
         super(SingleResourceStatsCollectionTaskState.class);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
+        super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
     }
 
@@ -149,7 +150,7 @@ public class SingleResourceStatsCollectionTaskService
         case CANCELLED:
             // this is a one shot task, self delete
             sendRequest(Operation
-                    .createPatch(UriUtils.buildUri(getHost(), currentState.parentLink))
+                    .createPatch(currentState.parentTaskReference)
                     .setBody(currentState.parentPatchBody)
                     .setCompletion(
                             (patchOp, patchEx) -> {
@@ -166,12 +167,18 @@ public class SingleResourceStatsCollectionTaskService
         }
     }
 
+
+    @Override
+    public void handlePut(Operation put) {
+        MonitoringTaskUtils.handleIdempotentPut(this, put);
+    }
+
     private void validateState(SingleResourceStatsCollectionTaskState state) {
         if (state.computeLink == null) {
             throw new IllegalStateException("computeReference should not be null");
         }
-        if (state.parentLink == null) {
-            throw new IllegalStateException("parentLink should not be null");
+        if (state.parentTaskReference == null) {
+            throw new IllegalStateException("parentTaskReference should not be null");
         }
         if (state.parentPatchBody == null) {
             throw new IllegalStateException("parentPatchBody should not be null");

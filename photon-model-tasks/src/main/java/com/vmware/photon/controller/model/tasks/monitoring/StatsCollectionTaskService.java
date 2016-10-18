@@ -76,6 +76,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
 
     public StatsCollectionTaskService() {
         super(StatsCollectionTaskState.class);
+        super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
     }
 
     @Override
@@ -129,6 +130,11 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         default:
             break;
         }
+    }
+
+    @Override
+    public void handlePut(Operation put) {
+        MonitoringTaskUtils.handleIdempotentPut(this, put);
     }
 
     private void validateState(StatsCollectionTaskState state) {
@@ -276,7 +282,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
     private void createSingleResourceComputeTask(String computeLink, String subtaskLink,
             URI statsAdapterReference) {
         SingleResourceStatsCollectionTaskState initState = new SingleResourceStatsCollectionTaskState();
-        initState.parentLink = subtaskLink;
+        initState.parentTaskReference = UriUtils.buildPublicUri(getHost(), subtaskLink);
         initState.computeLink = computeLink;
         initState.statsAdapterReference = statsAdapterReference;
         SubTaskState patchState = new SubTaskState();

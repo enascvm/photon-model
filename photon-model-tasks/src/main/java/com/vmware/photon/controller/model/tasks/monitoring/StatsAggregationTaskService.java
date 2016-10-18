@@ -74,6 +74,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
     public StatsAggregationTaskService() {
         super(StatsAggregationTaskState.class);
+        super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
     }
 
     @Override
@@ -127,6 +128,11 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         default:
             break;
         }
+    }
+
+    @Override
+    public void handlePut(Operation put) {
+        MonitoringTaskUtils.handleIdempotentPut(this, put);
     }
 
     private void handleStagePatch(Operation op, StatsAggregationTaskState currentState) {
@@ -228,7 +234,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         SingleResourceStatsAggregationTaskState initState = new SingleResourceStatsAggregationTaskState();
         initState.resourceLink = resourceLink;
         initState.metricNames = currentState.metricNames;
-        initState.parentLink = subtaskLink;
+        initState.parentTaskReference = UriUtils.buildPublicUri(getHost(), subtaskLink);
         sendRequest(Operation
                     .createPost(this,
                             SingleResourceStatsAggregationTaskService.FACTORY_LINK)

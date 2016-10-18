@@ -121,7 +121,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                 .setCompletion(
                         (o, e) -> {
                             // if a task instance is already running, just log the fact
-                            if (o.getStatusCode() == Operation.STATUS_CODE_CONFLICT) {
+                            if (o.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED) {
                                 logInfo("service instance already running.");
                                 op.complete();
                                 return;

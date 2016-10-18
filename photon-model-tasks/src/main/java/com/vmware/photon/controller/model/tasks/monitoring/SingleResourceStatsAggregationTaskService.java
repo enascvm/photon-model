@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks.monitoring;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -112,7 +113,7 @@ public class SingleResourceStatsAggregationTaskService extends
 
         @Documentation(description = "Task to patch back to")
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
-        public String parentLink;
+        public URI parentTaskReference;
 
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
@@ -143,6 +144,7 @@ public class SingleResourceStatsAggregationTaskService extends
     public SingleResourceStatsAggregationTaskService() {
         super(SingleResourceStatsAggregationTaskState.class);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
+        super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
     }
 
@@ -207,9 +209,9 @@ public class SingleResourceStatsAggregationTaskService extends
                     logWarning(currentState.failureMessage);
                 }
             }
-            if (currentState.parentLink != null) {
+            if (currentState.parentTaskReference != null) {
                 sendRequest(Operation
-                        .createPatch(UriUtils.buildUri(getHost(), currentState.parentLink))
+                        .createPatch(currentState.parentTaskReference)
                         .setBody(currentState)
                         .setCompletion(
                                 (patchOp, patchEx) -> {
@@ -228,6 +230,11 @@ public class SingleResourceStatsAggregationTaskService extends
         default:
             break;
         }
+    }
+
+    @Override
+    public void handlePut(Operation put) {
+        MonitoringTaskUtils.handleIdempotentPut(this, put);
     }
 
     private void handleStagePatch(SingleResourceStatsAggregationTaskState currentState) {
