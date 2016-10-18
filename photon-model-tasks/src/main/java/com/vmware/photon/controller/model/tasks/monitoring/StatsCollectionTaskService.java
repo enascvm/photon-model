@@ -24,7 +24,9 @@ import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
@@ -32,6 +34,7 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.ServiceUriPaths;
+import com.vmware.xenon.services.common.TaskFactoryService;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
@@ -43,6 +46,17 @@ import com.vmware.xenon.services.common.TaskService;
 public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskService.StatsCollectionTaskState> {
 
     public static final String FACTORY_LINK = UriPaths.MONITORING + "/stats-collection-tasks";
+
+    public static FactoryService createFactory() {
+        TaskFactoryService fs =  new TaskFactoryService(StatsCollectionTaskState.class) {
+            @Override
+            public Service createServiceInstance() throws Throwable {
+                return new StatsCollectionTaskService();
+            }
+        };
+        fs.setPeerNodeSelectorPath(ServiceUriPaths.DEFAULT_1X_NODE_SELECTOR);
+        return fs;
+    }
 
     public static final String STATS_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX + "StatsCollectionTaskService.query.resultLimit";
     private static final String QUERY_RESULT_LIMIT = System.getProperty(STATS_QUERY_RESULT_LIMIT);

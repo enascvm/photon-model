@@ -36,9 +36,11 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService.ResourceMetric;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -54,6 +56,7 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
+import com.vmware.xenon.services.common.TaskFactoryService;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
@@ -77,6 +80,17 @@ public class SingleResourceStatsAggregationTaskService extends
 
     public static final String FACTORY_LINK =
             UriPaths.MONITORING + "/single-resource-stats-aggregation";
+
+    public static FactoryService createFactory() {
+        TaskFactoryService fs =  new TaskFactoryService(SingleResourceStatsAggregationTaskState.class) {
+            @Override
+            public Service createServiceInstance() throws Throwable {
+                return new SingleResourceStatsAggregationTaskService();
+            }
+        };
+        fs.setPeerNodeSelectorPath(ServiceUriPaths.DEFAULT_1X_NODE_SELECTOR);
+        return fs;
+    }
 
     public static final String STATS_QUERY_RESULT_LIMIT =
             UriPaths.PROPERTY_PREFIX
@@ -146,6 +160,7 @@ public class SingleResourceStatsAggregationTaskService extends
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
+        super.setPeerNodeSelectorPath(ServiceUriPaths.DEFAULT_1X_NODE_SELECTOR);
     }
 
     @Override

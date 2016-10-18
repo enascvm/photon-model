@@ -22,12 +22,16 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.ServiceUriPaths;
+import com.vmware.xenon.services.common.TaskFactoryService;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
@@ -35,6 +39,17 @@ import com.vmware.xenon.services.common.TaskService;
  */
 public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerationTaskService.ResourceEnumerationTaskState> {
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/resource-enumeration-tasks";
+
+    public static FactoryService createFactory() {
+        TaskFactoryService fs =  new TaskFactoryService(ResourceEnumerationTaskState.class) {
+            @Override
+            public Service createServiceInstance() throws Throwable {
+                return new ResourceEnumerationTaskService();
+            }
+        };
+        fs.setPeerNodeSelectorPath(ServiceUriPaths.DEFAULT_1X_NODE_SELECTOR);
+        return fs;
+    }
 
     public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
             .toMicros(10);

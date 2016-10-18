@@ -32,8 +32,10 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 
+import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.ServiceStats;
@@ -48,6 +50,7 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
+import com.vmware.xenon.services.common.TaskFactoryService;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
@@ -61,6 +64,17 @@ public class SingleResourceStatsCollectionTaskService
 
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";
+
+    public static FactoryService createFactory() {
+        TaskFactoryService fs =  new TaskFactoryService(SingleResourceStatsCollectionTaskState.class) {
+            @Override
+            public Service createServiceInstance() throws Throwable {
+                return new SingleResourceStatsCollectionTaskService();
+            }
+        };
+        fs.setPeerNodeSelectorPath(ServiceUriPaths.DEFAULT_1X_NODE_SELECTOR);
+        return fs;
+    }
 
     public enum SingleResourceTaskCollectionStage {
         GET_DESCRIPTIONS, UPDATE_STATS

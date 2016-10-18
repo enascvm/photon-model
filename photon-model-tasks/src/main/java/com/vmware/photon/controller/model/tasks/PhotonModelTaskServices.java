@@ -51,7 +51,7 @@ public class PhotonModelTaskServices {
         host.startFactory(ResourceAllocationTaskService.class,
                 () -> TaskFactoryService.create(ResourceAllocationTaskService.class));
         host.startFactory(ResourceEnumerationTaskService.class,
-                () -> TaskFactoryService.create(ResourceEnumerationTaskService.class));
+                () -> ResourceEnumerationTaskService.createFactory());
         host.startFactory(ScheduledTaskService.class,
                 () -> TaskFactoryService.create(ScheduledTaskService.class));
         host.startFactory(ResourceRemovalTaskService.class,
@@ -64,17 +64,17 @@ public class PhotonModelTaskServices {
                 () -> TaskFactoryService.create(SnapshotTaskService.class));
         host.startFactory(ProvisionFirewallTaskService.class,
                 () -> TaskFactoryService.create(ProvisionFirewallTaskService.class));
-        host.startFactory(StatsCollectionTaskService.class,
-                () -> TaskFactoryService.create(StatsCollectionTaskService.class));
-        host.startFactory(StatsAggregationTaskService.class,
-                () -> TaskFactoryService.create(StatsAggregationTaskService.class));
-        host.startFactory(SingleResourceStatsCollectionTaskService.class,
-                () -> TaskFactoryService.create(SingleResourceStatsCollectionTaskService.class));
         host.startFactory(EndpointAllocationTaskService.class,
                 () -> TaskFactoryService.create(EndpointAllocationTaskService.class));
         host.startFactory(EndpointRemovalTaskService.class,
                 () -> TaskFactoryService.create(EndpointRemovalTaskService.class));
         host.startFactory(SingleResourceStatsAggregationTaskService.class,
-                () -> TaskFactoryService.create(SingleResourceStatsAggregationTaskService.class));
+                () -> SingleResourceStatsAggregationTaskService.createFactory());
+        host.startFactory(StatsAggregationTaskService.class,
+                () -> StatsAggregationTaskService.createFactory());
+        host.startFactory(SingleResourceStatsCollectionTaskService.class,
+                () -> SingleResourceStatsCollectionTaskService.createFactory());
+        host.startFactory(StatsCollectionTaskService.class,
+                () -> StatsCollectionTaskService.createFactory());
     }
 }
