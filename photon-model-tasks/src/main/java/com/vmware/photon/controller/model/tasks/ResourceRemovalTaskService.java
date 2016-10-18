@@ -261,6 +261,7 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
                             // is still at REMOVING_RESOURCES, we will just
                             // increment a counter
                             ResourceRemovalTaskState subTaskPatchBody = new ResourceRemovalTaskState();
+                            subTaskPatchBody.taskInfo = new TaskState();
                             subTaskPatchBody.taskInfo.stage = TaskState.TaskStage.FAILED;
                             sendPatch(
                                     UriUtils.buildUri(getHost(), subTaskLink),
