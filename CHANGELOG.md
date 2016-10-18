@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.4.15-SNAPSHOT
+## 0.4.15
 
 * Remove `ComputeState.networkId`: relationship to a network is expressed
   with a `networkInterfaceLink`
