@@ -13,16 +13,15 @@
 
 package com.vmware.photon.controller.model.tasks;
 
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentDescription;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.services.common.TaskService;
 import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
@@ -60,6 +59,12 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
          */
         public Map<String, String> customProperties;
 
+        /**
+         * delay before kicking off the task
+         */
+        @UsageOption(option = PropertyUsageOption.SERVICE_USE)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long delayMicros;
     }
 
     public ScheduledTaskService() {
@@ -88,7 +93,9 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
             if (state.intervalMicros != null) {
                 this.setMaintenanceIntervalMicros(state.intervalMicros);
             }
-            invokeTask(start, state, false);
+            state.delayMicros = new Random().longs(1, 0, state.intervalMicros).findFirst().getAsLong();
+            invokeTask(state, false);
+            start.complete();
         } catch (Throwable e) {
             start.fail(e);
         }
@@ -109,47 +116,34 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                     }
                     ScheduledTaskState state =
                             getOp.getBody(ScheduledTaskState.class);
-                    invokeTask(maintenanceOp, state, true);
+                    invokeTask(state, true);
+                    maintenanceOp.complete();
                 }));
     }
 
-    private void invokeTask(Operation op, ScheduledTaskState state, boolean patchToSelf) {
-        sendRequest(Operation
-                .createPost(this, state.factoryLink)
-                .setBody(state.initialStateJson)
-                .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE)
-                .setCompletion(
-                        (o, e) -> {
-                            // if a task instance is already running, just log the fact
-                            if (o.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED) {
-                                logInfo("service instance already running.");
-                                op.complete();
-                                return;
-                            } else if (e != null) {
-                                op.fail(e);
-                                return;
-                            }
-                            op.complete();
-                            // patch self to update the version; this tells us
-                            // the number of invocations
-                            if (patchToSelf) {
-                                ScheduledTaskState patchState = new ScheduledTaskState();
-                                sendRequest(Operation.createPatch(getUri())
-                                        .setBody(patchState));
-                            }
-                        }));
-    }
-
-    @Override
-    public ServiceDocument getDocumentTemplate() {
-        ServiceDocument td = super.getDocumentTemplate();
-
-        // enable indexing of custom properties map.
-        ServiceDocumentDescription.PropertyDescription pdCustomProperties = td.documentDescription.propertyDescriptions
-                .get(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES);
-        pdCustomProperties.indexingOptions = EnumSet
-                .of(ServiceDocumentDescription.PropertyIndexingOption.EXPAND);
-        ScheduledTaskState template = (ScheduledTaskState) td;
-        return template;
+    private void invokeTask(ScheduledTaskState state, boolean patchToSelf) {
+        getHost().schedule(() -> {
+            sendRequest(Operation
+                    .createPost(this, state.factoryLink)
+                    .setBody(state.initialStateJson)
+                    .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE)
+                    .setCompletion(
+                            (o, e) -> {
+                                // if a task instance is already running, just log the fact
+                                if (o.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED) {
+                                    logInfo("service instance already running.");
+                                } else if (e != null) {
+                                    logWarning("Scheduled task invocation failed: %s", e.getMessage());
+                                    return;
+                                }
+                                // patch self to update the version; this tells us
+                                // the number of invocations
+                                if (patchToSelf) {
+                                    ScheduledTaskState patchState = new ScheduledTaskState();
+                                    sendRequest(Operation.createPatch(getUri())
+                                            .setBody(patchState));
+                                }
+                            }));
+        }, state.delayMicros, TimeUnit.MICROSECONDS);
     }
 }

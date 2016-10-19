@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -46,6 +47,7 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
@@ -252,6 +254,7 @@ public class EndpointAllocationTaskServiceTest extends Suite {
             startState.enumerationRequest = new EndpointAllocationTaskService.ResourceEnumerationRequest();
             startState.enumerationRequest.resourcePoolLink = UriUtils
                     .buildUriPath(ResourcePoolService.FACTORY_LINK, "fake-pool");
+            startState.enumerationRequest.refreshIntervalMicros = TimeUnit.MILLISECONDS.toMicros(250);
 
             EndpointAllocationTaskState returnState = this
                     .postServiceSynchronously(

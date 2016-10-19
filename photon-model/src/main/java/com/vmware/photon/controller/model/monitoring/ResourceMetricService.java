@@ -33,7 +33,6 @@ public class ResourceMetricService extends StatefulService {
     public ResourceMetricService() {
         super(ResourceMetric.class);
         super.toggleOption(ServiceOption.PERSISTENCE, true);
-        super.toggleOption(ServiceOption.ON_DEMAND_LOAD, true);
     }
 
     public static class ResourceMetric extends ServiceDocument {

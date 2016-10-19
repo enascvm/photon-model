@@ -74,8 +74,7 @@ public class ResourceMetricServiceTest extends Suite {
         public void testServiceOptions() {
             EnumSet<Service.ServiceOption> expected = EnumSet.of(
                     Service.ServiceOption.CONCURRENT_GET_HANDLING,
-                    Service.ServiceOption.PERSISTENCE,
-                    Service.ServiceOption.ON_DEMAND_LOAD);
+                    Service.ServiceOption.PERSISTENCE);
             assertThat(this.StatsService.getOptions(), is(expected));
         }
     }

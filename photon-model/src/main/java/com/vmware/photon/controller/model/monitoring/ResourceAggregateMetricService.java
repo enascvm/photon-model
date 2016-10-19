@@ -37,7 +37,6 @@ public class ResourceAggregateMetricService extends StatefulService {
     public ResourceAggregateMetricService() {
         super(ResourceAggregateMetric.class);
         super.toggleOption(ServiceOption.PERSISTENCE, true);
-        super.toggleOption(ServiceOption.ON_DEMAND_LOAD, true);
     }
 
     /**

@@ -37,9 +37,12 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
+
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.TestContext;
 
 @RunWith(SnapshotTaskServiceTest.class)
 @SuiteClasses({ ScheduledTaskServiceTest.ConstructorTest.class,
@@ -185,12 +188,12 @@ public class ScheduledTaskServiceTest extends Suite {
             enumTaskState.adapterManagementReference = UriUtils.buildUri("http://foo.com");
             enumTaskState.documentSelfLink = UUID.randomUUID().toString();
             enumTaskState.isMockRequest = true;
-            // create a scheduled task to run once every 10 minutes; verify that
+            // create a scheduled task to run once every 5 seconds; verify that
             // it did run once on service start
             ScheduledTaskState scheduledTaskState = new ScheduledTaskState();
             scheduledTaskState.factoryLink = ResourceEnumerationTaskService.FACTORY_LINK;
             scheduledTaskState.initialStateJson = Utils.toJson(enumTaskState);
-            scheduledTaskState.intervalMicros = TimeUnit.MINUTES.toMicros(10);
+            scheduledTaskState.intervalMicros = TimeUnit.SECONDS.toMicros(5);
             scheduledTaskState.documentSelfLink = UUID.randomUUID().toString();
             TestUtils.doPost(this.host, scheduledTaskState,
                     ScheduledTaskState.class,
@@ -208,7 +211,22 @@ public class ScheduledTaskServiceTest extends Suite {
                         }
                         return false;
                     });
-
+            TestContext ctx = this.host.testCreate(1);
+            this.host.send(Operation.createGet(this.host,
+                    UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, scheduledTaskState.documentSelfLink))
+                    .setCompletion((getOp, getEx) -> {
+                        if (getEx != null) {
+                            ctx.failIteration(getEx);
+                            return;
+                        }
+                        ScheduledTaskState taskState = getOp.getBody(ScheduledTaskState.class);
+                        if (taskState.delayMicros == null || taskState.delayMicros > scheduledTaskState.intervalMicros) {
+                            ctx.fail(new IllegalStateException("delayMicros not set correctly"));
+                            return;
+                        }
+                        ctx.completeIteration();
+                    }));
+            this.host.testWait(ctx);
             // verify that the periodic maintenance handler is invoked for
             // scheduled task
             enumTaskState.documentSelfLink = UUID.randomUUID().toString();
