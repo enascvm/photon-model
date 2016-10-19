@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.4.17-SNAPSHOT
+
 ## 0.4.16
 
 * Optimize SingleResourceStatsAggregationTaskService to reduce the
