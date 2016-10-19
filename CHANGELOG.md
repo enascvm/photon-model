@@ -2,6 +2,10 @@
 
 ## 0.4.16-SNAPSHOT
 
+* Optimize SingleResourceStatsAggregationTaskService to reduce the
+number of queries issued - A single query is issued per resource
+as opposed to one query per metric
+
 ## 0.4.15
 
 * Remove `ComputeState.networkId`: relationship to a network is expressed

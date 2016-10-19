@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -38,7 +37,6 @@ import com.vmware.photon.controller.model.tasks.TaskUtils;
 
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
@@ -95,7 +93,7 @@ public class SingleResourceStatsAggregationTaskService extends
     public static final String STATS_QUERY_RESULT_LIMIT =
             UriPaths.PROPERTY_PREFIX
                     + "SingleResourceStatsAggregationTaskService.query.resultLimit";
-    private static final int DEFAULT_QUERY_RESULT_LIMIT = 100;
+    private static final int DEFAULT_QUERY_RESULT_LIMIT = 50;
 
     public static class SingleResourceStatsAggregationTaskState
             extends TaskService.TaskServiceState {
@@ -371,15 +369,21 @@ public class SingleResourceStatsAggregationTaskService extends
                         }));
     }
 
+    // private class that holds the rollup metric keys of interest
+    // and their last rollup time
+    private static class RollupMetricHolder {
+        String rollupKey;
+        Long beginTimestamp;
+    }
+
     private void getRawMetrics(SingleResourceStatsAggregationTaskState currentState,
             QueryTask resourceQueryTask) {
-        Set<Operation> rawMericQueryOps = new HashSet<>();
-        Map<String, String> taskUUIDToMetricKeyMap = new HashMap<>();
+        Query.Builder overallQueryBuilder = Query.Builder.create();
         for (String resourceLink : resourceQueryTask.results.documentLinks) {
             for (Entry<String, Long> metricEntry : currentState.lastRollupTimeForMetric
                     .entrySet()) {
                 String resourceRawMetricKey = buildRawMetricKey(resourceLink, metricEntry.getKey());
-                Query.Builder builder = Query.Builder.create();
+                Query.Builder builder = Query.Builder.create(Occurance.SHOULD_OCCUR);
                 builder.addKindFieldClause(ResourceMetric.class);
                 builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
                         UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
@@ -390,48 +394,57 @@ public class SingleResourceStatsAggregationTaskService extends
                                     computeIntervalBegin((metricEntry.getValue() - 1),
                                             lookupBinSize(metricEntry.getKey()))));
                 }
-                QueryTask task = QueryTask.Builder.createDirectTask()
-                        .addOption(QueryOption.BROADCAST)
-                        .addOption(QueryOption.EXPAND_CONTENT)
-                        .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
-                        .setQuery(builder.build()).build();
-                String taskId = UUID.randomUUID().toString();
-                task.documentSelfLink = taskId;
-                Operation queryOp = Operation
-                        .createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
-                        .setBody(task)
-                        .setConnectionSharing(true);
-                rawMericQueryOps.add(queryOp);
-                taskUUIDToMetricKeyMap.put(taskId, metricEntry.getKey());
+                overallQueryBuilder.addClause(builder.build());
             }
         }
-        OperationJoin.JoinedCompletionHandler postJoinCompletion = (postOps,
-                postExList) -> {
-            if (postExList != null) {
-                sendSelfFailurePatch(currentState,
-                        postExList.values().iterator().next().getMessage());
-                return;
+
+        // create a set of rollup metric keys we are interested in and the timestamp
+        // to rollup from for each
+        Set<RollupMetricHolder> rollupMetricHolder = new HashSet<>();
+        for (Entry<String, Long> metricEntry : currentState.lastRollupTimeForMetric
+                .entrySet()) {
+            RollupMetricHolder metric = new RollupMetricHolder();
+            metric.rollupKey = metricEntry.getKey();
+            if (metricEntry.getValue() != null) {
+                metric.beginTimestamp = computeIntervalBegin((metricEntry.getValue() - 1),
+                        lookupBinSize(metricEntry.getKey()));
             }
-            Map<String, List<ResourceMetric>> rawMetricsForKey = new HashMap<>();
-            for (Operation resultOp : postOps.values()) {
-                QueryTask rsp = resultOp.getBody(QueryTask.class);
-                String taskId = UriUtils.getLastPathSegment(rsp.documentSelfLink);
-                String metricKey = taskUUIDToMetricKeyMap.get(taskId);
-                List<ResourceMetric> rawMetricResultSet = rawMetricsForKey.get(metricKey);
-                if (rawMetricResultSet == null) {
-                    rawMetricResultSet = new ArrayList<>();
-                    rawMetricsForKey.put(metricKey, rawMetricResultSet);
-                }
-                for (Object aggrObj : rsp.results.documents.values()) {
-                    ResourceMetric rawMetric = Utils.fromJson(aggrObj, ResourceMetric.class);
-                    rawMetricResultSet.add(rawMetric);
-                }
-            }
-            aggregateMetrics(currentState, resourceQueryTask, rawMetricsForKey);
-        };
-        OperationJoin postJoinOp = OperationJoin.create(rawMericQueryOps);
-        postJoinOp.setCompletion(postJoinCompletion);
-        postJoinOp.sendWith(this);
+            rollupMetricHolder.add(metric);
+        }
+
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.BROADCAST)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
+                .setQuery(overallQueryBuilder.build()).build();
+        sendRequest(Operation
+                .createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+                .setBody(task)
+                .setConnectionSharing(true)
+                .setCompletion((queryOp, queryEx) -> {
+                    if (queryEx != null) {
+                        sendSelfFailurePatch(currentState, queryEx.getMessage());
+                        return;
+                    }
+                    Map<String, List<ResourceMetric>> rawMetricsForKey = new HashMap<>();
+                    QueryTask rsp = queryOp.getBody(QueryTask.class);
+                    for (Object aggrObj : rsp.results.documents.values()) {
+                        ResourceMetric rawMetric = Utils.fromJson(aggrObj, ResourceMetric.class);
+                        for (RollupMetricHolder metric : rollupMetricHolder) {
+                            // we want to consider raw metrics with the specified key and the appropriate timestamp
+                            if (rawMetric.documentSelfLink.contains(getRawMetricKey(metric.rollupKey)) && (metric.beginTimestamp == null ||
+                                    rawMetric.timestampMicrosUtc >= metric.beginTimestamp)) {
+                                List<ResourceMetric> rawMetricResultSet = rawMetricsForKey.get(metric.rollupKey);
+                                if (rawMetricResultSet == null) {
+                                    rawMetricResultSet = new ArrayList<>();
+                                    rawMetricsForKey.put(metric.rollupKey, rawMetricResultSet);
+                                }
+                                rawMetricResultSet.add(rawMetric);
+                            }
+                        }
+                    }
+                    aggregateMetrics(currentState, resourceQueryTask, rawMetricsForKey);
+                }));
     }
 
     private void aggregateMetrics(SingleResourceStatsAggregationTaskState currentState,
