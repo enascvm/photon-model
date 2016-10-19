@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -21,12 +20,9 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
@@ -36,17 +32,12 @@ import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskSe
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  *
  */
 public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
 
-    // fields that are used across method calls, stash them as private fields
-    private ResourcePoolState resourcePool;
-
-    private AuthCredentialsServiceState auth;
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
 
@@ -70,7 +61,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
         ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
-        statsCollectionTaskState.intervalMicros =   TimeUnit.MINUTES.toMicros(1);
+        statsCollectionTaskState.intervalMicros = TimeUnit.MINUTES.toMicros(1);
 
         TestUtils.doPost(this.host,
                 statsCollectionTaskState,
@@ -128,31 +119,5 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
                 ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
-    }
-
-    private ComputeDescription createComputeDescription() throws Throwable {
-        ComputeDescription computeDesc = new ComputeDescription();
-
-        computeDesc.id = UUID.randomUUID().toString();
-        computeDesc.name = computeDesc.id;
-        computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
-        computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
-        computeDesc.instanceAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
-
-        computeDesc.enumerationAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
-        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-
-        computeDesc.statsAdapterReference = UriUtils.buildUri(this.host,
-                VSphereUriPaths.STATS_SERVICE);
-
-        computeDesc.zoneId = this.zoneId;
-        computeDesc.regionId = this.datacenterId;
-
-        return TestUtils.doPost(this.host, computeDesc,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
 }

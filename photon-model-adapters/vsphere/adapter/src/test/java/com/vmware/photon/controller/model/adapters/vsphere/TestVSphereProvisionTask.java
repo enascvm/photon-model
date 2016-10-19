@@ -29,7 +29,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Basic
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -63,7 +62,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         this.auth = createAuth();
 
         this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost();
+        this.computeHost = createComputeHost(this.computeHostDescription);
         this.network = createNetwork(networkId);
 
         ComputeDescription vmDescription = createVmDescription();
@@ -209,47 +208,6 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         computeDesc.dataStoreId = this.dataStoreId;
 
         return doPost(this.host, computeDesc,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
-    }
-
-    /**
-     * Create a compute host representing a vcenter server
-     */
-    private ComputeState createComputeHost() throws Throwable {
-        ComputeState computeState = new ComputeState();
-        computeState.id = UUID.randomUUID().toString();
-        computeState.name = this.computeHostDescription.name;
-        computeState.documentSelfLink = computeState.id;
-        computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
-        computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = getAdapterManagementReference();
-
-        ComputeState returnState = TestUtils.doPost(this.host, computeState,
-                ComputeState.class,
-                UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
-        return returnState;
-    }
-
-    private ComputeDescription createComputeDescription() throws Throwable {
-        ComputeDescription computeDesc = new ComputeDescription();
-
-        computeDesc.id = UUID.randomUUID().toString();
-        computeDesc.name = computeDesc.id;
-        computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
-        computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
-        computeDesc.instanceAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
-
-        computeDesc.enumerationAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
-        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-
-        computeDesc.zoneId = this.zoneId;
-        computeDesc.regionId = this.datacenterId;
-
-        return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }

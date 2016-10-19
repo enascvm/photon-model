@@ -632,7 +632,7 @@ public class InstanceClient extends BaseHelper {
      * @throws InvalidPropertyFaultMsg
      * @throws RuntimeFaultFaultMsg
      */
-    public void enrichStateFromVm(ComputeState state)
+    public VmOverlay enrichStateFromVm(ComputeState state)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         Map<String, Object> props = this.get.entityProps(this.vm,
                 VimPath.vm_config_instanceUuid,
@@ -643,17 +643,19 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_summary_guest_ipAddress,
                 VimPath.vm_summary_guest_hostName);
 
-        VmOverlay vm = new VmOverlay(this.vm, props);
-        state.id = vm.getInstanceUuid();
-        state.primaryMAC = vm.getPrimaryMac();
-        state.powerState = vm.getPowerState();
-        state.address = vm.getIpAddressOrHostName();
-        state.name = vm.getName();
+        VmOverlay overlay = new VmOverlay(this.vm, props);
+        state.id = overlay.getInstanceUuid();
+        state.primaryMAC = overlay.getPrimaryMac();
+        state.powerState = overlay.getPowerState();
+        state.address = overlay.getIpAddressOrHostName();
+        state.name = overlay.getName();
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, this.vm)
-                .put(CustomProperties.HOST, vm.getHost())
+                .put(CustomProperties.HOST, overlay.getHost())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
+
+        return overlay;
     }
 
     /**

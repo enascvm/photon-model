@@ -24,6 +24,12 @@ import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.VirtualEthernetCard;
+import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
@@ -31,6 +37,11 @@ import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  */
@@ -63,7 +74,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
             switch (request.requestType) {
             case CREATE:
-                handleCreateInstance(ctx, request);
+                handleCreateInstance(ctx);
                 break;
             case DELETE:
                 handleDeleteInstance(ctx);
@@ -92,7 +103,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
         return initialContext;
     }
 
-    private void handleCreateInstance(ProvisionContext ctx, ComputeInstanceRequest req) {
+    private void handleCreateInstance(ProvisionContext ctx) {
         TaskManager mgr = new TaskManager(this, ctx.provisioningTaskReference);
 
         ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
@@ -131,7 +142,12 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                     PowerState.ON, null, 0);
                         }
 
-                        client.enrichStateFromVm(state);
+                        VmOverlay vmOverlay = client.enrichStateFromVm(state);
+                        if (ctx.templateMoRef != null) {
+                            // because the cloning, networkInterfaces are ignored and
+                            // recreted based on the template
+                            addNetworkLinksAfterClone(state, vmOverlay.getNics(), ctx);
+                        }
 
                         Operation patchResource = createComputeResourcePatch(state,
                                 ctx.computeReference);
@@ -151,6 +167,78 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         ctx.fail(e);
                     }
                 });
+    }
+
+    private void addNetworkLinksAfterClone(ComputeState state, List<VirtualEthernetCard> nics,
+            ProvisionContext ctx) {
+        if (state.networkInterfaceLinks == null) {
+            state.networkInterfaceLinks = new ArrayList<>(2);
+        } else {
+            // ignore network config from compute and store network config produced
+            // by vsphere after clone
+            state.networkInterfaceLinks.clear();
+        }
+
+        for (VirtualEthernetCard nic : nics) {
+            if (!(nic.getBacking() instanceof VirtualEthernetCardNetworkBackingInfo)) {
+                continue;
+            }
+            VirtualEthernetCardNetworkBackingInfo backing = (VirtualEthernetCardNetworkBackingInfo) nic
+                    .getBacking();
+
+            NetworkInterfaceState iface = new NetworkInterfaceState();
+            iface.documentSelfLink = UriUtils.buildUriPath(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    Utils.buildUUID(getHost().getId()));
+            iface.name = nic.getDeviceInfo().getLabel();
+            createNetworkInterface(iface, backing.getNetwork(), ctx.getAdapterManagementReference(),
+                    ctx.parent.description.regionId);
+            state.networkInterfaceLinks.add(iface.documentSelfLink);
+        }
+    }
+
+    private void createNetworkInterface(
+            NetworkInterfaceState iface,
+            ManagedObjectReference network, URI adapterManagementReference, String regionId) {
+
+        Query query = Query.Builder.create()
+                .addFieldClause(ServiceDocument.FIELD_NAME_KIND,
+                        Utils.buildKind(NetworkState.class))
+                .addFieldClause(NetworkState.FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE,
+                        adapterManagementReference.toString())
+                .addFieldClause(NetworkState.FIELD_NAME_REGION_ID, regionId)
+                .addFieldClause(QuerySpecification
+                                .buildCompositeFieldName(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                        CustomProperties.MOREF),
+                        VimUtils.convertMoRefToString(network))
+                .build();
+
+        QueryTask qt = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .build();
+
+        Operation.createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .setBody(qt)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logWarning("Error looking up network %s: %s", VimUtils
+                                .convertMoRefToString(network), e.getMessage());
+                        return;
+                    }
+
+                    List<String> links = o.getBody(QueryTask.class).results.documentLinks;
+                    if (links.isEmpty()) {
+                        logWarning("Could not locate network %s", VimUtils
+                                .convertMoRefToString(network));
+                        return;
+                    }
+
+                    iface.networkLink = links.get(0);
+                    Operation.createPost(this, NetworkInterfaceService.FACTORY_LINK)
+                            .setBody(iface)
+                            .sendWith(this);
+                })
+                .sendWith(this);
     }
 
     private Operation selfPatch(ServiceDocument doc) {

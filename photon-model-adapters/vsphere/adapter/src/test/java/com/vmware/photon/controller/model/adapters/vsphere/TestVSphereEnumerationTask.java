@@ -14,8 +14,6 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -26,13 +24,11 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
-import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
@@ -42,7 +38,6 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
@@ -54,10 +49,6 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  */
 public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
-    // fields that are used across method calls, stash them as private fields
-    private ResourcePoolState resourcePool;
-
-    private AuthCredentialsServiceState auth;
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
 
@@ -69,7 +60,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         this.auth = createAuth();
 
         this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost();
+        this.computeHost = createComputeHost(this.computeHostDescription);
 
         doRefresh();
 
@@ -138,46 +129,5 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
                         ResourceEnumerationTaskService.FACTORY_LINK));
 
         this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
-    }
-
-    /**
-     * Create a compute host representing a vcenter server
-     */
-    private ComputeState createComputeHost() throws Throwable {
-        ComputeState computeState = new ComputeState();
-        computeState.id = UUID.randomUUID().toString();
-        computeState.name = this.computeHostDescription.name;
-        computeState.documentSelfLink = computeState.id;
-        computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
-        computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = getAdapterManagementReference();
-
-        ComputeState returnState = TestUtils.doPost(this.host, computeState,
-                ComputeState.class,
-                UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
-        return returnState;
-    }
-
-    private ComputeDescription createComputeDescription() throws Throwable {
-        ComputeDescription computeDesc = new ComputeDescription();
-
-        computeDesc.id = UUID.randomUUID().toString();
-        computeDesc.name = computeDesc.id;
-        computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
-        computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
-        computeDesc.instanceAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
-
-        computeDesc.enumerationAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
-        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-
-        computeDesc.zoneId = this.zoneId;
-        computeDesc.regionId = this.datacenterId;
-
-        return TestUtils.doPost(this.host, computeDesc,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
 }

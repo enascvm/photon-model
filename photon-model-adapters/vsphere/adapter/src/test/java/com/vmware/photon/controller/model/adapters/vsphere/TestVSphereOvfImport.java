@@ -27,14 +27,11 @@ import com.vmware.photon.controller.model.adapters.vsphere.ovf.ImportOvfRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
@@ -43,10 +40,6 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
 
-    // fields that are used across method calls, stash them as private fields
-    private ResourcePoolState resourcePool;
-
-    private AuthCredentialsServiceState auth;
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
 
@@ -93,24 +86,6 @@ public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
         assertTrue(result.results.documentLinks.size() > 5);
 
         snapshotFactoryState("ovf", ComputeDescriptionService.class);
-    }
-
-    private ComputeDescription createComputeDescription() throws Throwable {
-        ComputeDescription computeDesc = new ComputeDescription();
-
-        computeDesc.id = UUID.randomUUID().toString();
-        computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
-        computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
-        computeDesc.instanceAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
-        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-
-        computeDesc.zoneId = this.zoneId;
-
-        return TestUtils.doPost(this.host, computeDesc,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
 
     /**

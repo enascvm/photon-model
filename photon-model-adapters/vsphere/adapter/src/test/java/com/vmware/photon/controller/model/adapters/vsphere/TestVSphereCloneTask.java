@@ -13,36 +13,47 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.UUID;
 
+import org.junit.Assert;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Builder;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
 
-    // fields that are used across method calls, stash them as private fields
-    private ResourcePoolState resourcePool;
-
-    private AuthCredentialsServiceState auth;
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
 
@@ -51,9 +62,15 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         this.auth = createAuth();
         this.resourcePool = createResourcePool();
 
+        if (isMock()) {
+            createNetwork(networkId);
+        }
         this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost();
+        this.computeHost = createComputeHost(this.computeHostDescription);
 
+        doRefresh();
+
+        snapshotFactoryState("clone-refresh", NetworkService.class);
         ComputeDescription vmDescription = createVmDescription();
         ComputeState vm = createVmState(vmDescription);
 
@@ -68,25 +85,42 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
             moref.setValue("vm-0");
             moref.setType(VimNames.TYPE_VM);
             CustomProperties.of(vm).put(CustomProperties.MOREF, moref);
-            vm = TestUtils.doPost(this.host, vm,
+            vm = doPost(this.host, vm,
                     ComputeState.class,
                     UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         }
 
         // create state & desc of the clone
         ComputeDescription cloneDescription = createCloneDescription(vm.documentSelfLink);
-        ComputeState clonedVm = createVmState(cloneDescription);
+        ComputeState clonedVm = createCloneVmState(cloneDescription);
 
         provisionTask = createProvisionTask(clonedVm);
         awaitTaskEnd(provisionTask);
 
         clonedVm = getComputeState(clonedVm);
 
-
         if (!isMock()) {
             deleteVmAndWait(vm);
             deleteVmAndWait(clonedVm);
         }
+    }
+
+    private void doRefresh() throws Throwable {
+        ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
+        task.adapterManagementReference = this.computeHost.adapterManagementReference;
+
+        task.isMockRequest = isMock();
+        task.enumerationAction = EnumerationAction.REFRESH;
+        task.parentComputeLink = this.computeHost.documentSelfLink;
+        task.resourcePoolLink = this.resourcePool.documentSelfLink;
+
+        ResourceEnumerationTaskState outTask = doPost(this.host,
+                task,
+                ResourceEnumerationTaskState.class,
+                UriUtils.buildUri(this.host,
+                        ResourceEnumerationTaskService.FACTORY_LINK));
+
+        this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
     }
 
     private ComputeDescription createCloneDescription(String templateComputeLink) throws Throwable {
@@ -104,7 +138,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         CustomProperties.of(computeDesc)
                 .put(CustomProperties.TEMPLATE_LINK, templateComputeLink);
 
-        return TestUtils.doPost(this.host, computeDesc,
+        return doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
@@ -122,10 +156,19 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
 
         computeState.parentLink = this.computeHost.documentSelfLink;
 
-        computeState.diskLinks = new ArrayList<>(1);
-        computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri()).documentSelfLink);
+        computeState.networkInterfaceLinks = new ArrayList<>(1);
 
-        computeState.diskLinks.add(createDisk("movies", DiskType.HDD, null).documentSelfLink);
+        NetworkInterfaceState iface = new NetworkInterfaceState();
+        iface.networkLink = findFirstNetwork();
+        iface.name = "unit test";
+        iface = TestUtils.doPost(this.host, iface,
+                NetworkInterfaceState.class,
+                UriUtils.buildUri(this.host, NetworkInterfaceService.FACTORY_LINK));
+
+        computeState.networkInterfaceLinks.add(iface.documentSelfLink);
+
+        computeState.diskLinks = new ArrayList<>(2);
+        computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri()).documentSelfLink);
         computeState.diskLinks.add(createDisk("A", DiskType.FLOPPY, null).documentSelfLink);
 
         CustomProperties.of(computeState)
@@ -137,6 +180,55 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         return returnState;
     }
 
+    private ComputeState createCloneVmState(ComputeDescription vmDescription) throws Throwable {
+        ComputeState computeState = new ComputeState();
+        computeState.id = vmDescription.name;
+        computeState.documentSelfLink = computeState.id;
+        computeState.descriptionLink = vmDescription.documentSelfLink;
+        computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
+        computeState.adapterManagementReference = getAdapterManagementReference();
+        computeState.name = vmDescription.name;
+
+        computeState.powerState = PowerState.ON;
+
+        computeState.parentLink = this.computeHost.documentSelfLink;
+
+        CustomProperties.of(computeState)
+                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
+
+        ComputeState returnState = TestUtils.doPost(this.host, computeState,
+                ComputeState.class,
+                UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+        return returnState;
+    }
+
+    private String findFirstNetwork() {
+        Query q = Builder.create()
+                .addFieldClause(ServiceDocument.FIELD_NAME_KIND,
+                        Utils.buildKind(NetworkState.class))
+                .addFieldClause(QuerySpecification.buildCompositeFieldName(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE),
+                        VimNames.TYPE_NETWORK)
+                .build();
+
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .build();
+
+        Operation op = Operation
+                .createPost(this.host, ServiceUriPaths.CORE_QUERY_TASKS)
+                .setBody(task);
+
+        Operation result = this.host.waitForResponse(op);
+
+        try {
+            return result.getBody(QueryTask.class).results.documentLinks.get(0);
+        } catch (Exception e) {
+            Assert.fail(e.getMessage());
+            // never gets here
+            return null;
+        }
+    }
+
     private DiskState createDisk(String alias, DiskType type, URI sourceImageReference)
             throws Throwable {
         DiskState res = new DiskState();
@@ -146,7 +238,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         res.id = res.name = "disk-" + alias;
 
         res.sourceImageReference = sourceImageReference;
-        return TestUtils.doPost(this.host, res,
+        return doPost(this.host, res,
                 DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
@@ -163,44 +255,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
 
-        return TestUtils.doPost(this.host, computeDesc,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
-    }
-
-    /**
-     * Create a compute host representing a vcenter server
-     */
-    private ComputeState createComputeHost() throws Throwable {
-        ComputeState computeState = new ComputeState();
-        computeState.id = UUID.randomUUID().toString();
-        computeState.name = this.computeHostDescription.name;
-        computeState.documentSelfLink = computeState.id;
-        computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
-        computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = getAdapterManagementReference();
-
-        ComputeState returnState = TestUtils.doPost(this.host, computeState,
-                ComputeState.class,
-                UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
-        return returnState;
-    }
-
-    private ComputeDescription createComputeDescription() throws Throwable {
-        ComputeDescription computeDesc = new ComputeDescription();
-
-        computeDesc.id = UUID.randomUUID().toString();
-        computeDesc.name = computeDesc.id;
-        computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
-        computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
-        computeDesc.instanceAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
-        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-
-        computeDesc.zoneId = this.zoneId;
-
-        return TestUtils.doPost(this.host, computeDesc,
+        return doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }

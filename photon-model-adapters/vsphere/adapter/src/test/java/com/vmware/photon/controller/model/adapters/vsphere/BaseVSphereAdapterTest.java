@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
@@ -26,7 +27,12 @@ import org.junit.After;
 import org.junit.Before;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
@@ -38,6 +44,7 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -220,6 +227,12 @@ public class BaseVSphereAdapterTest {
         } else {
             net.regionId = this.datacenterId;
         }
+        ManagedObjectReference ref = new ManagedObjectReference();
+        ref.setValue("network-3");
+        ref.setType(VimNames.TYPE_NETWORK);
+        CustomProperties.of(net)
+                .put(CustomProperties.TYPE, VimNames.TYPE_NETWORK)
+                .put(CustomProperties.MOREF, ref);
 
         return TestUtils.doPost(this.host, net, NetworkState.class,
                 UriUtils.buildUri(this.host, NetworkService.FACTORY_LINK));
@@ -245,5 +258,48 @@ public class BaseVSphereAdapterTest {
 
     protected URI getAdapterManagementReference() {
         return UriUtils.buildUri(this.vcUrl);
+    }
+
+
+    protected ComputeDescription createComputeDescription() throws Throwable {
+        ComputeDescription computeDesc = new ComputeDescription();
+
+        computeDesc.id = UUID.randomUUID().toString();
+        computeDesc.name = computeDesc.id;
+        computeDesc.documentSelfLink = computeDesc.id;
+        computeDesc.supportedChildren = new ArrayList<>();
+        computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
+        computeDesc.instanceAdapterReference = UriUtils
+                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
+
+        computeDesc.enumerationAdapterReference = UriUtils
+                .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
+        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
+
+        computeDesc.zoneId = this.zoneId;
+        computeDesc.regionId = this.datacenterId;
+
+        return TestUtils.doPost(this.host, computeDesc,
+                ComputeDescription.class,
+                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
+    }
+
+
+    /**
+     * Create a compute host representing a vcenter server
+     */
+    protected ComputeState createComputeHost(ComputeDescription computeHostDescription) throws Throwable {
+        ComputeState computeState = new ComputeState();
+        computeState.id = UUID.randomUUID().toString();
+        computeState.name = computeHostDescription.name;
+        computeState.documentSelfLink = computeState.id;
+        computeState.descriptionLink = computeHostDescription.documentSelfLink;
+        computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
+        computeState.adapterManagementReference = getAdapterManagementReference();
+
+        ComputeState returnState = TestUtils.doPost(this.host, computeState,
+                ComputeState.class,
+                UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+        return returnState;
     }
 }
