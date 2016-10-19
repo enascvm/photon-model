@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.4.16-SNAPSHOT
+## 0.4.16
 
 * Optimize SingleResourceStatsAggregationTaskService to reduce the
 number of queries issued - A single query is issued per resource
