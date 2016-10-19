@@ -170,6 +170,13 @@ public class ProvisionContext {
         }
 
         if (ctx.vSphereCredentials == null) {
+            if (ctx.parent.description.authCredentialsLink == null) {
+                ctx.fail(new IllegalStateException(
+                        "authCredentialsLink is not defined in resource "
+                                + ctx.parent.description.documentSelfLink));
+                return;
+            }
+
             URI credUri = UriUtils
                     .buildUri(service.getHost(), ctx.parent.description.authCredentialsLink);
             AdapterUtils.getServiceState(service, credUri, op -> {
