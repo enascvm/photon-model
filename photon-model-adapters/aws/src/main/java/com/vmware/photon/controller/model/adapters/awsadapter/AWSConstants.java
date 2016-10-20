@@ -88,6 +88,11 @@ public class AWSConstants {
     public static final String ESTIMATED_CHARGES = "EstimatedCharges";
     public static final String CURRENT_BURN_RATE = "CurrentBurnRatePerHour";
     public static final String AVERAGE_BURN_RATE = "AverageBurnRatePerHour";
+    public static final String COST = "Cost";
+    public static final String SERVICE_RESOURCE_COST = "Service_%s_ResourceCost";
+    public static final String SERVICE_OTHER_COST = "Service_%s_OtherCost";
+    public static final String SERVICE_MONTHLY_OTHER_COST = "Service_%s_MonthlyOtherCost";
+    public static final String SERVICE_RESERVED_RECURRING_COST = "Service_%s_ReservedRecurringCost";
 
     // AWS Metric Unit related constants
     public static final String UNIT_COUNT = "Count";

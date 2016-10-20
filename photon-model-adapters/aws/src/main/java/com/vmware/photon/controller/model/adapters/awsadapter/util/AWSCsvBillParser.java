@@ -209,24 +209,20 @@ public class AWSCsvBillParser {
         // have to ignore)}
         String resourceId = getStringFieldValue(rowMap, DetailedCsvHeaders.RESOURCE_ID);
         if (resourceId == null || resourceId.length() == 0) {
-            LocalDateTime usageStartTimeFromCsv = (LocalDateTime) rowMap
-                    .get(DetailedCsvHeaders.USAGE_START_DATE);
-            Long millisForBillDay = getMillisForHour(usageStartTimeFromCsv);
             // Check if this row has usageStartTime, if so set otherCost for
             // day, otherwise set it as common for month, can divide later for
             // all days
             if (rowMap.get(DetailedCsvHeaders.USAGE_START_DATE) != null) {
-                serviceDetail.addToOtherCosts(millisForBillDay, resourceCost);
+                LocalDateTime usageStartTimeFromCsv = (LocalDateTime) rowMap
+                        .get(DetailedCsvHeaders.USAGE_START_DATE);
+                Long millisForBillHour = getMillisForHour(usageStartTimeFromCsv);
+                serviceDetail.addToOtherCosts(millisForBillHour, resourceCost);
                 // Adding zero as direct cost for this entity to allow
                 // populating this as a resource while getting services- refer
                 // AwsInventoryServiceImpl#getAwsServicesCost()
-                serviceDetail.addToDirectCosts(millisForBillDay, 0d);
+                serviceDetail.addToDirectCosts(millisForBillHour, 0d);
             } else {
                 serviceDetail.addToRemainingCost(resourceCost);
-                // Adding zero as direct cost for this entity to allow
-                // populating this as a resource while getting services- refer
-                // AwsInventoryServiceImpl#getAwsServicesCost()
-                serviceDetail.addToDirectCosts(millisForBillDay, 0d);
             }
             return;
         }
@@ -539,11 +535,21 @@ public class AWSCsvBillParser {
             return this.type;
         }
 
-        public static PublicCloudServiceType getTypeByName(String name) {
-            for (AwsServices serviceName : AwsServices.values()) {
-                if (serviceName.getName().contains(name)) {
-                    return serviceName.getType();
+        public static AwsServices getByName(String name) {
+            name = name.replaceAll(" ", "");
+            for (AwsServices service : AwsServices.values()) {
+                String serviceName = service.getName().replaceAll(" ", "");
+                if (serviceName.contains(name)) {
+                    return service;
                 }
+            }
+            return null;
+        }
+
+        public static PublicCloudServiceType getTypeByName(String name) {
+            AwsServices service = getByName(name);
+            if (service != null) {
+                return service.getType();
             }
             return PublicCloudServiceType.OTHERS;
         }

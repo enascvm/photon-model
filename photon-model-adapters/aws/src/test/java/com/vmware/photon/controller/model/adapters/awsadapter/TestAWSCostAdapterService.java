@@ -25,6 +25,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
@@ -38,8 +39,6 @@ import com.vmware.xenon.common.UriUtils;
 public class TestAWSCostAdapterService extends BasicTestCase {
 
     public static final double ACCOUNT_MOCK_TOTAL_COST = 100.0;
-
-    public boolean isMock = true;
 
     @Before
     public void setUp() throws Exception {
@@ -89,22 +88,22 @@ public class TestAWSCostAdapterService extends BasicTestCase {
             @Override
             public void handleRequest(Operation op) {
                 if (op.getAction() == Action.PATCH) {
-                    if (!TestAWSCostAdapterService.this.isMock) {
-                        SingleResourceStatsCollectionTaskState resp = op
-                                .getBody(SingleResourceStatsCollectionTaskState.class);
-                        if (resp.statsList.size() != 3) {
-                            TestAWSCostAdapterService.this.host.failIteration(
-                                    new IllegalStateException("response size was incorrect."));
-                            return;
-                        }
-                        if (!resp.statsList.get(0).computeLink.equals(vm.documentSelfLink)) {
-                            TestAWSCostAdapterService.this.host
-                                    .failIteration(new IllegalStateException(
-                                            "Incorrect resourceReference returned."));
-                            return;
-                        }
-                        verifyCollectedStats(resp);
+
+                    SingleResourceStatsCollectionTaskState resp = op
+                            .getBody(SingleResourceStatsCollectionTaskState.class);
+                    if (resp.statsList.size() != 3) {
+                        TestAWSCostAdapterService.this.host.failIteration(
+                                new IllegalStateException("response size was incorrect."));
+                        return;
                     }
+                    if (!resp.statsList.get(0).computeLink.equals(vm.documentSelfLink)) {
+                        TestAWSCostAdapterService.this.host
+                                .failIteration(new IllegalStateException(
+                                        "Incorrect resourceReference returned."));
+                        return;
+                    }
+                    verifyCollectedStats(resp);
+
                     TestAWSCostAdapterService.this.host.completeIteration();
                 }
             }
@@ -114,7 +113,6 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         this.host.startService(startOp, parentService);
         ComputeStatsRequest statsRequest = new ComputeStatsRequest();
         statsRequest.resourceReference = UriUtils.buildUri(this.host, vm.documentSelfLink);
-        statsRequest.isMockRequest = this.isMock;
         statsRequest.taskReference = UriUtils.buildUri(this.host, servicePath);
         this.host.sendAndWait(Operation.createPatch(UriUtils.buildUri(
                 this.host, MockCostStatsAdapterService.SELF_LINK))
@@ -125,8 +123,26 @@ public class TestAWSCostAdapterService extends BasicTestCase {
     protected void verifyCollectedStats(SingleResourceStatsCollectionTaskState resp) {
         ComputeStats computeStats = resp.statsList.get(0);
         //check total account cost
-        assertTrue(computeStats.statValues.get(AWSCostStatsService.TOTAL_COST)
+        assertTrue(computeStats.statValues.get(AWSConstants.COST)
                 .get(0).latestValue == ACCOUNT_MOCK_TOTAL_COST);
+
+        // check that service level stats exist
+        String serviceCode = AWSCsvBillParser.AwsServices.ec2.getName().replaceAll(" ", "");
+        String serviceResourceCostMetric = String
+                .format(AWSConstants.SERVICE_RESOURCE_COST, serviceCode);
+        assertTrue(!computeStats.statValues.get(serviceResourceCostMetric).isEmpty());
+
+        String serviceOtherCostMetric = String
+                .format(AWSConstants.SERVICE_OTHER_COST, serviceCode);
+        assertTrue(!computeStats.statValues.get(serviceOtherCostMetric).isEmpty());
+
+        String serviceMonthlyOtherCostMetric = String
+                .format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode);
+        assertTrue(!computeStats.statValues.get(serviceMonthlyOtherCostMetric).isEmpty());
+
+        String serviceReservedRecurringCostMetric = String
+                .format(AWSConstants.SERVICE_RESERVED_RECURRING_COST, serviceCode);
+        assertTrue(!computeStats.statValues.get(serviceReservedRecurringCostMetric).isEmpty());
 
         // Check that stat values are accompanied with Units.
         for (String key : computeStats.statValues.keySet()) {
@@ -136,5 +152,4 @@ public class TestAWSCostAdapterService extends BasicTestCase {
             }
         }
     }
-
 }

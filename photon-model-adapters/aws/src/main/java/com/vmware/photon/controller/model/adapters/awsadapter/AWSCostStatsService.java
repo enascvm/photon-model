@@ -18,6 +18,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -77,7 +78,6 @@ public class AWSCostStatsService extends StatelessService {
 
     public static final String TEMP_DIR_LOCATION = "java.io.tmpdir";
     public static final String DIMENSION_CURRENCY_VALUE = "USD";
-    public static final String TOTAL_COST = "cost";
 
     private AWSClientManager clientManager;
 
@@ -411,10 +411,10 @@ public class AWSCostStatsService extends StatelessService {
             resourceStat.latestValue = cost.getValue().doubleValue();
             resourceStat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(cost.getKey());
             resourceStat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-            resourceStat.name = TOTAL_COST;
+            resourceStat.name = AWSConstants.COST;
             resourceServiceStats.add(resourceStat);
         }
-        resourceStats.statValues.put(TOTAL_COST, resourceServiceStats);
+        resourceStats.statValues.put(AWSConstants.COST, resourceServiceStats);
         return resourceStats;
     }
 
@@ -425,12 +425,88 @@ public class AWSCostStatsService extends StatelessService {
         stat.latestValue = awsAccountDetailDto.cost;
         stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(awsAccountDetailDto.month);
         stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-        stat.name = TOTAL_COST;
+        stat.name = AWSConstants.COST;
         ComputeStats accountStats = new ComputeStats();
         accountStats.statValues = new ConcurrentSkipListMap<>();
         accountStats.computeLink = accountComputeLink;
         accountStats.statValues.put(stat.name, Collections.singletonList(stat));
+
+        // Create metrics for service costs and add it at the account level.
+        for (AwsServiceDetailDto serviceDetailDto : awsAccountDetailDto.serviceDetailsMap
+                .values()) {
+            Map<String, List<ServiceStat>> statsForAwsService = createStatsForAwsService(
+                    accountComputeLink, serviceDetailDto, awsAccountDetailDto.month);
+            accountStats.statValues.putAll(statsForAwsService);
+        }
         return accountStats;
+    }
+
+    private Map<String, List<ServiceStat>> createStatsForAwsService(String accountComputeLink,
+            AwsServiceDetailDto serviceDetailDto, Long month) {
+
+        URI accountUri = UriUtils.buildUri(accountComputeLink);
+        String currencyUnit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+        // remove any spaces in the service name.
+        String serviceCode = serviceDetailDto.id.replaceAll(" ", "");
+        Map<String, List<ServiceStat>> stats = new HashMap<>();
+
+        // Create stats for hourly resource cost
+        List<ServiceStat> serviceStats = new ArrayList<>();
+        String serviceResourceCostMetric = String
+                .format(AWSConstants.SERVICE_RESOURCE_COST, serviceCode);
+        for (Entry<Long, Double> cost : serviceDetailDto.directCosts.entrySet()) {
+            ServiceStat stat = new ServiceStat();
+            stat.serviceReference = accountUri;
+            stat.latestValue = cost.getValue().doubleValue();
+            stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(cost.getKey());
+            stat.unit = currencyUnit;
+            stat.name = serviceResourceCostMetric;
+            serviceStats.add(stat);
+        }
+        if (!serviceStats.isEmpty()) {
+            stats.put(serviceResourceCostMetric, serviceStats);
+        }
+
+        // Create stats for hourly other costs
+        serviceStats = new ArrayList<>();
+        String serviceOtherCostMetric = String
+                .format(AWSConstants.SERVICE_OTHER_COST, serviceCode);
+        for (Entry<Long, Double> cost : serviceDetailDto.otherCosts.entrySet()) {
+            ServiceStat stat = new ServiceStat();
+            stat.serviceReference = accountUri;
+            stat.latestValue = cost.getValue().doubleValue();
+            stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(cost.getKey());
+            stat.unit = currencyUnit;
+            stat.name = serviceOtherCostMetric;
+            serviceStats.add(stat);
+        }
+        if (!serviceStats.isEmpty()) {
+            stats.put(serviceOtherCostMetric, serviceStats);
+        }
+
+        // Create stats for monthly other costs
+        String serviceMonthlyOtherCostMetric = String
+                .format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode);
+        ServiceStat stat = new ServiceStat();
+        stat.serviceReference = accountUri;
+        stat.latestValue = serviceDetailDto.remainingCost;
+        stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(month);
+        stat.unit = currencyUnit;
+        stat.name = serviceMonthlyOtherCostMetric;
+        stats.put(serviceMonthlyOtherCostMetric, Collections.singletonList(stat));
+
+        // Create stats for monthly reserved recurring instance costs
+        String serviceReservedRecurringCostMetric = String
+                .format(AWSConstants.SERVICE_RESERVED_RECURRING_COST, serviceCode);
+        stat = new ServiceStat();
+        stat.serviceReference = accountUri;
+        stat.latestValue = serviceDetailDto.reservedRecurringCost;
+        stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(month);
+        stat.unit = currencyUnit;
+        stat.name = serviceReservedRecurringCostMetric;
+        stats.put(serviceReservedRecurringCostMetric, Collections.singletonList(stat));
+
+        return stats;
     }
 
     private Consumer<Throwable> getFailureConsumer(AWSCostStatsCreationContext statsData) {
