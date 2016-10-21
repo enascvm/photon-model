@@ -23,11 +23,15 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.Inst
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.VirtualDeviceFileBackingInfo;
+import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
 import com.vmware.xenon.common.Operation;
@@ -147,6 +151,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             // because the cloning, networkInterfaces are ignored and
                             // recreted based on the template
                             addNetworkLinksAfterClone(state, vmOverlay.getNics(), ctx);
+                            addDiskLinksAfterClone(state, vmOverlay.getDisks(), ctx);
+
                         }
 
                         Operation patchResource = createComputeResourcePatch(state,
@@ -167,6 +173,42 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         ctx.fail(e);
                     }
                 });
+    }
+
+    private void addDiskLinksAfterClone(ComputeState state, List<VirtualDisk> disks,
+            ProvisionContext ctx) {
+        if (state.diskLinks == null) {
+            state.diskLinks = new ArrayList<>(2);
+        } else {
+            state.diskLinks.clear();
+        }
+
+        for (VirtualDisk disk : disks) {
+            if (!(disk.getBacking() instanceof VirtualDeviceFileBackingInfo)) {
+                continue;
+            }
+            VirtualDeviceFileBackingInfo backing = (VirtualDeviceFileBackingInfo) disk.getBacking();
+
+            DiskState ds = new DiskState();
+            ds.documentSelfLink = UriUtils.buildUriPath(
+                    DiskService.FACTORY_LINK,
+                    Utils.buildUUID(getHost().getIdHash()));
+
+            ds.name = disk.getDeviceInfo().getLabel();
+            ds.creationTimeMicros = Utils.getNowMicrosUtc();
+            ds.type = DiskType.HDD;
+            ds.regionId = ctx.parent.description.regionId;
+            ds.capacityMBytes = disk.getCapacityInKB() / 1024;
+            ds.sourceImageReference = VimUtils.datastorePathToUri(backing.getFileName());
+            createDiskOnDemand(ds);
+            state.diskLinks.add(ds.documentSelfLink);
+        }
+    }
+
+    private void createDiskOnDemand(DiskState ds) {
+        Operation.createPost(this, DiskService.FACTORY_LINK)
+                .setBody(ds)
+                .sendWith(this);
     }
 
     private void addNetworkLinksAfterClone(ComputeState state, List<VirtualEthernetCard> nics,
@@ -191,13 +233,14 @@ public class VSphereAdapterInstanceService extends StatelessService {
                     NetworkInterfaceService.FACTORY_LINK,
                     Utils.buildUUID(getHost().getId()));
             iface.name = nic.getDeviceInfo().getLabel();
-            createNetworkInterface(iface, backing.getNetwork(), ctx.getAdapterManagementReference(),
+            createNetworkInterfaceOnDemand(iface, backing.getNetwork(),
+                    ctx.getAdapterManagementReference(),
                     ctx.parent.description.regionId);
             state.networkInterfaceLinks.add(iface.documentSelfLink);
         }
     }
 
-    private void createNetworkInterface(
+    private void createNetworkInterfaceOnDemand(
             NetworkInterfaceState iface,
             ManagedObjectReference network, URI adapterManagementReference, String regionId) {
 

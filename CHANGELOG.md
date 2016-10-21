@@ -2,6 +2,8 @@
 
 ## 0.4.17-SNAPSHOT
 
+ * Rename DiskState.datacenterId to regionId for symmetry with ComputeDescription.
+
 ## 0.4.16
 
 * Optimize SingleResourceStatsAggregationTaskService to reduce the

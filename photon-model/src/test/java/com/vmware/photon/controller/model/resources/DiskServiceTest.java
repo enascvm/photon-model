@@ -391,7 +391,7 @@ public class DiskServiceTest extends Suite {
         @Test
         public void testPatchOtherFields() throws Throwable {
             DiskService.DiskState startState = buildValidStartState();
-            startState.dataCenterId = "data-center-id1";
+            startState.regionId = "data-center-id1";
             startState.resourcePoolLink = "resource-pool-link1";
             startState.authCredentialsLink = "auth-credentials-link1";
             startState.tenantLinks = new ArrayList<>();
@@ -407,7 +407,7 @@ public class DiskServiceTest extends Suite {
                     DiskService.DiskState.class);
 
             DiskService.DiskState patchState = new DiskService.DiskState();
-            patchState.dataCenterId = "data-center-id2";
+            patchState.regionId = "data-center-id2";
             patchState.resourcePoolLink = "resource-pool-link2";
             patchState.authCredentialsLink = "auth-credentials-link2";
             patchState.tenantLinks = new ArrayList<>();
@@ -423,7 +423,7 @@ public class DiskServiceTest extends Suite {
                     patchState);
             returnState = getServiceSynchronously(
                     returnState.documentSelfLink, DiskService.DiskState.class);
-            assertThat(returnState.dataCenterId, is(startState.dataCenterId));
+            assertThat(returnState.regionId, is(startState.regionId));
             assertThat(returnState.resourcePoolLink,
                     is(startState.resourcePoolLink));
             assertThat(returnState.authCredentialsLink,

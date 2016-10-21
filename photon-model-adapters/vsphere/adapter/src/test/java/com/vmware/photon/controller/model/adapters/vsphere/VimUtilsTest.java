@@ -112,6 +112,22 @@ public class VimUtilsTest {
         assertEquals("[ds_test] folder/vm.vmx", s);
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void datastorePathToUriInvalid() {
+        VimUtils.datastorePathToUri("hello world");
+    }
+
+    @Test
+    public void datastorePathToUri() {
+        URI uri = VimUtils.datastorePathToUri("[ds_test] folder/vm.vmx");
+        assertEquals(URI.create("datastore://ds_test/folder/vm.vmx"), uri);
+    }
+
+    @Test
+    public void datastorePathToUriNull() {
+        assertNull(VimUtils.datastorePathToUri(null));
+    }
+
     @Test
     public void convertStringToMoRef() {
         ManagedObjectReference ref = new ManagedObjectReference();

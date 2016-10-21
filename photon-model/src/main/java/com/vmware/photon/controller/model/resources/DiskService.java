@@ -63,10 +63,10 @@ public class DiskService extends StatefulService {
         public String zoneId;
 
         /**
-         * Identifier of the data center associated with this disk service
-         * instance.
+         * Identifier of the region associated with this disk service
+         * instance. Interpretation of the regionId is left to the InstanceAdapter.
          */
-        public String dataCenterId;
+        public String regionId;
 
         /**
          * Link to the Storage description associated with the disk.

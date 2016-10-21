@@ -24,6 +24,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualMachinePowerState;
 
@@ -65,6 +66,19 @@ public class VmOverlay extends AbstractOverlay {
         return dev.getVirtualDevice().stream()
                 .filter(d -> d instanceof VirtualEthernetCard)
                 .map(d -> (VirtualEthernetCard) d)
+                .collect(Collectors.toList());
+    }
+
+    public List<VirtualDisk> getDisks() {
+        ArrayOfVirtualDevice dev = (ArrayOfVirtualDevice) getOrDefault(
+                VimPath.vm_config_hardware_device, null);
+        if (dev == null) {
+            return Collections.emptyList();
+        }
+
+        return dev.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .map(d -> (VirtualDisk) d)
                 .collect(Collectors.toList());
     }
 

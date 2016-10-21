@@ -91,12 +91,8 @@ public final class VimUtils {
         }
 
         String path = uri.getSchemeSpecificPart();
-        // strip leading slashes
-        int i = 0;
-        while (i < path.length() && path.charAt(i) == '/') {
-            i++;
-        }
-        path = path.substring(i);
+        path = stripLeadingSlashes(path);
+        int i;
 
         // separator between datastore and path
         i = path.indexOf('/');
@@ -108,6 +104,36 @@ public final class VimUtils {
         path = path.substring(i + 1);
 
         return String.format("[%s] %s", ds, path);
+    }
+
+    protected static String stripLeadingSlashes(String path) {
+        // strip leading slashes
+        int i = 0;
+        while (i < path.length() && path.charAt(i) == '/') {
+            i++;
+        }
+        path = path.substring(i);
+        return path;
+    }
+
+    /**
+     * Convert a string [dsName] /path/to/file into a URI datastore://dsName/path/to/file.
+     *
+     * @param path
+     * @return
+     */
+    public static URI datastorePathToUri(String path) {
+        if (path == null) {
+            return null;
+        }
+
+        int i = path.indexOf("] ");
+        if (i <= 0) {
+            throw new IllegalArgumentException("Invalid datastore path " + path);
+        }
+        String dsName = path.substring(1, i);
+        String pathOnly = path.substring(i + 2);
+        return URI.create(SCHEME_DATASTORE + "://" + dsName + "/" + stripLeadingSlashes(pathOnly));
     }
 
     /**
