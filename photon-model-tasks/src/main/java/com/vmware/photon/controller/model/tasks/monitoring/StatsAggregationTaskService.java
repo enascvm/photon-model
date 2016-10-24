@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAggregationTaskService.SingleResourceStatsAggregationTaskState;
@@ -125,7 +126,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
         switch (currentState.taskInfo.stage) {
         case STARTED:
-            handleStagePatch(patch, currentState);
+            handleStagePatch(currentState);
             break;
         case FINISHED:
         case FAILED:
@@ -146,23 +147,23 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
     @Override
     public void handlePut(Operation put) {
-        MonitoringTaskUtils.handleIdempotentPut(this, put);
+        PhotonModelUtils.handleIdempotentPut(this, put);
     }
 
-    private void handleStagePatch(Operation op, StatsAggregationTaskState currentState) {
+    private void handleStagePatch(StatsAggregationTaskState currentState) {
         switch (currentState.taskStage) {
         case INIT:
-            initializeQuery(op, currentState);
+            initializeQuery(currentState);
             break;
         case GET_RESOURCES:
-            getResources(op, currentState);
+            getResources(currentState);
             break;
         default:
             break;
         }
     }
 
-    private void initializeQuery(Operation op, StatsAggregationTaskState currentState) {
+    private void initializeQuery(StatsAggregationTaskState currentState) {
 
         int resultLimit = Integer.getInteger(STATS_QUERY_RESULT_LIMIT, DEFAULT_QUERY_RESULT_LIMIT);
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
@@ -190,7 +191,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
     }
 
-    private void getResources(Operation op, StatsAggregationTaskState currentState) {
+    private void getResources(StatsAggregationTaskState currentState) {
         sendRequest(Operation
                 .createGet(UriUtils.buildUri(getHost(), currentState.queryResultLink))
                 .setCompletion(

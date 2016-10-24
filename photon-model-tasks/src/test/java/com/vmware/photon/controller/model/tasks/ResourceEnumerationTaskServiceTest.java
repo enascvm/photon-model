@@ -138,6 +138,7 @@ public class ResourceEnumerationTaskServiceTest extends Suite {
         public void testServiceOptions() {
 
             EnumSet<Service.ServiceOption> expected = EnumSet.of(
+                    Service.ServiceOption.IDEMPOTENT_POST,
                     Service.ServiceOption.INSTRUMENTATION,
                     Service.ServiceOption.OWNER_SELECTION,
                     Service.ServiceOption.REPLICATION);

@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.monitoring;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
@@ -36,7 +37,11 @@ public class ResourceAggregateMetricService extends StatefulService {
 
     public ResourceAggregateMetricService() {
         super(ResourceAggregateMetric.class);
+        super.toggleOption(ServiceOption.IMMUTABLE, true);
         super.toggleOption(ServiceOption.PERSISTENCE, true);
+        super.toggleOption(ServiceOption.ON_DEMAND_LOAD, true);
+        super.toggleOption(ServiceOption.REPLICATION, true);
+        super.toggleOption(ServiceOption.OWNER_SELECTION, true);
     }
 
     /**
@@ -45,9 +50,6 @@ public class ResourceAggregateMetricService extends StatefulService {
      * is the timestamp to which the metric values correspond
      */
     public static class ResourceAggregateMetric extends ServiceDocument {
-        public static final int VERSION_RETENTION_LIMIT = Integer.getInteger(
-                UriPaths.PROPERTY_PREFIX + ResourceAggregateMetric.class.getSimpleName()
-                + ".VERSION_RETENTION_LIMIT", 50000);
         public static final String FIELD_NAME_TIMESTAMP = "currentIntervalTimeStampMicrosUtc";
         public static final String FIELD_NAME_TIMEBIN = "timeBin";
 
@@ -72,13 +74,7 @@ public class ResourceAggregateMetricService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            ResourceAggregateMetric returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        PhotonModelUtils.handleIdempotentPut(this, put);
     }
 
     private ResourceAggregateMetric processInput(Operation op) {
@@ -89,13 +85,4 @@ public class ResourceAggregateMetricService extends StatefulService {
         Utils.validateState(getStateDescription(), state);
         return state;
     }
-
-    @Override
-    public ServiceDocument getDocumentTemplate() {
-        ServiceDocument serviceDocument = super.getDocumentTemplate();
-        serviceDocument.documentDescription.versionRetentionLimit = ResourceAggregateMetric.VERSION_RETENTION_LIMIT;
-        return serviceDocument;
-    }
-
-
 }

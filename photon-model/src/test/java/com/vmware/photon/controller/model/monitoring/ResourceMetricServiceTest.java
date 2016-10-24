@@ -74,7 +74,11 @@ public class ResourceMetricServiceTest extends Suite {
         public void testServiceOptions() {
             EnumSet<Service.ServiceOption> expected = EnumSet.of(
                     Service.ServiceOption.CONCURRENT_GET_HANDLING,
-                    Service.ServiceOption.PERSISTENCE);
+                    Service.ServiceOption.IMMUTABLE,
+                    Service.ServiceOption.PERSISTENCE,
+                    Service.ServiceOption.ON_DEMAND_LOAD,
+                    Service.ServiceOption.REPLICATION,
+                    Service.ServiceOption.OWNER_SELECTION);
             assertThat(this.StatsService.getOptions(), is(expected));
         }
     }
@@ -139,7 +143,7 @@ public class ResourceMetricServiceTest extends Suite {
                     IllegalArgumentException.class);
         }
 
-        @Test
+        @Test (expected = IllegalArgumentException.class)
         public void testIdempotentPostService() throws Throwable {
             URI factoryUri = UriUtils.buildFactoryUri(host, ResourceMetricService.class);
             this.host.startFactory(new ResourceMetricService());

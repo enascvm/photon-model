@@ -11,12 +11,12 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.tasks.monitoring;
+package com.vmware.photon.controller.model.resources.util;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatefulService;
 
-public class MonitoringTaskUtils {
+public class PhotonModelUtils {
 
     public static void handleIdempotentPut(StatefulService s, Operation put) {
 

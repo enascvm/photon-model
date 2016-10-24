@@ -101,7 +101,7 @@ public class SubTaskService extends TaskService<SubTaskService.SubTaskState> {
             if (currentState.errorThreshold == 0
                     || failedRatio > currentState.errorThreshold) {
                 logWarning("Notifying parent of task failure: %s (%s)",
-                        Utils.toJsonHtml(patchBody.taskInfo.failure),
+                        Utils.toJsonHtml(patchBody.failureMessage),
                         patchBody.taskInfo.stage);
 
                 parentPatchBody = Utils.toJson(patchBody);

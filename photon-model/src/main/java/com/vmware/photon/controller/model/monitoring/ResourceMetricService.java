@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.monitoring;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
@@ -32,13 +33,14 @@ public class ResourceMetricService extends StatefulService {
 
     public ResourceMetricService() {
         super(ResourceMetric.class);
+        super.toggleOption(ServiceOption.IMMUTABLE, true);
         super.toggleOption(ServiceOption.PERSISTENCE, true);
+        super.toggleOption(ServiceOption.ON_DEMAND_LOAD, true);
+        super.toggleOption(ServiceOption.REPLICATION, true);
+        super.toggleOption(ServiceOption.OWNER_SELECTION, true);
     }
 
     public static class ResourceMetric extends ServiceDocument {
-        public static final int VERSION_RETENTION_LIMIT = Integer.getInteger(
-                UriPaths.PROPERTY_PREFIX + ResourceMetric.class.getSimpleName()
-                + ".VERSION_RETENTION_LIMIT", 50000);
         public static final String FIELD_NAME_VALUE = "value";
         public static final String FIELD_NAME_TIMESTAMP = "timestampMicrosUtc";
 
@@ -63,13 +65,7 @@ public class ResourceMetricService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            ResourceMetric returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        PhotonModelUtils.handleIdempotentPut(this, put);
     }
 
     private ResourceMetric processInput(Operation op) {
@@ -79,12 +75,5 @@ public class ResourceMetricService extends StatefulService {
         ResourceMetric state = op.getBody(ResourceMetric.class);
         Utils.validateState(getStateDescription(), state);
         return state;
-    }
-
-    @Override
-    public ServiceDocument getDocumentTemplate() {
-        ServiceDocument serviceDocument = super.getDocumentTemplate();
-        serviceDocument.documentDescription.versionRetentionLimit = ResourceMetric.VERSION_RETENTION_LIMIT;
-        return serviceDocument;
     }
 }

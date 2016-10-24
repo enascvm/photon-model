@@ -26,15 +26,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService.ResourceAggregateMetric;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService.ResourceMetric;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
-
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
@@ -42,6 +41,7 @@ import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.ServiceDocumentDescription.TypeName;
 import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.AggregationType;
 import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.TimeBin;
 import com.vmware.xenon.common.TaskState;
@@ -49,23 +49,24 @@ import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Builder;
 import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskFactoryService;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
  * Task to aggregate resource stats for a single resource. Aggregate stats are backed by ResourceAggregateMetricService
- * instances. Aggregate metrics are identified using a key that is a combination of the resourceId and metricKey. This means
- * that the same service document is written to on every rollup resulting in the documents being versioned over time. Queries
- * for aggregate metrics need to issue a query to include all versions and filter by date
+ * instances. Aggregate metrics are identified using a key that is a combination of the resourceId, metricKey and a timestamp.
+ * Queries for aggregate metrics need to issue a prefix query on resourceId and metric Key to obtain all documents and filter by date.
  *
- * Aggregation operations can run multiple time within a time window. This will result in multiple versions of the document for
- * the time window. The one with the highest version represent the aggregate value after the time interval has closed. All
- * other versions represent point in time aggregates for the collection interval
+ * Aggregation operations can run multiple time within a time window. This will result in multiple documents for the time window.
+ * The first document, sorted by documentSelfLink in DESC order, represents the aggregate value after the time interval has closed. All
+ * other documents represent point in time aggregates for the collection interval.
  *
  * All aggregate metrics have a timestamp that represents the end of the interval. For example if the aggregation is for hourly
  * data and the interval is 10-11, the aggregate value will have a timestamp of 11
@@ -80,7 +81,8 @@ public class SingleResourceStatsAggregationTaskService extends
             UriPaths.MONITORING + "/single-resource-stats-aggregation";
 
     public static FactoryService createFactory() {
-        TaskFactoryService fs =  new TaskFactoryService(SingleResourceStatsAggregationTaskState.class) {
+        TaskFactoryService fs = new TaskFactoryService(
+                SingleResourceStatsAggregationTaskState.class) {
             @Override
             public Service createServiceInstance() throws Throwable {
                 return new SingleResourceStatsAggregationTaskService();
@@ -247,7 +249,7 @@ public class SingleResourceStatsAggregationTaskService extends
 
     @Override
     public void handlePut(Operation put) {
-        MonitoringTaskUtils.handleIdempotentPut(this, put);
+        PhotonModelUtils.handleIdempotentPut(this, put);
     }
 
     private void handleStagePatch(SingleResourceStatsAggregationTaskState currentState) {
@@ -270,48 +272,61 @@ public class SingleResourceStatsAggregationTaskService extends
     }
 
     private void getLastRollupTime(SingleResourceStatsAggregationTaskState currentState) {
-        Query.Builder builder = Query.Builder.create();
-        builder.addKindFieldClause(ResourceAggregateMetric.class);
         Map<String, Long> lastUpdateMap = new HashMap<>();
         // for all metrics, get the last time rollup happened
-        Query.Builder clause = Query.Builder.create();
+        List<Operation> operations = new ArrayList<>();
         for (String metricName : currentState.metricNames) {
             List<String> rollupKeys = buildRollupKeys(metricName);
             for (String rollupKey : rollupKeys) {
-                String serviceKey = StatsUtil.getMetricKey(currentState.resourceLink, rollupKey);
                 lastUpdateMap.put(rollupKey, null);
-                clause.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+
+                Query.Builder builder = Query.Builder.create();
+                builder.addKindFieldClause(ResourceAggregateMetric.class);
+                builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
                         UriUtils.buildUriPath(ResourceAggregateMetricService.FACTORY_LINK,
-                                serviceKey), Occurance.SHOULD_OCCUR);
+                                StatsUtil.getMetricKeyPrefix(currentState.resourceLink, rollupKey)),
+                        MatchType.PREFIX);
+
+                Operation op = Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+                        .setBody(Builder.createDirectTask()
+                                .addOption(QueryOption.SORT)
+                                .addOption(QueryOption.TOP_RESULTS)
+                                .addOption(QueryOption.EXPAND_CONTENT)
+                                .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
+                                        TypeName.STRING)
+                                .setResultLimit(1)
+                                .setQuery(builder.build()).build())
+                        .setConnectionSharing(true);
+                operations.add(op);
             }
         }
-        builder.addClause(clause.build());
 
-        sendRequest(Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(QueryTask.Builder.createDirectTask()
-                        .addOption(QueryOption.BROADCAST)
-                        .addOption(QueryOption.EXPAND_CONTENT)
-                        .setQuery(builder.build()).build())
-                .setConnectionSharing(true)
-                .setCompletion((queryResultOp, queryEx) -> {
-                    if (queryEx != null) {
-                        sendSelfFailurePatch(currentState, queryEx.getMessage());
+        // Need to optimize this. Right now using OperationSequence so we don't flood the system with
+        // lot of queries.
+        OperationSequence.create(operations.toArray(new Operation[operations.size()]))
+                .setCompletion((ops, failures) -> {
+                    if (failures != null) {
+                        sendSelfFailurePatch(currentState,
+                                failures.values().iterator().next().getMessage());
                         return;
                     }
-                    QueryTask rsp = queryResultOp.getBody(QueryTask.class);
-                    for (Object aggrObj : rsp.results.documents.values()) {
-                        ResourceAggregateMetric aggrState = Utils
-                                .fromJson(aggrObj, ResourceAggregateMetric.class);
-                        String metricKey = StatsUtil.getMetricName(aggrState.documentSelfLink);
-                        lastUpdateMap
-                                .replace(metricKey, aggrState.currentIntervalTimeStampMicrosUtc);
+                    for (Operation operation : ops.values()) {
+                        QueryTask response = operation.getBody(QueryTask.class);
+                        for (Object obj : response.results.documents.values()) {
+                            ResourceAggregateMetric aggregateMetric = Utils
+                                    .fromJson(obj, ResourceAggregateMetric.class);
+                            lastUpdateMap.replace(
+                                    StatsUtil.getMetricName(aggregateMetric.documentSelfLink),
+                                    aggregateMetric.currentIntervalTimeStampMicrosUtc);
+                        }
                     }
                     SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
                     patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
                     patchBody.taskStage = StatsAggregationStage.INIT_RESOURCE_QUERY;
                     patchBody.lastRollupTimeForMetric = lastUpdateMap;
                     sendSelfPatch(patchBody);
-                }));
+                })
+                .sendWith(this);
     }
 
     /**
@@ -373,7 +388,7 @@ public class SingleResourceStatsAggregationTaskService extends
     // and their last rollup time
     private static class RollupMetricHolder {
         String rollupKey;
-        Long beginTimestamp;
+        Long beginTimestampMicros;
     }
 
     private void getRawMetrics(SingleResourceStatsAggregationTaskState currentState,
@@ -382,16 +397,16 @@ public class SingleResourceStatsAggregationTaskService extends
         for (String resourceLink : resourceQueryTask.results.documentLinks) {
             for (Entry<String, Long> metricEntry : currentState.lastRollupTimeForMetric
                     .entrySet()) {
-                String resourceRawMetricKey = buildRawMetricKey(resourceLink, metricEntry.getKey());
                 Query.Builder builder = Query.Builder.create(Occurance.SHOULD_OCCUR);
                 builder.addKindFieldClause(ResourceMetric.class);
                 builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
                         UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
-                                resourceRawMetricKey));
+                                buildRawMetricKey(resourceLink, metricEntry.getKey())),
+                        MatchType.PREFIX);
                 if (metricEntry.getValue() != null) {
                     builder.addRangeClause(ResourceMetric.FIELD_NAME_TIMESTAMP,
                             NumericRange.createGreaterThanOrEqualRange(
-                                    computeIntervalBegin((metricEntry.getValue() - 1),
+                                    StatsUtil.computeIntervalBeginMicros(metricEntry.getValue() - 1,
                                             lookupBinSize(metricEntry.getKey()))));
                 }
                 overallQueryBuilder.addClause(builder.build());
@@ -406,16 +421,15 @@ public class SingleResourceStatsAggregationTaskService extends
             RollupMetricHolder metric = new RollupMetricHolder();
             metric.rollupKey = metricEntry.getKey();
             if (metricEntry.getValue() != null) {
-                metric.beginTimestamp = computeIntervalBegin((metricEntry.getValue() - 1),
+                metric.beginTimestampMicros = StatsUtil.computeIntervalBeginMicros(
+                        metricEntry.getValue() - 1,
                         lookupBinSize(metricEntry.getKey()));
             }
             rollupMetricHolder.add(metric);
         }
 
         QueryTask task = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.BROADCAST)
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
                 .setQuery(overallQueryBuilder.build()).build();
         sendRequest(Operation
                 .createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
@@ -427,14 +441,17 @@ public class SingleResourceStatsAggregationTaskService extends
                         return;
                     }
                     Map<String, List<ResourceMetric>> rawMetricsForKey = new HashMap<>();
-                    QueryTask rsp = queryOp.getBody(QueryTask.class);
-                    for (Object aggrObj : rsp.results.documents.values()) {
-                        ResourceMetric rawMetric = Utils.fromJson(aggrObj, ResourceMetric.class);
+                    QueryTask response = queryOp.getBody(QueryTask.class);
+                    for (Object obj : response.results.documents.values()) {
+                        ResourceMetric rawMetric = Utils.fromJson(obj, ResourceMetric.class);
                         for (RollupMetricHolder metric : rollupMetricHolder) {
                             // we want to consider raw metrics with the specified key and the appropriate timestamp
-                            if (rawMetric.documentSelfLink.contains(getRawMetricKey(metric.rollupKey)) && (metric.beginTimestamp == null ||
-                                    rawMetric.timestampMicrosUtc >= metric.beginTimestamp)) {
-                                List<ResourceMetric> rawMetricResultSet = rawMetricsForKey.get(metric.rollupKey);
+                            if (rawMetric.documentSelfLink
+                                    .contains(getRawMetricKey(metric.rollupKey))
+                                    && (metric.beginTimestampMicros == null ||
+                                    rawMetric.timestampMicrosUtc >= metric.beginTimestampMicros)) {
+                                List<ResourceMetric> rawMetricResultSet = rawMetricsForKey
+                                        .get(metric.rollupKey);
                                 if (rawMetricResultSet == null) {
                                     rawMetricResultSet = new ArrayList<>();
                                     rawMetricsForKey.put(metric.rollupKey, rawMetricResultSet);
@@ -490,8 +507,9 @@ public class SingleResourceStatsAggregationTaskService extends
 
             // iterate over the raw metric values and place it in the right time bin
             for (ResourceMetric metric : metrics) {
-                long binId = computeIntervalEnd(metric.timestampMicrosUtc,
-                        lookupBinSize(metricKey));
+                long binId = StatsUtil.computeIntervalEndMicros(
+                                metric.timestampMicrosUtc,
+                                lookupBinSize(metricKey));
                 TimeBin bin = timeBinMap.get(binId);
                 if (bin == null) {
                     bin = new TimeBin();
@@ -535,17 +553,19 @@ public class SingleResourceStatsAggregationTaskService extends
         }
 
         // Metric link to map of latest value per bin. For example:
-        // /monitoring/metrics/<resource-id>-<key1> -> 1474070400000000, <latest-value-of-key1-in-this-time-bucket>
-        // /monitoring/metrics/<resource-id>-<key2> -> 1474070400000000, <latest-value-of-key2-in-this-time-bucket>
+        // /monitoring/metrics/<resource-id>_<key1> -> 1474070400000000, <latest-value-of-key1-in-this-time-bucket>
+        // /monitoring/metrics/<resource-id>_<key2> -> 1474070400000000, <latest-value-of-key2-in-this-time-bucket>
         Map<String, Map<Long, ResourceMetric>> metricsByLatestValuePerInterval = new HashMap<>();
         for (ResourceMetric metric : metrics) {
+            String metricLinkPrefix = StatsUtil.getMetricLinkPrefix(metric.documentSelfLink);
             Map<Long, ResourceMetric> metricsByIntervalEndTime = metricsByLatestValuePerInterval
-                    .get(metric.documentSelfLink);
-            long binId = computeIntervalEnd(metric.timestampMicrosUtc, lookupBinSize(metricKeyWithInterval));
+                    .get(metricLinkPrefix);
+            long binId = StatsUtil.computeIntervalEndMicros(
+                            metric.timestampMicrosUtc, lookupBinSize(metricKeyWithInterval));
             if (metricsByIntervalEndTime == null) {
                 metricsByIntervalEndTime = new HashMap<>();
                 metricsByIntervalEndTime.put(binId, metric);
-                metricsByLatestValuePerInterval.put(metric.documentSelfLink, metricsByIntervalEndTime);
+                metricsByLatestValuePerInterval.put(metricLinkPrefix, metricsByIntervalEndTime);
                 continue;
             }
 
@@ -583,10 +603,9 @@ public class SingleResourceStatsAggregationTaskService extends
             for (Long timeKey : keys) {
                 ResourceAggregateMetric aggrMetric = new ResourceAggregateMetric();
                 aggrMetric.timeBin = aggrValue.get(timeKey);
-                aggrMetric.currentIntervalTimeStampMicrosUtc = TimeUnit.MILLISECONDS
-                        .toMicros(timeKey);
+                aggrMetric.currentIntervalTimeStampMicrosUtc = timeKey;
                 aggrMetric.documentSelfLink = StatsUtil.getMetricKey(currentState.resourceLink,
-                        aggregateEntries.getKey());
+                        aggregateEntries.getKey(), Utils.getNowMicrosUtc());
                 listOfAggrMetrics.add(Operation
                         .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
                         .setBody(aggrMetric));
@@ -617,8 +636,8 @@ public class SingleResourceStatsAggregationTaskService extends
     // build the keys used to represent rolled up data. We currently support hourly and daily rollups
     private List<String> buildRollupKeys(String baseKey) {
         List<String> returnList = new ArrayList<>();
-        returnList.add(new StringBuilder(baseKey).append(StatsConstants.HOUR_SUFFIX).toString());
-        returnList.add(new StringBuilder(baseKey).append(StatsConstants.DAILY_SUFFIX).toString());
+        returnList.add(baseKey + StatsConstants.HOUR_SUFFIX);
+        returnList.add(baseKey + StatsConstants.DAILY_SUFFIX);
         return returnList;
     }
 
@@ -632,20 +651,7 @@ public class SingleResourceStatsAggregationTaskService extends
 
     private String buildRawMetricKey(String resourceId, String rollupMetricKey) {
         String rawKey = getRawMetricKey(rollupMetricKey);
-        return StatsUtil.getMetricKey(resourceId, rawKey);
-    }
-
-    // compute the beginning of the rollup interval
-    private long computeIntervalBegin(long timestampMicros, long bucketDurationMillis) {
-        long timeMillis = TimeUnit.MICROSECONDS.toMillis(timestampMicros);
-        timeMillis -= (timeMillis % bucketDurationMillis);
-        return timeMillis;
-    }
-
-    // compute the end of the rollup interval
-    private long computeIntervalEnd(long timestampMicros, long bucketDurationMillis) {
-        long timeMillis = computeIntervalBegin(timestampMicros, bucketDurationMillis);
-        return (timeMillis + bucketDurationMillis);
+        return StatsUtil.getMetricKeyPrefix(resourceId, rawKey);
     }
 
     // lookup the size of the time bin based on the metric key

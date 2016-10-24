@@ -22,6 +22,8 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -95,6 +97,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
 
     public ResourceEnumerationTaskService() {
         super(ResourceEnumerationTaskState.class);
+        super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -170,13 +173,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
 
     @Override
     public void handlePut(Operation put) {
-        if (put.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_POST_TO_PUT)) {
-            logInfo("Task %s has already started. Ignoring converted PUT.", put.getUri());
-            put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
-            put.complete();
-            return;
-        }
-        put.fail(Operation.STATUS_CODE_BAD_METHOD);
+        PhotonModelUtils.handleIdempotentPut(this, put);
     }
 
     private void sendEnumRequest(Operation start, ResourceEnumerationTaskState state) {

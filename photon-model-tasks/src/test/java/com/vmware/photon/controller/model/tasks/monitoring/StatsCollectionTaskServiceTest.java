@@ -64,6 +64,7 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 
 public class StatsCollectionTaskServiceTest extends BaseModelTest {
     public int numResources = 200;
@@ -158,27 +159,24 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         // persisted at a per metric level along with the last collection run time
         for (String computeLink : computeLinks) {
             String metricSelfLink = UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
-                    StatsUtil.getMetricKey(computeLink, MockStatsAdapter.KEY_1));
+                    StatsUtil.getMetricKeyPrefix(computeLink, MockStatsAdapter.KEY_1));
 
-            ResourceMetric metric = getServiceSynchronously(metricSelfLink,
-                    ResourceMetric.class);
+            ResourceMetric metric = getResourceMetric(metricSelfLink);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_1 +
                     " should not be null ", metric);
 
             String metricSelfLink2 = UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
-                    StatsUtil.getMetricKey(computeLink, MockStatsAdapter.KEY_2));
-            ResourceMetric metric2 = getServiceSynchronously(metricSelfLink2,
-                    ResourceMetric.class);
+                    StatsUtil.getMetricKeyPrefix(computeLink, MockStatsAdapter.KEY_2));
+            ResourceMetric metric2 = getResourceMetric(metricSelfLink2);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_2 +
                     "should not be null ", metric2);
 
-            String lastSuccessfulRunMetricKey = StatsUtil.getMetricKey(MockStatsAdapter.SELF_LINK,
+            String lastSuccessfulRunMetricKey = StatsUtil.getMetricKeyPrefix(MockStatsAdapter.SELF_LINK,
                     PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME);
             String metricLastSuccessfulRunLink = UriUtils
                     .buildUriPath(ResourceMetricService.FACTORY_LINK,
-                            StatsUtil.getMetricKey(computeLink, lastSuccessfulRunMetricKey));
-            ResourceMetric metricLastRun = getServiceSynchronously(metricLastSuccessfulRunLink,
-                    ResourceMetric.class);
+                            StatsUtil.getMetricKeyPrefix(computeLink, lastSuccessfulRunMetricKey));
+            ResourceMetric metricLastRun = getResourceMetric(metricLastSuccessfulRunLink);
             assertNotNull("The resource metric for" + lastSuccessfulRunMetricKey
                     + " should not be null ", metricLastRun);
 
@@ -194,17 +192,17 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
             // get all versions
             QueryTask qt = QueryTask.Builder
                     .createDirectTask()
-                    .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .addOption(QueryOption.SORT)
-                    .orderAscending(ResourceMetric.FIELD_NAME_VERSION, TypeName.LONG)
+                    .orderAscending(ServiceDocument.FIELD_NAME_SELF_LINK, TypeName.STRING)
                     .setQuery(
                             Query.Builder.create().addKindFieldClause(ResourceMetric.class)
                                     .addFieldClause(ResourceMetric.FIELD_NAME_SELF_LINK,
                                             UriUtils.buildUriPath(
                                                     ResourceMetricService.FACTORY_LINK,
-                                                    StatsUtil.getMetricKey(computeLink,
-                                                            MockStatsAdapter.KEY_1)))
+                                                    StatsUtil.getMetricKeyPrefix(computeLink,
+                                                            MockStatsAdapter.KEY_1)),
+                                            MatchType.PREFIX)
                                     .build()).build();
             this.host.createQueryTaskService(qt, false, true, qt, null);
 
@@ -218,7 +216,6 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                     continue;
                 }
 
-                assertTrue(prevMetric.documentVersion < metric.documentVersion);
                 assertTrue(prevMetric.timestampMicrosUtc < metric.timestampMicrosUtc);
             }
         }
@@ -233,6 +230,31 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
             }
             return false;
         });
+    }
+
+    /**
+     * Queries all ResourceMetric documents with the prefix provided.
+     * Sorts the documents by documentSelfLink.
+     * Returns the first document.
+     */
+    private ResourceMetric getResourceMetric(String metricSelfLink) {
+        QueryTask qt = QueryTask.Builder
+                .createDirectTask()
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(1)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.SORT)
+                .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK, TypeName.STRING)
+                .setQuery(Query.Builder.create().addKindFieldClause(ResourceMetric.class)
+                        .addFieldClause(ResourceMetric.FIELD_NAME_SELF_LINK, metricSelfLink,
+                                MatchType.PREFIX)
+                        .build())
+                .build();
+        this.host.createQueryTaskService(qt, false, true, qt, null);
+        String documentLink = qt.results.documentLinks.get(0);
+        ResourceMetric resourceMetric = Utils.fromJson(qt.results.documents.get(documentLink),
+                ResourceMetric.class);
+        return resourceMetric;
     }
 
     @Test
@@ -291,7 +313,6 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 // check if custom stats adapter was invoked and the last collection time metric
                 // was populated in the in memory stats
                 for (ServiceStat stat : resStats.entries.values()) {
-                    //host.log(Level.INFO, "*****%s", stat.name);
                     if (stat.name
                             .startsWith(UriUtils.getLastPathSegment(CustomStatsAdapter.SELF_LINK))
                             && stat.timeSeriesStats.bins.size() > 0) {

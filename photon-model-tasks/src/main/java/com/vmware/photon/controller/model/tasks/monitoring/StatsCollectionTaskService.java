@@ -19,6 +19,7 @@ import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
@@ -148,7 +149,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
 
     @Override
     public void handlePut(Operation put) {
-        MonitoringTaskUtils.handleIdempotentPut(this, put);
+        PhotonModelUtils.handleIdempotentPut(this, put);
     }
 
     private void validateState(StatsCollectionTaskState state) {

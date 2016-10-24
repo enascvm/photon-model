@@ -13,9 +13,11 @@
 
 package com.vmware.photon.controller.model.tasks.monitoring;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,9 +37,9 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAggregationTaskService.SingleResourceStatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
@@ -46,9 +48,11 @@ import com.vmware.xenon.common.ServiceStats.TimeSeriesStats.AggregationType;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.SortOrder;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 
 public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest {
@@ -140,7 +144,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             return (result.documentCount == 4);
         });
 
-        // kick off an another aggregation task, ensure the version number has been updated
+        // kick off an another aggregation task, ensure there are documents
         postServiceSynchronously(SingleResourceStatsAggregationTaskService.FACTORY_LINK,
                 aggregationTaskState,
                 SingleResourceStatsAggregationTaskState.class);
@@ -155,8 +159,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             for (Object aggrDocument : result.documents.values()) {
                 ResourceAggregateMetric aggrMetric = Utils
                         .fromJson(aggrDocument, ResourceAggregateMetric.class);
-                if (aggrMetric.documentVersion == 1 && (aggrMetric.timeBin.count
-                        == NUM_COLLECTIONS)) {
+                if (aggrMetric.timeBin.count == NUM_COLLECTIONS) {
                     continue;
                 }
                 rightVersion = false;
@@ -184,9 +187,8 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                     .addKindFieldClause(ResourceAggregateMetric.class)
                     .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
                             UriUtils.buildUriPath(ResourceAggregateMetricService.FACTORY_LINK,
-                                    UriUtils.getLastPathSegment(rpReturnState.documentSelfLink)
-                                            + "*"),
-                            MatchType.WILDCARD).build();
+                                    UriUtils.getLastPathSegment(rpReturnState.documentSelfLink)),
+                            MatchType.PREFIX).build();
             querySpec.options.add(QueryOption.EXPAND_CONTENT);
             ServiceDocumentQueryResult result = this.host
                     .createAndWaitSimpleDirectQuery(querySpec, 4, 4);
@@ -194,8 +196,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             for (Object aggrDocument : result.documents.values()) {
                 ResourceAggregateMetric aggrMetric = Utils
                         .fromJson(aggrDocument, ResourceAggregateMetric.class);
-                if (aggrMetric.documentVersion == 0 && (aggrMetric.timeBin.count
-                        == NUM_COLLECTIONS * NUM_COMPUTE_RESOURCES)) {
+                if (aggrMetric.timeBin.count == NUM_COLLECTIONS * NUM_COMPUTE_RESOURCES) {
                     continue;
                 }
                 rightVersion = false;
@@ -231,30 +232,49 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                 SingleResourceStatsAggregationTaskState.class);
 
         this.host.waitFor("Error waiting for rolled up stats", () -> {
-            QuerySpecification querySpec = new QuerySpecification();
-            querySpec.query = Query.Builder.create()
-                    .addKindFieldClause(ResourceAggregateMetric.class)
-                    .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                            UriUtils.buildUriPath(ResourceAggregateMetricService.FACTORY_LINK,
-                                    UriUtils.getLastPathSegment(rpReturnState.documentSelfLink)
-                                            + "*"),
-                            MatchType.WILDCARD).build();
-            querySpec.options.add(QueryOption.EXPAND_CONTENT);
-            ServiceDocumentQueryResult result = this.host
-                    .createAndWaitSimpleDirectQuery(querySpec, 4, 4);
+            List<String> metricNames = Arrays.asList(
+                    MockStatsAdapter.KEY_1 + StatsConstants.HOUR_SUFFIX,
+                    MockStatsAdapter.KEY_2 + StatsConstants.HOUR_SUFFIX,
+                    MockStatsAdapter.KEY_1 + StatsConstants.DAILY_SUFFIX,
+                    MockStatsAdapter.KEY_2 + StatsConstants.DAILY_SUFFIX
+            );
+
+            List<Object> results = new ArrayList<>();
+            for (String metricName : metricNames) {
+                QuerySpecification querySpec = new QuerySpecification();
+                querySpec.query = Query.Builder.create()
+                        .addKindFieldClause(ResourceAggregateMetric.class)
+                        .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                                UriUtils.buildUriPath(ResourceAggregateMetricService.FACTORY_LINK,
+                                        StatsUtil.getMetricKeyPrefix(rpReturnState.documentSelfLink,
+                                                metricName)),
+                                MatchType.PREFIX)
+                        .build();
+
+                querySpec.sortOrder = SortOrder.DESC;
+                querySpec.sortTerm = new QueryTask.QueryTerm();
+                querySpec.sortTerm.propertyType = ServiceDocumentDescription.TypeName.STRING;
+                querySpec.sortTerm.propertyName = ServiceDocument.FIELD_NAME_SELF_LINK;
+                querySpec.options.add(QueryOption.EXPAND_CONTENT);
+                querySpec.options.add(QueryOption.SORT);
+                querySpec.options.add(QueryOption.TOP_RESULTS);
+                querySpec.resultLimit = 1;
+
+                ServiceDocumentQueryResult result = this.host
+                        .createAndWaitSimpleDirectQuery(querySpec, 1, 1);
+                results.add(result.documents.get(result.documentLinks.get(0)));
+            }
+
             boolean rightVersion = true;
-            for (Object aggrDocument : result.documents.values()) {
-                // The assertion here checks whether we are aggregating only on latest value. To
-                // that effect, here is the breakdown for the check:
-                // documentVersion = 1: this is the second aggregation that happened. In the
-                // previous assertion the document version was 0.
-                // count = num of resources: one value for each resource
-                // sum = null: not specified in the aggregate type set
+            for (Object aggrDocument : results) {
                 ResourceAggregateMetric aggrMetric = Utils
                         .fromJson(aggrDocument, ResourceAggregateMetric.class);
-                if (aggrMetric.documentVersion == 1
-                        && aggrMetric.timeBin.count == NUM_COMPUTE_RESOURCES
-                        && aggrMetric.timeBin.sum == null) {
+                // The assertion here checks whether we are aggregating only on latest value. To
+                // that effect, here is the breakdown for the check:
+                // count = num of resources: one value for each resource
+                // sum = null: not specified in the aggregate type set
+                if (aggrMetric.timeBin.sum == null
+                        && aggrMetric.timeBin.count == NUM_COMPUTE_RESOURCES) {
                     continue;
                 }
                 rightVersion = false;
@@ -267,10 +287,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             ServiceDocumentQueryResult res =
                     this.host.getFactoryState(UriUtils.buildUri(
                         this.host, SingleResourceStatsAggregationTaskService.FACTORY_LINK));
-            if (res.documentLinks.size() == 0) {
-                return true;
-            }
-            return false;
+            return res.documentLinks.size() == 0;
         });
 
     }

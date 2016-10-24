@@ -373,8 +373,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
     private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat, String computeLink) {
         ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
-        // Set the documentSelfLink to <computeId>-<metricName>
-        stat.documentSelfLink = StatsUtil.getMetricKey(computeLink, metricName);
+        stat.documentSelfLink = StatsUtil.getMetricKey(computeLink, metricName, stat.timestampMicrosUtc);
         stat.value = serviceStat.latestValue;
         stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
         this.host.sendRequest(Operation

@@ -119,7 +119,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         QuerySpecification qs = new QuerySpecification();
         qs.query.addBooleanClause(
                 Query.Builder.create()
-                        .addFieldClause(ComputeState.FIELD_NAME_ID, "ovf-*", MatchType.WILDCARD)
+                        .addFieldClause(ComputeState.FIELD_NAME_ID, "ovf-", MatchType.PREFIX)
                         .build());
         QueryTask qt = QueryTask.create(qs).setDirect(true);
 

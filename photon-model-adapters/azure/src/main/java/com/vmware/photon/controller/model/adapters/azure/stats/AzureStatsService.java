@@ -155,11 +155,11 @@ public class AzureStatsService extends StatelessService {
                 ResourceMetricService.FACTORY_LINK,
                 computeId) + UriUtils.URI_WILDCARD_CHAR;
 
-        QueryTask.Query computeClause = new QueryTask.Query()
-                .setTermMatchType(MatchType.WILDCARD)
-                .setTermPropertyName(ComputeService.ComputeState.FIELD_NAME_SELF_LINK)
+        QueryTask.Query selfLinkClause = new QueryTask.Query()
+                .setTermMatchType(MatchType.PREFIX)
+                .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
                 .setTermMatchValue(selfLinkValue);
-        querySpec.query.addBooleanClause(computeClause);
+        querySpec.query.addBooleanClause(selfLinkClause);
 
         QueryTask task = QueryTask.create(querySpec).setDirect(true);
         task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT);
