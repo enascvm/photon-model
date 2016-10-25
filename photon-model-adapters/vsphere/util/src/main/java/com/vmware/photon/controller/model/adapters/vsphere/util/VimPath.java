@@ -1560,6 +1560,9 @@ public class VimPath {
     /** PropertyType: <code>string</code> */
     public static final String res_configurationEx_defaultHardwareVersionKey = "configurationEx.defaultHardwareVersionKey";
 
+    /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
+    public static final String res_host = "host";
+
     /** PropertyType: <code>DatastoreSummary</code> */
     public static final String ds_summary = "summary";
 

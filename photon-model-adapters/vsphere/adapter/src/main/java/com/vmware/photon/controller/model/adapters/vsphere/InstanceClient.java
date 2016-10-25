@@ -652,7 +652,6 @@ public class InstanceClient extends BaseHelper {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, this.vm)
-                .put(CustomProperties.HOST, overlay.getHost())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
 
         return overlay;

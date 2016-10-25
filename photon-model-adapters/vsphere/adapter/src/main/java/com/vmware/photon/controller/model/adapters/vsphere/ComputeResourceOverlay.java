@@ -13,8 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.Collection;
+import java.util.Collections;
+
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
+import com.vmware.vim25.ArrayOfManagedObjectReference;
+import com.vmware.vim25.ClusterConfigInfoEx;
+import com.vmware.vim25.ClusterDrsConfigInfo;
+import com.vmware.vim25.ComputeResourceConfigInfo;
+import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 
 public class ComputeResourceOverlay extends AbstractOverlay {
@@ -32,6 +40,28 @@ public class ComputeResourceOverlay extends AbstractOverlay {
 
     public String getName() {
         return (String) getOrFail(VimNames.PROPERTY_NAME);
+    }
+
+    public Collection<ManagedObjectReference> getHosts() {
+        ArrayOfManagedObjectReference hosts = (ArrayOfManagedObjectReference) getOrDefault(
+                VimPath.res_host, null);
+        if (hosts != null) {
+            return hosts.getManagedObjectReference();
+        } else {
+            return Collections.emptyList();
+        }
+    }
+
+    public boolean isDrsEnabled() {
+        ComputeResourceConfigInfo cfg = ((ComputeResourceConfigInfo) getOrFail(
+                VimPath.res_configurationEx));
+
+        if (cfg instanceof ClusterConfigInfoEx) {
+            ClusterDrsConfigInfo drsConfig = ((ClusterConfigInfoEx) cfg).getDrsConfig();
+            return drsConfig == null || drsConfig.isEnabled();
+        } else {
+            return false;
+        }
     }
 
     public int getTotalCpuCores() {

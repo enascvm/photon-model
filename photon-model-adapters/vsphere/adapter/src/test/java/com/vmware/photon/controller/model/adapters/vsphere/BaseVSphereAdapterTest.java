@@ -122,7 +122,6 @@ public class BaseVSphereAdapterTest {
 
     protected void assertInternalPropertiesSet(ComputeState vm) {
         CustomProperties props = CustomProperties.of(vm);
-        assertNotNull(props.getMoRef(CustomProperties.HOST));
         assertNotNull(props.getMoRef(CustomProperties.MOREF));
         assertNotNull(props.getString(CustomProperties.TYPE));
     }

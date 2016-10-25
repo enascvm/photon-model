@@ -49,10 +49,6 @@ public class CustomProperties {
      */
     public static final String TYPE = "__computeType";
 
-    /**
-     * MoRef to host a VM is currently running on.
-     */
-    public static final String HOST = "__host";
 
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;

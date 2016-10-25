@@ -18,6 +18,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.GregorianCalendar;
+import java.util.Objects;
 
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
@@ -297,6 +298,19 @@ public final class VimUtils {
             lmf.setLocalizedMessage(e.getMessage());
             return lmf;
         }
+    }
+
+    public static boolean equals(ManagedObjectReference a, ManagedObjectReference b) {
+        if (a == b) {
+            return true;
+        }
+
+        if (a == null || b == null) {
+            return false;
+        }
+
+        return Objects.equals(a.getType(), b.getType()) &&
+                Objects.equals(a.getValue(), b.getValue());
     }
 }
 

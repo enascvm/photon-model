@@ -316,6 +316,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         List<DatastoreOverlay> datastores = new ArrayList<>();
         List<ComputeResourceOverlay> computeResources = new ArrayList<>();
 
+        Set<String> drsHosts = new HashSet<>();
+
         // put results in different buckets by type
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
@@ -336,7 +338,13 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         hosts.add(hs);
                     } else if (VimUtils.isComputeResource(cont.getObj())) {
                         ComputeResourceOverlay cr = new ComputeResourceOverlay(cont);
-                        computeResources.add(cr);
+                        if (cr.isDrsEnabled()) {
+                            // when DRS is enabled add the cluster itself but ignore the hosts
+                            computeResources.add(cr);
+                            drsHosts.addAll(cr.getHosts().stream()
+                                    .map(ManagedObjectReference::getValue)
+                                    .collect(Collectors.toList()));
+                        }
                     } else if (VimUtils.isDatastore(cont.getObj())) {
                         DatastoreOverlay ds = new DatastoreOverlay(cont);
                         datastores.add(ds);
@@ -369,6 +377,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             threadInterrupted(mgr, e);
             return;
         }
+
+        // exclude all hosts that are part of a DRS-enabled cluster
+        hosts.removeIf(hs -> drsHosts.contains(hs.getId().getValue()));
 
         enumerationContext.expectHostSystemCount(hosts.size());
         for (HostSystemOverlay host : hosts) {
@@ -1144,7 +1155,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
-                .put(CustomProperties.HOST, vm.getHost())
                 .put(CustomProperties.TEMPLATE, vm.isTemplate())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
         return state;
