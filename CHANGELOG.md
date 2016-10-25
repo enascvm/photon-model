@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.4.18-SNAPSHOT
+
 ## 0.4.17
 
 * Changing ResourceMetricService and ResourceAggregateMetricService to be IMMUTABLE.
