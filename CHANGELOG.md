@@ -1,8 +1,10 @@
 # CHANGELOG
 
-## 0.4.17-SNAPSHOT
+## 0.4.17
 
- * Rename DiskState.datacenterId to regionId for symmetry with ComputeDescription.
+* Changing ResourceMetricService and ResourceAggregateMetricService to be IMMUTABLE.
+
+* Rename DiskState.datacenterId to regionId for symmetry with ComputeDescription.
 
 * ResourceEnumerationTaskService will pass `TaskOptions.PRESERVE_MISSING_RESOUCES` to adapters, if
  specified. If specified, the adapters `must` not delete local ComputeStates in case remote instance
