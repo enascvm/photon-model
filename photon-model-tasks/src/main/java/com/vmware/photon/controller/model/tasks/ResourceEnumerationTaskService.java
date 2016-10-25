@@ -22,7 +22,6 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -60,6 +59,9 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
      * ResourceEnumerationTaskService instance.
      */
     public static class ResourceEnumerationTaskState extends TaskService.TaskServiceState {
+        public static final String FIELD_NAME_RESOURCE_POOL_LINK = "resourcePoolLink";
+        public static final String FIELD_NAME_PARENT_COMPUTE_LINK = "parentComputeLink";
+
         /**
          * Reference URI to the resource pool.
          */
