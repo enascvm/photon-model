@@ -37,7 +37,6 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
@@ -127,8 +126,8 @@ public class ScheduledTaskServiceTest extends Suite {
             ResourcePoolState inPool = new ResourcePoolState();
             inPool.name = UUID.randomUUID().toString();
             inPool.id = inPool.name;
-            inPool.minCpuCount = 1;
-            inPool.minMemoryBytes = 1024;
+            inPool.minCpuCount = 1L;
+            inPool.minMemoryBytes = 1024L;
             taskState.factoryLink = ResourcePoolService.FACTORY_LINK;
             taskState.initialStateJson = Utils.toJson(inPool);
 
@@ -156,8 +155,8 @@ public class ScheduledTaskServiceTest extends Suite {
             ResourcePoolState inPool = new ResourcePoolState();
             inPool.name = UUID.randomUUID().toString();
             inPool.id = inPool.name;
-            inPool.minCpuCount = 1;
-            inPool.minMemoryBytes = 1024;
+            inPool.minCpuCount = 1L;
+            inPool.minMemoryBytes = 1024L;
 
             ResourcePoolState returnPool = TestUtils.doPost(this.host, inPool, ResourcePoolState.class,
                     UriUtils.buildUri(this.host, ResourcePoolService.FACTORY_LINK));

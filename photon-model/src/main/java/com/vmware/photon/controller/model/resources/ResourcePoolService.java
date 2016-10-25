@@ -75,42 +75,50 @@ public class ResourcePoolService extends StatefulService {
         /**
          * Minimum number of CPU Cores in this resource pool.
          */
-        public long minCpuCount;
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long minCpuCount;
 
         /**
          * Minimum number of GPU Cores in this resource pool.
          */
-        public long minGpuCount;
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long minGpuCount;
 
         /**
          * Minimum amount of memory (in bytes) in this resource pool.
          */
-        public long minMemoryBytes;
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long minMemoryBytes;
 
         /**
          * Minimum disk capacity (in bytes) in this resource pool.
          */
-        public long minDiskCapacityBytes;
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long minDiskCapacityBytes;
 
         /**
          * Maximum number of CPU Cores in this resource pool.
          */
-        public long maxCpuCount;
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long maxCpuCount;
 
         /**
          * Maximum number of GPU Cores in this resource pool.
          */
-        public long maxGpuCount;
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long maxGpuCount;
 
         /**
          * Maximum amount of memory (in bytes) in this resource pool.
          */
-        public long maxMemoryBytes;
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long maxMemoryBytes;
 
         /**
          * Maximum disk capacity (in bytes) in this resource pool.
          */
-        public long maxDiskCapacityBytes;
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Long maxDiskCapacityBytes;
 
         /**
          * Maximum CPU Cost (per minute) in this resource pool.

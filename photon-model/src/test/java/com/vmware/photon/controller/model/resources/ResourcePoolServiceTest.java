@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
@@ -73,14 +74,14 @@ public class ResourcePoolServiceTest extends Suite {
         rp.id = UUID.randomUUID().toString();
         rp.currencyUnit = "US dollar";
         rp.maxCpuCostPerMinute = 10.0;
-        rp.maxCpuCount = 16;
+        rp.maxCpuCount = 16L;
         rp.maxDiskCapacityBytes = 2 ^ 40L;
         rp.maxDiskCostPerMinute = 10.0;
-        rp.maxGpuCount = 16;
+        rp.maxGpuCount = 16L;
         rp.maxMemoryBytes = 2 ^ 36L;
-        rp.minCpuCount = 2;
+        rp.minCpuCount = 2L;
         rp.minDiskCapacityBytes = 2 ^ 40L;
-        rp.minGpuCount = 0;
+        rp.minGpuCount = 0L;
         rp.minMemoryBytes = 2 ^ 34L;
         rp.name = "esx medium resource pool";
         rp.projectName = "GCE-project-123";
@@ -250,7 +251,7 @@ public class ResourcePoolServiceTest extends Suite {
                     ResourcePoolService.ResourcePoolState.class);
 
             // in a put action, passing the query is ok for non-elastic pools (no exception)
-            startState.maxCpuCount = 12;
+            startState.maxCpuCount = 12L;
             putServiceSynchronously(startState.documentSelfLink, startState);
         }
     }
@@ -269,12 +270,10 @@ public class ResourcePoolServiceTest extends Suite {
             patchState.tenantLinks.add("tenant1");
             patchState.groupLinks = new HashSet<String>();
             patchState.groupLinks.add("group1");
-            patchServiceSynchronously(startState.documentSelfLink,
-                    patchState);
-
-            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
+            ResourcePoolService.ResourcePoolState newState = patchServiceSynchronously(
                     startState.documentSelfLink,
-                    ResourcePoolService.ResourcePoolState.class);
+                    patchState, ResourcePoolService.ResourcePoolState.class);
+
             assertThat(newState.name, is(patchState.name));
             assertEquals(newState.tenantLinks, patchState.tenantLinks);
             assertEquals(newState.groupLinks, patchState.groupLinks);
@@ -320,59 +319,11 @@ public class ResourcePoolServiceTest extends Suite {
 
             ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
             patchState.projectName = UUID.randomUUID().toString();
-            patchServiceSynchronously(startState.documentSelfLink,
-                    patchState);
-
-            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
+            ResourcePoolService.ResourcePoolState newState = patchServiceSynchronously(
                     startState.documentSelfLink,
-                    ResourcePoolService.ResourcePoolState.class);
+                    patchState, ResourcePoolService.ResourcePoolState.class);
+
             assertThat(newState.projectName, is(patchState.projectName));
-        }
-
-        @Test
-        public void testPatchResourcePoolDiskCost() throws Throwable {
-            ResourcePoolService.ResourcePoolState startState = createResourcePoolService();
-
-            ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
-            patchState.maxDiskCostPerMinute = 12345.6789;
-            patchServiceSynchronously(startState.documentSelfLink, patchState);
-
-            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
-                    startState.documentSelfLink,
-                    ResourcePoolService.ResourcePoolState.class);
-            assertThat(newState.maxDiskCostPerMinute,
-                    is(patchState.maxDiskCostPerMinute));
-        }
-
-        @Test
-        public void testPatchResourcePoolCpuCost() throws Throwable {
-            ResourcePoolService.ResourcePoolState startState = createResourcePoolService();
-
-            ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
-            patchState.maxCpuCostPerMinute = 12345.6789;
-            patchServiceSynchronously(startState.documentSelfLink,
-                    patchState);
-
-            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
-                    startState.documentSelfLink,
-                    ResourcePoolService.ResourcePoolState.class);
-            assertThat(newState.maxCpuCostPerMinute,
-                    is(patchState.maxCpuCostPerMinute));
-        }
-
-        @Test
-        public void testPatchResourcePoolCpuCount() throws Throwable {
-            ResourcePoolService.ResourcePoolState startState = createResourcePoolService();
-
-            ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
-            patchState.maxCpuCount = 500L;
-            patchServiceSynchronously(startState.documentSelfLink,
-                    patchState);
-
-            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
-                    startState.documentSelfLink,
-                    ResourcePoolService.ResourcePoolState.class);
-            assertThat(newState.maxCpuCount, is(startState.maxCpuCount));
         }
 
         @Test
@@ -382,11 +333,10 @@ public class ResourcePoolServiceTest extends Suite {
             ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
             patchState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
             patchState.query = Query.Builder.create().build();
-            patchServiceSynchronously(startState.documentSelfLink, patchState);
-
-            ResourcePoolService.ResourcePoolState newState = getServiceSynchronously(
+            ResourcePoolService.ResourcePoolState newState = patchServiceSynchronously(
                     startState.documentSelfLink,
-                    ResourcePoolService.ResourcePoolState.class);
+                    patchState, ResourcePoolService.ResourcePoolState.class);
+
             assertThat(newState.properties, is(EnumSet.of(ResourcePoolProperty.ELASTIC)));
             assertNotNull(newState.query);
             assertNull(newState.query.booleanClauses);
@@ -450,6 +400,42 @@ public class ResourcePoolServiceTest extends Suite {
             assertThat(newState.properties, is(EnumSet.noneOf(ResourcePoolProperty.class)));
             assertNotNull(newState.query);
             assertFalse(newState.query.booleanClauses.isEmpty());
+        }
+
+        @Test
+        public void testPatchNumericFields() throws Throwable {
+            // create with null values
+            ResourcePoolService.ResourcePoolState startState = new ResourcePoolService.ResourcePoolState();
+            startState.name = "my-pool";
+            startState = postServiceSynchronously(
+                    ResourcePoolService.FACTORY_LINK, startState,
+                    ResourcePoolService.ResourcePoolState.class);
+
+            // patch with values
+            ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
+            patchState.maxCpuCount = 5L;
+            patchState.maxMemoryBytes = 5L;
+            patchState.maxCpuCostPerMinute = 5d;
+            ResourcePoolService.ResourcePoolState newState = patchServiceSynchronously(
+                    startState.documentSelfLink, patchState,
+                    ResourcePoolService.ResourcePoolState.class);
+
+            assertThat(newState.maxCpuCount, is(5L));
+            assertThat(newState.maxMemoryBytes, is(5L));
+            assertThat(newState.maxCpuCostPerMinute, is(5d));
+            assertThat(newState.minCpuCount, is(nullValue()));
+
+            // patch with new values
+            patchState = new ResourcePoolService.ResourcePoolState();
+            patchState.maxMemoryBytes = 6L;
+            patchState.maxCpuCostPerMinute = 6d;
+            newState = patchServiceSynchronously(startState.documentSelfLink, patchState,
+                    ResourcePoolService.ResourcePoolState.class);
+
+            assertThat(newState.maxCpuCount, is(5L));
+            assertThat(newState.maxMemoryBytes, is(6L));
+            assertThat(newState.maxCpuCostPerMinute, is(6d));
+            assertThat(newState.minCpuCount, is(nullValue()));
         }
 
         private ResourcePoolService.ResourcePoolState createResourcePoolService()

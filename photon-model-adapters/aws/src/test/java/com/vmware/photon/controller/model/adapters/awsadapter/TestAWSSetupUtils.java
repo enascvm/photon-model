@@ -213,8 +213,8 @@ public class TestAWSSetupUtils {
         inPool.name = UUID.randomUUID().toString();
         inPool.id = inPool.name;
 
-        inPool.minCpuCount = 1;
-        inPool.minMemoryBytes = 1024;
+        inPool.minCpuCount = 1L;
+        inPool.minMemoryBytes = 1024L;
 
         ResourcePoolState returnPool = TestUtils.doPost(host, inPool, ResourcePoolState.class,
                 UriUtils.buildUri(host, ResourcePoolService.FACTORY_LINK));

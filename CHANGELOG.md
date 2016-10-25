@@ -2,6 +2,10 @@
 
 ## 0.4.18-SNAPSHOT
 
+* Numeric fields in ResourcePoolState switched from long to Long with
+ PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL enabled so that they can be changed through a
+ PATCH request.
+
 ## 0.4.17
 
 * Changing ResourceMetricService and ResourceAggregateMetricService to be IMMUTABLE.
