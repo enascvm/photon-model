@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
-import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -46,6 +45,7 @@ import com.vmware.photon.controller.model.tasks.SnapshotTaskService.SnapshotTask
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
 
@@ -64,6 +64,8 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost(this.computeHostDescription);
         this.network = createNetwork(networkId);
+
+        enumerateComputes(this.computeHost);
 
         ComputeDescription vmDescription = createVmDescription();
         ComputeState vm = createVmState(vmDescription);
@@ -129,7 +131,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         state.computeLink = vm.documentSelfLink;
         state.description = "description: " + state.name;
 
-        return doPost(this.host, state,
+        return TestUtils.doPost(this.host, state,
                 SnapshotState.class,
                 UriUtils.buildUri(this.host, SnapshotService.FACTORY_LINK));
 
@@ -160,14 +162,24 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         computeState.networkInterfaceLinks
                 .add(createNic("nic for " + this.networkId, this.network.documentSelfLink));
 
-        CustomProperties.of(computeState)
-                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
+        // find a random compute that has a resource pool
+        String placementLink = "/mock/link";
+        if (!isMock()) {
+            Query q = createQueryForResourcePoolOwner();
+            placementLink = findFirstMatching(q, ComputeState.class).documentSelfLink;
+        }
 
-        ComputeService.ComputeState returnState = doPost(this.host, computeState,
+        CustomProperties.of(computeState)
+                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
+                .put(ComputeProperties.PLACEMENT_LINK,
+                        placementLink);
+
+        ComputeService.ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeService.ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
     }
+
 
     private DiskState createDisk(String alias, DiskType type, URI sourceImageReference)
             throws Throwable {
@@ -178,7 +190,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         res.id = res.name = "disk-" + alias;
 
         res.sourceImageReference = sourceImageReference;
-        return doPost(this.host, res,
+        return TestUtils.doPost(this.host, res,
                 DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
@@ -188,7 +200,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         nic.name = name;
         nic.networkLink = networkLink;
 
-        nic = doPost(this.host, nic,
+        nic = TestUtils.doPost(this.host, nic,
                 NetworkInterfaceState.class,
                 UriUtils.buildUri(this.host, NetworkInterfaceService.FACTORY_LINK));
 
@@ -207,7 +219,7 @@ public class TestVSphereProvisionTask extends BaseVSphereAdapterTest {
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
 
-        return doPost(this.host, computeDesc,
+        return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }

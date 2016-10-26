@@ -35,7 +35,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
-import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -44,13 +43,10 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayUpdateOperation;
 import com.vmware.vim25.FileAlreadyExists;
-import com.vmware.vim25.InsufficientResourcesFaultFaultMsg;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
-import com.vmware.vim25.InvalidNameFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.KeyValue;
 import com.vmware.vim25.ManagedObjectReference;
@@ -107,6 +103,7 @@ public class InstanceClient extends BaseHelper {
     private final ComputeStateWithDescription parent;
     private final List<DiskState> disks;
     private final List<NetworkInterfaceStateWithNetwork> nics;
+    private final ManagedObjectReference resourcePool;
 
     private final GetMoRef get;
     private final Finder finder;
@@ -115,7 +112,10 @@ public class InstanceClient extends BaseHelper {
 
     public InstanceClient(Connection connection,
             ComputeStateWithDescription resource,
-            ComputeStateWithDescription parent, List<DiskState> disks, List<NetworkInterfaceStateWithNetwork> nics)
+            ComputeStateWithDescription parent,
+            List<DiskState> disks,
+            List<NetworkInterfaceStateWithNetwork> nics,
+            ManagedObjectReference resourcePool)
             throws ClientException, FinderException {
         super(connection);
 
@@ -123,6 +123,7 @@ public class InstanceClient extends BaseHelper {
         this.parent = parent;
         this.disks = disks;
         this.nics = nics;
+        this.resourcePool = resourcePool;
 
         // the regionId is used as a ref to a vSphere datacenter name
         String id = resource.description.regionId;
@@ -173,6 +174,7 @@ public class InstanceClient extends BaseHelper {
         VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
         relocSpec.setDatastore(datastore);
         relocSpec.setFolder(folder);
+        relocSpec.setPool(this.resourcePool);
 
         VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
         cloneSpec.setLocation(relocSpec);
@@ -279,10 +281,9 @@ public class InstanceClient extends BaseHelper {
         }
 
         String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
-        ManagedObjectReference rp = getResourcePoolForVm();
 
         ManagedObjectReference vm = deployer
-                .deployOvf(ovfUri, host, folder, vmName, network, ds, props, config, rp);
+                .deployOvf(ovfUri, host, folder, vmName, network, ds, props, config, this.resourcePool);
 
         // Sometimes ComputeDescriptions created from an OVF can be modified. For such
         // cases one more reconfiguration is needed to set the cpu/mem correctly.
@@ -668,14 +669,13 @@ public class InstanceClient extends BaseHelper {
      */
     private ManagedObjectReference createVm() throws Exception {
         ManagedObjectReference folder = getVmFolder();
-        ManagedObjectReference resourcePool = getResourcePoolForVm();
         ManagedObjectReference datastore = getDatastore();
 
         String datastoreName = this.get.entityProp(datastore, "name");
         VirtualMachineConfigSpec spec = buildVirtualMachineConfigSpec(datastoreName);
 
         populateCloudConfig(spec);
-        ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool, null);
+        ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, this.resourcePool, null);
 
         TaskInfo info = waitTaskEnd(vmTask);
 
@@ -888,35 +888,6 @@ public class InstanceClient extends BaseHelper {
         }
 
         return this.datastore;
-    }
-
-    /**
-     * Creates a resource pool for the VM. The created resource pool is a child of the resource
-     * pool (zoneId) specified in the {@link #state} or {@link #parent}, whichever is defined first.
-     * @return the created resource pool, null if create is false and no resource pool was found
-     * @throws RuntimeFaultFaultMsg
-     * @throws InvalidPropertyFaultMsg
-     * @throws FinderException
-     * @throws InvalidNameFaultMsg
-     * @throws InsufficientResourcesFaultFaultMsg
-     */
-    private ManagedObjectReference getResourcePoolForVm()
-            throws RuntimeFaultFaultMsg, InvalidPropertyFaultMsg, FinderException,
-            InvalidNameFaultMsg, InsufficientResourcesFaultFaultMsg {
-        Element parentResourcePool;
-
-        // if a parent resource pool is not configured used the default one.
-        String parentResourcePath = VimUtils.firstNonNull(this.state.description.zoneId,
-                this.parent.description.zoneId);
-
-        if (parentResourcePath != null) {
-            parentResourcePool = this.finder.resourcePool(parentResourcePath);
-        } else {
-            // missing parent state path: default to the (assumed) single resource pool in the dc
-            parentResourcePool = this.finder.defaultResourcePool();
-        }
-
-        return parentResourcePool.object;
     }
 
     public ManagedObjectReference getVm() {

@@ -98,6 +98,8 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
         snapshotFactoryState("ovf", ComputeDescriptionService.class);
 
+        enumerateComputes(this.computeHost);
+
         String descriptionLink = findFirstOvfDescriptionLink();
 
         ComputeState vm = createVmState(descriptionLink);
@@ -144,8 +146,11 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
         computeState.parentLink = this.computeHost.documentSelfLink;
 
+        Query q = createQueryForResourcePoolOwner();
+
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
+                .put(ComputeProperties.PLACEMENT_LINK, findFirstMatching(q, ComputeState.class).documentSelfLink)
                 .put("ovf.prop:guestinfo.coreos.config.data", COREOS_CONFIG_DATA);
 
         ComputeService.ComputeState returnState = TestUtils.doPost(this.host, computeState,
@@ -195,8 +200,6 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-
-        computeDesc.zoneId = this.zoneId;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,

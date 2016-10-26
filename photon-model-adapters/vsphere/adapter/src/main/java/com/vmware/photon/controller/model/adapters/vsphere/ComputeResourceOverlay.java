@@ -64,6 +64,10 @@ public class ComputeResourceOverlay extends AbstractOverlay {
         }
     }
 
+    public ManagedObjectReference getRootResourcePool() {
+        return (ManagedObjectReference) getOrFail(VimPath.res_resourcePool);
+    }
+
     public int getTotalCpuCores() {
         return (short) getOrFail(VimPath.res_summary_numCpuCores);
     }

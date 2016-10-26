@@ -21,11 +21,13 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -58,6 +60,7 @@ public class ProvisionContext {
     public ComputeStateWithDescription child;
 
     public ManagedObjectReference templateMoRef;
+    public ManagedObjectReference resourcePoolMoRef;
 
     public ServiceDocument task;
     public List<DiskState> disks;
@@ -234,6 +237,47 @@ public class ProvisionContext {
                                     .fromJson(results.selectedDocuments.get(iface.networkLink),
                                             NetworkState.class);
                             ctx.nics.add(iface);
+                        }
+
+                        populateContextThen(service, ctx, onSuccess);
+                    })
+                    .sendWith(service);
+
+            return;
+        }
+
+        if (ctx.resourcePoolMoRef == null
+                && ctx.instanceRequestType == InstanceRequestType.CREATE) {
+            String placementLink = CustomProperties.of(ctx.child)
+                    .getString(ComputeProperties.PLACEMENT_LINK);
+
+            if (placementLink == null) {
+                Exception error = new IllegalStateException(
+                        "A Compute resource must have a " + ComputeProperties.PLACEMENT_LINK
+                                + " custom property");
+                ctx.fail(error);
+                return;
+            }
+
+            Operation.createGet(service, placementLink)
+                    .setCompletion((o, e) -> {
+                        if (e != null) {
+                            ctx.fail(e);
+                            return;
+                        }
+
+                        ComputeState host = o.getBody(ComputeState.class);
+
+                        ctx.resourcePoolMoRef = CustomProperties.of(host)
+                                .getMoRef(CustomProperties.RESOURCE_POOL_MOREF);
+
+                        if (ctx.resourcePoolMoRef == null) {
+                            Exception error = new IllegalStateException(String.format(
+                                    "Compute @ %s does not contain a %s custom property",
+                                    placementLink,
+                                    CustomProperties.RESOURCE_POOL_MOREF));
+                            ctx.fail(error);
+                            return;
                         }
 
                         populateContextThen(service, ctx, onSuccess);

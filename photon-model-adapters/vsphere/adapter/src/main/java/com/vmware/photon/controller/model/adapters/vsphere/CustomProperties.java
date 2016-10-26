@@ -42,13 +42,18 @@ public class CustomProperties {
     /**
      * If true, the ComputeState represents a VM template.
      */
-    public static final String TEMPLATE = "__isTemplate";
+    public static final String TEMPLATE_FLAG = "__isTemplate";
 
     /**
      * Track the compute type as seen from vsphere. Can be vm, cluster or host.
      */
     public static final String TYPE = "__computeType";
 
+    /**
+     * Compute instances that support VM_HOST have a root resource pool
+     * where the children are put when the instance is used a placement target.
+     */
+    public static final String RESOURCE_POOL_MOREF = "__rootResourcePoolMoRef";
 
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;

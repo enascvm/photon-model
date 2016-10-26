@@ -233,16 +233,6 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.vm_summary_guest_hostName
         ));
 
-        PropertySpec hostSpec = new PropertySpec();
-        hostSpec.setType(VimNames.TYPE_HOST);
-        hostSpec.getPathSet().addAll(Arrays.asList(
-                VimPath.host_summary_hardware_memorySize,
-                VimPath.host_summary_hardware_cpuMhz,
-                VimPath.host_summary_hardware_numCpuCores,
-                VimPath.host_summary_hardware_uuid,
-                VimNames.PROPERTY_NAME
-        ));
-
         PropertySpec rpSpec = new PropertySpec();
         rpSpec.setType(VimNames.TYPE_RESOURCE_POOL);
         rpSpec.getPathSet().addAll(Arrays.asList(
@@ -257,6 +247,7 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.res_summary_numCpuCores,
                 VimPath.res_summary_totalCpu,
                 VimPath.res_host,
+                VimPath.res_resourcePool,
                 VimPath.res_configurationEx,
                 VimPath.res_summary_totalMemory,
                 VimNames.PROPERTY_NAME
@@ -285,7 +276,6 @@ public class EnumerationClient extends BaseHelper {
 
         PropertyFilterSpec filterSpec = new PropertyFilterSpec();
         filterSpec.getObjectSet().add(ospec);
-        filterSpec.getPropSet().add(hostSpec);
         filterSpec.getPropSet().add(vmSpec);
         filterSpec.getPropSet().add(rpSpec);
         filterSpec.getPropSet().add(clusterSpec);

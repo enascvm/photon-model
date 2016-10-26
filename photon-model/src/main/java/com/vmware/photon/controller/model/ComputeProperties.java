@@ -31,11 +31,6 @@ public class ComputeProperties {
     public static final String RESOURCE_GROUP_NAME = "resourceGroupName";
 
     /**
-     *
-     */
-    public static final String ON_PREMISE_DATACENTER = "datacenterId";
-
-    /**
      * Custom property to hold the link to the endpoint.
      */
     public static final String ENDPOINT_LINK_PROP_NAME = "__endpointLink";
@@ -45,6 +40,11 @@ public class ComputeProperties {
      * See {@link OSType} for a list of possible values.
      */
     public static final String CUSTOM_OS_TYPE = "osType";
+
+    /**
+     * A link to a compute resource where to deploy this compute.
+     */
+    public static final String PLACEMENT_LINK = "__placementLink";
 
     public enum OSType {
         WINDOWS, LINUX;

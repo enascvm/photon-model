@@ -885,6 +885,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, cr.getId())
+                .put(CustomProperties.RESOURCE_POOL_MOREF, cr.getRootResourcePool())
                 .put(CustomProperties.TYPE, cr.getId().getType());
         return state;
     }
@@ -1155,7 +1156,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
-                .put(CustomProperties.TEMPLATE, vm.isTemplate())
+                .put(CustomProperties.TEMPLATE_FLAG, vm.isTemplate())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
         return state;
     }

@@ -20,6 +20,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
@@ -27,6 +28,7 @@ import org.junit.After;
 import org.junit.Before;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -41,8 +43,11 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
@@ -55,7 +60,13 @@ import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.ExampleService;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Builder;
+import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 public class BaseVSphereAdapterTest {
@@ -66,7 +77,6 @@ public class BaseVSphereAdapterTest {
     public String vcUsername = System.getProperty(TestProperties.VC_USERNAME);
     public String vcPassword = System.getProperty(TestProperties.VC_PASSWORD);
 
-    public String zoneId = System.getProperty(TestProperties.VC_ZONE_ID);
     public String datacenterId = System.getProperty(TestProperties.VC_DATECENTER_ID);
     public String dataStoreId = System.getProperty(TestProperties.VC_DATASTORE_ID);
     public String networkId = System.getProperty(TestProperties.VC_NETWORK_ID);
@@ -259,7 +269,6 @@ public class BaseVSphereAdapterTest {
         return UriUtils.buildUri(this.vcUrl);
     }
 
-
     protected ComputeDescription createComputeDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
@@ -275,7 +284,6 @@ public class BaseVSphereAdapterTest {
                 .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
 
-        computeDesc.zoneId = this.zoneId;
         computeDesc.regionId = this.datacenterId;
 
         return TestUtils.doPost(this.host, computeDesc,
@@ -283,11 +291,11 @@ public class BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
 
-
     /**
      * Create a compute host representing a vcenter server
      */
-    protected ComputeState createComputeHost(ComputeDescription computeHostDescription) throws Throwable {
+    protected ComputeState createComputeHost(ComputeDescription computeHostDescription)
+            throws Throwable {
         ComputeState computeState = new ComputeState();
         computeState.id = UUID.randomUUID().toString();
         computeState.name = computeHostDescription.name;
@@ -300,5 +308,53 @@ public class BaseVSphereAdapterTest {
                 ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
+    }
+
+    protected void enumerateComputes(ComputeState computeHost) throws Throwable {
+        ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
+        task.adapterManagementReference = computeHost.adapterManagementReference;
+
+        if (isMock()) {
+            task.options = EnumSet.of(TaskOption.IS_MOCK);
+        }
+        task.enumerationAction = EnumerationAction.REFRESH;
+        task.parentComputeLink = computeHost.documentSelfLink;
+        task.resourcePoolLink = this.resourcePool.documentSelfLink;
+
+        ResourceEnumerationTaskState outTask = TestUtils.doPost(this.host,
+                task,
+                ResourceEnumerationTaskState.class,
+                UriUtils.buildUri(this.host,
+                        ResourceEnumerationTaskService.FACTORY_LINK));
+
+        this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
+    }
+
+    protected Query createQueryForResourcePoolOwner() {
+        return Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(QuerySpecification.buildCompositeFieldName(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.RESOURCE_POOL_MOREF),
+                        "*", MatchType.WILDCARD)
+                .build();
+    }
+
+    protected <T extends ServiceDocument> T findFirstMatching(Query q, Class<T> type) {
+        QueryTask qt = Builder.createDirectTask()
+                .setQuery(q)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .build();
+
+        Operation result = this.host.waitForResponse(
+                Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
+                        .setBody(qt));
+
+        qt = result.getBody(QueryTask.class);
+        if (qt.results.documents.isEmpty()) {
+            throw new IllegalStateException(
+                    "Nothing found for " + Utils.toJsonHtml(q) + ". Expected at least one result");
+        }
+
+        // TODO rewrite using QueryResultsProcessor
+        return Utils.fromJson(qt.results.documents.values().iterator().next(), type);
     }
 }

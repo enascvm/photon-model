@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
@@ -70,13 +69,12 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
         // mark task as started
         mgr.patchTask(TaskStage.STARTED);
+        if (request.isMockRequest) {
+            handleMockRequest(mgr, request);
+            return;
+        }
 
         ProvisionContext.populateContextThen(this, createInitialContext(request), ctx -> {
-            if (request.isMockRequest) {
-                handleMockRequest(mgr, request, ctx);
-                return;
-            }
-
             switch (request.requestType) {
             case CREATE:
                 handleCreateInstance(ctx);
@@ -119,7 +117,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(connection, ctx.child,
-                                ctx.parent, ctx.disks, ctx.nics);
+                                ctx.parent, ctx.disks, ctx.nics, ctx.resourcePoolMoRef);
 
                         ComputeState state;
 
@@ -315,7 +313,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(conn, ctx.child, ctx.parent,
-                                ctx.disks, ctx.nics);
+                                ctx.disks, ctx.nics, null);
                         client.deleteInstance();
 
                         Operation finishTask = mgr.createTaskPatch(TaskStage.FINISHED);
@@ -336,15 +334,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 });
     }
 
-    private void handleMockRequest(TaskManager mgr, ComputeInstanceRequest req,
-            ProvisionContext ctx) {
-        // clean up the compute state
-        if (req.requestType == InstanceRequestType.DELETE
-                || req.requestType == InstanceRequestType.DELETE_DOCUMENTS_ONLY) {
-            deleteStatesOnly(mgr, ctx);
-        } else {
-            mgr.patchTask(TaskStage.FINISHED);
-        }
+    private void handleMockRequest(TaskManager mgr, ComputeInstanceRequest req) {
+        mgr.patchTask(TaskStage.FINISHED);
     }
 
     private void deleteStatesOnly(TaskManager mgr, ProvisionContext ctx) {

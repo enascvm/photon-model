@@ -1560,6 +1560,9 @@ public class VimPath {
     /** PropertyType: <code>string</code> */
     public static final String res_configurationEx_defaultHardwareVersionKey = "configurationEx.defaultHardwareVersionKey";
 
+    /** PropertyType: <code>ManagedObjectReference</code> */
+    public static final String res_resourcePool = "resourcePool";
+
     /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
     public static final String res_host = "host";
 

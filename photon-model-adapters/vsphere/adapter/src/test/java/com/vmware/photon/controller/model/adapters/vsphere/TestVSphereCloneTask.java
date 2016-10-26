@@ -174,6 +174,11 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeState.diskLinks = new ArrayList<>(2);
         computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri()).documentSelfLink);
         computeState.diskLinks.add(createDisk("A", DiskType.FLOPPY, null).documentSelfLink);
+        String placementLink = findRandomResourcePoolOwningCompute();
+
+        CustomProperties.of(computeState)
+                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
+                .put(ComputeProperties.PLACEMENT_LINK, placementLink);
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
@@ -182,6 +187,17 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
                 ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
+    }
+
+    private String findRandomResourcePoolOwningCompute() {
+        // find a random compute that has a resource pool
+        String placementLink = "/link/to/nowhere";
+        if (!isMock()) {
+            Query q = createQueryForResourcePoolOwner();
+            placementLink = findFirstMatching(q, ComputeState.class).documentSelfLink;
+        }
+
+        return placementLink;
     }
 
     private ComputeState createCloneVmState(ComputeDescription vmDescription) throws Throwable {
@@ -198,7 +214,8 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeState.parentLink = this.computeHost.documentSelfLink;
 
         CustomProperties.of(computeState)
-                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
+                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
+                .put(ComputeProperties.PLACEMENT_LINK, findRandomResourcePoolOwningCompute());
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

@@ -172,8 +172,10 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeState.diskLinks = new ArrayList<>(1);
         computeState.diskLinks.add(createBootDisk(SIMPLE_USER_DATA).documentSelfLink);
 
+        Query q = createQueryForResourcePoolOwner();
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
+                .put(ComputeProperties.PLACEMENT_LINK, findFirstMatching(q, ComputeState.class).documentSelfLink)
                 .put(CustomProperties.TEMPLATE_LINK, templateComputeLink);
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
@@ -252,7 +254,6 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.enumerationAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
-        computeDesc.zoneId = this.zoneId;
         computeDesc.regionId = this.datacenterId;
 
         return TestUtils.doPost(this.host, computeDesc,
