@@ -213,11 +213,14 @@ public class SingleResourceStatsAggregationTaskService extends
         case CREATED:
             break;
         case STARTED:
+            // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-3111
+            logInfo("Starting single resource stats aggregation for : " + currentState.resourceLink);
             handleStagePatch(currentState);
             break;
         case FINISHED:
         case FAILED:
         case CANCELLED:
+            logInfo("Finished single resource stats aggregation");
             if (TaskState.isFailed(currentState.taskInfo) ||
                     TaskState.isCancelled(currentState.taskInfo)) {
                 if (currentState.failureMessage != null) {

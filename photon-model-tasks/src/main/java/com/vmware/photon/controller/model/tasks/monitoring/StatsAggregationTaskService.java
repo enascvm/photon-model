@@ -126,6 +126,8 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
         switch (currentState.taskInfo.stage) {
         case STARTED:
+            // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-3111
+            logInfo("Starting stats aggregation");
             handleStagePatch(currentState);
             break;
         case FINISHED:
@@ -137,6 +139,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                     logWarning(currentState.failureMessage);
                 }
             }
+            logInfo("Finished stats aggregation");
             sendRequest(Operation
                         .createDelete(getUri()));
             break;
