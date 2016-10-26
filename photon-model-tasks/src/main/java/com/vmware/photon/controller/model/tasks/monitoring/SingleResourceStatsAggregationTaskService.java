@@ -637,7 +637,8 @@ public class SingleResourceStatsAggregationTaskService extends
     private List<String> buildRollupKeys(String baseKey) {
         List<String> returnList = new ArrayList<>();
         returnList.add(baseKey + StatsConstants.HOUR_SUFFIX);
-        returnList.add(baseKey + StatsConstants.DAILY_SUFFIX);
+        // TODO VSYM-3109: Re-enable this once we fix daily rollup performance.
+        // returnList.add(baseKey + StatsConstants.DAILY_SUFFIX);
         return returnList;
     }
 

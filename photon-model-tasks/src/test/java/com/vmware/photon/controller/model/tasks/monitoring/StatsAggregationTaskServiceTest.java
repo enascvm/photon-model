@@ -118,7 +118,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
         this.host.waitFor("Error waiting for stats", () -> {
             ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
                         ResourceAggregateMetricService.FACTORY_LINK));
-            if (aggrRes.documentCount ==  (2 * this.numResources)) {
+            if (aggrRes.documentCount ==  this.numResources) {
                 return true;
             }
             return false;

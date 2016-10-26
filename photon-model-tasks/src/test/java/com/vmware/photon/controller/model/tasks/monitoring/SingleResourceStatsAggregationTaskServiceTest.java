@@ -141,7 +141,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             ServiceDocumentQueryResult result = this.host
                     .getExpandedFactoryState(UriUtils.buildUri(this.host,
                             ResourceAggregateMetricService.FACTORY_LINK));
-            return (result.documentCount == 4);
+            return (result.documentCount == 2);
         });
 
         // kick off an another aggregation task, ensure there are documents
@@ -191,7 +191,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                             MatchType.PREFIX).build();
             querySpec.options.add(QueryOption.EXPAND_CONTENT);
             ServiceDocumentQueryResult result = this.host
-                    .createAndWaitSimpleDirectQuery(querySpec, 4, 4);
+                    .createAndWaitSimpleDirectQuery(querySpec, 2, 2);
             boolean rightVersion = true;
             for (Object aggrDocument : result.documents.values()) {
                 ResourceAggregateMetric aggrMetric = Utils
@@ -234,9 +234,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
         this.host.waitFor("Error waiting for rolled up stats", () -> {
             List<String> metricNames = Arrays.asList(
                     MockStatsAdapter.KEY_1 + StatsConstants.HOUR_SUFFIX,
-                    MockStatsAdapter.KEY_2 + StatsConstants.HOUR_SUFFIX,
-                    MockStatsAdapter.KEY_1 + StatsConstants.DAILY_SUFFIX,
-                    MockStatsAdapter.KEY_2 + StatsConstants.DAILY_SUFFIX
+                    MockStatsAdapter.KEY_2 + StatsConstants.HOUR_SUFFIX
             );
 
             List<Object> results = new ArrayList<>();
