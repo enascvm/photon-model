@@ -18,16 +18,22 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINERS;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_STATE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_STATUS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_CAPACITY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_SERVICE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
+import static com.vmware.photon.controller.model.adapters.azure.enumeration.AzureStorageEnumerationAdapterService.FIELD_COMPUTE_HOST_LINK;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -54,6 +60,8 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
@@ -371,14 +379,35 @@ public class AzureTestUtil {
         return sDesc;
     }
 
-    public static DiskState createDefaultDiskState(VerificationHost host, String storageAccountName,
-            String storageAccountLink, String resourcePoolLink) throws Throwable {
+    public static ResourceGroupState createDefaultResourceGroupState(VerificationHost host,
+            String containerName, String parentLink) throws Throwable {
+        ResourceGroupState rGroupState = new ResourceGroupState();
+        rGroupState.id = "testStorCont-" + randomString(4);
+        rGroupState.name = containerName;
+        rGroupState.groupLinks = new HashSet<>();
+        rGroupState.groupLinks.add("testStorAcct-" + randomString(4));
+        rGroupState.customProperties = new HashMap<>();
+        rGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK, parentLink);
+        rGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
+        rGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED,
+                randomString(10));
+        rGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_STATE,
+                randomString(5));
+        rGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_STATUS,
+                randomString(5));
+        ResourceGroupState rGroup = TestUtils.doPost(host, rGroupState,
+                ResourceGroupState.class, UriUtils.buildUri(host, ResourceGroupService.FACTORY_LINK));
+        return rGroup;
+    }
+
+    public static DiskState createDefaultDiskState(VerificationHost host, String diskName,
+            String storageContainerLink, String resourcePoolLink) throws Throwable {
         // Create a disk state
         DiskState diskState = new DiskState();
         diskState.id = UUID.randomUUID().toString();
-        diskState.name = storageAccountName;
+        diskState.name = diskName;
         diskState.resourcePoolLink = resourcePoolLink;
-        diskState.storageDescriptionLink = storageAccountLink;
+        diskState.storageDescriptionLink = storageContainerLink;
         diskState.type = DEFAULT_DISK_TYPE;
         diskState.capacityMBytes = DEFAULT_DISK_CAPACITY;
         diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);

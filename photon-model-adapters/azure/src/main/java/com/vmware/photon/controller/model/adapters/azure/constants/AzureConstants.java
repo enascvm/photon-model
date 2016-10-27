@@ -36,6 +36,7 @@ public class AzureConstants {
     public static final String STORAGE_NAMESPACE = "Microsoft.Storage";
     public static final String NETWORK_NAMESPACE = "Microsoft.Network";
     public static final String AZURE_STORAGE_ACCOUNTS = STORAGE_NAMESPACE + "/storageAccounts";
+    public static final String AZURE_STORAGE_CONTAINERS = STORAGE_NAMESPACE + "/containers";
     public static final String AZURE_STORAGE_DISKS = STORAGE_NAMESPACE + "/disks";
     public static final String AZURE_STORAGE_BLOBS = STORAGE_NAMESPACE + "/blobs";
 
@@ -81,9 +82,6 @@ public class AzureConstants {
 
     // Request Headers
     public static final String AUTH_HEADER_BEARER_PREFIX = "Bearer ";
-    public static final String AUTH_HEADER_SHARED_KEY_PREFIX = "SharedKey {accountName}:{accountSharedKey}";
-    public static final String X_MS_DATE_HEADER = "x-ms-date";
-    public static final String X_MS_VERSION_HEADER = "x-ms-version";
 
     // Stats Constants
     public static final String QUERY_PARAM_API_VERSION = "api-version";
@@ -115,7 +113,7 @@ public class AzureConstants {
     public static final String DISK_READ_BYTES_PER_SECOND = "\\PhysicalDisk\\ReadBytesPerSecond";
     public static final String DISK_WRITE_BYTES_PER_SECOND = "\\PhysicalDisk\\WriteBytesPerSecond";
 
-    // Storage credentials related contants
+    // Storage credentials related constants
     public static final String STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=http;" +
                     "AccountName=%s;" +
                     "AccountKey=%s;";
@@ -130,18 +128,19 @@ public class AzureConstants {
     public static final String LIST_STORAGE_ACCOUNTS = BASE_URI_FOR_REST
             + "/subscriptions/{subscriptionId}/providers/Microsoft.Storage/storageAccounts";
 
-    //Storage containers REST constants
-    public static final String BLOB_BASE_URI_FOR_REST = "https://{accountName}.blob.core.windows.net/";
-    public static final String LIST_STORAGE_CONTAINERS = BLOB_BASE_URI_FOR_REST + "?comp=list&include=metadata";
-
     public static final String UNIT_COST = "USD";
     public static final String UNIT_BYTES = "Bytes";
     public static final String UNIT_COUNT = "Count";
     public static final String UNIT_PERCENT = "Percent";
 
     // Azure Disk Properties
-    public static final String DEFAULT_DISK_SOURCE_IMAGE = "defaultDiskSourceImage";
     public static final String DEFAULT_DISK_SERVICE_REFERENCE = "defaultDiskServiceReference";
     public static final long DEFAULT_DISK_CAPACITY = 10000L;
     public static final DiskService.DiskType DEFAULT_DISK_TYPE = DiskService.DiskType.HDD;
+
+    // Azure container properties
+    public static final String AZURE_STORAGE_CONTAINER_LEASE_STATE = "state";
+    public static final String AZURE_STORAGE_CONTAINER_LEASE_STATUS = "status";
+    public static final String AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED = "LastModified";
+
 }

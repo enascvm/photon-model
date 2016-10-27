@@ -952,7 +952,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Update disk states
+     * Update disk states with additional custom properties
      */
     private void updateDiskStates(EnumerationContext ctx) {
         Iterator<Entry<String, VirtualMachine>> iterator = ctx.virtualMachines.entrySet()
