@@ -22,6 +22,8 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import java.util.Map;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.StatefulService;
@@ -88,18 +90,16 @@ public class EndpointService extends StatefulService {
 
     @Override
     public void handlePut(Operation put) {
-        try {
-            EndpointState returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
+        put.fail(new UnsupportedOperationException(
+                "PUT operation not supported on the Endpoint Service API."));
+
     }
 
     @Override
     public void handlePatch(Operation patch) {
         EndpointState currentState = getState(patch);
+        EndpointState newState = patch.getBody(EndpointState.class);
+        validateUpdates(currentState, newState);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
                 EndpointState.class, null);
     }
@@ -114,5 +114,24 @@ public class EndpointService extends StatefulService {
             throw new IllegalArgumentException("name is required.");
         }
         return state;
+    }
+
+    private void validateUpdates(EndpointState currentState, EndpointState newState) {
+        if (currentState == null || newState == null) {
+            return;
+        }
+        if (currentState.endpointProperties == null || newState.endpointProperties == null) {
+            return;
+        }
+        if (!currentState.endpointProperties.containsKey(EndpointConfigRequest.REGION_KEY)
+                || !newState.endpointProperties.containsKey(EndpointConfigRequest.REGION_KEY)) {
+            return;
+        } else if (!currentState.endpointProperties.get(EndpointConfigRequest.REGION_KEY)
+                .equalsIgnoreCase(
+                        newState.endpointProperties.get(EndpointConfigRequest.REGION_KEY))) {
+            throw new UnsupportedOperationException(
+                    "Updates to regionId of existing endpoints is not a supported operation");
+        }
+
     }
 }
