@@ -42,6 +42,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -129,14 +130,22 @@ public class AWSEndpointAdapterService extends StatelessService {
             cd.zoneId = r.get(ZONE_KEY).orElse(null);
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
 
-            cd.instanceAdapterReference = UriUtils.buildUri(this.getHost(),
-                    AWSUriPaths.AWS_INSTANCE_ADAPTER);
-            cd.enumerationAdapterReference = UriUtils.buildUri(this.getHost(),
-                    AWSUriPaths.AWS_ENUMERATION_ADAPTER);
-            URI statsAdapterUri = UriUtils.buildUri(this.getHost(),
-                    AWSUriPaths.AWS_STATS_ADAPTER);
-            URI costStatsAdapterUri = UriUtils.buildUri(this.getHost(),
-                    AWSUriPaths.AWS_COST_STATS_ADAPTER);
+            cd.instanceAdapterReference = UriUtils.buildUri(
+                    ServiceHost.LOCAL_HOST,
+                    this.getHost().getPort(),
+                    AWSUriPaths.AWS_INSTANCE_ADAPTER, null);
+            cd.enumerationAdapterReference = UriUtils.buildUri(
+                    ServiceHost.LOCAL_HOST,
+                    this.getHost().getPort(),
+                    AWSUriPaths.AWS_ENUMERATION_ADAPTER, null);
+            URI statsAdapterUri = UriUtils.buildUri(
+                    ServiceHost.LOCAL_HOST,
+                    this.getHost().getPort(),
+                    AWSUriPaths.AWS_STATS_ADAPTER, null);
+            URI costStatsAdapterUri = UriUtils.buildUri(
+                    ServiceHost.LOCAL_HOST,
+                    this.getHost().getPort(),
+                    AWSUriPaths.AWS_COST_STATS_ADAPTER, null);
 
             cd.statsAdapterReferences = new LinkedHashSet<>();
             cd.statsAdapterReferences.add(costStatsAdapterUri);
