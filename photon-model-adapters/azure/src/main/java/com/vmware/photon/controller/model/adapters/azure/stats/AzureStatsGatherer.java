@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 
 import java.io.IOException;
@@ -208,7 +209,8 @@ public class AzureStatsGatherer extends StatelessService {
             statsData.storageDescripton = op.getBody(StorageDescription.class);
             getStorageAccountAuth(statsData);
         };
-        AdapterUtils.getServiceState(this, statsData.bootDisk.storageDescriptionLink, onSuccess,
+        AdapterUtils.getServiceState(this, statsData.computeDesc.customProperties
+                        .get(AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK), onSuccess,
                 ((throwable) -> {
                     if (throwable instanceof ServiceNotFoundException) {
                         logInfo("Skipping stats collection because storage account not found for [%s]",

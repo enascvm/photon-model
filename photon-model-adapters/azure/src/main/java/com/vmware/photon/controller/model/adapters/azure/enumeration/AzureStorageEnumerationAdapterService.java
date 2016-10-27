@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_BLOBS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_DISKS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
@@ -458,7 +459,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
-                        ctx.enumRequest.resourceLink())
+                        ctx.computeHostDesc.documentSelfLink)
                 .build();
 
         QueryTask.Query.Builder instanceIdFilterParentQuery = Query.Builder.create(QueryTask.Query.Occurance.MUST_OCCUR);
@@ -625,9 +626,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageDescription.authCredentialsLink = storageAuthLink;
             storageDescription.resourcePoolLink = ctx.enumRequest.resourcePoolLink;
             storageDescription.documentSelfLink = UUID.randomUUID().toString();
-            storageDescription.computeHostLink = ctx.enumRequest.resourceLink();
+            storageDescription.computeHostLink = ctx.computeHostDesc.documentSelfLink;
             storageDescription.customProperties = new HashMap<>();
             storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
+            storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI,
+                    storageAccount.properties.primaryEndpoints.blob);
             storageDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
             Operation storageDescOp = Operation
@@ -1173,7 +1176,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     // Only page blobs that have the .vhd extension are disks.
     private boolean isDisk(String name) {
-        return name.substring(name.length() - 4) == VHD_EXTENSION;
+        return name.endsWith(VHD_EXTENSION);
     }
 
     // Helper to populate map of connection strings

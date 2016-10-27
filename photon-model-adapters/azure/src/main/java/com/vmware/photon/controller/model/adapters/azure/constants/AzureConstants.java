@@ -25,9 +25,10 @@ public class AzureConstants {
     public static final String AZURE_OSDISK_CACHING = "azureOsDiskCaching";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "azureStorageAccountType";
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "azureStorageAccountName";
-    public static final String AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME = "azureDiagnosticStorageAccountName";
+    public static final String AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK = "azureDiagnosticStorageAccountLink";
     public static final String AZURE_STORAGE_ACCOUNT_KEY1 = "azureStorageAccountKey1";
     public static final String AZURE_STORAGE_ACCOUNT_KEY2 = "azureStorageAccountKey2";
+    public static final String AZURE_STORAGE_ACCOUNT_URI = "storageAccountUri";
     public static final String AZURE_STORAGE_TYPE = "storageType";
 
     // Azure Namespace

@@ -13,21 +13,15 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
 
 /**
  * Enumeration Adapter for Azure. Performs a list call to the Azure API
@@ -44,7 +38,10 @@ public class AzureEnumerationAdapterService extends StatelessService {
     }
 
     public static enum AzureEnumerationStages {
-        TRIGGER_ENUMERATION, FINISHED, ERROR
+        TRIGGER_STORAGE_ENUMERATION,
+        TRIGGER_COMPUTE_ENUMERATION,
+        FINISHED,
+        ERROR
     }
 
     /**
@@ -52,17 +49,13 @@ public class AzureEnumerationAdapterService extends StatelessService {
      */
     public static class EnumerationContext {
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-        public ComputeStateWithDescription parentCompute;
         public AzureEnumerationStages stage;
-        public List<Operation> enumerationOperations;
         public Throwable error;
         public Operation azureAdapterOperation;
 
         public EnumerationContext(ComputeEnumerateResourceRequest request, Operation op) {
             this.computeEnumerationRequest = request;
-            this.stage = AzureEnumerationStages.TRIGGER_ENUMERATION;
-            this.enumerationOperations = new ArrayList<Operation>();
+            this.stage = AzureEnumerationStages.TRIGGER_STORAGE_ENUMERATION;
             this.azureAdapterOperation = op;
         }
     }
@@ -125,8 +118,13 @@ public class AzureEnumerationAdapterService extends StatelessService {
      */
     public void handleEnumerationRequest(EnumerationContext context) {
         switch (context.stage) {
-        case TRIGGER_ENUMERATION:
-            triggerEnumerationAdapters(context, AzureEnumerationStages.FINISHED);
+        case TRIGGER_STORAGE_ENUMERATION:
+            triggerEnumerationAdapter(context, AzureStorageEnumerationAdapterService.SELF_LINK,
+                    AzureEnumerationStages.TRIGGER_COMPUTE_ENUMERATION);
+            break;
+        case TRIGGER_COMPUTE_ENUMERATION:
+            triggerEnumerationAdapter(context, AzureComputeEnumerationAdapterService.SELF_LINK,
+                    AzureEnumerationStages.FINISHED);
             break;
         case FINISHED:
             setOperationDurationStat(context.azureAdapterOperation);
@@ -147,46 +145,36 @@ public class AzureEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Trigger the enumeration adapters
+     * Trigger specified enumeration adapter
      */
-    public void triggerEnumerationAdapters(EnumerationContext context, AzureEnumerationStages next) {
-        Operation patchComputeEnumAdapterService = Operation
-                .createPatch(this, AzureComputeEnumerationAdapterService.SELF_LINK)
-                .setBody(context.computeEnumerationRequest)
-                .setReferer(this.getUri());
-
-        Operation patchStorageEnumAdapterService = Operation
-                .createPatch(this, AzureStorageEnumerationAdapterService.SELF_LINK)
-                .setBody(context.computeEnumerationRequest)
-                .setReferer(this.getUri());
-
-        context.enumerationOperations.add(patchComputeEnumAdapterService);
-        context.enumerationOperations.add(patchStorageEnumAdapterService);
-
-        if (context.enumerationOperations == null || context.enumerationOperations.size() == 0) {
-            logInfo("There are no enumeration tasks to run.");
-            context.stage = next;
-            handleEnumerationRequest(context);
-            return;
-        }
-        OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
-                exc) -> {
-            if (exc != null) {
-                logSevere("Error triggering Azure enumeration adapters. %s", Utils.toString(exc));
+    public void triggerEnumerationAdapter(EnumerationContext context, String adapterSelfLink,
+            AzureEnumerationStages next) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                String error = String.format("Error triggering Azure enumeration adapter %s", adapterSelfLink);
+                logSevere(error);
+                context.error = new IllegalStateException(error);
                 AdapterUtils.sendFailurePatchToEnumerationTask(this,
                         context.computeEnumerationRequest.taskReference,
-                        exc.values().iterator().next());
+                        context.error);
                 return;
             }
-            logInfo("Successfully completed Azure enumeration.");
+
+            logInfo("Successfully completed Azure enumeration adapter %s", adapterSelfLink);
             context.stage = next;
             handleEnumerationRequest(context);
             return;
         };
-        OperationJoin joinOp = OperationJoin.create(context.enumerationOperations);
-        joinOp.setCompletion(joinCompletion);
-        joinOp.sendWith(getHost());
-        logInfo("Triggered Azure enumeration adapters");
+
+        Operation patchEnumAdapterService = Operation
+                .createPatch(this, adapterSelfLink)
+                .setBody(context.computeEnumerationRequest)
+                .setReferer(this.getUri());
+
+        patchEnumAdapterService
+                .setCompletion(completionHandler)
+                .sendWith(getHost());
+        logInfo("Triggered Azure enumeration adapter %s", adapterSelfLink);
     }
 
     /**

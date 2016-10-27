@@ -15,12 +15,10 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_RESOURCE_GROUP_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LINUX_OPERATING_SYSTEM;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VM_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
@@ -49,8 +47,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
@@ -62,9 +58,6 @@ import com.microsoft.azure.management.network.NetworkManagementClient;
 import com.microsoft.azure.management.network.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.models.NetworkInterface;
 import com.microsoft.azure.management.network.models.PublicIPAddress;
-import com.microsoft.azure.management.storage.StorageManagementClient;
-import com.microsoft.azure.management.storage.StorageManagementClientImpl;
-import com.microsoft.azure.management.storage.models.StorageAccountKeys;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
@@ -90,12 +83,9 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
-import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
-import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
-import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -118,7 +108,6 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  */
 public class AzureComputeEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_COMPUTE_ENUMERATION_ADAPTER;
-    private static final Pattern STORAGE_ACCOUNT_NAME_PATTERN = Pattern.compile("https?://([^.]*)");
 
     public AzureComputeEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -136,13 +125,18 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     /**
      * Substages to handle Azure VM data collection.
      */
-    private enum EnumerationSubStages {
+    private enum ComputeEnumerationSubStages {
         LISTVMS,
-        QUERY,
-        UPDATE,
-        CREATE,
+        GET_COMPUTE_STATES,
+        UPDATE_RESOURCES,
+        GET_DISK_STATES,
+        GET_STORAGE_DESCRIPTIONS,
+        CREATE_COMPUTE_DESCRIPTIONS,
+        UPDATE_DISK_STATES,
+        CREATE_NETWORK_INTERFACE_STATES,
+        CREATE_COMPUTE_STATES,
         PATCH_ADDITIONAL_FIELDS,
-        DELETE,
+        DELETE_COMPUTE_STATES,
         FINISHED
     }
 
@@ -176,9 +170,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         String enumNextPageLink;
 
         // Substage specific fields
-        EnumerationSubStages subStage;
+        ComputeEnumerationSubStages subStage;
         Map<String, VirtualMachine> virtualMachines = new ConcurrentHashMap<>();
         Map<String, ComputeState> computeStates = new ConcurrentHashMap<>();
+        Map<String, DiskState> diskStates = new ConcurrentHashMap<>();
+        Map<String, StorageDescription> storageDescriptions = new ConcurrentHashMap<>();
+        Map<String, String> networkInterfaceIds = new ConcurrentHashMap<>();
+        Map<String, String> computeDescriptionIds = new ConcurrentHashMap<>();
         // Compute States for patching additional fields.
         Map<String, ComputeState> computeStatesForPatching = new ConcurrentHashMap<>();
         List<String> vmIds = new ArrayList<>();
@@ -192,7 +190,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         public OkHttpClient httpClient;
 
         // Azure clients
-        StorageManagementClient storageClient;
         NetworkManagementClient networkClient;
         ComputeManagementClient computeClient;
 
@@ -270,7 +267,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 handleEnumerationRequest(ctx);
                 break;
             case REFRESH:
-                ctx.subStage = EnumerationSubStages.LISTVMS;
+                ctx.subStage = ComputeEnumerationSubStages.LISTVMS;
                 handleSubStage(ctx);
                 break;
             case STOP:
@@ -324,22 +321,37 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         switch (ctx.subStage) {
         case LISTVMS:
-            enumerate(ctx);
+            getVmList(ctx);
             break;
-        case QUERY:
-            queryForComputeStates(ctx, ctx.virtualMachines);
+        case GET_COMPUTE_STATES:
+            queryForComputeStates(ctx);
             break;
-        case UPDATE:
-            update(ctx);
+        case UPDATE_RESOURCES:
+            updateResources(ctx);
             break;
-        case CREATE:
-            create(ctx);
+        case GET_DISK_STATES:
+            queryForDiskStates(ctx);
+            break;
+        case GET_STORAGE_DESCRIPTIONS:
+            queryForDiagnosticStorageDescriptions(ctx);
+            break;
+        case CREATE_COMPUTE_DESCRIPTIONS:
+            createComputeDescriptions(ctx);
+            break;
+        case UPDATE_DISK_STATES:
+            updateDiskStates(ctx);
+            break;
+        case CREATE_NETWORK_INTERFACE_STATES:
+            createNetworkInterfaceStates(ctx);
+            break;
+        case CREATE_COMPUTE_STATES:
+            createComputeStates(ctx);
             break;
         case PATCH_ADDITIONAL_FIELDS:
             patchAdditionalFields(ctx);
             break;
-        case DELETE:
-            delete(ctx);
+        case DELETE_COMPUTE_STATES:
+            deleteComputeStates(ctx);
             break;
         case FINISHED:
             ctx.stage = EnumerationStages.FINISHED;
@@ -368,7 +380,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      *
      * The method paginates through list of resources for deletion.
      */
-    private void delete(EnumerationContext ctx) {
+    private void deleteComputeStates(EnumerationContext ctx) {
         CompletionHandler completionHandler = (o, e) -> {
             if (e != null) {
                 handleError(ctx, e);
@@ -378,7 +390,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             if (queryTask.results.nextPageLink == null) {
                 logInfo("No compute states match for deletion");
-                ctx.subStage = EnumerationSubStages.FINISHED;
+                ctx.subStage = ComputeEnumerationSubStages.FINISHED;
                 handleSubStage(ctx);
                 return;
             }
@@ -405,6 +417,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         logFine("Querying compute resources for deletion");
         sendRequest(Operation
                 .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .setConnectionSharing(true)
                 .setBody(q)
                 .setCompletion(completionHandler));
     }
@@ -416,7 +429,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         if (ctx.deletionNextPageLink == null) {
             logInfo("Finished %s of compute states for Azure",
                     ctx.enumRequest.preserveMissing ? "retiring" : "deletion");
-            ctx.subStage = EnumerationSubStages.FINISHED;
+            ctx.subStage = ComputeEnumerationSubStages.FINISHED;
             handleSubStage(ctx);
             return;
         }
@@ -531,7 +544,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     /**
      * Enumerate VMs from Azure.
      */
-    private void enumerate(EnumerationContext ctx) {
+    private void getVmList(EnumerationContext ctx) {
         logInfo("Enumerating VMs from Azure");
         String uriStr = ctx.enumNextPageLink;
         URI uri;
@@ -567,7 +580,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             // If there are no VMs in Azure we directly skip over to deletion phase.
             if (virtualMachines == null || virtualMachines.size() == 0) {
-                ctx.subStage = EnumerationSubStages.DELETE;
+                ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
                 handleSubStage(ctx);
                 return;
             }
@@ -592,7 +605,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             logFine("Processing %d VMs", ctx.vmIds.size());
 
-            ctx.subStage = EnumerationSubStages.QUERY;
+            ctx.subStage = ComputeEnumerationSubStages.GET_COMPUTE_STATES;
             handleSubStage(ctx);
 
         });
@@ -602,7 +615,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     /**
      * Query all compute states for the cluster filtered by the received set of instance Ids.
      */
-    private void queryForComputeStates(EnumerationContext ctx, Map<String, VirtualMachine> vms) {
+    private void queryForComputeStates(EnumerationContext ctx) {
         QueryTask q = new QueryTask();
         q.setDirect(true);
         q.querySpec = new QueryTask.QuerySpecification();
@@ -615,7 +628,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         Query.Builder instanceIdFilterParentQuery = Query.Builder.create(Occurance.MUST_OCCUR);
 
-        for (String instanceId : vms.keySet()) {
+        for (String instanceId : ctx.virtualMachines.keySet()) {
             QueryTask.Query instanceIdFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
                     .addFieldClause(ComputeState.FIELD_NAME_ID, instanceId)
                     .build();
@@ -626,6 +639,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         sendRequest(Operation
                 .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .setConnectionSharing(true)
                 .setBody(q)
                 .setCompletion((o, e) -> {
                     if (e != null) {
@@ -639,7 +653,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
                     // If there are no matches, there is nothing to update.
                     if (queryTask.results.documentCount == 0) {
-                        ctx.subStage = EnumerationSubStages.CREATE;
+                        ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
                         handleSubStage(ctx);
                         return;
                     }
@@ -651,7 +665,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         ctx.computeStates.put(instanceId, computeState);
                     }
 
-                    ctx.subStage = EnumerationSubStages.UPDATE;
+                    ctx.subStage = ComputeEnumerationSubStages.UPDATE_RESOURCES;
                     handleSubStage(ctx);
                 }));
     }
@@ -659,10 +673,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     /**
      * Updates matching compute states for given VMs.
      */
-    private void update(EnumerationContext ctx) {
+    private void updateResources(EnumerationContext ctx) {
         if (ctx.computeStates.size() == 0) {
             logInfo("No compute states available for update");
-            ctx.subStage = EnumerationSubStages.CREATE;
+            ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
             handleSubStage(ctx);
             return;
         }
@@ -688,7 +702,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             if (ctx.computeStates.size() == 0) {
                 logInfo("Finished updating compute states");
-                ctx.subStage = EnumerationSubStages.CREATE;
+                ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
                 handleSubStage(ctx);
             }
 
@@ -700,8 +714,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         rootDisk.customProperties.put(AZURE_OSDISK_CACHING,
                 vm.properties.storageProfile.getOsDisk().getCaching());
         rootDisk.documentSelfLink = computeState.diskLinks.get(0);
-
-        // TODO VSYM-630: Discover storage keys for storage account during Azure enumeration
 
         Operation.createPatch(this, rootDisk.documentSelfLink)
                 .setBody(rootDisk)
@@ -716,7 +728,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
                     if (numOfUpdates.decrementAndGet() == 0) {
                         logInfo("Finished updating compute states");
-                        ctx.subStage = EnumerationSubStages.CREATE;
+                        ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
                         handleSubStage(ctx);
                     }
                 })
@@ -724,18 +736,155 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     /**
+     * Get all disk states related to given VMs
+     */
+    private void queryForDiskStates(EnumerationContext ctx) {
+        if (ctx.virtualMachines.size() == 0) {
+            logInfo("No virtual machines found to be associated with local disks");
+            ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
+            handleSubStage(ctx);
+            return;
+        }
+        Query query = Query.Builder.create()
+                .addKindFieldClause(DiskState.class)
+                .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
+                        ctx.computeHostDesc.documentSelfLink)
+                .build();
+
+        QueryTask.Query.Builder diskUriFilterParentQuery = QueryTask.Query.Builder
+                .create(QueryTask.Query.Occurance.MUST_OCCUR);
+        for (String instanceId : ctx.virtualMachines.keySet()) {
+            String diskId = httpsToHttp(
+                    ctx.virtualMachines.get(instanceId).properties.storageProfile.getOsDisk().getVhd().getUri());
+            QueryTask.Query diskUriFilter = QueryTask.Query.Builder.create(QueryTask.Query.Occurance.SHOULD_OCCUR)
+                    .addFieldClause(DiskState.FIELD_NAME_ID, diskId)
+                    .build();
+
+            diskUriFilterParentQuery.addClause(diskUriFilter);
+        }
+        query.addBooleanClause(diskUriFilterParentQuery.build());
+
+        QueryTask q = QueryTask.Builder.createDirectTask()
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .setQuery(query).build();
+        q.tenantLinks = ctx.computeHostDesc.tenantLinks;
+
+        sendRequest(Operation
+                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .setConnectionSharing(true)
+                .setBody(q)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logWarning("Failed to get disk: %s", e.getMessage());
+                        return;
+                    }
+                    QueryTask queryTask = o.getBody(QueryTask.class);
+
+                    logFine("Found %d matching disk states for Azure blobs",
+                            queryTask.results.documentCount);
+
+                    // If there are no matches, continue with storage descriptions
+                    if (queryTask.results.documentCount == 0) {
+                        ctx.subStage = ComputeEnumerationSubStages.GET_STORAGE_DESCRIPTIONS;
+                        handleSubStage(ctx);
+                        return;
+                    }
+
+                    for (Object d : queryTask.results.documents.values()) {
+                        DiskState diskState = Utils.fromJson(d, DiskState.class);
+                        String diskUri = diskState.id;
+                        ctx.diskStates.put(diskUri, diskState);
+                    }
+
+                    ctx.subStage = ComputeEnumerationSubStages.GET_STORAGE_DESCRIPTIONS;
+                    handleSubStage(ctx);
+                }));
+    }
+
+    /**
+     * Get all storage descriptions responsible for diagnostics of given VMs.
+     */
+    private void queryForDiagnosticStorageDescriptions(EnumerationContext ctx) {
+        Query query = Query.Builder.create()
+                .addKindFieldClause(StorageDescription.class)
+                .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
+                        ctx.computeHostDesc.documentSelfLink)
+                .build();
+
+        QueryTask.Query.Builder storageDescUriFilterParentQuery = QueryTask.Query.Builder
+                .create(QueryTask.Query.Occurance.MUST_OCCUR);
+
+        for (String instanceId : ctx.virtualMachines.keySet()) {
+            if (ctx.virtualMachines.get(instanceId).properties.diagnosticsProfile != null) {
+                String diagnosticStorageAccountUri = ctx.virtualMachines.get(instanceId)
+                        .properties.diagnosticsProfile.getBootDiagnostics().getStorageUri();
+
+                String storageAccountProperty = QueryTask.QuerySpecification
+                        .buildCompositeFieldName(StorageDescription.FIELD_NAME_CUSTOM_PROPERTIES,
+                                AZURE_STORAGE_ACCOUNT_URI);
+
+                QueryTask.Query storageAccountUriFilter = QueryTask.Query.Builder.create(
+                        QueryTask.Query.Occurance.SHOULD_OCCUR)
+                        .addFieldClause(storageAccountProperty, diagnosticStorageAccountUri)
+                        .build();
+
+                storageDescUriFilterParentQuery.addClause(storageAccountUriFilter);
+
+            }
+        }
+        query.addBooleanClause(storageDescUriFilterParentQuery.build());
+
+        QueryTask q = QueryTask.Builder.createDirectTask()
+                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .setQuery(query).build();
+        q.tenantLinks = ctx.computeHostDesc.tenantLinks;
+
+        sendRequest(Operation
+                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .setConnectionSharing(true)
+                .setBody(q)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logWarning("Failed to get storage accounts: %s", e.getMessage());
+                        return;
+                    }
+                    QueryTask queryTask = o.getBody(QueryTask.class);
+
+                    logFine("Found %d matching diagnostics storage accounts",
+                            queryTask.results.documentCount);
+
+                    // If there are no matches, continue to creating compute states
+                    if (queryTask.results.documentCount == 0) {
+                        ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
+                        handleSubStage(ctx);
+                        return;
+                    }
+
+                    for (Object d : queryTask.results.documents.values()) {
+                        StorageDescription storageDesc = Utils.fromJson(d, StorageDescription.class);
+                        String storageDescUri = storageDesc.customProperties.get(AZURE_STORAGE_ACCOUNT_URI);
+                        ctx.storageDescriptions.put(storageDescUri, storageDesc);
+                    }
+
+                    ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
+                    handleSubStage(ctx);
+                }));
+
+    }
+
+    /**
      * Creates relevant resources for given VMs.
      */
-    private void create(EnumerationContext ctx) {
+    private void createComputeDescriptions(EnumerationContext ctx) {
         if (ctx.virtualMachines.size() == 0) {
             if (ctx.enumNextPageLink != null) {
-                ctx.subStage = EnumerationSubStages.LISTVMS;
+                ctx.subStage = ComputeEnumerationSubStages.LISTVMS;
                 handleSubStage(ctx);
                 return;
             }
 
             logInfo("No virtual machine available for creation");
-            ctx.subStage = EnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
+            ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
             handleSubStage(ctx);
             return;
         }
@@ -744,187 +893,51 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         Iterator<Entry<String, VirtualMachine>> iterator = ctx.virtualMachines.entrySet()
                 .iterator();
-        AtomicInteger size = new AtomicInteger(ctx.virtualMachines.size());
 
+        Collection<Operation> opCollection = new ArrayList<>();
         while (iterator.hasNext()) {
             Entry<String, VirtualMachine> vmEntry = iterator.next();
             VirtualMachine virtualMachine = vmEntry.getValue();
-            iterator.remove();
-            createHelper(ctx, virtualMachine, size);
+
+            AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
+            auth.userEmail = virtualMachine.properties.osProfile.getAdminUsername();
+            auth.privateKey = virtualMachine.properties.osProfile.getAdminPassword();
+            auth.documentSelfLink = UUID.randomUUID().toString();
+            auth.tenantLinks = ctx.computeHostDesc.tenantLinks;
+
+            String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
+                    auth.documentSelfLink);
+
+            Operation authOp = Operation
+                    .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
+                    .setBody(auth);
+            opCollection.add(authOp);
+
+            // TODO VSYM-631: Match existing descriptions for new VMs discovered on Azure
+            ComputeDescription computeDescription = new ComputeDescription();
+            computeDescription.id = UUID.randomUUID().toString();
+            computeDescription.name = virtualMachine.name;
+            computeDescription.regionId = virtualMachine.location;
+            computeDescription.authCredentialsLink = authLink;
+            computeDescription.documentSelfLink = computeDescription.id;
+            computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
+            computeDescription.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
+            computeDescription.instanceAdapterReference = ctx.computeHostDesc.instanceAdapterReference;
+            computeDescription.statsAdapterReference = ctx.computeHostDesc.statsAdapterReference;
+            computeDescription.customProperties = new HashMap<>();
+
+            // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1268
+            String resourceGroupName = getResourceGroupName(virtualMachine.id);
+            computeDescription.customProperties.put(AZURE_RESOURCE_GROUP_NAME,
+                    resourceGroupName);
+            computeDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
+
+            Operation compDescOp = Operation
+                    .createPost(getHost(), ComputeDescriptionService.FACTORY_LINK)
+                    .setBody(computeDescription);
+            ctx.computeDescriptionIds.put(virtualMachine.name, computeDescription.id);
+            opCollection.add(compDescOp);
         }
-    }
-
-    private void createHelper(EnumerationContext ctx, VirtualMachine virtualMachine,
-            AtomicInteger size) {
-        Collection<Operation> opCollection = new ArrayList<>();
-        AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
-        auth.userEmail = virtualMachine.properties.osProfile.getAdminUsername();
-        auth.privateKey = virtualMachine.properties.osProfile.getAdminPassword();
-        auth.documentSelfLink = UUID.randomUUID().toString();
-        auth.tenantLinks = ctx.computeHostDesc.tenantLinks;
-
-        String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
-                auth.documentSelfLink);
-
-        Operation authOp = Operation
-                .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
-                .setBody(auth);
-        opCollection.add(authOp);
-
-        // TODO VSYM-631: Match existing descriptions for new VMs discovered on Azure
-        ComputeDescription computeDescription = new ComputeDescription();
-        computeDescription.id = UUID.randomUUID().toString();
-        computeDescription.name = virtualMachine.name;
-        computeDescription.regionId = virtualMachine.location;
-        computeDescription.authCredentialsLink = authLink;
-        computeDescription.documentSelfLink = computeDescription.id;
-        computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
-        computeDescription.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
-        computeDescription.instanceAdapterReference = ctx.computeHostDesc.instanceAdapterReference;
-        computeDescription.statsAdapterReference = ctx.computeHostDesc.statsAdapterReference;
-        computeDescription.customProperties = new HashMap<>();
-
-        String diagnosticStorageAccountName = null;
-        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1452
-        if (virtualMachine.properties.diagnosticsProfile != null) {
-            diagnosticStorageAccountName = getStorageAccountName(virtualMachine.properties.diagnosticsProfile
-                    .getBootDiagnostics().getStorageUri());
-            computeDescription.customProperties.put(AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_NAME,
-                    diagnosticStorageAccountName);
-        }
-        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1268
-        String resourceGroupName = getResourceGroupName(virtualMachine.id);
-        computeDescription.customProperties.put(AZURE_RESOURCE_GROUP_NAME,
-                resourceGroupName);
-        computeDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
-
-        Operation compDescOp = Operation
-                .createPost(getHost(), ComputeDescriptionService.FACTORY_LINK)
-                .setBody(computeDescription);
-        opCollection.add(compDescOp);
-
-        // Create root disk
-        DiskState rootDisk = new DiskState();
-        rootDisk.id = virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri();
-        rootDisk.documentSelfLink = UUID.randomUUID().toString();
-        rootDisk.name = virtualMachine.properties.storageProfile.getOsDisk().getName();
-        rootDisk.computeHostLink = ctx.computeHostDesc.documentSelfLink;
-        ImageReference imageReference = virtualMachine.properties.storageProfile.getImageReference();
-        rootDisk.type = DiskType.HDD;
-        rootDisk.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
-        rootDisk.bootOrder = 1;
-        rootDisk.customProperties = new HashMap<>();
-        rootDisk.customProperties.put(AZURE_OSDISK_CACHING,
-                virtualMachine.properties.storageProfile.getOsDisk().getCaching());
-        rootDisk.customProperties.put(AZURE_STORAGE_ACCOUNT_NAME,
-                getStorageAccountName(
-                        virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri()));
-        rootDisk.tenantLinks = ctx.computeHostDesc.tenantLinks;
-
-        List<String> vmDisks = new ArrayList<>();
-        vmDisks.add(UriUtils.buildUriPath(DiskService.FACTORY_LINK, rootDisk.documentSelfLink));
-
-        String storageAuthLink = UUID.randomUUID().toString();
-        Operation storageOp = null;
-        if (diagnosticStorageAccountName != null && diagnosticStorageAccountName.length() > 0) {
-            logInfo("Diagnostic Storage Account is enabled for VM [%s]", computeDescription.name);
-            getStorageManagementClient(ctx).getStorageAccountsOperations().listKeysAsync(
-                    resourceGroupName, diagnosticStorageAccountName,
-                    new AzureAsyncCallback<StorageAccountKeys>() {
-                        //TODO:
-                        @Override
-                        public void onError(Throwable e) {
-                            logWarning(e.getMessage());
-                        }
-
-                        @Override
-                        public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
-                            StorageAccountKeys keys = result.getBody();
-                            String key1 = keys.getKey1();
-                            String key2 = keys.getKey2();
-
-                            AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
-                            storageAuth.documentSelfLink = storageAuthLink;
-                            storageAuth.customProperties = new HashMap<>();
-                            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, key1);
-                            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, key2);
-                            storageAuth.tenantLinks = ctx.computeHostDesc.tenantLinks;
-
-                            Operation storageAuthOp = Operation
-                                    .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
-                                    .setBody(storageAuth);
-                            sendRequest(storageAuthOp);
-                        }
-                    });
-            StorageDescription storageDescription = new StorageDescription();
-            storageDescription.documentSelfLink = UUID.randomUUID().toString();
-            storageDescription.name = diagnosticStorageAccountName;
-            storageDescription.id = virtualMachine.properties.diagnosticsProfile.getBootDiagnostics().getStorageUri();
-            storageDescription.resourcePoolLink = ctx.enumRequest.resourcePoolLink;
-            storageDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
-            storageDescription.authCredentialsLink = UriUtils.buildUriPath(
-                    AuthCredentialsService.FACTORY_LINK,
-                    storageAuthLink);
-
-            storageOp = Operation
-                    .createPost(getHost(),
-                            StorageDescriptionService.FACTORY_LINK)
-                    .setBody(storageDescription);
-            opCollection.add(storageOp);
-
-            // Set the storage description link only if storage account is present
-            rootDisk.storageDescriptionLink = UriUtils.buildUriPath(
-                    StorageDescriptionService.FACTORY_LINK,
-                    storageDescription.documentSelfLink);
-        }
-
-        Operation diskOp = Operation.createPost(getHost(), DiskService.FACTORY_LINK)
-                .setBody(rootDisk);
-        opCollection.add(diskOp);
-
-        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1473
-        List<String> networkLinks = null;
-        if (virtualMachine.properties.networkProfile != null) {
-            NetworkInterfaceReference networkInterfaceReference = virtualMachine.properties.networkProfile
-                    .getNetworkInterfaces().get(0);
-            NetworkInterfaceState networkState = new NetworkInterfaceState();
-            networkState.documentSelfLink = UUID.randomUUID().toString();
-            networkState.id = networkInterfaceReference.getId();
-            // Setting to the same ID since there is nothing obtained during enumeration other than the ID
-            networkState.networkLink = networkInterfaceReference.getId();
-            networkState.tenantLinks = ctx.computeHostDesc.tenantLinks;
-            Operation networkOp = Operation
-                    .createPost(getHost(), NetworkInterfaceService.FACTORY_LINK)
-                    .setBody(networkState);
-            opCollection.add(networkOp);
-
-            networkLinks = new ArrayList<>();
-            networkLinks.add(UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK,
-                    networkState.documentSelfLink));
-        }
-
-        // Create compute state
-        ComputeState resource = new ComputeState();
-        resource.documentSelfLink = UUID.randomUUID().toString();
-        resource.creationTimeMicros = Utils.getNowMicrosUtc();
-        resource.id = virtualMachine.id.toLowerCase();
-        resource.name = virtualMachine.name;
-        resource.parentLink = ctx.enumRequest.resourceLink();
-        resource.descriptionLink = UriUtils.buildUriPath(
-                ComputeDescriptionService.FACTORY_LINK, computeDescription.id);
-        resource.resourcePoolLink = ctx.enumRequest.resourcePoolLink;
-        resource.diskLinks = vmDisks;
-        resource.customProperties = new HashMap<>();
-        resource.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
-        resource.tenantLinks = ctx.computeHostDesc.tenantLinks;
-        resource.networkInterfaceLinks = networkLinks;
-
-        ctx.computeStatesForPatching.put(resource.id, resource);
-
-        Operation resourceOp = Operation
-                .createPost(getHost(), ComputeService.FACTORY_LINK)
-                .setBody(resource);
-        opCollection.add(resourceOp);
 
         OperationJoin.create(opCollection)
                 .setCompletion((ops, exs) -> {
@@ -932,17 +945,171 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
                     }
 
-                    if (size.decrementAndGet() == 0) {
-                        if (ctx.enumNextPageLink != null) {
-                            ctx.subStage = EnumerationSubStages.LISTVMS;
-                            handleSubStage(ctx);
-                            return;
-                        }
+                    logInfo("Continue on to updating disks");
+                    ctx.subStage = ComputeEnumerationSubStages.UPDATE_DISK_STATES;
+                    handleSubStage(ctx);
+                }).sendWith(this);
+    }
 
-                        logInfo("Finished creating compute states");
-                        ctx.subStage = EnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
-                        handleSubStage(ctx);
+    /**
+     * Update disk states
+     */
+    private void updateDiskStates(EnumerationContext ctx) {
+        Iterator<Entry<String, VirtualMachine>> iterator = ctx.virtualMachines.entrySet()
+                .iterator();
+
+        Collection<Operation> opCollection = new ArrayList<>();
+        while (iterator.hasNext()) {
+            Entry<String, VirtualMachine> vmEntry = iterator.next();
+            VirtualMachine virtualMachine = vmEntry.getValue();
+            String diskUri = httpsToHttp(
+                    virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri());
+
+            DiskState diskToUpdate = ctx.diskStates.get(diskUri);
+            ImageReference imageReference = virtualMachine.properties.storageProfile.getImageReference();
+            diskToUpdate.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
+            diskToUpdate.bootOrder = 1;
+            if (diskToUpdate.customProperties == null) {
+                diskToUpdate.customProperties = new HashMap<>();
+            }
+            diskToUpdate.customProperties.put(AZURE_OSDISK_CACHING,
+                    virtualMachine.properties.storageProfile.getOsDisk().getCaching());
+            Operation diskOp = Operation.createPatch(getHost(), diskToUpdate.documentSelfLink)
+                    .setBody(diskToUpdate);
+            opCollection.add(diskOp);
+        }
+        OperationJoin.create(opCollection)
+                .setCompletion((ops, exs) -> {
+                    if (exs != null) {
+                        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-3256
+                        exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
                     }
+
+                    logInfo("Continue on to create network interface");
+                    ctx.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
+                    handleSubStage(ctx);
+
+                }).sendWith(this);
+    }
+
+    /**
+     * Create network interface states for each VM
+     */
+    private void createNetworkInterfaceStates(EnumerationContext ctx) {
+        Iterator<Entry<String, VirtualMachine>> iterator = ctx.virtualMachines.entrySet()
+                .iterator();
+
+        Collection<Operation> opCollection = new ArrayList<>();
+        while (iterator.hasNext()) {
+            Entry<String, VirtualMachine> vmEntry = iterator.next();
+            VirtualMachine virtualMachine = vmEntry.getValue();
+
+            // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1473
+            if (virtualMachine.properties.networkProfile != null) {
+                NetworkInterfaceReference networkInterfaceReference = virtualMachine.properties.networkProfile
+                        .getNetworkInterfaces().get(0);
+                NetworkInterfaceState networkState = new NetworkInterfaceState();
+                networkState.documentSelfLink = UUID.randomUUID().toString();
+                networkState.id = networkInterfaceReference.getId();
+                // Setting to the same ID since there is nothing obtained during enumeration other than the ID
+                networkState.networkLink = networkInterfaceReference.getId();
+                networkState.tenantLinks = ctx.computeHostDesc.tenantLinks;
+                Operation networkOp = Operation
+                        .createPost(getHost(), NetworkInterfaceService.FACTORY_LINK)
+                        .setBody(networkState);
+                opCollection.add(networkOp);
+
+                ctx.networkInterfaceIds.put(
+                        virtualMachine.properties.networkProfile.getNetworkInterfaces().get(0).getId(),
+                        UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK,
+                                networkState.documentSelfLink));
+            }
+        }
+        OperationJoin.create(opCollection)
+                .setCompletion((ops, exs) -> {
+                    if (exs != null) {
+                        exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                    }
+
+                    logInfo("Continue to create network interface");
+                    ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_STATES;
+                    handleSubStage(ctx);
+
+                }).sendWith(this);
+    }
+
+    /**
+     * Create compute state for each VM
+     */
+    private void createComputeStates(EnumerationContext ctx) {
+        Iterator<Entry<String, VirtualMachine>> iterator = ctx.virtualMachines.entrySet()
+                .iterator();
+
+        Collection<Operation> opCollection = new ArrayList<>();
+        while (iterator.hasNext()) {
+            Entry<String, VirtualMachine> vmEntry = iterator.next();
+            VirtualMachine virtualMachine = vmEntry.getValue();
+            iterator.remove();
+
+            List<String> vmDisks = new ArrayList<>();
+            if (ctx.diskStates != null && ctx.diskStates.size() > 0) {
+                vmDisks.add(ctx.diskStates.get(
+                        httpsToHttp(virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri())).documentSelfLink);
+            }
+
+            List<String> networkLinks = new ArrayList<>();
+            networkLinks.add(ctx.networkInterfaceIds.get(
+                    virtualMachine.properties.networkProfile.getNetworkInterfaces().get(0).getId()));
+
+            // Create compute state
+            ComputeState resource = new ComputeState();
+            resource.documentSelfLink = UUID.randomUUID().toString();
+            resource.creationTimeMicros = Utils.getNowMicrosUtc();
+            resource.id = virtualMachine.id.toLowerCase();
+            resource.name = virtualMachine.name;
+            resource.parentLink = ctx.enumRequest.resourceLink();
+            resource.descriptionLink = UriUtils.buildUriPath(ComputeDescriptionService.FACTORY_LINK,
+                    ctx.computeDescriptionIds.get(virtualMachine.name));
+            resource.resourcePoolLink = ctx.enumRequest.resourcePoolLink;
+            resource.diskLinks = vmDisks;
+            resource.customProperties = new HashMap<>();
+            resource.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
+
+            if (virtualMachine.properties.diagnosticsProfile != null) {
+                String diagnosticsAccountUri = virtualMachine.properties.diagnosticsProfile
+                        .getBootDiagnostics().getStorageUri();
+                StorageDescription storageDesk = ctx.storageDescriptions.get(diagnosticsAccountUri);
+                if (storageDesk != null) {
+                    resource.customProperties.put(AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK,
+                            storageDesk.documentSelfLink);
+                }
+            }
+            resource.tenantLinks = ctx.computeHostDesc.tenantLinks;
+            resource.networkInterfaceLinks = networkLinks;
+
+            ctx.computeStatesForPatching.put(resource.id, resource);
+
+            Operation resourceOp = Operation
+                    .createPost(getHost(), ComputeService.FACTORY_LINK)
+                    .setBody(resource);
+            opCollection.add(resourceOp);
+        }
+
+        OperationJoin.create(opCollection)
+                .setCompletion((ops, exs) -> {
+                    if (exs != null) {
+                        exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                    }
+
+                    if (ctx.enumNextPageLink != null) {
+                        ctx.subStage = ComputeEnumerationSubStages.LISTVMS;
+                        handleSubStage(ctx);
+                        return;
+                    }
+
+                    logInfo("Finished creating compute states");
+                    ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
+                    handleSubStage(ctx);
 
                 }).sendWith(this);
     }
@@ -950,7 +1117,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void patchAdditionalFields(EnumerationContext ctx) {
         if (ctx.computeStatesForPatching.size() == 0) {
             logInfo("No compute states available to patch additional fields");
-            ctx.subStage = EnumerationSubStages.DELETE;
+            ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
             handleSubStage(ctx);
             return;
         }
@@ -1107,7 +1274,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         if (numOfPatches.decrementAndGet() == 0) {
             logInfo("Finished patching compute states");
-            ctx.subStage = EnumerationSubStages.DELETE;
+            ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
             handleSubStage(ctx);
         }
     }
@@ -1155,16 +1322,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         return ctx.computeClient;
     }
 
-    private StorageManagementClient getStorageManagementClient(EnumerationContext ctx) {
-        if (ctx.storageClient == null) {
-            ctx.storageClient = new StorageManagementClientImpl(
-                    AzureConstants.BASE_URI, ctx.credentials, ctx.clientBuilder,
-                    getRetrofitBuilder());
-            ctx.storageClient.setSubscriptionId(ctx.parentAuth.userLink);
-        }
-        return ctx.storageClient;
-    }
-
     private NetworkManagementClient getNetworkManagementClient(EnumerationContext ctx) {
         if (ctx.networkClient == null) {
             ctx.networkClient = new NetworkManagementClientImpl(
@@ -1173,18 +1330,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             ctx.networkClient.setSubscriptionId(ctx.parentAuth.userLink);
         }
         return ctx.networkClient;
-    }
-
-    /**
-     * Extracts storage account name from the given storage URI.
-     */
-    private String getStorageAccountName(String storageUri) {
-        Matcher matcher = STORAGE_ACCOUNT_NAME_PATTERN.matcher(storageUri);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-        logFine("Input storageUri was [%s]", storageUri);
-        return storageUri;
     }
 
     /**
@@ -1205,5 +1350,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         } else {
             return null;
         }
+    }
+
+    /**
+     * Converts https to http.
+     */
+    private String httpsToHttp(String uri) {
+        return (uri.startsWith("https")) ? uri.replace("https", "http") : uri;
     }
 }
