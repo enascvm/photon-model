@@ -20,7 +20,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_BLOBS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_DISKS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_CAPACITY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_SERVICE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_STORAGE_ACCOUNTS;
@@ -57,6 +56,7 @@ import com.microsoft.azure.management.storage.StorageManagementClientImpl;
 import com.microsoft.azure.management.storage.models.StorageAccountKeys;
 import com.microsoft.azure.storage.CloudStorageAccount;
 import com.microsoft.azure.storage.StorageException;
+import com.microsoft.azure.storage.blob.CloudBlob;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.ListBlobItem;
@@ -99,6 +99,7 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 public class AzureStorageEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_STORAGE_ENUMERATION_ADAPTER;
     private static final String VHD_EXTENSION = ".vhd";
+    public static final int B_TO_MB_FACTOR = 1024 * 1024;
 
     private static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT =
             UriPaths.PROPERTY_PREFIX + "AzureStorageEnumerationAdapterService.QUERY_RESULT_LIMIT";
@@ -917,6 +918,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             diskStateToUpdate.storageDescriptionLink = diskState.storageDescriptionLink;
             diskStateToUpdate.computeHostLink = context.computeHostDesc.documentSelfLink;
             diskStateToUpdate.documentSelfLink = diskState.documentSelfLink;
+            long bLength = 0;
+            if (blob instanceof CloudBlob) {
+                CloudBlob blobItem = (CloudBlob) blob;
+                bLength = blobItem.getProperties().getLength();
+            }
+            diskStateToUpdate.capacityMBytes = bLength / B_TO_MB_FACTOR;
             diskStateToUpdate.customProperties = new HashMap<>();
             String diskType = isDisk(diskStateToUpdate.name) ? AZURE_STORAGE_DISKS : AZURE_STORAGE_BLOBS;
             diskStateToUpdate.customProperties.put(AZURE_STORAGE_TYPE, diskType);
@@ -986,13 +993,18 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             return;
         }
         diskState.resourcePoolLink = context.enumRequest.resourcePoolLink;
+        long bLength = 0;
+        if (blob instanceof CloudBlob) {
+            CloudBlob blobItem = (CloudBlob) blob;
+            bLength = blobItem.getProperties().getLength();
+        }
+        diskState.capacityMBytes = bLength / B_TO_MB_FACTOR;
         diskState.documentSelfLink = UUID.randomUUID().toString();
         diskState.customProperties = new HashMap<>();
         String diskType = isDisk(diskState.name) ? AZURE_STORAGE_DISKS : AZURE_STORAGE_BLOBS;
         diskState.customProperties.put(AZURE_STORAGE_TYPE, diskType);
         // following three properties are set to defaults - can't retrieve that information from existing calls
         diskState.type = DEFAULT_DISK_TYPE;
-        diskState.capacityMBytes = DEFAULT_DISK_CAPACITY;
         diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);
         diskState.computeHostLink = context.computeHostDesc.documentSelfLink;
         diskState.tenantLinks = context.computeHostDesc.tenantLinks;
