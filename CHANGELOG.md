@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.4.18-SNAPSHOT
+## 0.4.18
+
+* Bug Fixes - Fixed a regression in AWSAdapters to bind the adapter references to LOCALHOST.
 
 * Numeric fields in ResourcePoolState switched from long to Long with
  PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL enabled so that they can be changed through a
