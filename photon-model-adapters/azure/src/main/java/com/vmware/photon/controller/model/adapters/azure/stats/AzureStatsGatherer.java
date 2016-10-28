@@ -325,7 +325,7 @@ public class AzureStatsGatherer extends StatelessService {
         // Patch back to the Parent with empty response
         SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
         statsData.statsResponse.computeLink = statsData.computeDesc.documentSelfLink;
-        respBody.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
+        respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(statsData.statsRequest.nextStage);
         respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
         respBody.statsList = new ArrayList<>();
         this.sendRequest(Operation.createPatch(statsData.statsRequest.taskReference)
@@ -395,7 +395,7 @@ public class AzureStatsGatherer extends StatelessService {
             if (this.statsData.numResponses.incrementAndGet() == METRIC_NAMES.length) {
                 SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
                 this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;
-                respBody.taskStage = (SingleResourceTaskCollectionStage) this.statsData.statsRequest.nextStage;
+                respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(this.statsData.statsRequest.nextStage);
                 respBody.statsList = new ArrayList<>();
                 respBody.statsList.add(this.statsData.statsResponse);
                 respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);

@@ -75,7 +75,7 @@ public class MockStatsAdapter extends StatelessService {
             cStat.computeLink = statsRequest.resourceReference.getPath();
             statsResponse.statsList = new ArrayList<>();
             statsResponse.statsList.add(cStat);
-            statsResponse.taskStage = (SingleResourceTaskCollectionStage) statsRequest.nextStage;
+            statsResponse.taskStage = SingleResourceTaskCollectionStage.valueOf(statsRequest.nextStage);
             statsResponse.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
             this.sendRequest(Operation.createPatch(statsRequest.taskReference)
                     .setBody(statsResponse));

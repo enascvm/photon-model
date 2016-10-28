@@ -21,7 +21,7 @@ public class ComputeStatsRequest extends ResourceRequest {
     /**
      * The return stage to patch back
      */
-    public Object nextStage;
+    public String nextStage;
 
     /**
      * Time, in microseconds since UNIX epoch, for the last time stats collection succeeded.

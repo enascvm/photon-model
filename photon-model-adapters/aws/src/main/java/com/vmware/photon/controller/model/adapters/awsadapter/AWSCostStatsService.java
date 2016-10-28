@@ -332,7 +332,7 @@ public class AWSCostStatsService extends StatelessService {
 
     private void postAllResourcesCostStats(AWSCostStatsCreationContext statsData) {
         SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
-        respBody.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
+        respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(statsData.statsRequest.nextStage);
         respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
         respBody.statsList = statsData.statsResponse.statsList;
         respBody.computeLink = statsData.computeDesc.documentSelfLink;

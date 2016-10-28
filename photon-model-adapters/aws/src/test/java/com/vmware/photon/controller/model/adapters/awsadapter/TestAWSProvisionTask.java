@@ -60,6 +60,7 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
@@ -364,6 +365,7 @@ public class TestAWSProvisionTask {
         ComputeStatsRequest statsRequest = new ComputeStatsRequest();
         statsRequest.resourceReference = UriUtils.buildUri(this.host, vm.documentSelfLink);
         statsRequest.isMockRequest = this.isMock;
+        statsRequest.nextStage = SingleResourceTaskCollectionStage.UPDATE_STATS.name();
         statsRequest.taskReference = UriUtils.buildUri(this.host, servicePath);
         if (lastCollectionTime != null) {
             statsRequest.lastCollectionTimeMicrosUtc = lastCollectionTime;

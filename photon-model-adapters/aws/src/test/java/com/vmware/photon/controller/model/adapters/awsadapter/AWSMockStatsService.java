@@ -171,7 +171,7 @@ public class AWSMockStatsService extends StatelessService {
         SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
         statsData.statsResponse.computeLink = statsData.computeState.documentSelfLink;
         respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
-        respBody.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
+        respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(statsData.statsRequest.nextStage);
         respBody.statsList = new ArrayList<>();
         respBody.statsList.add(statsData.statsResponse);
 

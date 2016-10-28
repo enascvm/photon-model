@@ -28,7 +28,9 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.Comput
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
@@ -114,6 +116,7 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         ComputeStatsRequest statsRequest = new ComputeStatsRequest();
         statsRequest.resourceReference = UriUtils.buildUri(this.host, vm.documentSelfLink);
         statsRequest.taskReference = UriUtils.buildUri(this.host, servicePath);
+        statsRequest.nextStage = SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage.UPDATE_STATS.name();
         this.host.sendAndWait(Operation.createPatch(UriUtils.buildUri(
                 this.host, MockCostStatsAdapterService.SELF_LINK))
                 .setBody(statsRequest)

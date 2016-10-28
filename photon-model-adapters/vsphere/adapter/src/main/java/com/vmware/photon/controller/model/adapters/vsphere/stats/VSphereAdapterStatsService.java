@@ -134,7 +134,7 @@ public class VSphereAdapterStatsService extends StatelessService {
         SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
         respBody.statsList = new ArrayList<>();
         respBody.statsList.add(cs);
-        respBody.taskStage = (SingleResourceTaskCollectionStage) statsRequest.nextStage;
+        respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(statsRequest.nextStage);
         respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
 
         this.sendRequest(Operation.createPatch(statsRequest.taskReference)

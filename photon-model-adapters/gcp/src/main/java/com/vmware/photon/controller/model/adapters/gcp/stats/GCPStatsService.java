@@ -574,7 +574,7 @@ public class GCPStatsService extends StatelessService {
         if (statsData.numResponses.incrementAndGet() == METRIC_NAMES_UNITS.length) {
             SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
             statsData.statsResponse.computeLink = statsData.computeDesc.documentSelfLink;
-            respBody.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
+            respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(statsData.statsRequest.nextStage);
             respBody.statsList = Collections.singletonList(statsData.statsResponse);
             setOperationDurationStat(statsData.gcpStatsCollectionOperation);
             statsData.gcpStatsCollectionOperation.complete();

@@ -475,7 +475,7 @@ public class AWSStatsService extends StatelessService {
 
                 SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
                 this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;
-                respBody.taskStage = (SingleResourceTaskCollectionStage) this.statsData.statsRequest.nextStage;
+                respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(this.statsData.statsRequest.nextStage);
                 respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
                 respBody.statsList = new ArrayList<>();
                 respBody.statsList.add(this.statsData.statsResponse);

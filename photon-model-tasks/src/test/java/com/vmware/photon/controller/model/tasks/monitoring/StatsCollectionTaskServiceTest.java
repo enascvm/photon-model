@@ -429,7 +429,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 stats.computeLink = request.resourceReference.getPath();
                 response.statsList = new ArrayList<>();
                 response.statsList.add(stats);
-                response.taskStage = (SingleResourceTaskCollectionStage) request.nextStage;
+                response.taskStage = SingleResourceTaskCollectionStage.valueOf(request.nextStage);
                 response.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
                 this.sendRequest(Operation.createPatch(request.taskReference)
                         .setBody(response));

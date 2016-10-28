@@ -270,7 +270,7 @@ public class SingleResourceStatsCollectionTaskService
                             }
 
                             if (statsAdapterReference != null) {
-                                statsRequest.nextStage = SingleResourceTaskCollectionStage.UPDATE_STATS;
+                                statsRequest.nextStage = SingleResourceTaskCollectionStage.UPDATE_STATS.name();
                                 statsRequest.resourceReference = UriUtils
                                         .buildUri(getHost(), computeStateWithDesc.documentSelfLink);
                                 statsRequest.taskReference = getUri();

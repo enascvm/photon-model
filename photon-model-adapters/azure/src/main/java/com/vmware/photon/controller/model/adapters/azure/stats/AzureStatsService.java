@@ -194,7 +194,7 @@ public class AzureStatsService extends StatelessService {
         // No children found. Send an empty response back.
         if (computeCount <= 0) {
             SingleResourceStatsCollectionTaskState response = new SingleResourceStatsCollectionTaskState();
-            response.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
+            response.taskStage = SingleResourceTaskCollectionStage.valueOf(statsData.statsRequest.nextStage);
             response.statsList = new ArrayList<>();
             response.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
             this.sendRequest(
@@ -236,7 +236,7 @@ public class AzureStatsService extends StatelessService {
             // Aggregate all the responses into a single response
             SingleResourceStatsCollectionTaskState response = aggregateComputeStatsResponses(
                     statsData, items);
-            response.taskStage = (SingleResourceTaskCollectionStage) statsData.statsRequest.nextStage;
+            response.taskStage = SingleResourceTaskCollectionStage.valueOf(statsData.statsRequest.nextStage);
             response.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
             this.sendRequest(
                     Operation.createPatch(statsData.statsRequest.taskReference)
