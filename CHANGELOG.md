@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.4.19-SNAPSHOT
+
 ## 0.4.18
 
 * Bug Fixes - Fixed a regression in AWSAdapters to bind the adapter references to LOCALHOST.
