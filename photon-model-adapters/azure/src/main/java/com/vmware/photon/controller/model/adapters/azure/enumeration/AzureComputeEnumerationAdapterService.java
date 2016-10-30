@@ -100,7 +100,6 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -781,14 +780,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         computeDescription.documentSelfLink = computeDescription.id;
         computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
         computeDescription.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
-        computeDescription.instanceAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                AzureUriPaths.AZURE_INSTANCE_ADAPTER, null);
-        computeDescription.statsAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                AzureUriPaths.AZURE_STATS_ADAPTER, null);
+        computeDescription.instanceAdapterReference = ctx.computeHostDesc.instanceAdapterReference;
+        computeDescription.statsAdapterReference = ctx.computeHostDesc.statsAdapterReference;
         computeDescription.customProperties = new HashMap<>();
 
         String diagnosticStorageAccountName = null;

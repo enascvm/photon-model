@@ -29,6 +29,7 @@ import org.junit.Before;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -277,11 +278,16 @@ public class BaseVSphereAdapterTest {
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
-        computeDesc.instanceAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
 
-        computeDesc.enumerationAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.ENUMERATION_SERVICE);
+        computeDesc.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
+                VSphereUriPaths.INSTANCE_SERVICE);
+        computeDesc.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
+                VSphereUriPaths.ENUMERATION_SERVICE);
+        computeDesc.statsAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
+                VSphereUriPaths.STATS_SERVICE);
+        computeDesc.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
+                VSphereUriPaths.POWER_SERVICE);
+
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
 
         computeDesc.regionId = this.datacenterId;

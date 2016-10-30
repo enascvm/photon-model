@@ -39,9 +39,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.ServiceUriPaths;
@@ -68,11 +66,11 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
      */
     public static class AWSComputeDescriptionCreationState {
         public List<Instance> instancesToBeCreated;
-        public String regionId;
         public URI parentTaskLink;
         public String authCredentiaslLink;
         public boolean isMock;
         public List<String> tenantLinks;
+        public ComputeDescription parentDescription;
     }
 
     /**
@@ -202,7 +200,7 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
             AWSComputeDescCreationStage next) {
         QueryTask q = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
                 context.representativeComputeDescriptionSet, context.cdState.tenantLinks,
-                this, context.cdState.parentTaskLink, context.cdState.regionId);
+                this, context.cdState.parentTaskLink, context.cdState.parentDescription.regionId);
 
         // create the query to find an existing compute description
         sendRequest(Operation
@@ -307,18 +305,10 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         String key = cd.computeDescriptionsToBeCreatedList.get(cd.instanceToBeCreatedCounter);
         ComputeDescriptionService.ComputeDescription computeDescription = new ComputeDescriptionService.ComputeDescription();
 
-        computeDescription.instanceAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                AWSUriPaths.AWS_INSTANCE_ADAPTER, null);
-        computeDescription.enumerationAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                AWSUriPaths.AWS_ENUMERATION_ADAPTER, null);
-        computeDescription.statsAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                AWSUriPaths.AWS_STATS_ADAPTER, null);
+        computeDescription.instanceAdapterReference = cd.cdState.parentDescription.instanceAdapterReference;
+        computeDescription.enumerationAdapterReference = cd.cdState.parentDescription.enumerationAdapterReference;
+        computeDescription.statsAdapterReference = cd.cdState.parentDescription.statsAdapterReference;
+        computeDescription.statsAdapterReferences = cd.cdState.parentDescription.statsAdapterReferences;
 
         computeDescription.environmentName = AWSInstanceService.AWS_ENVIRONMENT_NAME;
         // Change this once we make the overarching change to correctly use zoneId and regionId from

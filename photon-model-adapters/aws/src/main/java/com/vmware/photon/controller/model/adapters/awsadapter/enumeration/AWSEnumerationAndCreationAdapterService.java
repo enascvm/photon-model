@@ -553,7 +553,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.parentTaskLink = this.aws.computeEnumerationRequest.taskReference;
             cd.authCredentiaslLink = this.aws.parentAuth.documentSelfLink;
             cd.tenantLinks = this.aws.parentCompute.tenantLinks;
-            cd.regionId = this.aws.parentCompute.description.regionId;
+            cd.parentDescription = this.aws.parentCompute.description;
 
             this.service.sendRequest(Operation
                     .createPatch(this.service,

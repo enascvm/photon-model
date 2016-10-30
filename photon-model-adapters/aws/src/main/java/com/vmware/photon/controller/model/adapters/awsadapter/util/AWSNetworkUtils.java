@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PRIVATE_INTERFACE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PUBLIC_INTERFACE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
@@ -35,13 +33,11 @@ import java.util.UUID;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Vpc;
 
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
@@ -56,28 +52,6 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  * states and NICs etc.
  */
 public class AWSNetworkUtils {
-
-    public static NetworkState mapVPCToNetworkState(Instance instance, String regionId,
-            String resourcePoolLink, String authCredentialsLink, List<String> tenantLinks) {
-        if (instance == null) {
-            throw new IllegalArgumentException("Cannot map VPC to network state for null instance");
-        }
-        NetworkState networkState = new NetworkState();
-        networkState.id = instance.getVpcId();
-        networkState.name = instance.getVpcId();
-        networkState.regionId = regionId;
-        networkState.resourcePoolLink = resourcePoolLink;
-        networkState.authCredentialsLink = authCredentialsLink;
-        networkState.instanceAdapterReference = UriUtils
-                .buildUri(AWSUriPaths.AWS_INSTANCE_ADAPTER);
-        networkState.tenantLinks = tenantLinks;
-        networkState.customProperties = new HashMap<String, String>();
-        networkState.customProperties.put(AWS_VPC_ID,
-                instance.getVpcId());
-        networkState.customProperties.put(AWS_SUBNET_ID,
-                instance.getSubnetId());
-        return networkState;
-    }
 
     public static NetworkState mapVPCToNetworkState(Vpc vpc, String regionId,
             String resourcePoolLink, String authCredentialsLink, List<String> tenantLinks,

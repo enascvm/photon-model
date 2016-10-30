@@ -77,7 +77,6 @@ import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
-import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -730,7 +729,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setBody(state)
                 .sendWith(this);
 
-        ComputeDescription desc = makeDescriptionForCluster(cr);
+        ComputeDescription desc = makeDescriptionForCluster(enumerationContext, cr);
         desc.documentSelfLink = oldDocument.descriptionLink;
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
@@ -738,7 +737,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .sendWith(this);
     }
 
-    private ComputeDescription makeDescriptionForCluster(ComputeResourceOverlay cr) {
+    private ComputeDescription makeDescriptionForCluster(EnumerationContext enumerationContext,
+            ComputeResourceOverlay cr) {
         ComputeDescription res = new ComputeDescription();
         res.name = cr.getName();
         res.documentSelfLink = UriUtils
@@ -750,18 +750,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.totalMemoryBytes = cr.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
 
-        res.instanceAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.INSTANCE_SERVICE, null);
-        res.enumerationAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.ENUMERATION_SERVICE, null);
-        res.statsAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.STATS_SERVICE, null);
+        res.instanceAdapterReference = enumerationContext
+                .getParent().description.instanceAdapterReference;
+        res.enumerationAdapterReference = enumerationContext
+                .getParent().description.enumerationAdapterReference;
+        res.statsAdapterReference = enumerationContext
+                .getParent().description.statsAdapterReference;
 
         return res;
     }
@@ -770,7 +764,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             ComputeResourceOverlay cr, List<String> tenantLinks) {
         ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
 
-        ComputeDescription desc = makeDescriptionForCluster(cr);
+        ComputeDescription desc = makeDescriptionForCluster(enumerationContext, cr);
         desc.tenantLinks = tenantLinks;
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(desc)
@@ -943,7 +937,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion(trackHostSystem(enumerationContext, hs))
                 .sendWith(this);
 
-        ComputeDescription desc = makeDescriptionForHost(request, hs);
+        ComputeDescription desc = makeDescriptionForHost(enumerationContext, hs);
         desc.documentSelfLink = oldDocument.descriptionLink;
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
@@ -954,7 +948,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             HostSystemOverlay hs, List<String> tenantLinks) {
         ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
 
-        ComputeDescription desc = makeDescriptionForHost(request, hs);
+        ComputeDescription desc = makeDescriptionForHost(enumerationContext, hs);
         desc.tenantLinks = tenantLinks;
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(desc)
@@ -977,7 +971,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.tagLinks = retrieveTagLinksAndCreateTagsAsync(endpoint, obj.getId(), tenantLinks);
     }
 
-    private ComputeDescription makeDescriptionForHost(ComputeEnumerateResourceRequest request,
+    private ComputeDescription makeDescriptionForHost(EnumerationContext enumerationContext,
             HostSystemOverlay hs) {
         ComputeDescription res = new ComputeDescription();
         res.name = hs.getName();
@@ -987,18 +981,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.cpuMhzPerCore = hs.getCpuMhz();
         res.totalMemoryBytes = hs.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
-        res.instanceAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.INSTANCE_SERVICE, null);
-        res.enumerationAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.ENUMERATION_SERVICE, null);
-        res.statsAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.STATS_SERVICE, null);
+        res.instanceAdapterReference = enumerationContext
+                .getParent().description.instanceAdapterReference;
+        res.enumerationAdapterReference = enumerationContext
+                .getParent().description.enumerationAdapterReference;
+        res.statsAdapterReference = enumerationContext
+                .getParent().description.statsAdapterReference;
 
         return res;
     }
@@ -1107,22 +1095,14 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.name = vm.getName();
         res.documentSelfLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
-        res.instanceAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.INSTANCE_SERVICE, null);
-        res.enumerationAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.ENUMERATION_SERVICE, null);
-        res.statsAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.STATS_SERVICE, null);
-        res.powerAdapterReference = UriUtils.buildUri(
-                ServiceHost.LOCAL_HOST,
-                this.getHost().getPort(),
-                VSphereUriPaths.POWER_SERVICE, null);
+        res.instanceAdapterReference = enumerationContext
+                .getParent().description.instanceAdapterReference;
+        res.enumerationAdapterReference = enumerationContext
+                .getParent().description.enumerationAdapterReference;
+        res.statsAdapterReference = enumerationContext
+                .getParent().description.statsAdapterReference;
+        res.powerAdapterReference = enumerationContext
+                .getParent().description.powerAdapterReference;
 
         res.regionId = enumerationContext.getRegionId();
 

@@ -14,10 +14,13 @@
 package com.vmware.photon.controller.model.adapters.util;
 
 import java.io.UnsupportedEncodingException;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -34,9 +37,9 @@ public class AdapterUriUtil {
      * "e"] will expand to "localhost/resourceA/d/e" "{123}", etc...
      *
      * @param pathTemplate
-     *        A {@link String} that represents the pathTemplate in form of ".../{a}/{b}/...".
+     *            A {@link String} that represents the pathTemplate in form of ".../{a}/{b}/...".
      * @param pathVariableValues
-     *        The values that will replace the variables from the template.
+     *            The values that will replace the variables from the template.
      * @return The expanded URI.
      */
     public static String expandUriPathTemplate(String pathTemplate, String... pathVariableValues) {
@@ -56,12 +59,16 @@ public class AdapterUriUtil {
         return pathTemplate;
     }
 
+    public static URI buildAdapterUri(ServiceHost host, String path) {
+        return UriUtils.buildUri(ServiceHost.LOCAL_HOST, host.getPort(), path, null);
+    }
+
     /**
      * Determines whether a {@link String} contains URI variable, a character sequence like "{a}",
      * "{123}", etc...
      *
      * @param pathTemplate
-     *        A string to examine.
+     *            A string to examine.
      * @return True if URI contains a variable, false otherwise.
      */
     private static boolean containsPathVariables(String pathTemplate) {

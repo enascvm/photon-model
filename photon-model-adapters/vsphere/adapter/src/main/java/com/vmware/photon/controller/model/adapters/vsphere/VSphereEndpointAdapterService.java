@@ -24,6 +24,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
+import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
@@ -37,7 +38,6 @@ import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
-import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -113,22 +113,14 @@ public class VSphereEndpointAdapterService extends StatelessService {
                 cd.zoneId = r.get(ZONE_KEY).orElse(null);
 
                 cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-                cd.instanceAdapterReference = UriUtils.buildUri(
-                        ServiceHost.LOCAL_HOST,
-                        this.getHost().getPort(),
-                        VSphereUriPaths.INSTANCE_SERVICE, null);
-                cd.enumerationAdapterReference = UriUtils.buildUri(
-                        ServiceHost.LOCAL_HOST,
-                        this.getHost().getPort(),
-                        VSphereUriPaths.ENUMERATION_SERVICE, null);
-                cd.statsAdapterReference = UriUtils.buildUri(
-                        ServiceHost.LOCAL_HOST,
-                        this.getHost().getPort(),
-                        VSphereUriPaths.STATS_SERVICE, null);
-                cd.powerAdapterReference = UriUtils.buildUri(
-                        ServiceHost.LOCAL_HOST,
-                        this.getHost().getPort(),
-                        VSphereUriPaths.POWER_SERVICE, null);
+                cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                        VSphereUriPaths.INSTANCE_SERVICE);
+                cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                        VSphereUriPaths.ENUMERATION_SERVICE);
+                cd.statsAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                        VSphereUriPaths.STATS_SERVICE);
+                cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                        VSphereUriPaths.POWER_SERVICE);
             };
 
             if (id == null || id.isEmpty()) {

@@ -40,13 +40,13 @@ import retrofit2.Retrofit;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
-import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -141,18 +141,12 @@ public class AzureEndpointAdapterService extends StatelessService {
             }
 
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
-            cd.instanceAdapterReference = UriUtils.buildUri(
-                    ServiceHost.LOCAL_HOST,
-                    this.getHost().getPort(),
-                    AzureUriPaths.AZURE_INSTANCE_ADAPTER, null);
-            cd.enumerationAdapterReference = UriUtils.buildUri(
-                    ServiceHost.LOCAL_HOST,
-                    this.getHost().getPort(),
-                    AzureUriPaths.AZURE_ENUMERATION_ADAPTER, null);
-            cd.statsAdapterReference = UriUtils.buildUri(
-                    ServiceHost.LOCAL_HOST,
-                    this.getHost().getPort(),
-                    AzureUriPaths.AZURE_STATS_ADAPTER, null);
+            cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    AzureUriPaths.AZURE_INSTANCE_ADAPTER);
+            cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    AzureUriPaths.AZURE_ENUMERATION_ADAPTER);
+            cd.statsAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    AzureUriPaths.AZURE_STATS_ADAPTER);
         };
     }
 
