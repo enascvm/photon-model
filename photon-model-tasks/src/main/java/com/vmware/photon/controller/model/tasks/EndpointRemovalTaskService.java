@@ -33,6 +33,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
@@ -199,10 +200,9 @@ public class EndpointRemovalTaskService
         Operation crdOp = Operation.createDelete(this, endpoint.authCredentialsLink);
         Operation cdsOp = Operation.createDelete(this, endpoint.computeDescriptionLink);
         Operation csOp = Operation.createDelete(this, endpoint.computeLink);
-        Operation poolOp = Operation.createDelete(this, endpoint.resourcePoolLink);
         Operation epOp = Operation.createDelete(this, endpoint.documentSelfLink);
 
-        OperationJoin.create(crdOp, cdsOp, csOp, poolOp, epOp).setCompletion((ops, exc) -> {
+        OperationJoin.create(crdOp, cdsOp, csOp, epOp).setCompletion((ops, exc) -> {
             if (exc != null) {
                 logFine("Failed delete some of the associated resources, reason %s",
                         Utils.toString(exc));

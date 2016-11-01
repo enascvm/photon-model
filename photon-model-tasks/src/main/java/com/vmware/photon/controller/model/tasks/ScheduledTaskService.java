@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import com.vmware.photon.controller.model.UriPaths;
 
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.services.common.TaskService;
 import com.vmware.xenon.services.common.TaskService.TaskServiceState;
@@ -57,6 +58,9 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
         /**
          * Custom properties associated with the task
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND,
+                PropertyIndexingOption.FIXED_ITEM_NAME })
         public Map<String, String> customProperties;
 
         /**
