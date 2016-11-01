@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model;
 
+import com.vmware.photon.controller.model.monitoring.InMemoryResourceMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -54,6 +55,7 @@ public class PhotonModelServices {
             FirewallService.FACTORY_LINK,
             StorageDescriptionService.FACTORY_LINK,
             ResourceMetricService.FACTORY_LINK,
+            InMemoryResourceMetricService.FACTORY_LINK,
             EndpointService.FACTORY_LINK,
             ResourceAggregateMetricService.FACTORY_LINK,
             TagService.FACTORY_LINK };
@@ -72,6 +74,7 @@ public class PhotonModelServices {
         host.startFactory(new FirewallService());
         host.startFactory(new StorageDescriptionService());
         host.startFactory(new EndpointService());
+        host.startFactory(new InMemoryResourceMetricService());
         host.startFactory(TagService.class, TagFactoryService::new);
         host.startFactory(ResourceMetricService.class, ResourceMetricService::createFactory);
         setFactoryToAvailable(host, ResourceMetricService.FACTORY_LINK);

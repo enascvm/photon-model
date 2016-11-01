@@ -144,8 +144,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 ServiceStats resStats = getServiceSynchronously(statsUriPath, ServiceStats.class);
                 boolean returnStatus = false;
                 for (ServiceStat stat : resStats.entries.values()) {
-                    if (stat.latestValue > 0 &&
-                            stat.timeSeriesStats.bins.size() > 0) {
+                    if (stat.latestValue > 0) {
                         returnStatus = true;
                         break;
                     }
@@ -314,8 +313,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 // was populated in the in memory stats
                 for (ServiceStat stat : resStats.entries.values()) {
                     if (stat.name
-                            .startsWith(UriUtils.getLastPathSegment(CustomStatsAdapter.SELF_LINK))
-                            && stat.timeSeriesStats.bins.size() > 0) {
+                            .startsWith(UriUtils.getLastPathSegment(CustomStatsAdapter.SELF_LINK))) {
                         returnStatus = true;
                         break;
                     }

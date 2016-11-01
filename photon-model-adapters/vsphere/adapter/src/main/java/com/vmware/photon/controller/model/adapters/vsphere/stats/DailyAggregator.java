@@ -63,7 +63,7 @@ public class DailyAggregator implements SamplesAggregator {
             Long value = values.get(i);
 
             converted = convertValue(value);
-            res.timeSeriesStats.add(getSampleTimestampMicros(info), converted);
+            res.timeSeriesStats.add(getSampleTimestampMicros(info), converted, converted);
         }
 
         res.sourceTimeMicrosUtc = res.lastUpdateMicrosUtc = getSampleTimestampMicros(info);

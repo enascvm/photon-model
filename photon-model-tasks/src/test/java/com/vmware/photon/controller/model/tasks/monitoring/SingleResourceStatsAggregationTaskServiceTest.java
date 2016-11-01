@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.junit.Assert;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
@@ -119,8 +120,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                 ServiceStats resStats = getServiceSynchronously(statsUriPath, ServiceStats.class);
                 for (ServiceStat stat : resStats.entries.values()) {
                     if (stat.name
-                            .startsWith(UriUtils.getLastPathSegment(MockStatsAdapter.SELF_LINK))
-                            && stat.timeSeriesStats.bins.size() > 0) {
+                            .startsWith(UriUtils.getLastPathSegment(MockStatsAdapter.SELF_LINK))) {
                         returnStatus = true;
                         break;
                     }
@@ -143,6 +143,18 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                             ResourceAggregateMetricService.FACTORY_LINK));
             return (result.documentCount == 2);
         });
+
+        String statsUriPath = UriUtils.buildUriPath(computeStateArray[0].documentSelfLink,
+                    ServiceHost.SERVICE_URI_SUFFIX_STATS);
+        ServiceStats resStats = getServiceSynchronously(statsUriPath, ServiceStats.class);
+        int statCount = 0;
+        for (ServiceStat stat : resStats.entries.values()) {
+            if (stat.name.startsWith(MockStatsAdapter.KEY_1) ||
+                    stat.name.startsWith(MockStatsAdapter.KEY_2) ) {
+                statCount++;
+            }
+        }
+        Assert.assertEquals("Did not find in-memory stats", 2, statCount);
 
         // kick off an another aggregation task, ensure there are documents
         postServiceSynchronously(SingleResourceStatsAggregationTaskService.FACTORY_LINK,
@@ -213,10 +225,10 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
 
         Map<String, Set<AggregationType>> aggregations = new HashMap<>();
         aggregations.put(MockStatsAdapter.KEY_1, Stream.of(
-                AggregationType.AVG, AggregationType.MAX, AggregationType.MIN)
+                AggregationType.AVG, AggregationType.MAX, AggregationType.SUM)
                 .collect(Collectors.toSet()));
         aggregations.put(MockStatsAdapter.KEY_2, Stream.of(
-                AggregationType.AVG, AggregationType.MAX, AggregationType.MIN)
+                AggregationType.AVG, AggregationType.MAX, AggregationType.SUM)
                 .collect(Collectors.toSet()));
 
         aggregationTaskState.aggregations = aggregations;
@@ -271,7 +283,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                 // that effect, here is the breakdown for the check:
                 // count = num of resources: one value for each resource
                 // sum = null: not specified in the aggregate type set
-                if (aggrMetric.timeBin.sum == null
+                if (aggrMetric.timeBin.min == null
                         && aggrMetric.timeBin.count == NUM_COMPUTE_RESOURCES) {
                     continue;
                 }

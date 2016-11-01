@@ -111,6 +111,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
     @Override
     protected void initializeState(StatsAggregationTaskState state, Operation postOp) {
+        logInfo("Started stats aggregation");
         super.initializeState(state, postOp);
         state.taskStage = StatsAggregationStage.INIT;
     }
@@ -140,7 +141,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                     logWarning(currentState.failureMessage);
                 }
             }
-            logFine("Finished stats aggregation cycle");
+            logInfo("Finished stats aggregation");
             sendRequest(Operation
                         .createDelete(getUri()));
             break;

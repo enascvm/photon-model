@@ -98,6 +98,7 @@ public class AWSStatsService extends StatelessService {
     private static final int COST_COLLECTION_PERIOD_IN_SECONDS = 14400;
     // AWS stores all billing data in us-east-1 zone.
     private static final String COST_ZONE_ID = "us-east-1";
+    private static final int NUM_OF_COST_DATAPOINTS_IN_A_DAY = 6;
 
     private class AWSStatsDataHolder {
         public ComputeStateWithDescription computeDesc;
@@ -354,63 +355,72 @@ public class AWSStatsService extends StatelessService {
         @Override
         public void onSuccess(GetMetricStatisticsRequest request,
                 GetMetricStatisticsResult result) {
-            OperationContext.restoreOperationContext(this.opContext);
-            List<Datapoint> dpList = result.getDatapoints();
-            // Sort the data points in increasing order of timestamp to calculate Burn rate
-            Collections.sort(dpList, (o1, o2) -> o1.getTimestamp().compareTo(o2.getTimestamp()));
+            try {
+                OperationContext.restoreOperationContext(this.opContext);
+                List<Datapoint> dpList = result.getDatapoints();
+                // Sort the data points in increasing order of timestamp to calculate Burn rate
+                Collections
+                        .sort(dpList, (o1, o2) -> o1.getTimestamp().compareTo(o2.getTimestamp()));
 
-            List<ServiceStat> estimatedChargesDatapoints = new ArrayList<>();
-            if (dpList != null && dpList.size() != 0) {
-                for (Datapoint dp : dpList) {
-                    // If the datapoint collected is older than the last collection time, skip it.
-                    if (this.statsData.statsRequest.lastCollectionTimeMicrosUtc != null &&
-                            TimeUnit.MILLISECONDS.toMicros(dp.getTimestamp()
-                                    .getTime()) <= this.statsData.statsRequest.lastCollectionTimeMicrosUtc) {
-                        continue;
+                List<ServiceStat> estimatedChargesDatapoints = new ArrayList<>();
+                if (dpList != null && dpList.size() != 0) {
+                    for (Datapoint dp : dpList) {
+                        // If the datapoint collected is older than the last collection time, skip it.
+                        if (this.statsData.statsRequest.lastCollectionTimeMicrosUtc != null &&
+                                TimeUnit.MILLISECONDS.toMicros(dp.getTimestamp()
+                                        .getTime())
+                                        <= this.statsData.statsRequest.lastCollectionTimeMicrosUtc) {
+                            continue;
+                        }
+
+                        // If there is no lastCollectionTime or the datapoint collected in newer
+                        // than the lastCollectionTime, push it.
+                        ServiceStat stat = new ServiceStat();
+                        stat.latestValue = dp.getAverage();
+                        stat.unit = AWSStatsNormalizer
+                                .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                        stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS
+                                .toMicros(dp.getTimestamp().getTime());
+                        estimatedChargesDatapoints.add(stat);
                     }
 
-                    // If there is no lastCollectionTime or the datapoint collected in newer
-                    // than the lastCollectionTime, push it.
-                    ServiceStat stat = new ServiceStat();
-                    stat.latestValue = dp.getAverage();
-                    stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS
-                            .toMicros(dp.getTimestamp().getTime());
-                    estimatedChargesDatapoints.add(stat);
-                }
-
-                this.statsData.statsResponse.statValues.put(
-                        AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()),
-                        estimatedChargesDatapoints);
-
-                // Calculate average burn rate only if there is more than 1 datapoint available.
-                // This will ensure that NaN errors will not occur.
-                if (dpList.size() > 1) {
-                    ServiceStat averageBurnRate = new ServiceStat();
-                    averageBurnRate.latestValue = AWSUtils.calculateAverageBurnRate(dpList);
-                    averageBurnRate.unit = AWSStatsNormalizer
-                            .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-                    averageBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
                     this.statsData.statsResponse.statValues.put(
-                            AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.AVERAGE_BURN_RATE),
-                            Collections.singletonList(averageBurnRate));
+                            AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()),
+                            estimatedChargesDatapoints);
+
+                    // Calculate average burn rate only if there is more than 1 datapoint available.
+                    // This will ensure that NaN errors will not occur.
+                    if (dpList.size() > 1) {
+                        ServiceStat averageBurnRate = new ServiceStat();
+                        averageBurnRate.latestValue = AWSUtils.calculateAverageBurnRate(dpList);
+                        averageBurnRate.unit = AWSStatsNormalizer
+                                .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                        averageBurnRate.sourceTimeMicrosUtc = Utils.getSystemNowMicrosUtc();
+                        this.statsData.statsResponse.statValues.put(
+                                AWSStatsNormalizer
+                                        .getNormalizedStatKeyValue(AWSConstants.AVERAGE_BURN_RATE),
+                                Collections.singletonList(averageBurnRate));
+                    }
+
+                    // Calculate current burn rate only if there is more than 1 day worth of data available.
+                    if (dpList.size() > NUM_OF_COST_DATAPOINTS_IN_A_DAY) {
+                        ServiceStat currentBurnRate = new ServiceStat();
+                        currentBurnRate.latestValue = AWSUtils.calculateCurrentBurnRate(dpList);
+                        currentBurnRate.unit = AWSStatsNormalizer
+                                .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                        currentBurnRate.sourceTimeMicrosUtc = Utils.getSystemNowMicrosUtc();
+                        this.statsData.statsResponse.statValues.put(
+                                AWSStatsNormalizer
+                                        .getNormalizedStatKeyValue(AWSConstants.CURRENT_BURN_RATE),
+                                Collections.singletonList(currentBurnRate));
+                    }
                 }
 
-                // Calculate current burn rate only if there is more than 1 day worth of data available.
-                if (dpList.size() >= 7) {
-                    ServiceStat currentBurnRate = new ServiceStat();
-                    currentBurnRate.latestValue = AWSUtils.calculateCurrentBurnRate(dpList);
-                    currentBurnRate.unit = AWSStatsNormalizer
-                            .getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-                    currentBurnRate.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
-                    this.statsData.statsResponse.statValues.put(
-                            AWSStatsNormalizer
-                                    .getNormalizedStatKeyValue(AWSConstants.CURRENT_BURN_RATE),
-                            Collections.singletonList(currentBurnRate));
-                }
+                getEC2Stats(this.statsData, AGGREGATE_METRIC_NAMES_ACROSS_INSTANCES, true);
+            } catch (Exception e) {
+                AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
+                        this.statsData.statsRequest.taskReference, e);
             }
-
-            getEC2Stats(this.statsData, AGGREGATE_METRIC_NAMES_ACROSS_INSTANCES, true);
         }
     }
 
@@ -442,46 +452,52 @@ public class AWSStatsService extends StatelessService {
         @Override
         public void onSuccess(GetMetricStatisticsRequest request,
                 GetMetricStatisticsResult result) {
-            OperationContext.restoreOperationContext(this.opContext);
-            List<ServiceStat> statDatapoints = new ArrayList<>();
-            List<Datapoint> dpList = result.getDatapoints();
-            if (dpList != null && dpList.size() != 0) {
-                for (Datapoint dp : dpList) {
-                    ServiceStat stat = new ServiceStat();
-                    stat.latestValue = dp.getAverage();
-                    stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(dp.getUnit());
-                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS
-                            .toMicros(dp.getTimestamp().getTime());
-                    statDatapoints.add(stat);
+            try {
+                OperationContext.restoreOperationContext(this.opContext);
+                List<ServiceStat> statDatapoints = new ArrayList<>();
+                List<Datapoint> dpList = result.getDatapoints();
+                if (dpList != null && dpList.size() != 0) {
+                    for (Datapoint dp : dpList) {
+                        ServiceStat stat = new ServiceStat();
+                        stat.latestValue = dp.getAverage();
+                        stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(dp.getUnit());
+                        stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS
+                                .toMicros(dp.getTimestamp().getTime());
+                        statDatapoints.add(stat);
+                    }
+
+                    this.statsData.statsResponse.statValues
+                            .put(AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()),
+                                    statDatapoints);
                 }
 
-                this.statsData.statsResponse.statValues
-                        .put(AWSStatsNormalizer.getNormalizedStatKeyValue(result.getLabel()),
-                                statDatapoints);
-            }
+                if (this.statsData.numResponses.incrementAndGet() == this.numOfMetrics) {
+                    // Put the number of API requests as a stat
+                    ServiceStat apiCallCountStat = new ServiceStat();
+                    apiCallCountStat.latestValue = this.numOfMetrics;
+                    if (this.isAggregateStats) {
+                        // Number of Aggregate metrics + 1 call for cost metric
+                        apiCallCountStat.latestValue += 1;
+                    }
+                    apiCallCountStat.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+                    apiCallCountStat.unit = PhotonModelConstants.UNIT_COUNT;
+                    this.statsData.statsResponse.statValues.put(PhotonModelConstants.API_CALL_COUNT,
+                            Collections.singletonList(apiCallCountStat));
 
-            if (this.statsData.numResponses.incrementAndGet() == this.numOfMetrics) {
-                // Put the number of API requests as a stat
-                ServiceStat apiCallCountStat = new ServiceStat();
-                apiCallCountStat.latestValue = this.numOfMetrics;
-                if (this.isAggregateStats) {
-                    // Number of Aggregate metrics + 1 call for cost metric
-                    apiCallCountStat.latestValue += 1;
+                    SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
+                    this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;
+                    respBody.taskStage = SingleResourceTaskCollectionStage
+                            .valueOf(this.statsData.statsRequest.nextStage);
+                    respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
+                    respBody.statsList = new ArrayList<>();
+                    respBody.statsList.add(this.statsData.statsResponse);
+                    this.service.sendRequest(
+                            Operation.createPatch(this.statsData.statsRequest.taskReference)
+                                    .setBody(respBody));
                 }
-                apiCallCountStat.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
-                apiCallCountStat.unit = PhotonModelConstants.UNIT_COUNT;
-                this.statsData.statsResponse.statValues.put(PhotonModelConstants.API_CALL_COUNT,
-                        Collections.singletonList(apiCallCountStat));
-
-                SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
-                this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;
-                respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(this.statsData.statsRequest.nextStage);
-                respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
-                respBody.statsList = new ArrayList<>();
-                respBody.statsList.add(this.statsData.statsResponse);
-                this.service.sendRequest(
-                        Operation.createPatch(this.statsData.statsRequest.taskReference)
-                                .setBody(respBody));
+            } catch (Exception e) {
+                AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
+                        this.statsData.statsRequest.taskReference, e);
             }
         }
     }
