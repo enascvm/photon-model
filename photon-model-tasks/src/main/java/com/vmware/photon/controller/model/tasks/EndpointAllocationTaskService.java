@@ -424,7 +424,7 @@ public class EndpointAllocationTaskService
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         if (o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
-                            logFine("Endpoint %s not found, creating new.", es.documentSelfLink);
+                            logInfo("Endpoint %s not found, creating new.", es.documentSelfLink);
                             createEndpoint(currentState);
                         } else {
                             logSevere("Failed to update endpoint %s : %s",
@@ -439,37 +439,23 @@ public class EndpointAllocationTaskService
                 .sendWith(this);
     }
 
-    private void doUpdateEndpoint(EndpointState es, EndpointAllocationTaskState currentState) {
-        String id = UriUtils.getLastPathSegment(es.documentSelfLink);
-        Operation.createGet(this, UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
+    private void doUpdateEndpoint(EndpointState loadedState,
+            EndpointAllocationTaskState currentState) {
+        loadedState.endpointProperties = currentState.endpointState.endpointProperties;
+
+        String id = UriUtils.getLastPathSegment(loadedState.documentSelfLink);
+        logInfo("Stopping any scheduled task for endpoint %s", loadedState.documentSelfLink);
+        Operation.createDelete(this, UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        if (o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
-                            // there was no enumeration triggered, so simply invoke adapter
-                            EndpointAllocationTaskState state = createUpdateSubStageTask(
-                                    SubStage.INVOKE_ADAPTER);
-                            state.endpointState = es;
-                            sendSelfPatch(state);
-                        } else {
-                            logSevere("Failed to load ScheduleTaskState for endpoint %s : %s",
-                                    es.documentSelfLink, e.getMessage());
-                            sendFailurePatch(this, currentState, e);
-                        }
-                        return;
+                        logInfo("Unable to delete ScheduleTaskState for endpoint %s : %s",
+                                loadedState.documentSelfLink, e.getMessage());
                     }
-                    // first delete scheduled task
-                    Operation.createDelete(this,
-                            UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
-                            .setCompletion((od, ed) -> {
-                                EndpointAllocationTaskState state = createUpdateSubStageTask(
-                                        SubStage.INVOKE_ADAPTER);
-                                if (state.enumerationRequest == null) {
-                                    state.enumerationRequest = new ResourceEnumerationRequest();
-                                    state.enumerationRequest.resourcePoolLink = es.resourcePoolLink;
-                                }
-                                state.endpointState = es;
-                                sendSelfPatch(state);
-                            }).sendWith(this);
+
+                    EndpointAllocationTaskState state = createUpdateSubStageTask(
+                            SubStage.INVOKE_ADAPTER);
+                    state.endpointState = loadedState;
+                    sendSelfPatch(state);
                 }).sendWith(this);
 
     }
@@ -560,6 +546,7 @@ public class EndpointAllocationTaskService
                 endpoint.documentSelfLink);
 
         Operation.createPost(this, ScheduledTaskService.FACTORY_LINK)
+                .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE)
                 .setBody(scheduledTaskState)
                 .setCompletion((o, e) -> {
                     if (e != null) {

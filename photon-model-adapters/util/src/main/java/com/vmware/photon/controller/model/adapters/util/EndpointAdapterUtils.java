@@ -150,7 +150,7 @@ public class EndpointAdapterUtils {
             };
 
             validator.accept(credentials, callback);
-        } catch (IllegalArgumentException e) {
+        } catch (Throwable e) {
             op.fail(e);
         }
     }

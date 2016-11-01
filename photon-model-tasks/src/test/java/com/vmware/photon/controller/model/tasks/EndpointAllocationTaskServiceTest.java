@@ -38,6 +38,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -61,6 +62,9 @@ import com.vmware.xenon.common.UriUtils;
         EndpointAllocationTaskServiceTest.HandleStartTest.class,
         EndpointAllocationTaskServiceTest.EndToEndTest.class })
 public class EndpointAllocationTaskServiceTest extends Suite {
+
+    private static final String TEST_ACCESS_KEY = "test-accessKey";
+    private static final String TEST_SECRETE_KEY = "test-secreteKey";
 
     public EndpointAllocationTaskServiceTest(Class<?> klass,
             RunnerBuilder builder) throws InitializationError {
@@ -285,6 +289,107 @@ public class EndpointAllocationTaskServiceTest extends Suite {
         }
 
         @Test
+        public void testSuccessUpdateWithEnumerationAndExpliciteResourcePool() throws Throwable {
+            EndpointState endpoint = createEndpointState();
+            ResourcePoolState pool = ModelUtils.createResourcePool(this);
+            EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
+            startState.adapterReference = UriUtils.buildUri(getHost(),
+                    MockSuccessEndpointAdapter.SELF_LINK);
+            startState.enumerationRequest = new EndpointAllocationTaskService.ResourceEnumerationRequest();
+            startState.enumerationRequest.resourcePoolLink = pool.documentSelfLink;
+            startState.enumerationRequest.refreshIntervalMicros = TimeUnit.MILLISECONDS
+                    .toMicros(250);
+            startState.taskInfo = new TaskState();
+            startState.taskInfo.isDirect = true;
+
+            EndpointAllocationTaskState returnState = this
+                    .postServiceSynchronously(
+                            EndpointAllocationTaskService.FACTORY_LINK,
+                            startState, EndpointAllocationTaskState.class);
+
+            EndpointAllocationTaskState completeState = this
+                    .waitForServiceState(
+                            EndpointAllocationTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                    .ordinal());
+
+            EndpointState endpointState = getServiceSynchronously(
+                    completeState.endpointState.documentSelfLink, EndpointState.class);
+            assertEquals(EndpointType.aws.name(), endpointState.endpointType);
+            assertNotNull(endpointState.endpointProperties);
+            assertEquals(TEST_ACCESS_KEY, endpointState.endpointProperties.get(PRIVATE_KEYID_KEY));
+            assertEquals(TEST_SECRETE_KEY, endpointState.endpointProperties.get(PRIVATE_KEY_KEY));
+
+            ComputeState computeState = getServiceSynchronously(
+                    completeState.endpointState.computeLink, ComputeState.class);
+            assertEquals(startState.enumerationRequest.resourcePoolLink,
+                    computeState.resourcePoolLink);
+
+            assertThat(completeState.taskInfo.stage,
+                    is(TaskState.TaskStage.FINISHED));
+            // Check scheduled task was created
+            String schedTaskLink = UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK,
+                    UriUtils.getLastPathSegment(completeState.endpointState.documentSelfLink));
+            ScheduledTaskState scheduledTaskState = getServiceSynchronously(schedTaskLink,
+                    ScheduledTaskState.class);
+            assertNotNull(scheduledTaskState);
+
+            // Do update endpoint
+            EndpointState update = createEndpointState();
+            update.name = "updated";
+            update.endpointProperties.put(PRIVATE_KEYID_KEY, "new-access-key");
+            // make sure we set documentSelfLink
+            update.documentSelfLink = endpointState.documentSelfLink;
+
+            EndpointAllocationTaskState updateState = createEndpointAllocationRequest(update);
+            updateState.adapterReference = UriUtils.buildUri(getHost(),
+                    MockSuccessEndpointAdapter.SELF_LINK);
+            updateState.enumerationRequest = new EndpointAllocationTaskService.ResourceEnumerationRequest();
+            updateState.enumerationRequest.resourcePoolLink = pool.documentSelfLink;
+            updateState.enumerationRequest.refreshIntervalMicros = TimeUnit.MILLISECONDS
+                    .toMicros(150);
+            updateState.taskInfo = new TaskState();
+            updateState.taskInfo.isDirect = true;
+
+            returnState = this
+                    .postServiceSynchronously(
+                            EndpointAllocationTaskService.FACTORY_LINK,
+                            updateState, EndpointAllocationTaskState.class);
+
+            completeState = this
+                    .waitForServiceState(
+                            EndpointAllocationTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                    .ordinal());
+
+            endpointState = getServiceSynchronously(
+                    completeState.endpointState.documentSelfLink, EndpointState.class);
+            assertEquals(EndpointType.aws.name(), endpointState.endpointType);
+            assertNotNull(endpointState.endpointProperties);
+            assertEquals("new-access-key", endpointState.endpointProperties.get(PRIVATE_KEYID_KEY));
+            assertEquals(TEST_SECRETE_KEY, endpointState.endpointProperties.get(PRIVATE_KEY_KEY));
+
+            computeState = getServiceSynchronously(
+                    completeState.endpointState.computeLink, ComputeState.class);
+            assertEquals(updateState.enumerationRequest.resourcePoolLink,
+                    computeState.resourcePoolLink);
+
+            assertThat(completeState.taskInfo.stage,
+                    is(TaskState.TaskStage.FINISHED));
+            // Check scheduled task was created
+            schedTaskLink = UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK,
+                    UriUtils.getLastPathSegment(completeState.endpointState.documentSelfLink));
+            scheduledTaskState = getServiceSynchronously(schedTaskLink,
+                    ScheduledTaskState.class);
+            assertNotNull(scheduledTaskState);
+
+            // delete scheduled task
+            deleteServiceSynchronously(schedTaskLink);
+        }
+
+        @Test
         public void testSuccessWithEnumerationAndImplicitResourcePool() throws Throwable {
             EndpointState endpoint = createEndpointState();
             EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
@@ -325,12 +430,12 @@ public class EndpointAllocationTaskServiceTest extends Suite {
 
     private static EndpointState createEndpointState() {
         EndpointState endpoint = new EndpointState();
-        endpoint.endpointType = "aws";
+        endpoint.endpointType = EndpointType.aws.name();
         endpoint.name = "aws_endpoint";
         endpoint.endpointProperties = new HashMap<>();
         endpoint.endpointProperties.put(REGION_KEY, "test-regionId");
-        endpoint.endpointProperties.put(PRIVATE_KEY_KEY, "test-secreteKey");
-        endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, "test-accessKey");
+        endpoint.endpointProperties.put(PRIVATE_KEY_KEY, TEST_SECRETE_KEY);
+        endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, TEST_ACCESS_KEY);
         endpoint.tenantLinks = Collections.singletonList("tenant-1");
         return endpoint;
     }
