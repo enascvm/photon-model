@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.5.0-SNAPSHOT
+
 ## 0.4.19
 
 * Updated xenon to 1.2.0
