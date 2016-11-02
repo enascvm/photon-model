@@ -20,8 +20,10 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -315,7 +317,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         List<DatastoreOverlay> datastores = new ArrayList<>();
         List<ComputeResourceOverlay> computeResources = new ArrayList<>();
 
-        Set<String> drsHosts = new HashSet<>();
+        Map<String, ComputeResourceOverlay> nonDrsClusters = new HashMap<>();
 
         // put results in different buckets by type
         try {
@@ -333,16 +335,25 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                             vms.add(vm);
                         }
                     } else if (VimUtils.isHost(cont.getObj())) {
+                        // this includes all standalone and clustered hosts
                         HostSystemOverlay hs = new HostSystemOverlay(cont);
                         hosts.add(hs);
                     } else if (VimUtils.isComputeResource(cont.getObj())) {
                         ComputeResourceOverlay cr = new ComputeResourceOverlay(cont);
                         if (cr.isDrsEnabled()) {
-                            // when DRS is enabled add the cluster itself but ignore the hosts
+                            // when DRS is enabled add the cluster itself and skip the hosts
                             computeResources.add(cr);
-                            drsHosts.addAll(cr.getHosts().stream()
-                                    .map(ManagedObjectReference::getValue)
-                                    .collect(Collectors.toList()));
+                        } else if (VimUtils.isClusterComputeResource(cont.getObj())) {
+                            // when DRS is not enabled, skip the cluster and then
+                            // add the inside hosts instead; when provisioning into a non-DRS
+                            // cluster, specifying a host is mandatory (in addition to the target
+                            // resource pool which always has to be specified)
+                            nonDrsClusters.put(cr.getId().getValue(), cr);
+                        } else {
+                            // add standalone hosts (by their ComputeResource instance instead of
+                            // the inner HostSystem one because the former contains the resource
+                            // pool which we need)
+                            computeResources.add(cr);
                         }
                     } else if (VimUtils.isDatastore(cont.getObj())) {
                         DatastoreOverlay ds = new DatastoreOverlay(cont);
@@ -377,12 +388,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        // exclude all hosts that are part of a DRS-enabled cluster
-        hosts.removeIf(hs -> drsHosts.contains(hs.getId().getValue()));
-
+        // include hosts that are part of a non-DRS enabled cluster
+        hosts.removeIf(hs -> nonDrsClusters.get(hs.getParent().getValue()) == null);
         enumerationContext.expectHostSystemCount(hosts.size());
-        for (HostSystemOverlay host : hosts) {
-            processFoundHostSystem(enumerationContext, host, parent.tenantLinks);
+        for (HostSystemOverlay hs : hosts) {
+            ComputeResourceOverlay cr = nonDrsClusters.get(hs.getParent().getValue());
+            processFoundHostSystem(enumerationContext, hs, cr, parent.tenantLinks);
         }
 
         enumerationContext.expectComputeResourceCount(computeResources.size());
@@ -901,30 +912,31 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     /**
      * @param enumerationContext
      * @param hs
+     * @param cr parent ComputeResource
      * @param tenantLinks
      */
     private void processFoundHostSystem(EnumerationContext enumerationContext,
-            HostSystemOverlay hs, List<String> tenantLinks) {
+            HostSystemOverlay hs, ComputeResourceOverlay cr, List<String> tenantLinks) {
         ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
         QueryTask task = queryForHostSystem(request.resourceLink(),
                 hs.getHardwareUuid());
         task.tenantLinks = tenantLinks;
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewHostSystem(enumerationContext, hs, tenantLinks);
+                createNewHostSystem(enumerationContext, hs, cr, tenantLinks);
             } else {
                 ComputeState oldDocument = convertOnlyResultToComputeState(result,
                         ComputeState.class);
-                updateHostSystem(oldDocument, enumerationContext, hs, tenantLinks);
+                updateHostSystem(oldDocument, enumerationContext, hs, cr, tenantLinks);
             }
         });
     }
 
     private void updateHostSystem(ComputeState oldDocument, EnumerationContext enumerationContext,
-            HostSystemOverlay hs, List<String> tenantLinks) {
+            HostSystemOverlay hs, ComputeResourceOverlay cr, List<String> tenantLinks) {
         ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
 
-        ComputeState state = makeHostSystemFromResults(request, hs);
+        ComputeState state = makeHostSystemFromResults(request, hs, cr);
         state.documentSelfLink = oldDocument.documentSelfLink;
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = tenantLinks;
@@ -945,7 +957,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void createNewHostSystem(EnumerationContext enumerationContext,
-            HostSystemOverlay hs, List<String> tenantLinks) {
+            HostSystemOverlay hs, ComputeResourceOverlay cr, List<String> tenantLinks) {
         ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
 
         ComputeDescription desc = makeDescriptionForHost(enumerationContext, hs);
@@ -954,7 +966,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setBody(desc)
                 .sendWith(this);
 
-        ComputeState state = makeHostSystemFromResults(request, hs);
+        ComputeState state = makeHostSystemFromResults(request, hs, cr);
         state.descriptionLink = desc.documentSelfLink;
         state.tenantLinks = tenantLinks;
         populateTags(hs, enumerationContext.getEndpoint(), state, tenantLinks);
@@ -992,7 +1004,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private ComputeState makeHostSystemFromResults(ComputeEnumerateResourceRequest request,
-            HostSystemOverlay hs) {
+            HostSystemOverlay hs, ComputeResourceOverlay cr) {
         ComputeState state = new ComputeState();
         state.id = hs.getHardwareUuid();
         state.adapterManagementReference = request.adapterManagementReference;
@@ -1003,7 +1015,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
-                .put(CustomProperties.TYPE, hs.getId().getType());
+                .put(CustomProperties.TYPE, hs.getId().getType())
+                .put(CustomProperties.RESOURCE_POOL_MOREF, cr.getRootResourcePool());
         return state;
     }
 

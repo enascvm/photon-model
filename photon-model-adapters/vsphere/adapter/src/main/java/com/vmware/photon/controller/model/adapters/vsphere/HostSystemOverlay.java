@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
+import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 
 public class HostSystemOverlay extends AbstractOverlay {
@@ -25,6 +26,10 @@ public class HostSystemOverlay extends AbstractOverlay {
 
     public String getName() {
         return (String) getOrFail(VimNames.PROPERTY_NAME);
+    }
+
+    public ManagedObjectReference getParent() {
+        return (ManagedObjectReference) getOrFail(VimPath.host_parent);
     }
 
     public int getCoreCount() {

@@ -1233,6 +1233,9 @@ public class VimPath {
     /** PropertyType: <code>short</code> */
     public static final String host_summary_hardware_numCpuThreads = "summary.hardware.numCpuThreads";
 
+    /** PropertyType: <code>ManagedObjectReference</code> */
+    public static final String host_parent = "parent";
+
     /** PropertyType: <code>TaskInfo</code> */
     public static final String task_info = "info";
 

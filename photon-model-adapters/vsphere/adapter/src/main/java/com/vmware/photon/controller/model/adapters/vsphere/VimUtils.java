@@ -254,7 +254,14 @@ public final class VimUtils {
 
         return VimNames.TYPE_COMPUTE_RESOURCE.equals(obj.getType()) ||
                 VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(obj.getType());
+    }
 
+    public static boolean isClusterComputeResource(ManagedObjectReference obj) {
+        if (obj == null) {
+            return false;
+        }
+
+        return VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(obj.getType());
     }
 
     public static boolean isNetwork(ManagedObjectReference obj) {

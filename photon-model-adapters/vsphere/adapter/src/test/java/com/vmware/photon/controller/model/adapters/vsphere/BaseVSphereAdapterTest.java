@@ -339,7 +339,11 @@ public class BaseVSphereAdapterTest {
     protected Query createQueryForResourcePoolOwner() {
         return Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addFieldClause(QuerySpecification.buildCompositeFieldName(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.RESOURCE_POOL_MOREF),
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.TYPE, VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE)
+                .addFieldClause(QuerySpecification.buildCompositeFieldName(
+                        ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.RESOURCE_POOL_MOREF),
                         "*", MatchType.WILDCARD)
                 .build();
     }
