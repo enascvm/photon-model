@@ -82,6 +82,7 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -385,10 +386,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
 
-        String linuxVMId = provisionAWSVMWithEC2Client(this.client, EC2_LINUX_AMI);
+        String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
         this.instancesToCleanUp.add(linuxVMId);
 
-        String windowsVMId = provisionAWSVMWithEC2Client(this.client, EC2_WINDOWS_AMI);
+        String windowsVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_WINDOWS_AMI);
         this.instancesToCleanUp.add(windowsVMId);
 
         waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
@@ -418,7 +419,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
 
-        String linuxVMId = provisionAWSVMWithEC2Client(this.client, EC2_LINUX_AMI);
+        String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
         this.instancesToCleanUp.add(linuxVMId);
 
         waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
@@ -454,7 +455,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         Tag tag3 = new Tag("key3", "value3");
         List<Tag> allTags = Arrays.asList(tag1, tag2, tag3);
 
-        String linuxVMId1 = provisionAWSVMWithEC2Client(this.client, EC2_LINUX_AMI);
+        String linuxVMId1 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
         this.instancesToCleanUp.add(linuxVMId1);
         waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
 
@@ -467,7 +468,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                 TEST_CASE_INITIAL);
 
-        String linuxVMId2 = provisionAWSVMWithEC2Client(this.client, EC2_LINUX_AMI);
+        String linuxVMId2 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
         this.instancesToCleanUp.add(linuxVMId2);
 
         waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);

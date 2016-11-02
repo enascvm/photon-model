@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.amazonaws.handlers.AsyncHandler;
@@ -75,6 +76,7 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -117,7 +119,7 @@ public class TestAWSSetupUtils {
     public static final String AWS_INSTANCE_PREFIX = "i-";
 
     public static final String EC2_LINUX_AMI = "ami-0d4cfd66";
-    public static final String EC2_WINDOWS_AMI = "ami-3c32b12b";
+    public static final String EC2_WINDOWS_AMI = "ami-30540427";
 
     /**
      * Class to hold the baseline counts for the compute states and the compute descriptions that
@@ -574,7 +576,8 @@ public class TestAWSSetupUtils {
                 .flatMap(r -> r.getInstances().stream()).collect(Collectors.toList());
     }
 
-    public static String provisionAWSVMWithEC2Client(AmazonEC2Client client, String ami) {
+    public static String provisionAWSVMWithEC2Client(VerificationHost host, AmazonEC2Client client,
+            String ami) {
 
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
                 .withImageId(ami)
@@ -583,7 +586,13 @@ public class TestAWSSetupUtils {
                 .withSecurityGroupIds(DEFAULT_SECURITY_GROUP_NAME);
 
         // handler invoked once the EC2 runInstancesAsync commands completes
-        RunInstancesResult result = client.runInstances(runInstancesRequest);
+        RunInstancesResult result = null;
+        try {
+            result = client.runInstances(runInstancesRequest);
+        } catch (Exception e) {
+            host.log(Level.SEVERE, "Error encountered in provisioning machine on AWS",
+                    Utils.toString(e));
+        }
         assertNotNull(result);
         assertNotNull(result.getReservation());
         assertNotNull(result.getReservation().getInstances());
