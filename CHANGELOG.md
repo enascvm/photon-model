@@ -1,6 +1,12 @@
 # CHANGELOG
 
-## 0.4.19-SNAPSHOT
+## 0.4.19
+
+* Updated xenon to 1.2.0
+
+* Fixing issues with endpoint deletion.
+
+* Performance improvements to stats aggregation.
 
 ## 0.4.18
 
