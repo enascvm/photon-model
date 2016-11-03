@@ -34,7 +34,6 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.security.InvalidKeyException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -778,19 +777,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
 
         for (String storageAccountId: context.storageAccountIds) {
-            try {
-                String storageConnectionString = context.storageConnectionStrings.get(storageAccountId);
-                CloudStorageAccount storageAccount = null;
-                try {
-                    storageAccount = CloudStorageAccount.parse(storageConnectionString);
-                } catch (URISyntaxException e) {
-                    handleError(context, e);
-                    return;
-                } catch (InvalidKeyException e) {
-                    handleError(context, e);
-                    return;
-                }
 
+            String storageConnectionString = context.storageConnectionStrings.get(
+                    storageAccountId);
+            if (storageConnectionString == null) {
+                continue;
+            }
+            try {
+                CloudStorageAccount storageAccount = CloudStorageAccount
+                        .parse(storageConnectionString);
                 CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
                 Iterable<CloudBlobContainer> containerList = blobClient.listContainers();
 
