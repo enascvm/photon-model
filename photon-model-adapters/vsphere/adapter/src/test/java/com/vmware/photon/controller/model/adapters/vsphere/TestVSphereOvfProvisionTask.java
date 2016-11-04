@@ -26,16 +26,13 @@ import com.vmware.photon.controller.model.adapters.vsphere.ovf.ImportOvfRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
-import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
@@ -49,9 +46,6 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
     // fields that are used across method calls, stash them as private fields
-    private ResourcePoolState resourcePool;
-
-    private AuthCredentialsServiceState auth;
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
 
@@ -80,8 +74,8 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         this.resourcePool = createResourcePool();
         this.auth = createAuth();
 
-        this.computeHostDescription = createComputeHostDescription();
-        this.computeHost = createComputeHost();
+        this.computeHostDescription = createComputeDescription();
+        this.computeHost = createComputeHost(this.computeHostDescription);
 
         ComputeDescription computeDesc = createTemplate();
 
@@ -169,41 +163,6 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         computeDesc.dataStoreId = this.dataStoreId;
 
         return computeDesc;
-    }
-
-    /**
-     * Create a compute host representing a vcenter server
-     */
-    private ComputeState createComputeHost() throws Throwable {
-        ComputeState computeState = new ComputeState();
-        computeState.id = UUID.randomUUID().toString();
-        computeState.name = this.computeHostDescription.name;
-        computeState.documentSelfLink = computeState.id;
-        computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
-        computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        computeState.adapterManagementReference = getAdapterManagementReference();
-
-        ComputeState returnState = TestUtils.doPost(this.host, computeState,
-                ComputeState.class,
-                UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
-        return returnState;
-    }
-
-    private ComputeDescription createComputeHostDescription() throws Throwable {
-        ComputeDescription computeDesc = new ComputeDescription();
-
-        computeDesc.id = UUID.randomUUID().toString();
-        computeDesc.name = computeDesc.id;
-        computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
-        computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
-        computeDesc.instanceAdapterReference = UriUtils
-                .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
-        computeDesc.authCredentialsLink = this.auth.documentSelfLink;
-
-        return TestUtils.doPost(this.host, computeDesc,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
 
     public URI getOvfUri() {
