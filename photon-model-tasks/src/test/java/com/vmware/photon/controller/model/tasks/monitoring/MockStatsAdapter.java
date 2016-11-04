@@ -62,12 +62,13 @@ public class MockStatsAdapter extends StatelessService {
             double currentCounter = this.counter.incrementAndGet();
             ServiceStat key1 = new ServiceStat();
             key1.latestValue = currentCounter;
-            key1.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+            long timestampMicros = Utils.getNowMicrosUtc();
+            key1.sourceTimeMicrosUtc = timestampMicros;
             key1.unit = UNIT_1;
             statValues.put(KEY_1, Collections.singletonList(key1));
             ServiceStat key2 = new ServiceStat();
             key2.latestValue = currentCounter;
-            key2.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+            key2.sourceTimeMicrosUtc = timestampMicros;
             key2.unit = UNIT_2;
             statValues.put(KEY_2, Collections.singletonList(key2));
             ComputeStats cStat = new ComputeStats();

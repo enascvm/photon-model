@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -81,7 +81,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
             ServiceDocumentQueryResult state = host
                     .getFactoryState(
                             UriUtils.buildFactoryUri(TestVSphereStatsTask.this.host,
-                                    ResourceMetricService.class));
+                                    ResourceMetricsService.class));
 
             return !state.documentLinks.isEmpty();
         });

@@ -28,6 +28,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -63,7 +64,7 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -421,7 +422,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                         // Verify all the stats are obtained
                         verifyStats(resp);
                         // Persist stats on Verification Host for testing the computeHost stats.
-                        URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
+                        URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricsService.FACTORY_LINK);
                         for (String key : resp.statsList.get(0).statValues.keySet()) {
                             List<ServiceStat> stats = resp.statsList.get(0).statValues.get(key);
                             for (ServiceStat stat : stats) {
@@ -453,9 +454,10 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     }
 
     private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat, String computeLink) {
-        ResourceMetricService.ResourceMetric stat = new ResourceMetricService.ResourceMetric();
-        stat.documentSelfLink = StatsUtil.getMetricKey(computeLink, metricName, stat.timestampMicrosUtc);
-        stat.value = serviceStat.latestValue;
+        ResourceMetricsService.ResourceMetrics stat = new ResourceMetricsService.ResourceMetrics();
+        stat.documentSelfLink = StatsUtil.getMetricKey(computeLink, stat.timestampMicrosUtc);
+        stat.entries = new HashMap<>();
+        stat.entries.put(metricName, serviceStat.latestValue);
         stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
         this.host.sendRequest(Operation
                 .createPost(persistStatsUri)

@@ -20,6 +20,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Consumer;
 
@@ -28,15 +29,15 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.Comput
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService.ResourceMetric;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
@@ -146,13 +147,13 @@ public class AzureStatsService extends StatelessService {
         URI queryUri = UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_QUERY_TASKS);
         QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
 
-        String kind = Utils.buildKind(ResourceMetric.class);
+        String kind = Utils.buildKind(ResourceMetrics.class);
         QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
                 ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(kind);
         querySpec.query.addBooleanClause(kindClause);
 
         String selfLinkValue = UriUtils.buildUriPath(
-                ResourceMetricService.FACTORY_LINK,
+                ResourceMetricsService.FACTORY_LINK,
                 computeId) + UriUtils.URI_WILDCARD_CHAR;
 
         QueryTask.Query selfLinkClause = new QueryTask.Query()
@@ -261,15 +262,17 @@ public class AzureStatsService extends StatelessService {
         for (QueryTask queryResult : items) {
             if (queryResult.results.documents != null) {
                 for (String key : queryResult.results.documents.keySet()) {
-                    ResourceMetric metric = Utils.fromJson(queryResult.results.documents.get(key),
-                            ResourceMetric.class);
-                    String metricName = StatsUtil.getMetricName(metric.documentSelfLink);
-                    if (statMap.containsKey(metricName)) {
-                        statMap.get(metricName).latestValue += metric.value;
-                    } else {
-                        ServiceStat stat = new ServiceStat();
-                        stat.latestValue = metric.value;
-                        statMap.put(metricName, stat);
+                    ResourceMetrics metric = Utils.fromJson(queryResult.results.documents.get(key),
+                            ResourceMetrics.class);
+                    for (Entry<String, Double> entry : metric.entries.entrySet()) {
+                        String metricName = entry.getKey();
+                        if (statMap.containsKey(metricName)) {
+                            statMap.get(metricName).latestValue += entry.getValue();
+                        } else {
+                            ServiceStat stat = new ServiceStat();
+                            stat.latestValue = entry.getValue();
+                            statMap.put(metricName, stat);
+                        }
                     }
                 }
             }

@@ -28,13 +28,14 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.Comput
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.InMemoryResourceMetricService;
 import com.vmware.photon.controller.model.monitoring.InMemoryResourceMetricService.InMemoryResourceMetric;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService.ResourceMetric;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
@@ -51,7 +52,9 @@ import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
@@ -312,14 +315,10 @@ public class SingleResourceStatsCollectionTaskService
         Collection<Operation> operations = new ArrayList<>();
         URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.computeLink);
         operations.add(Operation.createPost(inMemoryStatsUri).setBody(minuteStats));
-
-        URI metricUri = UriUtils.buildUri(getHost(), ResourceMetricService.FACTORY_LINK);
-        Operation resourceMetricOp = createResourceMetricOp(metricUri,
+        List<ResourceMetrics> metricsList = new ArrayList<>();
+        populateResourceMetrics(metricsList,
                 getLastCollectionMetricKeyForAdapterLink(statsLink, false),
                 minuteStats, currentState.computeLink);
-        if (resourceMetricOp != null) {
-            operations.add(resourceMetricOp);
-        }
 
         // TODO: Support case when stats list has data for multiple resources
         // https://jira-hzn.eng.vmware.com/browse/VSYM-3121
@@ -351,13 +350,14 @@ public class SingleResourceStatsCollectionTaskService
                     updateInMemoryStats(dailyMemoryState, entries.getKey(), serviceStat,
                             StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS);
 
-                    resourceMetricOp = createResourceMetricOp(metricUri, entries.getKey(),
+                    populateResourceMetrics(metricsList, entries.getKey(),
                             serviceStat, computeLink);
-                    if (resourceMetricOp != null) {
-                        operations.add(resourceMetricOp);
-                    }
                 }
             }
+        }
+        for (ResourceMetrics metrics : metricsList) {
+            operations.add(Operation.createPost(getHost(), ResourceMetricsService.FACTORY_LINK)
+                    .setBodyNoCloning(metrics));
         }
         operations.add(Operation.createPost(getHost(), InMemoryResourceMetricService.FACTORY_LINK)
                 .setBodyNoCloning(hourlyMemoryState));
@@ -405,19 +405,29 @@ public class SingleResourceStatsCollectionTaskService
         }
     }
 
-    private Operation createResourceMetricOp(URI persistedStatsUri, String metricName,
+    private void populateResourceMetrics(List<ResourceMetrics> metricsList,
+            String metricName,
             ServiceStat serviceStat,
             String computeLink) {
         if (Double.isNaN(serviceStat.latestValue)) {
-            return null;
+            return;
         }
-
-        ResourceMetric stat = new ResourceMetric();
-        stat.documentSelfLink = StatsUtil
-                .getMetricKey(computeLink, metricName, serviceStat.sourceTimeMicrosUtc);
-        stat.value = serviceStat.latestValue;
-        stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
-        return Operation.createPost(persistedStatsUri).setBodyNoCloning(stat);
+        ResourceMetrics metricsObjToUpdate = null;
+        for (ResourceMetrics metricsObj : metricsList) {
+            if (metricsObj.documentSelfLink.startsWith(UriUtils.getLastPathSegment(computeLink)) &&
+                    metricsObj.timestampMicrosUtc.equals(serviceStat.sourceTimeMicrosUtc)) {
+                metricsObjToUpdate = metricsObj;
+                break;
+            }
+        }
+        if (metricsObjToUpdate == null) {
+            metricsObjToUpdate = new ResourceMetrics();
+            metricsObjToUpdate.documentSelfLink = StatsUtil.getMetricKey(computeLink, Utils.getNowMicrosUtc());
+            metricsObjToUpdate.entries = new HashMap<>();
+            metricsObjToUpdate.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
+            metricsList.add(metricsObjToUpdate);
+        }
+        metricsObjToUpdate.entries.put(metricName, serviceStat.latestValue);
     }
 
     /**
@@ -471,13 +481,13 @@ public class SingleResourceStatsCollectionTaskService
         String statsAdapterLink = getAdapterLinkFromURI(patchUri);
         String lastSuccessfulRunMetricKey = getLastCollectionMetricKeyForAdapterLink(
                 statsAdapterLink, false);
-        String metricSelfLink = StatsUtil
-                .getMetricKeyPrefix(currentState.computeLink, lastSuccessfulRunMetricKey);
         Query.Builder builder = Query.Builder.create();
-        builder.addKindFieldClause(ResourceMetric.class);
+        builder.addKindFieldClause(ResourceMetrics.class);
         builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK, metricSelfLink),
+                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, UriUtils.getLastPathSegment(currentState.computeLink)),
                 MatchType.PREFIX);
+        builder.addRangeClause( QuerySpecification.buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, lastSuccessfulRunMetricKey),
+                NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
         QueryTask task = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.SORT)
                 .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK, TypeName.STRING)
@@ -507,9 +517,10 @@ public class SingleResourceStatsCollectionTaskService
                     if (responseTask.results.documentCount > 0) {
                         Object rawMetricObj = responseTask.results.documents
                                 .get(responseTask.results.documentLinks.get(0));
-                        ResourceMetric rawMetric = Utils.fromJson(rawMetricObj,
-                                ResourceMetric.class);
-                        computeStatsRequest.lastCollectionTimeMicrosUtc = rawMetric.timestampMicrosUtc;
+                        ResourceMetrics rawMetrics = Utils.fromJson(rawMetricObj,
+                                ResourceMetrics.class);
+                        computeStatsRequest.lastCollectionTimeMicrosUtc =
+                                rawMetrics.timestampMicrosUtc;
                     }
                     sendStatsRequestToAdapter(currentState, patchUri, computeStatsRequest);
                 })

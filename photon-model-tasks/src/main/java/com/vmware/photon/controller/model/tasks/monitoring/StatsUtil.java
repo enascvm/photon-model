@@ -39,6 +39,15 @@ public class StatsUtil {
     }
 
     /**
+     * Builds a metric key for given resource link and timestamp.
+     */
+    public static String getMetricKey(String resourceLink,
+            Long sourceTimeMicrosUtc) {
+        return UriUtils.getLastPathSegment(resourceLink) + SEPARATOR +
+                + sourceTimeMicrosUtc;
+    }
+
+    /**
      * Builds a metric key for given resource link and metric name.
      */
     public static String getMetricKeyPrefix(String resourceLink, String metricName) {

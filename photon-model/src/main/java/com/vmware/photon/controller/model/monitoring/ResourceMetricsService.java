@@ -13,26 +13,29 @@
 
 package com.vmware.photon.controller.model.monitoring;
 
+import java.util.Map;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.Utils;
 
-public class ResourceMetricService extends StatefulService {
+public class ResourceMetricsService extends StatefulService {
 
-    public static final String FACTORY_LINK = UriPaths.MONITORING + "/metrics";
+    public static final String FACTORY_LINK = UriPaths.MONITORING + "/resource-metrics";
 
     public static FactoryService createFactory() {
-        return FactoryService.createIdempotent(ResourceMetricService.class);
+        return FactoryService.createIdempotent(ResourceMetricsService.class);
     }
 
-    public ResourceMetricService() {
-        super(ResourceMetric.class);
+    public ResourceMetricsService() {
+        super(ResourceMetrics.class);
         super.toggleOption(ServiceOption.IMMUTABLE, true);
         super.toggleOption(ServiceOption.PERSISTENCE, true);
         super.toggleOption(ServiceOption.ON_DEMAND_LOAD, true);
@@ -40,15 +43,16 @@ public class ResourceMetricService extends StatefulService {
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
     }
 
-    public static class ResourceMetric extends ServiceDocument {
-        public static final String FIELD_NAME_VALUE = "value";
+    public static class ResourceMetrics extends ServiceDocument {
+        public static final String FIELD_NAME_ENTRIES = "entries";
         public static final String FIELD_NAME_TIMESTAMP = "timestampMicrosUtc";
 
-        @Documentation(description = "The average value returned by the cloud provider")
+        @Documentation(description = "Map of datapoints. The key represents the metric name and the value"
+                + "represents the the metric value")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public Double value;
-
-        @Documentation(description = "The timestamp returned by the cloud provider")
+        @PropertyOptions(indexing = PropertyIndexingOption.EXPAND)
+        public Map<String, Double> entries;
+        @Documentation(description = "timestamp associated with this metric entry")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public Long timestampMicrosUtc;
     }
@@ -68,11 +72,11 @@ public class ResourceMetricService extends StatefulService {
         PhotonModelUtils.handleIdempotentPut(this, put);
     }
 
-    private ResourceMetric processInput(Operation op) {
+    private ResourceMetrics processInput(Operation op) {
         if (!op.hasBody()) {
             throw (new IllegalArgumentException("body is required"));
         }
-        ResourceMetric state = op.getBody(ResourceMetric.class);
+        ResourceMetrics state = op.getBody(ResourceMetrics.class);
         Utils.validateState(getStateDescription(), state);
         return state;
     }

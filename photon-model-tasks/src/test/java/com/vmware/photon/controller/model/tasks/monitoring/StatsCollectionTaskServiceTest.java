@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks.monitoring;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -35,8 +36,8 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricService.ResourceMetric;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -62,7 +63,9 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 
@@ -83,7 +86,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 new CustomStatsAdapter());
         this.host.waitForServiceAvailable(StatsCollectionTaskService.FACTORY_LINK);
         this.host.waitForServiceAvailable(SingleResourceStatsCollectionTaskService.FACTORY_LINK);
-        this.host.waitForServiceAvailable(ResourceMetricService.FACTORY_LINK);
+        this.host.waitForServiceAvailable(ResourceMetricsService.FACTORY_LINK);
         this.host.waitForServiceAvailable(MockStatsAdapter.SELF_LINK);
         this.host.waitForServiceAvailable(CustomStatsAdapter.SELF_LINK);
     }
@@ -157,25 +160,17 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         // check that all the stats retuned from the mock stats adapter are
         // persisted at a per metric level along with the last collection run time
         for (String computeLink : computeLinks) {
-            String metricSelfLink = UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
-                    StatsUtil.getMetricKeyPrefix(computeLink, MockStatsAdapter.KEY_1));
-
-            ResourceMetric metric = getResourceMetric(metricSelfLink);
+            ResourceMetrics metric = getResourceMetrics(computeLink, MockStatsAdapter.KEY_1);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_1 +
                     " should not be null ", metric);
 
-            String metricSelfLink2 = UriUtils.buildUriPath(ResourceMetricService.FACTORY_LINK,
-                    StatsUtil.getMetricKeyPrefix(computeLink, MockStatsAdapter.KEY_2));
-            ResourceMetric metric2 = getResourceMetric(metricSelfLink2);
+            ResourceMetrics metric2 = getResourceMetrics(computeLink, MockStatsAdapter.KEY_2);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_2 +
                     "should not be null ", metric2);
-
+            assertEquals(metric2.entries.size(), 2);
             String lastSuccessfulRunMetricKey = StatsUtil.getMetricKeyPrefix(MockStatsAdapter.SELF_LINK,
                     PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME);
-            String metricLastSuccessfulRunLink = UriUtils
-                    .buildUriPath(ResourceMetricService.FACTORY_LINK,
-                            StatsUtil.getMetricKeyPrefix(computeLink, lastSuccessfulRunMetricKey));
-            ResourceMetric metricLastRun = getResourceMetric(metricLastSuccessfulRunLink);
+            ResourceMetrics metricLastRun = getResourceMetrics(computeLink, lastSuccessfulRunMetricKey);
             assertNotNull("The resource metric for" + lastSuccessfulRunMetricKey
                     + " should not be null ", metricLastRun);
 
@@ -195,27 +190,28 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                     .addOption(QueryOption.SORT)
                     .orderAscending(ServiceDocument.FIELD_NAME_SELF_LINK, TypeName.STRING)
                     .setQuery(
-                            Query.Builder.create().addKindFieldClause(ResourceMetric.class)
-                                    .addFieldClause(ResourceMetric.FIELD_NAME_SELF_LINK,
-                                            UriUtils.buildUriPath(
-                                                    ResourceMetricService.FACTORY_LINK,
-                                                    StatsUtil.getMetricKeyPrefix(computeLink,
-                                                            MockStatsAdapter.KEY_1)),
-                                            MatchType.PREFIX)
+                            Query.Builder.create().addKindFieldClause(ResourceMetrics.class)
+                            .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, UriUtils.getLastPathSegment(computeLink)),
+                                MatchType.PREFIX)
+                            .addRangeClause( QuerySpecification.buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES,
+                                    MockStatsAdapter.KEY_1),
+                                NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true))
                                     .build()).build();
             this.host.createQueryTaskService(qt, false, true, qt, null);
 
-            ResourceMetric prevMetric = null;
+            ResourceMetrics prevMetric = null;
             for (String documentLink : qt.results.documentLinks) {
-                ResourceMetric metric = Utils
-                        .fromJson(qt.results.documents.get(documentLink), ResourceMetric.class);
+                ResourceMetrics metric = Utils
+                        .fromJson(qt.results.documents.get(documentLink), ResourceMetrics.class);
 
                 if (prevMetric == null) {
                     prevMetric = metric;
                     continue;
                 }
 
-                assertTrue(prevMetric.timestampMicrosUtc < metric.timestampMicrosUtc);
+                assertTrue(prevMetric.timestampMicrosUtc <
+                        metric.timestampMicrosUtc);
             }
         }
 
@@ -236,7 +232,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
      * Sorts the documents by documentSelfLink.
      * Returns the first document.
      */
-    private ResourceMetric getResourceMetric(String metricSelfLink) {
+    private ResourceMetrics getResourceMetrics(String resourceLink, String metricKey) {
         QueryTask qt = QueryTask.Builder
                 .createDirectTask()
                 .addOption(QueryOption.TOP_RESULTS)
@@ -244,15 +240,19 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.SORT)
                 .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK, TypeName.STRING)
-                .setQuery(Query.Builder.create().addKindFieldClause(ResourceMetric.class)
-                        .addFieldClause(ResourceMetric.FIELD_NAME_SELF_LINK, metricSelfLink,
+                .setQuery(Query.Builder.create()
+                            .addKindFieldClause(ResourceMetrics.class)
+                            .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, UriUtils.getLastPathSegment(resourceLink)),
                                 MatchType.PREFIX)
+                            .addRangeClause( QuerySpecification.buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, metricKey),
+                                NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true))
                         .build())
                 .build();
         this.host.createQueryTaskService(qt, false, true, qt, null);
         String documentLink = qt.results.documentLinks.get(0);
-        ResourceMetric resourceMetric = Utils.fromJson(qt.results.documents.get(documentLink),
-                ResourceMetric.class);
+        ResourceMetrics resourceMetric = Utils.fromJson(qt.results.documents.get(documentLink),
+                ResourceMetrics.class);
         return resourceMetric;
     }
 
