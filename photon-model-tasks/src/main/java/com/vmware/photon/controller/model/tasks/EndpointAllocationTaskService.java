@@ -120,6 +120,11 @@ public class EndpointAllocationTaskService
         // infra provider and the symphony server
         public Long refreshIntervalMicros;
 
+        /**
+         * delay before kicking off the task
+         */
+        public Long delayMicros;
+
     }
 
     public EndpointAllocationTaskService() {
@@ -269,6 +274,10 @@ public class EndpointAllocationTaskService
         if (es.documentSelfLink == null) {
             es.documentSelfLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
                     UUID.randomUUID().toString());
+        }
+
+        if (es.tenantLinks == null || es.tenantLinks.isEmpty()) {
+            es.tenantLinks = currentState.tenantLinks;
         }
 
         Operation endpointOp = Operation.createPost(this, EndpointService.FACTORY_LINK);
@@ -540,6 +549,7 @@ public class EndpointAllocationTaskService
         scheduledTaskState.factoryLink = ResourceEnumerationTaskService.FACTORY_LINK;
         scheduledTaskState.initialStateJson = Utils.toJson(enumTaskState);
         scheduledTaskState.intervalMicros = intervalMicros;
+        scheduledTaskState.delayMicros = currentState.enumerationRequest.delayMicros;
         scheduledTaskState.tenantLinks = endpoint.tenantLinks;
         scheduledTaskState.customProperties = new HashMap<>();
         scheduledTaskState.customProperties.put(ENDPOINT_LINK_PROP_NAME,

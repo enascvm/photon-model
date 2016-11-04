@@ -33,7 +33,6 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
@@ -66,10 +65,32 @@ public class EndpointRemovalTaskService
      * SubStage.
      */
     public static enum SubStage {
+
+        /**
+         * Load endpoint data.
+         */
         LOAD_ENDPOINT,
-        DELETE_ASSOCIATED,
+
+        /**
+         * Stop scheduled enumeration task
+         */
+        STOP_ENUMERATION,
+
+        /**
+         * Delete resources from this endpoint. Only local resources are deleted.
+         */
         DELETE_RESOURCES,
-        ISSUING_DELETES,
+
+        /**
+         * Delete the endpoint documents
+         */
+        ISSUE_ENDPOINT_DELETE,
+
+        /**
+         * Delete any additional resources which refer this endpoint through custom property
+         * {@link ComputeProperties#ENDPOINT_LINK_PROP_NAME}
+         */
+        DELETE_RELATED_RESOURCES,
         FINISHED,
         FAILED
     }
@@ -88,7 +109,8 @@ public class EndpointRemovalTaskService
         public SubStage taskSubStage;
 
         @Documentation(description = "A list of tenant links which can access this task.")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = { PropertyIndexingOption.EXPAND })
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = {
+                PropertyIndexingOption.EXPAND })
         public List<String> tenantLinks;
 
         /**
@@ -169,16 +191,19 @@ public class EndpointRemovalTaskService
 
         switch (currentState.taskSubStage) {
         case LOAD_ENDPOINT:
-            getEndpoint(currentState, SubStage.DELETE_ASSOCIATED);
+            getEndpoint(currentState, SubStage.STOP_ENUMERATION);
             break;
-        case DELETE_ASSOCIATED:
-            deleteAssociatedDocuments(currentState, SubStage.DELETE_RESOURCES);
+        case STOP_ENUMERATION:
+            stopEnumeration(currentState, SubStage.DELETE_RESOURCES);
             break;
         case DELETE_RESOURCES:
-            deleteResources(currentState, SubStage.ISSUING_DELETES);
+            deleteResources(currentState, SubStage.ISSUE_ENDPOINT_DELETE);
             break;
-        case ISSUING_DELETES:
-            doInstanceDeletes(currentState, SubStage.FINISHED);
+        case ISSUE_ENDPOINT_DELETE:
+            doInstanceDeletes(currentState, SubStage.DELETE_RELATED_RESOURCES);
+            break;
+        case DELETE_RELATED_RESOURCES:
+            deleteAssociatedDocuments(currentState, SubStage.FINISHED);
             break;
         case FAILED:
             break;
@@ -188,6 +213,20 @@ public class EndpointRemovalTaskService
         default:
             break;
         }
+    }
+
+    private void stopEnumeration(EndpointRemovalTaskState currentState, SubStage next) {
+        String id = UriUtils.getLastPathSegment(currentState.endpointLink);
+        logInfo("Stopping any scheduled task for endpoint %s", currentState.endpointLink);
+        Operation.createDelete(this, UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logInfo("Unable to delete ScheduleTaskState for endpoint %s : %s",
+                                currentState.endpointLink, e.getMessage());
+                    }
+
+                    sendSelfPatch(TaskStage.STARTED, next);
+                }).sendWith(this);
     }
 
     /**

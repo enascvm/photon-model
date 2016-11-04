@@ -19,12 +19,11 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.services.common.TaskService;
-import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 /**
  * Task service to invoke other tasks on a schedule. The interval
@@ -34,7 +33,8 @@ import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 public class ScheduledTaskService extends TaskService<ScheduledTaskService.ScheduledTaskState> {
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/scheduled-tasks";
 
-    public static class ScheduledTaskState extends TaskServiceState {
+    public static class ScheduledTaskState
+            extends com.vmware.xenon.services.common.TaskService.TaskServiceState {
         /**
          * Link to the service factory
          */
@@ -66,7 +66,6 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
         /**
          * delay before kicking off the task
          */
-        @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Long delayMicros;
     }
@@ -82,6 +81,15 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
 
     @Override
     public void handleStart(Operation start) {
+        if (!ServiceHost.isServiceCreate(start)) {
+            // Skip if this is a restart operation, but make sure we set the maintenanceInterval.
+            if (start.hasBody()) {
+                ScheduledTaskState state = getBody(start);
+                this.setMaintenanceIntervalMicros(state.intervalMicros);
+            }
+            start.complete();
+            return;
+        }
         try {
             if (!start.hasBody()) {
                 start.fail(new IllegalArgumentException("body is required"));
@@ -97,7 +105,8 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
             if (state.intervalMicros != null) {
                 this.setMaintenanceIntervalMicros(state.intervalMicros);
             }
-            state.delayMicros = new Random().longs(1, 0, state.intervalMicros).findFirst().getAsLong();
+            state.delayMicros = state.delayMicros != null ? state.delayMicros
+                    : new Random().longs(1, 0, state.intervalMicros).findFirst().getAsLong();
             invokeTask(state, false);
             start.complete();
         } catch (Throwable e) {
@@ -112,6 +121,10 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
 
     @Override
     public void handlePeriodicMaintenance(Operation maintenanceOp) {
+        if (getProcessingStage() != ProcessingStage.AVAILABLE) {
+            logFine("Skipping maintenance since service is not available: %s ", getUri());
+            return;
+        }
         sendRequest(Operation.createGet(getUri())
                 .setCompletion((getOp, getEx) -> {
                     if (getEx != null) {
