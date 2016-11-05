@@ -18,24 +18,29 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.resources.ComputeService;
-
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
  * Task removes the compute service instances.
  */
-public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskService.ResourceRemovalTaskState> {
+public class ResourceRemovalTaskService
+        extends TaskService<ResourceRemovalTaskService.ResourceRemovalTaskState> {
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/resource-removal-tasks";
 
     public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
@@ -45,7 +50,11 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
      * SubStage.
      */
     public static enum SubStage {
-        WAITING_FOR_QUERY_COMPLETION, ISSUING_DELETES, FINISHED, FAILED
+        WAITING_FOR_QUERY_COMPLETION,
+        ISSUE_ADAPTER_DELETES,
+        DELETE_DOCUMENTS,
+        FINISHED,
+        FAILED
     }
 
     /**
@@ -119,6 +128,10 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
             QueryTask q = new QueryTask();
             q.documentExpirationTimeMicros = state.documentExpirationTimeMicros;
             q.querySpec = state.resourceQuerySpec;
+            // make sure we expand the content
+            if (!q.querySpec.options.contains(QueryOption.EXPAND_CONTENT)) {
+                q.querySpec.options.add(QueryOption.EXPAND_CONTENT);
+            }
             q.documentSelfLink = UUID.randomUUID().toString();
             q.tenantLinks = state.tenantLinks;
             // create the query to find resources
@@ -208,7 +221,10 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
                     newState.taskSubStage = SubStage.FINISHED;
                 } else {
                     newState.taskInfo.stage = TaskState.TaskStage.STARTED;
-                    newState.taskSubStage = SubStage.ISSUING_DELETES;
+
+                    newState.taskSubStage = currentState.options != null
+                            && currentState.options.contains(TaskOption.DOCUMENT_CHANGES_ONLY)
+                                    ? SubStage.DELETE_DOCUMENTS : SubStage.ISSUE_ADAPTER_DELETES;
                 }
                 sendSelfPatch(newState);
                 return;
@@ -219,8 +235,11 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
                 getQueryResults(currentState);
             }, 1, TimeUnit.SECONDS);
             break;
-        case ISSUING_DELETES:
+        case ISSUE_ADAPTER_DELETES:
             doInstanceDeletes(currentState, queryTask, null);
+            break;
+        case DELETE_DOCUMENTS:
+            deleteDocuments(currentState, queryTask);
             break;
         case FAILED:
             break;
@@ -229,6 +248,38 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
         default:
             break;
         }
+    }
+
+    private void deleteDocuments(ResourceRemovalTaskState currentState, QueryTask queryTask) {
+        Stream<Operation> deletes = queryTask.results.documents.values().stream()
+                .map(d -> Utils.fromJson(d, ComputeState.class))
+                .flatMap(c -> {
+                    Stream<Operation> ops = Stream
+                            .of(Operation.createDelete(this, c.documentSelfLink));
+                    if (c.diskLinks != null && !c.diskLinks.isEmpty()) {
+                        ops = Stream.concat(ops,
+                                c.diskLinks.stream().map(l -> Operation.createDelete(this, l)));
+                    }
+                    if (c.networkInterfaceLinks != null && !c.networkInterfaceLinks.isEmpty()) {
+                        ops = Stream.concat(ops, c.networkInterfaceLinks.stream()
+                                .map(l -> Operation.createDelete(this, l)));
+                    }
+                    return ops;
+                });
+        OperationJoin.create(deletes)
+                .setCompletion((ox, exc) -> {
+                    // delete query
+                    sendRequest(Operation.createDelete(this, currentState.resourceQueryLink));
+                    if (exc != null) {
+                        logSevere("Failure deleting compute states from the local system",
+                                Utils.toString(exc));
+                        sendFailureSelfPatch(exc.values().iterator().next());
+                        return;
+                    }
+                    sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
+                })
+                .sendWith(this);
+
     }
 
     private void doInstanceDeletes(ResourceRemovalTaskState currentState,
@@ -260,39 +311,33 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
                             // current state
                             // is still at REMOVING_RESOURCES, we will just
                             // increment a counter
-                            ResourceRemovalTaskState subTaskPatchBody = new ResourceRemovalTaskState();
-                            subTaskPatchBody.taskInfo = new TaskState();
-                            subTaskPatchBody.taskInfo.stage = TaskState.TaskStage.FAILED;
-                            sendPatch(
-                                    UriUtils.buildUri(getHost(), subTaskLink),
-                                    subTaskPatchBody);
+                            ResourceOperationResponse subTaskPatchBody = ResourceOperationResponse
+                                    .fail(resourceLink, e);
+                            sendPatch(subTaskLink, subTaskPatchBody);
                             return;
                         }
                         sendInstanceDelete(resourceLink, subTaskLink, o,
                                 currentState);
                     }));
         }
-        sendRequest(Operation
-                .createDelete(this, currentState.resourceQueryLink));
     }
 
     /**
-     * Before we proceed with issuing DELETE requests to the instance services
-     * we must create a sub task that will track the DELETE completions. The
-     * instance service will issue a PATCH with TaskStage.FINISHED, for every
-     * PATCH we send it, to delete the compute resource
+     * Before we proceed with issuing DELETE requests to the instance services we must create a sub
+     * task that will track the DELETE completions. The instance service will issue a PATCH with
+     * TaskStage.FINISHED, for every PATCH we send it, to delete the compute resource
      */
     private void createSubTaskForDeleteCallbacks(
             ResourceRemovalTaskState currentState, int resourceCount,
             QueryTask queryTask) {
-        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
-        ResourceRemovalTaskState subTaskPatchBody = new ResourceRemovalTaskState();
-        subTaskPatchBody.taskInfo = new TaskState();
-        subTaskPatchBody.taskInfo.stage = TaskState.TaskStage.FINISHED;
-        subTaskPatchBody.taskSubStage = SubStage.FINISHED;
+
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
+        callback.onSuccessTo(SubStage.DELETE_DOCUMENTS);
+
+        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
+
         // tell the sub task with what to patch us, on completion
-        subTaskInitState.parentPatchBody = Utils.toJson(subTaskPatchBody);
-        subTaskInitState.parentTaskLink = getSelfLink();
+        subTaskInitState.serviceTaskCallback = callback;
         subTaskInitState.completionsRemaining = resourceCount;
         subTaskInitState.errorThreshold = currentState.errorThreshold;
         subTaskInitState.tenantLinks = currentState.tenantLinks;
@@ -309,44 +354,49 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
                                         SubStage.FAILED, e);
                                 return;
                             }
-                            SubTaskService.SubTaskState body = o
+                            SubTaskService.SubTaskState<?> body = o
                                     .getBody(SubTaskService.SubTaskState.class);
                             // continue with deletes, passing the sub task link
                             doInstanceDeletes(currentState, queryTask,
                                     body.documentSelfLink);
                         });
-        getHost().startService(startPost, new SubTaskService());
+        getHost().startService(startPost, new SubTaskService<SubStage>());
     }
 
     private void sendInstanceDelete(String resourceLink, String subTaskLink,
             Operation o, ResourceRemovalTaskState currentState) {
         ComputeService.ComputeStateWithDescription chd = o
                 .getBody(ComputeService.ComputeStateWithDescription.class);
-        ComputeInstanceRequest deleteReq = new ComputeInstanceRequest();
-        deleteReq.resourceReference = UriUtils.buildUri(getHost(), resourceLink);
-        deleteReq.taskReference = UriUtils.buildUri(getHost(),
-                subTaskLink);
-        deleteReq.requestType =
-                (currentState.options != null && currentState.options.contains(TaskOption.DOCUMENT_CHANGES_ONLY))
-                ? ComputeInstanceRequest.InstanceRequestType.DELETE_DOCUMENTS_ONLY : ComputeInstanceRequest.InstanceRequestType.DELETE;
-        deleteReq.isMockRequest = currentState.isMockRequest;
-        sendRequest(Operation
-                .createPatch(chd.description.instanceAdapterReference)
-                .setBody(deleteReq)
-                .setCompletion(
-                        (deleteOp, e) -> {
-                            if (e != null) {
-                                logWarning(
-                                        "PATCH to instance service %s, failed: %s",
-                                        deleteOp.getUri(), e.toString());
-                                ResourceRemovalTaskState subTaskPatchBody = new ResourceRemovalTaskState();
-                                subTaskPatchBody.taskInfo = new TaskState();
-                                subTaskPatchBody.taskInfo.stage = TaskState.TaskStage.FAILED;
-                                sendPatch(UriUtils.buildUri(getHost(),
-                                        subTaskLink), subTaskPatchBody);
-                                return;
-                            }
-                        }));
+        if (chd.description.instanceAdapterReference != null) {
+            ComputeInstanceRequest deleteReq = new ComputeInstanceRequest();
+            deleteReq.resourceReference = UriUtils.buildUri(getHost(), resourceLink);
+            deleteReq.taskReference = UriUtils.buildUri(getHost(),
+                    subTaskLink);
+            deleteReq.requestType = ComputeInstanceRequest.InstanceRequestType.DELETE;
+            deleteReq.isMockRequest = currentState.isMockRequest;
+            sendRequest(Operation
+                    .createPatch(chd.description.instanceAdapterReference)
+                    .setBody(deleteReq)
+                    .setCompletion(
+                            (deleteOp, e) -> {
+                                if (e != null) {
+                                    logWarning(
+                                            "PATCH to instance service %s, failed: %s",
+                                            deleteOp.getUri(), e.toString());
+                                    ResourceOperationResponse fail = ResourceOperationResponse
+                                            .fail(resourceLink, e);
+                                    sendPatch(subTaskLink, fail);
+                                    return;
+                                }
+                            }));
+        } else {
+            logWarning(
+                    "Compute instance %s doesn't not have configured instanceAdapter. Only local resource will be deleted.",
+                    resourceLink);
+            ResourceOperationResponse subTaskPatchBody = ResourceOperationResponse
+                    .finish(resourceLink);
+            sendPatch(subTaskLink, subTaskPatchBody);
+        }
     }
 
     public void getQueryResults(ResourceRemovalTaskState currentState) {
@@ -419,9 +469,9 @@ public class ResourceRemovalTaskService extends TaskService<ResourceRemovalTaskS
         sendSelfPatch(body);
     }
 
-    private void sendPatch(URI uri, Object body) {
+    private void sendPatch(String link, Object body) {
         Operation patch = Operation
-                .createPatch(uri)
+                .createPatch(this, link)
                 .setBody(body)
                 .setCompletion(
                         (o, ex) -> {

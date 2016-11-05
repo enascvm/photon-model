@@ -20,10 +20,11 @@ import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.tasks.ServiceTaskCallback;
+import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAggregationTaskService.SingleResourceStatsAggregationTaskState;
-
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -32,7 +33,6 @@ import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.ServiceUriPaths;
@@ -59,6 +59,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
     public static final String STATS_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX + "StatsAggregationTaskService.query.resultLimit";
     private static final int DEFAULT_QUERY_RESULT_LIMIT = 50;
+    private static final String PROP_NEXT_PAGE_LINK = "__nextPageLink";
 
     public static class StatsAggregationTaskState extends TaskService.TaskServiceState {
 
@@ -71,7 +72,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public StatsAggregationStage taskStage;
+        public StatsAggregationStage taskSubStage;
 
         /**
          * cursor for obtaining compute services - this is set for the first time based on
@@ -113,13 +114,13 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
     protected void initializeState(StatsAggregationTaskState state, Operation postOp) {
         logInfo("Started stats aggregation");
         super.initializeState(state, postOp);
-        state.taskStage = StatsAggregationStage.INIT;
+        state.taskSubStage = StatsAggregationStage.INIT;
     }
 
     @Override
     public void handlePatch(Operation patch) {
         StatsAggregationTaskState currentState = getState(patch);
-        StatsAggregationTaskState patchState = getBody(patch);
+        StatsAggregationTaskState patchState = getTaskBody(patch);
         validateTransition(patch, currentState, patchState);
         updateState(currentState, patchState);
         patch.setBody(currentState);
@@ -128,7 +129,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         switch (currentState.taskInfo.stage) {
         case STARTED:
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-3111
-            logFine("Started stats aggregation. Stage [%s], PageLink [%s]", currentState.taskStage,
+            logFine("Started stats aggregation. Stage [%s], PageLink [%s]", currentState.taskSubStage,
                     currentState.queryResultLink);
             handleStagePatch(currentState);
             break;
@@ -156,7 +157,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
     }
 
     private void handleStagePatch(StatsAggregationTaskState currentState) {
-        switch (currentState.taskStage) {
+        switch (currentState.taskSubStage) {
         case INIT:
             initializeQuery(currentState);
             break;
@@ -188,7 +189,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
                     } else {
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-                        patchBody.taskStage = StatsAggregationStage.GET_RESOURCES;
+                        patchBody.taskSubStage = StatsAggregationStage.GET_RESOURCES;
                         patchBody.queryResultLink = rsp.results.nextPageLink;
                     }
                     sendSelfPatch(patchBody);
@@ -218,19 +219,18 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
     private void createSubTask(List<String> computeResources, String nextPageLink,
             StatsAggregationTaskState currentState) {
-        StatsAggregationTaskState patchBody = new StatsAggregationTaskState();
+        ServiceTaskCallback<StatsAggregationStage> callback = ServiceTaskCallback
+                .create(getSelfLink());
         if (nextPageLink != null) {
-            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-            patchBody.taskStage = StatsAggregationStage.GET_RESOURCES;
-            patchBody.queryResultLink = nextPageLink;
+            callback.onSuccessTo(StatsAggregationStage.GET_RESOURCES)
+                    .addProperty(PROP_NEXT_PAGE_LINK, nextPageLink);
         } else {
-            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+            callback.onSuccessFinishTask();
         }
-        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
-        subTaskInitState.parentPatchBody = Utils.toJson(patchBody);
+        SubTaskService.SubTaskState<StatsAggregationStage> subTaskInitState = new SubTaskService.SubTaskState<StatsAggregationStage>();
         subTaskInitState.errorThreshold = 0;
         subTaskInitState.completionsRemaining = computeResources.size();
-        subTaskInitState.parentTaskLink = getSelfLink();
+        subTaskInitState.serviceTaskCallback = callback;
         Operation startPost = Operation
                 .createPost(this, UUID.randomUUID().toString())
                 .setBody(subTaskInitState)
@@ -239,7 +239,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                         TaskUtils.sendFailurePatch(this, new StatsAggregationTaskState(), postEx);
                         return;
                     }
-                    SubTaskService.SubTaskState body = postOp
+                    SubTaskService.SubTaskState<?> body = postOp
                             .getBody(SubTaskService.SubTaskState.class);
                     // kick off a aggregation task for each resource and track completion
                     // via the compute subtask
@@ -247,7 +247,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                         createSingleResourceComputeTask(computeLink, body.documentSelfLink, currentState);
                     }
                 });
-        getHost().startService(startPost, new SubTaskService());
+        getHost().startService(startPost, new SubTaskService<StatsAggregationStage>());
     }
 
     private void createSingleResourceComputeTask(String resourceLink, String subtaskLink, StatsAggregationTaskState currentState ) {
@@ -264,5 +264,14 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                             TaskUtils.sendFailurePatch(this, new StatsAggregationTaskState(), factoryPostEx);
                         }
                     }));
+    }
+
+    private StatsAggregationTaskState getTaskBody(Operation op) {
+        StatsAggregationTaskState body = op.getBody(StatsAggregationTaskState.class);
+        if (ServiceTaskCallbackResponse.KIND.equals(body.documentKind)) {
+            ServiceTaskCallbackResponse<?> cr = op.getBody(ServiceTaskCallbackResponse.class);
+            body.queryResultLink = cr.getProperty(PROP_NEXT_PAGE_LINK);
+        }
+        return body;
     }
 }

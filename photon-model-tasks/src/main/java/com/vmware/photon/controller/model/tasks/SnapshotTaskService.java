@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
 import com.vmware.photon.controller.model.resources.SnapshotService;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -217,14 +216,12 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
                         }));
     }
 
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     private void createSubTaskForSnapshotCallback(SnapshotTaskState currentState) {
         SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
-        SnapshotTaskState subTaskPatchBody = new SnapshotTaskState();
-        subTaskPatchBody.taskInfo = new TaskState();
-        subTaskPatchBody.taskInfo.stage = TaskState.TaskStage.FINISHED;
         // tell the sub task with what to patch us, on completion
-        subTaskInitState.parentPatchBody = Utils.toJson(subTaskPatchBody);
-        subTaskInitState.parentTaskLink = getSelfLink();
+        subTaskInitState.serviceTaskCallback = ServiceTaskCallback.create(getSelfLink())
+                .onSuccessFinishTask();
         Operation startPost = Operation
                 .createPost(this, UUID.randomUUID().toString())
                 .setBody(subTaskInitState)

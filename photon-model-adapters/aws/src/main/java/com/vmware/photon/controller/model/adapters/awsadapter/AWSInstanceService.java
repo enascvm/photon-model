@@ -29,7 +29,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -62,10 +61,8 @@ import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -92,12 +89,14 @@ public class AWSInstanceService extends StatelessService {
     private static final String AWS_TERMINATED_NAME = "terminated";
 
     public AWSInstanceService() {
-        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 
@@ -159,7 +158,6 @@ public class AWSInstanceService extends StatelessService {
                 handleAllocation(aws);
                 break;
             case DELETE:
-            case DELETE_DOCUMENTS_ONLY:
                 aws.stage = AWSStages.DELETE;
                 handleAllocation(aws);
                 break;
@@ -251,7 +249,8 @@ public class AWSInstanceService extends StatelessService {
             aws.stage = next;
             handleAllocation(aws);
         };
-        URI parentURI = ComputeStateWithDescription.buildUri(UriUtils.buildUri(getHost(), aws.child.parentLink));
+        URI parentURI = ComputeStateWithDescription
+                .buildUri(UriUtils.buildUri(getHost(), aws.child.parentLink));
         AdapterUtils.getServiceState(this, parentURI, onSuccess, getFailureConsumer(aws));
     }
 
@@ -321,7 +320,8 @@ public class AWSInstanceService extends StatelessService {
      * method will retrieve network interfaces for targeted image
      */
     private void getVMNetworkInterfaces(AWSAllocation aws, AWSStages next) {
-        if (aws.child.networkInterfaceLinks == null || aws.child.networkInterfaceLinks.size() == 0) {
+        if (aws.child.networkInterfaceLinks == null
+                || aws.child.networkInterfaceLinks.size() == 0) {
             aws.stage = next;
             handleAllocation(aws);
             return;
@@ -604,7 +604,8 @@ public class AWSInstanceService extends StatelessService {
                 AWSTaskStatusChecker
                         .create(this.amazonEC2Client, instanceId,
                                 AWSInstanceService.AWS_RUNNING_NAME, consumer, this.computeReq,
-                                this.service, this.taskExpirationTimeMicros).start();
+                                this.service, this.taskExpirationTimeMicros)
+                        .start();
             };
 
             // add the name tag only if there are no tag links
@@ -646,9 +647,8 @@ public class AWSInstanceService extends StatelessService {
 
     private void deleteInstance(AWSAllocation aws) {
 
-        if (aws.computeRequest.isMockRequest ||
-                aws.computeRequest.requestType == InstanceRequestType.DELETE_DOCUMENTS_ONLY) {
-            deleteComputeResource(this, aws.child, aws.computeRequest);
+        if (aws.computeRequest.isMockRequest) {
+            AdapterUtils.sendPatchToProvisioningTask(this, aws.computeRequest.taskReference);
             return;
         }
 
@@ -667,8 +667,8 @@ public class AWSInstanceService extends StatelessService {
                 instanceIdList);
         StatelessService service = this;
         AsyncHandler<TerminateInstancesRequest, TerminateInstancesResult> terminateHandler = buildTerminationCallbackHandler(
-                service, aws.computeRequest, aws.child, aws.amazonEC2Client,
-                instanceId, aws.taskExpirationMicros);
+                service, aws.computeRequest, aws.amazonEC2Client, instanceId,
+                aws.taskExpirationMicros);
         aws.amazonEC2Client.terminateInstancesAsync(termRequest,
                 terminateHandler);
     }
@@ -678,7 +678,6 @@ public class AWSInstanceService extends StatelessService {
 
         private StatelessService service;
         private ComputeInstanceRequest computeReq;
-        private ComputeStateWithDescription computeDesc;
         private AmazonEC2AsyncClient amazonEC2Client;
         private OperationContext opContext;
         private String instanceId;
@@ -686,12 +685,10 @@ public class AWSInstanceService extends StatelessService {
 
         private AWSTerminateHandler(StatelessService service,
                 ComputeInstanceRequest computeReq,
-                ComputeStateWithDescription computeDesc,
                 AmazonEC2AsyncClient amazonEC2Client, String instanceId,
                 long taskExpirationTimeMicros) {
             this.service = service;
             this.computeReq = computeReq;
-            this.computeDesc = computeDesc;
             this.amazonEC2Client = amazonEC2Client;
             this.opContext = OperationContext.getOperationContext();
             this.instanceId = instanceId;
@@ -720,9 +717,8 @@ public class AWSInstanceService extends StatelessService {
                                 new IllegalStateException("Error getting instance"));
                         return;
                     }
-                    deleteComputeResource(AWSTerminateHandler.this.service,
-                            AWSTerminateHandler.this.computeDesc,
-                            AWSTerminateHandler.this.computeReq);
+                    AdapterUtils.sendPatchToProvisioningTask(AWSTerminateHandler.this.service,
+                            AWSTerminateHandler.this.computeReq.taskReference);
                 }
             };
             AWSTaskStatusChecker.create(this.amazonEC2Client, this.instanceId,
@@ -734,44 +730,10 @@ public class AWSInstanceService extends StatelessService {
     // callback handler to be invoked once a aws terminate calls returns
     private AsyncHandler<TerminateInstancesRequest, TerminateInstancesResult> buildTerminationCallbackHandler(
             StatelessService service, ComputeInstanceRequest computeReq,
-            ComputeStateWithDescription computeDesc,
             AmazonEC2AsyncClient amazonEC2Client, String instanceId,
             long taskExpirationTimeMicros) {
-        return new AWSTerminateHandler(service, computeReq, computeDesc,
-                amazonEC2Client, instanceId, taskExpirationTimeMicros);
-    }
-
-    private void deleteComputeResource(StatelessService service,
-            ComputeStateWithDescription computeDesc,
-            ComputeInstanceRequest computeReq) {
-        List<String> resourcesToDelete = new ArrayList<>();
-        resourcesToDelete.add(computeDesc.documentSelfLink);
-        if (computeDesc.diskLinks != null) {
-            resourcesToDelete.addAll(computeDesc.diskLinks);
-        }
-        if (computeDesc.networkInterfaceLinks != null) {
-            resourcesToDelete.addAll(computeDesc.networkInterfaceLinks);
-        }
-        AtomicInteger deleteCallbackCount = new AtomicInteger(0);
-        CompletionHandler deletionKickoffCompletion = (sendDeleteOp,
-                sendDeleteEx) -> {
-            if (sendDeleteEx != null) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        computeReq.taskReference, sendDeleteEx);
-                return;
-            }
-            if (deleteCallbackCount.incrementAndGet() == resourcesToDelete
-                    .size()) {
-                AdapterUtils.sendPatchToProvisioningTask(this,
-                        computeReq.taskReference);
-            }
-        };
-        for (String resourcetoDelete : resourcesToDelete) {
-            sendRequest(Operation
-                    .createDelete(service.getHost(), resourcetoDelete)
-                    .setBody(new ServiceDocument())
-                    .setCompletion(deletionKickoffCompletion));
-        }
+        return new AWSTerminateHandler(service, computeReq, amazonEC2Client, instanceId,
+                taskExpirationTimeMicros);
     }
 
     /*
@@ -815,7 +777,8 @@ public class AWSInstanceService extends StatelessService {
         // make a call to validate credentials
         aws.amazonEC2Client.describeAvailabilityZonesAsync(new DescribeAvailabilityZonesRequest(),
                 new AsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult>() {
-                    @Override public void onError(Exception e) {
+                    @Override
+                    public void onError(Exception e) {
                         if (e instanceof AmazonServiceException) {
                             AmazonServiceException ase = (AmazonServiceException) e;
                             if (ase.getStatusCode() == STATUS_CODE_UNAUTHORIZED) {
@@ -829,7 +792,8 @@ public class AWSInstanceService extends StatelessService {
                         aws.awsOperation.fail(e);
                     }
 
-                    @Override public void onSuccess(DescribeAvailabilityZonesRequest request,
+                    @Override
+                    public void onSuccess(DescribeAvailabilityZonesRequest request,
                             DescribeAvailabilityZonesResult describeAvailabilityZonesResult) {
                         aws.awsOperation.complete();
                     }

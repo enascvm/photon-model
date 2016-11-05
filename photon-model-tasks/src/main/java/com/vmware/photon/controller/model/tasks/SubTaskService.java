@@ -14,27 +14,27 @@
 package com.vmware.photon.controller.model.tasks;
 
 import java.util.List;
+import java.util.Set;
 
+import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
+import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
- * Utility task that waits for multiple tasks to complete
- * When those tasks have completed the operation they issue a PATCH to
- * this service with the taskInfo.stage set to FINISHED, or if the operation
- * fails, set to FAILED.
- * The subtask service then issues one PATCH to the service referenced via
- * parentTaskLink
+ * Utility task that waits for multiple tasks to complete When those tasks have completed the
+ * operation they issue a PATCH to this service with the taskInfo.stage set to FINISHED, or if the
+ * operation fails, set to FAILED. The subtask service then issues one PATCH to the service
+ * referenced via parentTaskLink
  */
-public class SubTaskService extends TaskService<SubTaskService.SubTaskState> {
+public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskService.SubTaskState<E>> {
 
     /**
      * Represent the state of subtask service.
      */
-    public static class SubTaskState extends TaskService.TaskServiceState {
+    public static class SubTaskState<E extends Enum<E>> extends TaskService.TaskServiceState {
         /**
          * Number of tasks to track.
          */
@@ -55,15 +55,11 @@ public class SubTaskService extends TaskService<SubTaskService.SubTaskState> {
          */
         public double errorThreshold;
 
-        /**
-         * Link to parent task.
-         */
-        public String parentTaskLink;
+        public ServiceTaskCallback<E> serviceTaskCallback;
 
-        /**
-         * Parent task document as json.
-         */
-        public String parentPatchBody;
+        public Set<ResourceOperationResponse> failures;
+
+        public Set<ResourceOperationResponse> completed;
 
         /**
          * Tenant links.
@@ -77,9 +73,8 @@ public class SubTaskService extends TaskService<SubTaskService.SubTaskState> {
 
     @Override
     public void handlePatch(Operation patch) {
-        SubTaskState patchBody = patch
-                .getBody(SubTaskState.class);
-        SubTaskState currentState = getState(patch);
+        SubTaskState<E> patchBody = getBody(patch);
+        SubTaskState<E> currentState = getState(patch);
 
         if (patchBody.taskInfo == null || patchBody.taskInfo.stage == null) {
             String error = "taskInfo, taskInfo.stage are required";
@@ -88,28 +83,28 @@ public class SubTaskService extends TaskService<SubTaskService.SubTaskState> {
             return;
         }
 
-        String parentPatchBody = currentState.parentPatchBody;
+        if (currentState.completionsRemaining == 0) {
+            // don't do anything, we are done
+            patch.complete();
+            return;
+        }
+
         if (patchBody.taskInfo.stage == TaskStage.FAILED
                 || patchBody.taskInfo.stage == TaskStage.CANCELLED) {
             currentState.failCount++;
             currentState.completionsRemaining--;
 
-            double failedRatio = (double) currentState.failCount
-                    / (double) (currentState.finishedCount
-                            + currentState.failCount + currentState.completionsRemaining);
-
-            if (currentState.errorThreshold == 0
-                    || failedRatio > currentState.errorThreshold) {
-                logWarning("Notifying parent of task failure: %s (%s)",
-                        Utils.toJsonHtml(patchBody.failureMessage),
-                        patchBody.taskInfo.stage);
-
-                parentPatchBody = Utils.toJson(patchBody);
-                currentState.completionsRemaining = 0;
+            if (ResourceOperationResponse.KIND.equals(patchBody.documentKind)) {
+                ResourceOperationResponse r = patch.getBody(ResourceOperationResponse.class);
+                currentState.failures.add(r);
             }
         } else if (patchBody.taskInfo.stage == TaskStage.FINISHED) {
             currentState.completionsRemaining--;
             currentState.finishedCount++;
+            if (ResourceOperationResponse.KIND.equals(patchBody.documentKind)) {
+                ResourceOperationResponse r = patch.getBody(ResourceOperationResponse.class);
+                currentState.completed.add(r);
+            }
         } else if (patchBody.taskInfo.stage == TaskStage.STARTED) {
             // don't decrement completions remaining.
         } else {
@@ -122,20 +117,39 @@ public class SubTaskService extends TaskService<SubTaskService.SubTaskState> {
         // any operation on state before a operation is completed, is guaranteed
         // to be atomic
         // (service is synchronized)
+        logFine("Remaining %d", currentState.completionsRemaining);
         boolean isFinished = currentState.completionsRemaining == 0;
         patch.complete();
-
-        logFine("Remaining %d", currentState.completionsRemaining);
 
         if (!isFinished) {
             return;
         }
 
-        sendRequest(Operation.createPatch(this, currentState.parentTaskLink)
+        ServiceTaskCallbackResponse<E> parentPatchBody = currentState.serviceTaskCallback
+                .getFinishedResponse();
+        if (currentState.failCount > 0) {
+            double failedRatio = (double) currentState.failCount
+                    / (double) (currentState.finishedCount
+                            + currentState.failCount + currentState.completionsRemaining);
+
+            if (currentState.errorThreshold == 0
+                    || failedRatio > currentState.errorThreshold) {
+                logWarning("Notifying parent of task failure: %s (%s)",
+                        Utils.toJsonHtml(patchBody.failureMessage),
+                        patchBody.taskInfo.stage);
+
+                parentPatchBody = currentState.serviceTaskCallback
+                        .getFailedResponse(patchBody.taskInfo.failure);
+            }
+        }
+
+        parentPatchBody.completed = currentState.completed;
+        parentPatchBody.failures = currentState.failures;
+
+        sendRequest(Operation.createPatch(this, currentState.serviceTaskCallback.serviceSelfLink)
                 .setBody(parentPatchBody));
 
         // we are a one shot task, self DELETE
-        sendRequest(Operation.createDelete(getUri()).setBody(
-                new ServiceDocument()));
+        sendRequest(Operation.createDelete(this, getSelfLink()));
     }
 }

@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
@@ -81,9 +80,6 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 break;
             case DELETE:
                 handleDeleteInstance(ctx);
-                break;
-            case DELETE_DOCUMENTS_ONLY:
-                deleteStatesOnly(mgr, ctx);
                 break;
             default:
                 Throwable error = new IllegalStateException(
@@ -321,11 +317,6 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         OperationSequence seq = OperationSequence
                                 .create(finishTask);
 
-                        OperationJoin deleteComputeState = createComputeStateDelete(ctx);
-                        if (deleteComputeState != null) {
-                            seq = seq.next(deleteComputeState);
-                        }
-
                         seq.setCompletion(ctx.logOnError())
                                 .sendWith(this);
                     } catch (Exception e) {
@@ -336,43 +327,5 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
     private void handleMockRequest(TaskManager mgr, ComputeInstanceRequest req) {
         mgr.patchTask(TaskStage.FINISHED);
-    }
-
-    private void deleteStatesOnly(TaskManager mgr, ProvisionContext ctx) {
-        OperationSequence seq = OperationSequence
-                .create(mgr.createTaskPatch(TaskStage.FINISHED));
-
-        OperationJoin deleteComputeState = createComputeStateDelete(ctx);
-        if (deleteComputeState != null) {
-            seq = seq.next(deleteComputeState);
-        }
-
-        seq.setCompletion(ctx.logOnError())
-                .sendWith(this);
-    }
-
-    private OperationJoin createComputeStateDelete(ProvisionContext ctx) {
-        List<Operation> deleteOps = new ArrayList<>();
-
-        deleteOps.add(Operation.createDelete(ctx.computeReference));
-
-        if (ctx.child.diskLinks != null) {
-            deleteOps.addAll(ctx.child.diskLinks.stream()
-                    .map(link -> Operation.createDelete(UriUtils.buildUri(this.getHost(), link)))
-                    .collect(Collectors.toList()));
-        }
-
-        if (ctx.child.networkInterfaceLinks != null) {
-            deleteOps.addAll(ctx.child.networkInterfaceLinks.stream()
-                    .map(link -> Operation.createDelete(UriUtils.buildUri(this.getHost(), link)))
-                    .collect(Collectors.toList()));
-        }
-
-        if (deleteOps.isEmpty()) {
-            return null;
-        } else {
-            return OperationJoin.create(deleteOps)
-                    .setCompletion(ctx.logOnError());
-        }
     }
 }

@@ -29,13 +29,11 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeService;
-
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * This class implements tests for the {@link ResourceRemovalTaskService} class.
@@ -215,15 +213,45 @@ public class ResourceRemovalTaskServiceTest extends Suite {
 
             // restart and check service restart successfully.
             this.getHost().startFactory(new ResourceRemovalTaskService());
+        }
 
-            // TODO work around until we move to Xenon 0.7.1 or later release. Factories started after
-            // initial synch, will not have children restarted
-            this.host.scheduleNodeGroupChangeMaintenance(ServiceUriPaths.DEFAULT_NODE_SELECTOR);
-            ResourceRemovalTaskService.ResourceRemovalTaskState stateAfterRestart = this
-                    .getServiceSynchronously(
-                            returnState.documentSelfLink,
+        @Test
+        public void testLocalResourceRemovalOnlySuccess() throws Throwable {
+            ResourceRemovalTaskService.ResourceRemovalTaskState startState = buildValidStartState();
+            startState.options = EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY);
+
+            ComputeService.ComputeStateWithDescription cs = ModelUtils
+                    .createComputeWithDescription(this,
+                            MockAdapter.MockFailOnInvokeInstanceAdapter.SELF_LINK,
+                            null);
+
+            ResourceRemovalTaskService.ResourceRemovalTaskState returnState = this
+                    .postServiceSynchronously(
+                            ResourceRemovalTaskService.FACTORY_LINK,
+                            startState,
                             ResourceRemovalTaskService.ResourceRemovalTaskState.class);
-            assertThat(stateAfterRestart, notNullValue());
+
+            returnState = this
+                    .waitForServiceState(
+                            ResourceRemovalTaskService.ResourceRemovalTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> state.taskInfo.stage == TaskState.TaskStage.FINISHED);
+
+            assertThat(returnState.taskSubStage,
+                    is(ResourceRemovalTaskService.SubStage.FINISHED));
+
+            // Clean up the compute and description documents
+            this.deleteServiceSynchronously(cs.documentSelfLink);
+            this.deleteServiceSynchronously(cs.descriptionLink);
+
+            // Stop factory service.
+            this.deleteServiceSynchronously(ResourceRemovalTaskService.FACTORY_LINK);
+
+            // stop the removal task
+            this.stopServiceSynchronously(returnState.documentSelfLink);
+
+            // restart and check service restart successfully.
+            this.getHost().startFactory(new ResourceRemovalTaskService());
         }
 
         @Test

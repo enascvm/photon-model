@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -94,7 +93,6 @@ import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
@@ -111,9 +109,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -247,7 +243,6 @@ public class AzureInstanceService extends StatelessService {
                 validateAzureCredentials(ctx);
                 break;
             case DELETE:
-            case DELETE_DOCUMENTS_ONLY:
                 ctx.stage = AzureStages.DELETE;
                 handleAllocation(ctx);
                 break;
@@ -361,9 +356,10 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private void deleteVM(AzureAllocationContext ctx) {
-        if (ctx.computeRequest.isMockRequest
-                || ctx.computeRequest.requestType == InstanceRequestType.DELETE_DOCUMENTS_ONLY) {
-            deleteComputeResource(ctx);
+        if (ctx.computeRequest.isMockRequest) {
+            AdapterUtils.sendPatchToProvisioningTask(this, ctx.computeRequest.taskReference);
+            ctx.stage = AzureStages.FINISHED;
+            handleAllocation(ctx);
             return;
         }
 
@@ -390,38 +386,12 @@ public class AzureInstanceService extends StatelessService {
                     @Override
                     public void onSuccess(ServiceResponse<Void> result) {
                         logInfo("Successfully deleted resource group [%s]", resourceGroupName);
-                        deleteComputeResource(ctx);
+                        AdapterUtils.sendPatchToProvisioningTask(AzureInstanceService.this,
+                                ctx.computeRequest.taskReference);
+                        ctx.stage = AzureStages.FINISHED;
+                        handleAllocation(ctx);
                     }
                 });
-    }
-
-    private void deleteComputeResource(AzureAllocationContext ctx) {
-        ComputeStateWithDescription computeDesc = ctx.child;
-        ComputeInstanceRequest computeReq = ctx.computeRequest;
-
-        List<String> resourcesToDelete = new ArrayList<>();
-        resourcesToDelete.add(computeDesc.documentSelfLink);
-        if (computeDesc.diskLinks != null) {
-            resourcesToDelete.addAll(computeDesc.diskLinks);
-        }
-        AtomicInteger deleteCallbackCount = new AtomicInteger(0);
-        CompletionHandler deletionKickoffCompletion = (sendDeleteOp, sendDeleteEx) -> {
-            if (sendDeleteEx != null) {
-                handleError(ctx, sendDeleteEx);
-                return;
-            }
-            if (deleteCallbackCount.incrementAndGet() == resourcesToDelete.size()) {
-                AdapterUtils
-                        .sendPatchToProvisioningTask(this, computeReq.taskReference);
-                ctx.stage = AzureStages.FINISHED;
-                handleAllocation(ctx);
-            }
-        };
-        for (String resourcetoDelete : resourcesToDelete) {
-            sendRequest(Operation.createDelete(UriUtils.buildUri(getHost(), resourcetoDelete))
-                    .setBody(new ServiceDocument())
-                    .setCompletion(deletionKickoffCompletion));
-        }
     }
 
     private void initResourceGroup(AzureAllocationContext ctx, AzureStages nextStage) {

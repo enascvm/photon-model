@@ -70,6 +70,19 @@ public class MockAdapter {
     }
 
     /**
+     * Mock instance adapter that fails if invoked.
+     */
+    public static class MockFailOnInvokeInstanceAdapter extends StatelessService {
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_invoke_fail_instance_adapter";
+
+        @Override
+        public void handleRequest(Operation op) {
+            op.fail(new UnsupportedOperationException("Shouldn't be invoked"));
+        }
+    }
+
+    /**
      * Mock instance adapter that always succeeds.
      */
     public static class MockSuccessInstanceAdapter extends StatelessService {
@@ -86,6 +99,7 @@ public class MockAdapter {
             case PATCH:
                 ComputeInstanceRequest request = op
                         .getBody(ComputeInstanceRequest.class);
+                @SuppressWarnings("rawtypes")
                 SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = new TaskState();
                 computeSubTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
@@ -116,6 +130,7 @@ public class MockAdapter {
             case PATCH:
                 ComputeInstanceRequest request = op
                         .getBody(ComputeInstanceRequest.class);
+                @SuppressWarnings("rawtypes")
                 SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation.createPatch(
@@ -145,6 +160,7 @@ public class MockAdapter {
             case PATCH:
                 ComputeBootRequest request = op
                         .getBody(ComputeBootRequest.class);
+                @SuppressWarnings("rawtypes")
                 SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = new TaskState();
                 computeSubTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
@@ -175,6 +191,7 @@ public class MockAdapter {
             case PATCH:
                 ComputeBootRequest request = op
                         .getBody(ComputeBootRequest.class);
+                @SuppressWarnings("rawtypes")
                 SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = new TaskState();
                 computeSubTaskState.taskInfo = createFailedTaskInfo();
@@ -301,6 +318,7 @@ public class MockAdapter {
             switch (op.getAction()) {
             case PATCH:
                 SnapshotRequest request = op.getBody(SnapshotRequest.class);
+                @SuppressWarnings("rawtypes")
                 SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = new TaskState();
                 computeSubTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
@@ -331,6 +349,7 @@ public class MockAdapter {
             switch (op.getAction()) {
             case PATCH:
                 SnapshotRequest request = op.getBody(SnapshotRequest.class);
+                @SuppressWarnings("rawtypes")
                 SubTaskState computeSubTaskState = new SubTaskState();
                 computeSubTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation

@@ -30,7 +30,6 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.ResourceDescriptionService;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
@@ -576,16 +575,14 @@ public class ResourceAllocationTaskService
     private void createSubTaskForProvisionCallbacks(
             ResourceAllocationTaskState currentState,
             ComputeDescriptionService.ComputeDescription desc) {
-        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
-        ResourceAllocationTaskState subTaskPatchBody = new ResourceAllocationTaskState();
-        subTaskPatchBody.taskInfo = new TaskState();
-        subTaskPatchBody.taskSubStage = SubStage.FINISHED;
-        subTaskPatchBody.taskInfo.stage = TaskStage.FINISHED;
-        // tell the sub task with what to patch us, on completion
-        subTaskInitState.parentPatchBody = Utils.toJson(subTaskPatchBody);
-        subTaskInitState.errorThreshold = currentState.errorThreshold;
 
-        subTaskInitState.parentTaskLink = getSelfLink();
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
+        callback.onSuccessFinishTask();
+
+        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
+        subTaskInitState.errorThreshold = currentState.errorThreshold;
+        // tell the sub task with what to patch us, on completion
+        subTaskInitState.serviceTaskCallback = callback;
         subTaskInitState.completionsRemaining = currentState.resourceCount;
         subTaskInitState.tenantLinks = currentState.tenantLinks;
         Operation startPost = Operation
@@ -599,13 +596,13 @@ public class ResourceAllocationTaskService
                                 sendFailureSelfPatch(e);
                                 return;
                             }
-                            SubTaskService.SubTaskState body = o
+                            SubTaskService.SubTaskState<?> body = o
                                     .getBody(SubTaskService.SubTaskState.class);
                             // continue, passing the sub task link
                             doComputeResourceProvisioning(currentState, desc,
                                     body.documentSelfLink);
                         });
-        getHost().startService(startPost, new SubTaskService());
+        getHost().startService(startPost, new SubTaskService<SubStage>());
     }
 
     // Create all the dependencies, then create the compute document. createDisk
@@ -864,6 +861,12 @@ public class ResourceAllocationTaskService
             currentState.taskInfo.failure = body.taskInfo.failure;
             currentState.taskInfo.stage = body.taskInfo.stage;
             currentState.taskSubStage = SubStage.FAILED;
+            return false;
+        }
+
+        if (TaskState.isFinished(body.taskInfo)) {
+            currentState.taskInfo.stage = body.taskInfo.stage;
+            currentState.taskSubStage = SubStage.FINISHED;
             return false;
         }
 

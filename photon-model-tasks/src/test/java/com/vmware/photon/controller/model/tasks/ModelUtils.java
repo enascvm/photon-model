@@ -23,6 +23,11 @@ import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionServiceTest;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.xenon.common.UriUtils;
@@ -68,9 +73,9 @@ public class ModelUtils {
         cs.adapterManagementReference = URI
                 .create("https://esxhost-01:443/sdk");
         cs.diskLinks = new ArrayList<>();
-        cs.diskLinks.add("http://disk");
+        cs.diskLinks.add(createDiskState(test, cs.name).documentSelfLink);
         cs.networkInterfaceLinks = new ArrayList<>();
-        cs.networkInterfaceLinks.add("http://network");
+        cs.networkInterfaceLinks.add(createNetworkInterface(test, cs.name).documentSelfLink);
         cs.customProperties = new HashMap<>();
         cs.customProperties.put(TEST_DESC_PROPERTY_NAME,
                 TEST_DESC_PROPERTY_VALUE);
@@ -83,6 +88,32 @@ public class ModelUtils {
 
         return ComputeService.ComputeStateWithDescription.create(cd,
                 returnState);
+    }
+
+    public static DiskState createDiskState(BaseModelTest test, String name) throws Throwable {
+        DiskState d = new DiskState();
+        d.id = UUID.randomUUID().toString();
+        d.name = name;
+        d.documentSelfLink = d.id;
+        d.type = DiskType.HDD;
+        d.sourceImageReference = new URI("http://sourceImageReference");
+
+        DiskState returnState = test.postServiceSynchronously(DiskService.FACTORY_LINK, d,
+                DiskState.class);
+        return returnState;
+    }
+
+    public static NetworkInterfaceState createNetworkInterface(BaseModelTest test, String name)
+            throws Throwable {
+        NetworkInterfaceState nis = new NetworkInterfaceState();
+        nis.id = UUID.randomUUID().toString();
+        nis.name = name;
+        nis.documentSelfLink = nis.id;
+        nis.address = "10.0.0.0";
+
+        NetworkInterfaceState returnState = test.postServiceSynchronously(
+                NetworkInterfaceService.FACTORY_LINK, nis, NetworkInterfaceState.class);
+        return returnState;
     }
 
     public static ComputeService.ComputeStateWithDescription createComputeWithDescription(

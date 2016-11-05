@@ -20,11 +20,12 @@ import java.util.UUID;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.tasks.ServiceTaskCallback;
+import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
-
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -32,7 +33,6 @@ import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskFactoryService;
@@ -62,6 +62,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
     public static final String STATS_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX + "StatsCollectionTaskService.query.resultLimit";
     private static final String QUERY_RESULT_LIMIT = System.getProperty(STATS_QUERY_RESULT_LIMIT);
     private static final int DEFAULT_QUERY_RESULT_LIMIT = 50;
+    private static final String PROP_NEXT_PAGE_LINK = "__nextPageLink";
 
     public enum StatsCollectionStage {
         INIT, GET_RESOURCES
@@ -78,7 +79,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
          */
         public String resourcePoolLink;
 
-        public StatsCollectionStage taskStage;
+        public StatsCollectionStage taskSubStage;
 
         public URI statsAdapterReference;
 
@@ -108,7 +109,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
             logInfo("Starting stats collection task for: " + state.resourcePoolLink);
             start.complete();
             state.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-            state.taskStage = StatsCollectionStage.INIT;
+            state.taskSubStage = StatsCollectionStage.INIT;
             handleStagePatch(start, state);
         } catch (Throwable e) {
             start.fail(e);
@@ -118,8 +119,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
     @Override
     public void handlePatch(Operation patch) {
         StatsCollectionTaskState currentState = getState(patch);
-        StatsCollectionTaskState patchState = patch
-                .getBody(StatsCollectionTaskState.class);
+        StatsCollectionTaskState patchState = getTaskBody(patch);
         updateState(currentState, patchState);
         patch.setBody(currentState);
         patch.complete();
@@ -165,8 +165,8 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         if (patchState.taskInfo != null) {
             currentState.taskInfo = patchState.taskInfo;
         }
-        if (patchState.taskStage != null) {
-            currentState.taskStage = patchState.taskStage;
+        if (patchState.taskSubStage != null) {
+            currentState.taskSubStage = patchState.taskSubStage;
         }
         if (patchState.nextPageLink != null) {
             currentState.nextPageLink = patchState.nextPageLink;
@@ -174,7 +174,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
     }
 
     private void handleStagePatch(Operation op, StatsCollectionTaskState currentState) {
-        switch (currentState.taskStage) {
+        switch (currentState.taskSubStage) {
         case INIT:
             initializeQuery(op, currentState, null);
             break;
@@ -232,7 +232,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
                     } else {
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-                        patchBody.taskStage = StatsCollectionStage.GET_RESOURCES;
+                        patchBody.taskSubStage = StatsCollectionStage.GET_RESOURCES;
                         patchBody.nextPageLink = rsp.results.nextPageLink;
                     }
                     TaskUtils.sendPatch(this, patchBody);
@@ -263,19 +263,19 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
 
     private void createSubTask(List<String> computeResources, String nextPageLink,
             StatsCollectionTaskState currentState) {
-        StatsCollectionTaskState patchBody = new StatsCollectionTaskState();
+        ServiceTaskCallback<StatsCollectionStage> callback = ServiceTaskCallback
+                .create(getSelfLink());
         if (nextPageLink != null) {
-            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-            patchBody.taskStage = StatsCollectionStage.GET_RESOURCES;
-            patchBody.nextPageLink = nextPageLink;
+            callback.onSuccessTo(StatsCollectionStage.GET_RESOURCES)
+                    .addProperty(PROP_NEXT_PAGE_LINK, nextPageLink);
         } else {
-            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+            callback.onSuccessFinishTask();
         }
-        SubTaskState subTaskInitState = new SubTaskState();
-        subTaskInitState.parentPatchBody = Utils.toJson(patchBody);
+
+        SubTaskState<StatsCollectionStage> subTaskInitState = new SubTaskState<StatsCollectionStage>();
         subTaskInitState.errorThreshold = 0;
         subTaskInitState.completionsRemaining = computeResources.size();
-        subTaskInitState.parentTaskLink = getSelfLink();
+        subTaskInitState.serviceTaskCallback = callback;
         Operation startPost = Operation
                 .createPost(this, UUID.randomUUID().toString())
                 .setBody(subTaskInitState)
@@ -284,7 +284,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                         TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), postEx);
                         return;
                     }
-                    SubTaskState body = postOp
+                    SubTaskState<?> body = postOp
                             .getBody(SubTaskState.class);
                     // kick off a collection task for each resource and track completion
                     // via the compute subtask
@@ -292,7 +292,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                         createSingleResourceComputeTask(computeLink, body.documentSelfLink, currentState.statsAdapterReference);
                     }
                 });
-        getHost().startService(startPost, new SubTaskService());
+        getHost().startService(startPost, new SubTaskService<StatsCollectionStage>());
     }
 
     private void createSingleResourceComputeTask(String computeLink, String subtaskLink,
@@ -301,7 +301,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         initState.parentTaskReference = UriUtils.buildPublicUri(getHost(), subtaskLink);
         initState.computeLink = computeLink;
         initState.statsAdapterReference = statsAdapterReference;
-        SubTaskState patchState = new SubTaskState();
+        SubTaskState<StatsCollectionStage> patchState = new SubTaskState<StatsCollectionStage>();
         patchState.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
         initState.parentPatchBody = patchState;
         sendRequest(Operation
@@ -313,5 +313,14 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                             TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), factoryPostEx);
                         }
                     }));
+    }
+
+    private StatsCollectionTaskState getTaskBody(Operation op) {
+        StatsCollectionTaskState body = op.getBody(StatsCollectionTaskState.class);
+        if (ServiceTaskCallbackResponse.KIND.equals(body.documentKind)) {
+            ServiceTaskCallbackResponse<?> cr = op.getBody(ServiceTaskCallbackResponse.class);
+            body.nextPageLink = cr.getProperty(PROP_NEXT_PAGE_LINK);
+        }
+        return body;
     }
 }

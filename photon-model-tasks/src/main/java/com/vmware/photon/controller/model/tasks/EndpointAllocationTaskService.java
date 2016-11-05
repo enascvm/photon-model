@@ -238,21 +238,20 @@ public class EndpointAllocationTaskService
 
     private void createSubTask(CompletionHandler c, SubStage nextStage,
             EndpointAllocationTaskState currentState) {
-        EndpointAllocationTaskState patchBody = new EndpointAllocationTaskState();
-        patchBody.taskInfo = new TaskState();
-        patchBody.taskInfo.stage = TaskStage.STARTED;
-        patchBody.taskSubStage = nextStage;
 
-        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
-        subTaskInitState.parentPatchBody = Utils.toJson(patchBody);
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
+        callback.onSuccessTo(nextStage).onErrorTo(SubStage.FAILED);
+
+        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
         subTaskInitState.errorThreshold = 0;
-        subTaskInitState.parentTaskLink = getSelfLink();
+
+        subTaskInitState.serviceTaskCallback = callback;
         subTaskInitState.tenantLinks = currentState.endpointState.tenantLinks;
         subTaskInitState.documentExpirationTimeMicros = currentState.documentExpirationTimeMicros;
         Operation startPost = Operation
                 .createPost(this, UUID.randomUUID().toString())
                 .setBody(subTaskInitState).setCompletion(c);
-        getHost().startService(startPost, new SubTaskService());
+        getHost().startService(startPost, new SubTaskService<SubStage>());
     }
 
     private void sendEnhanceRequest(Object body, EndpointAllocationTaskState currentState) {

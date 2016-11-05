@@ -23,7 +23,9 @@ public class ComputeInstanceRequest extends ResourceRequest {
      * Instance request type.
      */
     public enum InstanceRequestType {
-        CREATE, DELETE, VALIDATE_CREDENTIALS, DELETE_DOCUMENTS_ONLY
+        CREATE,
+        DELETE,
+        VALIDATE_CREDENTIALS
     }
 
     /**

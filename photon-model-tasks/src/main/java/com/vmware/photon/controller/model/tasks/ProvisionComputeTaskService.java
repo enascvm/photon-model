@@ -27,7 +27,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.Inst
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.BootDevice;
-
+import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.TaskState;
@@ -51,10 +51,10 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
     /**
      * Represent state of a provision task.
      */
-    public static class ProvisionComputeTaskState extends TaskService.TaskServiceState {
+    public static class ProvisionComputeTaskState
+            extends com.vmware.xenon.services.common.TaskService.TaskServiceState {
 
-        public static final long DEFAULT_EXPIRATION_MICROS = TimeUnit.HOURS
-                .toMicros(1);
+        public static final long DEFAULT_EXPIRATION_MICROS = TimeUnit.HOURS.toMicros(1);
         public static final String FIELD_NAME_PARENT_TASK_LINK = "parentTaskReference";
 
         /**
@@ -411,21 +411,19 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
     public void createSubTask(CompletionHandler c,
             ProvisionComputeTaskState.SubStage nextStage,
             ProvisionComputeTaskState currentState) {
-        ProvisionComputeTaskState patchBody = new ProvisionComputeTaskState();
-        patchBody.taskInfo = new TaskState();
-        patchBody.taskInfo.stage = TaskStage.STARTED;
-        patchBody.taskSubStage = nextStage;
 
-        SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
-        subTaskInitState.parentPatchBody = Utils.toJson(patchBody);
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
+        callback.onSuccessTo(nextStage);
+
+        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
         subTaskInitState.errorThreshold = 0;
-        subTaskInitState.parentTaskLink = getSelfLink();
+        subTaskInitState.serviceTaskCallback = callback;
         subTaskInitState.tenantLinks = currentState.tenantLinks;
         subTaskInitState.documentExpirationTimeMicros = currentState.documentExpirationTimeMicros;
         Operation startPost = Operation
                 .createPost(this, UUID.randomUUID().toString())
                 .setBody(subTaskInitState).setCompletion(c);
-        getHost().startService(startPost, new SubTaskService());
+        getHost().startService(startPost, new SubTaskService<SubStage>());
     }
 
     private void sendHostServiceRequest(Object body, URI adapterReference) {
@@ -454,6 +452,14 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
                 patch.fail(new IllegalArgumentException(
                         "taskInfo and taskInfo.stage are required"));
                 return true;
+            }
+
+            if (TaskState.isFinished(patchBody.taskInfo)) {
+                currentState.taskInfo.stage = patchBody.taskInfo.stage;
+                adjustStat(patchBody.taskInfo.stage.toString(), 1);
+                currentState.taskSubStage = SubStage.DONE;
+                adjustStat(currentState.taskSubStage.toString(), 1);
+                return false;
             }
 
             // Current state always has a non-null taskSubStage, per
