@@ -60,7 +60,7 @@ public class ProvisionContext {
     public ComputeStateWithDescription child;
 
     public ManagedObjectReference templateMoRef;
-    public ManagedObjectReference resourcePoolMoRef;
+    public ManagedObjectReference computeMoRef;
 
     public ServiceDocument task;
     public List<DiskState> disks;
@@ -246,7 +246,7 @@ public class ProvisionContext {
             return;
         }
 
-        if (ctx.resourcePoolMoRef == null
+        if (ctx.computeMoRef == null
                 && ctx.instanceRequestType == InstanceRequestType.CREATE) {
             String placementLink = CustomProperties.of(ctx.child)
                     .getString(ComputeProperties.PLACEMENT_LINK);
@@ -268,14 +268,15 @@ public class ProvisionContext {
 
                         ComputeState host = o.getBody(ComputeState.class);
 
-                        ctx.resourcePoolMoRef = CustomProperties.of(host)
-                                .getMoRef(CustomProperties.RESOURCE_POOL_MOREF);
+                        // extract the target resource pool for the placement
+                        CustomProperties hostCustomProperties = CustomProperties.of(host);
+                        ctx.computeMoRef = hostCustomProperties.getMoRef(CustomProperties.MOREF);
 
-                        if (ctx.resourcePoolMoRef == null) {
+                        if (ctx.computeMoRef == null) {
                             Exception error = new IllegalStateException(String.format(
                                     "Compute @ %s does not contain a %s custom property",
                                     placementLink,
-                                    CustomProperties.RESOURCE_POOL_MOREF));
+                                    CustomProperties.MOREF));
                             ctx.fail(error);
                             return;
                         }

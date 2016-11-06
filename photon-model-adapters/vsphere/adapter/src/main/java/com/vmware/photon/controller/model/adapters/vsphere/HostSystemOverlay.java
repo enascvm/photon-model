@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
+import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 
@@ -46,5 +47,9 @@ public class HostSystemOverlay extends AbstractOverlay {
 
     public String getHardwareUuid() {
         return (String) getOrFail(VimPath.host_summary_hardware_uuid);
+    }
+
+    public ArrayOfManagedObjectReference getDatastore() {
+        return (ArrayOfManagedObjectReference) getOrFail(VimPath.host_datastore);
     }
 }

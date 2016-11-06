@@ -43,6 +43,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayUpdateOperation;
 import com.vmware.vim25.FileAlreadyExists;
@@ -103,19 +104,21 @@ public class InstanceClient extends BaseHelper {
     private final ComputeStateWithDescription parent;
     private final List<DiskState> disks;
     private final List<NetworkInterfaceStateWithNetwork> nics;
-    private final ManagedObjectReference resourcePool;
+    private final ManagedObjectReference parentComputeResource;
 
     private final GetMoRef get;
     private final Finder finder;
     private ManagedObjectReference vm;
     private ManagedObjectReference datastore;
+    private ManagedObjectReference resourcePool;
+    private ManagedObjectReference host;
 
     public InstanceClient(Connection connection,
             ComputeStateWithDescription resource,
             ComputeStateWithDescription parent,
             List<DiskState> disks,
             List<NetworkInterfaceStateWithNetwork> nics,
-            ManagedObjectReference resourcePool)
+            ManagedObjectReference parentComputeResource)
             throws ClientException, FinderException {
         super(connection);
 
@@ -123,7 +126,7 @@ public class InstanceClient extends BaseHelper {
         this.parent = parent;
         this.disks = disks;
         this.nics = nics;
-        this.resourcePool = resourcePool;
+        this.parentComputeResource = parentComputeResource;
 
         // the regionId is used as a ref to a vSphere datacenter name
         String id = resource.description.regionId;
@@ -170,11 +173,12 @@ public class InstanceClient extends BaseHelper {
     private ManagedObjectReference cloneVm(ManagedObjectReference template) throws Exception {
         ManagedObjectReference folder = getVmFolder();
         ManagedObjectReference datastore = getDatastore();
+        ManagedObjectReference resourcePool = getResourcePool();
 
         VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
         relocSpec.setDatastore(datastore);
         relocSpec.setFolder(folder);
-        relocSpec.setPool(this.resourcePool);
+        relocSpec.setPool(resourcePool);
 
         VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
         cloneSpec.setLocation(relocSpec);
@@ -268,6 +272,7 @@ public class InstanceClient extends BaseHelper {
         String vmName = this.state.name;
         List<OvfNetworkMapping> network = Collections.emptyList();
         ManagedObjectReference ds = getDatastore();
+        ManagedObjectReference resourcePool = getResourcePool();
 
         List<KeyValue> props = new ArrayList<>();
         for (Map.Entry<String, String> e : this.state.customProperties.entrySet()) {
@@ -283,7 +288,7 @@ public class InstanceClient extends BaseHelper {
         String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
 
         ManagedObjectReference vm = deployer
-                .deployOvf(ovfUri, host, folder, vmName, network, ds, props, config, this.resourcePool);
+                .deployOvf(ovfUri, host, folder, vmName, network, ds, props, config, resourcePool);
 
         // Sometimes ComputeDescriptions created from an OVF can be modified. For such
         // cases one more reconfiguration is needed to set the cpu/mem correctly.
@@ -670,12 +675,14 @@ public class InstanceClient extends BaseHelper {
     private ManagedObjectReference createVm() throws Exception {
         ManagedObjectReference folder = getVmFolder();
         ManagedObjectReference datastore = getDatastore();
+        ManagedObjectReference resourcePool = getResourcePool();
+        ManagedObjectReference host = getHost();
 
         String datastoreName = this.get.entityProp(datastore, "name");
         VirtualMachineConfigSpec spec = buildVirtualMachineConfigSpec(datastoreName);
 
         populateCloudConfig(spec);
-        ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, this.resourcePool, null);
+        ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool, host);
 
         TaskInfo info = waitTaskEnd(vmTask);
 
@@ -882,12 +889,50 @@ public class InstanceClient extends BaseHelper {
         String datastorePath = this.state.description.dataStoreId;
 
         if (datastorePath == null) {
-            this.datastore = this.finder.defaultDatastore().object;
+            ArrayOfManagedObjectReference datastores = this.get
+                    .entityProp(this.parentComputeResource, VimPath.res_datastore);
+            if (datastores == null || datastores.getManagedObjectReference().isEmpty()) {
+                this.datastore = this.finder.defaultDatastore().object;
+            } else {
+                this.datastore = datastores.getManagedObjectReference().get(0);
+            }
         } else {
             this.datastore = this.finder.datastore(datastorePath).object;
         }
 
         return this.datastore;
+    }
+
+    public ManagedObjectReference getResourcePool()
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        if (this.resourcePool != null) {
+            return this.resourcePool;
+        }
+
+        if (VimNames.TYPE_HOST.equals(this.parentComputeResource.getType())) {
+            ManagedObjectReference parentCompute = this.get.entityProp(this.parentComputeResource,
+                    VimPath.host_parent);
+            this.resourcePool = this.get.entityProp(parentCompute, VimPath.res_resourcePool);
+        } else {
+            this.resourcePool = this.get.entityProp(this.parentComputeResource,
+                    VimPath.res_resourcePool);
+
+        }
+
+        return this.resourcePool;
+    }
+
+    public ManagedObjectReference getHost()
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        if (this.host != null) {
+            return this.host;
+        }
+
+        if (VimNames.TYPE_HOST.equals(this.parentComputeResource.getType())) {
+            this.host = this.parentComputeResource;
+        }
+
+        return this.host;
     }
 
     public ManagedObjectReference getVm() {

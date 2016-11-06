@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
@@ -66,7 +67,6 @@ import com.vmware.xenon.services.common.QueryTask.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
@@ -336,15 +336,24 @@ public class BaseVSphereAdapterTest {
         this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
     }
 
-    protected Query createQueryForResourcePoolOwner() {
+    protected Query createQueryForComputeResource() {
+        return createQueryForComputeResource(null);
+    }
+
+    protected Query createQueryForComputeResource(String vimType) {
+        List<String> vimTypes = new ArrayList<>();
+        if (vimType != null) {
+            vimTypes.add(vimType);
+        } else {
+            // by default use cluster
+            vimTypes.add(VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE);
+        }
+
         return Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        CustomProperties.TYPE, VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE)
-                .addFieldClause(QuerySpecification.buildCompositeFieldName(
+                .addInClause(QuerySpecification.buildCompositeFieldName(
                         ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        CustomProperties.RESOURCE_POOL_MOREF),
-                        "*", MatchType.WILDCARD)
+                        CustomProperties.TYPE), vimTypes)
                 .build();
     }
 

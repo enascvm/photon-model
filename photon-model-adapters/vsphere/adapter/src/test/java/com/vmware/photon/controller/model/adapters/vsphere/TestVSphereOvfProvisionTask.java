@@ -140,7 +140,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
         computeState.parentLink = this.computeHost.documentSelfLink;
 
-        Query q = createQueryForResourcePoolOwner();
+        Query q = createQueryForComputeResource();
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)

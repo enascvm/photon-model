@@ -49,12 +49,6 @@ public class CustomProperties {
      */
     public static final String TYPE = "__computeType";
 
-    /**
-     * Compute instances that support VM_HOST have a root resource pool
-     * where the children are put when the instance is used a placement target.
-     */
-    public static final String RESOURCE_POOL_MOREF = "__rootResourcePoolMoRef";
-
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

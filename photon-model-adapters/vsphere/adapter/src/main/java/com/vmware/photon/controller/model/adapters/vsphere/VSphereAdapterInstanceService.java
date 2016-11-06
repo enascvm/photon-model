@@ -117,7 +117,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(connection, ctx.child,
-                                ctx.parent, ctx.disks, ctx.nics, ctx.resourcePoolMoRef);
+                                ctx.parent, ctx.disks, ctx.nics, ctx.computeMoRef);
 
                         ComputeState state;
 

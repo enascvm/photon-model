@@ -79,4 +79,8 @@ public class ComputeResourceOverlay extends AbstractOverlay {
     public int getTotalCpuMhz() {
         return (int) getOrFail(VimPath.res_summary_totalCpu);
     }
+
+    public ArrayOfManagedObjectReference getDatastore() {
+        return (ArrayOfManagedObjectReference) getOrFail(VimPath.res_datastore);
+    }
 }

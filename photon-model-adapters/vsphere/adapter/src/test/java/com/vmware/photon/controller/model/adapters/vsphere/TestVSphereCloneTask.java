@@ -193,7 +193,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         // find a random compute that has a resource pool
         String placementLink = "/link/to/nowhere";
         if (!isMock()) {
-            Query q = createQueryForResourcePoolOwner();
+            Query q = createQueryForComputeResource();
             placementLink = findFirstMatching(q, ComputeState.class).documentSelfLink;
         }
 

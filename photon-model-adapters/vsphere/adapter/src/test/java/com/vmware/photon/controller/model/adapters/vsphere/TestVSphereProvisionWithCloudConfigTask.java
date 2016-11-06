@@ -172,7 +172,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeState.diskLinks = new ArrayList<>(1);
         computeState.diskLinks.add(createBootDisk(SIMPLE_USER_DATA).documentSelfLink);
 
-        Query q = createQueryForResourcePoolOwner();
+        Query q = createQueryForComputeResource();
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
                 .put(ComputeProperties.PLACEMENT_LINK, findFirstMatching(q, ComputeState.class).documentSelfLink)
