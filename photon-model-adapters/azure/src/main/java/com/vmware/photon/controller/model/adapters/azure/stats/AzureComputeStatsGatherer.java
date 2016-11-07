@@ -81,11 +81,8 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  * It is called per compute VM to obtain the metrics.
  *
  */
-public class AzureStatsGatherer extends StatelessService {
-    public static final String SELF_LINK = AzureUriPaths.AZURE_STATS_GATHERER;
-    private static final String STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=http;"
-            + "AccountName=%s;"
-            + "AccountKey=%s";
+public class AzureComputeStatsGatherer extends StatelessService {
+    public static final String SELF_LINK = AzureUriPaths.AZURE_COMPUTE_STATS_GATHERER;
     private static final String PARTITION_KEY = "PartitionKey";
     private static final String COUNTER_NAME_KEY = "CounterName";
     private static final String TIMESTAMP = "Timestamp";
@@ -265,7 +262,7 @@ public class AzureStatsGatherer extends StatelessService {
     }
 
     /**
-     * Get the metric definitons from Azure using the Endpoint "/metricDefinitions"
+     * Get the metric definitions from Azure using the Endpoint "/metricDefinitions"
      * The request and response of the API is as described in
      * {@link https://msdn.microsoft.com/en-us/library/azure/dn931939.aspx} Insights REST.
      * @param statsData
@@ -348,7 +345,7 @@ public class AzureStatsGatherer extends StatelessService {
         String storageAccountName = statsData.storageDescripton.name;
         String storageKey = statsData.storageAccountAuth.customProperties
                 .get(AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1);
-        String storageConnectionString = String.format(STORAGE_CONNECTION_STRING,
+        String storageConnectionString = String.format(AzureConstants.STORAGE_CONNECTION_STRING,
                 storageAccountName, storageKey);
         for (String metricName : METRIC_NAMES) {
             AzureMetricRequest request = new AzureMetricRequest();

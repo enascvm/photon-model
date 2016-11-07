@@ -15,40 +15,26 @@ package com.vmware.photon.controller.model.adapters.azure.stats;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashMap;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
+import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
-import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class AzureStatsService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_STATS_ADAPTER;
@@ -96,14 +82,13 @@ public class AzureStatsService extends StatelessService {
             if (!isComputeHost) {
                 ComputeStatsRequest statsRequest = statsData.statsRequest;
                 Operation statsOp = Operation.createPatch(
-                        UriUtils.buildUri(getHost(), AzureUriPaths.AZURE_STATS_GATHERER))
+                        UriUtils.buildUri(getHost(), AzureUriPaths.AZURE_COMPUTE_STATS_GATHERER))
                         .setBody(statsRequest)
                         .setReferer(getUri());
                 getHost().sendRequest(statsOp);
                 return;
             }
 
-            // If it's a compute host, get children and send stats request for each.
             getComputeHostStats(statsData);
         };
         URI computeUri = UriUtils.extendUriWithQuery(statsData.statsRequest.resourceReference,
@@ -112,186 +97,63 @@ public class AzureStatsService extends StatelessService {
     }
 
     /**
-     * Query all the children VM compute of the compute host.
+     * Get metrics at the compute host level.
+     * @param statsData
      */
     private void getComputeHostStats(AzureStatsDataHolder statsData) {
-        URI queryUri = UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_QUERY_TASKS);
-        QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
+        ComputeStatsRequest statsRequest = statsData.statsRequest;
+        Collection<Operation> opCollection = new ArrayList<>();
 
-        String kind = Utils.buildKind(ComputeService.ComputeState.class);
-        QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
-                ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(kind);
-        querySpec.query.addBooleanClause(kindClause);
+        Operation computeStatsOp = Operation.createPatch(
+                UriUtils.buildUri(getHost(), AzureUriPaths.AZURE_COMPUTE_HOST_STATS_GATHERER))
+                .setBody(statsRequest)
+                .setReferer(getUri());
+        opCollection.add(computeStatsOp);
 
-        QueryTask.Query parentClause = new QueryTask.Query()
-                .setTermMatchType(MatchType.TERM)
-                .setTermPropertyName(ComputeService.ComputeState.FIELD_NAME_PARENT_LINK)
-                .setTermMatchValue(statsData.computeDesc.documentSelfLink);
-        querySpec.query.addBooleanClause(parentClause);
+        Operation storageStatsOp = Operation.createPatch(
+                UriUtils.buildUri(getHost(),
+                        AzureUriPaths.AZURE_COMPUTE_HOST_STORAGE_STATS_GATHERER))
+                .setBody(statsRequest)
+                .setReferer(getUri());
 
-        // TODO: Handle Pagination - https://jira-hzn.eng.vmware.com/browse/VSYM-1270
-        QueryTask task = QueryTask.create(querySpec).setDirect(true);
-        task.tenantLinks = statsData.computeDesc.tenantLinks;
-        Operation queryOp = Operation
-                .createPost(queryUri)
-                .setBody(task)
-                .setCompletion((o, f) -> handleComputeQueryCompletion(o, f, statsData));
-        sendRequest(queryOp);
-    }
+        opCollection.add(storageStatsOp);
 
-    /**
-     * Create a query task for each compute VM and return the operation.
-     */
-    private Operation getStatsQueryTaskOperation(AzureStatsDataHolder statsData, String computeLink) {
-        String computeId = UriUtils.getLastPathSegment(computeLink);
-        URI queryUri = UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_QUERY_TASKS);
-        QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
+        OperationJoin.create(opCollection)
+                .setCompletion((ops, exs) -> {
+                    if (exs != null) {
+                        exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                        sendFailurePatch(statsData, exs.get(0L));
+                        return;
+                    }
+                    SingleResourceStatsCollectionTaskState statsResponse =
+                            new SingleResourceStatsCollectionTaskState();
+                    statsResponse.taskStage = SingleResourceTaskCollectionStage
+                            .valueOf(statsData.statsRequest.nextStage);
+                    statsResponse.statsList = new ArrayList<>();
+                    statsResponse.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
 
-        String kind = Utils.buildKind(ResourceMetrics.class);
-        QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
-                ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(kind);
-        querySpec.query.addBooleanClause(kindClause);
-
-        String selfLinkValue = UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, computeId);
-
-        QueryTask.Query selfLinkClause = new QueryTask.Query()
-                .setTermMatchType(MatchType.PREFIX)
-                .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
-                .setTermMatchValue(selfLinkValue);
-        querySpec.query.addBooleanClause(selfLinkClause);
-
-        QueryTask task = QueryTask.create(querySpec).setDirect(true);
-        task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT);
-        task.tenantLinks = statsData.computeDesc.tenantLinks;
-        Operation queryOp = Operation
-                .createPost(queryUri)
-                .setBody(task);
-        return queryOp;
-    }
-
-    /**
-     * Get all the children computes and create a query task for each to query the metrics.
-     */
-    private void handleComputeQueryCompletion(Operation operation, Throwable failure,
-            AzureStatsDataHolder statsData) {
-        if (failure != null) {
-            logSevere(failure.getMessage());
-            sendFailurePatch(statsData, failure);
-            return;
-        }
-
-        QueryTask queryResult = operation.getBody(QueryTask.class);
-        if (queryResult == null || queryResult.results == null) {
-            sendFailurePatch(statsData, new RuntimeException(
-                    String.format("Unexpected query result for '%s'",
-                            operation.getUri())));
-            return;
-        }
-
-        int computeCount = Math.toIntExact(queryResult.results.documentCount);
-
-        // No children found. Send an empty response back.
-        if (computeCount <= 0) {
-            SingleResourceStatsCollectionTaskState response = new SingleResourceStatsCollectionTaskState();
-            response.taskStage = SingleResourceTaskCollectionStage.valueOf(statsData.statsRequest.nextStage);
-            response.statsList = new ArrayList<>();
-            response.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
-            this.sendRequest(
-                    Operation.createPatch(statsData.statsRequest.taskReference)
-                            .setBody(response));
-            return;
-        }
-
-        // Create multiple operations, one each for a VM compute.
-        List<Operation> statOperations = new ArrayList<>(computeCount);
-        for (String computeLink : queryResult.results.documentLinks) {
-            Operation statsOp = getStatsQueryTaskOperation(statsData, computeLink);
-            statOperations.add(statsOp);
-        }
-
-        OperationJoin.create(statOperations)
-                .setCompletion((ops, failures) -> handleQueryTaskResponseAndConsolidateStats(ops,
-                        failures, statsData))
-                .sendWith(this);
-    }
-
-    /**
-     * Consolidates all the query task responses into one response and patches back.
-     */
-    private void handleQueryTaskResponseAndConsolidateStats(Map<Long, Operation> ops,
-            Map<Long, Throwable> failures, AzureStatsDataHolder statsData) {
-        try {
-            if (failures != null) {
-                sendFailurePatch(statsData, failures.get(0L));
-                return;
-            }
-            List<QueryTask> items = new ArrayList<>(ops.size());
-
-            for (Operation op : ops.values()) {
-                QueryTask queryResult = op.getBody(QueryTask.class);
-                items.add(queryResult);
-            }
-
-            // Aggregate all the responses into a single response
-            SingleResourceStatsCollectionTaskState response = aggregateComputeStatsResponses(
-                    statsData, items);
-            response.taskStage = SingleResourceTaskCollectionStage.valueOf(statsData.statsRequest.nextStage);
-            response.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
-            this.sendRequest(
-                    Operation.createPatch(statsData.statsRequest.taskReference)
-                            .setBody(response)
-                            .setReferer(getUri()));
-        } catch (Throwable t) {
-            sendFailurePatch(statsData, t);
-        }
-    }
-
-    /**
-     * Aggregates stats from all the compute VMs to make up compute Host stats.
-     */
-    private SingleResourceStatsCollectionTaskState aggregateComputeStatsResponses(
-            AzureStatsDataHolder statsData, List<QueryTask> items) {
-        int numberOfComputeResponse = items.size();
-        ComputeStats computeStats = new ComputeStats();
-        computeStats.computeLink = statsData.computeDesc.documentSelfLink;
-
-        Map<String, ServiceStat> statMap = new HashMap<>();
-        // Gather all the stats in a single response.
-        for (QueryTask queryResult : items) {
-            if (queryResult.results.documents != null) {
-                for (String key : queryResult.results.documents.keySet()) {
-                    ResourceMetrics metric = Utils.fromJson(queryResult.results.documents.get(key),
-                            ResourceMetrics.class);
-                    for (Entry<String, Double> entry : metric.entries.entrySet()) {
-                        String metricName = entry.getKey();
-                        if (statMap.containsKey(metricName)) {
-                            statMap.get(metricName).latestValue += entry.getValue();
-                        } else {
-                            ServiceStat stat = new ServiceStat();
-                            stat.latestValue = entry.getValue();
-                            statMap.put(metricName, stat);
+                    for (Map.Entry<Long, Operation> op : ops.entrySet()) {
+                        ComputeStatsResponse.ComputeStats stats = op.getValue()
+                                .getBody(ComputeStatsResponse.ComputeStats.class);
+                        if (stats != null) {
+                            if (statsResponse.statsList == null ||
+                                    statsResponse.statsList.size() == 0) {
+                                statsResponse.statsList.add(stats);
+                            } else {
+                                for (Map.Entry<String, List<ServiceStat>> entry :
+                                        stats.statValues.entrySet()) {
+                                    statsResponse.statsList.get(0).statValues
+                                            .put(entry.getKey(), entry.getValue());
+                                }
+                            }
                         }
                     }
-                }
-            }
-        }
-
-        computeStats.statValues = new ConcurrentSkipListMap<>();
-        // Divide each metric value by the number of computes to get an average value.
-        for (String key : statMap.keySet()) {
-            ServiceStat serviceStatValue = statMap.get(key);
-            serviceStatValue.unit = PhotonModelConstants.getUnitForMetric(key);
-            serviceStatValue.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
-            serviceStatValue.latestValue = serviceStatValue.latestValue / numberOfComputeResponse;
-            computeStats.statValues.put(key, Collections.singletonList(serviceStatValue));
-        }
-
-        SingleResourceStatsCollectionTaskState statsResponse = new SingleResourceStatsCollectionTaskState();
-        statsResponse.statsList = new ArrayList<>();
-        if (computeStats.statValues.size() > 0) {
-            statsResponse.statsList.add(computeStats);
-        }
-        return statsResponse;
+                    this.sendRequest(
+                            Operation.createPatch(statsData.statsRequest.taskReference)
+                                    .setBody(statsResponse));
+                    logInfo("Finished collection of compute host stats");
+                })
+                .sendWith(this);
     }
 
     /**

@@ -18,7 +18,9 @@ import java.util.logging.Level;
 import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
-import com.vmware.photon.controller.model.adapters.azure.stats.AzureStatsGatherer;
+import com.vmware.photon.controller.model.adapters.azure.stats.AzureComputeHostStatsGatherer;
+import com.vmware.photon.controller.model.adapters.azure.stats.AzureComputeHostStorageStatsGatherer;
+import com.vmware.photon.controller.model.adapters.azure.stats.AzureComputeStatsGatherer;
 import com.vmware.photon.controller.model.adapters.azure.stats.AzureStatsService;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.Utils;
@@ -32,7 +34,9 @@ public class AzureAdapters {
             AzureEnumerationAdapterService.SELF_LINK,
             AzureInstanceService.SELF_LINK,
             AzureStatsService.SELF_LINK,
-            AzureStatsGatherer.SELF_LINK,
+            AzureComputeStatsGatherer.SELF_LINK,
+            AzureComputeHostStatsGatherer.SELF_LINK,
+            AzureComputeHostStorageStatsGatherer.SELF_LINK,
             AzureEndpointAdapterService.SELF_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
@@ -40,7 +44,9 @@ public class AzureAdapters {
             host.startService(new AzureEnumerationAdapterService());
             host.startService(new AzureInstanceService());
             host.startService(new AzureStatsService());
-            host.startService(new AzureStatsGatherer());
+            host.startService(new AzureComputeStatsGatherer());
+            host.startService(new AzureComputeHostStatsGatherer());
+            host.startService(new AzureComputeHostStorageStatsGatherer());
             host.startService(new AzureEndpointAdapterService());
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring provisioning adapters: %s",

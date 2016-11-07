@@ -44,6 +44,7 @@ public class PhotonModelConstants {
     public static final String MEMORY_USED_BYTES = "MemoryUsedBytes";
     public static final String MEMORY_AVAILABLE_PERCENT = "MemoryAvailablePercent";
     public static final String MEMORY_USED_PERCENT = "MemoryUsedPercent";
+    public static final String STORAGE_USED_BYTES = "StorageUsedBytes";
 
     // Photon-Model Metric Unit related constants
     public static final String UNIT_COUNT = "Count";
@@ -86,6 +87,7 @@ public class PhotonModelConstants {
         statMap.put(DISK_READ_TIME_SECONDS, UNIT_SECONDS);
         statMap.put(MEMORY_AVAILABLE_BYTES, UNIT_BYTES);
         statMap.put(MEMORY_USED_BYTES, UNIT_BYTES);
+        statMap.put(STORAGE_USED_BYTES , UNIT_BYTES);
         METRIC_UNIT_MAP = Collections.unmodifiableMap(statMap);
     }
 

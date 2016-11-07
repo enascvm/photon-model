@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getAzureVMCount;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.randomString;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -315,7 +316,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             if (this.enumeratedComputeLink != null) {
                 this.host.waitFor("Error waiting for VM stats", () -> {
                     try {
-                        issueStatsRequest(this.enumeratedComputeLink);
+                        issueStatsRequest(this.enumeratedComputeLink, false);
                     } catch (Throwable t) {
                         return false;
                     }
@@ -328,7 +329,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                     this.computeHost.documentSelfLink);
             this.host.waitFor("Error waiting for host stats", () -> {
                 try {
-                    issueStatsRequest(this.computeHost.documentSelfLink);
+                    issueStatsRequest(this.computeHost.documentSelfLink, true);
                 } catch (Throwable t) {
                     return false;
                 }
@@ -392,7 +393,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         });
     }
 
-    private void issueStatsRequest(String selfLink) throws Throwable {
+    private void issueStatsRequest(String selfLink, boolean isComputeHost) throws Throwable {
         // spin up a stateless service that acts as the parent link to patch back to
         StatelessService parentService = new StatelessService() {
             @Override
@@ -423,7 +424,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                             return;
                         }
                         // Verify all the stats are obtained
-                        verifyStats(resp);
+                        verifyStats(resp, isComputeHost);
                         // Persist stats on Verification Host for testing the computeHost stats.
                         URI persistStatsUri = UriUtils.buildUri(getHost(),
                                 ResourceMetricsService.FACTORY_LINK);
@@ -461,10 +462,13 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 .setReferer(this.host.getUri()));
     }
 
-    private void verifyStats(ComputeStatsResponse resp) {
+    private void verifyStats(ComputeStatsResponse resp, boolean isComputeHost) {
         Set<String> obtainedMetricKeys = resp.statsList.get(0).statValues.keySet();
         // Check if at least one metric was returned by Azure.
         Assert.assertTrue("No metrics were returned.", obtainedMetricKeys.size() > 0);
+        if (isComputeHost) {
+            Assert.assertTrue(obtainedMetricKeys.contains(STORAGE_USED_BYTES));
+        }
     }
 
     private void createAzureStorageAccounts(int numOfAccts) throws Throwable {
