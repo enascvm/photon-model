@@ -46,7 +46,6 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
-import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -102,7 +101,8 @@ public class AzureTestUtil {
                           .setBody(deletionState)
                           .setCompletion(host.getCompletion()));
         host.testWait();
-        ProvisioningUtils.queryComputeInstances(host, 1);
+        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-3258
+        //ProvisioningUtils.queryComputeInstances(host, 1);
     }
 
     /**

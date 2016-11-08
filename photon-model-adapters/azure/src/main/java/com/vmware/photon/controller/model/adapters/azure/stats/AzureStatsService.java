@@ -152,9 +152,7 @@ public class AzureStatsService extends StatelessService {
                 ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(kind);
         querySpec.query.addBooleanClause(kindClause);
 
-        String selfLinkValue = UriUtils.buildUriPath(
-                ResourceMetricsService.FACTORY_LINK,
-                computeId) + UriUtils.URI_WILDCARD_CHAR;
+        String selfLinkValue = UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, computeId);
 
         QueryTask.Query selfLinkClause = new QueryTask.Query()
                 .setTermMatchType(MatchType.PREFIX)

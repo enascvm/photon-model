@@ -80,6 +80,7 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 
 import com.vmware.xenon.common.BasicReusableHostTestCase;
@@ -291,7 +292,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         try {
             // Test stats for the VM that was just enumerated from Azure.
-            this.host.log(Level.INFO, "Collecting stats for [%s]", this.enumeratedComputeLink);
+            this.host.log(Level.INFO, "Collecting stats for VM [%s]-[%s]", CUSTOM_DIAGNOSTIC_ENABLED_VM, this.enumeratedComputeLink);
             this.host.setTimeoutSeconds(300);
             if (this.enumeratedComputeLink != null) {
                 this.host.waitFor("Error waiting for VM stats", () -> {
@@ -305,7 +306,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             }
 
             // Test stats for the compute host.
-            this.host.log(Level.INFO, "Collecting stats for [%s]", this.computeHost.documentSelfLink);
+            this.host.log(Level.INFO, "Collecting stats for host [%s]", this.computeHost.documentSelfLink);
             this.host.waitFor("Error waiting for host stats", () -> {
                 try {
                     issueStatsRequest(this.computeHost.documentSelfLink);
@@ -423,12 +424,20 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                         verifyStats(resp);
                         // Persist stats on Verification Host for testing the computeHost stats.
                         URI persistStatsUri = UriUtils.buildUri(getHost(), ResourceMetricsService.FACTORY_LINK);
+                        ResourceMetricsService.ResourceMetrics resourceMetric = new ResourceMetricsService.ResourceMetrics();
+                        resourceMetric.documentSelfLink = StatsUtil.getMetricKey(selfLink, Utils.getNowMicrosUtc());
+                        resourceMetric.entries = new HashMap<>();
+                        resourceMetric.timestampMicrosUtc = Utils.getNowMicrosUtc();
                         for (String key : resp.statsList.get(0).statValues.keySet()) {
                             List<ServiceStat> stats = resp.statsList.get(0).statValues.get(key);
                             for (ServiceStat stat : stats) {
-                                persistStat(persistStatsUri, key, stat, selfLink);
+                                resourceMetric.entries.put(key, stat.latestValue);
                             }
                         }
+                        TestAzureEnumerationTask.this.host.sendRequest(Operation
+                                .createPost(persistStatsUri)
+                                .setReferer(TestAzureEnumerationTask.this.host.getUri())
+                                .setBodyNoCloning(resourceMetric));
                     }
                     TestAzureEnumerationTask.this.host.completeIteration();
                 }
@@ -439,6 +448,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         this.host.startService(startOp, parentService);
         ComputeStatsRequest statsRequest = new ComputeStatsRequest();
         statsRequest.resourceReference = UriUtils.buildUri(this.host, selfLink);
+        statsRequest.nextStage = SingleResourceTaskCollectionStage.UPDATE_STATS.name();
         statsRequest.isMockRequest = this.isMock;
         statsRequest.taskReference = UriUtils.buildUri(this.host, servicePath);
         this.host.sendAndWait(Operation.createPatch(UriUtils.buildUri(
@@ -451,18 +461,6 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         Set<String> obtainedMetricKeys = resp.statsList.get(0).statValues.keySet();
         // Check if at least one metric was returned by Azure.
         Assert.assertTrue("No metrics were returned.", obtainedMetricKeys.size() > 0);
-    }
-
-    private void persistStat(URI persistStatsUri, String metricName, ServiceStat serviceStat, String computeLink) {
-        ResourceMetricsService.ResourceMetrics stat = new ResourceMetricsService.ResourceMetrics();
-        stat.documentSelfLink = StatsUtil.getMetricKey(computeLink, stat.timestampMicrosUtc);
-        stat.entries = new HashMap<>();
-        stat.entries.put(metricName, serviceStat.latestValue);
-        stat.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
-        this.host.sendRequest(Operation
-                .createPost(persistStatsUri)
-                .setReferer(this.host.getUri())
-                .setBodyNoCloning(stat));
     }
 
     private void createAzureStorageAccounts(int numOfAccts) throws Throwable {

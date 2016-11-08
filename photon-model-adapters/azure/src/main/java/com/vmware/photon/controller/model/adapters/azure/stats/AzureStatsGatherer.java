@@ -209,7 +209,16 @@ public class AzureStatsGatherer extends StatelessService {
             getStorageAccountAuth(statsData);
         };
         AdapterUtils.getServiceState(this, statsData.bootDisk.storageDescriptionLink, onSuccess,
-                getFailureConsumer(statsData));
+                ((throwable) -> {
+                    if (throwable instanceof ServiceNotFoundException) {
+                        logInfo("Skipping stats collection because storage account not found for [%s]",
+                                statsData.computeDesc.name);
+                        patchEmptyResponse(statsData);
+                        return;
+                    }
+                    AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                            statsData.statsRequest.taskReference, throwable);
+                }));
     }
 
     private void getStorageAccountAuth(AzureStatsDataHolder statsData) {
