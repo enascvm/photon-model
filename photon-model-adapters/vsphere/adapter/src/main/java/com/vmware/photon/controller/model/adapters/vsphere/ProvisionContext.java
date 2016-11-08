@@ -365,19 +365,6 @@ public class ProvisionContext {
         }
     }
 
-    /**
-     * zoneID is interpreted as a resource pool. Specific zoneId is preferred, else the parents zone
-     * is used.
-     * @return
-     */
-    public String getResourcePoolId() {
-        if (this.child.description.zoneId != null) {
-            return this.child.description.zoneId;
-        } else {
-            return this.parent.description.zoneId;
-        }
-    }
-
     public void failWithMessage(String msg) {
         fail(new IllegalStateException(msg));
     }
