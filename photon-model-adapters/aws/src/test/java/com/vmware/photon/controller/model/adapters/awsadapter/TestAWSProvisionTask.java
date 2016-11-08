@@ -92,7 +92,8 @@ public class TestAWSProvisionTask {
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
     private AmazonEC2AsyncClient client;
-    public int timeElapsedSinceLastCollectionInMinutes = 4;
+    // the default collection period is 5 mins; set a value that spans 2 periods
+    public int timeElapsedSinceLastCollectionInMinutes = 11;
 
 
     @Before
@@ -335,8 +336,6 @@ public class TestAWSProvisionTask {
                                     "incorrect number of metrics received."));
                             return;
                         }
-                        // If the last collection time was set to collect stats for previous windows
-                        // and they are not collected then fail the current iteration
                         if (lastCollectionTime != null) {
                             if (resp.statsList.get(0).statValues
                                     .get(PhotonModelConstants.CPU_UTILIZATION_PERCENT)

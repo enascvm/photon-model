@@ -31,6 +31,7 @@ import com.amazonaws.services.cloudwatch.model.Dimension;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -43,6 +44,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -57,6 +59,9 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AWSStatsService extends StatelessService {
     private AWSClientManager clientManager;
+
+    public static final String AWS_COLLECTION_PERIOD_SECONDS = UriPaths.PROPERTY_PREFIX + "AWSStatsService.collectionPeriod";
+    private static final int DEFAULT_AWS_COLLECTION_PERIOD_SECONDS = 300;
 
     public AWSStatsService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -88,7 +93,6 @@ public class AWSStatsService extends StatelessService {
     // collection time is not specified.
     // Defaulting to 1 hr.
     private static final int MAX_METRIC_COLLECTION_WINDOW_IN_MINUTES = 60;
-    private static final int METRIC_COLLECTION_PERIOD_IN_SECONDS = 60;
 
     // Cost
     private static final String BILLING_NAMESPACE = "AWS/Billing";
@@ -218,6 +222,7 @@ public class AWSStatsService extends StatelessService {
     private void getEC2Stats(AWSStatsDataHolder statsData, String[] metricNames,
             boolean isAggregateStats) {
         getAWSAsyncStatsClient(statsData);
+        int collectionPeriod = Integer.getInteger(AWS_COLLECTION_PERIOD_SECONDS, DEFAULT_AWS_COLLECTION_PERIOD_SECONDS);
         for (String metricName : metricNames) {
             GetMetricStatisticsRequest metricRequest = new GetMetricStatisticsRequest();
             // get datapoint for the for the passed in time window.
@@ -225,7 +230,7 @@ public class AWSStatsService extends StatelessService {
                     TimeUnit.MINUTES.toMicros(MAX_METRIC_COLLECTION_WINDOW_IN_MINUTES),
                     statsData.statsRequest.lastCollectionTimeMicrosUtc,
                     metricRequest);
-            metricRequest.setPeriod(METRIC_COLLECTION_PERIOD_IN_SECONDS);
+            metricRequest.setPeriod(collectionPeriod);
             metricRequest.setStatistics(Arrays.asList(STATISTICS));
             metricRequest.setNamespace(NAMESPACE);
 
