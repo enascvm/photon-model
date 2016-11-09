@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere.ovf;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -21,6 +22,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 
+import org.apache.http.client.HttpClient;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
@@ -60,5 +63,55 @@ public class OvfParserTest {
             assertTrue(description.cpuCount > 0);
             assertTrue(description.totalMemoryBytes > 0);
         }
+    }
+
+    /**
+     * Test is ignore because it is slow.
+     * @throws IOException
+     */
+    @Test
+    @Ignore
+    public void tarsAreDownloadedAndExtracted() throws IOException {
+        HttpClient client = OvfRetriever.newInsecureClient();
+        OvfRetriever retriever = new OvfRetriever(client);
+
+        String photonOs = "https://bintray.com/vmware/photon/download_file?file_path=photon-custom-hw10-1.0-13c08b6.ova";
+        URI ovfUri = retriever.downloadIfOva(URI.create(photonOs));
+
+        assertTrue(ovfUri.toString().endsWith("photon-custom-hw10.ovf"));
+    }
+
+    @Test
+    public void nonTarsAreNoProcessed() throws IOException {
+        HttpClient client = OvfRetriever.newInsecureClient();
+        OvfRetriever retriever = new OvfRetriever(client);
+
+        URI definitelyNotTar = URI.create("https://vmware.github.io/photon/");
+        URI ovfUri = retriever.downloadIfOva(definitelyNotTar);
+
+        assertSame(ovfUri, definitelyNotTar);
+    }
+
+    @Test
+    public void ovfsAreNotProcessed() throws IOException {
+        HttpClient client = OvfRetriever.newInsecureClient();
+        OvfRetriever retriever = new OvfRetriever(client);
+
+        URI anOvf = new File("src/test/resources/vcenter.ovf").toURI();
+        URI ovfUri = retriever.downloadIfOva(anOvf);
+
+        assertSame(ovfUri, anOvf);
+    }
+
+    @Test
+    public void filesAreNotProcessed() throws IOException {
+        HttpClient client = OvfRetriever.newInsecureClient();
+        OvfRetriever retriever = new OvfRetriever(client);
+
+        URI anOvf = new File("src/test/java/com/vmware/photon/controller/model/adapters/vsphere/ovf/OvfParserTest.java")
+                .toURI();
+        URI ovfUri = retriever.downloadIfOva(anOvf);
+
+        assertSame(ovfUri, anOvf);
     }
 }

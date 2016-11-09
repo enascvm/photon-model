@@ -13,9 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.ovf;
 
+import java.net.URI;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Stream;
 
+import org.apache.http.client.HttpClient;
 import org.w3c.dom.Document;
 
 import com.vmware.photon.controller.model.adapters.vsphere.CustomProperties;
@@ -48,17 +51,29 @@ public class OvfImporterService extends StatelessService {
 
     private Runnable createImportTask(ImportOvfRequest req, Operation patch) {
         return () -> {
+            URI ovfUri;
+
+            HttpClient client = OvfRetriever.newInsecureClient();
+            OvfRetriever retriever = new OvfRetriever(client);
             OvfParser parser = new OvfParser();
+
             Document doc;
             try {
-                doc = parser.retrieveDescriptor(req.ovfUri);
+                ovfUri = retriever.downloadIfOva(req.ovfUri);
+                doc = parser.retrieveDescriptor(ovfUri);
             } catch (Exception e) {
                 patch.fail(e);
                 return;
             }
 
             CustomProperties.of(req.template)
-                    .put(OvfParser.PROP_OVF_URI, req.ovfUri.toString());
+                    .put(OvfParser.PROP_OVF_URI, ovfUri);
+
+            if (!Objects.equals(ovfUri, req.ovfUri)) {
+                // this is an ova archive, store original OVA uri
+                CustomProperties.of(req.template)
+                        .put(OvfParser.PROP_OVF_ARCHIVE_URI, req.ovfUri);
+            }
 
             List<ComputeDescription> ovfDescriptions = parser.parse(doc, req.template);
             Stream<Operation> opStream = ovfDescriptions.stream().map(desc -> Operation

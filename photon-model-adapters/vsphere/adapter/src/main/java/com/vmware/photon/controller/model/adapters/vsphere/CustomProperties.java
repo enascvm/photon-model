@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -102,6 +103,15 @@ public class CustomProperties {
         return VimUtils.convertStringToMoRef(getString(key));
     }
 
+    public URI getUri(String key) {
+        String s = getString(key);
+        if (s != null) {
+            return URI.create(s);
+        } else {
+            return null;
+        }
+    }
+
     public Integer getInt(String key, Integer defaultValue) {
         String s = getString(key);
         if (s == null) {
@@ -143,6 +153,16 @@ public class CustomProperties {
 
     public CustomProperties put(String key, ManagedObjectReference moref) {
         return put(key, VimUtils.convertMoRefToString(moref));
+    }
+
+    public CustomProperties put(String key, URI uri) {
+        if (uri == null) {
+            this.remove.accept(key);
+        } else {
+            this.getPropsForWrite.get().put(key, uri.toString());
+        }
+
+        return this;
     }
 
     public CustomProperties put(String key, String s) {

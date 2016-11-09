@@ -144,9 +144,9 @@ public class LeaseProgressUpdater {
         while (i-- > 0) {
             HttpNfcLeaseState state = getState();
             if (state.equals(HttpNfcLeaseState.ERROR)) {
-                Exception leaseError = this.get.entityProp(this.nfcLease, PROP_ERROR);
-                logger.log(Level.WARNING, "nfcLease error: " + leaseError.getMessage(), leaseError);
-                throw leaseError;
+                LocalizedMethodFault leaseError = this.get.entityProp(this.nfcLease, PROP_ERROR);
+                logger.log(Level.WARNING, "nfcLease error: " + leaseError.getLocalizedMessage(), leaseError);
+                VimUtils.rethrow(leaseError);
             }
 
             if (state.equals(HttpNfcLeaseState.READY)) {

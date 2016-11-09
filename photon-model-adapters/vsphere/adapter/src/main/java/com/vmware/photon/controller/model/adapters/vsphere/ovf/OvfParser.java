@@ -45,9 +45,14 @@ import com.vmware.xenon.common.Utils;
 
 public class OvfParser {
     public static final String PROP_OVF_CONFIGURATION = "ovf.configuration";
+
     public static final String PROP_OVF_URI = "ovf.uri";
+
     public static final String PREFIX_OVF_PROP = "ovf.prop:";
+
     public static final String PREFIX_OVF_NET = "ovf.net:";
+
+    public static final String PROP_OVF_ARCHIVE_URI = "ova.uri";
 
     private XPath xpath;
 

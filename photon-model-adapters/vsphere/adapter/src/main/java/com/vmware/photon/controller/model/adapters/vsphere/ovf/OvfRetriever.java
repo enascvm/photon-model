@@ -16,14 +16,19 @@ package com.vmware.photon.controller.model.adapters.vsphere.ovf;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.security.KeyManagementException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Date;
+import java.util.Properties;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
@@ -36,6 +41,9 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
+import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -47,12 +55,23 @@ import org.apache.http.util.EntityUtils;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
+import com.vmware.xenon.common.Utils;
+
 /**
  * Downloads an OVF descriptor over http or file. Only checks if the input is a valid xml.
  */
 public class OvfRetriever {
 
+    public static final int TAR_MAGIC_OFFSET = 0x101;
+    private static final String MARKER_FILE = "status.properties";
+
     private HttpClient client;
+
+    /**
+     * TAR magic numbers https://en.wikipedia.org/wiki/Tar_(computing)
+     */
+    private static final byte[] TAR_MAGIC = new byte[] { 0x75, 0x73, 0x74, 0x61, 0x72, 0x00, 0x30, 0x30 };
+    private static final byte[] TAR_MAGIC2 = new byte[] { 0x75, 0x73, 0x74, 0x61, 0x72, 0x20, 0x20, 0x00 };
 
     public OvfRetriever(HttpClient client) {
         this.client = client;
@@ -190,5 +209,134 @@ public class OvfRetriever {
         }
 
         return storingInputStream;
+    }
+
+    /**
+     * If ovaOrOvfUri points to a OVA it will be download locally and extracted. The uri is considered OVA if it is
+     * in tar format and there is at least one .ovf inside.
+     *
+     * @param ovaOrOvfUri
+     * @return the first .ovf file from the extracted tar of the input parameter if it's a local file or not a
+     * tar archive
+     */
+    public URI downloadIfOva(URI ovaOrOvfUri) throws IOException {
+        if (ovaOrOvfUri.getScheme().equals("file")) {
+            // local files are assumed to be ovfs
+            return ovaOrOvfUri;
+        }
+
+        HttpGet get = new HttpGet(ovaOrOvfUri);
+        HttpResponse check = null;
+
+        try {
+            check = this.client.execute(get);
+            byte[] buffer = new byte[TAR_MAGIC_OFFSET + TAR_MAGIC.length];
+            int read = IOUtils.read(check.getEntity().getContent(), buffer);
+            if (read != buffer.length) {
+                // not a tar file, probably OVF, lets caller decide further
+                return ovaOrOvfUri;
+            }
+            for (int i = 0; i < TAR_MAGIC.length; i++) {
+                byte b = buffer[TAR_MAGIC_OFFSET + i];
+                if (b != TAR_MAGIC[i] && b != TAR_MAGIC2[i]) {
+                    // magic numbers don't match
+                    return ovaOrOvfUri;
+                }
+            }
+        } finally {
+            get.abort();
+            if (check != null) {
+                EntityUtils.consumeQuietly(check.getEntity());
+            }
+        }
+
+        // it's an OVA (at least a tar file), download to a local folder
+        String folderName = hash(ovaOrOvfUri);
+        File destination = new File(getBaseOvaExtractionDir(), folderName);
+        if (new File(destination, MARKER_FILE).isFile()) {
+            // marker file exists so the archive is already downloaded
+            return findFirstOvfInFolder(destination);
+        }
+
+        destination.mkdirs();
+
+        get = new HttpGet(ovaOrOvfUri);
+        HttpResponse response = null;
+        try {
+            response = this.client.execute(get);
+            TarArchiveInputStream tarStream = new TarArchiveInputStream(response.getEntity().getContent());
+            TarArchiveEntry entry;
+            while ((entry = tarStream.getNextTarEntry()) != null) {
+                extractEntry(tarStream, destination, entry);
+            }
+        } finally {
+            if (response != null) {
+                EntityUtils.consumeQuietly(response.getEntity());
+            }
+        }
+
+        // store download progress
+        writeMarkerFile(destination, ovaOrOvfUri);
+
+        return findFirstOvfInFolder(destination);
+    }
+
+    protected URI findFirstOvfInFolder(File destination) throws IOException {
+        File[] files = destination.listFiles(f -> f.getName().endsWith(".ovf"));
+        if (files == null || files.length == 0) {
+            throw new IOException("OVA archive does not contain an .ovf descriptor");
+        }
+
+        return files[0].toURI();
+    }
+
+    private void writeMarkerFile(File destination, URI ovaOrOvfUri) {
+        Properties props = new Properties();
+        props.setProperty("download-uri", ovaOrOvfUri.toString());
+        props.setProperty("download-date", new Date().toString());
+        props.setProperty("download-folder", destination.getAbsolutePath());
+
+        try {
+            try (FileOutputStream fos = new FileOutputStream(new File(destination, MARKER_FILE))) {
+                try {
+                    props.store(fos, null);
+                } catch (IOException ignore) {
+
+                }
+            }
+        } catch (IOException e) {
+
+        }
+    }
+
+    protected String getBaseOvaExtractionDir() {
+        // good idea to make this configurable
+        return System.getProperty("java.io.tmpdir");
+    }
+
+    private void extractEntry(TarArchiveInputStream tar, File destination, TarArchiveEntry entry) throws IOException {
+        File file = new File(destination, entry.getName());
+        if (entry.isDirectory()) {
+            file.mkdirs();
+        } else {
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                IOUtils.copy(tar, fos);
+            }
+        }
+    }
+
+    private String hash(URI ovaOrOvfUri) {
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            sha256.update(ovaOrOvfUri.toString().getBytes(Utils.CHARSET));
+            byte[] digest = sha256.digest();
+            return Hex.encodeHexString(digest);
+        } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public HttpClient getClient() {
+        return this.client;
     }
 }

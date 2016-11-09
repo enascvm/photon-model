@@ -22,7 +22,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -61,9 +60,13 @@ public class OvfDeployer extends BaseHelper {
 
     public static final String TRANSPORT_GUESTINFO = "com.vmware.guestInfo";
     public static final String TRANSPORT_ISO = "iso";
+    private OvfRetriever ovfRetriever;
 
     public OvfDeployer(Connection connection) throws ClientException, FinderException {
         super(connection);
+
+        CloseableHttpClient client = OvfRetriever.newInsecureClient();
+        this.ovfRetriever = new OvfRetriever(client);
     }
 
 
@@ -91,9 +94,8 @@ public class OvfDeployer extends BaseHelper {
             List<KeyValue> ovfProps,
             String deploymentConfig,
             ManagedObjectReference resourcePool) throws Exception {
-        CloseableHttpClient client = OvfRetriever.newInsecureClient();
 
-        String ovfDescriptor = new OvfRetriever(client).retrieveAsString(ovfUri);
+        String ovfDescriptor = getRetriever().retrieveAsString(ovfUri);
 
         OvfCreateImportSpecParams params = new OvfCreateImportSpecParams();
         params.setHostSystem(host);
@@ -158,7 +160,7 @@ public class OvfDeployer extends BaseHelper {
                         logger.fine("Importing device id: " + deviceKey);
                         String sourceUri = basePath + ovfFileItem.getPath();
                         String uploadUri = makUploadUri(ip, deviceUrl);
-                        uploadVmdkFile(ovfFileItem, sourceUri, uploadUri, leaseUpdater, client);
+                        uploadVmdkFile(ovfFileItem, sourceUri, uploadUri, leaseUpdater, this.ovfRetriever.getClient());
                         logger.info("Completed uploading VMDK file " + sourceUri);
                     }
                 }
@@ -172,7 +174,6 @@ public class OvfDeployer extends BaseHelper {
             throw e;
         } finally {
             executorService.shutdown();
-            IOUtils.closeQuietly(client);
         }
 
         httpNfcLeaseInfo = get.entityProp(lease, PROP_INFO);
@@ -219,7 +220,7 @@ public class OvfDeployer extends BaseHelper {
 
         HttpEntity entityToUpload;
 
-        if (sourceUri.startsWith("file://")) {
+        if (sourceUri.startsWith("file:/")) {
             entityToUpload = new FileEntity(new File(URI.create(sourceUri)));
         } else {
             //prepare download method
@@ -243,5 +244,9 @@ public class OvfDeployer extends BaseHelper {
     private CountingEntityWrapper newCountingEntity(HttpEntity httpEntity,
             LeaseProgressUpdater leaseUpdater) {
         return new CountingEntityWrapper(httpEntity, leaseUpdater);
+    }
+
+    public OvfRetriever getRetriever() {
+        return this.ovfRetriever;
     }
 }

@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithNetwork;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfParser;
+import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfRetriever;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
@@ -258,18 +259,23 @@ public class InstanceClient extends BaseHelper {
     }
 
     private boolean isOvfDeploy() {
-        return CustomProperties.of(this.state.description).getString(OvfParser.PROP_OVF_URI, null)
-                != null;
+        return CustomProperties.of(this.state.description).getString(OvfParser.PROP_OVF_URI, null) != null;
     }
 
     private ManagedObjectReference deployOvf() throws Exception {
         OvfDeployer deployer = new OvfDeployer(this.connection);
         CustomProperties cust = CustomProperties.of(this.state.description);
 
-        URI ovfUri = URI.create(cust.getString(OvfParser.PROP_OVF_URI));
+        URI ovfUri = cust.getUri(OvfParser.PROP_OVF_URI);
+
+        URI archiveUri = cust.getUri(OvfParser.PROP_OVF_ARCHIVE_URI);
+        if (archiveUri != null) {
+            OvfRetriever retriever = deployer.getRetriever();
+            ovfUri = retriever.downloadIfOva(archiveUri);
+        }
+
         ManagedObjectReference host = null;
         ManagedObjectReference folder = getVmFolder();
-        String vmName = this.state.name;
         List<OvfNetworkMapping> network = Collections.emptyList();
         ManagedObjectReference ds = getDatastore();
         ManagedObjectReference resourcePool = getResourcePool();
@@ -286,6 +292,8 @@ public class InstanceClient extends BaseHelper {
         }
 
         String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
+
+        String vmName = this.state.name;
 
         ManagedObjectReference vm = deployer
                 .deployOvf(ovfUri, host, folder, vmName, network, ds, props, config, resourcePool);
@@ -823,7 +831,7 @@ public class InstanceClient extends BaseHelper {
         files.setVmPathName(path);
         spec.setFiles(files);
 
-        for (NetworkInterfaceStateWithNetwork ni: this.nics) {
+        for (NetworkInterfaceStateWithNetwork ni : this.nics) {
             VirtualDevice nic = createNic(ni.network.name);
             addDeviceToVm(spec, nic);
         }
