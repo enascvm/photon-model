@@ -32,7 +32,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -66,7 +65,6 @@ public class ProvisionContext {
     public List<DiskState> disks;
     public List<NetworkInterfaceStateWithNetwork> nics;
     public AuthCredentialsServiceState vSphereCredentials;
-    public ResourcePoolState resourcePool;
 
     public VSphereIOThreadPool pool;
     public Consumer<Throwable> errorHandler;
@@ -138,22 +136,6 @@ public class ProvisionContext {
                 } else {
                     populateContextThen(service, ctx, onSuccess);
                 }
-            }, ctx.errorHandler);
-            return;
-        }
-
-        if (ctx.resourcePool == null) {
-            if (ctx.child.resourcePoolLink == null) {
-                ctx.fail(new IllegalStateException(
-                        "resourcePoolLink is not defined for resource "
-                                + ctx.child.documentSelfLink));
-                return;
-            }
-
-            URI rpUri = UriUtils.buildUri(service.getHost(), ctx.child.resourcePoolLink);
-            AdapterUtils.getServiceState(service, rpUri, op -> {
-                ctx.resourcePool = op.getBody(ResourcePoolState.class);
-                populateContextThen(service, ctx, onSuccess);
             }, ctx.errorHandler);
             return;
         }
