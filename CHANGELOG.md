@@ -1,6 +1,12 @@
 # CHANGELOG
 
-## 0.5.0-SNAPSHOT
+## 0.5.0
+
+* Changed collection interval in AWS Stats adapter to 5 minutes.
+
+* Updated xenon to 1.3.0.
+
+* Consolidate raw metric storage into a single document.
 
 ## 0.4.19
 
