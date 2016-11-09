@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.5.1-SNAPSHOT
+
 ## 0.5.0
 
 * Changed collection interval in AWS Stats adapter to 5 minutes.
