@@ -85,7 +85,6 @@ public class ProvisionNetworkTaskService extends TaskService<ProvisionNetworkTas
 
     public ProvisionNetworkTaskService() {
         super(ProvisionNetworkTaskState.class);
-        super.toggleOption(ServiceOption.PERSISTENCE, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
     }

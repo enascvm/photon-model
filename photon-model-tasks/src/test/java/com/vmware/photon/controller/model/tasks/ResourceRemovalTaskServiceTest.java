@@ -83,9 +83,7 @@ public class ResourceRemovalTaskServiceTest extends Suite {
         public void testServiceOptions() {
 
             EnumSet<Service.ServiceOption> expected = EnumSet.of(
-                    Service.ServiceOption.CONCURRENT_GET_HANDLING,
                     Service.ServiceOption.INSTRUMENTATION,
-                    Service.ServiceOption.PERSISTENCE,
                     Service.ServiceOption.REPLICATION,
                     Service.ServiceOption.OWNER_SELECTION);
 
@@ -204,15 +202,11 @@ public class ResourceRemovalTaskServiceTest extends Suite {
             // Clean up the compute and description documents
             this.deleteServiceSynchronously(cs.documentSelfLink);
             this.deleteServiceSynchronously(cs.descriptionLink);
-
             // Stop factory service.
             this.deleteServiceSynchronously(ResourceRemovalTaskService.FACTORY_LINK);
 
             // stop the removal task
             this.stopServiceSynchronously(returnState.documentSelfLink);
-
-            // restart and check service restart successfully.
-            this.getHost().startFactory(new ResourceRemovalTaskService());
         }
 
         @Test
@@ -250,8 +244,6 @@ public class ResourceRemovalTaskServiceTest extends Suite {
             // stop the removal task
             this.stopServiceSynchronously(returnState.documentSelfLink);
 
-            // restart and check service restart successfully.
-            this.getHost().startFactory(new ResourceRemovalTaskService());
         }
 
         @Test

@@ -99,10 +99,8 @@ public class SnapshotTaskServiceTest extends Suite {
         public void testServiceOptions() {
 
             EnumSet<Service.ServiceOption> expected = EnumSet.of(
-                    Service.ServiceOption.CONCURRENT_GET_HANDLING,
                     Service.ServiceOption.INSTRUMENTATION,
                     Service.ServiceOption.OWNER_SELECTION,
-                    Service.ServiceOption.PERSISTENCE,
                     Service.ServiceOption.REPLICATION);
 
             assertThat(this.snapshotTaskService.getOptions(), is(expected));

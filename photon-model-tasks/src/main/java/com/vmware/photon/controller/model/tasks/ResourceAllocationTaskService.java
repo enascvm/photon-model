@@ -144,7 +144,6 @@ public class ResourceAllocationTaskService
 
     public ResourceAllocationTaskService() {
         super(ResourceAllocationTaskState.class);
-        super.toggleOption(ServiceOption.PERSISTENCE, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
