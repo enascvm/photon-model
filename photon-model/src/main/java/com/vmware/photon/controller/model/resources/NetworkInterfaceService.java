@@ -36,14 +36,23 @@ public class NetworkInterfaceService extends StatefulService {
     public static class NetworkInterfaceState extends ResourceState {
 
         public static final String FIELD_NAME_NETWORK_LINK = "networkLink";
+
+        public static final String FIELD_NAME_SUBNET_LINK = "subnetLink";
         /**
          * Link to the network this nic is connected to.
          */
         public String networkLink;
 
         /**
-         * The static IP of the interface. Optional. If networkLink
-         * is defined, this cannot be and vice versa.
+         * Subnet ID in which the network interface will be created.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String subnetLink;
+
+        /**
+         * The static IP of the interface. Optional. If networkLink is defined, this cannot be and
+         * vice versa.
          */
         public String address;
 

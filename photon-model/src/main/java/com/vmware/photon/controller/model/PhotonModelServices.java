@@ -28,9 +28,9 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
@@ -69,6 +69,7 @@ public class PhotonModelServices {
         host.startFactory(new DiskService());
         host.startFactory(new SnapshotService());
         host.startFactory(new NetworkInterfaceService());
+        host.startFactory(new SubnetService());
         host.startFactory(new ResourceGroupService());
         host.startFactory(new NetworkService());
         host.startFactory(new FirewallService());

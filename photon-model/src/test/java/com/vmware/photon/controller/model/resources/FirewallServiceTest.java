@@ -218,11 +218,11 @@ public class FirewallServiceTest extends Suite {
 
             invalidIngressIpRangeNoSubnet.ingress.get(0).ipRange = "10.0.0.0";
             invalidIngressIpRangeInvalidIP.ingress.get(0).ipRange = "10.0.0.FOO";
-            invalidIngressIpRangeInvalidSubnet.ingress.get(0).ipRange = "10.0.0.0/32";
+            invalidIngressIpRangeInvalidSubnet.ingress.get(0).ipRange = "10.0.0.0/33";
 
             invalidEgressIpRangeNoSubnet.ingress.get(0).ipRange = "10.0.0.0";
             invalidEgressIpRangeInvalidIP.ingress.get(0).ipRange = "10.0.0.FOO";
-            invalidEgressIpRangeInvalidSubnet.ingress.get(0).ipRange = "10.0.0.0/32";
+            invalidEgressIpRangeInvalidSubnet.ingress.get(0).ipRange = "10.0.0.0/33";
 
             invalidIngressPorts0.ingress.get(0).ports.clear();
             invalidIngressPorts1.ingress.get(0).ports.add(0, "1-1024-6535");
@@ -244,9 +244,10 @@ public class FirewallServiceTest extends Suite {
                     invalidEgressProtocol, invalidIngressIpRangeNoSubnet,
                     invalidIngressIpRangeInvalidIP,
                     invalidIngressIpRangeInvalidSubnet,
+                    invalidEgressIpRangeInvalidSubnet,
                     invalidEgressIpRangeNoSubnet,
                     invalidEgressIpRangeInvalidIP,
-                    invalidEgressIpRangeInvalidSubnet, invalidIngressPorts0,
+                    invalidIngressPorts0,
                     invalidIngressPorts1, invalidIngressPorts2,
                     invalidIngressPorts3, invalidIngressPorts4,
                     invalidEgressPorts0, invalidEgressPorts1,
