@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -60,6 +61,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
 
     private static final int NUM_COMPUTE_RESOURCES = 200;
     private static final int NUM_COLLECTIONS = 5;
+    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 7;
 
     @Override
     protected void startRequiredServices() throws Throwable {
@@ -167,10 +169,18 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             if (result.documents.size() == 0) {
                 return false;
             }
+            // Expiration time = Now + 7 day.
+            long expectedExpirationTime = Utils.getNowMicrosUtc()
+                    + TimeUnit.DAYS.toMicros(DEFAULT_RETENTION_LIMIT_DAYS);
+
             boolean rightVersion = true;
             for (Object aggrDocument : result.documents.values()) {
                 ResourceAggregateMetric aggrMetric = Utils
                         .fromJson(aggrDocument, ResourceAggregateMetric.class);
+                // Make sure all the documents have expiration time set.
+                Assert.assertTrue("Expiration time is not correctly set.",
+                        aggrMetric.documentExpirationTimeMicros <  expectedExpirationTime);
+
                 if (aggrMetric.timeBin.count == NUM_COLLECTIONS) {
                     continue;
                 }
@@ -205,9 +215,17 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             ServiceDocumentQueryResult result = this.host
                     .createAndWaitSimpleDirectQuery(querySpec, 2, 2);
             boolean rightVersion = true;
+            // Expiration time = Now + 7 day.
+            long expectedExpirationTime = Utils.getNowMicrosUtc()
+                    + TimeUnit.DAYS.toMicros(DEFAULT_RETENTION_LIMIT_DAYS);
+
             for (Object aggrDocument : result.documents.values()) {
                 ResourceAggregateMetric aggrMetric = Utils
                         .fromJson(aggrDocument, ResourceAggregateMetric.class);
+                // Make sure all the documents have expiration time set.
+                Assert.assertTrue("Expiration time is not correctly set.",
+                        aggrMetric.documentExpirationTimeMicros < expectedExpirationTime);
+
                 if (aggrMetric.timeBin.count == NUM_COLLECTIONS * NUM_COMPUTE_RESOURCES) {
                     continue;
                 }
@@ -276,9 +294,18 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
             }
 
             boolean rightVersion = true;
+            // Expiration time = Now + 7 day.
+            long expectedExpirationTime = Utils.getNowMicrosUtc()
+                    + TimeUnit.DAYS.toMicros(DEFAULT_RETENTION_LIMIT_DAYS);
+
             for (Object aggrDocument : results) {
                 ResourceAggregateMetric aggrMetric = Utils
                         .fromJson(aggrDocument, ResourceAggregateMetric.class);
+
+                // Make sure all the documents have expiration time set.
+                Assert.assertTrue("Expiration time is not correctly set.",
+                        aggrMetric.documentExpirationTimeMicros < expectedExpirationTime);
+
                 // The assertion here checks whether we are aggregating only on latest value. To
                 // that effect, here is the breakdown for the check:
                 // count = num of resources: one value for each resource

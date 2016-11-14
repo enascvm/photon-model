@@ -44,6 +44,10 @@ import com.vmware.xenon.common.Utils;
         ResourceAggregateMetricServiceTest.HandleStartTest.class })
 public class ResourceAggregateMetricServiceTest extends Suite {
 
+    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 7;
+    private static final long EXPIRATION_TIME = Utils.getNowMicrosUtc()
+            + TimeUnit.DAYS.toMicros(DEFAULT_RETENTION_LIMIT_DAYS);
+
     public ResourceAggregateMetricServiceTest(Class<?> klass, RunnerBuilder builder)
             throws InitializationError {
         super(klass, builder);
@@ -54,6 +58,7 @@ public class ResourceAggregateMetricServiceTest extends Suite {
         statState.timeBin = new TimeBin();
         statState.timeBin.avg = new Double(1000);
         statState.currentIntervalTimeStampMicrosUtc = TimeUnit.MICROSECONDS.toMillis(Utils.getNowMicrosUtc());
+        statState.documentExpirationTimeMicros = EXPIRATION_TIME;
         return statState;
     }
 
@@ -95,6 +100,7 @@ public class ResourceAggregateMetricServiceTest extends Suite {
             assertNotNull(returnState);
             assertEquals(returnState.timeBin.avg, startState.timeBin.avg);
             assertEquals(returnState.currentIntervalTimeStampMicrosUtc, startState.currentIntervalTimeStampMicrosUtc);
+            assertEquals(returnState.documentExpirationTimeMicros, startState.documentExpirationTimeMicros);
         }
 
         @Test (expected = IllegalArgumentException.class)

@@ -107,6 +107,13 @@ public class SingleResourceStatsAggregationTaskService extends
                     + "SingleResourceStatsAggregationTaskService.query.resultLimit";
     private static final int DEFAULT_QUERY_RESULT_LIMIT = 25;
 
+    public static final String RESOURCE_METRIC_RETENTION_LIMIT_DAYS = UriPaths.PROPERTY_PREFIX
+            + "SingleResourceStatsAggregationTaskService.metric.retentionLimitDays";
+    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 7;
+
+    private static final long EXPIRATION_INTERVAL = Integer
+            .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_DAYS, DEFAULT_RETENTION_LIMIT_DAYS);
+
     public static class SingleResourceStatsAggregationTaskState
             extends TaskService.TaskServiceState {
 
@@ -901,6 +908,7 @@ public class SingleResourceStatsAggregationTaskService extends
      * Publish aggregate metric values
      */
     private void publishMetrics(SingleResourceStatsAggregationTaskState currentState) {
+        long expirationTime = Utils.getNowMicrosUtc() + TimeUnit.DAYS.toMicros(EXPIRATION_INTERVAL);
         if (currentState.aggregatedTimeBinMap == null) {
             sendSelfPatch(currentState, TaskStage.FINISHED, null);
             return;
@@ -919,6 +927,7 @@ public class SingleResourceStatsAggregationTaskService extends
                 aggrMetric.currentIntervalTimeStampMicrosUtc = timeKey;
                 aggrMetric.documentSelfLink = StatsUtil.getMetricKey(currentState.resourceLink,
                         aggregateEntries.getKey(), Utils.getNowMicrosUtc());
+                aggrMetric.documentExpirationTimeMicros = expirationTime;
                 operations.add(Operation
                         .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
                         .setBody(aggrMetric));

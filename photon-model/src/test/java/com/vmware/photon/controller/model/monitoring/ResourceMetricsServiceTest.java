@@ -54,6 +54,9 @@ public class ResourceMetricsServiceTest extends Suite {
 
     private static String KEY1 = "key1";
     private static Double VAL = Double.valueOf(1000);
+    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 7;
+    private static final long EXPIRATION_TIME = Utils.getNowMicrosUtc()
+            + TimeUnit.DAYS.toMicros(DEFAULT_RETENTION_LIMIT_DAYS);
 
     public ResourceMetricsServiceTest(Class<?> klass, RunnerBuilder builder)
             throws InitializationError {
@@ -65,6 +68,7 @@ public class ResourceMetricsServiceTest extends Suite {
         statState.entries = new HashMap<>();
         statState.timestampMicrosUtc  = TimeUnit.MICROSECONDS.toMillis(Utils.getNowMicrosUtc());
         statState.entries.put(KEY1, VAL);
+        statState.documentExpirationTimeMicros = EXPIRATION_TIME;
         return statState;
     }
 
@@ -108,6 +112,8 @@ public class ResourceMetricsServiceTest extends Suite {
                     is(startState.entries.values().iterator().next()));
             assertThat(returnState.timestampMicrosUtc,
                     is(startState.timestampMicrosUtc));
+            assertThat(returnState.documentExpirationTimeMicros,
+                    is(startState.documentExpirationTimeMicros));
             QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
             querySpec.query = Query.Builder.create().addRangeClause(
                     QuerySpecification.buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES,KEY1), NumericRange.createEqualRange(VAL)).build();

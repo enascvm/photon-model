@@ -21,6 +21,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
@@ -72,6 +73,13 @@ public class SingleResourceStatsCollectionTaskService
 
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";
+
+    public static final String RESOURCE_METRIC_RETENTION_LIMIT_DAYS = UriPaths.PROPERTY_PREFIX
+            + "SingleResourceStatsCollectionTaskService.metric.retentionLimitDays";
+    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 7;
+
+    private static final long EXPIRATION_INTERVAL = Integer
+            .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_DAYS, DEFAULT_RETENTION_LIMIT_DAYS);
 
     public static FactoryService createFactory() {
         TaskFactoryService fs = new TaskFactoryService(
@@ -303,6 +311,8 @@ public class SingleResourceStatsCollectionTaskService
             throw new IllegalStateException("stats adapter reference should not be null");
         }
 
+        long expirationTime = Utils.getNowMicrosUtc() + TimeUnit.DAYS.toMicros(EXPIRATION_INTERVAL);
+
         // Push the last collection metric to the in memory stats available at the
         // compute-link/stats URI.
         ServiceStats.ServiceStat minuteStats = new ServiceStats.ServiceStat();
@@ -318,7 +328,7 @@ public class SingleResourceStatsCollectionTaskService
         List<ResourceMetrics> metricsList = new ArrayList<>();
         populateResourceMetrics(metricsList,
                 getLastCollectionMetricKeyForAdapterLink(statsLink, false),
-                minuteStats, currentState.computeLink);
+                minuteStats, currentState.computeLink, expirationTime);
 
         // TODO: Support case when stats list has data for multiple resources
         // https://jira-hzn.eng.vmware.com/browse/VSYM-3121
@@ -351,7 +361,7 @@ public class SingleResourceStatsCollectionTaskService
                             StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS);
 
                     populateResourceMetrics(metricsList, entries.getKey(),
-                            serviceStat, computeLink);
+                            serviceStat, computeLink, expirationTime);
                 }
             }
         }
@@ -408,7 +418,7 @@ public class SingleResourceStatsCollectionTaskService
     private void populateResourceMetrics(List<ResourceMetrics> metricsList,
             String metricName,
             ServiceStat serviceStat,
-            String computeLink) {
+            String computeLink, long expirationTime) {
         if (Double.isNaN(serviceStat.latestValue)) {
             return;
         }
@@ -425,6 +435,7 @@ public class SingleResourceStatsCollectionTaskService
             metricsObjToUpdate.documentSelfLink = StatsUtil.getMetricKey(computeLink, Utils.getNowMicrosUtc());
             metricsObjToUpdate.entries = new HashMap<>();
             metricsObjToUpdate.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
+            metricsObjToUpdate.documentExpirationTimeMicros = expirationTime;
             metricsList.add(metricsObjToUpdate);
         }
         metricsObjToUpdate.entries.put(metricName, serviceStat.latestValue);
