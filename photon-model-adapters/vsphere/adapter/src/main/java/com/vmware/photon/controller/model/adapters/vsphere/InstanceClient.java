@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithNetwork;
+import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfParser;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfRetriever;
@@ -106,7 +106,7 @@ public class InstanceClient extends BaseHelper {
     private final ComputeStateWithDescription state;
     private final ComputeStateWithDescription parent;
     private final List<DiskState> disks;
-    private final List<NetworkInterfaceStateWithNetwork> nics;
+    private final List<NetworkInterfaceStateWithDetails> nics;
     private final ManagedObjectReference parentComputeResource;
 
     private final GetMoRef get;
@@ -120,7 +120,7 @@ public class InstanceClient extends BaseHelper {
             ComputeStateWithDescription resource,
             ComputeStateWithDescription parent,
             List<DiskState> disks,
-            List<NetworkInterfaceStateWithNetwork> nics,
+            List<NetworkInterfaceStateWithDetails> nics,
             ManagedObjectReference parentComputeResource)
             throws ClientException, FinderException {
         super(connection);
@@ -837,7 +837,7 @@ public class InstanceClient extends BaseHelper {
         files.setVmPathName(path);
         spec.setFiles(files);
 
-        for (NetworkInterfaceStateWithNetwork ni : this.nics) {
+        for (NetworkInterfaceStateWithDetails ni : this.nics) {
             VirtualDevice nic = createNic(ni.network.name);
             addDeviceToVm(spec, nic);
         }

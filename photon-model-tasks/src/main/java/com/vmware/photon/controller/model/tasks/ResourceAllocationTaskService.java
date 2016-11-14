@@ -774,7 +774,7 @@ public class ResourceAllocationTaskService
                                 nic.firewallLinks = nid.firewallLinks;
                                 nic.groupLinks = nid.groupLinks;
                                 nic.name = nid.name;
-                                nic.networkInterfaceDesciptionLink = nid.documentSelfLink;
+                                nic.networkInterfaceDescriptionLink = nid.documentSelfLink;
                                 nic.networkLink = nid.networkLink;
                                 nic.subnetLink = nid.subnetLink;
                                 nic.tagLinks = nid.tagLinks;

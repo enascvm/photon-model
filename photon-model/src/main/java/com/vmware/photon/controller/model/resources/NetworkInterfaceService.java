@@ -38,6 +38,8 @@ public class NetworkInterfaceService extends StatefulService {
         public static final String FIELD_NAME_NETWORK_LINK = "networkLink";
 
         public static final String FIELD_NAME_SUBNET_LINK = "subnetLink";
+
+        public static final String FIELD_NAME_DESCRIPTION_LINK = "networkInterfaceDescriptionLink";
         /**
          * Link to the network this nic is connected to.
          */
@@ -51,10 +53,10 @@ public class NetworkInterfaceService extends StatefulService {
         public String subnetLink;
 
         /**
-         * The actual IP of the interface. Optional. The IP will be assign based on the on the
-         * NetworkInterfaceDescription's IP assignment type.
+         * [Output only]. Holds the public IP of this interface after provisioning.
          */
         public String address;
+
 
         /**
          * Firewalls with which this network interface is associated.
@@ -66,7 +68,7 @@ public class NetworkInterfaceService extends StatefulService {
         /**
          * The link to the desire state, from which this Network interface was created.
          */
-        public String networkInterfaceDesciptionLink;
+        public String networkInterfaceDescriptionLink;
     }
 
     public NetworkInterfaceService() {

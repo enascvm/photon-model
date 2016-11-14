@@ -21,6 +21,7 @@ import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
@@ -30,16 +31,23 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.vim25.CustomizationSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
+import com.vmware.vim25.TaskInfo;
+import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
+import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
@@ -144,7 +152,30 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             return;
                         }
 
+                        // populate state, MAC address being very important
+                        VmOverlay vmOverlay = client.enrichStateFromVm(state);
+
                         Operation finishTask = null;
+
+                        for (NetworkInterfaceStateWithDetails nic : ctx.nics) {
+                            // request guest customization while vm of powered off
+                            NetworkInterfaceDescription desc = nic.description;
+                            SubnetState subnet = nic.subnet;
+                            if (subnet != null && desc != null && desc.assignment == IpAssignment.STATIC) {
+                                CustomizationClient cc = new CustomizationClient(connection, ctx.child,
+                                        VirtualMachineGuestOsIdentifier.OTHER_GUEST_64);
+                                CustomizationSpec template = new CustomizationSpec();
+                                cc.customizeNic(vmOverlay.getPrimaryMac(), desc, subnet, template);
+                                cc.customizeDns(subnet.dnsServerAddresses, subnet.dnsSearchDomains,
+                                        template);
+                                ManagedObjectReference task = cc.customizeGuest(client.getVm(), template);
+
+                                TaskInfo taskInfo = VimUtils.waitTaskEnd(connection, task);
+                                if (taskInfo.getState() == TaskInfoState.ERROR) {
+                                    VimUtils.rethrow(taskInfo.getError());
+                                }
+                            }
+                        }
 
                         // power on machine before enrichment
                         if (ctx.child.powerState == PowerState.ON) {
@@ -165,13 +196,13 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             finishTask = mgr.createTaskPatch(TaskStage.FINISHED);
                         }
 
-                        VmOverlay vmOverlay = client.enrichStateFromVm(state);
+
+
                         if (ctx.templateMoRef != null) {
-                            // because the cloning, networkInterfaces are ignored and
+                            // as we're cloning, networkInterfaces are ignored and
                             // recreated based on the template
                             addNetworkLinksAfterClone(state, vmOverlay.getNics(), ctx);
                             addDiskLinksAfterClone(state, vmOverlay.getDisks(), ctx);
-
                         }
 
                         state.lifecycleState = LifecycleState.READY;

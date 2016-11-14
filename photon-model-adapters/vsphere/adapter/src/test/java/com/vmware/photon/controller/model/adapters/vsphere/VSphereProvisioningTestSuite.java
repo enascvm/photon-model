@@ -24,8 +24,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
-import org.junit.runners.model.InitializationError;
-import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
@@ -39,8 +37,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.SnapshotService.SnapshotState;
@@ -52,16 +48,12 @@ import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask.Query;
 
-@RunWith(VSphereProvisioningTestSuite.class)
-@SuiteClasses({ VSphereProvisioningTestSuite.TestVSphereProvisionTask.class,
+@RunWith(Suite.class)
+@SuiteClasses({
+        VSphereProvisioningTestSuite.TestVSphereProvisionTask.class,
         VSphereProvisioningTestSuite.ProvisionToClusteredHostTest.class,
         VSphereProvisioningTestSuite.ProvisionToStandaloneHostTest.class })
-public class VSphereProvisioningTestSuite extends Suite {
-
-    public VSphereProvisioningTestSuite(Class<?> klass, RunnerBuilder builder)
-            throws InitializationError {
-        super(klass, builder);
-    }
+public class VSphereProvisioningTestSuite {
 
     public abstract static class BaseVSphereAdapterProvisionTest extends BaseVSphereAdapterTest {
         protected final String placementTargetVimType;
@@ -169,18 +161,6 @@ public class VSphereProvisioningTestSuite extends Suite {
             return TestUtils.doPost(this.host, res,
                     DiskState.class,
                     UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
-        }
-
-        private String createNic(String name, String networkLink) throws Throwable {
-            NetworkInterfaceState nic = new NetworkInterfaceState();
-            nic.name = name;
-            nic.networkLink = networkLink;
-
-            nic = TestUtils.doPost(this.host, nic,
-                    NetworkInterfaceState.class,
-                    UriUtils.buildUri(this.host, NetworkInterfaceService.FACTORY_LINK));
-
-            return nic.documentSelfLink;
         }
 
         private ComputeDescription createVmDescription() throws Throwable {

@@ -30,7 +30,7 @@ import com.vmware.xenon.common.Utils;
  */
 public class NetworkService extends StatefulService {
 
-    public static final String FACTORY_LINK = UriPaths.RESOURCES + "/networks";
+    public static final String FACTORY_LINK = UriPaths.RESOURCES_NETWORKS;
 
     /**
      * Network State document.

@@ -21,6 +21,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.FirewallService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceDescriptionService;
@@ -50,6 +51,7 @@ public class PhotonModelServices {
             DiskService.FACTORY_LINK,
             SnapshotService.FACTORY_LINK,
             NetworkInterfaceService.FACTORY_LINK,
+            NetworkInterfaceDescriptionService.FACTORY_LINK,
             ResourceGroupService.FACTORY_LINK,
             NetworkService.FACTORY_LINK,
             FirewallService.FACTORY_LINK,
@@ -69,6 +71,7 @@ public class PhotonModelServices {
         host.startFactory(new DiskService());
         host.startFactory(new SnapshotService());
         host.startFactory(new NetworkInterfaceService());
+        host.startFactory(new NetworkInterfaceDescriptionService());
         host.startFactory(new SubnetService());
         host.startFactory(new ResourceGroupService());
         host.startFactory(new NetworkService());

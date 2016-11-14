@@ -32,7 +32,7 @@ import com.vmware.xenon.common.Utils;
  */
 public class NetworkInterfaceDescriptionService extends StatefulService {
 
-    public static final String FACTORY_LINK = UriPaths.RESOURCES_NETWORK_INTERFACES;
+    public static final String FACTORY_LINK = UriPaths.RESOURCES_NETWORK_INTERFACE_DESCRIPTIONS;
 
     public enum IpAssignment {
         /**

@@ -30,17 +30,17 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -63,7 +63,7 @@ public class ProvisionContext {
 
     public ServiceDocument task;
     public List<DiskState> disks;
-    public List<NetworkInterfaceStateWithNetwork> nics;
+    public List<NetworkInterfaceStateWithDetails> nics;
     public AuthCredentialsServiceState vSphereCredentials;
 
     public VSphereIOThreadPool pool;
@@ -71,8 +71,10 @@ public class ProvisionContext {
 
     private final InstanceRequestType instanceRequestType;
 
-    public static class NetworkInterfaceStateWithNetwork extends NetworkInterfaceState {
+    public static class NetworkInterfaceStateWithDetails extends NetworkInterfaceState {
         public NetworkState network;
+        public SubnetState subnet;
+        public NetworkInterfaceDescription description;
     }
 
     public ProvisionContext(ComputeInstanceRequest req) {
@@ -200,6 +202,8 @@ public class ProvisionContext {
                     .addOption(QueryOption.EXPAND_LINKS)
                     .addOption(QueryOption.SELECT_LINKS)
                     .addLinkTerm(NetworkInterfaceState.FIELD_NAME_NETWORK_LINK)
+                    .addLinkTerm(NetworkInterfaceState.FIELD_NAME_SUBNET_LINK)
+                    .addLinkTerm(NetworkInterfaceState.FIELD_NAME_DESCRIPTION_LINK)
                     .build();
 
             Operation.createPost(service, ServiceUriPaths.CORE_QUERY_TASKS)
@@ -209,16 +213,28 @@ public class ProvisionContext {
                             ctx.errorHandler.accept(e);
                             return;
                         }
+                        QueryResultsProcessor processor = QueryResultsProcessor.create(o);
+                        for (NetworkInterfaceStateWithDetails nic : processor
+                                .documents(NetworkInterfaceStateWithDetails.class)) {
 
-                        ServiceDocumentQueryResult results = o.getBody(QueryTask.class).results;
-                        for (Object obj : results.documents.values()) {
-                            NetworkInterfaceStateWithNetwork iface = Utils
-                                    .fromJson(obj, NetworkInterfaceStateWithNetwork.class);
+                            if (nic.networkInterfaceDescriptionLink != null) {
+                                NetworkInterfaceDescription desc =
+                                        processor.selectedDocument(nic.networkInterfaceDescriptionLink,
+                                                NetworkInterfaceDescription.class);
+                                nic.description = desc;
+                            }
 
-                            iface.network = Utils
-                                    .fromJson(results.selectedDocuments.get(iface.networkLink),
-                                            NetworkState.class);
-                            ctx.nics.add(iface);
+                            if (nic.subnetLink != null) {
+                                SubnetState subnet = processor.selectedDocument(nic.subnetLink, SubnetState.class);
+                                nic.subnet = subnet;
+                            }
+
+                            if (nic.networkLink != null) {
+                                NetworkState network = processor.selectedDocument(nic.networkLink, NetworkState.class);
+                                nic.network = network;
+                            }
+
+                            ctx.nics.add(nic);
                         }
 
                         populateContextThen(service, ctx, onSuccess);

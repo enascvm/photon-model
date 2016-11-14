@@ -38,10 +38,16 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -87,6 +93,8 @@ public class BaseVSphereAdapterTest {
     protected VerificationHost host;
     protected AuthCredentialsServiceState auth;
     protected ResourcePoolState resourcePool;
+    public NetworkInterfaceDescription nicDescription;
+    public SubnetState subnet;
 
     @Before
     public void setUp() throws Throwable {
@@ -375,5 +383,35 @@ public class BaseVSphereAdapterTest {
 
         // TODO rewrite using QueryResultsProcessor
         return Utils.fromJson(qt.results.documents.values().iterator().next(), type);
+    }
+
+    protected String createNic(String name, String networkLink) throws Throwable {
+        NetworkInterfaceState nic = new NetworkInterfaceState();
+        nic.name = name;
+        nic.networkLink = networkLink;
+
+        if (this.nicDescription != null) {
+            String subnetLink = null;
+            if (this.subnet != null) {
+                this.subnet.networkLink = networkLink;
+                this.subnet = TestUtils.doPost(this.host, this.subnet,
+                        SubnetState.class,
+                        UriUtils.buildUri(this.host, SubnetService.FACTORY_LINK));
+                subnetLink = this.subnet.documentSelfLink;
+                nic.subnetLink = this.subnet.documentSelfLink;
+            }
+
+            this.nicDescription.subnetLink = subnetLink;
+            this.nicDescription = TestUtils.doPost(this.host, this.nicDescription,
+                    NetworkInterfaceDescription.class,
+                    UriUtils.buildUri(this.host, NetworkInterfaceDescriptionService.FACTORY_LINK));
+            nic.networkInterfaceDescriptionLink = this.nicDescription.documentSelfLink;
+        }
+
+        nic = TestUtils.doPost(this.host, nic,
+                NetworkInterfaceState.class,
+                UriUtils.buildUri(this.host, NetworkInterfaceService.FACTORY_LINK));
+
+        return nic.documentSelfLink;
     }
 }

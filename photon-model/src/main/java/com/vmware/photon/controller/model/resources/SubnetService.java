@@ -67,6 +67,18 @@ public class SubnetService extends StatefulService {
          */
         @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL, indexing = PropertyIndexingOption.EXPAND)
         public Set<String> dnsServerAddresses;
+
+        /**
+         * DNS domain of the this subnet
+         */
+        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String domain;
+
+        /**
+         * Domains search in
+         */
+        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL, indexing = PropertyIndexingOption.EXPAND)
+        public Set<String> dnsSearchDomains;
     }
 
     public SubnetService() {
