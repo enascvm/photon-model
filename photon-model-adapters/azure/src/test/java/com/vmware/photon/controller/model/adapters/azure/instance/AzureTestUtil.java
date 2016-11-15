@@ -32,8 +32,13 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
+import com.microsoft.azure.management.compute.ComputeManagementClient;
+import com.microsoft.azure.management.compute.models.VirtualMachine;
+import com.microsoft.rest.ServiceResponse;
+
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureComputeEnumerationAdapterService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -46,6 +51,7 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -85,7 +91,23 @@ public class AzureTestUtil {
         return returnPool;
     }
 
-    public static void deleteVMs(VerificationHost host, String documentSelfLink, boolean isMock)
+    public static int getAzureVMCount(ComputeManagementClient computeManagementClient) throws Exception {
+        ServiceResponse<List<VirtualMachine>> response = computeManagementClient
+                .getVirtualMachinesOperations().listAll();
+
+        int count = 0;
+        for (VirtualMachine virtualMachine : response.getBody()) {
+            if (AzureComputeEnumerationAdapterService.AZURE_VM_TERMINATION_STATES
+                    .contains(virtualMachine.getProvisioningState())) {
+                continue;
+            }
+            count++;
+        }
+
+        return count;
+    }
+
+    public static void deleteVMs(VerificationHost host, String documentSelfLink, boolean isMock, int numberOfRemainingVMs)
             throws Throwable {
         host.testStart(1);
         ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
@@ -101,8 +123,7 @@ public class AzureTestUtil {
                           .setBody(deletionState)
                           .setCompletion(host.getCompletion()));
         host.testWait();
-        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-3258
-        //ProvisioningUtils.queryComputeInstances(host, 1);
+        ProvisioningUtils.queryComputeInstances(host, numberOfRemainingVMs);
     }
 
     /**
