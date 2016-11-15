@@ -134,6 +134,9 @@ public class AWSEndpointAdapterService extends StatelessService {
                     AWSUriPaths.AWS_INSTANCE_ADAPTER);
             cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
                     AWSUriPaths.AWS_ENUMERATION_ADAPTER);
+            cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    AWSUriPaths.AWS_POWER_ADAPTER);
+
             URI statsAdapterUri = AdapterUriUtil.buildAdapterUri(this.getHost(),
                     AWSUriPaths.AWS_STATS_ADAPTER);
             URI costStatsAdapterUri = AdapterUriUtil.buildAdapterUri(this.getHost(),

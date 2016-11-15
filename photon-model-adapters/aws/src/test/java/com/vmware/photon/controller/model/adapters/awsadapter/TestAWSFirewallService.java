@@ -98,7 +98,7 @@ public class TestAWSFirewallService {
             this.client = TestUtils.getClient(this.privateKeyId,this.privateKey,this.region,false);
             // legacy that can be removed when instance
             // refactored
-            this.aws = new AWSAllocation(null);
+            this.aws = new AWSAllocation(null, null);
             this.aws.amazonEC2Client = this.client;
 
         } catch (Throwable e) {

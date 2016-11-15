@@ -14,6 +14,8 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 
 /**
  * URI definitions for AWS adapters.
@@ -48,4 +50,7 @@ public class AWSUriPaths {
             + "/network-state-creation-adapter";
     public static final String AWS_ENDPOINT_CONFIG_ADAPTER = PROVISIONING_AWS
             + "/endpoint-config-adapter";
+
+    public static final String AWS_POWER_ADAPTER = AdapterTypePath.POWER_ADAPTER
+            .adapterLink(EndpointType.aws.name());
 }

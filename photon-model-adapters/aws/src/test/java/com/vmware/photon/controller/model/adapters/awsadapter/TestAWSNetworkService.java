@@ -34,7 +34,6 @@ import org.junit.rules.ExpectedException;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
-
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
@@ -83,7 +82,7 @@ public class TestAWSNetworkService {
                     Operation.createPost(UriUtils.buildUri(this.host,
                             AWSNetworkService.class)),
                     this.netSvc);
-            this.aws = new AWSAllocation(null);
+            this.aws = new AWSAllocation(null, null);
             this.aws.amazonEC2Client = TestUtils.getClient(this.privateKeyId,
                     this.privateKey, this.region, false);
         } catch (Throwable e) {

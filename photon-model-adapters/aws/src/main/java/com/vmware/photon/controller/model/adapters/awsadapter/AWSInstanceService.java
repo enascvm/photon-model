@@ -46,7 +46,7 @@ import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
+import com.vmware.photon.controller.model.adapters.awsadapter.BaseAwsContext.BaseAwsStages;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -67,7 +67,6 @@ import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  * Adapter to create an EC2 instance on AWS.
@@ -106,24 +105,41 @@ public class AWSInstanceService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        AWSAllocation aws = new AWSAllocation(
-                op.getBody(ComputeInstanceRequest.class));
-        switch (aws.computeRequest.requestType) {
+
+        ComputeInstanceRequest request = op.getBody(ComputeInstanceRequest.class);
+
+        switch (request.requestType) {
         case VALIDATE_CREDENTIALS:
-            aws.stage = AWSStages.PARENTAUTH;
-            aws.awsOperation = op;
-            handleAllocation(aws);
+            BaseAwsContext.populateContextThen(new AWSAllocation(this, request,
+                    UriUtils.buildUri(this.getHost(), request.authCredentialsLink)),
+                    BaseAwsStages.PARENTAUTH, (context, t) -> {
+                        if (t != null) {
+                            context.stage = AWSStages.ERROR;
+                            context.error = t;
+                        } else {
+                            context.stage = AWSStages.CLIENT;
+                            context.awsOperation = op;
+                        }
+                        handleAllocation(context);
+                    });
             break;
         default:
             op.complete();
-            if (aws.computeRequest.isMockRequest
-                    && aws.computeRequest.requestType == ComputeInstanceRequest.InstanceRequestType.CREATE) {
-                AdapterUtils.sendPatchToProvisioningTask(this,
-                        aws.computeRequest.taskReference);
+            if (request.isMockRequest
+                    && request.requestType == ComputeInstanceRequest.InstanceRequestType.CREATE) {
+                AdapterUtils.sendPatchToProvisioningTask(this, request.taskReference);
                 return;
             }
-            handleAllocation(aws);
+            BaseAwsContext.populateContextThen(new AWSAllocation(this, request),
+                    BaseAwsStages.VMDESC, (context, t) -> {
+                        if (t != null) {
+                            context.stage = AWSStages.ERROR;
+                            context.error = t;
+                        }
+                        handleAllocation(context);
+                    });
         }
+
     }
 
     /*
@@ -135,17 +151,8 @@ public class AWSInstanceService extends StatelessService {
      */
     private void handleAllocation(AWSAllocation aws) {
         switch (aws.stage) {
-        case VMDESC:
-            getVMDescription(aws, AWSStages.PARENTDESC);
-            break;
-        case PARENTDESC:
-            getParentDescription(aws, AWSStages.PROVISIONTASK);
-            break;
         case PROVISIONTASK:
-            getProvisioningTaskReference(aws, AWSStages.PARENTAUTH);
-            break;
-        case PARENTAUTH:
-            getParentAuth(aws, AWSStages.CLIENT);
+            getProvisioningTaskReference(aws, AWSStages.CLIENT);
             break;
         case CLIENT:
             aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
@@ -209,22 +216,6 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /*
-     * method will be responsible for getting the compute description for the requested resource and
-     * then passing to the next step
-     */
-    private void getVMDescription(AWSAllocation aws, AWSStages next) {
-        Consumer<Operation> onSuccess = (op) -> {
-            aws.child = op.getBody(ComputeStateWithDescription.class);
-            aws.stage = next;
-            handleAllocation(aws);
-        };
-        URI computeUri = UriUtils.extendUriWithQuery(
-                aws.computeRequest.resourceReference, UriUtils.URI_PARAM_ODATA_EXPAND,
-                Boolean.TRUE.toString());
-        AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(aws));
-    }
-
-    /*
      * Gets the provisioning task reference for this operation. Sets the task expiration time in the
      * context to be used for bounding the status checks for creation and termination requests.
      */
@@ -238,35 +229,6 @@ public class AWSInstanceService extends StatelessService {
         };
         AdapterUtils.getServiceState(this, aws.computeRequest.taskReference, onSuccess,
                 getFailureConsumer(aws));
-    }
-
-    /*
-     * Method will get the service for the identified link
-     */
-    private void getParentDescription(AWSAllocation aws, AWSStages next) {
-        Consumer<Operation> onSuccess = (op) -> {
-            aws.parent = op.getBody(ComputeStateWithDescription.class);
-            aws.stage = next;
-            handleAllocation(aws);
-        };
-        URI parentURI = ComputeStateWithDescription
-                .buildUri(UriUtils.buildUri(getHost(), aws.child.parentLink));
-        AdapterUtils.getServiceState(this, parentURI, onSuccess, getFailureConsumer(aws));
-    }
-
-    private void getParentAuth(AWSAllocation aws, AWSStages next) {
-        String parentAuthLink;
-        if (aws.computeRequest.requestType == InstanceRequestType.VALIDATE_CREDENTIALS) {
-            parentAuthLink = aws.computeRequest.authCredentialsLink;
-        } else {
-            parentAuthLink = aws.parent.description.authCredentialsLink;
-        }
-        Consumer<Operation> onSuccess = (op) -> {
-            aws.parentAuth = op.getBody(AuthCredentialsServiceState.class);
-            aws.stage = next;
-            handleAllocation(aws);
-        };
-        AdapterUtils.getServiceState(this, parentAuthLink, onSuccess, getFailureConsumer(aws));
     }
 
     private Consumer<Throwable> getFailureConsumer(AWSAllocation aws) {

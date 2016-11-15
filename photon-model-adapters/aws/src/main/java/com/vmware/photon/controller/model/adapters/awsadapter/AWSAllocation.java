@@ -13,33 +13,30 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.services.common.AuthCredentialsService;
+import com.vmware.xenon.common.Service;
 
 /**
  * AWS allocation.
  */
-public class AWSAllocation {
+public class AWSAllocation extends BaseAwsContext {
 
     public AWSStages stage;
 
     transient Operation awsOperation;
     public ComputeInstanceRequest computeRequest;
-    public ComputeStateWithDescription child;
-    public ComputeStateWithDescription parent;
     public AmazonEC2AsyncClient amazonEC2Client;
-    public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
     public Map<DiskType, DiskState> childDisks;
     public List<String> securityGroupIds;
     public String subnetId;
@@ -53,8 +50,14 @@ public class AWSAllocation {
     /**
      * Initialize with request info and first stage.
      */
-    public AWSAllocation(ComputeInstanceRequest computeReq) {
+    public AWSAllocation(Service service, ComputeInstanceRequest computeReq) {
+        this(service, computeReq, computeReq.resourceReference);
+    }
+
+    public AWSAllocation(Service service, ComputeInstanceRequest computeReq,
+            URI resourceReference) {
+        super(service, resourceReference);
         this.computeRequest = computeReq;
-        this.stage = AWSStages.VMDESC;
+        this.stage = AWSStages.PROVISIONTASK;
     }
 }

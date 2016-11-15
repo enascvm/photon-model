@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -87,6 +88,12 @@ public class AdapterUtils {
         provisioningTaskBody.taskInfo = taskInfo;
         service.sendRequest(Operation.createPatch(taskLink).setBody(
                 provisioningTaskBody));
+    }
+
+    public static void sendPatchToTask(StatelessService service, URI taskReference,
+            ResourceOperationResponse response) {
+        service.sendRequest(Operation.createPatch(taskReference).setBody(
+                response));
     }
 
     /**

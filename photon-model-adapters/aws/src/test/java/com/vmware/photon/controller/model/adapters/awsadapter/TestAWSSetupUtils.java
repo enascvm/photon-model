@@ -76,7 +76,6 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -231,6 +230,18 @@ public class TestAWSSetupUtils {
             String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
             Set<String> tagLinks)
             throws Throwable {
+        return createAWSVMResource(host, parentLink, resourcePoolLink, clazz, instanceType_t2_micro,
+                tagLinks);
+    }
+
+    /**
+     * Create a compute resource for an AWS instance
+     */
+    public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
+            String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
+            String vmName,
+            Set<String> tagLinks)
+            throws Throwable {
 
         // Step 1: Create an auth credential to login to the VM
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
@@ -248,7 +259,8 @@ public class TestAWSSetupUtils {
         ComputeDescriptionService.ComputeDescription awsVMDesc = new ComputeDescriptionService.ComputeDescription();
 
         awsVMDesc.id = instanceType_t2_micro;
-        awsVMDesc.name = instanceType_t2_micro;
+        awsVMDesc.name = vmName;
+        awsVMDesc.instanceType = instanceType_t2_micro;
 
         awsVMDesc.supportedChildren = new ArrayList<>();
         awsVMDesc.supportedChildren.add(ComputeType.DOCKER_CONTAINER.name());

@@ -13,27 +13,27 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
+import com.vmware.photon.controller.model.adapters.awsadapter.BaseAwsContext;
+import com.vmware.photon.controller.model.adapters.awsadapter.BaseAwsContext.BaseAwsStages;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * Enumeration Adapter for the Amazon Web Services. Performs a list call to the AWS API
- * and reconciles the local state with the state on the remote system. It lists the instances on the remote system.
- * Compares those with the local system and creates the instances that are missing in the local system.
+ * Enumeration Adapter for the Amazon Web Services. Performs a list call to the AWS API and
+ * reconciles the local state with the state on the remote system. It lists the instances on the
+ * remote system. Compares those with the local system and creates the instances that are missing in
+ * the local system.
  *
  */
 public class AWSEnumerationAdapterService extends StatelessService {
@@ -45,11 +45,14 @@ public class AWSEnumerationAdapterService extends StatelessService {
     }
 
     public static enum AWSEnumerationStages {
-        HOSTDESC, PARENTAUTH, KICKOFF_ENUMERATION, PATCH_COMPLETION, ERROR
+        KICKOFF_ENUMERATION,
+        PATCH_COMPLETION,
+        ERROR
     }
 
     /**
-     * Holds the compute resource request and other data that is required by the helper flows to perform resource enumeration on AWS.
+     * Holds the compute resource request and other data that is required by the helper flows to
+     * perform resource enumeration on AWS.
      *
      */
     public static class AWSEnumerationRequest {
@@ -68,21 +71,22 @@ public class AWSEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * The enumeration service context needed to spawn off control to the creation and deletion adapters for AWS.
+     * The enumeration service context needed to spawn off control to the creation and deletion
+     * adapters for AWS.
      */
-    public static class EnumerationContext {
+    public static class EnumerationContext extends BaseAwsContext {
 
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-        public ComputeStateWithDescription parentCompute;
         public AWSEnumerationStages stage;
         public List<Operation> enumerationOperations;
         public Throwable error;
         public Operation awsAdapterOperation;
 
-        public EnumerationContext(ComputeEnumerateResourceRequest request, Operation op) {
+        public EnumerationContext(Service service, ComputeEnumerateResourceRequest request,
+                Operation op) {
+            super(service, request.resourceReference);
             this.computeEnumerationRequest = request;
-            this.stage = AWSEnumerationStages.HOSTDESC;
+            this.stage = AWSEnumerationStages.KICKOFF_ENUMERATION;
             this.enumerationOperations = new ArrayList<Operation>();
             this.awsAdapterOperation = op;
         }
@@ -102,16 +106,22 @@ public class AWSEnumerationAdapterService extends StatelessService {
             return;
         }
         op.complete();
-        EnumerationContext awsEnumerationContext = new EnumerationContext(
-                op.getBody(ComputeEnumerateResourceRequest.class), op);
-        AdapterUtils.validateEnumRequest(awsEnumerationContext.computeEnumerationRequest);
-        if (awsEnumerationContext.computeEnumerationRequest.isMockRequest) {
+        ComputeEnumerateResourceRequest request = op.getBody(ComputeEnumerateResourceRequest.class);
+
+        AdapterUtils.validateEnumRequest(request);
+        if (request.isMockRequest) {
             // patch status to parent task
-            AdapterUtils.sendPatchToEnumerationTask(this,
-                    awsEnumerationContext.computeEnumerationRequest.taskReference);
+            AdapterUtils.sendPatchToEnumerationTask(this, request.taskReference);
             return;
         }
-        handleEnumerationRequest(awsEnumerationContext);
+        BaseAwsContext.populateContextThen(new EnumerationContext(this, request, op),
+                BaseAwsStages.PARENTDESC, (context, t) -> {
+                    if (t != null) {
+                        context.error = t;
+                        context.stage = AWSEnumerationStages.ERROR;
+                    }
+                    handleEnumerationRequest(context);
+                });
     }
 
     /**
@@ -151,17 +161,12 @@ public class AWSEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Creates operations for the creation and deletion adapter services and spawns them off in parallel
+     * Creates operations for the creation and deletion adapter services and spawns them off in
+     * parallel
      *
      */
     public void handleEnumerationRequest(EnumerationContext aws) {
         switch (aws.stage) {
-        case HOSTDESC:
-            getHostComputeDescription(aws, AWSEnumerationStages.PARENTAUTH);
-            break;
-        case PARENTAUTH:
-            getParentAuth(aws, AWSEnumerationStages.KICKOFF_ENUMERATION);
-            break;
         case KICKOFF_ENUMERATION:
             kickOffEnumerationWorkFlows(aws, AWSEnumerationStages.PATCH_COMPLETION);
             break;
@@ -191,7 +196,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
             AWSEnumerationStages next) {
         AWSEnumerationRequest awsEnumerationRequest = new AWSEnumerationRequest(
                 context.computeEnumerationRequest, context.parentAuth,
-                context.parentCompute);
+                context.parent);
 
         Operation patchAWSCreationAdapterService = Operation
                 .createPatch(this, AWSEnumerationAndCreationAdapterService.SELF_LINK)
@@ -241,53 +246,5 @@ public class AWSEnumerationAdapterService extends StatelessService {
         joinOp.sendWith(getHost());
         logInfo("Kicked off enumeration creation,deletion and storage workflows for AWS");
 
-    }
-
-    /**
-     * Method to retrieve the parent compute host on which the enumeration task will be performed.
-     * @param aws
-     */
-    private void getHostComputeDescription(EnumerationContext aws,
-            AWSEnumerationStages next) {
-        Consumer<Operation> onSuccess = (op) -> {
-            ComputeStateWithDescription csd = op.getBody(ComputeStateWithDescription.class);
-            aws.parentCompute = csd;
-            aws.stage = next;
-            handleEnumerationRequest(aws);
-        };
-
-        URI computeUri = UriUtils
-                .extendUriWithQuery(aws.computeEnumerationRequest.resourceReference,
-                        UriUtils.URI_PARAM_ODATA_EXPAND,
-                        Boolean.TRUE.toString());
-
-        AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(aws));
-    }
-
-    /**
-     * Private method to arrive at the credentials needed to call the AWS API for enumerating the instances.
-     * @param aws
-     */
-    private void getParentAuth(EnumerationContext aws, AWSEnumerationStages next) {
-        Consumer<Operation> onSuccess = (op) -> {
-            aws.parentAuth = op.getBody(AuthCredentialsServiceState.class);
-            aws.stage = next;
-            handleEnumerationRequest(aws);
-        };
-        AdapterUtils.getServiceState(this, aws.parentCompute.description.authCredentialsLink,
-                onSuccess, getFailureConsumer(aws));
-    }
-
-    /**
-     * Method to get the failed consumer to handle the error that was raised.
-     * @param aws The enumeration context
-     * @return
-     */
-    private Consumer<Throwable> getFailureConsumer(EnumerationContext aws) {
-        return (t) -> {
-            aws.error = t;
-            aws.stage = AWSEnumerationStages.ERROR;
-            handleEnumerationRequest(aws);
-        };
     }
 }
