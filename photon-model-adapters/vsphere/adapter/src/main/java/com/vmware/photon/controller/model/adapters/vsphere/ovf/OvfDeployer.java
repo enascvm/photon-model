@@ -19,8 +19,6 @@ import java.net.URI;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -32,6 +30,8 @@ import org.apache.http.client.methods.HttpPut;
 import org.apache.http.entity.FileEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
@@ -55,7 +55,7 @@ import com.vmware.xenon.common.Operation;
 public class OvfDeployer extends BaseHelper {
     public static final String CONTENT_TYPE_VMDK = "application/x-vnd.vmware-streamVmdk";
 
-    private static final Logger logger = Logger.getLogger(OvfDeployer.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(OvfDeployer.class.getName());
     private static final String PROP_INFO = "info";
 
     public static final String TRANSPORT_GUESTINFO = "com.vmware.guestInfo";
@@ -68,7 +68,6 @@ public class OvfDeployer extends BaseHelper {
         CloseableHttpClient client = OvfRetriever.newInsecureClient();
         this.ovfRetriever = new OvfRetriever(client);
     }
-
 
     private long getImportSizeBytes(OvfCreateImportSpecResult importResult) {
         List<OvfFileItem> items = importResult.getFileItem();
@@ -101,7 +100,12 @@ public class OvfDeployer extends BaseHelper {
         params.setHostSystem(host);
         params.setLocale("US");
         params.setEntityName(vmName);
+
+        if (deploymentConfig == null) {
+            deploymentConfig = "";
+        }
         params.setDeploymentOption(deploymentConfig);
+
         params.getNetworkMapping().addAll(networks);
         params.setDiskProvisioning(OvfCreateImportSpecParamsDiskProvisioningType.THIN.name());
 
@@ -157,11 +161,11 @@ public class OvfDeployer extends BaseHelper {
 
                 for (OvfFileItem ovfFileItem : importSpecResult.getFileItem()) {
                     if (deviceKey.equals(ovfFileItem.getDeviceId())) {
-                        logger.fine("Importing device id: " + deviceKey);
+                        logger.debug("Importing device id: {}", deviceKey);
                         String sourceUri = basePath + ovfFileItem.getPath();
                         String uploadUri = makUploadUri(ip, deviceUrl);
                         uploadVmdkFile(ovfFileItem, sourceUri, uploadUri, leaseUpdater, this.ovfRetriever.getClient());
-                        logger.info("Completed uploading VMDK file " + sourceUri);
+                        logger.info("Completed uploading VMDK file {}", sourceUri);
                     }
                 }
             }
@@ -170,7 +174,7 @@ public class OvfDeployer extends BaseHelper {
             leaseUpdater.complete();
         } catch (Exception e) {
             leaseUpdater.abort(VimUtils.convertExceptionToFault(e));
-            logger.log(Level.INFO, "Error importing ovf", e);
+            logger.info("Error importing ovf", e);
             throw e;
         } finally {
             executorService.shutdown();

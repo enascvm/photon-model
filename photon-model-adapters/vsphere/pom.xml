@@ -17,4 +17,12 @@
     <module>util</module>
     <module>sdk</module>
   </modules>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.vmware.xenon</groupId>
+      <artifactId>xenon-slf4j</artifactId>
+      <version>${xenon.version}</version>
+    </dependency>
+  </dependencies>
 </project>

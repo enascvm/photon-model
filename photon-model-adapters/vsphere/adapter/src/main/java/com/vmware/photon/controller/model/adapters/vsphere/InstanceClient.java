@@ -24,8 +24,10 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithNetwork;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
@@ -97,7 +99,7 @@ import com.vmware.vim25.VmConfigSpec;
  * construction time a ClientException is thrown.
  */
 public class InstanceClient extends BaseHelper {
-    private static final Logger logger = Logger.getLogger(InstanceClient.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(InstanceClient.class.getName());
 
     private static final String CLOUD_CONFIG_PROPERTY_USER_DATA = "user-data";
     private static final String CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS = "public-keys";
@@ -259,7 +261,9 @@ public class InstanceClient extends BaseHelper {
     }
 
     private boolean isOvfDeploy() {
-        return CustomProperties.of(this.state.description).getString(OvfParser.PROP_OVF_URI, null) != null;
+        CustomProperties cp = CustomProperties.of(this.state.description);
+        return cp.getString(OvfParser.PROP_OVF_URI) != null ||
+                cp.getString(OvfParser.PROP_OVF_ARCHIVE_URI) != null;
     }
 
     private ManagedObjectReference deployOvf() throws Exception {
@@ -270,6 +274,7 @@ public class InstanceClient extends BaseHelper {
 
         URI archiveUri = cust.getUri(OvfParser.PROP_OVF_ARCHIVE_URI);
         if (archiveUri != null) {
+            logger.info("Prefer ova {} uri to ovf {}",  archiveUri, ovfUri);
             OvfRetriever retriever = deployer.getRetriever();
             ovfUri = retriever.downloadIfOva(archiveUri);
         }

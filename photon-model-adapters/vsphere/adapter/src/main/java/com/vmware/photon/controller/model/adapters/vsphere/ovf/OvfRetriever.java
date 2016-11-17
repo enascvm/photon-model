@@ -52,6 +52,8 @@ import org.apache.http.conn.ssl.X509HostnameVerifier;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -64,6 +66,8 @@ public class OvfRetriever {
 
     public static final int TAR_MAGIC_OFFSET = 0x101;
     private static final String MARKER_FILE = "status.properties";
+
+    private static final Logger logger = LoggerFactory.getLogger(OvfRetriever.class.getName());
 
     private HttpClient client;
 
@@ -228,6 +232,8 @@ public class OvfRetriever {
         HttpGet get = new HttpGet(ovaOrOvfUri);
         HttpResponse check = null;
 
+        logger.debug("Downloading ovf/ova from {}", ovaOrOvfUri);
+
         try {
             check = this.client.execute(get);
             byte[] buffer = new byte[TAR_MAGIC_OFFSET + TAR_MAGIC.length];
@@ -240,6 +246,7 @@ public class OvfRetriever {
                 byte b = buffer[TAR_MAGIC_OFFSET + i];
                 if (b != TAR_MAGIC[i] && b != TAR_MAGIC2[i]) {
                     // magic numbers don't match
+                    logger.info("{} is not a tar file, assuming OVF", ovaOrOvfUri);
                     return ovaOrOvfUri;
                 }
             }
@@ -255,10 +262,12 @@ public class OvfRetriever {
         File destination = new File(getBaseOvaExtractionDir(), folderName);
         if (new File(destination, MARKER_FILE).isFile()) {
             // marker file exists so the archive is already downloaded
+            logger.info("Marker file for {} exists in {}, not downloading again", ovaOrOvfUri, destination);
             return findFirstOvfInFolder(destination);
         }
 
         destination.mkdirs();
+        logger.info("Downloading OVA to {}", destination);
 
         get = new HttpGet(ovaOrOvfUri);
         HttpResponse response = null;
@@ -297,9 +306,11 @@ public class OvfRetriever {
         props.setProperty("download-folder", destination.getAbsolutePath());
 
         try {
-            try (FileOutputStream fos = new FileOutputStream(new File(destination, MARKER_FILE))) {
+            File propFile = new File(destination, MARKER_FILE);
+            try (FileOutputStream fos = new FileOutputStream(propFile)) {
                 try {
                     props.store(fos, null);
+                    logger.debug("Stored OVA download progress to {}", propFile.getAbsoluteFile());
                 } catch (IOException ignore) {
 
                 }
@@ -320,6 +331,7 @@ public class OvfRetriever {
             file.mkdirs();
         } else {
             try (FileOutputStream fos = new FileOutputStream(file)) {
+                logger.debug("Extracting {} to {}", entry.getName(), file.getAbsoluteFile());
                 IOUtils.copy(tar, fos);
             }
         }
@@ -327,7 +339,7 @@ public class OvfRetriever {
 
     private String hash(URI ovaOrOvfUri) {
         try {
-            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-1");
             sha256.update(ovaOrOvfUri.toString().getBytes(Utils.CHARSET));
             byte[] digest = sha256.digest();
             return Hex.encodeHexString(digest);

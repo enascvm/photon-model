@@ -17,8 +17,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
@@ -39,7 +40,7 @@ public class LeaseProgressUpdater {
     public static final int LEASE_UPDATE_INTERVAL_MILLIS = 10000;
     public static final int LEASE_READY_RETRY_MILLIS = 1000;
 
-    private static final Logger logger = Logger.getLogger(LeaseProgressUpdater.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(LeaseProgressUpdater.class.getName());
 
     private static final String PROP_STATE = "state";
     private static final String PROP_ERROR = "error";
@@ -74,7 +75,7 @@ public class LeaseProgressUpdater {
             getVimPort().httpNfcLeaseProgress(this.nfcLease, 100);
             getVimPort().httpNfcLeaseComplete(this.nfcLease);
         } catch (RuntimeFaultFaultMsg | TimedoutFaultMsg | InvalidStateFaultMsg e) {
-            logger.log(Level.WARNING, "Cannot complete nfcLease, continuing", e);
+            logger.warn("Cannot complete nfcLease, continuing", e);
         }
     }
 
@@ -88,7 +89,7 @@ public class LeaseProgressUpdater {
                 try {
                     updateLease();
                 } catch (RuntimeFaultFaultMsg | TimedoutFaultMsg e) {
-                    logger.log(Level.WARNING, "Lease timed out", e);
+                    logger.warn("Lease timed out", e);
                     return;
                 }
 
@@ -114,8 +115,7 @@ public class LeaseProgressUpdater {
             pct = 99;
         }
 
-        logger.log(Level.INFO, String.format("Updating nfcLease %s: %s %%",
-                VimUtils.convertMoRefToString(this.nfcLease), pct));
+        logger.info("Updating nfcLease {}: {} %", VimUtils.convertMoRefToString(this.nfcLease), pct);
         getVimPort().httpNfcLeaseProgress(this.nfcLease, pct);
     }
 
@@ -125,8 +125,7 @@ public class LeaseProgressUpdater {
         try {
             getVimPort().httpNfcLeaseAbort(this.nfcLease, e);
         } catch (RuntimeFaultFaultMsg | TimedoutFaultMsg | InvalidStateFaultMsg ex) {
-            logger.log(Level.WARNING,
-                    "Error aborting nfcLease " + VimUtils.convertMoRefToString(this.nfcLease), e);
+            logger.warn("Error aborting nfcLease {}", VimUtils.convertMoRefToString(this.nfcLease), e);
         }
     }
 
@@ -145,7 +144,7 @@ public class LeaseProgressUpdater {
             HttpNfcLeaseState state = getState();
             if (state.equals(HttpNfcLeaseState.ERROR)) {
                 LocalizedMethodFault leaseError = this.get.entityProp(this.nfcLease, PROP_ERROR);
-                logger.log(Level.WARNING, "nfcLease error: " + leaseError.getLocalizedMessage(), leaseError);
+                logger.warn("nfcLease error: {}", leaseError.getLocalizedMessage(), leaseError);
                 VimUtils.rethrow(leaseError);
             }
 
@@ -153,8 +152,7 @@ public class LeaseProgressUpdater {
                 return;
             }
 
-            logger.log(Level.FINEST,
-                    "Waiting for nfcLease" + VimUtils.convertMoRefToString(this.nfcLease), state);
+            logger.debug("Waiting for nfcLease {}", VimUtils.convertMoRefToString(this.nfcLease), state);
 
             Thread.sleep(LEASE_READY_RETRY_MILLIS);
         }
