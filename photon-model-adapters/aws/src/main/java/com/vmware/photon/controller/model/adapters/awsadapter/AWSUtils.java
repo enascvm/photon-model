@@ -102,22 +102,22 @@ public class AWSUtils {
     }
 
     public static boolean isAwsClientMock() {
-        return System.getProperty("awsMockEndpointReference") == null ? 
-       		          IS_AWS_CLIENT_MOCK : true; 
-       }
+        return System.getProperty("awsMockEndpointReference") == null ? IS_AWS_CLIENT_MOCK : true;
+    }
 
-       public static void setAwsMockEndpointReference(String endpointReference) {
-           awsMockEndpointReference = endpointReference;
-       }
-       
-       private static String getAWSMockEndpointReference() {
-       	return System.getProperty("awsMockEndpointReference") == null ? 
-       			awsMockEndpointReference : System.getProperty("awsMockEndpointReference");
-       	
-       }
+    public static void setAwsMockEndpointReference(String endpointReference) {
+        awsMockEndpointReference = endpointReference;
+    }
+
+    private static String getAWSMockEndpointReference() {
+        return System.getProperty("awsMockEndpointReference") == null ? awsMockEndpointReference
+                : System.getProperty("awsMockEndpointReference");
+
+    }
 
     public static AmazonEC2AsyncClient getAsyncClient(
-            AuthCredentialsServiceState credentials, String region, ExecutorService executorService) {
+            AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService) {
         AmazonEC2AsyncClient ec2AsyncClient = new AmazonEC2AsyncClient(
                 new BasicAWSCredentials(credentials.privateKeyId,
                         credentials.privateKey),
@@ -199,7 +199,6 @@ public class AWSUtils {
     public static Filter getFilter(String name, String value) {
         return new Filter().withName(name).withValues(value);
     }
-
 
     /**
      * Returns the region Id for the AWS instance
