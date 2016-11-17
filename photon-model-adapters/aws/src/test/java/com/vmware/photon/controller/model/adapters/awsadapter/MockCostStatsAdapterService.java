@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashMap;
 
 import org.joda.time.LocalDate;
@@ -23,6 +24,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.xenon.common.Utils;
 
 public class MockCostStatsAdapterService extends AWSCostStatsService {
 
@@ -84,9 +86,30 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         statsData.computeDesc = new ComputeStateWithDescription();
         statsData.computeDesc.documentSelfLink = "accountSelfLink";
         statsData.computeDesc.customProperties = new HashMap<>();
-        statsData.computeDesc.customProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, "123456789");
+        statsData.computeDesc.customProperties
+                .put(AWSConstants.AWS_ACCOUNT_ID_KEY, TestAWSCostAdapterService.account1Id);
 
         statsData.stage = next;
         handleCostStatsCreationRequest(statsData);
+    }
+
+    @Override
+    protected void queryLinkedAccounts(AWSCostStatsCreationContext context,
+            AWSCostStatsCreationStages next) {
+
+        ComputeState account1ComputeState = new ComputeState();
+        account1ComputeState.documentSelfLink = TestAWSCostAdapterService.account1SelfLink;
+        account1ComputeState.creationTimeMicros = Utils.getNowMicrosUtc();
+        context.awsAccountIdToComputeStates.put(TestAWSCostAdapterService.account1Id,
+                Collections.singletonList(account1ComputeState));
+
+        ComputeState account2ComputeState = new ComputeState();
+        account2ComputeState.documentSelfLink = TestAWSCostAdapterService.account2SelfLink;
+        account2ComputeState.creationTimeMicros = Utils.getNowMicrosUtc();
+        context.awsAccountIdToComputeStates.put(TestAWSCostAdapterService.account2Id,
+                Collections.singletonList(account2ComputeState));
+
+        context.stage = next;
+        handleCostStatsCreationRequest(context);
     }
 }

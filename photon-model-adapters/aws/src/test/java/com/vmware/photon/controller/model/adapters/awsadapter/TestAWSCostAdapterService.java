@@ -16,7 +16,10 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.junit.After;
 import org.junit.Before;
@@ -40,7 +43,12 @@ import com.vmware.xenon.common.UriUtils;
 
 public class TestAWSCostAdapterService extends BasicTestCase {
 
-    public static final double ACCOUNT_MOCK_TOTAL_COST = 100.0;
+    public static final String account1Id = "123456789";
+    public static final String account2Id = "555555555";
+    public static final String account1SelfLink = "account1SelfLink";
+    public static final String account2SelfLink = "account2SelfLink";
+    public static final double account1TotalCost = 100.0;
+    public static final double account2TotalCost = 50.0;
 
     @Before
     public void setUp() throws Exception {
@@ -80,7 +88,7 @@ public class TestAWSCostAdapterService extends BasicTestCase {
     @Test
     public void testAwsBillParsingAndStatsCreation() throws Throwable {
         ComputeState account = new ComputeState();
-        account.documentSelfLink = "accountSelfLink";
+        account.documentSelfLink = account1SelfLink;
         issueStatsRequest(account);
     }
 
@@ -93,7 +101,7 @@ public class TestAWSCostAdapterService extends BasicTestCase {
 
                     SingleResourceStatsCollectionTaskState resp = op
                             .getBody(SingleResourceStatsCollectionTaskState.class);
-                    if (resp.statsList.size() != 3) {
+                    if (resp.statsList.size() != 4) {
                         TestAWSCostAdapterService.this.host.failIteration(
                                 new IllegalStateException("response size was incorrect."));
                         return;
@@ -124,10 +132,12 @@ public class TestAWSCostAdapterService extends BasicTestCase {
     }
 
     protected void verifyCollectedStats(SingleResourceStatsCollectionTaskState resp) {
-        ComputeStats computeStats = resp.statsList.get(0);
+        Map<String, ComputeStats> computeStatsByLink = resp.statsList.stream()
+                .collect(Collectors.toMap(e -> e.computeLink, Function.identity()));
+        ComputeStats computeStats = computeStatsByLink.get(account1SelfLink);
         //check total account cost
         assertTrue(computeStats.statValues.get(AWSConstants.COST)
-                .get(0).latestValue == ACCOUNT_MOCK_TOTAL_COST);
+                .get(0).latestValue == account1TotalCost);
 
         // check that service level stats exist
         String serviceCode = AWSCsvBillParser.AwsServices.ec2.getName().replaceAll(" ", "");
@@ -154,5 +164,10 @@ public class TestAWSCostAdapterService extends BasicTestCase {
                 assertTrue("Unit is empty", !stat.unit.isEmpty());
             }
         }
+
+        // Check the cost of linked account
+        ComputeStats account2ComputeStats = computeStatsByLink.get(account2SelfLink);
+        assertTrue(account2ComputeStats.statValues.get(AWSConstants.COST)
+                .get(0).latestValue == account2TotalCost);
     }
 }

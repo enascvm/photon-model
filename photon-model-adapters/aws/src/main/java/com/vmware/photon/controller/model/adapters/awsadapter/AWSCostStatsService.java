@@ -18,8 +18,10 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +30,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressEventType;
@@ -49,9 +52,11 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.xenon.common.Operation;
@@ -81,7 +86,7 @@ public class AWSCostStatsService extends StatelessService {
     private AWSClientManager clientManager;
 
     public static enum AWSCostStatsCreationStages {
-        ACCOUNT_DETAILS, CLIENT, DOWNLOAD_THEN_PARSE, QUERY_LOCAL_RESOURCES, CREATE_STATS, POST_STATS
+        ACCOUNT_DETAILS, CLIENT, DOWNLOAD_THEN_PARSE, QUERY_LOCAL_RESOURCES, QUERY_LINKED_ACCOUNTS, CREATE_STATS, POST_STATS
     }
 
     public AWSCostStatsService() {
@@ -100,13 +105,16 @@ public class AWSCostStatsService extends StatelessService {
         public AWSCostStatsCreationStages stage;
         public Map<String, AwsAccountDetailDto> accountDetailsMap;
         Map<String, ComputeState> awsInstancesById;
+        // This map is one to many because a distinct compute state will be present for each region of an AWS account.
+        Map<String, List<ComputeState>> awsAccountIdToComputeStates;
         OperationContext opContext;
 
         public AWSCostStatsCreationContext(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
             this.stage = AWSCostStatsCreationStages.ACCOUNT_DETAILS;
             this.ignorableInvoiceCharge = new ArrayList<>();
-            this.awsInstancesById = new ConcurrentSkipListMap<String, ComputeState>();
+            this.awsInstancesById = new ConcurrentSkipListMap<>();
+            this.awsAccountIdToComputeStates = new ConcurrentSkipListMap<>();
             this.statsResponse = new ComputeStatsResponse();
             this.statsResponse.statsList = new ArrayList<>();
             this.opContext = OperationContext.getOperationContext();
@@ -147,7 +155,10 @@ public class AWSCostStatsService extends StatelessService {
             getAWSAsyncCostingClient(statsData, AWSCostStatsCreationStages.DOWNLOAD_THEN_PARSE);
             break;
         case DOWNLOAD_THEN_PARSE:
-            scheduleDownload(statsData, AWSCostStatsCreationStages.QUERY_LOCAL_RESOURCES);
+            scheduleDownload(statsData, AWSCostStatsCreationStages.QUERY_LINKED_ACCOUNTS);
+            break;
+        case QUERY_LINKED_ACCOUNTS:
+            queryLinkedAccounts(statsData, AWSCostStatsCreationStages.QUERY_LOCAL_RESOURCES);
             break;
         case QUERY_LOCAL_RESOURCES:
             queryInstances(statsData, AWSCostStatsCreationStages.CREATE_STATS);
@@ -246,11 +257,14 @@ public class AWSCostStatsService extends StatelessService {
 
     protected void queryInstances(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
+
+        List<String> linkedAccountsLinks = statsData.awsAccountIdToComputeStates.values()
+                .stream().flatMap(List::stream) // flatten collection of lists to single list
+                .map(e -> e.documentSelfLink).collect(Collectors.toList()); // extract document self links of all accounts
+
         Query query = Query.Builder.create().addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
-                        statsData.statsRequest.resourceLink(),
-                        Occurance.MUST_OCCUR)
-                .build();
+                .addInClause(ComputeState.FIELD_NAME_PARENT_LINK, linkedAccountsLinks,
+                        Occurance.MUST_OCCUR).build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT).setQuery(query)
                 .build();
@@ -279,20 +293,71 @@ public class AWSCostStatsService extends StatelessService {
                         }));
     }
 
+    protected void queryLinkedAccounts(AWSCostStatsCreationContext context,
+            AWSCostStatsCreationStages next) {
+
+        // Query all compute state objects representing AWS accounts.
+        Query awsAccountsQuery = Query.Builder.create().addKindFieldClause(ComputeState.class)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
+                        PhotonModelConstants.EndpointType.aws.name()).build();
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT).setQuery(awsAccountsQuery).build();
+        queryTask.setDirect(true);
+        queryTask.tenantLinks = context.computeDesc.tenantLinks;
+        queryTask.documentSelfLink = UUID.randomUUID().toString();
+        Operation op = Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+                .setBody(queryTask)
+                .setConnectionSharing(true).setCompletion((o, e) -> {
+                    if (e != null) {
+                        logSevere(e);
+                        AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                                context.statsRequest.taskReference, e);
+                        return;
+                    }
+                    QueryTask responseTask = o.getBody(QueryTask.class);
+                    for (Object s : responseTask.results.documents.values()) {
+                        ComputeState accountComputeState = Utils.fromJson(s,
+                                ComputeState.class);
+                        String awsAccountId = accountComputeState.customProperties
+                                .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
+                        // We are interested only in the compute state objects representing the linked accounts
+                        // of the primary account under consideration.
+                        if ((awsAccountId != null) && context.accountDetailsMap.keySet()
+                                .contains(awsAccountId)) {
+                            List<ComputeState> accountComputeStates = context.awsAccountIdToComputeStates
+                                    .getOrDefault(awsAccountId, null);
+                            if (accountComputeStates == null) {
+                                accountComputeStates = new ArrayList<>();
+                                context.awsAccountIdToComputeStates
+                                        .put(awsAccountId, accountComputeStates);
+                            }
+                            accountComputeStates.add(accountComputeState);
+                        }
+                    }
+                    context.stage = next;
+                    handleCostStatsCreationRequest(context);
+                });
+        sendRequest(op);
+    }
+
     private void createStats(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
         int count = 0;
 
-        for (String account : statsData.accountDetailsMap.keySet()) {
-            AwsAccountDetailDto awsAccountDetailDto = statsData.accountDetailsMap.get(account);
-            String accountId = statsData.computeDesc.customProperties
-                    .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
-            if ((accountId != null) && awsAccountDetailDto.id.equalsIgnoreCase(accountId)) {
-                // As of now we are creating stats for the primary account only.
-                // TODO: handle the stats of linked accounts.
+        for (Entry<String, AwsAccountDetailDto> accountDetailsMapEntry : statsData.accountDetailsMap.entrySet()) {
+            AwsAccountDetailDto awsAccountDetailDto = accountDetailsMapEntry.getValue();
+            List<ComputeState> accountComputeStates = statsData.awsAccountIdToComputeStates
+                    .getOrDefault(awsAccountDetailDto.id, null);
+            if ((accountComputeStates != null) && !accountComputeStates.isEmpty()) {
+                // We use the oldest compute state among those representing this account to save the account level stats.
+                ComputeState accountComputeState = accountComputeStates.stream()
+                        .min(Comparator.comparing(e -> e.creationTimeMicros)).get();
                 ComputeStats accountStats = createComputeStatsForAccount(
-                        statsData.computeDesc.documentSelfLink, awsAccountDetailDto);
+                        accountComputeState.documentSelfLink, awsAccountDetailDto);
                 statsData.statsResponse.statsList.add(accountStats);
+            } else {
+                logFine("AWS account with ID '{}' is not configured yet. Not creating cost metrics for the same.");
             }
 
             // create resouce stats for only live EC2 instances that exist in system
