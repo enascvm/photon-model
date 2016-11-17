@@ -44,24 +44,29 @@ public class NetworkInterfaceService extends StatefulService {
         public String networkLink;
 
         /**
-         * Subnet ID in which the network interface will be created.
+         * Subnet in which this network interface will be created.
          */
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String subnetLink;
 
         /**
-         * The static IP of the interface. Optional. If networkLink is defined, this cannot be and
-         * vice versa.
+         * The actual IP of the interface. Optional. The IP will be assign based on the on the
+         * NetworkInterfaceDescription's IP assignment type.
          */
         public String address;
 
         /**
-         * Firewalls with which this compute instance is associated.
+         * Firewalls with which this network interface is associated.
          */
         @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
                 PropertyUsageOption.LINKS })
         public List<String> firewallLinks;
+
+        /**
+         * The link to the desire state, from which this Network interface was created.
+         */
+        public String networkInterfaceDesciptionLink;
     }
 
     public NetworkInterfaceService() {

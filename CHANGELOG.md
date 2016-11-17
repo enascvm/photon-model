@@ -2,6 +2,15 @@
 
 ## 0.5.1-SNAPSHOT
 
+* Introduce NetworkInterfaceDescription, to represent the desire state of a NetworkInterface.
+ ComputeDescription is extended to have a list on NetworkInterfaceDescriptions, e.g. the desire
+ state of NICs for the requested compute. Each NetworkInterface has a link to the
+ NetworkInterfaceDescription, which it is based on.
+
+* Introduce Subnet as first class concept in the model. The Subnet represents sub network part of a
+ given network, with it's IP address range, gateway and list of DNS servers.
+ NetworkInterface is extend to have a link to Subnet it is attached to.
+
 ## 0.5.0
 
 * Changed collection interval in AWS Stats adapter to 5 minutes.

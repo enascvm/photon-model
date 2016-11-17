@@ -25,10 +25,13 @@ import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceDescriptionService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -106,11 +109,6 @@ public class ResourceAllocationTaskService
          * The disk descriptions used as a templates to create a disk per resource.
          */
         public List<String> diskDescriptionLinks;
-
-        /**
-         * The network descriptions used to associate network resources with compute resources.
-         */
-        public List<String> networkInterfaceLinks;
 
         /**
          * Custom properties passes in for the resources to be provisioned.
@@ -199,7 +197,6 @@ public class ResourceAllocationTaskService
         ResourceAllocationTaskState state = getBody(start);
         if (state.computeType != null || state.computeDescriptionLink != null
                 || state.diskDescriptionLinks != null
-                || state.networkInterfaceLinks != null
                 || state.customProperties != null) {
             start.fail(new IllegalArgumentException(
                     "ResourceDescription overrides ResourceAllocationTaskState"));
@@ -220,7 +217,6 @@ public class ResourceAllocationTaskService
                             state.computeType = resourceDesc.computeType;
                             state.computeDescriptionLink = resourceDesc.computeDescriptionLink;
                             state.diskDescriptionLinks = resourceDesc.diskDescriptionLinks;
-                            state.networkInterfaceLinks = resourceDesc.networkInterfaceLinks;
                             state.customProperties = resourceDesc.customProperties;
 
                             validateAndCompleteStart(start, state);
@@ -523,13 +519,14 @@ public class ResourceAllocationTaskService
 
             createComputeResource(
                     currentState,
+                    desc,
                     parentIterator.next(),
                     computeResourceId, computeName,
                     currentState.diskDescriptionLinks == null
                             || currentState.diskDescriptionLinks.isEmpty() ? new ArrayList<>()
                                     : null,
-                    currentState.networkInterfaceLinks == null
-                            || currentState.networkInterfaceLinks.isEmpty() ? new ArrayList<>()
+                    desc.networkInterfaceDescLinks == null
+                            || desc.networkInterfaceDescLinks.isEmpty() ? new ArrayList<>()
                                     : null);
 
             // as long as you can predict the document self link of a service,
@@ -609,17 +606,17 @@ public class ResourceAllocationTaskService
     // will create their documents, then recurse back here with the appropriate
     // links set.
     private void createComputeResource(
-            ResourceAllocationTaskState currentState, String parentLink,
+            ResourceAllocationTaskState currentState, ComputeDescription cd, String parentLink,
             String computeResourceId, String name, List<String> diskLinks,
             List<String> networkLinks) {
         if (diskLinks == null) {
-            createDiskResources(currentState, parentLink, computeResourceId, name,
+            createDiskResources(currentState, cd, parentLink, computeResourceId, name,
                     networkLinks);
             return;
         }
 
         if (networkLinks == null) {
-            createNetworkResources(currentState, parentLink, computeResourceId, name,
+            createNetworkResources(currentState, cd, parentLink, computeResourceId, name,
                     diskLinks);
             return;
         }
@@ -668,6 +665,7 @@ public class ResourceAllocationTaskService
      * @param computeResourceId
      */
     private void createDiskResources(ResourceAllocationTaskState currentState,
+            ComputeDescription cd,
             String parentLink, String computeResourceId, String name,
             List<String> networkLinks) {
 
@@ -691,7 +689,7 @@ public class ResourceAllocationTaskService
 
             // we have created all the disks. Now create the compute host
             // resource
-            createComputeResource(currentState, parentLink, computeResourceId, name,
+            createComputeResource(currentState, cd, parentLink, computeResourceId, name,
                     diskLinks, networkLinks);
         };
 
@@ -723,8 +721,8 @@ public class ResourceAllocationTaskService
         }
     }
 
-    private void createNetworkResources(
-            ResourceAllocationTaskState currentState, String parentLink,
+    private void createNetworkResources(ResourceAllocationTaskState currentState,
+            ComputeDescription cd, String parentLink,
             String computeResourceId, String name, List<String> diskLinks) {
         List<String> networkLinks = new ArrayList<>();
         CompletionHandler networkInterfaceCreateCompletion = (o, e) -> {
@@ -739,7 +737,7 @@ public class ResourceAllocationTaskService
                     .getBody(NetworkInterfaceService.NetworkInterfaceState.class);
             synchronized (networkLinks) {
                 networkLinks.add(newInterfaceState.documentSelfLink);
-                if (networkLinks.size() != currentState.networkInterfaceLinks
+                if (networkLinks.size() != cd.networkInterfaceDescLinks
                         .size()) {
                     return;
                 }
@@ -747,14 +745,14 @@ public class ResourceAllocationTaskService
 
             // we have created all the networks. Now create the compute host
             // resource
-            createComputeResource(currentState, parentLink, computeResourceId, name,
+            createComputeResource(currentState, cd, parentLink, computeResourceId, name,
                     diskLinks, networkLinks);
         };
 
         // get all network descriptions first, then create new network
         // interfaces using the
         // description/template
-        for (String networkDescLink : currentState.networkInterfaceLinks) {
+        for (String networkDescLink : cd.networkInterfaceDescLinks) {
             sendRequest(Operation
                     .createGet(this, networkDescLink)
                     .setCompletion(
@@ -767,19 +765,27 @@ public class ResourceAllocationTaskService
                                     return;
                                 }
 
-                                NetworkInterfaceService.NetworkInterfaceState templateNetwork = o
-                                        .getBody(
-                                                NetworkInterfaceService.NetworkInterfaceState.class);
-                                templateNetwork.id = UUID.randomUUID().toString();
-                                templateNetwork.documentSelfLink = templateNetwork.id;
-                                templateNetwork.tenantLinks = currentState.tenantLinks;
+                                NetworkInterfaceDescription nid = o
+                                        .getBody(NetworkInterfaceDescription.class);
+                                NetworkInterfaceState nic = new NetworkInterfaceState();
+                                nic.id = UUID.randomUUID().toString();
+                                nic.documentSelfLink = nic.id;
+                                nic.customProperties = nid.customProperties;
+                                nic.firewallLinks = nid.firewallLinks;
+                                nic.groupLinks = nid.groupLinks;
+                                nic.name = nid.name;
+                                nic.networkInterfaceDesciptionLink = nid.documentSelfLink;
+                                nic.networkLink = nid.networkLink;
+                                nic.subnetLink = nid.subnetLink;
+                                nic.tagLinks = nid.tagLinks;
+                                nic.tenantLinks = currentState.tenantLinks;
                                 // create a new network based off the template
                                 // but use a unique ID
                                 sendRequest(Operation
                                         .createPost(
                                                 this,
                                                 NetworkInterfaceService.FACTORY_LINK)
-                                        .setBody(templateNetwork)
+                                        .setBody(nic)
                                         .setCompletion(
                                                 networkInterfaceCreateCompletion));
                             }));

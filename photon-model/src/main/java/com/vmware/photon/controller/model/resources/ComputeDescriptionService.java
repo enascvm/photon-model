@@ -110,6 +110,12 @@ public class ComputeDescriptionService extends StatefulService {
         public List<String> supportedChildren;
 
         /**
+         * List of Network interfaces descriptions to attach to this compute.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public List<String> networkInterfaceDescLinks;
+
+        /**
          * Number of CPU Cores in this host.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
