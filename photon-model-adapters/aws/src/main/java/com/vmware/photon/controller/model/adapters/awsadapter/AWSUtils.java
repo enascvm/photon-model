@@ -102,12 +102,19 @@ public class AWSUtils {
     }
 
     public static boolean isAwsClientMock() {
-        return IS_AWS_CLIENT_MOCK;
-    }
+        return System.getProperty("awsMockEndpointReference") == null ? 
+       		          IS_AWS_CLIENT_MOCK : true; 
+       }
 
-    public static void setAwsMockEndpointReference(String endpointReference) {
-        awsMockEndpointReference = endpointReference;
-    }
+       public static void setAwsMockEndpointReference(String endpointReference) {
+           awsMockEndpointReference = endpointReference;
+       }
+       
+       private static String getAWSMockEndpointReference() {
+       	return System.getProperty("awsMockEndpointReference") == null ? 
+       			awsMockEndpointReference : System.getProperty("awsMockEndpointReference");
+       	
+       }
 
     public static AmazonEC2AsyncClient getAsyncClient(
             AuthCredentialsServiceState credentials, String region, ExecutorService executorService) {
@@ -117,7 +124,7 @@ public class AWSUtils {
                 executorService);
 
         if (isAwsClientMock()) {
-            ec2AsyncClient.setEndpoint(awsMockEndpointReference);
+            ec2AsyncClient.setEndpoint(getAWSMockEndpointReference());
             return ec2AsyncClient;
         }
 
