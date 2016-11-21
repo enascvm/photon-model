@@ -14,8 +14,9 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.net.URI;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -36,16 +37,16 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class VSphereIOThreadPool {
     private static final Logger logger = Logger.getLogger(VSphereIOThreadPool.class.getName());
-    private final ExecutorService executorService;
+    private final ScheduledExecutorService executorService;
     private final ServiceHost host;
 
-    public VSphereIOThreadPool(ServiceHost host, ExecutorService executorService) {
+    public VSphereIOThreadPool(ServiceHost host, ScheduledExecutorService executorService) {
         this.host = host;
         this.executorService = executorService;
     }
 
     public static VSphereIOThreadPool createDefault(ServiceHost host, int concurrency) {
-        return new VSphereIOThreadPool(host, Executors.newFixedThreadPool(concurrency));
+        return new VSphereIOThreadPool(host, Executors.newScheduledThreadPool(concurrency));
     }
 
     /**
@@ -177,6 +178,10 @@ public class VSphereIOThreadPool {
         } catch (Exception e) {
             logger.log(Level.WARNING, "Error closing connection to " + connection.getURI(), e);
         }
+    }
+
+    public void schedule(Runnable task, int timeout, TimeUnit unit) {
+        this.executorService.schedule(task, timeout, unit);
     }
 
     @FunctionalInterface

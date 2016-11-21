@@ -88,7 +88,9 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
                 .setReferer(this.host.getPublicUri());
 
         CompletableFuture<Operation> f = this.host.sendWithFuture(op);
-        f.get(30, TimeUnit.SECONDS);
+
+        // depending on OVF location you may want to increase the timeout
+        f.get(300, TimeUnit.SECONDS);
 
         snapshotFactoryState("ovf", ComputeDescriptionService.class);
 

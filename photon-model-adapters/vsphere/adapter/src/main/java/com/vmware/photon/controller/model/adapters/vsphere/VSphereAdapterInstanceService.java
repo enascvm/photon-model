@@ -16,9 +16,14 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -28,7 +33,9 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualEthernetCard;
@@ -51,6 +58,8 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 public class VSphereAdapterInstanceService extends StatelessService {
 
     public static final String SELF_LINK = VSphereUriPaths.INSTANCE_SERVICE;
+    private static final int IP_CHECK_INTERVAL_SECONDS = 20;
+    private static final int IP_CHECK_ATTEMPT_COUNT = 10;
 
     @Override
     public void handlePatch(Operation op) {
@@ -135,16 +144,31 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             return;
                         }
 
+                        Operation finishTask = null;
+
                         // power on machine before enrichment
                         if (ctx.child.powerState == PowerState.ON) {
                             new PowerStateClient(connection).changePowerState(client.getVm(),
                                     PowerState.ON, null, 0);
+
+                            Operation op = mgr.createTaskPatch(TaskStage.FINISHED);
+
+                            Runnable runnable = createCheckForIpTask(ctx.pool, op, client.getVm(),
+                                    connection.createUnmanagedCopy(),
+                                    ctx.child.documentSelfLink);
+
+                            ctx.pool.schedule(runnable,
+                                    IP_CHECK_INTERVAL_SECONDS,
+                                    TimeUnit.SECONDS);
+                        } else {
+                            // only finish the task without waiting for IP
+                            finishTask = mgr.createTaskPatch(TaskStage.FINISHED);
                         }
 
                         VmOverlay vmOverlay = client.enrichStateFromVm(state);
                         if (ctx.templateMoRef != null) {
                             // because the cloning, networkInterfaces are ignored and
-                            // recreted based on the template
+                            // recreated based on the template
                             addNetworkLinksAfterClone(state, vmOverlay.getNics(), ctx);
                             addDiskLinksAfterClone(state, vmOverlay.getDisks(), ctx);
 
@@ -153,7 +177,6 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         state.lifecycleState = LifecycleState.READY;
                         Operation patchResource = createComputeResourcePatch(state,
                                 ctx.computeReference);
-                        Operation finishTask = mgr.createTaskPatch(TaskStage.FINISHED);
 
                         OperationSequence seq = OperationSequence
                                 .create(patchResource);
@@ -162,13 +185,66 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             seq = seq.next(patchDisks);
                         }
 
-                        seq.next(finishTask)
-                                .setCompletion(ctx.failTaskOnError())
+                        if (finishTask != null) {
+                            seq = seq.next(finishTask);
+                        }
+
+                        seq.setCompletion(ctx.failTaskOnError())
                                 .sendWith(this);
                     } catch (Exception e) {
                         ctx.fail(e);
                     }
                 });
+    }
+
+    private Runnable createCheckForIpTask(VSphereIOThreadPool pool,
+            Operation taskFinisher,
+            ManagedObjectReference vm,
+            Connection connection,
+            String computeLink) {
+        return new Runnable() {
+            int attemptsLeft = IP_CHECK_ATTEMPT_COUNT - 1;
+
+            @Override
+            public void run() {
+                String ip;
+                try {
+                    GetMoRef get = new GetMoRef(connection);
+                    ip = get.entityProp(vm, VimPath.vm_summary_guest_ipAddress);
+                } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg e) {
+                    log(Level.WARNING, "Error getting IP of vm %s, %s, aborting ",
+                            VimUtils.convertMoRefToString(vm),
+                            computeLink);
+                    // complete the task, IP could be assigned during next enumeration cycle
+                    taskFinisher.sendWith(VSphereAdapterInstanceService.this);
+                    connection.close();
+                    return;
+                }
+
+                if (ip != null) {
+                    ComputeState state = new ComputeState();
+                    state.address = ip;
+                    // update compute
+                    Operation.createPatch(VSphereAdapterInstanceService.this, computeLink)
+                            .setBody(state)
+                            .setCompletion((o, e) -> {
+                                // finish task
+                                taskFinisher.sendWith(VSphereAdapterInstanceService.this);
+                            })
+                            .sendWith(VSphereAdapterInstanceService.this);
+                    connection.close();
+                } else if (attemptsLeft > 0) {
+                    attemptsLeft--;
+                    log(Level.INFO, "IP of %s not ready, retrying", computeLink);
+                    // reschedule
+                    pool.schedule(this, IP_CHECK_INTERVAL_SECONDS, TimeUnit.SECONDS);
+                } else {
+                    // still no IP after all
+                    taskFinisher.sendWith(VSphereAdapterInstanceService.this);
+                    connection.close();
+                }
+            }
+        };
     }
 
     private void addDiskLinksAfterClone(ComputeState state, List<VirtualDisk> disks,

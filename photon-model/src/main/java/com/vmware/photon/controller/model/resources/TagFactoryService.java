@@ -46,6 +46,11 @@ public class TagFactoryService extends FactoryService {
      */
     @Override
     public void handlePost(Operation op) {
+        if (op.isSynchronize()) {
+            op.complete();
+            return;
+        }
+
         if (op.hasBody()) {
             TagState body = (TagState) op.getBody(this.stateType);
             if (body == null) {
