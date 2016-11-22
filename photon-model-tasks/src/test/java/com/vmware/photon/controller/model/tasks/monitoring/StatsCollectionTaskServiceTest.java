@@ -236,6 +236,9 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         QueryTask qt = QueryTask.Builder
                 .createDirectTask()
                 .addOption(QueryOption.TOP_RESULTS)
+                // No-op in photon-model. Required for special handling of immutable documents.
+                // This will prevent Lucene from holding the full result set in memory.
+                .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
                 .setResultLimit(1)
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.SORT)

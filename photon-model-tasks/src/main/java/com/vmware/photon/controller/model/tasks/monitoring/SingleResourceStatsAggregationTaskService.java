@@ -341,6 +341,9 @@ public class SingleResourceStatsAggregationTaskService extends
                         .setBody(Builder.createDirectTask()
                                 .addOption(QueryOption.SORT)
                                 .addOption(QueryOption.TOP_RESULTS)
+                                // No-op in photon-model. Required for special handling of immutable documents.
+                                // This will prevent Lucene from holding the full result set in memory.
+                                .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
                                 .addOption(QueryOption.EXPAND_CONTENT)
                                 .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
                                         TypeName.STRING)
