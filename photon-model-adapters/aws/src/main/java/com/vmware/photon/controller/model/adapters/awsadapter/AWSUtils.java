@@ -86,45 +86,42 @@ public class AWSUtils {
             2376, 2375, 1 };
     public static final String DEFAULT_ALLOWED_NETWORK = "0.0.0.0/0";
     public static final String DEFAULT_PROTOCOL = "tcp";
+    public static final String AWS_EC2_ENDPOINT = "/aws-mock/ec2-endpoint/";
+    public static final String AWS_CLOUDWATCH_ENDPOINT = "/aws-mock/cloudwatch/";
+
     /**
      * Flag to use aws-mock, will be set in test files.
      * Aws-mock is a open-source tool for testing AWS services in a mock EC2 environment.
      * @see <a href="https://github.com/treelogic-swe/aws-mock">aws-mock</a>
      */
     private static boolean IS_AWS_CLIENT_MOCK = false;
+
     /**
-     * Mock EC2 endpoint of aws-mock, will be set in test files.
+     * Mock Host and port http://<ip-address>:<port> of aws-mock, will be set in test files.
      */
-    private static String awsMockEndpointReference = null;
+    private static String awsMockHost = null;
 
     public static void setAwsClientMock(boolean isAwsClientMock) {
         IS_AWS_CLIENT_MOCK = isAwsClientMock;
     }
 
     public static boolean isAwsClientMock() {
-        return System.getProperty("awsMockEndpointReference") == null ? IS_AWS_CLIENT_MOCK : true;
+        return IS_AWS_CLIENT_MOCK;
     }
 
-    public static void setAwsMockEndpointReference(String endpointReference) {
-        awsMockEndpointReference = endpointReference;
-    }
-
-    private static String getAWSMockEndpointReference() {
-        return System.getProperty("awsMockEndpointReference") == null ? awsMockEndpointReference
-                : System.getProperty("awsMockEndpointReference");
-
+    public static void setAwsMockEndpointReference(String mockHost) {
+        awsMockHost = mockHost;
     }
 
     public static AmazonEC2AsyncClient getAsyncClient(
-            AuthCredentialsServiceState credentials, String region,
-            ExecutorService executorService) {
+            AuthCredentialsServiceState credentials, String region, ExecutorService executorService) {
         AmazonEC2AsyncClient ec2AsyncClient = new AmazonEC2AsyncClient(
                 new BasicAWSCredentials(credentials.privateKeyId,
                         credentials.privateKey),
                 executorService);
 
         if (isAwsClientMock()) {
-            ec2AsyncClient.setEndpoint(getAWSMockEndpointReference());
+            ec2AsyncClient.setEndpoint(awsMockHost + AWS_EC2_ENDPOINT);
             return ec2AsyncClient;
         }
 
@@ -141,6 +138,11 @@ public class AWSUtils {
                 new BasicAWSCredentials(credentials.privateKeyId,
                         credentials.privateKey),
                 executorService);
+
+        if (isAwsClientMock()) {
+            client.setEndpoint(awsMockHost + AWS_CLOUDWATCH_ENDPOINT);
+            return client;
+        }
 
         client.setRegion(Region.getRegion(Regions.fromName(region)));
         // make a call to validate credentials
