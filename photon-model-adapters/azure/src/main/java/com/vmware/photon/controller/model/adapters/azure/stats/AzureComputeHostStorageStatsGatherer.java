@@ -26,6 +26,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -115,7 +116,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
 
         // Storage account specific properties
         Map<String, StorageAccount> storageAccounts = new ConcurrentHashMap<>();
-        List<CloudBlob> snapshots = Collections.synchronizedList(new ArrayList<CloudBlob>());
+        List<CloudBlob> snapshots = Collections.synchronizedList(new ArrayList<>());
 
         // Azure clients
         StorageManagementClient storageClient;
@@ -357,10 +358,12 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                 // Azure account
                                 if (statsData.snapshots.size() > 0) {
                                     synchronized (statsData.snapshots) {
-                                        for (CloudBlob snapshot : statsData.snapshots) {
+                                        Iterator<CloudBlob> snapshotIterator = statsData.snapshots.iterator();
+                                        while (snapshotIterator.hasNext()) {
                                             try {
+                                                CloudBlob snapshot = snapshotIterator.next();
                                                 snapshot.deleteIfExists();
-                                                statsData.snapshots.remove(snapshot);
+                                                snapshotIterator.remove();
                                             } catch (StorageException e) {
                                                 handleError(statsData, e);
                                                 continue;
