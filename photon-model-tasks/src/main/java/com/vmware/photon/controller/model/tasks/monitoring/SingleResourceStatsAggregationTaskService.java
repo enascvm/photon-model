@@ -90,6 +90,8 @@ public class SingleResourceStatsAggregationTaskService extends
     public static final String FACTORY_LINK =
             UriPaths.MONITORING + "/single-resource-stats-aggregation";
 
+    private static final long DEFAULT_EXPIRATION_MINUTES = 10;
+
     public static FactoryService createFactory() {
         TaskFactoryService fs = new TaskFactoryService(
                 SingleResourceStatsAggregationTaskState.class) {
@@ -201,7 +203,10 @@ public class SingleResourceStatsAggregationTaskService extends
     protected void initializeState(SingleResourceStatsAggregationTaskState state,
             Operation postOp) {
         super.initializeState(state, postOp);
+        // Override the default expiration of 4 hours to 10 minutes.
+        setExpiration(state, DEFAULT_EXPIRATION_MINUTES, TimeUnit.MINUTES);
         state.taskStage = StatsAggregationStage.GET_LAST_ROLLUP_TIME;
+        state.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
 
         if (state.query == null) {
             state.query = Query.Builder.create().addFieldClause(
@@ -230,7 +235,7 @@ public class SingleResourceStatsAggregationTaskService extends
         case CREATED:
             break;
         case STARTED:
-            logFine("Starting single resource stats aggregation for: " + currentState.resourceLink);
+            logFine("Starting single resource stats aggregation for [%s] ", currentState.resourceLink);
             handleStagePatch(currentState);
             break;
         case FINISHED:
@@ -257,7 +262,7 @@ public class SingleResourceStatsAggregationTaskService extends
             } else {
                 sendRequest(Operation.createDelete(getUri()));
             }
-            logFine("Finished single resource stats aggregation");
+            logFine("Single resource stats aggregation in [%s] stage", currentState.taskInfo.stage);
             break;
         default:
             break;

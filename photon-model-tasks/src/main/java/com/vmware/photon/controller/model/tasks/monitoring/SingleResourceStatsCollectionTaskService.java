@@ -73,6 +73,7 @@ public class SingleResourceStatsCollectionTaskService
 
     public static final String FACTORY_LINK = UriPaths.MONITORING
             + "/stats-collection-resource-tasks";
+    private static final long DEFAULT_EXPIRATION_MINUTES = 10;
 
     public static final String RESOURCE_METRIC_RETENTION_LIMIT_DAYS = UriPaths.PROPERTY_PREFIX
             + "SingleResourceStatsCollectionTaskService.metric.retentionLimitDays";
@@ -142,23 +143,34 @@ public class SingleResourceStatsCollectionTaskService
     }
 
     @Override
-    public void handleStart(Operation start) {
-        try {
-            if (!start.hasBody()) {
-                start.fail(new IllegalArgumentException("body is required"));
-                return;
-            }
-            SingleResourceStatsCollectionTaskState state = start
-                    .getBody(SingleResourceStatsCollectionTaskState.class);
-
-            validateState(state);
-            start.complete();
-            state.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-            state.taskStage = SingleResourceTaskCollectionStage.GET_DESCRIPTIONS;
-            TaskUtils.sendPatch(this, state);
-        } catch (Throwable e) {
-            start.fail(e);
+    protected SingleResourceStatsCollectionTaskState validateStartPost(Operation postOp) {
+        SingleResourceStatsCollectionTaskState state = super.validateStartPost(postOp);
+        if (state == null) {
+            return null;
         }
+        if (state.computeLink == null) {
+            postOp.fail(new IllegalArgumentException("computeReference needs to be specified"));
+            return null;
+        }
+        if (state.parentTaskReference == null) {
+            postOp.fail(new IllegalArgumentException("parentTaskReference needs to be specified"));
+            return null;
+        }
+        if (state.parentPatchBody == null) {
+            postOp.fail(new IllegalArgumentException("parentPatchBody needs to be specified"));
+            return null;
+        }
+        return state;
+    }
+
+    @Override
+    protected void initializeState(SingleResourceStatsCollectionTaskState state,
+            Operation postOp) {
+        super.initializeState(state, postOp);
+        // Override the default expiration of 4 hours to 10 minutes.
+        setExpiration(state, DEFAULT_EXPIRATION_MINUTES, TimeUnit.MINUTES);
+        state.taskStage = SingleResourceTaskCollectionStage.GET_DESCRIPTIONS;
+        state.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
     }
 
     @Override
@@ -202,18 +214,6 @@ public class SingleResourceStatsCollectionTaskService
     @Override
     public void handlePut(Operation put) {
         PhotonModelUtils.handleIdempotentPut(this, put);
-    }
-
-    private void validateState(SingleResourceStatsCollectionTaskState state) {
-        if (state.computeLink == null) {
-            throw new IllegalStateException("computeReference should not be null");
-        }
-        if (state.parentTaskReference == null) {
-            throw new IllegalStateException("parentTaskReference should not be null");
-        }
-        if (state.parentPatchBody == null) {
-            throw new IllegalStateException("parentPatchBody should not be null");
-        }
     }
 
     @Override
