@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -22,19 +23,23 @@ import com.microsoft.azure.management.network.NetworkManagementClient;
 import com.microsoft.azure.management.network.models.NetworkInterface;
 import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
 import com.microsoft.azure.management.network.models.PublicIPAddress;
+import com.microsoft.azure.management.network.models.Subnet;
 import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.models.ResourceGroup;
 import com.microsoft.azure.management.storage.StorageManagementClient;
 import com.microsoft.azure.management.storage.models.StorageAccount;
+
 import okhttp3.OkHttpClient;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureStages;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
-
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 
@@ -50,21 +55,55 @@ public class AzureAllocationContext {
     public ComputeService.ComputeStateWithDescription parent;
     public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
     public AuthCredentialsService.AuthCredentialsServiceState childAuth;
+
     public StorageDescription storageDescription;
     public DiskState bootDisk;
     public List<DiskState> childDisks;
     public String vmName;
     public String vmId;
 
-    //Azure specific context
+    // Azure specific context
     public ApplicationTokenCredentials credentials;
     public ResourceGroup resourceGroup;
     public StorageAccount storage;
-    public VirtualNetwork network;
-    public PublicIPAddress publicIP;
-    public NetworkInterface nic;
+
+    /**
+     * The class encapsulates NIC related data (both Photon Model and Azure model) used during
+     * provisioning.
+     */
+    public static class NicAllocationContext {
+
+        // NIC related states (resolved by links) related to the ComputeState that is provisioned.
+        public NetworkInterfaceStateWithDescription nicStateWithDesc;
+        public NetworkState networkState;
+        public SubnetState subnetState;
+
+        // The Azure vNet-subnet pair this NIC is associated to. It is created by this service.
+        public VirtualNetwork vNet;
+        public Subnet subnet;
+
+        // The actual NIC object in Azure. It is created by this service.
+        public NetworkInterface nic;
+
+        // The public IP assigned to the NIC. It is created by this service.
+        public PublicIPAddress publicIP;
+        // The security group this NIC is assigned to. It is created by this service.
+        public NetworkSecurityGroup securityGroup;
+    }
+
+    /**
+     * Holds allocation data for all VM NICs.
+     */
+    public List<NicAllocationContext> nics = new ArrayList<>();
+
+    /**
+     * First NIC is considered primary.
+     */
+    public NicAllocationContext getVmPrimaryNic() {
+        return this.nics.get(0);
+    }
+
     public String storageAccountName;
-    public NetworkSecurityGroup securityGroup;
     public ImageReference imageReference;
     public String operatingSystemFamily;
 

@@ -47,10 +47,19 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
@@ -66,13 +75,15 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 public class AzureTestUtil {
     public static final String AZURE_ADMIN_USERNAME = "azureuser";
     public static final String AZURE_ADMIN_PASSWORD = "Pa$$word1";
-    public static final String AZURE_VM_SIZE = "Basic_A0";
+    public static final String AZURE_VM_SIZE = "Standard_A3";
     public static final String IMAGE_REFERENCE = "Canonical:UbuntuServer:14.04.3-LTS:latest";
     public static final String AZURE_RESOURCE_GROUP_LOCATION = "westus";
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "storage";
-    public static final String AZURE_STORAGE_DISK_NAME = "disk";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_RAGRS";
+    public static final String AZURE_NETWORK_CIDR = "192.168.100.0/22";
+    public static final String AZURE_SUBNET_CIDR = "192.168.100.0/24";
     public static final String DEFAULT_OS_DISK_CACHING = "None";
+    public static final int NUMBER_OF_NICS = 2;
 
     public static ResourcePoolState createDefaultResourcePool(
             VerificationHost host)
@@ -243,6 +254,68 @@ public class AzureTestUtil {
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
         vmDisks.add(UriUtils.buildUriPath(DiskService.FACTORY_LINK, rootDisk.id));
 
+        // Create network state.
+        NetworkState networkState;
+        {
+            networkState = new NetworkState();
+            networkState.id = UUID.randomUUID().toString();
+            networkState.name = azureVMName + "-vNet";
+            networkState.authCredentialsLink = authLink;
+            networkState.resourcePoolLink = resourcePoolLink;
+            networkState.subnetCIDR = AZURE_NETWORK_CIDR;
+            networkState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
+            networkState.instanceAdapterReference = UriUtils.buildUri(host, "/dummyInstanceAdapterReference");
+
+            networkState = TestUtils.doPost(host, networkState, NetworkState.class,
+                    UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
+        }
+
+        // Create subnet state.
+        SubnetState subnetState;
+        {
+            subnetState = new SubnetState();
+
+            subnetState.id = UUID.randomUUID().toString();
+            subnetState.name = azureVMName + "-subnet";
+            subnetState.networkLink = networkState.documentSelfLink;
+            subnetState.subnetCIDR = AZURE_SUBNET_CIDR;
+
+            subnetState = TestUtils.doPost(host, subnetState, SubnetState.class,
+                    UriUtils.buildUri(host, SubnetService.FACTORY_LINK));
+        }
+
+        // Create network interface descriptions.
+        NetworkInterfaceDescription nicDescription;
+        {
+            nicDescription = new NetworkInterfaceDescription();
+            nicDescription.id = UUID.randomUUID().toString();
+            nicDescription.assignment = IpAssignment.DYNAMIC;
+
+            nicDescription = TestUtils.doPost(host, nicDescription, NetworkInterfaceDescription.class,
+                    UriUtils.buildUri(host, NetworkInterfaceDescriptionService.FACTORY_LINK));
+        }
+
+        // Create NIC states.
+        List<String> nicLinks;
+        {
+            nicLinks = new ArrayList<>();
+            for (int i = 0; i < NUMBER_OF_NICS; i++) {
+                NetworkInterfaceState nicState = new NetworkInterfaceState();
+                nicState.id = UUID.randomUUID().toString();
+                nicState.documentSelfLink = nicState.id;
+                nicState.name = azureVMName + "-nic" + i;
+                nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
+                nicState.networkLink = networkState.documentSelfLink;
+                nicState.subnetLink = subnetState.documentSelfLink;
+
+                nicState = TestUtils.doPost(host, nicState, NetworkInterfaceState.class,
+                        UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
+
+                nicLinks.add(nicState.documentSelfLink);
+            }
+        }
+
+        // Finally create the compute resource state to provision using all constructs above.
         ComputeState resource = new ComputeState();
         resource.id = UUID.randomUUID().toString();
         resource.name = azureVMName;
@@ -250,24 +323,27 @@ public class AzureTestUtil {
         resource.descriptionLink = vmComputeDesc.documentSelfLink;
         resource.resourcePoolLink = resourcePoolLink;
         resource.diskLinks = vmDisks;
-        resource.documentSelfLink = resource.id;
+        resource.networkInterfaceLinks = nicLinks;
         resource.customProperties = new HashMap<>();
         resource.customProperties.put(RESOURCE_GROUP_NAME, azureVMName);
 
-        ComputeState vmComputeState = TestUtils.doPost(host, resource, ComputeState.class,
+        resource = TestUtils.doPost(host, resource, ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
-        return vmComputeState;
+
+        return resource;
     }
 
     public static void deleteServiceDocument(VerificationHost host, String documentSelfLink)
             throws Throwable {
         host.testStart(1);
-        host.send(Operation.createDelete(host, documentSelfLink).setCompletion(host.getCompletion()));
+        host.send(
+                Operation.createDelete(host, documentSelfLink).setCompletion(host.getCompletion()));
         host.testWait();
     }
 
-    public static StorageDescription createDefaultStorageAccountDescription(VerificationHost host, String storageAccountName,
-                                                                        String parentLink, String resourcePoolLink) throws Throwable {
+    public static StorageDescription createDefaultStorageAccountDescription(VerificationHost host,
+            String storageAccountName,
+            String parentLink, String resourcePoolLink) throws Throwable {
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
         auth.customProperties = new HashMap<>();
         auth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, randomString(15));
@@ -275,8 +351,9 @@ public class AzureTestUtil {
         auth.documentSelfLink = UUID.randomUUID().toString();
 
         TestUtils.doPost(host, auth, AuthCredentialsServiceState.class,
-                                UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
-        String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK, auth.documentSelfLink);
+                UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
+        String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
+                auth.documentSelfLink);
 
         // Create a storage description
         StorageDescription storageDesc = new StorageDescription();
@@ -290,12 +367,12 @@ public class AzureTestUtil {
         storageDesc.customProperties = new HashMap<>();
         storageDesc.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
         StorageDescription sDesc = TestUtils.doPost(host, storageDesc, StorageDescription.class,
-                    UriUtils.buildUri(host, StorageDescriptionService.FACTORY_LINK));
+                UriUtils.buildUri(host, StorageDescriptionService.FACTORY_LINK));
         return sDesc;
     }
 
     public static DiskState createDefaultDiskState(VerificationHost host, String storageAccountName,
-                                                   String storageAccountLink, String resourcePoolLink) throws Throwable {
+            String storageAccountLink, String resourcePoolLink) throws Throwable {
         // Create a disk state
         DiskState diskState = new DiskState();
         diskState.id = UUID.randomUUID().toString();
@@ -307,7 +384,7 @@ public class AzureTestUtil {
         diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);
         diskState.documentSelfLink = diskState.id;
         DiskState dState = TestUtils.doPost(host, diskState, DiskState.class,
-                    UriUtils.buildUri(host, DiskService.FACTORY_LINK));
+                UriUtils.buildUri(host, DiskService.FACTORY_LINK));
         return dState;
     }
 }

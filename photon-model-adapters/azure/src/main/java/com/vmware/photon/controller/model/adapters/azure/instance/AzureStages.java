@@ -69,24 +69,37 @@ public enum AzureStages {
     INIT_STORAGE,
 
     /**
-     * Stage where network is initialized.
+     * Stage where network interface states are initialized.
      */
-    INIT_NETWORK,
+    GET_NIC_STATES,
+    /**
+     * Stage where NICs' network states are initialized.
+     */
+    GET_NETWORK_STATES,
+    /**
+     * Stage where NICs' subnet states are initialized.
+     */
+    GET_SUBNET_STATES,
 
     /**
-     * Stage where public IP is created.
+     * Stage where networks (vNet-subnet pair) are created.
      */
-    INIT_PUBLIC_IP,
+    CREATE_NETWORKS,
 
     /**
-     * Stage where network interface is initialized.
+     * Stage where public IPs are created.
      */
-    INIT_NIC,
+    CREATE_PUBLIC_IPS,
 
     /**
-     * Stage to initialize security group.
+     * Stage where security groups are created.
      */
-    INIT_SEC_GROUP,
+    CREATE_SECURITY_GROUPS,
+
+    /**
+     * Stage where NICs are created.
+     */
+    CREATE_NICS,
 
     /**
      * Stage to initialize Azure client.

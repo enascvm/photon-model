@@ -63,8 +63,9 @@ public class NetworkInterfaceService extends StatefulService {
         /**
          * [Output only]. Holds the public IP of this interface after provisioning.
          */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String address;
-
 
         /**
          * Firewalls with which this network interface is associated.
@@ -90,8 +91,9 @@ public class NetworkInterfaceService extends StatefulService {
          */
         public NetworkInterfaceDescription description;
 
-        public static URI buildUri(URI computeHostUri) {
-            return UriUtils.extendUriWithQuery(computeHostUri,
+        public static URI buildUri(URI nicStateUri) {
+            return UriUtils.extendUriWithQuery(
+                    nicStateUri,
                     UriUtils.URI_PARAM_ODATA_EXPAND,
                     NetworkInterfaceState.FIELD_NAME_DESCRIPTION_LINK);
         }

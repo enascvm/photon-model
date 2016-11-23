@@ -46,6 +46,7 @@ public class AzureConstants {
     public static final String AZURE_VM_POWER_STATE_RUNNING = "PowerState/running";
     public static final String AZURE_VM_POWER_STATE_DEALLOCATED = "PowerState/deallocated";
     public static final String AZURE_VM_PROVISIONING_STATE_SUCCEEDED = "ProvisioningState/succeeded";
+    public static final String PROVISIONING_STATE_SUCCEEDED = "Succeeded";
     public static final String PROVIDER_REGISTRED_STATE = "REGISTERED";
     public static final String LINUX_OPERATING_SYSTEM = "Linux";
     public static final String WINDOWS_OPERATING_SYSTEM = "Windows";

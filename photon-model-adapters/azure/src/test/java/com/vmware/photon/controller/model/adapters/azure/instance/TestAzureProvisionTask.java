@@ -13,6 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
@@ -39,13 +43,13 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -162,6 +166,8 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
         // check that the VM has been created
         ProvisioningUtils.queryComputeInstances(this.host, this.vmCount);
 
+        assertVmNetworksConfiguration();
+
         // Stats on individual VM is currently broken.
         if (!this.skipStats) {
             this.host.setTimeoutSeconds(60);
@@ -221,5 +227,31 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 this.host, AzureUriPaths.AZURE_STATS_ADAPTER))
                 .setBody(statsRequest)
                 .setReferer(this.host.getUri()));
+    }
+
+    private void assertVmNetworksConfiguration() {
+
+        ComputeState vm = this.host.getServiceState(null,
+                ComputeState.class,
+                UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+
+        assertNotNull("VM address should be set.", vm.address);
+
+        NetworkInterfaceState primaryNicState = this.host.getServiceState(null,
+                NetworkInterfaceState.class,
+                UriUtils.buildUri(this.host, vm.networkInterfaceLinks.get(0)));
+
+        assertNotNull("Primary NIC public IP should be set.", primaryNicState.address);
+
+        assertEquals("VM address should be the same as primary NIC public IP.", vm.address, primaryNicState.address);
+
+        for (int i = 1; i < vm.networkInterfaceLinks.size(); i++) {
+            NetworkInterfaceState nonPrimaryNicState = this.host.getServiceState(null,
+                    NetworkInterfaceState.class,
+                    UriUtils.buildUri(this.host, vm.networkInterfaceLinks.get(i)));
+
+            assertNull("Non-primary NIC" + i + " public IP should not be set.",
+                    nonPrimaryNicState.address);
+        }
     }
 }

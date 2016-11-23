@@ -23,6 +23,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.MISSING_SUBSCRIPTION_CODE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REGISTRED_STATE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
@@ -41,10 +42,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.microsoft.azure.CloudError;
 import com.microsoft.azure.CloudException;
@@ -62,8 +67,12 @@ import com.microsoft.azure.management.compute.models.VirtualHardDisk;
 import com.microsoft.azure.management.compute.models.VirtualMachine;
 import com.microsoft.azure.management.compute.models.VirtualMachineImage;
 import com.microsoft.azure.management.compute.models.VirtualMachineImageResource;
+import com.microsoft.azure.management.network.NetworkInterfacesOperations;
 import com.microsoft.azure.management.network.NetworkManagementClient;
 import com.microsoft.azure.management.network.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.NetworkSecurityGroupsOperations;
+import com.microsoft.azure.management.network.PublicIPAddressesOperations;
+import com.microsoft.azure.management.network.VirtualNetworksOperations;
 import com.microsoft.azure.management.network.models.AddressSpace;
 import com.microsoft.azure.management.network.models.NetworkInterface;
 import com.microsoft.azure.management.network.models.NetworkInterfaceIPConfiguration;
@@ -89,7 +98,6 @@ import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
-
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -97,6 +105,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.AzureAllocationContext;
+import com.vmware.photon.controller.model.adapters.azure.model.AzureAllocationContext.NicAllocationContext;
 import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.AzureDiagnosticSettings;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -105,8 +114,12 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -128,10 +141,6 @@ public class AzureInstanceService extends StatelessService {
     // Name prefixes
     private static final String NICCONFIG_NAME_PREFIX = "nicconfig";
 
-    private static final String SUBNET_NAME = "default";
-    private static final String NETWORK_ADDRESS_PREFIX = "10.0.0.0/16";
-    private static final String SUBNET_ADDRESS_PREFIX = "10.0.0.0/24";
-    private static final String PUBLIC_IP_ALLOCATION_METHOD = "Dynamic";
     private static final String PRIVATE_IP_ALLOCATION_METHOD = "Dynamic";
 
     private static final String DEFAULT_GROUP_PREFIX = "group";
@@ -145,6 +154,12 @@ public class AzureInstanceService extends StatelessService {
 
     private static final long DEFAULT_EXPIRATION_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
     private static final int RETRY_INTERVAL_SECONDS = 30;
+
+    private static final class WaitProvisiningToSucceed {
+        static final int INTERVAL = 500;
+        static final TimeUnit TIMEUNIT = TimeUnit.MILLISECONDS;
+        static final int MAX_WAITS = 10;
+    }
 
     private ExecutorService executorService;
 
@@ -168,156 +183,160 @@ public class AzureInstanceService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
+
         AzureAllocationContext ctx = new AzureAllocationContext(
                 op.getBody(ComputeInstanceRequest.class));
+
         switch (ctx.computeRequest.requestType) {
         case VALIDATE_CREDENTIALS:
-            ctx.stage = AzureStages.PARENTAUTH;
             ctx.operation = op;
-            handleAllocation(ctx);
+            handleAllocation(ctx, AzureStages.PARENTAUTH);
             break;
         default:
             op.complete();
             if (ctx.computeRequest.isMockRequest
                     && ctx.computeRequest.requestType == ComputeInstanceRequest.InstanceRequestType.CREATE) {
-                AdapterUtils.sendPatchToProvisioningTask(this,
-                        ctx.computeRequest.taskReference);
-                return;
+                handleAllocation(ctx, AzureStages.FINISHED);
+                break;
             }
-            try {
-                handleAllocation(ctx);
-            } catch (Exception e) {
-                logSevere(e);
-                if (ctx.computeRequest.taskReference != null) {
-                    AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                            ctx.computeRequest.taskReference, e);
-                }
-            }
+            handleAllocation(ctx);
         }
     }
 
     /**
+     * Shortcut method that sets the next stage into the context and delegates to
+     * {@link #handleAllocation(AzureAllocationContext)}.
+     */
+    private void handleAllocation(AzureAllocationContext ctx, AzureStages nextStage) {
+        logInfo("Transition to " + nextStage);
+        ctx.stage = nextStage;
+        handleAllocation(ctx);
+    }
+
+    /**
+     * Shortcut method that stores the error into context, sets next stage to
+     * {@link AzureStages#ERROR} and delegates to {@link #handleAllocation(AzureAllocationContext)}.
+     */
+    private void handleError(AzureAllocationContext ctx, Throwable e) {
+        ctx.error = e;
+        handleAllocation(ctx, AzureStages.ERROR);
+    }
+
+    /**
      * State machine to handle different stages of VM creation/deletion.
+     *
+     * @see #handleError(AzureAllocationContext, Throwable)
+     * @see #handleAllocation(AzureAllocationContext, AzureStages)
      */
     private void handleAllocation(AzureAllocationContext ctx) {
-        switch (ctx.stage) {
-        case VMDESC:
-            getVMDescription(ctx, AzureStages.PARENTDESC);
-            break;
-        case PARENTDESC:
-            getParentDescription(ctx, AzureStages.PARENTAUTH);
-            break;
-        case PARENTAUTH:
-            getParentAuth(ctx, AzureStages.CLIENT);
-            break;
-        case CLIENT:
-            if (ctx.credentials == null) {
-                try {
+        try {
+            switch (ctx.stage) {
+            case VMDESC:
+                getVMDescription(ctx, AzureStages.PARENTDESC);
+                break;
+            case PARENTDESC:
+                getParentDescription(ctx, AzureStages.PARENTAUTH);
+                break;
+            case PARENTAUTH:
+                getParentAuth(ctx, AzureStages.CLIENT);
+                break;
+            case CLIENT:
+                if (ctx.credentials == null) {
                     ctx.credentials = getAzureConfig(ctx.parentAuth);
-                } catch (Throwable e) {
-                    logSevere(e);
-                    ctx.error = e;
-                    ctx.stage = AzureStages.ERROR;
-                    handleAllocation(ctx);
-                    return;
                 }
-            }
 
-            try {
                 // Creating a shared singleton Http client instance
-                // Reference https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
+                // Reference
+                // https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
                 // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
                 ctx.httpClient = new OkHttpClient();
                 ctx.clientBuilder = ctx.httpClient.newBuilder();
-            } catch (Exception e) {
-                handleError(ctx, e);
-                return;
-            }
-            // now that we have a client lets move onto the next step
-            switch (ctx.computeRequest.requestType) {
-            case CREATE:
-                ctx.stage = AzureStages.CHILDAUTH;
-                handleAllocation(ctx);
+
+                // now that we have a client lets move onto the next step
+                switch (ctx.computeRequest.requestType) {
+                case CREATE:
+                    handleAllocation(ctx, AzureStages.CHILDAUTH);
+                    break;
+                case VALIDATE_CREDENTIALS:
+                    validateAzureCredentials(ctx);
+                    break;
+                case DELETE:
+                    handleAllocation(ctx, AzureStages.DELETE);
+                    break;
+                default:
+                    throw new IllegalStateException(
+                            "Unknown compute request type: " + ctx.computeRequest.requestType);
+                }
                 break;
-            case VALIDATE_CREDENTIALS:
-                validateAzureCredentials(ctx);
+            case CHILDAUTH:
+                getChildAuth(ctx, AzureStages.VMDISKS);
+                break;
+            case VMDISKS:
+                getVMDisks(ctx, AzureStages.INIT_RES_GROUP);
+                break;
+            case INIT_RES_GROUP:
+                initResourceGroup(ctx, AzureStages.GET_DISK_OS_FAMILY);
+                break;
+            case GET_DISK_OS_FAMILY:
+                differentiateVMImages(ctx, AzureStages.INIT_STORAGE);
+                break;
+            case INIT_STORAGE:
+                initStorageAccount(ctx, AzureStages.GET_NIC_STATES);
+                break;
+            // Resolve NIC related links to NIC related states
+            case GET_NIC_STATES:
+                getNicStates(ctx, AzureStages.GET_SUBNET_STATES);
+                break;
+            case GET_SUBNET_STATES:
+                getSubnetStates(ctx, AzureStages.GET_NETWORK_STATES);
+                break;
+            case GET_NETWORK_STATES:
+                getNetworkStates(ctx, AzureStages.CREATE_NETWORKS);
+                break;
+            // Create Azure networks, PIPs and NSGs required by NICs
+            case CREATE_NETWORKS:
+                createNetworks(ctx, AzureStages.CREATE_PUBLIC_IPS);
+                break;
+            case CREATE_PUBLIC_IPS:
+                createPublicIPs(ctx, AzureStages.CREATE_SECURITY_GROUPS);
+                break;
+            case CREATE_SECURITY_GROUPS:
+                createSecurityGroups(ctx, AzureStages.CREATE_NICS);
+                break;
+            case CREATE_NICS:
+                createNICs(ctx, AzureStages.CREATE);
+                break;
+            case CREATE:
+                createVM(ctx, AzureStages.GET_PUBLIC_IP_ADDRESS);
+                break;
+            // TODO VSYM-620: Enable monitoring on Azure VMs
+            case ENABLE_MONITORING:
+                enableMonitoring(ctx, AzureStages.GET_STORAGE_KEYS);
+                break;
+            case GET_PUBLIC_IP_ADDRESS:
+                getPublicIpAddress(ctx, AzureStages.GET_STORAGE_KEYS);
+                break;
+            case GET_STORAGE_KEYS:
+                getStorageKeys(ctx, AzureStages.FINISHED);
                 break;
             case DELETE:
-                ctx.stage = AzureStages.DELETE;
-                handleAllocation(ctx);
+                deleteVM(ctx);
+                break;
+            case FINISHED:
+                // This is the ultimate exit point with success of the state machine
+                finishWithSuccess(ctx);
+                break;
+            case ERROR:
+                // This is the ultimate exit point with error of the state machine
+                errorHandler(ctx);
                 break;
             default:
-                ctx.error = new IllegalStateException(
-                        "Unknown compute request type: " + ctx.computeRequest.requestType);
-                ctx.stage = AzureStages.ERROR;
-                handleAllocation(ctx);
+                throw new IllegalStateException("Unknown stage: " + ctx.stage);
             }
-            break;
-        case CHILDAUTH:
-            getChildAuth(ctx, AzureStages.VMDISKS);
-            break;
-        case VMDISKS:
-            getVMDisks(ctx, AzureStages.INIT_RES_GROUP);
-            break;
-        case INIT_RES_GROUP:
-            initResourceGroup(ctx, AzureStages.GET_DISK_OS_FAMILY);
-            break;
-        case GET_DISK_OS_FAMILY:
-            differentiateVMImages(ctx, AzureStages.INIT_STORAGE);
-            break;
-        case INIT_STORAGE:
-            initStorageAccount(ctx, AzureStages.INIT_NETWORK);
-            break;
-        case INIT_NETWORK:
-            initNetwork(ctx, AzureStages.INIT_PUBLIC_IP);
-            break;
-        case INIT_PUBLIC_IP:
-            initPublicIP(ctx, AzureStages.INIT_SEC_GROUP);
-            break;
-        case INIT_SEC_GROUP:
-            initSecurityGroup(ctx, AzureStages.INIT_NIC);
-            break;
-        case INIT_NIC:
-            initNIC(ctx, AzureStages.CREATE);
-            break;
-        case CREATE:
-            createVM(ctx, AzureStages.GET_PUBLIC_IP_ADDRESS);
-            break;
-        // TODO VSYM-620: Enable monitoring on Azure VMs
-        case ENABLE_MONITORING:
-            try {
-                enableMonitoring(ctx, AzureStages.GET_STORAGE_KEYS);
-            } catch (Throwable e) {
-                this.handleError(ctx, e);
-                return;
-            }
-            break;
-        case GET_PUBLIC_IP_ADDRESS:
-            getPublicIpAddress(ctx, AzureStages.GET_STORAGE_KEYS);
-            break;
-        case GET_STORAGE_KEYS:
-            getStorageKeys(ctx, AzureStages.FINISHED);
-            break;
-        case FINISHED:
-            AdapterUtils.sendPatchToProvisioningTask(
-                    AzureInstanceService.this,
-                    ctx.computeRequest.taskReference);
-            cleanUpHttpClient(this, ctx.httpClient);
-            break;
-        case DELETE:
-            deleteVM(ctx);
-            break;
-        case ERROR:
-            if (ctx.computeRequest.taskReference != null) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        ctx.computeRequest.taskReference, ctx.error);
-            }
-            cleanUpHttpClient(this, ctx.httpClient);
-            break;
-        default:
-            logSevere("Unhandled stage: %s", ctx.stage.toString());
-            cleanUpHttpClient(this, ctx.httpClient);
-            break;
+        } catch (Exception e) {
+            // NOTE: Do not use handleError(err) cause that might result in endless recursion.
+            ctx.error = e;
+            errorHandler(ctx);
         }
     }
 
@@ -357,9 +376,7 @@ public class AzureInstanceService extends StatelessService {
 
     private void deleteVM(AzureAllocationContext ctx) {
         if (ctx.computeRequest.isMockRequest) {
-            AdapterUtils.sendPatchToProvisioningTask(this, ctx.computeRequest.taskReference);
-            ctx.stage = AzureStages.FINISHED;
-            handleAllocation(ctx);
+            handleAllocation(ctx, AzureStages.FINISHED);
             return;
         }
 
@@ -377,21 +394,94 @@ public class AzureInstanceService extends StatelessService {
                 new AzureAsyncCallback<Void>() {
                     @Override
                     public void onError(Throwable e) {
-                        logSevere(e);
-                        ctx.error = e;
-                        ctx.stage = AzureStages.ERROR;
-                        handleAllocation(ctx);
+                        handleError(ctx, e);
                     }
 
                     @Override
                     public void onSuccess(ServiceResponse<Void> result) {
                         logInfo("Successfully deleted resource group [%s]", resourceGroupName);
-                        AdapterUtils.sendPatchToProvisioningTask(AzureInstanceService.this,
-                                ctx.computeRequest.taskReference);
-                        ctx.stage = AzureStages.FINISHED;
-                        handleAllocation(ctx);
+                        handleAllocation(ctx, AzureStages.FINISHED);
                     }
                 });
+    }
+
+    /**
+     * The ultimate error handler that should handle errors from all sources.
+     *
+     * NOTE: Do not use directly. Use it through
+     * {@link #handleError(AzureAllocationContext, Throwable)}.
+     */
+    private void errorHandler(AzureAllocationContext ctx) {
+
+        logSevere(ctx.error);
+
+        if (ctx.computeRequest.isMockRequest) {
+            finishWithFailure(ctx);
+            return;
+        }
+
+        if (ctx.computeRequest.requestType != ComputeInstanceRequest.InstanceRequestType.CREATE) {
+            finishWithFailure(ctx);
+            return;
+        }
+
+        if (ctx.resourceGroup == null) {
+            finishWithFailure(ctx);
+            return;
+        }
+
+        // CREATE request has resulted in RG creation -> clear RG and its content.
+
+        String resourceGroupName = ctx.resourceGroup.getName();
+
+        String msg = "Rollback provisioning for [" + ctx.vmName + "] Azure VM: %s";
+
+        logInfo(msg, "STARTED");
+
+        ResourceManagementClient client = getResourceManagementClient(ctx);
+
+        client.getResourceGroupsOperations().beginDeleteAsync(resourceGroupName,
+                new AzureAsyncCallback<Void>() {
+                    @Override
+                    public void onError(Throwable e) {
+                        String rollbackError = String.format(msg + ". Details: %s", "FAILED",
+                                e.getMessage());
+
+                        // Wrap original ctx.error with rollback error details.
+                        ctx.error = new IllegalStateException(rollbackError, ctx.error);
+
+                        finishWithFailure(ctx);
+                    }
+
+                    @Override
+                    public void onSuccess(ServiceResponse<Void> result) {
+                        logInfo(msg, "SUCCESS");
+
+                        finishWithFailure(ctx);
+                    }
+                });
+    }
+
+    private void finishWithFailure(AzureAllocationContext ctx) {
+
+        if (ctx.computeRequest.taskReference != null) {
+            // Report the error back to the caller
+            AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                    ctx.computeRequest.taskReference,
+                    ctx.error);
+        }
+
+        cleanUpHttpClient(this, ctx.httpClient);
+    }
+
+    private void finishWithSuccess(AzureAllocationContext ctx) {
+
+        if (ctx.computeRequest.taskReference != null) {
+            // Report the success back to the caller
+            AdapterUtils.sendPatchToProvisioningTask(this, ctx.computeRequest.taskReference);
+        }
+
+        cleanUpHttpClient(this, ctx.httpClient);
     }
 
     private void initResourceGroup(AzureAllocationContext ctx, AzureStages nextStage) {
@@ -408,19 +498,15 @@ public class AzureInstanceService extends StatelessService {
                 new AzureAsyncCallback<ResourceGroup>() {
                     @Override
                     public void onError(Throwable e) {
-                        logSevere(e);
-                        ctx.error = e;
-                        ctx.stage = AzureStages.ERROR;
-                        handleAllocation(ctx);
+                        handleError(ctx, e);
                     }
 
                     @Override
                     public void onSuccess(ServiceResponse<ResourceGroup> result) {
-                        ctx.stage = nextStage;
-                        ctx.resourceGroup = result.getBody();
                         logInfo("Successfully created resource group [%s]",
                                 result.getBody().getName());
-                        handleAllocation(ctx);
+                        ctx.resourceGroup = result.getBody();
+                        handleAllocation(ctx, nextStage);
                     }
                 });
     }
@@ -430,9 +516,8 @@ public class AzureInstanceService extends StatelessService {
         storageParameters.setLocation(ctx.resourceGroup.getLocation());
 
         if (ctx.bootDisk.customProperties == null) {
-            ctx.error = new IllegalArgumentException("Custom properties for boot disk is required");
-            ctx.stage = AzureStages.ERROR;
-            handleAllocation(ctx);
+            handleError(ctx,
+                    new IllegalArgumentException("Custom properties for boot disk is required"));
             return;
         }
 
@@ -454,8 +539,11 @@ public class AzureInstanceService extends StatelessService {
 
         StorageManagementClient client = getStorageManagementClient(ctx);
 
-        client.getStorageAccountsOperations().createAsync(ctx.resourceGroup.getName(),
-                ctx.storageAccountName, storageParameters,
+        // TODO: Use ProvisioningCallback.
+        client.getStorageAccountsOperations().createAsync(
+                ctx.resourceGroup.getName(),
+                ctx.storageAccountName,
+                storageParameters,
                 new AzureAsyncCallback<StorageAccount>() {
                     @Override
                     public void onError(Throwable e) {
@@ -466,10 +554,13 @@ public class AzureInstanceService extends StatelessService {
                     public void onSuccess(ServiceResponse<StorageAccount> result) {
                         logInfo("Successfully created storage account [%s]",
                                 ctx.storageAccountName);
+
                         ctx.storage = result.getBody();
+
                         StorageDescription storageDescription = new StorageDescription();
                         storageDescription.name = ctx.storageAccountName;
                         storageDescription.type = ctx.storage.getAccountType().name();
+
                         Operation storageOp = Operation
                                 .createPost(getHost(),
                                         StorageDescriptionService.FACTORY_LINK)
@@ -497,6 +588,8 @@ public class AzureInstanceService extends StatelessService {
                                                 }
                                                 logInfo("Successfully updated boot disk [%s]",
                                                         ctx.bootDisk.name);
+
+                                                handleAllocation(ctx, nextStage);
                                             }));
                                     sendRequest(patch);
                                     return;
@@ -504,86 +597,226 @@ public class AzureInstanceService extends StatelessService {
                         sendRequest(storageOp);
                     }
                 });
-        ctx.stage = nextStage;
-        handleAllocation(ctx);
     }
 
-    private void initNetwork(AzureAllocationContext ctx, AzureStages nextStage) {
-        VirtualNetwork vnet = new VirtualNetwork();
-        vnet.setLocation(ctx.resourceGroup.getLocation());
-        vnet.setAddressSpace(new AddressSpace());
-        vnet.getAddressSpace().setAddressPrefixes(new ArrayList<>());
-        vnet.getAddressSpace().getAddressPrefixes().add(NETWORK_ADDRESS_PREFIX);
+    private void createNetworks(AzureAllocationContext ctx, AzureStages nextStage) {
+        if (ctx.nics.isEmpty()) {
+            handleAllocation(ctx, nextStage);
+            return;
+        }
 
-        vnet.setSubnets(new ArrayList<>());
-        Subnet subnet = new Subnet();
-        subnet.setName(SUBNET_NAME);
-        subnet.setAddressPrefix(SUBNET_ADDRESS_PREFIX);
-        vnet.getSubnets().add(subnet);
+        VirtualNetworksOperations azureClient = getNetworkManagementClient(ctx)
+                .getVirtualNetworksOperations();
 
-        String vNetName = ctx.vmName;
+        // NOTE: for now we create single vNet-Subnet per VM.
+        // NEXT: create vNet-Subnet OR use enumerated vNet-Subnet per NIC.
 
-        logInfo("Creating virtual network [%s]", vNetName);
+        final NicAllocationContext primaryNic = ctx.getVmPrimaryNic();
+        final String vNetName = primaryNic.networkState.name;
+        final String subnetName = primaryNic.subnetState.name;
 
-        NetworkManagementClient client = getNetworkManagementClient(ctx);
+        final VirtualNetwork vNet = newAzureVirtualNetwork(ctx, primaryNic);
 
-        client.getVirtualNetworksOperations().beginCreateOrUpdateAsync(
-                ctx.resourceGroup.getName(), vNetName, vnet,
-                new AzureAsyncCallback<VirtualNetwork>() {
+        String msg = "Creating Azure vNet-subnet [" + vNetName + ":" + subnetName + "] for ["
+                + ctx.vmName + "] VM";
+
+        azureClient.beginCreateOrUpdateAsync(
+                ctx.resourceGroup.getName(),
+                vNetName,
+                vNet,
+                new ProvisioningCallback<VirtualNetwork>(ctx, nextStage, msg) {
+
                     @Override
-                    public void onError(Throwable e) {
+                    void handleFailure(Throwable e) {
                         handleSubscriptionError(ctx, NETWORK_NAMESPACE, e);
                     }
 
                     @Override
-                    public void onSuccess(ServiceResponse<VirtualNetwork> result) {
-                        ctx.stage = nextStage;
-                        ctx.network = result.getBody();
-                        logInfo("Successfully created virtual network [%s]",
-                                result.getBody().getName());
-                        handleAllocation(ctx);
+                    CompletableFuture<VirtualNetwork> handleProvisioningSucceeded(
+                            VirtualNetwork vNet) {
+                        Subnet subnet = vNet.getSubnets().stream()
+                                .filter(s -> s.getName().equals(subnetName)).findFirst().get();
+
+                        // Populate all NICs with same vNet-Subnet.
+                        for (NicAllocationContext nicCtx : ctx.nics) {
+                            nicCtx.vNet = vNet;
+                            nicCtx.subnet = subnet;
+                        }
+                        return CompletableFuture.completedFuture(vNet);
+                    }
+
+                    @Override
+                    String getProvisioningState(VirtualNetwork vNet) {
+                        Subnet subnet = vNet.getSubnets().stream()
+                                .filter(s -> s.getName().equals(subnetName)).findFirst().get();
+
+                        if (PROVISIONING_STATE_SUCCEEDED.equals(vNet.getProvisioningState())
+                                && PROVISIONING_STATE_SUCCEEDED
+                                        .equals(subnet.getProvisioningState())) {
+
+                            return PROVISIONING_STATE_SUCCEEDED;
+                        }
+                        return vNet.getProvisioningState() + ":" + subnet.getProvisioningState();
+                    }
+
+                    @Override
+                    Runnable checkProvisioningStateCall(
+                            ServiceCallback<VirtualNetwork> checkProvisioningStateCallback) {
+                        return () -> azureClient.getAsync(
+                                ctx.resourceGroup.getName(),
+                                vNetName,
+                                null /* expand */ ,
+                                checkProvisioningStateCallback);
                     }
                 });
     }
 
-    private void initPublicIP(AzureAllocationContext ctx, AzureStages nextStage) {
+    /**
+     * Converts Photon model constructs to underlying Azure VirtualNetwork-Subnet model.
+     */
+    private VirtualNetwork newAzureVirtualNetwork(
+            AzureAllocationContext ctx,
+            NicAllocationContext nicCtx) {
+
+        Subnet subnet = new Subnet();
+        subnet.setName(nicCtx.subnetState.name);
+        subnet.setAddressPrefix(nicCtx.subnetState.subnetCIDR);
+
+        VirtualNetwork vNet = new VirtualNetwork();
+        vNet.setLocation(ctx.resourceGroup.getLocation());
+
+        vNet.setAddressSpace(new AddressSpace());
+        vNet.getAddressSpace().setAddressPrefixes(new ArrayList<>());
+        vNet.getAddressSpace().getAddressPrefixes().add(nicCtx.networkState.subnetCIDR);
+
+        vNet.setSubnets(new ArrayList<>());
+        vNet.getSubnets().add(subnet);
+
+        return vNet;
+    }
+
+    private void createPublicIPs(AzureAllocationContext ctx, AzureStages nextStage) {
+        if (ctx.nics.isEmpty()) {
+            handleAllocation(ctx, nextStage);
+            return;
+        }
+
+        PublicIPAddressesOperations azureClient = getNetworkManagementClient(ctx)
+                .getPublicIPAddressesOperations();
+
+        NicAllocationContext nicCtx = ctx.getVmPrimaryNic();
+
+        final PublicIPAddress publicIPAddress = newAzurePublicIPAddress(ctx, nicCtx);
+
+        final String publicIPName = ctx.vmName + "-pip";
+
+        String msg = "Creating Azure Public IP [" + publicIPName + "] for [" + ctx.vmName + "] VM";
+
+        azureClient.beginCreateOrUpdateAsync(
+                ctx.resourceGroup.getName(),
+                publicIPName,
+                publicIPAddress,
+                new ProvisioningCallback<PublicIPAddress>(ctx, nextStage, msg) {
+
+                    @Override
+                    CompletableFuture<PublicIPAddress> handleProvisioningSucceeded(
+                            PublicIPAddress publicIP) {
+                        nicCtx.publicIP = publicIP;
+
+                        return CompletableFuture.completedFuture(publicIP);
+                    }
+
+                    @Override
+                    Runnable checkProvisioningStateCall(
+                            ServiceCallback<PublicIPAddress> checkProvisioningStateCallback) {
+                        return () -> azureClient.getAsync(
+                                ctx.resourceGroup.getName(),
+                                publicIPName,
+                                null /* expand */ ,
+                                checkProvisioningStateCallback);
+                    }
+
+                    @Override
+                    String getProvisioningState(PublicIPAddress publicIP) {
+                        return publicIP.getProvisioningState();
+                    }
+                });
+    }
+
+    /**
+     * Converts Photon model constructs to underlying Azure PublicIPAddress model.
+     */
+    private PublicIPAddress newAzurePublicIPAddress(
+            AzureAllocationContext ctx,
+            NicAllocationContext nicCtx) {
+
         PublicIPAddress publicIPAddress = new PublicIPAddress();
         publicIPAddress.setLocation(ctx.resourceGroup.getLocation());
-        publicIPAddress.setPublicIPAllocationMethod(PUBLIC_IP_ALLOCATION_METHOD);
+        publicIPAddress
+                .setPublicIPAllocationMethod(nicCtx.nicStateWithDesc.description.assignment.name());
 
-        String publicIPName = ctx.vmName;
+        return publicIPAddress;
+    }
 
-        logInfo("Creating public IP with name [%s]", publicIPName);
+    private void createSecurityGroups(AzureAllocationContext ctx, AzureStages nextStage) {
+        if (ctx.nics.isEmpty()) {
+            handleAllocation(ctx, nextStage);
+            return;
+        }
 
-        NetworkManagementClient client = getNetworkManagementClient(ctx);
+        NetworkSecurityGroupsOperations azureClient = getNetworkManagementClient(ctx)
+                .getNetworkSecurityGroupsOperations();
 
-        client.getPublicIPAddressesOperations().beginCreateOrUpdateAsync(
-                ctx.resourceGroup.getName(), publicIPName, publicIPAddress,
-                new AzureAsyncCallback<PublicIPAddress>() {
+        // NOTE: for now we create single NSG per VM.
+        // NEXT: create NSG per NIC based on FirewallStates.
+
+        final NetworkSecurityGroup nsg = newAzureNetworkSecurityGroup(ctx);
+
+        final String nsgName = ctx.vmName + "-nsg";
+
+        String msg = "Creating Azure Security Group [" + nsgName + "] for [" + ctx.vmName + "] VM";
+
+        azureClient.beginCreateOrUpdateAsync(
+                ctx.resourceGroup.getName(),
+                nsgName,
+                nsg,
+                new ProvisioningCallback<NetworkSecurityGroup>(ctx, nextStage, msg) {
+
                     @Override
-                    public void onError(Throwable e) {
-                        logSevere(e);
-                        ctx.error = e;
-                        ctx.stage = AzureStages.ERROR;
-                        handleAllocation(ctx);
+                    CompletableFuture<NetworkSecurityGroup> handleProvisioningSucceeded(
+                            NetworkSecurityGroup nsg) {
+                        // Populate all NICs with same NSG.
+                        for (NicAllocationContext nicCtx : ctx.nics) {
+                            nicCtx.securityGroup = nsg;
+                        }
+                        return CompletableFuture.completedFuture(nsg);
                     }
 
                     @Override
-                    public void onSuccess(ServiceResponse<PublicIPAddress> result) {
-                        ctx.stage = nextStage;
-                        ctx.publicIP = result.getBody();
-                        logInfo("Successfully created public IP address with name [%s]",
-                                result.getBody().getName());
-                        handleAllocation(ctx);
+                    Runnable checkProvisioningStateCall(
+                            ServiceCallback<NetworkSecurityGroup> checkProvisioningStateCallback) {
+                        return () -> azureClient.getAsync(
+                                ctx.resourceGroup.getName(),
+                                nsgName,
+                                null /* expand */ ,
+                                checkProvisioningStateCallback);
+                    }
+
+                    @Override
+                    String getProvisioningState(NetworkSecurityGroup body) {
+                        return body.getProvisioningState();
                     }
                 });
     }
 
-    private void initSecurityGroup(AzureAllocationContext ctx, AzureStages nextStage) {
-        NetworkSecurityGroup group = new NetworkSecurityGroup();
-        group.setLocation(ctx.resourceGroup.getLocation());
+    /**
+     * Converts Photon model constructs to underlying Azure NetworkSecurityGroup model.
+     */
+    private NetworkSecurityGroup newAzureNetworkSecurityGroup(
+            AzureAllocationContext ctx) {
 
         SecurityRule securityRule = new SecurityRule();
+
         securityRule.setPriority(AzureConstants.AZURE_SECURITY_GROUP_PRIORITY);
         securityRule.setAccess(AzureConstants.AZURE_SECURITY_GROUP_ACCESS);
         securityRule.setProtocol(AzureConstants.AZURE_SECURITY_GROUP_PROTOCOL);
@@ -607,72 +840,70 @@ public class AzureInstanceService extends StatelessService {
                     AzureConstants.AZURE_WINDOWS_SECURITY_GROUP_DESTINATION_PORT_RANGE);
         }
 
-        group.setSecurityRules(Collections.singletonList(securityRule));
+        NetworkSecurityGroup securityGroup = new NetworkSecurityGroup();
+        securityGroup.setLocation(ctx.resourceGroup.getLocation());
+        securityGroup.setSecurityRules(Collections.singletonList(securityRule));
 
-        String secGroupName = ctx.vmName;
-
-        logInfo("Creating security group with name [%s]", secGroupName);
-
-        NetworkManagementClient client = getNetworkManagementClient(ctx);
-
-        client.getNetworkSecurityGroupsOperations().createOrUpdateAsync(
-                ctx.resourceGroup.getName(), secGroupName, group,
-                new AzureAsyncCallback<NetworkSecurityGroup>() {
-                    @Override
-                    public void onError(Throwable e) {
-                        logSevere(e);
-                        ctx.error = e;
-                        ctx.stage = AzureStages.ERROR;
-                        handleAllocation(ctx);
-                    }
-
-                    @Override
-                    public void onSuccess(ServiceResponse<NetworkSecurityGroup> result) {
-                        ctx.stage = nextStage;
-                        ctx.securityGroup = result.getBody();
-                        logInfo("Successfully created security group with name [%s]",
-                                result.getBody().getName());
-                        handleAllocation(ctx);
-                    }
-                });
+        return securityGroup;
     }
 
-    private void initNIC(AzureAllocationContext ctx, AzureStages nextStage) {
+    private void createNICs(AzureAllocationContext ctx, AzureStages nextStage) {
+
+        if (ctx.nics.isEmpty()) {
+            handleAllocation(ctx, nextStage);
+            return;
+        }
+
+        // Shared state between multi async calls {{
+        AtomicInteger numberOfCalls = new AtomicInteger(ctx.nics.size());
+        AtomicBoolean hasFailed = new AtomicBoolean(false);
+        NetworkInterfacesOperations azureClient = getNetworkManagementClient(ctx)
+                .getNetworkInterfacesOperations();
+        // }}
+
+        for (NicAllocationContext nicCtx : ctx.nics) {
+
+            final NetworkInterface nic = newAzureNetworkInterface(ctx, nicCtx);
+
+            final String nicName = nicCtx.nicStateWithDesc.name;
+
+            String msg = "Creating Azure NIC [" + nicName + "] for [" + ctx.vmName + "] VM";
+
+            azureClient.beginCreateOrUpdateAsync(
+                    ctx.resourceGroup.getName(),
+                    nicName,
+                    nic,
+                    new FailFastAzureAsyncCallback<NetworkInterface>(ctx, nextStage,
+                            numberOfCalls, hasFailed, msg) {
+
+                        @Override
+                        protected void handleSuccess(NetworkInterface nic) {
+                            nicCtx.nic = nic;
+                        }
+                    });
+        }
+    }
+
+    /**
+     * Converts Photon model constructs to underlying Azure NetworkInterface model.
+     */
+    private NetworkInterface newAzureNetworkInterface(
+            AzureAllocationContext ctx,
+            NicAllocationContext nicCtx) {
+
+        NetworkInterfaceIPConfiguration ipConfig = new NetworkInterfaceIPConfiguration();
+        ipConfig.setName(generateName(NICCONFIG_NAME_PREFIX));
+        ipConfig.setPrivateIPAllocationMethod(PRIVATE_IP_ALLOCATION_METHOD);
+        ipConfig.setSubnet(nicCtx.subnet);
+        ipConfig.setPublicIPAddress(nicCtx.publicIP);
+
         NetworkInterface nic = new NetworkInterface();
         nic.setLocation(ctx.resourceGroup.getLocation());
         nic.setIpConfigurations(new ArrayList<>());
-        NetworkInterfaceIPConfiguration configuration = new NetworkInterfaceIPConfiguration();
-        configuration.setName(generateName(NICCONFIG_NAME_PREFIX));
-        configuration.setPrivateIPAllocationMethod(PRIVATE_IP_ALLOCATION_METHOD);
-        configuration.setSubnet(ctx.network.getSubnets().get(0));
-        configuration.setPublicIPAddress(ctx.publicIP);
-        nic.getIpConfigurations().add(configuration);
-        nic.setNetworkSecurityGroup(ctx.securityGroup);
+        nic.getIpConfigurations().add(ipConfig);
+        nic.setNetworkSecurityGroup(nicCtx.securityGroup);
 
-        String nicName = generateName(ctx.vmName);
-
-        NetworkManagementClient client = getNetworkManagementClient(ctx);
-
-        client.getNetworkInterfacesOperations().beginCreateOrUpdateAsync(
-                ctx.resourceGroup.getName(), nicName, nic,
-                new AzureAsyncCallback<NetworkInterface>() {
-                    @Override
-                    public void onError(Throwable e) {
-                        logSevere(e);
-                        ctx.error = e;
-                        ctx.stage = AzureStages.ERROR;
-                        handleAllocation(ctx);
-                    }
-
-                    @Override
-                    public void onSuccess(ServiceResponse<NetworkInterface> result) {
-                        ctx.stage = nextStage;
-                        ctx.nic = result.getBody();
-                        logInfo("Successfully created NIC with name [%s]",
-                                result.getBody().getName());
-                        handleAllocation(ctx);
-                    }
-                });
+        return nic;
     }
 
     private void createVM(AzureAllocationContext ctx, AzureStages nextStage) {
@@ -741,14 +972,20 @@ public class AzureInstanceService extends StatelessService {
         storageProfile.setOsDisk(osDisk);
         request.setStorageProfile(storageProfile);
 
-        // Set network profile
-        NetworkInterfaceReference nir = new NetworkInterfaceReference();
-        nir.setPrimary(true);
-        nir.setId(ctx.nic.getId());
-
+        // Set network profile {{
         NetworkProfile networkProfile = new NetworkProfile();
-        networkProfile.setNetworkInterfaces(Collections.singletonList(nir));
+        networkProfile.setNetworkInterfaces(new ArrayList<>());
+
+        for (NicAllocationContext nicCtx : ctx.nics) {
+            NetworkInterfaceReference nicRef = new NetworkInterfaceReference();
+            nicRef.setId(nicCtx.nic.getId());
+            // NOTE: First NIC is marked as Primary.
+            nicRef.setPrimary(networkProfile.getNetworkInterfaces().isEmpty());
+
+            networkProfile.getNetworkInterfaces().add(nicRef);
+        }
         request.setNetworkProfile(networkProfile);
+        // }}
 
         logInfo("Creating virtual machine with name [%s]", vmName);
 
@@ -779,14 +1016,10 @@ public class AzureInstanceService extends StatelessService {
                         Operation.CompletionHandler completionHandler = (ox,
                                 exc) -> {
                             if (exc != null) {
-                                logSevere(exc);
-                                ctx.stage = AzureStages.ERROR;
-                                ctx.error = exc;
-                                handleAllocation(ctx);
+                                handleError(ctx, exc);
                                 return;
                             }
-                            ctx.stage = nextStage;
-                            handleAllocation(ctx);
+                            handleAllocation(ctx, nextStage);
                         };
 
                         sendRequest(
@@ -798,13 +1031,17 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * Gets the public IP address from the VM and patches the compute state.
+     * Gets the public IP address from the VM and patches the compute state and primary NIC state.
      */
     private void getPublicIpAddress(AzureAllocationContext ctx, AzureStages nextStage) {
+
         NetworkManagementClient client = getNetworkManagementClient(ctx);
-        client.getPublicIPAddressesOperations().getAsync(ctx.resourceGroup.getName(),
-                ctx.publicIP.getName(),
-                null, new AzureAsyncCallback<PublicIPAddress>() {
+
+        client.getPublicIPAddressesOperations().getAsync(
+                ctx.resourceGroup.getName(),
+                ctx.getVmPrimaryNic().publicIP.getName(),
+                null /* expand */,
+                new AzureAsyncCallback<PublicIPAddress>() {
 
                     @Override
                     public void onError(Throwable e) {
@@ -812,34 +1049,59 @@ public class AzureInstanceService extends StatelessService {
                     }
 
                     @Override
-                    public void onSuccess(
-                            ServiceResponse<PublicIPAddress> result) {
-                        ctx.publicIP = result.getBody();
-                        patchComputeResource(ctx, nextStage);
+                    public void onSuccess(ServiceResponse<PublicIPAddress> result) {
+                        ctx.getVmPrimaryNic().publicIP = result.getBody();
+
+                        OperationJoin operationJoin = OperationJoin
+                                .create(patchComputeState(ctx), patchNICState(ctx))
+                                .setCompletion((ops, excs) -> {
+                                    if (excs != null) {
+                                        handleError(ctx, new IllegalStateException(
+                                                "Error patching compute state and primary NIC state with VM Public IP address."));
+                                        return;
+                                    }
+                                    handleAllocation(ctx, nextStage);
+                                });
+                        operationJoin.sendWith(AzureInstanceService.this);
+                    }
+
+                    private Operation patchComputeState(AzureAllocationContext ctx) {
+
+                        ComputeState computeState = new ComputeState();
+
+                        computeState.address = ctx.getVmPrimaryNic().publicIP.getIpAddress();
+
+                        return Operation.createPatch(ctx.computeRequest.resourceReference)
+                                .setBody(computeState)
+                                .setCompletion((op, exc) -> {
+                                    if (exc == null) {
+                                        logInfo("Patching compute state with VM Public IP address ["
+                                                + computeState.address + "]: SUCCESS");
+                                    }
+                                });
+
+                    }
+
+                    private Operation patchNICState(AzureAllocationContext ctx) {
+
+                        NetworkInterfaceState primaryNicState = new NetworkInterfaceState();
+
+                        primaryNicState.address = ctx.getVmPrimaryNic().publicIP.getIpAddress();
+
+                        URI primaryNicUri = UriUtils.buildUri(getHost(),
+                                ctx.getVmPrimaryNic().nicStateWithDesc.documentSelfLink);
+
+                        return Operation.createPatch(primaryNicUri)
+                                .setBody(primaryNicState)
+                                .setCompletion((op, exc) -> {
+                                    if (exc == null) {
+                                        logInfo("Patching primary NIC state with VM Public IP address ["
+                                                + primaryNicState.address + "]: SUCCESS");
+                                    }
+                                });
+
                     }
                 });
-    }
-
-    private void patchComputeResource(AzureAllocationContext ctx, AzureStages nextStage) {
-        ComputeState resource = new ComputeState();
-        resource.address = ctx.publicIP.getIpAddress();
-
-        Operation computePatchOp = Operation
-                .createPatch(ctx.computeRequest.resourceReference)
-                .setBody(resource)
-                .setCompletion((ox, exc) -> {
-                    if (exc != null) {
-                        logSevere(exc);
-                        ctx.stage = AzureStages.ERROR;
-                        ctx.error = exc;
-                        handleAllocation(ctx);
-                        return;
-                    }
-                    logInfo("Finished patching compute state with VM PublicIP address");
-                    ctx.stage = nextStage;
-                    handleAllocation(ctx);
-                });
-        sendRequest(computePatchOp);
     }
 
     /**
@@ -887,8 +1149,7 @@ public class AzureInstanceService extends StatelessService {
                                                     return;
                                                 }
                                                 logFine("Patched the storage description successfully.");
-                                                ctx.stage = nextStage;
-                                                handleAllocation(ctx);
+                                                handleAllocation(ctx, nextStage);
                                             }));
                                     sendRequest(patch);
                                 });
@@ -937,23 +1198,13 @@ public class AzureInstanceService extends StatelessService {
         handleError(ctx, e);
     }
 
-    private void handleError(AzureAllocationContext ctx, Throwable e) {
-        logSevere(e);
-        ctx.error = e;
-        ctx.stage = AzureStages.ERROR;
-        handleAllocation(ctx);
-    }
-
     private void registerSubscription(AzureAllocationContext ctx, String namespace) {
         ResourceManagementClient client = getResourceManagementClient(ctx);
         client.getProvidersOperations().registerAsync(namespace,
                 new AzureAsyncCallback<Provider>() {
                     @Override
                     public void onError(Throwable e) {
-                        logSevere(e);
-                        ctx.error = e;
-                        ctx.stage = AzureStages.ERROR;
-                        handleAllocation(ctx);
+                        handleError(ctx, e);
                     }
 
                     @Override
@@ -980,10 +1231,7 @@ public class AzureInstanceService extends StatelessService {
             String msg = String
                     .format("Subscription for %s namespace did not reach %s state", namespace,
                             PROVIDER_REGISTRED_STATE);
-            logSevere(msg);
-            ctx.error = new RuntimeException(msg);
-            ctx.stage = AzureStages.ERROR;
-            handleAllocation(ctx);
+            handleError(ctx, new RuntimeException(msg));
             return;
         }
 
@@ -994,10 +1242,7 @@ public class AzureInstanceService extends StatelessService {
                         new AzureAsyncCallback<Provider>() {
                             @Override
                             public void onError(Throwable e) {
-                                logSevere(e);
-                                ctx.error = e;
-                                ctx.stage = AzureStages.ERROR;
-                                handleAllocation(ctx);
+                                handleError(ctx, e);
                             }
 
                             @Override
@@ -1027,8 +1272,7 @@ public class AzureInstanceService extends StatelessService {
         String childAuthLink = ctx.child.description.authCredentialsLink;
         Consumer<Operation> onSuccess = (op) -> {
             ctx.childAuth = op.getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
-            ctx.stage = next;
-            handleAllocation(ctx);
+            handleAllocation(ctx, next);
         };
         AdapterUtils.getServiceState(this, childAuthLink, onSuccess, getFailureConsumer(ctx));
     }
@@ -1042,8 +1286,7 @@ public class AzureInstanceService extends StatelessService {
         }
         Consumer<Operation> onSuccess = (op) -> {
             ctx.parentAuth = op.getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
-            ctx.stage = next;
-            handleAllocation(ctx);
+            handleAllocation(ctx, next);
         };
         AdapterUtils.getServiceState(this, parentAuthLink, onSuccess, getFailureConsumer(ctx));
     }
@@ -1057,9 +1300,8 @@ public class AzureInstanceService extends StatelessService {
             ctx.child = op.getBody(ComputeService.ComputeStateWithDescription.class);
             ctx.vmName = ctx.child.name != null ? ctx.child.name : ctx.child.id;
 
-            ctx.stage = next;
             logInfo(ctx.child.id);
-            handleAllocation(ctx);
+            handleAllocation(ctx, next);
         };
         URI computeUri = UriUtils.extendUriWithQuery(
                 ctx.computeRequest.resourceReference, UriUtils.URI_PARAM_ODATA_EXPAND,
@@ -1073,19 +1315,120 @@ public class AzureInstanceService extends StatelessService {
     private void getParentDescription(AzureAllocationContext ctx, AzureStages next) {
         Consumer<Operation> onSuccess = (op) -> {
             ctx.parent = op.getBody(ComputeService.ComputeStateWithDescription.class);
-            ctx.stage = next;
-            handleAllocation(ctx);
+            handleAllocation(ctx, next);
         };
-        URI parentURI = ComputeStateWithDescription.buildUri(UriUtils.buildUri(getHost(), ctx.child.parentLink));
+        URI parentURI = ComputeStateWithDescription
+                .buildUri(UriUtils.buildUri(getHost(), ctx.child.parentLink));
         AdapterUtils.getServiceState(this, parentURI, onSuccess, getFailureConsumer(ctx));
     }
 
+    private void getNicStates(AzureAllocationContext ctx, AzureStages next) {
+        if (ctx.child.networkInterfaceLinks == null
+                || ctx.child.networkInterfaceLinks.size() == 0) {
+            handleAllocation(ctx, next);
+            return;
+        }
+
+        List<Operation> getNICsOps = new ArrayList<>();
+
+        for (String nicStateLink : ctx.child.networkInterfaceLinks) {
+
+            NicAllocationContext nicCtx = new NicAllocationContext();
+
+            ctx.nics.add(nicCtx);
+
+            URI nicStateUri = NetworkInterfaceStateWithDescription
+                    .buildUri(UriUtils.buildUri(getHost(), nicStateLink));
+
+            Operation getNicOp = Operation.createGet(nicStateUri).setCompletion(
+                    (op, exc) -> {
+                        // Handle SUCCESS; error is handled by the join handler.
+                        if (exc == null) {
+                            nicCtx.nicStateWithDesc = op
+                                    .getBody(NetworkInterfaceStateWithDescription.class);
+                        }
+                    });
+
+            getNICsOps.add(getNicOp);
+        }
+
+        OperationJoin operationJoin = OperationJoin.create(getNICsOps)
+                .setCompletion(
+                        (ops, excs) -> {
+                            if (excs != null) {
+                                handleError(ctx, new IllegalStateException(
+                                        "Error getting network interface states."));
+                                return;
+                            }
+                            handleAllocation(ctx, next);
+                        });
+        operationJoin.sendWith(this);
+    }
+
+    /**
+     * Get {@link NetworkState}s containing the {@link SubnetState}s
+     * {@link NetworkInterfaceState#subnetLink assigned} to the NICs.
+     *
+     * @see #getSubnetStates(AzureAllocationContext, AzureStages)
+     */
+    private void getNetworkStates(AzureAllocationContext ctx, AzureStages next) {
+        if (ctx.nics.isEmpty()) {
+            handleAllocation(ctx, next);
+            return;
+        }
+
+        Stream<Operation> getNetworksOps = ctx.nics.stream()
+                .map(nicCtx -> Operation.createGet(this.getHost(), nicCtx.subnetState.networkLink)
+                        .setCompletion((op, ex) -> {
+                            if (ex == null) {
+                                nicCtx.networkState = op.getBody(NetworkState.class);
+                            }
+                        }));
+
+        OperationJoin operationJoin = OperationJoin.create(getNetworksOps)
+                .setCompletion((ops, excs) -> {
+                    if (excs != null) {
+                        handleError(ctx, new IllegalStateException(
+                                "Error getting network states."));
+                        return;
+                    }
+                    handleAllocation(ctx, next);
+                });
+        operationJoin.sendWith(this);
+    }
+
+    /**
+     * Get {@link SubnetState}s {@link NetworkInterfaceState#subnetLink assigned} to the NICs.
+     */
+    private void getSubnetStates(AzureAllocationContext ctx, AzureStages next) {
+        if (ctx.nics.isEmpty()) {
+            handleAllocation(ctx, next);
+            return;
+        }
+
+        Stream<Operation> getSubnetsOps = ctx.nics.stream()
+                .map(nicCtx -> Operation
+                        .createGet(this.getHost(), nicCtx.nicStateWithDesc.subnetLink)
+                        .setCompletion((op, ex) -> {
+                            if (ex == null) {
+                                nicCtx.subnetState = op.getBody(SubnetState.class);
+                            }
+                        }));
+
+        OperationJoin operationJoin = OperationJoin.create(getSubnetsOps)
+                .setCompletion((ops, excs) -> {
+                    if (excs != null) {
+                        handleError(ctx, new IllegalStateException(
+                                "Error getting subnet states."));
+                        return;
+                    }
+                    handleAllocation(ctx, next);
+                });
+        operationJoin.sendWith(this);
+    }
+
     private Consumer<Throwable> getFailureConsumer(AzureAllocationContext ctx) {
-        return (t) -> {
-            ctx.stage = AzureStages.ERROR;
-            ctx.error = t;
-            handleAllocation(ctx);
-        };
+        return (t) -> handleError(ctx, t);
     }
 
     private Retrofit.Builder getRetrofitBuilder() {
@@ -1156,9 +1499,7 @@ public class AzureInstanceService extends StatelessService {
      */
     private void getVMDisks(AzureAllocationContext ctx, AzureStages nextStage) {
         if (ctx.child.diskLinks == null || ctx.child.diskLinks.size() == 0) {
-            ctx.error = new IllegalStateException("a minimum of 1 disk is required");
-            ctx.stage = AzureStages.ERROR;
-            handleAllocation(ctx);
+            handleError(ctx, new IllegalStateException("a minimum of 1 disk is required"));
             return;
         }
         Collection<Operation> operations = new ArrayList<>();
@@ -1171,10 +1512,8 @@ public class AzureInstanceService extends StatelessService {
                 .setCompletion(
                         (ops, exc) -> {
                             if (exc != null) {
-                                ctx.error = new IllegalStateException(
-                                        "Error getting disk information");
-                                ctx.stage = AzureStages.ERROR;
-                                handleAllocation(ctx);
+                                handleError(ctx, new IllegalStateException(
+                                        "Error getting disk information"));
                                 return;
                             }
 
@@ -1185,10 +1524,8 @@ public class AzureInstanceService extends StatelessService {
                                 // We treat the first disk in the boot order as the boot disk.
                                 if (disk.bootOrder == 1) {
                                     if (ctx.bootDisk != null) {
-                                        ctx.error = new IllegalStateException(
-                                                "Only 1 boot disk is allowed");
-                                        ctx.stage = AzureStages.ERROR;
-                                        handleAllocation(ctx);
+                                        handleError(ctx, new IllegalStateException(
+                                                "Only 1 boot disk is allowed"));
                                         return;
                                     }
 
@@ -1199,14 +1536,12 @@ public class AzureInstanceService extends StatelessService {
                             }
 
                             if (ctx.bootDisk == null) {
-                                ctx.error = new IllegalStateException("Boot disk is required");
-                                ctx.stage = AzureStages.ERROR;
-                                handleAllocation(ctx);
+                                handleError(ctx,
+                                        new IllegalStateException("Boot disk is required"));
                                 return;
                             }
 
-                            ctx.stage = nextStage;
-                            handleAllocation(ctx);
+                            handleAllocation(ctx, nextStage);
                         });
         operationJoin.sendWith(this);
     }
@@ -1297,8 +1632,7 @@ public class AzureInstanceService extends StatelessService {
                         logFine("Retrieved the operating system family - %s",
                                 ctx.operatingSystemFamily);
                         ctx.imageReference = imageReference;
-                        ctx.stage = nextStage;
-                        handleAllocation(ctx);
+                        handleAllocation(ctx, nextStage);
                     }
                 });
     }
@@ -1344,7 +1678,7 @@ public class AzureInstanceService extends StatelessService {
                 operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
                         AzureConstants.AUTH_HEADER_BEARER_PREFIX + credentials.getToken());
             } catch (Exception ex) {
-                this.handleError(ctx, ex);
+                handleError(ctx, ex);
                 return;
             }
 
@@ -1356,8 +1690,7 @@ public class AzureInstanceService extends StatelessService {
                 }
 
                 logInfo("Successfully enabled monitoring on the VM [%s]", vmName);
-                ctx.stage = nextStage;
-                handleAllocation(ctx);
+                handleAllocation(ctx, nextStage);
             });
             sendRequest(operation);
         });
@@ -1387,4 +1720,286 @@ public class AzureInstanceService extends StatelessService {
         }
         return resourceGroupName;
     }
+
+    /**
+     * Use this Azure callback in case of multiple async calls. It transitions to next stage upon
+     * FIRST error. Subsequent calls (either success or failure) are just ignored.
+     */
+    private abstract class FailFastAzureAsyncCallback<T> extends AzureAsyncCallback<T> {
+
+        final AzureAllocationContext ctx;
+        final AzureStages nextStage;
+
+        final AtomicInteger numberOfCalls;
+        final AtomicBoolean hasAnyFailed;
+
+        final String msg;
+
+        FailFastAzureAsyncCallback(
+                AzureAllocationContext ctx,
+                AzureStages nextStage,
+                AtomicInteger numberOfCalls,
+                AtomicBoolean hasAnyFailed,
+                String message) {
+            this.ctx = ctx;
+            this.nextStage = nextStage;
+            this.numberOfCalls = numberOfCalls;
+            this.hasAnyFailed = hasAnyFailed;
+            this.msg = message;
+
+            logInfo(this.msg + ": STARTED");
+        }
+
+        @Override
+        public final void onError(Throwable e) {
+
+            e = new IllegalStateException(this.msg + ": FAILED", e);
+
+            if (this.hasAnyFailed.compareAndSet(false, true)) {
+                // Check whether this is the first failure and proceed to next stage.
+                // i.e. fail-fast on batch operations.
+                this.handleFailure(e);
+            } else {
+                // Any subsequent failure is just logged.
+                logSevere(e);
+            }
+        }
+
+        /**
+         * Hook to be implemented by descendants to handle failed Azure call.
+         *
+         * <p>
+         * Default error handler delegates to
+         * {@link AzureInstanceService#handleError(AzureAllocationContext, Throwable)}.
+         */
+        void handleFailure(Throwable e) {
+            AzureInstanceService.this.handleError(this.ctx, e);
+        }
+
+        @Override
+        public final void onSuccess(ServiceResponse<T> result) {
+            if (this.hasAnyFailed.get()) {
+                logInfo(this.msg + ": SUCCESS. Still batch calls has failed so skip this result.");
+                return;
+            }
+
+            logInfo(this.msg + ": SUCCESS");
+
+            handleSuccess(result.getBody());
+
+            if (this.numberOfCalls.decrementAndGet() == 0) {
+                // Check whether all calls have succeeded and proceed to next stage.
+                AzureInstanceService.this.handleAllocation(this.ctx, this.nextStage);
+            }
+        }
+
+        /**
+         * Core logic (implemented by descendants) handling successful Azure call.
+         *
+         * <p>
+         * The implementation should focus on consuming the response/result. It is responsibility of
+         * this class to handle transition to next stage as defined by
+         * {@link AzureInstanceService#handleAllocation(AzureAllocationContext, AzureStages)}.
+         */
+        abstract void handleSuccess(T resultBody);
+
+    }
+
+    /**
+     * Use this Azure callback in case of single async call. It transitions to next stage upon
+     * success.
+     */
+    private abstract class TransitionToCallback<T> extends AzureAsyncCallback<T> {
+
+        final AzureAllocationContext ctx;
+        final AzureStages nextStage;
+
+        final String msg;
+
+        TransitionToCallback(
+                AzureAllocationContext ctx,
+                AzureStages nextStage,
+                String message) {
+            this.ctx = ctx;
+            this.nextStage = nextStage;
+            this.msg = message;
+
+            logInfo(this.msg + ": STARTED");
+        }
+
+        @Override
+        public final void onError(Throwable e) {
+
+            e = new IllegalStateException(this.msg + ": FAILED", e);
+
+            this.handleFailure(e);
+        }
+
+        /**
+         * Hook that might be implemented by descendants to handle failed Azure call.
+         *
+         * <p>
+         * Default error handling delegates to
+         * {@link AzureInstanceService#handleError(AzureAllocationContext, Throwable)}.
+         */
+        void handleFailure(Throwable e) {
+            AzureInstanceService.this.handleError(this.ctx, e);
+        }
+
+        @Override
+        public final void onSuccess(ServiceResponse<T> result) {
+            logInfo(this.msg + ": SUCCESS");
+
+            // First delegate to descendants to process result body
+            CompletableFuture<T> handleSuccess = handleSuccess(result.getBody());
+
+            // Then transition upon completion
+            handleSuccess.whenComplete((body, exc) -> {
+                if (exc != null) {
+                    handleFailure(exc);
+                } else {
+                    transition();
+                }
+            });
+        }
+
+        /**
+         * Hook to be implemented by descendants to handle successful Azure call.
+         *
+         * <p>
+         * The implementation should focus on consuming the result. It is responsibility of this
+         * class to handle transition to next stage as defined by
+         * {@link AzureInstanceService#handleAllocation(AzureAllocationContext, AzureStages)}.
+         */
+        abstract CompletableFuture<T> handleSuccess(T resultBody);
+
+        /**
+         * Transition to the next stage of AzureInstanceService state machine once Azure call is
+         * complete.
+         */
+        private void transition() {
+            AzureInstanceService.this.handleAllocation(this.ctx, this.nextStage);
+        }
+    }
+
+    /**
+     * Use this Azure callback in case of Azure provisioning call (such as create vNet, NIC, etc.).
+     *
+     * <p>
+     * The provisioning state of resources returned by Azure 'create' call is 'Updating'. This
+     * callback is responsible to wait for resource provisioning state to change to 'Succeeded'.
+     */
+    private abstract class ProvisioningCallback<T> extends TransitionToCallback<T> {
+
+        private static final String WAIT_PROVISIONING_TO_SUCCEED_MSG = "WAIT for provisioning to succeed";
+
+        private int numberOfWaits = 0;
+        private CompletableFuture<T> waitProvisioningToSucceed = new CompletableFuture<>();
+
+        ProvisioningCallback(AzureAllocationContext ctx, AzureStages nextStage, String msg) {
+            super(ctx, nextStage, msg);
+        }
+
+        /**
+         * Hook to be implemented by descendants to handle 'Succeeded' Azure resource provisioning.
+         * Since implementations might decide to trigger/initiate sync operation they are required
+         * to return {@link CompletableFuture} to track its completion.
+         *
+         * <p>
+         * This call is introduced by analogy with {@link #handleSuccess(Object)}.
+         */
+        abstract CompletableFuture<T> handleProvisioningSucceeded(T body);
+
+        /**
+         * By design Azure resources do not have generic 'provisioningState' getter, so we enforce
+         * descendants to provide us with its value.
+         *
+         * <p>
+         * NOTE: Might be done through reflection. For now keep it simple.
+         */
+        abstract String getProvisioningState(T body);
+
+        /**
+         * This Runnable abstracts/models the Azure 'get resource' call used to get/check resource
+         * provisioning state.
+         *
+         * @param checkProvisioningStateCallback
+         *            The special callback that should be used while creating the Azure 'get
+         *            resource' call.
+         */
+        abstract Runnable checkProvisioningStateCall(
+                ServiceCallback<T> checkProvisioningStateCallback);
+
+        /**
+         * Provides 'wait-for-provisioning-to-succeed' logic prior forwarding to actual resource
+         * create {@link #handleProvisioningSucceeded(Object) callback}.
+         */
+        @Override
+        final CompletableFuture<T> handleSuccess(T body) {
+
+            return waitProvisioningToSucceed(body).thenCompose(this::handleProvisioningSucceeded);
+        }
+
+        /**
+         * The core logic that waits for provisioning to succeed. It polls periodically for resource
+         * provisioning state.
+         */
+        private CompletableFuture<T> waitProvisioningToSucceed(T body) {
+
+            String provisioningState = getProvisioningState(body);
+
+            logInfo(this.msg + ": provisioningState = " + provisioningState);
+
+            if (PROVISIONING_STATE_SUCCEEDED.equals(provisioningState)) {
+
+                // Resource 'provisioningState' has changed finally to 'Succeeded'
+                // Completes 'waitProvisioningToSucceed' task with success
+                this.waitProvisioningToSucceed.complete(body);
+
+            } else if (this.numberOfWaits > WaitProvisiningToSucceed.MAX_WAITS) {
+
+                // Max number of re-tries has reached.
+                // Completes 'waitProvisioningToSucceed' task with exception.
+                this.waitProvisioningToSucceed.completeExceptionally(
+                        new IllegalStateException(
+                                WAIT_PROVISIONING_TO_SUCCEED_MSG + ": max waits exceeded"));
+
+            } else {
+
+                // Retry one more time
+
+                this.numberOfWaits++;
+
+                logInfo("%s: %s - %s", this.msg, WAIT_PROVISIONING_TO_SUCCEED_MSG,
+                        this.numberOfWaits);
+
+                getHost().schedule(
+                        checkProvisioningStateCall(new CheckProvisioningStateCallback()),
+                        WaitProvisiningToSucceed.INTERVAL,
+                        WaitProvisiningToSucceed.TIMEUNIT);
+            }
+
+            return this.waitProvisioningToSucceed;
+        }
+
+        /**
+         * Specialization of Azure callback used by {@link ProvisioningCallback} to handle
+         * 'get/check resource state' call.
+         */
+        private class CheckProvisioningStateCallback extends AzureAsyncCallback<T> {
+
+            @Override
+            public void onError(Throwable e) {
+                e = new IllegalStateException(WAIT_PROVISIONING_TO_SUCCEED_MSG + ": FAILED", e);
+
+                ProvisioningCallback.this.waitProvisioningToSucceed.completeExceptionally(e);
+            }
+
+            @Override
+            public void onSuccess(ServiceResponse<T> result) {
+                ProvisioningCallback.this.waitProvisioningToSucceed(result.getBody());
+            }
+        }
+    }
+
 }

@@ -286,17 +286,14 @@ public class NetworkInterfaceServiceTest extends Suite {
             patchState.tenantLinks.add("tenant-linkA");
             patchState.groupLinks = new HashSet<String>();
             patchState.groupLinks.add("group1");
-            patchServiceSynchronously(returnState.documentSelfLink,
-                    patchState);
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
             returnState = getServiceSynchronously(
                     returnState.documentSelfLink,
                     NetworkInterfaceService.NetworkInterfaceState.class);
 
-            // Only leaselink is patched others are not updated
-            assertThat(returnState.address, is(startState.address));
-            assertThat(returnState.networkLink,
-                    is(startState.networkLink));
+            assertThat(returnState.address, is(patchState.address));
+            assertThat(returnState.networkLink, is(startState.networkLink));
             assertEquals(returnState.tenantLinks, patchState.tenantLinks);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
         }

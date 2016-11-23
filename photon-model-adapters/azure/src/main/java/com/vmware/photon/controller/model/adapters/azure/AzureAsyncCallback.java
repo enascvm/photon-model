@@ -39,13 +39,13 @@ public abstract class AzureAsyncCallback<T> extends ServiceCallback<T> {
     public abstract void onSuccess(ServiceResponse<T> result);
 
     @Override
-    public void failure(Throwable t) {
+    public final void failure(Throwable t) {
         OperationContext.restoreOperationContext(this.opContext);
         onError(t);
     }
 
     @Override
-    public void success(ServiceResponse<T> result) {
+    public final void success(ServiceResponse<T> result) {
         OperationContext.restoreOperationContext(this.opContext);
         onSuccess(result);
     }

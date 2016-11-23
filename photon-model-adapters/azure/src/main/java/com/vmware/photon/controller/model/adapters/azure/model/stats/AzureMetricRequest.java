@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.model.stats;
 
 import java.util.Date;
+
 /**
  * The metric request object passed to the Runnable
  *
