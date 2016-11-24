@@ -22,7 +22,6 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -705,11 +704,6 @@ public class EndpointAllocationTaskService
 
         // setting up a host, so all have VM_HOST as a child
         ComputeDescription cd = new ComputeDescription();
-        List<String> children = new ArrayList<>();
-        // TODO: switch to VM_HOST once we introduce hosts discovery
-        // children.add(ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST.toString());
-        children.add(ComputeDescriptionService.ComputeDescription.ComputeType.VM_GUEST.toString());
-        cd.supportedChildren = children;
         cd.tenantLinks = state.tenantLinks;
         cd.authCredentialsLink = state.authCredentialsLink;
         cd.name = state.name;

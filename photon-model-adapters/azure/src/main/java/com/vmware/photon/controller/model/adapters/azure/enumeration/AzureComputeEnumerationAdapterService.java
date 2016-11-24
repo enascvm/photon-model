@@ -76,6 +76,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -1054,6 +1055,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             resource.creationTimeMicros = Utils.getNowMicrosUtc();
             resource.id = virtualMachine.id.toLowerCase();
             resource.name = virtualMachine.name;
+            resource.type = ComputeType.VM_GUEST;
             resource.parentLink = ctx.enumRequest.resourceLink();
             resource.descriptionLink = UriUtils.buildUriPath(ComputeDescriptionService.FACTORY_LINK,
                     ctx.computeDescriptionIds.get(virtualMachine.name));
@@ -1163,6 +1165,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                 resource.powerState = PowerState.OFF;
                             }
                         }
+                        resource.type = ComputeType.VM_GUEST;
                         patchComputeResource(ctx, resource, numOfPatches);
                     }
                 });

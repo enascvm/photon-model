@@ -20,8 +20,10 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.function.BiConsumer;
 
 import com.amazonaws.AmazonServiceException;
@@ -40,6 +42,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
@@ -129,6 +132,9 @@ public class AWSEndpointAdapterService extends StatelessService {
             cd.regionId = r.getRequired(REGION_KEY);
             cd.zoneId = r.get(ZONE_KEY).orElse(null);
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
+            List<String> children = new ArrayList<>();
+            children.add(ComputeType.VM_GUEST.toString());
+            cd.supportedChildren = children;
 
             cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
                     AWSUriPaths.AWS_INSTANCE_ADAPTER);
@@ -155,6 +161,7 @@ public class AWSEndpointAdapterService extends StatelessService {
             b.append(r.getRequired(REGION_KEY));
             b.append(".amazonaws.com");
 
+            c.type = ComputeType.VM_HOST;
             c.adapterManagementReference = UriUtils.buildUri(b.toString());
             String billsBucketName = r.get(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY).orElse(null);
             if (billsBucketName != null) {

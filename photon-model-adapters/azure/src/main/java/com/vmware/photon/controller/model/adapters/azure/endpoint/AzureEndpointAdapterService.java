@@ -22,7 +22,9 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
@@ -44,6 +46,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
@@ -141,6 +144,11 @@ public class AzureEndpointAdapterService extends StatelessService {
             }
 
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
+
+            List<String> children = new ArrayList<>();
+            children.add(ComputeType.VM_GUEST.toString());
+            cd.supportedChildren = children;
+
             cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
                     AzureUriPaths.AZURE_INSTANCE_ADAPTER);
             cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
@@ -152,6 +160,7 @@ public class AzureEndpointAdapterService extends StatelessService {
 
     private BiConsumer<ComputeState, Retriever> compute() {
         return (c, r) -> {
+            c.type = ComputeType.VM_HOST;
             c.adapterManagementReference = UriUtils.buildUri("https://management.azure.com");
         };
     }

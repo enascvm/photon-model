@@ -14,14 +14,16 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
-import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.xenon.common.Operation;
@@ -102,8 +104,9 @@ public class ComputeService extends StatefulService {
          * capacity to. Based on dynamic queries in elastic resource pools this compute may
          * participate in other pools too.
          *
-         * <p>It is recommended to use {@code ResourcePoolState.query} instead which works for
-         * both elastic and non-elastic resource pools.
+         * <p>
+         * It is recommended to use {@code ResourcePoolState.query} instead which works for both
+         * elastic and non-elastic resource pools.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String resourcePoolLink;
@@ -112,6 +115,13 @@ public class ComputeService extends StatefulService {
          * Ip address of this compute instance.
          */
         public String address;
+
+        /**
+         * The type of this compute resource.
+         */
+        @UsageOption(option = PropertyUsageOption.SINGLE_ASSIGNMENT)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_6)
+        public ComputeType type;
 
         /**
          * MAC address of this compute instance.
@@ -185,6 +195,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.parentLink = currentState.parentLink;
             chsWithDesc.powerState = currentState.powerState;
             chsWithDesc.primaryMAC = currentState.primaryMAC;
+            chsWithDesc.type = currentState.type;
             chsWithDesc.resourcePoolLink = currentState.resourcePoolLink;
             chsWithDesc.adapterManagementReference = currentState.adapterManagementReference;
             chsWithDesc.networkInterfaceLinks = currentState.networkInterfaceLinks;
@@ -264,6 +275,7 @@ public class ComputeService extends StatefulService {
         if (state.creationTimeMicros == null) {
             state.creationTimeMicros = Utils.getNowMicrosUtc();
         }
+
         Utils.validateState(getStateDescription(), state);
         return state;
     }
@@ -273,39 +285,12 @@ public class ComputeService extends StatefulService {
             throw (new IllegalArgumentException("body is required"));
         }
         ComputeState state = op.getBody(ComputeState.class);
+        ComputeState currentState = getState(op);
+        if (state.type != null && currentState.type != null && state.type != currentState.type) {
+            throw new IllegalArgumentException("Compute type can not be changed");
+        }
         Utils.validateState(getStateDescription(), state);
         return state;
-    }
-
-    public static void validateSupportedChildren(ComputeState state,
-            ComputeDescription description) {
-
-        if (description.supportedChildren == null) {
-            return;
-        }
-
-        Iterator<String> childIterator = description.supportedChildren
-                .iterator();
-        while (childIterator.hasNext()) {
-            ComputeType type = ComputeType.valueOf(childIterator.next());
-            switch (type) {
-            case VM_HOST:
-            case PHYSICAL:
-                if (state.adapterManagementReference == null) {
-                    throw new IllegalArgumentException(
-                            "adapterManagementReference is required");
-                }
-                break;
-            case DOCKER_CONTAINER:
-                break;
-            case OS_ON_PHYSICAL:
-                break;
-            case VM_GUEST:
-                break;
-            default:
-                break;
-            }
-        }
     }
 
     @Override
@@ -316,6 +301,14 @@ public class ComputeService extends StatefulService {
             public Boolean apply(Operation t) {
                 boolean hasStateChanged = false;
                 ComputeState patchBody = patch.getBody(ComputeState.class);
+                if (patchBody.type != null && currentState.type != null
+                        && patchBody.type != currentState.type) {
+                    throw new IllegalArgumentException("Compute type can not be changed");
+                } else {
+                    currentState.type = patchBody.type;
+                    hasStateChanged = true;
+                }
+
                 if (patchBody.address != null
                         && !patchBody.address.equals(currentState.address)) {
                     InetAddressValidator.getInstance().isValidInet4Address(
@@ -377,6 +370,7 @@ public class ComputeService extends StatefulService {
                 ComputeDescriptionService.FACTORY_LINK,
                 "on-prem-one-cpu-vm-guest");
         template.resourcePoolLink = null;
+        template.type = ComputeType.VM_GUEST;
         template.adapterManagementReference = URI
                 .create("https://esxhost-01:443/sdk");
 

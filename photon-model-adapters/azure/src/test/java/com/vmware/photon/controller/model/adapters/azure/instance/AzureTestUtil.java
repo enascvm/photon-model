@@ -338,6 +338,7 @@ public class AzureTestUtil {
         resource.id = UUID.randomUUID().toString();
         resource.name = azureVMName;
         resource.parentLink = parentLink;
+        resource.type = ComputeType.VM_GUEST;
         resource.descriptionLink = vmComputeDesc.documentSelfLink;
         resource.resourcePoolLink = resourcePoolLink;
         resource.diskLinks = vmDisks;

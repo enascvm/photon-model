@@ -25,7 +25,6 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -35,16 +34,16 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
- * Describes a compute resource. The same description service instance can be
- * re-used across many compute resources acting as a shared template.
+ * Describes a compute resource. The same description service instance can be re-used across many
+ * compute resources acting as a shared template.
  */
 public class ComputeDescriptionService extends StatefulService {
     public static final String FACTORY_LINK = UriPaths.RESOURCES
             + "/compute-descriptions";
 
     /**
-     * This class represents the document state associated with a
-     * {@link ComputeDescriptionService} task.
+     * This class represents the document state associated with a {@link ComputeDescriptionService}
+     * task.
      */
     public static class ComputeDescription extends ResourceState {
 
@@ -67,7 +66,11 @@ public class ComputeDescriptionService extends StatefulService {
          * Types of Compute hosts.
          */
         public enum ComputeType {
-            VM_HOST, VM_GUEST, DOCKER_CONTAINER, PHYSICAL, OS_ON_PHYSICAL
+            VM_HOST,
+            VM_GUEST,
+            DOCKER_CONTAINER,
+            PHYSICAL,
+            OS_ON_PHYSICAL
         }
 
         /**
@@ -102,8 +105,7 @@ public class ComputeDescriptionService extends StatefulService {
         public String dataStoreId;
 
         /**
-         * Self-link to the AuthCredentialsService used to access this compute
-         * host.
+         * Self-link to the AuthCredentialsService used to access this compute host.
          */
         public String authCredentialsLink;
 
@@ -175,15 +177,13 @@ public class ComputeDescriptionService extends StatefulService {
         public URI bootAdapterReference;
 
         /**
-         * URI reference to the adapter used to get the health status of this
-         * host.
+         * URI reference to the adapter used to get the health status of this host.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI healthAdapterReference;
 
         /**
-         * URI reference to the adapter used to get the stats info of this
-         * host.
+         * URI reference to the adapter used to get the stats info of this host.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI statsAdapterReference;
@@ -193,8 +193,7 @@ public class ComputeDescriptionService extends StatefulService {
         public Set<URI> statsAdapterReferences;
 
         /**
-         * URI reference to the adapter used to enumerate instances of this
-         * host.
+         * URI reference to the adapter used to enumerate instances of this host.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI enumerationAdapterReference;
@@ -309,6 +308,10 @@ public class ComputeDescriptionService extends StatefulService {
             case PHYSICAL:
                 break;
             case VM_GUEST:
+                if (state.instanceAdapterReference == null) {
+                    throw new IllegalArgumentException(
+                            "instanceAdapterReference is required");
+                }
                 break;
             default:
                 break;

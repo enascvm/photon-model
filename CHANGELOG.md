@@ -37,6 +37,8 @@
 
 * Update ScheduleTaskService to run in context of the specified user
 
+* Introduce new field `type` on ComputeState, to explicitly define the type of the Compute.
+
 * Introduce NetworkInterfaceDescription, to represent the desire state of a NetworkInterface.
   ComputeDescription is extended to have a list on NetworkInterfaceDescriptions, e.g. the desire
   state of NICs for the requested compute. Each NetworkInterface has a link to the

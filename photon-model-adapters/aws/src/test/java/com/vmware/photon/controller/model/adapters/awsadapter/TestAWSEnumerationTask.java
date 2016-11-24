@@ -47,7 +47,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
-
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getNetworkStates;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
@@ -71,6 +70,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
@@ -401,6 +401,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         ComputeState linuxCompute = getComputeByAWSId(this.host, linuxVMId);
         assertNotNull(linuxCompute);
+        assertEquals(ComputeType.VM_GUEST, linuxCompute.type);
         assertNotNull(linuxCompute.customProperties);
         String linuxOSType = linuxCompute.customProperties.get(CUSTOM_OS_TYPE);
         assertNotNull(linuxOSType);
@@ -408,6 +409,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         ComputeState winCompute = getComputeByAWSId(this.host, windowsVMId);
         assertNotNull(winCompute);
+        assertEquals(ComputeType.VM_GUEST, winCompute.type);
         assertNotNull(winCompute.customProperties);
         String winOSType = winCompute.customProperties.get(CUSTOM_OS_TYPE);
         assertNotNull(winOSType);

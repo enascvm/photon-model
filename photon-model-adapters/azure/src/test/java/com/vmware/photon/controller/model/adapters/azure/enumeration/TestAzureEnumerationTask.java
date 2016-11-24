@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
+import static org.junit.Assert.assertEquals;
+
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
@@ -70,6 +72,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -91,7 +94,6 @@ import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
-
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -102,15 +104,16 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * PRE-REQUISITE: An Azure Resource Manager VM named <b>EnumTestVM-DoNotDelete</b>, with diagnostics enabled,
- * is required for the stats collection on compute host to be successful.
+ * PRE-REQUISITE: An Azure Resource Manager VM named <b>EnumTestVM-DoNotDelete</b>, with diagnostics
+ * enabled, is required for the stats collection on compute host to be successful.
  * <p>
- * NOTE: Testing pagination related changes requires manual setup due to account limits, slowness
- * of vm creation on azure (this slowness is on azure), and cost associated.
+ * NOTE: Testing pagination related changes requires manual setup due to account limits, slowness of
+ * vm creation on azure (this slowness is on azure), and cost associated.
  * <p>
  * For manual tests use Azure CLI to create multiple VMs using this bash command line:
  * <p>
- * for i in {1..55}; do azure vm quick-create resourcegroup vm$i westus linux canonical:UbuntuServer:12.04.3-LTS:12.04.201401270 azureuser Pa$$word% -z Standard_A0; done
+ * for i in {1..55}; do azure vm quick-create resourcegroup vm$i westus linux
+ * canonical:UbuntuServer:12.04.3-LTS:12.04.201401270 azureuser Pa$$word% -z Standard_A0; done
  */
 public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private static final int STALE_VM_RESOURCES_COUNT = 100;
@@ -334,7 +337,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 NetworkService.FACTORY_LINK, true);
         // 1 subnet per network, 1 network per each stale vm resource + 1 subnet for the original
         // compute state.
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_VM_RESOURCES_COUNT + 1,
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
+                STALE_VM_RESOURCES_COUNT + 1,
                 SubnetService.FACTORY_LINK, true);
 
         this.vmCount = getAzureVMCount(this.computeManagementClient);
@@ -364,12 +368,18 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         ServiceDocumentQueryResult result = ProvisioningUtils.queryComputeInstances(this.host,
                 this.vmCount);
 
+        // validate type field for enumerated VMs
+        result.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
+                .filter(c -> !c.documentSelfLink.equals(this.computeHost.documentSelfLink))
+                .forEach(c -> assertEquals(ComputeType.VM_GUEST, c.type));
+
         for (Entry<String, Object> key : result.documents.entrySet()) {
             ComputeState document = Utils.fromJson(key.getValue(), ComputeState.class);
             if (!document.documentSelfLink.equals(this.computeHost.documentSelfLink)
                     && !document.documentSelfLink.equals(this.vmState.documentSelfLink)
                     && document.id.toLowerCase()
-                    .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
+                            .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
                 this.enumeratedComputeLink = document.documentSelfLink;
                 break;
             }
@@ -495,8 +505,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                         // Persist stats on Verification Host for testing the computeHost stats.
                         URI persistStatsUri = UriUtils.buildUri(getHost(),
                                 ResourceMetricsService.FACTORY_LINK);
-                        ResourceMetricsService.ResourceMetrics resourceMetric =
-                                new ResourceMetricsService.ResourceMetrics();
+                        ResourceMetricsService.ResourceMetrics resourceMetric = new ResourceMetricsService.ResourceMetrics();
                         resourceMetric.documentSelfLink = StatsUtil.getMetricKey(selfLink,
                                 Utils.getNowMicrosUtc());
                         resourceMetric.entries = new HashMap<>();

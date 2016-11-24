@@ -879,6 +879,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             ComputeResourceOverlay cr) {
         ComputeState state = new ComputeState();
         state.id = cr.getId().getValue();
+        state.type = ComputeType.VM_HOST;
         state.adapterManagementReference = enumerationContext.getRequest().adapterManagementReference;
         state.parentLink = enumerationContext.getRequest().resourceLink();
         state.resourcePoolLink = enumerationContext.getRequest().resourcePoolLink;
@@ -998,6 +999,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             HostSystemOverlay hs, ComputeResourceOverlay cr) {
         ComputeState state = new ComputeState();
         state.id = hs.getHardwareUuid();
+        state.type = ComputeType.VM_HOST;
         state.adapterManagementReference = enumerationContext.getRequest().adapterManagementReference;
         state.parentLink = enumerationContext.getRequest().resourceLink();
         state.resourcePoolLink = enumerationContext.getRequest().resourcePoolLink;
@@ -1125,6 +1127,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
 
         ComputeState state = new ComputeState();
+        state.type = ComputeType.VM_GUEST;
         state.adapterManagementReference = request.adapterManagementReference;
         state.parentLink = request.resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;

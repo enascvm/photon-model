@@ -632,6 +632,7 @@ public class ResourceAllocationTaskService
         resource.id = computeResourceId;
         resource.name = name;
         resource.parentLink = parentLink;
+        resource.type = ComputeType.VM_GUEST;
         resource.descriptionLink = currentState.computeDescriptionLink;
         resource.resourcePoolLink = currentState.resourcePoolLink;
         resource.diskLinks = diskLinks;

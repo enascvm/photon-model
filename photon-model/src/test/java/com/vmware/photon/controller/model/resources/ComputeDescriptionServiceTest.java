@@ -37,6 +37,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -73,8 +74,7 @@ public class ComputeDescriptionServiceTest extends Suite {
         cd.dataStoreId = null;
 
         ArrayList<String> children = new ArrayList<>();
-        children.add(ComputeDescriptionService.ComputeDescription.ComputeType.VM_HOST
-                .toString());
+        children.add(ComputeType.VM_HOST.toString());
 
         cd.supportedChildren = children;
         cd.environmentName = ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;

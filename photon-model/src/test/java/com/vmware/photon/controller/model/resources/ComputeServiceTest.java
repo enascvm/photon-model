@@ -40,6 +40,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.UriUtils;
@@ -55,6 +56,7 @@ import com.vmware.xenon.services.common.TenantService;
         ComputeServiceTest.HandleStartTest.class,
         ComputeServiceTest.HandleGetTest.class,
         ComputeServiceTest.HandlePatchTest.class,
+        ComputeServiceTest.HandlePutTest.class,
         ComputeServiceTest.QueryTest.class })
 public class ComputeServiceTest extends Suite {
     private static final String TEST_DESC_PROPERTY_NAME = "testDescProperty";
@@ -75,6 +77,7 @@ public class ComputeServiceTest extends Suite {
         cs.resourcePoolLink = null;
         cs.address = "10.0.0.1";
         cs.name = "testVM";
+        cs.type = ComputeType.VM_GUEST;
         cs.primaryMAC = "01:23:45:67:89:ab";
         cs.powerState = ComputeService.PowerState.ON;
         cs.adapterManagementReference = URI
@@ -321,6 +324,24 @@ public class ComputeServiceTest extends Suite {
             assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
         }
 
+        @Test(expected = IllegalArgumentException.class)
+        public void testPatchFailOnTypeChange() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd);
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+            assertNotNull(returnState);
+
+            ComputeService.ComputeState patchBody = new ComputeService.ComputeState();
+            patchBody.type = ComputeType.DOCKER_CONTAINER;
+
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchBody);
+        }
+
         @Test
         public void testPatchNoChange() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
@@ -452,6 +473,24 @@ public class ComputeServiceTest extends Suite {
             assertEquals(getState.networkInterfaceLinks, newState.networkInterfaceLinks);
             // make sure launchTimeMicros was preserved
             assertEquals(getState.creationTimeMicros, returnState.creationTimeMicros);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutFailOnTypeChange() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd);
+            startState.creationTimeMicros = Long.MIN_VALUE;
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+            assertNotNull(returnState);
+
+            returnState.type = ComputeType.DOCKER_CONTAINER;
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    returnState);
         }
     }
 

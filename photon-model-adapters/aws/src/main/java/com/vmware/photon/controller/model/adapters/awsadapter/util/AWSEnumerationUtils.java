@@ -39,6 +39,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
@@ -169,6 +170,7 @@ public class AWSEnumerationUtils {
         computeState.id = instance.getInstanceId();
         computeState.name = instance.getInstanceId();
         computeState.parentLink = parentComputeLink;
+        computeState.type = ComputeType.VM_GUEST;
 
         computeState.resourcePoolLink = resourcePoolLink;
         // Compute descriptions are looked up by the instanceType in the local list of CDs.
