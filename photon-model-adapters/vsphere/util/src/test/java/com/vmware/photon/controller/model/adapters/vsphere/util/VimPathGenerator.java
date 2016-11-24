@@ -71,7 +71,12 @@ public final class VimPathGenerator {
     private int indent;
 
     public static void main(String[] args) throws Exception {
-        new VimPathGenerator(new File(args[0]), new File(args[1])).generate();
+        if (args.length != 2) {
+            new VimPathGenerator(new File("../sdk/src/main/resources/com/vmware/vim25/vim-types.xsd"),
+                    new File("src/main/java/com/vmware/photon/controller/model/adapters/vsphere/util")).generate();
+        } else {
+            new VimPathGenerator(new File(args[0]), new File(args[1])).generate();
+        }
     }
 
     private VimPathGenerator(File input, File dest) throws Exception {
@@ -103,6 +108,7 @@ public final class VimPathGenerator {
         this.roots.put("vm:summary", "VirtualMachineSummary");
         this.roots.put("vm:config", "VirtualMachineConfigInfo");
         this.roots.put("vm:runtime", "VirtualMachineRuntimeInfo");
+        this.roots.put("vm:guest", "GuestInfo");
 
         this.roots.put("host:summary", "HostListSummary");
         this.roots.put("host:parent", "ManagedObjectReference");

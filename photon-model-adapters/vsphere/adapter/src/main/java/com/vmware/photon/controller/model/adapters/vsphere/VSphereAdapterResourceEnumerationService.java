@@ -1132,7 +1132,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.powerState = vm.getPowerState();
         state.primaryMAC = vm.getPrimaryMac();
         if (!vm.isTemplate()) {
-            state.address = vm.getIpAddressOrHostName();
+            state.address = vm.guessPublicIpV4Address();
         }
         state.id = vm.getInstanceUuid();
         state.name = vm.getName();

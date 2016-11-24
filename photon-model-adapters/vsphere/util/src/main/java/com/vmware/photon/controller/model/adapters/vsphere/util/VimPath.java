@@ -975,6 +975,81 @@ public class VimPath {
     /** PropertyType: <code>ArrayOfVirtualMachineDeviceRuntimeInfo</code> */
     public static final String vm_runtime_device = "runtime.device";
 
+    /** PropertyType: <code>GuestInfo</code> */
+    public static final String vm_guest = "guest";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_toolsRunningStatus = "guest.toolsRunningStatus";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_hostName = "guest.hostName";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_guestFullName = "guest.guestFullName";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_appState = "guest.appState";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String vm_guest_guestOperationsReady = "guest.guestOperationsReady";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String vm_guest_interactiveGuestOperationsReady = "guest.interactiveGuestOperationsReady";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_ipAddress = "guest.ipAddress";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_toolsVersion = "guest.toolsVersion";
+
+    /** PropertyType: <code>GuestScreenInfo</code> */
+    public static final String vm_guest_screen = "guest.screen";
+
+    /** PropertyType: <code>int</code> */
+    public static final String vm_guest_screen_width = "guest.screen.width";
+
+    /** PropertyType: <code>int</code> */
+    public static final String vm_guest_screen_height = "guest.screen.height";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_guestState = "guest.guestState";
+
+    /** PropertyType: <code>VirtualMachineToolsStatus</code> */
+    public static final String vm_guest_toolsStatus = "guest.toolsStatus";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_toolsVersionStatus2 = "guest.toolsVersionStatus2";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String vm_guest_guestStateChangeSupported = "guest.guestStateChangeSupported";
+
+    /** PropertyType: <code>ArrayOfGuestDiskInfo</code> */
+    public static final String vm_guest_disk = "guest.disk";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String vm_guest_guestKernelCrashed = "guest.guestKernelCrashed";
+
+    /** PropertyType: <code>ArrayOfGuestStackInfo</code> */
+    public static final String vm_guest_ipStack = "guest.ipStack";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_guestFamily = "guest.guestFamily";
+
+    /** PropertyType: <code>ArrayOfGuestInfoNamespaceGenerationInfo</code> */
+    public static final String vm_guest_generationInfo = "guest.generationInfo";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_toolsVersionStatus = "guest.toolsVersionStatus";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_appHeartbeatStatus = "guest.appHeartbeatStatus";
+
+    /** PropertyType: <code>ArrayOfGuestNicInfo</code> */
+    public static final String vm_guest_net = "guest.net";
+
+    /** PropertyType: <code>string</code> */
+    public static final String vm_guest_guestId = "guest.guestId";
+
     /** PropertyType: <code>HostListSummary</code> */
     public static final String host_summary = "summary";
 

@@ -659,6 +659,7 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_config_hardware_device,
                 VimPath.vm_runtime_powerState,
                 VimPath.vm_runtime_host,
+                VimPath.vm_guest_net,
                 VimPath.vm_summary_guest_ipAddress,
                 VimPath.vm_summary_guest_hostName);
 
@@ -666,7 +667,7 @@ public class InstanceClient extends BaseHelper {
         state.id = overlay.getInstanceUuid();
         state.primaryMAC = overlay.getPrimaryMac();
         state.powerState = overlay.getPowerState();
-        state.address = overlay.getIpAddressOrHostName();
+        state.address = overlay.guessPublicIpV4Address();
         state.name = overlay.getName();
 
         CustomProperties.of(state)
