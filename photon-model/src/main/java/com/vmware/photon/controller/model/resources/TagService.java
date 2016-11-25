@@ -87,7 +87,6 @@ public class TagService extends StatefulService {
         } else {
             //Do nothing
             put.setBody(currentState);
-            put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
             put.complete();
         }
     }

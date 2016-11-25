@@ -162,7 +162,7 @@ public class TagServiceTest extends Suite {
                     TagService.TagState.class);
 
             assertThat(newReturnState.documentSelfLink, is(returnState.documentSelfLink));
-            assertThat(newReturnState.documentVersion, is(0L));
+            assertThat(newReturnState.documentVersion, is(1L));
         }
     }
 
