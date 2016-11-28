@@ -61,6 +61,7 @@ import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCo
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -85,7 +86,7 @@ public class AWSCostStatsService extends StatelessService {
 
     private AWSClientManager clientManager;
 
-    public static enum AWSCostStatsCreationStages {
+    protected enum AWSCostStatsCreationStages {
         ACCOUNT_DETAILS, CLIENT, DOWNLOAD_THEN_PARSE, QUERY_LOCAL_RESOURCES, QUERY_LINKED_ACCOUNTS, CREATE_STATS, POST_STATS
     }
 
@@ -96,20 +97,20 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     protected class AWSCostStatsCreationContext {
-        public ComputeStateWithDescription computeDesc;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-        public ComputeStatsRequest statsRequest;
-        public ComputeStatsResponse statsResponse;
-        public TransferManager s3Client;
-        public List<String> ignorableInvoiceCharge;
-        public AWSCostStatsCreationStages stage;
-        public Map<String, AwsAccountDetailDto> accountDetailsMap;
-        Map<String, ComputeState> awsInstancesById;
+        protected ComputeStateWithDescription computeDesc;
+        protected AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        protected ComputeStatsRequest statsRequest;
+        protected ComputeStatsResponse statsResponse;
+        protected TransferManager s3Client;
+        protected List<String> ignorableInvoiceCharge;
+        protected AWSCostStatsCreationStages stage;
+        protected Map<String, AwsAccountDetailDto> accountDetailsMap;
+        protected Map<String, ComputeState> awsInstancesById;
         // This map is one to many because a distinct compute state will be present for each region of an AWS account.
-        Map<String, List<ComputeState>> awsAccountIdToComputeStates;
-        OperationContext opContext;
+        protected Map<String, List<ComputeState>> awsAccountIdToComputeStates;
+        protected OperationContext opContext;
 
-        public AWSCostStatsCreationContext(ComputeStatsRequest statsRequest) {
+        protected AWSCostStatsCreationContext(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
             this.stage = AWSCostStatsCreationStages.ACCOUNT_DETAILS;
             this.ignorableInvoiceCharge = new ArrayList<>();
@@ -182,7 +183,30 @@ public class AWSCostStatsService extends StatelessService {
             AWSCostStatsCreationStages next) {
         Consumer<Operation> onSuccess = (op) -> {
             statsData.computeDesc = op.getBody(ComputeStateWithDescription.class);
-            getParentAuth(statsData, next);
+            String accountId = statsData.computeDesc.customProperties
+                    .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
+            if (accountId == null) {
+                logWarning(
+                        "Account ID is not set for compute state '%s'. Not collecting cost stats.",
+                        statsData.computeDesc.documentSelfLink);
+                return;
+            }
+            Consumer<List<ComputeState>> queryResultConsumer = (accountComputeStates) -> {
+                statsData.awsAccountIdToComputeStates.put(accountId, accountComputeStates);
+                ComputeState primaryComputeState = findPrimaryComputeState(accountComputeStates);
+                if (statsData.computeDesc.documentSelfLink
+                        .equals(primaryComputeState.documentSelfLink)) {
+                    // The Cost stats adapter will be configured for all compute states corresponding to an account (one per region).
+                    // We want to run only once corresponding to the primary compute state.
+                    getParentAuth(statsData, next);
+                } else {
+                    logFine("Compute state '%s' is not primary for account '%s'. Not collecting cost stats.",
+                            statsData.computeDesc.documentSelfLink, accountId);
+                    return;
+                }
+            };
+            sendRequest(createQueryForComputeStatesByAccount(statsData, accountId,
+                    queryResultConsumer));
         };
         URI computeUri = UriUtils.extendUriWithQuery(statsData.statsRequest.resourceReference,
                 UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString());
@@ -198,6 +222,53 @@ public class AWSCostStatsService extends StatelessService {
         };
         String authLink = statsData.computeDesc.description.authCredentialsLink;
         AdapterUtils.getServiceState(this, authLink, onSuccess, getFailureConsumer(statsData));
+    }
+
+    private ComputeState findPrimaryComputeState(List<ComputeState> accountComputeStates) {
+        // As of now, the oldest created compute state for this account represents the
+        // primary compute state from costing stats perspective.
+        return accountComputeStates.stream().min(Comparator.comparing(e -> e.creationTimeMicros))
+                .get();
+    }
+
+    /**
+     * Method creates a query operation to get the compute states corresponding to the specified account ID.
+     * The list of the resultant compute states is then passed to the specified handler for processing.
+     * @param context
+     * @param accountId
+     * @param queryResultConsumer
+     * @return operation object representing the query
+     */
+    protected Operation createQueryForComputeStatesByAccount(AWSCostStatsCreationContext context,
+            String accountId,
+            Consumer<List<ComputeState>> queryResultConsumer) {
+        Query awsAccountsQuery = Query.Builder.create().addKindFieldClause(ComputeState.class)
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
+                        PhotonModelConstants.EndpointType.aws.name())
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        AWSConstants.AWS_ACCOUNT_ID_KEY, accountId).build();
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT).setQuery(awsAccountsQuery).build();
+        queryTask.setDirect(true);
+        queryTask.tenantLinks = context.computeDesc.tenantLinks;
+        Operation op = Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+                .setBody(queryTask)
+                .setConnectionSharing(true).setCompletion((o, e) -> {
+                    if (e != null) {
+                        logSevere(e);
+                        AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                                context.statsRequest.taskReference, e);
+                        return;
+                    }
+                    QueryTask responseTask = o.getBody(QueryTask.class);
+                    List<ComputeState> accountComputeStates = responseTask.results.documents
+                            .values().stream()
+                            .map(s -> Utils.fromJson(s, ComputeState.class))
+                            .collect(Collectors.toList());
+                    queryResultConsumer.accept(accountComputeStates);
+                });
+        return op;
     }
 
     protected void getAWSAsyncCostingClient(AWSCostStatsCreationContext statsData,
@@ -216,7 +287,7 @@ public class AWSCostStatsService extends StatelessService {
         String accountId = statsData.computeDesc.customProperties
                 .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
         if (accountId == null) {
-            logWarning("Account ID is not set for account '{}'. Not collecting cost stats.",
+            logWarning("Account ID is not set for account '%s'. Not collecting cost stats.",
                     statsData.computeDesc.documentSelfLink);
             return;
         }
@@ -228,7 +299,7 @@ public class AWSCostStatsService extends StatelessService {
                     .autoDiscoverBillsBucketName(statsData.s3Client.getAmazonS3Client(), accountId);
             if (billsBucketName == null) {
                 logWarning(
-                        "Bills Bucket name is not configured for account '{}'. Not collecting cost stats.",
+                        "Bills Bucket name is not configured for account '%s'. Not collecting cost stats.",
                         statsData.computeDesc.documentSelfLink);
                 return;
             } else {
@@ -296,49 +367,39 @@ public class AWSCostStatsService extends StatelessService {
     protected void queryLinkedAccounts(AWSCostStatsCreationContext context,
             AWSCostStatsCreationStages next) {
 
-        // Query all compute state objects representing AWS accounts.
-        Query awsAccountsQuery = Query.Builder.create().addKindFieldClause(ComputeState.class)
-                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
-                        PhotonModelConstants.EndpointType.aws.name()).build();
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT).setQuery(awsAccountsQuery).build();
-        queryTask.setDirect(true);
-        queryTask.tenantLinks = context.computeDesc.tenantLinks;
-        queryTask.documentSelfLink = UUID.randomUUID().toString();
-        Operation op = Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(queryTask)
-                .setConnectionSharing(true).setCompletion((o, e) -> {
-                    if (e != null) {
-                        logSevere(e);
-                        AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                                context.statsRequest.taskReference, e);
-                        return;
-                    }
-                    QueryTask responseTask = o.getBody(QueryTask.class);
-                    for (Object s : responseTask.results.documents.values()) {
-                        ComputeState accountComputeState = Utils.fromJson(s,
-                                ComputeState.class);
-                        String awsAccountId = accountComputeState.customProperties
-                                .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
-                        // We are interested only in the compute state objects representing the linked accounts
-                        // of the primary account under consideration.
-                        if ((awsAccountId != null) && context.accountDetailsMap.keySet()
-                                .contains(awsAccountId)) {
-                            List<ComputeState> accountComputeStates = context.awsAccountIdToComputeStates
-                                    .getOrDefault(awsAccountId, null);
-                            if (accountComputeStates == null) {
-                                accountComputeStates = new ArrayList<>();
-                                context.awsAccountIdToComputeStates
-                                        .put(awsAccountId, accountComputeStates);
-                            }
-                            accountComputeStates.add(accountComputeState);
-                        }
-                    }
-                    context.stage = next;
-                    handleCostStatsCreationRequest(context);
-                });
-        sendRequest(op);
+        // Construct a list of query operations, one for each account ID to query the
+        // corresponding compute states and populate in the context object.
+        List<Operation> queryOps = new ArrayList<>();
+        for (String accountId : context.accountDetailsMap.keySet()) {
+            if (!context.awsAccountIdToComputeStates.containsKey(accountId)) {
+                Operation queryOp = createQueryForComputeStatesByAccount(context,
+                        accountId,
+                        (accountComputeStates) -> {
+                            context.awsAccountIdToComputeStates
+                                    .put(accountId, accountComputeStates);
+                        });
+                queryOps.add(queryOp);
+            }
+        }
+
+        if (queryOps.isEmpty()) {
+            // Linked accounts have already been queried and present in the cache.
+            context.stage = next;
+            handleCostStatsCreationRequest(context);
+            return;
+        }
+
+        OperationJoin.create(queryOps).setCompletion((o, e) -> {
+            if (e != null && !e.isEmpty()) {
+                Throwable firstException = e.values().iterator().next();
+                logSevere(firstException);
+                AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                        context.statsRequest.taskReference, firstException);
+                return;
+            }
+            context.stage = next;
+            handleCostStatsCreationRequest(context);
+        }).sendWith(this);
     }
 
     private void createStats(AWSCostStatsCreationContext statsData,
@@ -351,13 +412,12 @@ public class AWSCostStatsService extends StatelessService {
                     .getOrDefault(awsAccountDetailDto.id, null);
             if ((accountComputeStates != null) && !accountComputeStates.isEmpty()) {
                 // We use the oldest compute state among those representing this account to save the account level stats.
-                ComputeState accountComputeState = accountComputeStates.stream()
-                        .min(Comparator.comparing(e -> e.creationTimeMicros)).get();
+                ComputeState accountComputeState = findPrimaryComputeState(accountComputeStates);
                 ComputeStats accountStats = createComputeStatsForAccount(
                         accountComputeState.documentSelfLink, awsAccountDetailDto);
                 statsData.statsResponse.statsList.add(accountStats);
             } else {
-                logFine("AWS account with ID '{}' is not configured yet. Not creating cost metrics for the same.");
+                logFine("AWS account with ID '%s' is not configured yet. Not creating cost metrics for the same.");
             }
 
             // create resouce stats for only live EC2 instances that exist in system
@@ -376,7 +436,7 @@ public class AWSCostStatsService extends StatelessService {
                     String resourceName = entry.getKey();
                     ComputeState computeState = statsData.awsInstancesById.get(resourceName);
                     if (computeState == null) {
-                        logFine("Skipping creating costs for AWS instance {} since its compute link does not exist.",
+                        logFine("Skipping creating costs for AWS instance %s since its compute link does not exist.",
                                 resourceName);
                         continue;
                     }

@@ -28,9 +28,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.model.Instance;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSCostStatsService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -194,7 +196,6 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
      * - Environment name(AWS),
      * - Name (instance type),
      * - ZoneId(placement).
-     * @param instance The instance returned from the AWS endpoint.
      */
     private void getLocalComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {
@@ -297,8 +298,6 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
     /**
      * Creates a compute description based on the VM instance information received from AWS. Futher creates an operation
      * that will post to the compute description service for the creation of the compute description.
-     * @param AWSComputeDescriptionCreationState The compute description state object that will be used for the creation of the
-     * compute description.
      */
     public void createComputeDescriptionOperations(AWSComputeDescriptionCreationServiceContext cd) {
         // Create a compute description for the AWS instance at hand
@@ -308,7 +307,12 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         computeDescription.instanceAdapterReference = cd.cdState.parentDescription.instanceAdapterReference;
         computeDescription.enumerationAdapterReference = cd.cdState.parentDescription.enumerationAdapterReference;
         computeDescription.statsAdapterReference = cd.cdState.parentDescription.statsAdapterReference;
-        computeDescription.statsAdapterReferences = cd.cdState.parentDescription.statsAdapterReferences;
+        // We don't want cost adapter to run for each instance. Remove it from the list of stats adapter.
+        if (cd.cdState.parentDescription.statsAdapterReferences != null) {
+            computeDescription.statsAdapterReferences = cd.cdState.parentDescription.statsAdapterReferences
+                    .stream().filter(uri -> !uri.getPath().endsWith(AWSCostStatsService.SELF_LINK))
+                    .collect(Collectors.toSet());
+        }
 
         computeDescription.environmentName = AWSInstanceService.AWS_ENVIRONMENT_NAME;
         // Change this once we make the overarching change to correctly use zoneId and regionId from
