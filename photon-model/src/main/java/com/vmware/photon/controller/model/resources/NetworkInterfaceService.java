@@ -13,14 +13,17 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import java.net.URI;
 import java.util.List;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -40,6 +43,7 @@ public class NetworkInterfaceService extends StatefulService {
         public static final String FIELD_NAME_SUBNET_LINK = "subnetLink";
 
         public static final String FIELD_NAME_DESCRIPTION_LINK = "networkInterfaceDescriptionLink";
+
         /**
          * Link to the network this nic is connected to.
          */
@@ -71,6 +75,45 @@ public class NetworkInterfaceService extends StatefulService {
         public String networkInterfaceDescriptionLink;
     }
 
+    /**
+     * Network interface state with in-line, expanded description.
+     */
+    public static class NetworkInterfaceStateWithDescription extends NetworkInterfaceState {
+
+        /**
+         * Network interface description associated with this network interface instance.
+         */
+        public NetworkInterfaceDescription description;
+
+        public static URI buildUri(URI computeHostUri) {
+            return UriUtils.extendUriWithQuery(computeHostUri,
+                    UriUtils.URI_PARAM_ODATA_EXPAND,
+                    NetworkInterfaceState.FIELD_NAME_DESCRIPTION_LINK);
+        }
+
+        public static NetworkInterfaceStateWithDescription create(
+                NetworkInterfaceDescription description,
+                NetworkInterfaceState state) {
+
+            NetworkInterfaceStateWithDescription stateWithDesc = new NetworkInterfaceStateWithDescription();
+
+            state.copyTo(stateWithDesc);
+
+            // Populate 'stateWithDesc' from 'state'
+            stateWithDesc.address = state.address;
+            stateWithDesc.networkLink = state.networkLink;
+            stateWithDesc.subnetLink = state.subnetLink;
+            stateWithDesc.firewallLinks = state.firewallLinks;
+
+            // Then extend with 'description' data
+            stateWithDesc.networkInterfaceDescriptionLink = description.documentSelfLink;
+            stateWithDesc.description = description;
+
+            return stateWithDesc;
+        }
+
+    }
+
     public NetworkInterfaceService() {
         super(NetworkInterfaceState.class);
         super.toggleOption(ServiceOption.PERSISTENCE, true);
@@ -90,6 +133,40 @@ public class NetworkInterfaceService extends StatefulService {
     }
 
     @Override
+    public void handleGet(Operation get) {
+
+        NetworkInterfaceState currentState = getState(get);
+
+        boolean doExpand = get.getUri().getQuery() != null &&
+                UriUtils.hasODataExpandParamValue(get.getUri());
+
+        if (!doExpand) {
+            get.setBody(currentState).complete();
+            return;
+        }
+
+        // retrieve the description and include in an augmented version of our
+        // state.
+        Operation getDesc = Operation
+                .createGet(this, currentState.networkInterfaceDescriptionLink)
+                .setCompletion(
+                        (o, e) -> {
+                            if (e != null) {
+                                get.fail(e);
+                                return;
+                            }
+                            NetworkInterfaceDescription desc = o
+                                    .getBody(NetworkInterfaceDescription.class);
+
+                            NetworkInterfaceStateWithDescription stateWithDesc = NetworkInterfaceStateWithDescription
+                                    .create(desc, currentState);
+
+                            get.setBody(stateWithDesc).complete();
+                        });
+        sendRequest(getDesc);
+    }
+
+    @Override
     public void handlePut(Operation put) {
         try {
             NetworkInterfaceState returnState = processInput(put);
@@ -100,6 +177,13 @@ public class NetworkInterfaceService extends StatefulService {
         }
     }
 
+    @Override
+    public void handlePatch(Operation patch) {
+        NetworkInterfaceState currentState = getState(patch);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+                NetworkInterfaceState.class, null);
+    }
+
     private NetworkInterfaceState processInput(Operation op) {
         if (!op.hasBody()) {
             throw (new IllegalArgumentException("body is required"));
@@ -107,13 +191,6 @@ public class NetworkInterfaceService extends StatefulService {
         NetworkInterfaceState state = op.getBody(NetworkInterfaceState.class);
         validateState(state);
         return state;
-    }
-
-    @Override
-    public void handlePatch(Operation patch) {
-        NetworkInterfaceState currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                NetworkInterfaceState.class, null);
     }
 
     private void validateState(NetworkInterfaceState state) {

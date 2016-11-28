@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNotNull;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.UUID;
@@ -33,6 +34,9 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -44,6 +48,7 @@ import com.vmware.xenon.services.common.TenantService;
  */
 @RunWith(NetworkInterfaceServiceTest.class)
 @SuiteClasses({ NetworkInterfaceServiceTest.ConstructorTest.class,
+        NetworkInterfaceServiceTest.HandleGetTest.class,
         NetworkInterfaceServiceTest.HandleStartTest.class,
         NetworkInterfaceServiceTest.HandlePatchTest.class,
         NetworkInterfaceServiceTest.QueryTest.class })
@@ -54,11 +59,34 @@ public class NetworkInterfaceServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static NetworkInterfaceService.NetworkInterfaceState buildValidStartState() {
-        NetworkInterfaceService.NetworkInterfaceState networkInterfaceState = new NetworkInterfaceService.NetworkInterfaceState();
+    private static NetworkInterfaceState buildValidStartState() {
+
+        NetworkInterfaceState networkInterfaceState = new NetworkInterfaceState();
+
         networkInterfaceState.id = UUID.randomUUID().toString();
-        networkInterfaceState.address = "10.0.0.0";
+        networkInterfaceState.name = NetworkInterfaceServiceTest.class.getSimpleName();
+        networkInterfaceState.address = "9.9.9.9";
+        networkInterfaceState.firewallLinks = Collections.singletonList("/resources/firewall/fw9");
+        networkInterfaceState.networkInterfaceDescriptionLink = "/resources/nicDesc/nicDesc9";
+
         return networkInterfaceState;
+    }
+
+    private static NetworkInterfaceStateWithDescription buildValidStartState(
+            NetworkInterfaceDescription nd) {
+
+        NetworkInterfaceStateWithDescription niStateWithDesc = new NetworkInterfaceStateWithDescription();
+
+        niStateWithDesc.id = UUID.randomUUID().toString();
+        niStateWithDesc.name = NetworkInterfaceServiceTest.class.getSimpleName();
+        niStateWithDesc.networkLink = "/resources/network/net9";
+        niStateWithDesc.subnetLink = "/resources/subnet/subnet9";
+        niStateWithDesc.firewallLinks = Collections.singletonList("/resources/firewall/fw9");
+        niStateWithDesc.networkInterfaceDescriptionLink = nd.documentSelfLink;
+
+        niStateWithDesc.description = nd;
+
+        return niStateWithDesc;
     }
 
     /**
@@ -174,6 +202,67 @@ public class NetworkInterfaceServiceTest extends Suite {
                     startState,
                     NetworkInterfaceService.NetworkInterfaceState.class,
                     IllegalArgumentException.class);
+        }
+    }
+
+    /**
+     * This class implements tests for the handleGet method.
+     */
+    public static class HandleGetTest extends BaseModelTest {
+
+        NetworkInterfaceStateWithDescription startState;
+        NetworkInterfaceState createdState;
+
+        @Before
+        public void beforeTest() throws Throwable {
+            NetworkInterfaceDescription nd = NetworkInterfaceDescriptionServiceTest
+                    .createNetworkInterfaceDescription(this);
+
+            this.startState = buildValidStartState(nd);
+
+            this.createdState = postServiceSynchronously(
+                    NetworkInterfaceService.FACTORY_LINK,
+                    this.startState,
+                    NetworkInterfaceState.class);
+            assertNotNull(this.createdState);
+        }
+
+        @Test
+        public void testGet() throws Throwable {
+
+            NetworkInterfaceState getState = getServiceSynchronously(
+                    this.createdState.documentSelfLink,
+                    NetworkInterfaceState.class);
+
+            assertThat(getState.id, is(this.startState.id));
+            assertThat(getState.name, is(this.startState.name));
+
+            assertThat(getState.networkLink, is(this.startState.networkLink));
+            assertThat(getState.subnetLink, is(this.startState.subnetLink));
+            assertThat(getState.firewallLinks, is(this.startState.firewallLinks));
+            assertThat(getState.networkInterfaceDescriptionLink,
+                    is(this.startState.networkInterfaceDescriptionLink));
+        }
+
+        @Test
+        public void testGetExpand() throws Throwable {
+
+            NetworkInterfaceStateWithDescription getState = getServiceSynchronously(
+                    UriUtils.extendUriWithQuery(UriUtils.buildUri(this.createdState.documentSelfLink),
+                            UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString()).toString(),
+                    NetworkInterfaceStateWithDescription.class);
+
+            assertThat(getState.id, is(this.startState.id));
+            assertThat(getState.name, is(this.startState.name));
+
+            assertThat(getState.address, is(this.startState.address));
+            assertThat(getState.networkLink, is(this.startState.networkLink));
+            assertThat(getState.subnetLink, is(this.startState.subnetLink));
+            assertThat(getState.firewallLinks, is(this.startState.firewallLinks));
+            assertThat(getState.networkInterfaceDescriptionLink,
+                    is(this.startState.networkInterfaceDescriptionLink));
+
+            assertThat(getState.description.id, is(this.startState.description.id));
         }
     }
 

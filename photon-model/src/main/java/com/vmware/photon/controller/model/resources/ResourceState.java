@@ -79,4 +79,16 @@ public class ResourceState extends ServiceDocument {
     @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
     @UsageOption(option = PropertyUsageOption.LINKS)
     public Set<String> tagLinks;
+
+    public void copyTo(ResourceState target) {
+        super.copyTo(target);
+
+        target.id = this.id;
+        target.name = this.name;
+        target.customProperties = this.customProperties;
+        target.tenantLinks = this.tenantLinks;
+        target.groupLinks = this.groupLinks;
+        target.tagLinks = this.tagLinks;
+    }
+
 }

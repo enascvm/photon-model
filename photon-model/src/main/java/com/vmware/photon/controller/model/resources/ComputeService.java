@@ -182,17 +182,12 @@ public class ComputeService extends StatefulService {
 
             chsWithDesc.address = currentState.address;
             chsWithDesc.diskLinks = currentState.diskLinks;
-            chsWithDesc.id = currentState.id;
-            chsWithDesc.name = currentState.name;
             chsWithDesc.parentLink = currentState.parentLink;
             chsWithDesc.powerState = currentState.powerState;
             chsWithDesc.primaryMAC = currentState.primaryMAC;
             chsWithDesc.resourcePoolLink = currentState.resourcePoolLink;
             chsWithDesc.adapterManagementReference = currentState.adapterManagementReference;
-            chsWithDesc.customProperties = currentState.customProperties;
             chsWithDesc.networkInterfaceLinks = currentState.networkInterfaceLinks;
-            chsWithDesc.tenantLinks = currentState.tenantLinks;
-            chsWithDesc.tagLinks = currentState.tagLinks;
             chsWithDesc.creationTimeMicros = currentState.creationTimeMicros;
 
             chsWithDesc.description = desc;
