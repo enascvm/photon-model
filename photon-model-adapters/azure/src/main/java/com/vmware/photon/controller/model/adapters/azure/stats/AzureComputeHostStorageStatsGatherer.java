@@ -26,6 +26,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -42,11 +43,15 @@ import com.microsoft.azure.management.storage.StorageManagementClient;
 import com.microsoft.azure.management.storage.StorageManagementClientImpl;
 import com.microsoft.azure.management.storage.models.StorageAccountKeys;
 import com.microsoft.azure.storage.CloudStorageAccount;
+import com.microsoft.azure.storage.ResultContinuation;
+import com.microsoft.azure.storage.ResultSegment;
 import com.microsoft.azure.storage.StorageException;
+import com.microsoft.azure.storage.blob.BlobListingDetails;
 import com.microsoft.azure.storage.blob.CloudBlob;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.CloudPageBlob;
+import com.microsoft.azure.storage.blob.ContainerListingDetails;
 import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.azure.storage.blob.PageRange;
 import com.microsoft.rest.ServiceResponse;
@@ -78,6 +83,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
  */
 public class AzureComputeHostStorageStatsGatherer extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_COMPUTE_HOST_STORAGE_STATS_GATHERER;
+    public static final Integer QUERY_RESULT_LIMIT = 50;
 
     private ExecutorService executorService;
 
@@ -326,30 +332,43 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                 CloudStorageAccount storageAccount = CloudStorageAccount
                                         .parse(storageConnectionString);
                                 CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
-                                Iterable<CloudBlobContainer> containerList = blobClient.listContainers();
+                                ResultContinuation nextContainerResults = null;
+                                do {
+                                    ResultSegment<CloudBlobContainer> contSegment =
+                                            blobClient.listContainersSegmented(null, ContainerListingDetails.NONE,
+                                                    QUERY_RESULT_LIMIT, nextContainerResults, null, null);
 
-                                for (CloudBlobContainer container : containerList) {
-                                    for (ListBlobItem blobItem : container.listBlobs()) {
+                                    nextContainerResults = contSegment.getContinuationToken();
+                                    for (CloudBlobContainer container : contSegment.getResults()) {
+                                        ResultContinuation nextBlobResults = null;
+                                        do {
+                                            ResultSegment<ListBlobItem> blobsSegment = container.listBlobsSegmented(
+                                                    null, false, EnumSet.noneOf(
+                                                    BlobListingDetails.class),
+                                                    QUERY_RESULT_LIMIT, nextBlobResults, null, null);
+                                            nextBlobResults = blobsSegment.getContinuationToken();
+                                            for (ListBlobItem blobItem : blobsSegment.getResults()) {
+                                                if (blobItem instanceof CloudPageBlob) {
+                                                    CloudPageBlob pageBlob = (CloudPageBlob) blobItem;
+                                                    // Due to concurrency issues: We can only get the used bytes of a blob
+                                                    // only by creating a snapshot and getting the page ranges of the snapshot
+                                                    // TODO https://jira-hzn.eng.vmware.com/browse/VSYM-3445
+                                                    CloudBlob blobSnapshot = pageBlob.createSnapshot();
+                                                    statsData.snapshots.add(blobSnapshot);
+                                                    CloudPageBlob pageBlobSnapshot = (CloudPageBlob) blobSnapshot;
+                                                    ArrayList<PageRange> pages = pageBlobSnapshot.downloadPageRanges();
 
-                                        if (blobItem instanceof CloudPageBlob) {
-                                            CloudPageBlob pageBlob = (CloudPageBlob) blobItem;
-                                            // Due to concurrency issues: We can only get the used bytes of a blob
-                                            // only by creating a snapshot and getting the page ranges of the snapshot
-                                            // TODO https://jira-hzn.eng.vmware.com/browse/VSYM-3445
-                                            CloudBlob blobSnapshot = pageBlob.createSnapshot();
-                                            statsData.snapshots.add(blobSnapshot);
-                                            CloudPageBlob pageBlobSnapshot = (CloudPageBlob) blobSnapshot;
-                                            ArrayList<PageRange> pages = pageBlobSnapshot.downloadPageRanges();
-
-                                            // TODO store disk utilized bytes more granularly
-                                            // https://jira-hzn.eng.vmware.com/browse/VSYM-3355
-                                            for (PageRange pageRange : pages) {
-                                                statsData.utilizedBytes += pageRange.getEndOffset()
-                                                        - pageRange.getStartOffset();
+                                                    // TODO store disk utilized bytes more granularly
+                                                    // https://jira-hzn.eng.vmware.com/browse/VSYM-3355
+                                                    for (PageRange pageRange : pages) {
+                                                        statsData.utilizedBytes += pageRange.getEndOffset()
+                                                                - pageRange.getStartOffset();
+                                                    }
+                                                }
                                             }
-                                        }
+                                        } while (nextBlobResults != null);
                                     }
-                                }
+                                } while (nextContainerResults != null);
                             } catch (Exception e) {
                                 handleError(statsData, e);
                                 return;

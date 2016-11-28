@@ -21,4 +21,5 @@ import java.util.List;
  */
 public class StorageAccountResultList {
     public List<StorageAccount> value;
+    public String nextLink;
 }
