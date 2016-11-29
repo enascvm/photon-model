@@ -174,6 +174,23 @@ public class SingleResourceStatsCollectionTaskService
     }
 
     @Override
+    public void handleStart(Operation taskOperation) {
+        SingleResourceStatsCollectionTaskState initialState = validateStartPost(taskOperation);
+        if (initialState == null) {
+            return;
+        }
+
+        initializeState(initialState, taskOperation);
+        initialState.taskInfo.stage = TaskStage.CREATED;
+        taskOperation.setBody(initialState)
+                .setStatusCode(Operation.STATUS_CODE_ACCEPTED)
+                .complete();
+
+        // self patch to start state machine
+        sendSelfPatch(initialState, TaskStage.STARTED, null);
+    }
+
+    @Override
     public void handlePatch(Operation patch) {
         SingleResourceStatsCollectionTaskState currentState = getState(patch);
         SingleResourceStatsCollectionTaskState patchState = patch

@@ -223,6 +223,23 @@ public class SingleResourceStatsAggregationTaskService extends
     }
 
     @Override
+    public void handleStart(Operation taskOperation) {
+        SingleResourceStatsAggregationTaskState initialState = validateStartPost(taskOperation);
+        if (initialState == null) {
+            return;
+        }
+
+        initializeState(initialState, taskOperation);
+        initialState.taskInfo.stage = TaskStage.CREATED;
+        taskOperation.setBody(initialState)
+                .setStatusCode(Operation.STATUS_CODE_ACCEPTED)
+                .complete();
+
+        // self patch to start state machine
+        sendSelfPatch(initialState, TaskStage.STARTED, null);
+    }
+
+    @Override
     public void handlePatch(Operation patch) {
         SingleResourceStatsAggregationTaskState currentState = getState(patch);
         SingleResourceStatsAggregationTaskState patchState = getBody(patch);
