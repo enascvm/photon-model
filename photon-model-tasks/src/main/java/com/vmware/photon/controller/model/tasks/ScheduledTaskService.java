@@ -18,7 +18,10 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -49,6 +52,11 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
          * Interval for task execution
          */
         public Long intervalMicros;
+
+        @Documentation(description = "The user in whose context the task will be executed")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_1)
+        public String userLink;
 
         /**
          * A list of tenant links which can access this task.
@@ -131,8 +139,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                         maintenanceOp.fail(getEx);
                         return;
                     }
-                    ScheduledTaskState state =
-                            getOp.getBody(ScheduledTaskState.class);
+                    ScheduledTaskState state = getOp.getBody(ScheduledTaskState.class);
                     invokeTask(state, true);
                     maintenanceOp.complete();
                 }));
@@ -140,9 +147,18 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
 
     private void invokeTask(ScheduledTaskState state, boolean patchToSelf) {
         getHost().schedule(() -> {
-            sendRequest(Operation
-                    .createPost(this, state.factoryLink)
-                    .setBody(state.initialStateJson)
+            Operation op = Operation.createPost(this, state.factoryLink);
+            if (getHost().isAuthorizationEnabled() && state.userLink != null) {
+                try {
+                    TaskUtils.assumeIdentity(this, op, state.userLink);
+                } catch (Exception e) {
+                    logWarning("Unhandled exception while assuming identity for %s: %s",
+                            state.userLink, e.getMessage());
+                    return;
+                }
+            }
+
+            sendRequest(op.setBody(state.initialStateJson)
                     .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE)
                     .setCompletion(
                             (o, e) -> {
@@ -150,7 +166,8 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                                 if (o.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED) {
                                     logInfo("service instance already running.");
                                 } else if (e != null) {
-                                    logWarning("Scheduled task invocation failed: %s", e.getMessage());
+                                    logWarning("Scheduled task invocation failed: %s",
+                                            e.getMessage());
                                     return;
                                 }
                                 // patch self to update the version; this tells us

@@ -525,7 +525,7 @@ public class EndpointAllocationTaskService
                 ? currentState.enumerationRequest.refreshIntervalMicros
                 : DEFAULT_SCHEDULED_TASK_INTERVAL_MICROS;
 
-        // Use endpooint documentSelfLink's last part as convention, so that we are able to stop
+        // Use endpoint documentSelfLink's last part as convention, so that we are able to stop
         // enumeration during endpoint update.
         String id = UriUtils.getLastPathSegment(endpoint.documentSelfLink);
 
