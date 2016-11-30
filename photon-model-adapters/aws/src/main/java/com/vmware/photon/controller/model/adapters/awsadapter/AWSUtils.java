@@ -105,12 +105,18 @@ public class AWSUtils {
         IS_AWS_CLIENT_MOCK = isAwsClientMock;
     }
 
-    public static boolean isAwsClientMock() {
-        return IS_AWS_CLIENT_MOCK;
+    public static void setAwsMockHost(String mockHost) {
+        awsMockHost = mockHost;
     }
 
-    public static void setAwsMockEndpointReference(String mockHost) {
-        awsMockHost = mockHost;
+    public static boolean isAwsClientMock() {
+        return System.getProperty("awsMockHost") == null ? IS_AWS_CLIENT_MOCK : true;
+    }
+
+    private static String getAWSMockHost() {
+        return System.getProperty("awsMockHost") == null ? awsMockHost
+                : System.getProperty("awsMockHost");
+
     }
 
     public static AmazonEC2AsyncClient getAsyncClient(
@@ -121,7 +127,7 @@ public class AWSUtils {
                 executorService);
 
         if (isAwsClientMock()) {
-            ec2AsyncClient.setEndpoint(awsMockHost + AWS_EC2_ENDPOINT);
+            ec2AsyncClient.setEndpoint(getAWSMockHost() + AWS_EC2_ENDPOINT);
             return ec2AsyncClient;
         }
 
@@ -140,7 +146,7 @@ public class AWSUtils {
                 executorService);
 
         if (isAwsClientMock()) {
-            client.setEndpoint(awsMockHost + AWS_CLOUDWATCH_ENDPOINT);
+            client.setEndpoint(getAWSMockHost() + AWS_CLOUDWATCH_ENDPOINT);
             return client;
         }
 

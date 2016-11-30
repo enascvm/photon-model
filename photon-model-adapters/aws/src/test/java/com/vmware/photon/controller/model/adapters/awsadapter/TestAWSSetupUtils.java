@@ -650,7 +650,7 @@ public class TestAWSSetupUtils {
     public static void setAwsClientMockInfo(boolean isAwsClientMock,
             String awsMockEndpointReference) {
         AWSUtils.setAwsClientMock(isAwsClientMock);
-        AWSUtils.setAwsMockEndpointReference(awsMockEndpointReference);
+        AWSUtils.setAwsMockHost(awsMockEndpointReference);
     }
 
     /**
