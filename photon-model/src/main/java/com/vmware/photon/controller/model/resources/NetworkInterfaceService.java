@@ -16,9 +16,12 @@ package com.vmware.photon.controller.model.resources;
 import java.net.URI;
 import java.util.List;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -54,6 +57,7 @@ public class NetworkInterfaceService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_1)
         public String subnetLink;
 
         /**
@@ -72,6 +76,7 @@ public class NetworkInterfaceService extends StatefulService {
         /**
          * The link to the desire state, from which this Network interface was created.
          */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_1)
         public String networkInterfaceDescriptionLink;
     }
 

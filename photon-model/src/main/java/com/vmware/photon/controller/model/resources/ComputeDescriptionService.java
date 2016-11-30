@@ -20,8 +20,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -113,6 +117,7 @@ public class ComputeDescriptionService extends StatefulService {
          * List of Network interfaces descriptions to attach to this compute.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_1)
         public List<String> networkInterfaceDescLinks;
 
         /**
