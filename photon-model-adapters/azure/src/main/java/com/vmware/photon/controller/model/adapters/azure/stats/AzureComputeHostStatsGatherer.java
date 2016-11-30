@@ -197,6 +197,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
             statsData.error = failure;
             statsData.stage = ComputeHostMetricsStages.ERROR;
             handleMetricDiscovery(statsData);
+            return;
         }
 
         QueryTask queryResult = operation.getBody(QueryTask.class);
@@ -213,6 +214,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
         if (computeCount <= 0) {
             statsData.stage = ComputeHostMetricsStages.FINISHED;
             handleMetricDiscovery(statsData);
+            return;
         }
 
         // Create multiple operations, one each for a VM compute.
