@@ -1,15 +1,26 @@
 # CHANGELOG
 
-## 0.5.1-SNAPSHOT
+## 0.5.1
+
+* Updated xenon to 1.3.1.
+
+* Add storage utilization metric for Azure disks
+
+* Setting default expiration times in SingleResourceStatsCollectionTaskService and
+  SingleResourceStatsAggregationTaskService to 10 minute.
+
+* Implementing a default data rentention model for ResourceMetrics and ResourceAggregateMetrics
+
+* Update ScheduleTaskService to run in context of the specified user
 
 * Introduce NetworkInterfaceDescription, to represent the desire state of a NetworkInterface.
- ComputeDescription is extended to have a list on NetworkInterfaceDescriptions, e.g. the desire
- state of NICs for the requested compute. Each NetworkInterface has a link to the
- NetworkInterfaceDescription, which it is based on.
+  ComputeDescription is extended to have a list on NetworkInterfaceDescriptions, e.g. the desire
+  state of NICs for the requested compute. Each NetworkInterface has a link to the
+  NetworkInterfaceDescription, which it is based on.
 
 * Introduce Subnet as first class concept in the model. The Subnet represents sub network part of a
- given network, with it's IP address range, gateway and list of DNS servers.
- NetworkInterface is extend to have a link to Subnet it is attached to.
+  given network, with it's IP address range, gateway and list of DNS servers.
+  NetworkInterface is extend to have a link to Subnet it is attached to.
 
 ## 0.5.0
 
