@@ -72,12 +72,10 @@ import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * Test to provision a VM instance on AWS and tear it down
- * The test exercises the AWS instance adapter to create the VM
- * All public fields below can be specified via command line arguments
- * If the 'isMock' flag is set to true the test runs the adapter in mock
- * mode and does not actually create a VM.
- * Minimally the accessKey and secretKey for AWS must be specified.
+ * Test to provision a VM instance on AWS and tear it down The test exercises the AWS instance
+ * adapter to create the VM All public fields below can be specified via command line arguments If
+ * the 'isMock' flag is set to true the test runs the adapter in mock mode and does not actually
+ * create a VM. Minimally the accessKey and secretKey for AWS must be specified.
  *
  */
 public class TestAWSProvisionTask {
@@ -94,7 +92,6 @@ public class TestAWSProvisionTask {
     private AmazonEC2AsyncClient client;
     // the default collection period is 5 mins; set a value that spans 2 periods
     public int timeElapsedSinceLastCollectionInMinutes = 11;
-
 
     @Before
     public void setUp() throws Exception {
@@ -251,7 +248,8 @@ public class TestAWSProvisionTask {
 
         Set<String> tagLinks = tags.stream().map(t -> t.documentSelfLink)
                 .collect(Collectors.toSet());
-        this.vmState = TestAWSSetupUtils.createAWSVMResource(this.host, outComputeHost.documentSelfLink,
+        this.vmState = TestAWSSetupUtils.createAWSVMResource(this.host,
+                outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(), tagLinks);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
@@ -263,6 +261,10 @@ public class TestAWSProvisionTask {
             List<Instance> instances = getAwsInstancesByIds(this.client, this.host,
                     Collections.singletonList(compute.id));
             assertTags(tags, instances.get(0), this.vmState.name);
+
+            assertEquals("VM should have the specified number of NICs assigned",
+                    TestAWSSetupUtils.NUMBER_OF_NICS, instances.get(0).getNetworkInterfaces()
+                            .size());
 
             // reach out to AWS and get the current state
             remoteStateBefore = TestAWSSetupUtils

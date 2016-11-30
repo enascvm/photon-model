@@ -14,16 +14,26 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.InstanceNetworkInterfaceSpecification;
+import com.amazonaws.services.ec2.model.Subnet;
+import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 
@@ -38,7 +48,6 @@ public class AWSAllocation extends BaseAwsContext {
     public ComputeInstanceRequest computeRequest;
     public AmazonEC2AsyncClient amazonEC2Client;
     public Map<DiskType, DiskState> childDisks;
-    public List<String> securityGroupIds;
     public String subnetId;
     public Throwable error;
     public long taskExpirationMicros;
@@ -46,6 +55,35 @@ public class AWSAllocation extends BaseAwsContext {
     public Map<String, FirewallState> childFirewalls;
 
     public List<NetworkInterfaceState> networkInterfaces;
+
+    /**
+     * The class encapsulates NIC related data (both Photon Model and AWS model) used during
+     * provisioning.
+     */
+    public static class NicAllocationContext {
+
+        // NIC related states (resolved by links) related to the ComputeState that is provisioned.
+        public NetworkInterfaceStateWithDescription nicStateWithDesc;
+        public NetworkState networkState;
+        public SubnetState subnetState;
+        public Map<String, FirewallState> firewallStates = new HashMap<>();
+
+        // The AWS vpc-subnet pair this NIC is associated to. It is created by this service.
+        public Vpc vpc;
+        public Subnet subnet;
+
+        // The security group Ids list that will be assigned to the current NIC networking
+        // configuration
+        public List<String> groupIds;
+
+        // The NIC spec that should be created by AWS.
+        public InstanceNetworkInterfaceSpecification nicSpec;
+    }
+
+    /**
+     * Holds allocation data for all VM NICs.
+     */
+    public List<NicAllocationContext> nics = new ArrayList<>();
 
     /**
      * Initialize with request info and first stage.
@@ -59,5 +97,22 @@ public class AWSAllocation extends BaseAwsContext {
         super(service, resourceReference);
         this.computeRequest = computeReq;
         this.stage = AWSStages.PROVISIONTASK;
+    }
+
+    /**
+     * First NIC is considered primary.
+     */
+    public NicAllocationContext getVmPrimaryNic() {
+        return this.nics.get(0);
+    }
+
+    /**
+     * Get the effective list of AWS NIC Specs that should be created during VM provisioning.
+     */
+    public List<InstanceNetworkInterfaceSpecification> getAWSNicSpecs() {
+        return this.nics.stream()
+                .filter(nic -> nic.nicSpec != null)
+                .map(nic -> nic.nicSpec)
+                .collect(Collectors.toList());
     }
 }

@@ -23,6 +23,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PRIVATE_INTERFACE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PUBLIC_INTERFACE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryResultLimit;
@@ -46,6 +47,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
+
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getNetworkStates;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
@@ -82,7 +84,6 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
-
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -536,19 +537,23 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         assertEquals(taggedComputeState.descriptionLink, computeState.descriptionLink);
         assertTrue(taggedComputeState.networkInterfaceLinks != null);
-        assertTrue(taggedComputeState.networkInterfaceLinks.size() == 2);
+        assertTrue(taggedComputeState.networkInterfaceLinks.size() == (TestAWSSetupUtils.NUMBER_OF_NICS * 3));
 
-        URI[] networkLinkURIs = new URI[2];
+        List<URI> networkLinkURIs = new ArrayList<>();
         for (int i = 0; i < taggedComputeState.networkInterfaceLinks.size(); i++) {
-            networkLinkURIs[i] = UriUtils.buildUri(this.host,
-                    taggedComputeState.networkInterfaceLinks.get(i));
+            if (taggedComputeState.networkInterfaceLinks.get(i).contains(PUBLIC_INTERFACE)
+                    || taggedComputeState.networkInterfaceLinks.get(i).contains(PRIVATE_INTERFACE)) {
+                networkLinkURIs.add(UriUtils.buildUri(this.host,
+                        taggedComputeState.networkInterfaceLinks.get(i)));
+            }
         }
 
         // Assert that both the public and private IP addresses have been mapped to separated NICs
         Map<URI, NetworkInterfaceState> NICMap = this.host
                 .getServiceState(null, NetworkInterfaceState.class, networkLinkURIs);
-        assertNotNull(NICMap.get(networkLinkURIs[0]).address);
-        assertNotNull(NICMap.get(networkLinkURIs[1]).address);
+        for (URI uri : networkLinkURIs) {
+            assertNotNull(NICMap.get(uri).address);
+        }
 
         // get the VPC information for the provisioned VM
         assertTrue(taggedComputeState.customProperties.get(AWS_VPC_ID) != null);

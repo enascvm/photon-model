@@ -21,7 +21,9 @@ public class AWSConstants {
     public static final String AWS_SECURITY_GROUP_ID = "awsSecurityGroupId";
     public static final String AWS_TAG_NAME = "Name";
     public static final String AWS_VPC_ID = "awsVpcId";
+    public static final String AWS_VPC_FILTER = "vpc-id";
     public static final String AWS_SUBNET_ID = "awsSubnetId";
+    public static final String AWS_SUBNET_FILTER = "subnet-id";
     public static final String AWS_GATEWAY_ID = "awsGatewayID";
     public static final String AWS_VPC_ROUTE_TABLE_ID = "awsMainRouteTableID";
     public static final String AWS_MAIN_ROUTE_ASSOCIATION = "association.main";
@@ -42,7 +44,6 @@ public class AWSConstants {
     public static final String PUBLIC_INTERFACE = "public-interface";
     public static final String PRIVATE_INTERFACE = "private-interface";
     public static final String AWS_ATTACHMENT_VPC_FILTER = "attachment.vpc-id";
-    public static final String AWS_VPC_FILTER = "vpc-id";
     public static final String AWS_BILLS_S3_BUCKET_NAME_KEY = "billsBucketName";
     public static final String AWS_ACCOUNT_ID_KEY = "accountId";
     public static final String AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS =

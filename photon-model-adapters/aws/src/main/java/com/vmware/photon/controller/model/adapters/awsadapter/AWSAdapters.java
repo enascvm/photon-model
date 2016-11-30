@@ -43,6 +43,7 @@ public class AWSAdapters {
             host.startService(new AWSEnumerationAdapterService());
             host.startService(new AWSEndpointAdapterService());
             host.startService(new AWSPowerService());
+            host.startService(new AWSFirewallService());
 
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring provisioning adapters: %s",

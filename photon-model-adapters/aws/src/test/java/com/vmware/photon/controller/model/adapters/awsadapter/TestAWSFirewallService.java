@@ -21,10 +21,10 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DE
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_PROTOCOL;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_SECURITY_GROUP_DESC;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_SECURITY_GROUP_NAME;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.allocateSecurityGroups;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.buildRules;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getDefaultRules;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getOrCreateSecurityGroups;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.updateIngressRules;
 
@@ -180,7 +180,7 @@ public class TestAWSFirewallService {
      */
     @Test
     public void testAllocateSecurityGroup() throws Throwable {
-        allocateSecurityGroups(this.aws);
+        getOrCreateSecurityGroups(this.aws);
         SecurityGroup group = getSecurityGroup(this.client);
         validateDefaultRules(group.getIpPermissions());
         this.svc.deleteSecurityGroup(this.client);
@@ -201,7 +201,7 @@ public class TestAWSFirewallService {
                 .withToPort(22)
                 .withIpRanges(DEFAULT_ALLOWED_NETWORK));
         updateIngressRules(this.client, groupId, rules);
-        allocateSecurityGroups(this.aws);
+        getOrCreateSecurityGroups(this.aws);
         SecurityGroup updatedGroup = getSecurityGroup(this.client, DEFAULT_SECURITY_GROUP_NAME);
         validateDefaultRules(updatedGroup.getIpPermissions());
         this.svc.deleteSecurityGroup(this.client);

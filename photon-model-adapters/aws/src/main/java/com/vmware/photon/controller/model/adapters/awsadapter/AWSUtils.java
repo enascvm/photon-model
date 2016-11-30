@@ -63,6 +63,7 @@ import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.transfer.TransferManager;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSAllocation.NicAllocationContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -274,25 +275,40 @@ public class AWSUtils {
         }
     }
 
+    public static List<String> getOrCreateSecurityGroups(AWSAllocation aws) {
+        if (aws.nics.size() > 0) {
+            return getOrCreateSecurityGroups(aws.getVmPrimaryNic(), aws);
+        } else {
+            return getOrCreateSecurityGroups(null, aws);
+        }
+    }
+
     /*
      * method will create new or validate existing security group has the necessary settings for CM
      * to function. It will return the security group id that is required during instance
      * provisioning.
+     * for each nicContext element provided, for each of its firewallStates, security group is discovered from AWS
+     * in case that there are no firewallStates, security group ID is obtained from the custom properties
+     * in case that none of the above methods discover a security group, the default one is discovered from AWS
+     * in case that none of the above method discover a security group, a new security group is created
      */
-    public static List<String> allocateSecurityGroups(AWSAllocation aws) {
+    public static List<String> getOrCreateSecurityGroups(NicAllocationContext nicCtx, AWSAllocation aws) {
         String groupId;
         SecurityGroup group;
+
         List<String> groupIds = new ArrayList<>();
 
-        if (aws.childFirewalls != null && !aws.childFirewalls.isEmpty()) {
-            List<SecurityGroup> securityGroups = getSecurityGroups(aws.amazonEC2Client,
-                    new ArrayList<>(aws.childFirewalls.keySet()));
-            for (SecurityGroup securityGroup : securityGroups) {
-                aws.childFirewalls.remove(securityGroup.getGroupName());
-                groupIds.add(securityGroup.getGroupId());
+        if (nicCtx != null) {
+            if (nicCtx.firewallStates != null && !nicCtx.firewallStates.isEmpty()) {
+                List<SecurityGroup> securityGroups = getSecurityGroups(aws.amazonEC2Client,
+                        new ArrayList<>(nicCtx.firewallStates.keySet()));
+                for (SecurityGroup securityGroup : securityGroups) {
+                    groupIds.add(securityGroup.getGroupId());
+                }
+                return groupIds;
             }
-            return groupIds;
         }
+
         // use the security group provided in the description properties
         String sgId = getFromCustomProperties(aws.child.description,
                 AWSConstants.AWS_SECURITY_GROUP_ID);
@@ -315,6 +331,13 @@ public class AWSUtils {
             }
         }
 
+        groupId = createAWSSecurityGroup(aws);
+
+        return Arrays.asList(groupId);
+    }
+
+    //method create a security group in the VPC provided in custom properties
+    private static String createAWSSecurityGroup(AWSAllocation aws) {
         // get the subnet cidr from the subnet provided in description properties (if any)
         String subnet = getSubnetFromDescription(aws);
 
@@ -327,7 +350,7 @@ public class AWSUtils {
         if (subnet == null) {
             throw new AmazonServiceException("default VPC not found");
         }
-
+        String groupId;
         try {
             // create the security group for the the vpc
             // provided in the description properties (if any)
@@ -344,8 +367,7 @@ public class AWSUtils {
                 throw t;
             }
         }
-
-        return Arrays.asList(groupId);
+        return groupId;
     }
 
     public static List<SecurityGroup> getSecurityGroups(AmazonEC2AsyncClient client,

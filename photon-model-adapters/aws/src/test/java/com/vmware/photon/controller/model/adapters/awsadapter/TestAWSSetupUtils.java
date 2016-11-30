@@ -64,9 +64,20 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.FirewallService;
+import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
@@ -76,6 +87,7 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -99,6 +111,15 @@ public class TestAWSSetupUtils {
     public static final String zoneId = "us-east-1";
     public static final String userData = null;
     public static final String aws = "Amazon Web Services";
+
+    private static final String AWS_DEFAULT_VPC_ID = "vpc-95a29bf1";
+    private static final String AWS_DEFAULT_VPC_CIDR = "172.31.0.0/16";
+    private static final String AWS_DEFAULT_SUBNET_NAME = "default";
+    private static final String AWS_DEFAULT_SUBNET_ID = "subnet-1f82fe22";
+    private static final String AWS_DEFAULT_SUBNET_CIDR = "172.31.32.0/20";
+    private static final String AWS_DEFAULT_GROUP_NAME = AWS_DEFAULT_SUBNET_NAME;
+    private static final String AWS_DEFAULT_GROUP_ID = "sg-240f995c";
+    public static final int NUMBER_OF_NICS = 1;
 
     public static final String DEFAULT_AUTH_TYPE = "PublicKey";
     public static final String DEFAULT_ROOT_DISK_NAME = "CoreOS root disk";
@@ -230,7 +251,8 @@ public class TestAWSSetupUtils {
             String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
             Set<String> tagLinks)
             throws Throwable {
-        return createAWSVMResource(host, parentLink, resourcePoolLink, clazz, instanceType_t2_micro,
+        return createAWSVMResource(host, parentLink, resourcePoolLink, clazz,
+                instanceType_t2_micro,
                 tagLinks);
     }
 
@@ -306,14 +328,138 @@ public class TestAWSSetupUtils {
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
         vmDisks.add(UriUtils.buildUriPath(DiskService.FACTORY_LINK, rootDisk.id));
 
-        ComputeService.ComputeState resource = new ComputeService.ComputeState();
-        resource.id = UUID.randomUUID().toString();
-        resource.name = awsVMDesc.name;
-        resource.parentLink = parentLink;
-        resource.descriptionLink = vmComputeDesc.documentSelfLink;
-        resource.resourcePoolLink = resourcePoolLink;
-        resource.diskLinks = vmDisks;
-        resource.tagLinks = tagLinks;
+        // Create network state.
+        NetworkState netState;
+        {
+            netState = new NetworkState();
+            netState.id = UUID.randomUUID().toString();
+            netState.name = AWS_DEFAULT_VPC_ID;
+            netState.documentSelfLink = netState.id;
+            netState.authCredentialsLink = authCredentialsLink;
+            netState.resourcePoolLink = resourcePoolLink;
+            netState.subnetCIDR = AWS_DEFAULT_VPC_CIDR;
+            netState.regionId = zoneId;
+            netState.instanceAdapterReference = UriUtils.buildUri(host,
+                    AWSUriPaths.AWS_NETWORK_ADAPTER);
+
+            netState = TestUtils.doPost(host, netState, NetworkState.class,
+                    UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
+        }
+
+        // Create subnet state.
+        SubnetState subnetState;
+        {
+            subnetState = new SubnetState();
+            subnetState.id = AWS_DEFAULT_SUBNET_ID;
+            subnetState.name = AWS_DEFAULT_SUBNET_NAME;
+            subnetState.documentSelfLink = subnetState.id;
+            subnetState.networkLink = UriUtils.buildUriPath(
+                    NetworkService.FACTORY_LINK,
+                    netState.id);
+            subnetState.subnetCIDR = AWS_DEFAULT_SUBNET_CIDR;
+
+            TestUtils.doPost(host, subnetState, SubnetState.class,
+                    UriUtils.buildUri(host, SubnetService.FACTORY_LINK));
+        }
+
+        // Create network interface descriptions.
+        NetworkInterfaceDescription nicDescription;
+        {
+            nicDescription = new NetworkInterfaceDescription();
+            nicDescription.id = UUID.randomUUID().toString();
+            nicDescription.assignment = IpAssignment.DYNAMIC;
+
+            nicDescription = TestUtils.doPost(host, nicDescription, NetworkInterfaceDescription.class,
+                    UriUtils.buildUri(host, NetworkInterfaceDescriptionService.FACTORY_LINK));
+        }
+
+        // Create firewall state
+        FirewallState firewallState;
+        {
+            firewallState = new FirewallState();
+            firewallState.authCredentialsLink = authCredentialsLink;
+            firewallState.id = AWS_DEFAULT_GROUP_ID;
+            firewallState.documentSelfLink = firewallState.id;
+            firewallState.name = AWS_DEFAULT_GROUP_NAME;
+            firewallState.networkDescriptionLink = UriUtils.buildUriPath(
+                    NetworkService.FACTORY_LINK,
+                    nicDescription.id);
+            firewallState.tenantLinks = new ArrayList<>();
+            firewallState.tenantLinks.add("tenant-linkA");
+            ArrayList<FirewallService.FirewallState.Allow> ingressRules = new ArrayList<>();
+
+            FirewallService.FirewallState.Allow ssh = new FirewallService.FirewallState.Allow();
+            ssh.name = "ssh";
+            ssh.protocol = "tcp";
+            ssh.ipRange = "0.0.0.0/0";
+            ssh.ports = new ArrayList<>();
+            ssh.ports.add("22");
+            ingressRules.add(ssh);
+            firewallState.ingress = ingressRules;
+
+            ArrayList<FirewallService.FirewallState.Allow> egressRules = new ArrayList<>();
+            FirewallService.FirewallState.Allow out = new FirewallService.FirewallState.Allow();
+            out.name = "out";
+            out.protocol = "tcp";
+            out.ipRange = "0.0.0.0/0";
+            out.ports = new ArrayList<>();
+            out.ports.add("1-65535");
+            egressRules.add(out);
+            firewallState.egress = egressRules;
+
+            firewallState.regionId = "regionId";
+            firewallState.resourcePoolLink = "/link/to/rp";
+            firewallState.instanceAdapterReference = new URI(
+                    "http://instanceAdapterReference");
+
+            TestUtils.doPost(host, firewallState, FirewallState.class,
+                    UriUtils.buildUri(host, FirewallService.FACTORY_LINK));
+        }
+
+        // Create nics
+        List<String> nics = new ArrayList<>();
+        for (int i = 0; i < NUMBER_OF_NICS; i++) {
+            NetworkInterfaceState nicState;
+            {
+                nicState = new NetworkInterfaceState();
+                nicState.id = UUID.randomUUID().toString();
+                nicState.documentSelfLink = nicState.id;
+                nicState.name = awsVMDesc.name + "-nic-" + i;
+
+                nicState.networkLink = UriUtils.buildUriPath(
+                        NetworkService.FACTORY_LINK,
+                        netState.id);
+                nicState.subnetLink = UriUtils.buildUriPath(
+                        SubnetService.FACTORY_LINK,
+                        subnetState.id);
+                nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
+
+                String firewallLink = UriUtils.buildUriPath(
+                        FirewallService.FACTORY_LINK,
+                        firewallState.id);
+                nicState.firewallLinks = new ArrayList<>();
+                nicState.firewallLinks.add(firewallLink);
+
+                nicState = TestUtils.doPost(host, nicState, NetworkInterfaceState.class,
+                        UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
+
+                nics.add(UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK, nicState.id));
+            }
+        }
+
+        // Create compute state
+        ComputeService.ComputeState resource;
+        {
+            resource = new ComputeService.ComputeState();
+            resource.id = UUID.randomUUID().toString();
+            resource.name = awsVMDesc.name;
+            resource.parentLink = parentLink;
+            resource.descriptionLink = vmComputeDesc.documentSelfLink;
+            resource.resourcePoolLink = resourcePoolLink;
+            resource.networkInterfaceLinks = nics;
+            resource.diskLinks = vmDisks;
+            resource.tagLinks = tagLinks;
+        }
 
         ComputeService.ComputeState vmComputeState = TestUtils.doPost(host, resource,
                 ComputeService.ComputeState.class,
@@ -793,7 +939,8 @@ public class TestAWSSetupUtils {
      * Enumerates resources on the AWS endpoint. Expects a peerURI and the tenantLinks to be set.
      */
     public static void enumerateResources(VerificationHost host, URI peerURI,
-            EnumSet<TaskOption> options, String resourcePoolLink, String computeHostLinkDescription,
+            EnumSet<TaskOption> options, String resourcePoolLink,
+            String computeHostLinkDescription,
             String computeHostLink,
             String testCase, List<String> tenantLinks) throws Throwable {
         // Perform resource enumeration on the AWS end point. Pass the references to the AWS compute
