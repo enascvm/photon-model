@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertTrue;
+
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,6 +32,8 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
 
     public static final String SELF_LINK = AWSUriPaths.PROVISIONING_AWS
             + "/mock-costs-stats-adapter";
+
+    public static final Long billProcessedTimeMillis = 1475276400000L;
 
     @Override
     protected void getAccountDescription(AWSCostStatsCreationContext statsData,
@@ -49,6 +53,13 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
             AWSCostStatsCreationStages next) {
         statsData.stage = next;
         handleCostStatsCreationRequest(statsData);
+    }
+
+    @Override
+    protected void queryBillProcessedTime(AWSCostStatsCreationContext context,
+            AWSCostStatsCreationStages next) {
+        context.stage = next;
+        handleCostStatsCreationRequest(context);
     }
 
     protected void scheduleDownload(AWSCostStatsCreationContext statsData,
@@ -100,16 +111,32 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         ComputeState account1ComputeState = new ComputeState();
         account1ComputeState.documentSelfLink = TestAWSCostAdapterService.account1SelfLink;
         account1ComputeState.creationTimeMicros = Utils.getNowMicrosUtc();
+        account1ComputeState.customProperties = new HashMap<>();
+        account1ComputeState.customProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, "account1Id");
         context.awsAccountIdToComputeStates.put(TestAWSCostAdapterService.account1Id,
                 Collections.singletonList(account1ComputeState));
 
         ComputeState account2ComputeState = new ComputeState();
         account2ComputeState.documentSelfLink = TestAWSCostAdapterService.account2SelfLink;
         account2ComputeState.creationTimeMicros = Utils.getNowMicrosUtc();
+        account2ComputeState.customProperties = new HashMap<>();
+        account2ComputeState.customProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, "account2Id");
         context.awsAccountIdToComputeStates.put(TestAWSCostAdapterService.account2Id,
                 Collections.singletonList(account2ComputeState));
 
         context.stage = next;
         handleCostStatsCreationRequest(context);
+    }
+
+    @Override
+    protected void setBillProcessedTime(AWSCostStatsCreationContext statsData) {
+
+        assertTrue("Last bill processed time is not correct. " +
+                        "Expected: " + billProcessedTimeMillis.toString() +
+                        " Got: " + statsData.accountDetailsMap.values().iterator()
+                        .next().billProcessedTimeMillis.toString(),
+                statsData.accountDetailsMap.values().iterator()
+                        .next().billProcessedTimeMillis.toString()
+                        .equals(billProcessedTimeMillis.toString()));
     }
 }

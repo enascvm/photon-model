@@ -45,6 +45,8 @@ public class AWSConstants {
     public static final String AWS_VPC_FILTER = "vpc-id";
     public static final String AWS_BILLS_S3_BUCKET_NAME_KEY = "billsBucketName";
     public static final String AWS_ACCOUNT_ID_KEY = "accountId";
+    public static final String AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS =
+            "billProcessedTimeMillis";
     public static final String AWS_INVALID_INSTANCE_ID_ERROR_CODE = "InvalidInstanceID.NotFound";
     public static final String PROPERTY_NAME_QUERY_PAGE_SIZE = UriPaths.PROPERTY_PREFIX
             + AWSConstants.class.getSimpleName() + ".QUERY_PAGE_SIZE";
@@ -101,6 +103,11 @@ public class AWSConstants {
     public static final String UNIT_COST = "USD";
 
     public static final String WINDOWS_PLATFORM = "windows";
+
+    /**
+     * Number of operations to send in a batch when using OperationJoin
+     */
+    public static final int OPERATION_BATCH_SIZE = 50;
 
     // AWS client types
     public enum AwsClientType {

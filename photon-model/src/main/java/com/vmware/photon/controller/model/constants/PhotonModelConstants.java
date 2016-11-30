@@ -51,6 +51,7 @@ public class PhotonModelConstants {
     public static final String UNIT_BYTES = "Bytes";
     public static final String UNIT_PERCENT = "Percent";
     public static final String UNIT_SECONDS = "Seconds";
+    public static final String UNIT_MILLISECONDS = "MilliSeconds";
     public static final String UNIT_MICROSECONDS = "MicroSeconds";
     public static final String UNIT_COST = "USD";
 

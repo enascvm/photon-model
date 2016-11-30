@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 import org.joda.time.LocalDateTime;
 import org.joda.time.format.DateTimeFormat;
@@ -85,7 +86,7 @@ public class AWSCsvBillParser {
         for (Map.Entry<String, AwsAccountDetailDto> accountDetailEntry : accountToDetailsMap
                 .entrySet()) {
             AwsAccountDetailDto accountDetail = accountDetailEntry.getValue();
-            accountDetail.month = monthDate.toDate().getTime();
+            accountDetail.month = monthDate.toDateTimeAtCurrentTime(DateTimeZone.UTC).getMillis();
         }
         return accountToDetailsMap;
     }
@@ -95,8 +96,8 @@ public class AWSCsvBillParser {
             throws IOException {
         final CsvPreference STANDARD_SKIP_COMMENTS = new CsvPreference.Builder(
                 CsvPreference.STANDARD_PREFERENCE)
-                        .skipComments(new CommentStartsWith(AWS_SKIP_COMMENTS))
-                        .build();
+                    .skipComments(new CommentStartsWith(AWS_SKIP_COMMENTS))
+                    .build();
 
         try (InputStreamReader reader = new InputStreamReader(inputStream, "UTF-8");
                 ICsvMapReader mapReader = new CsvMapReader(reader, STANDARD_SKIP_COMMENTS)) {
@@ -135,8 +136,10 @@ public class AWSCsvBillParser {
         }
     }
 
-    public String getCsvBillFileName(int month, int year, String accountId, boolean isZipFile) {
+    public String getCsvBillFileName(LocalDate date, String accountId, boolean isZipFile) {
         StringBuilder monthStrBuffer = new StringBuilder();
+        int month = date.getMonthOfYear();
+        int year = date.getYear();
         if (month <= 9) {
             monthStrBuffer.append('0');
         }
@@ -181,10 +184,19 @@ public class AWSCsvBillParser {
      **/
     private void readRow(Map<String, Object> rowMap, Map<String, AwsAccountDetailDto> monthlyBill,
             List<String> tagHeaders, Collection<String> ignorableInvoiceCharge) {
+        Long billProcessedTimeMillis = 0L;
+        String payerAccountId = (String) rowMap.get(DetailedCsvHeaders.PAYER_ACCOUNT_ID);
+        if (payerAccountId != null && monthlyBill.get(payerAccountId) != null) {
+            billProcessedTimeMillis = monthlyBill.get(payerAccountId).billProcessedTimeMillis;
+            if (billProcessedTimeMillis == null) {
+                billProcessedTimeMillis = 0L;
+            }
+        }
         final String linkedAccountId = getStringFieldValue(rowMap,
                 DetailedCsvHeaders.LINKED_ACCOUNT_ID);
         String serviceName = getStringFieldValue(rowMap, DetailedCsvHeaders.PRODUCT_NAME);
         String subscriptionId = getStringFieldValue(rowMap, DetailedCsvHeaders.SUBSCRIPTION_ID);
+
         // For all rows except summary rows this is not null.
         if (subscriptionId == null || subscriptionId.length() == 0 || serviceName == null
                 || serviceName.length() == 0) {
@@ -194,9 +206,9 @@ public class AWSCsvBillParser {
                     ignorableInvoiceCharge);
             return;
         }
-        AwsAccountDetailDto accountDeatils = createOrGetAccountDetailObject(monthlyBill,
+        AwsAccountDetailDto accountDetails = createOrGetAccountDetailObject(monthlyBill,
                 linkedAccountId);
-        AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(accountDeatils,
+        AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(accountDetails,
                 serviceName);
         // Get the UsageStartTime for this lineItem.
         // LocalDateTime usageStartTimeFromCsv = (LocalDateTime)
@@ -221,6 +233,10 @@ public class AWSCsvBillParser {
                 // populating this as a resource while getting services- refer
                 // AwsInventoryServiceImpl#getAwsServicesCost()
                 serviceDetail.addToDirectCosts(millisForBillHour, 0d);
+                if (millisForBillHour.compareTo(billProcessedTimeMillis) > 0
+                        && monthlyBill.get(payerAccountId) != null) {
+                    monthlyBill.get(payerAccountId).billProcessedTimeMillis = millisForBillHour;
+                }
             } else {
                 serviceDetail.addToRemainingCost(resourceCost);
             }
@@ -231,14 +247,19 @@ public class AWSCsvBillParser {
                 .get(DetailedCsvHeaders.USAGE_START_DATE);
         Long millisForBillHour = getMillisForHour(usageStartTimeFromCsv);
         serviceDetail.addToDirectCosts(millisForBillHour, resourceCost);
-        AwsResourceDetailDto resourceDetail = createOrGetResourceDetailObject(rowMap, serviceDetail,
+        AwsResourceDetailDto resourceDetail = createOrGetResourceDetailObject(rowMap,
+                serviceDetail,
                 resourceId);
         resourceDetail.addToDirectCosts(millisForBillHour, resourceCost);
         setLatestResourceValues(rowMap, tagHeaders, resourceDetail);
+        if (millisForBillHour.compareTo(billProcessedTimeMillis) > 0 && monthlyBill.get(
+                payerAccountId) != null) {
+            monthlyBill.get(payerAccountId).billProcessedTimeMillis = millisForBillHour;
+        }
     }
 
     private Long getMillisForHour(LocalDateTime usageStartTime) {
-        return usageStartTime.toDateTime().getMillis();
+        return usageStartTime.toDateTime(DateTimeZone.UTC).getMillis();
     }
 
     private Double getResourceCost(Map<String, Object> rowMap) {

@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -40,6 +41,7 @@ import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.transfer.Download;
 import com.amazonaws.services.s3.transfer.TransferManager;
 
+import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
@@ -60,9 +62,11 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -88,7 +92,7 @@ public class AWSCostStatsService extends StatelessService {
     private AWSClientManager clientManager;
 
     protected enum AWSCostStatsCreationStages {
-        ACCOUNT_DETAILS, CLIENT, DOWNLOAD_THEN_PARSE, QUERY_LOCAL_RESOURCES, QUERY_LINKED_ACCOUNTS, CREATE_STATS, POST_STATS
+        ACCOUNT_DETAILS, CLIENT, DOWNLOAD_THEN_PARSE, QUERY_LOCAL_RESOURCES, QUERY_LINKED_ACCOUNTS, QUERY_BILL_PROCESSED_TIME, CREATE_STATS, POST_STATS
     }
 
     public AWSCostStatsService() {
@@ -110,6 +114,7 @@ public class AWSCostStatsService extends StatelessService {
         // This map is one to many because a distinct compute state will be present for each region of an AWS account.
         protected Map<String, List<ComputeState>> awsAccountIdToComputeStates;
         protected OperationContext opContext;
+        protected Map<String, Long> accountIdToBillProcessedTime;
 
         protected AWSCostStatsCreationContext(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
@@ -117,6 +122,7 @@ public class AWSCostStatsService extends StatelessService {
             this.ignorableInvoiceCharge = new ArrayList<>();
             this.awsInstancesById = new ConcurrentSkipListMap<>();
             this.awsAccountIdToComputeStates = new ConcurrentSkipListMap<>();
+            this.accountIdToBillProcessedTime = new ConcurrentHashMap<>();
             this.statsResponse = new ComputeStatsResponse();
             this.statsResponse.statsList = new ArrayList<>();
             this.opContext = OperationContext.getOperationContext();
@@ -163,7 +169,10 @@ public class AWSCostStatsService extends StatelessService {
             queryLinkedAccounts(statsData, AWSCostStatsCreationStages.QUERY_LOCAL_RESOURCES);
             break;
         case QUERY_LOCAL_RESOURCES:
-            queryInstances(statsData, AWSCostStatsCreationStages.CREATE_STATS);
+            queryInstances(statsData, AWSCostStatsCreationStages.QUERY_BILL_PROCESSED_TIME);
+            break;
+        case QUERY_BILL_PROCESSED_TIME:
+            queryBillProcessedTime(statsData, AWSCostStatsCreationStages.CREATE_STATS);
             break;
         case CREATE_STATS:
             createStats(statsData, AWSCostStatsCreationStages.POST_STATS);
@@ -203,7 +212,6 @@ public class AWSCostStatsService extends StatelessService {
                 } else {
                     logFine("Compute state '%s' is not primary for account '%s'. Not collecting cost stats.",
                             statsData.computeDesc.documentSelfLink, accountId);
-                    return;
                 }
             };
             sendRequest(createQueryForComputeStatesByAccount(statsData, accountId,
@@ -253,7 +261,7 @@ public class AWSCostStatsService extends StatelessService {
                 .addOption(QueryOption.EXPAND_CONTENT).setQuery(awsAccountsQuery).build();
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeDesc.tenantLinks;
-        Operation op = Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+        return Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
                 .setBody(queryTask)
                 .setConnectionSharing(true).setCompletion((o, e) -> {
                     if (e != null) {
@@ -269,7 +277,6 @@ public class AWSCostStatsService extends StatelessService {
                             .collect(Collectors.toList());
                     queryResultConsumer.accept(accountComputeStates);
                 });
-        return op;
     }
 
     protected void getAWSAsyncCostingClient(AWSCostStatsCreationContext statsData,
@@ -293,6 +300,8 @@ public class AWSCostStatsService extends StatelessService {
             return;
         }
 
+        LocalDate currentDate = LocalDate.now(DateTimeZone.UTC);
+
         String billsBucketName = statsData.computeDesc.customProperties
                 .getOrDefault(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, null);
         if (billsBucketName == null) {
@@ -308,8 +317,7 @@ public class AWSCostStatsService extends StatelessService {
             }
         }
         try {
-            downloadAndParse(statsData, billsBucketName, LocalDate.now().getYear(),
-                    LocalDate.now().getMonthOfYear(), next);
+            downloadAndParse(statsData, billsBucketName, currentDate, next);
         } catch (IOException e) {
             logSevere(e);
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
@@ -319,6 +327,7 @@ public class AWSCostStatsService extends StatelessService {
 
     private void setBillsBucketNameInAccount(AWSCostStatsCreationContext statsData,
             String billsBucketName) {
+
         ComputeState accountState = new ComputeState();
         accountState.customProperties = new HashMap<>();
         accountState.customProperties
@@ -365,6 +374,34 @@ public class AWSCostStatsService extends StatelessService {
                         }));
     }
 
+    protected void queryBillProcessedTime(AWSCostStatsCreationContext context,
+            AWSCostStatsCreationStages next) {
+        // Construct a list of query operations, one for each account ID to query the
+        // corresponding billProcessedTime and populate in the context object.
+        List<Operation> queryOps = new ArrayList<>();
+        for (Entry<String, List<ComputeState>> entry : context.awsAccountIdToComputeStates
+                .entrySet()) {
+            ComputeState accountComputeState = findPrimaryComputeState(entry.getValue());
+            String accountId = accountComputeState.customProperties
+                    .get(AWSConstants.AWS_ACCOUNT_ID_KEY);
+            if (!context.accountIdToBillProcessedTime.containsKey(entry.getKey())) {
+                Operation queryOp = createBillProcessedTimeOperation(context, accountComputeState,
+                        accountId);
+                queryOps.add(queryOp);
+            }
+        }
+
+        if (queryOps.isEmpty()) {
+            // billProcessedTime has already been queried for all accounts and present in the cache.
+            context.stage = next;
+            handleCostStatsCreationRequest(context);
+            return;
+        }
+
+        joinOperationAndSendRequest(context, next, queryOps);
+
+    }
+
     protected void queryLinkedAccounts(AWSCostStatsCreationContext context,
             AWSCostStatsCreationStages next) {
 
@@ -390,17 +427,7 @@ public class AWSCostStatsService extends StatelessService {
             return;
         }
 
-        OperationJoin.create(queryOps).setCompletion((o, e) -> {
-            if (e != null && !e.isEmpty()) {
-                Throwable firstException = e.values().iterator().next();
-                logSevere(firstException);
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        context.statsRequest.taskReference, firstException);
-                return;
-            }
-            context.stage = next;
-            handleCostStatsCreationRequest(context);
-        }).sendWith(this);
+        joinOperationAndSendRequest(context, next, queryOps);
     }
 
     private void inferDeletedVmCounts(AWSCostStatsCreationContext context) {
@@ -430,17 +457,28 @@ public class AWSCostStatsService extends StatelessService {
             AwsAccountDetailDto awsAccountDetailDto = accountDetailsMapEntry.getValue();
             List<ComputeState> accountComputeStates = statsData.awsAccountIdToComputeStates
                     .getOrDefault(awsAccountDetailDto.id, null);
+            Long billProcessedTimeMillis = 0L;
+
             if ((accountComputeStates != null) && !accountComputeStates.isEmpty()) {
                 // We use the oldest compute state among those representing this account to save the account level stats.
                 ComputeState accountComputeState = findPrimaryComputeState(accountComputeStates);
+
+                String accountId = accountComputeState.customProperties
+                        .get(AWSConstants.AWS_ACCOUNT_ID_KEY);
+                billProcessedTimeMillis = statsData.accountIdToBillProcessedTime
+                        .getOrDefault(accountId, 0L);
+                logInfo("Processing and persisting stats for the account: %s "
+                                + "since the time: %s UTC.",
+                        accountComputeState.documentSelfLink, billProcessedTimeMillis);
                 ComputeStats accountStats = createComputeStatsForAccount(
-                        accountComputeState.documentSelfLink, awsAccountDetailDto);
+                        accountComputeState.documentSelfLink, awsAccountDetailDto,
+                        billProcessedTimeMillis);
                 statsData.statsResponse.statsList.add(accountStats);
             } else {
                 logFine("AWS account with ID '%s' is not configured yet. Not creating cost metrics for the same.");
             }
 
-            // create resouce stats for only live EC2 instances that exist in system
+            // create resource stats for only live EC2 instances that exist in system
             Map<String, AwsServiceDetailDto> serviceDetails = awsAccountDetailDto.serviceDetailsMap;
             for (String service : serviceDetails.keySet()) {
                 if (!service.equalsIgnoreCase(AWSCsvBillParser.AwsServices.ec2.getName())) {
@@ -463,7 +501,8 @@ public class AWSCostStatsService extends StatelessService {
                     AwsResourceDetailDto resourceDetails = entry.getValue();
                     if (resourceDetails.directCosts != null) {
                         ComputeStats vmStats = createComputeStatsForResource(
-                                computeState.documentSelfLink, resourceDetails);
+                                computeState.documentSelfLink, resourceDetails,
+                                billProcessedTimeMillis);
                         statsData.statsResponse.statsList.add(vmStats);
                         count++;
                     }
@@ -476,20 +515,31 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     private void postAllResourcesCostStats(AWSCostStatsCreationContext statsData) {
+
         SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
         respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(statsData.statsRequest.nextStage);
         respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
         respBody.statsList = statsData.statsResponse.statsList;
         respBody.computeLink = statsData.computeDesc.documentSelfLink;
-        sendRequest(Operation.createPatch(statsData.statsRequest.taskReference).setBody(respBody));
+        sendRequest(Operation.createPatch(statsData.statsRequest.taskReference).setBody(respBody)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        logSevere(e);
+                        AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                                statsData.statsRequest.taskReference, e);
+                        return;
+                    }
+                    // After posting all stats, persist the time in the bill for the last row until which
+                    // current collection & processing was done.
+                    setBillProcessedTime(statsData);
+                }));
     }
 
     private void downloadAndParse(AWSCostStatsCreationContext statsData,
-            String awsBucketname,
-            int year,
-            int month, AWSCostStatsCreationStages next) throws IOException {
+            String awsBucketName, LocalDate date, AWSCostStatsCreationStages next)
+            throws IOException {
 
-        // Creating a working directory for downloanding and processing the bill
+        // Creating a working directory for downloading and processing the bill
         final Path workingDirPath = Paths.get(System.getProperty(TEMP_DIR_LOCATION),
                 UUID.randomUUID().toString());
         Files.createDirectories(workingDirPath);
@@ -497,10 +547,10 @@ public class AWSCostStatsService extends StatelessService {
         String accountId = statsData.computeDesc.customProperties
                 .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
         AWSCsvBillParser parser = new AWSCsvBillParser();
-        final String csvBillZipFileName = parser.getCsvBillFileName(month, year, accountId, true);
+        final String csvBillZipFileName = parser.getCsvBillFileName(date, accountId, true);
 
         Path csvBillZipFilePath = Paths.get(workingDirPath.toString(), csvBillZipFileName);
-        GetObjectRequest getObjectRequest = new GetObjectRequest(awsBucketname, csvBillZipFileName);
+        GetObjectRequest getObjectRequest = new GetObjectRequest(awsBucketName, csvBillZipFileName);
         Download download = statsData.s3Client.download(getObjectRequest,
                 csvBillZipFilePath.toFile());
 
@@ -511,7 +561,7 @@ public class AWSCostStatsService extends StatelessService {
                 try {
                     ProgressEventType eventType = progressEvent.getEventType();
                     if (ProgressEventType.TRANSFER_COMPLETED_EVENT.equals(eventType)) {
-                        LocalDate monthDate = new LocalDate(year, month, 1);
+                        LocalDate monthDate = new LocalDate(date.getYear(), date.getMonthOfYear(), 1);
                         statsData.accountDetailsMap = parser.parseDetailedCsvBill(
                                 statsData.ignorableInvoiceCharge,
                                 csvBillZipFilePath,
@@ -544,26 +594,31 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     private ComputeStats createComputeStatsForResource(String resourceComputeLink,
-            AwsResourceDetailDto resourceDetails) {
+            AwsResourceDetailDto resourceDetails, Long billProcessedTimeMillis) {
+
         ComputeStats resourceStats = new ComputeStats();
         resourceStats.statValues = new ConcurrentSkipListMap<>();
         resourceStats.computeLink = resourceComputeLink;
         List<ServiceStat> resourceServiceStats = new ArrayList<>();
         for (Entry<Long, Double> cost : resourceDetails.directCosts.entrySet()) {
-            ServiceStat resourceStat = new ServiceStat();
-            resourceStat.serviceReference = UriUtils.buildUri(this.getHost(), resourceComputeLink);
-            resourceStat.latestValue = cost.getValue().doubleValue();
-            resourceStat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(cost.getKey());
-            resourceStat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-            resourceStat.name = AWSConstants.COST;
-            resourceServiceStats.add(resourceStat);
+            Long usageStartTime = cost.getKey();
+            if (usageStartTime.compareTo(billProcessedTimeMillis) > 0) {
+                ServiceStat resourceStat = new ServiceStat();
+                resourceStat.serviceReference = UriUtils.buildUri(this.getHost(), resourceComputeLink);
+                resourceStat.latestValue = cost.getValue();
+                resourceStat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(usageStartTime);
+                resourceStat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+                resourceStat.name = AWSConstants.COST;
+                resourceServiceStats.add(resourceStat);
+            }
         }
         resourceStats.statValues.put(AWSConstants.COST, resourceServiceStats);
         return resourceStats;
     }
 
     private ComputeStats createComputeStatsForAccount(String accountComputeLink,
-            AwsAccountDetailDto awsAccountDetailDto) {
+            AwsAccountDetailDto awsAccountDetailDto,
+            Long billProcessedTimeMillis) {
 
         ComputeStats accountStats = new ComputeStats();
         accountStats.statValues = new ConcurrentSkipListMap<>();
@@ -594,14 +649,15 @@ public class AWSCostStatsService extends StatelessService {
         for (AwsServiceDetailDto serviceDetailDto : awsAccountDetailDto.serviceDetailsMap
                 .values()) {
             Map<String, List<ServiceStat>> statsForAwsService = createStatsForAwsService(
-                    accountComputeLink, serviceDetailDto, awsAccountDetailDto.month);
+                    accountComputeLink, serviceDetailDto, awsAccountDetailDto.month,
+                    billProcessedTimeMillis);
             accountStats.statValues.putAll(statsForAwsService);
         }
         return accountStats;
     }
 
     private Map<String, List<ServiceStat>> createStatsForAwsService(String accountComputeLink,
-            AwsServiceDetailDto serviceDetailDto, Long month) {
+            AwsServiceDetailDto serviceDetailDto, Long month, Long billProcessedTimeMillis) {
 
         URI accountUri = UriUtils.buildUri(accountComputeLink);
         String currencyUnit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
@@ -614,13 +670,11 @@ public class AWSCostStatsService extends StatelessService {
         String serviceResourceCostMetric = String
                 .format(AWSConstants.SERVICE_RESOURCE_COST, serviceCode);
         for (Entry<Long, Double> cost : serviceDetailDto.directCosts.entrySet()) {
-            ServiceStat stat = new ServiceStat();
-            stat.serviceReference = accountUri;
-            stat.latestValue = cost.getValue().doubleValue();
-            stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(cost.getKey());
-            stat.unit = currencyUnit;
-            stat.name = serviceResourceCostMetric;
-            serviceStats.add(stat);
+            Long usageStartTime = cost.getKey();
+            if (usageStartTime.compareTo(billProcessedTimeMillis) > 0) {
+                createServiceStat(accountUri, currencyUnit,
+                        serviceStats, serviceResourceCostMetric, usageStartTime, cost.getValue());
+            }
         }
         if (!serviceStats.isEmpty()) {
             stats.put(serviceResourceCostMetric, serviceStats);
@@ -631,13 +685,11 @@ public class AWSCostStatsService extends StatelessService {
         String serviceOtherCostMetric = String
                 .format(AWSConstants.SERVICE_OTHER_COST, serviceCode);
         for (Entry<Long, Double> cost : serviceDetailDto.otherCosts.entrySet()) {
-            ServiceStat stat = new ServiceStat();
-            stat.serviceReference = accountUri;
-            stat.latestValue = cost.getValue().doubleValue();
-            stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(cost.getKey());
-            stat.unit = currencyUnit;
-            stat.name = serviceOtherCostMetric;
-            serviceStats.add(stat);
+            Long usageStartTime = cost.getKey();
+            if (usageStartTime.compareTo(billProcessedTimeMillis) > 0) {
+                createServiceStat(accountUri, currencyUnit,
+                        serviceStats, serviceOtherCostMetric, usageStartTime, cost.getValue());
+            }
         }
         if (!serviceStats.isEmpty()) {
             stats.put(serviceOtherCostMetric, serviceStats);
@@ -646,32 +698,144 @@ public class AWSCostStatsService extends StatelessService {
         // Create stats for monthly other costs
         String serviceMonthlyOtherCostMetric = String
                 .format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode);
-        ServiceStat stat = new ServiceStat();
-        stat.serviceReference = accountUri;
-        stat.latestValue = serviceDetailDto.remainingCost;
-        stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(month);
-        stat.unit = currencyUnit;
-        stat.name = serviceMonthlyOtherCostMetric;
-        stats.put(serviceMonthlyOtherCostMetric, Collections.singletonList(stat));
+        serviceStats = new ArrayList<>();
+        createServiceStat(accountUri, currencyUnit, serviceStats, serviceMonthlyOtherCostMetric,
+                month, serviceDetailDto.remainingCost);
+        stats.put(serviceMonthlyOtherCostMetric, serviceStats);
 
         // Create stats for monthly reserved recurring instance costs
         String serviceReservedRecurringCostMetric = String
                 .format(AWSConstants.SERVICE_RESERVED_RECURRING_COST, serviceCode);
-        stat = new ServiceStat();
-        stat.serviceReference = accountUri;
-        stat.latestValue = serviceDetailDto.reservedRecurringCost;
-        stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(month);
-        stat.unit = currencyUnit;
-        stat.name = serviceReservedRecurringCostMetric;
-        stats.put(serviceReservedRecurringCostMetric, Collections.singletonList(stat));
+        serviceStats = new ArrayList<>();
+        createServiceStat(accountUri, currencyUnit, serviceStats,
+                serviceReservedRecurringCostMetric, month, serviceDetailDto.reservedRecurringCost);
+        stats.put(serviceReservedRecurringCostMetric, serviceStats);
 
         return stats;
     }
 
+    /**
+     * AWS bills are read, processed and persisted based on the records which were processed in
+     * the last collection cycle. This method will persist the record ID which was successfully
+     * processed in the current collection cycle. The default value of this property is 0 (Zero),
+     * in which case all the records in the bill for the month being processed will be processed.
+     *  @param statsData
+     *
+     */
+    protected void setBillProcessedTime(AWSCostStatsCreationContext statsData) {
+
+        for (Entry<String, List<ComputeState>> accountComputeStates : statsData.awsAccountIdToComputeStates
+                .entrySet()) {
+            if (accountComputeStates.getValue() == null || accountComputeStates.getValue()
+                    .isEmpty()) {
+                continue;
+            }
+            for (ComputeState accountComputeState : accountComputeStates.getValue()) {
+
+                String accountId = statsData.computeDesc.customProperties
+                        .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
+
+                if (accountId != null) {
+                    String billProcessedTime = StatsUtil.getMetricKeyPrefix(SELF_LINK,
+                            AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS);
+
+                    ServiceStat stat = new ServiceStat();
+                    stat.serviceReference = UriUtils
+                            .buildUri(this.getHost(), accountComputeState.documentSelfLink);
+                    stat.latestValue = statsData.accountDetailsMap
+                            .get(accountId).billProcessedTimeMillis;
+                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS
+                            .toMicros(statsData.accountDetailsMap
+                                    .get(accountId).month);
+                    stat.unit = PhotonModelConstants.UNIT_MILLISECONDS;
+                    stat.name = billProcessedTime;
+
+                    sendRequest(Operation
+                            .createPost(UriUtils.buildStatsUri(getHost(),
+                                    accountComputeState.documentSelfLink))
+                            .setBody(stat)
+                            .setCompletion((o, e) -> {
+                                if (e != null) {
+                                    logSevere("Unable to set billProcessedTime for account: %s: %s",
+                                            accountComputeState.documentSelfLink, e);
+                                }
+                            }));
+                } else {
+                    logWarning(
+                            "Couldn't find the primary account ID. "
+                                    + "Not updating the processed time for this collection cycle.");
+                }
+            }
+        }
+    }
+
+    private void createServiceStat(URI accountUri,
+            String currencyUnit, List<ServiceStat> serviceStats,
+            String serviceResourceCostMetric, Long timestamp, Double cost) {
+
+        ServiceStat stat = new ServiceStat();
+        stat.serviceReference = accountUri;
+        stat.latestValue = cost;
+        stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp);
+        stat.unit = currencyUnit;
+        stat.name = serviceResourceCostMetric;
+        serviceStats.add(stat);
+    }
+
     private Consumer<Throwable> getFailureConsumer(AWSCostStatsCreationContext statsData) {
+
         return ((t) -> {
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     statsData.statsRequest.taskReference, t);
         });
     }
+
+    /**
+     * Creates an Operation to get the billProcessedTime of an account
+     * @param context has the context for this running thread, is used to populate the billProcessedTime
+     * @param accountComputeState has the account compute state being processed
+     * @param accountId the AWS account identifier of the account being processed
+     * @return the operation to get the billProcessedTime for the entry passed
+     */
+    private Operation createBillProcessedTimeOperation(AWSCostStatsCreationContext context,
+            ComputeState accountComputeState, String accountId) {
+
+        return Operation.createGet(
+                UriUtils.buildStatsUri(getHost(), accountComputeState.documentSelfLink))
+                .setCompletion((operation, exception) -> {
+                    if (exception != null) {
+                        logWarning(
+                                "Failed to get bill processed time for account: %s %s",
+                                accountComputeState.documentSelfLink, exception);
+                        AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                                context.statsRequest.taskReference, exception);
+                    }
+                    ServiceStats body = operation.getBody(ServiceStats.class);
+                    ServiceStat serviceStat = body.entries
+                            .get(StatsUtil.getMetricKeyPrefix(SELF_LINK,
+                                    AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS));
+                    long accountBillProcessedTime = 0L;
+                    if (serviceStat != null) {
+                        accountBillProcessedTime = (long) serviceStat.latestValue;
+                    }
+                    context.accountIdToBillProcessedTime
+                            .put(accountId, accountBillProcessedTime);
+                });
+    }
+
+    private void joinOperationAndSendRequest(AWSCostStatsCreationContext context,
+            AWSCostStatsCreationStages next, List<Operation> queryOps) {
+        OperationJoin.create(queryOps).setCompletion((operationMap, exception) -> {
+            if (exception != null && !exception.isEmpty()) {
+                Throwable firstException = exception.values().iterator().next();
+                logSevere(firstException);
+                AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                        context.statsRequest.taskReference, firstException);
+                return;
+            }
+            context.stage = next;
+            handleCostStatsCreationRequest(context);
+        }).sendWith(this, AWSConstants.OPERATION_BATCH_SIZE);
+    }
+
 }

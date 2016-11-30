@@ -95,7 +95,7 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         issueStatsRequest(account);
     }
 
-    private void issueStatsRequest(ComputeState vm) throws Throwable {
+    private void issueStatsRequest(ComputeState account) throws Throwable {
         // spin up a stateless service that acts as the parent link to patch back to
         StatelessService parentService = new StatelessService() {
             @Override
@@ -109,23 +109,24 @@ public class TestAWSCostAdapterService extends BasicTestCase {
                                 new IllegalStateException("response size was incorrect."));
                         return;
                     }
-                    if (!resp.statsList.get(0).computeLink.equals(vm.documentSelfLink)) {
+                    if (!resp.statsList.get(0).computeLink.equals(account.documentSelfLink)) {
                         TestAWSCostAdapterService.this.host
                                 .failIteration(new IllegalStateException(
                                         "Incorrect resourceReference returned."));
                         return;
                     }
                     verifyCollectedStats(resp);
-
                     TestAWSCostAdapterService.this.host.completeIteration();
+                    op.complete();
                 }
             }
         };
         String servicePath = UUID.randomUUID().toString();
         Operation startOp = Operation.createPost(UriUtils.buildUri(this.host, servicePath));
         this.host.startService(startOp, parentService);
+
         ComputeStatsRequest statsRequest = new ComputeStatsRequest();
-        statsRequest.resourceReference = UriUtils.buildUri(this.host, vm.documentSelfLink);
+        statsRequest.resourceReference = UriUtils.buildUri(this.host, account.documentSelfLink);
         statsRequest.taskReference = UriUtils.buildUri(this.host, servicePath);
         statsRequest.nextStage = SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage.UPDATE_STATS.name();
         this.host.sendAndWait(Operation.createPatch(UriUtils.buildUri(
