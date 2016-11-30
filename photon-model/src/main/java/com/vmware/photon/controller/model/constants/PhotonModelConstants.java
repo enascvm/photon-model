@@ -58,6 +58,7 @@ public class PhotonModelConstants {
     public static final String API_CALL_COUNT = "APICallCount";
     public static final String SOURCE_TASK_LINK = "SourceTaskLink";
     public static final String LAST_SUCCESSFUL_STATS_COLLECTION_TIME = "LastSuccessfulCollectionTimeInMicros";
+    public static final String DELETED_VM_COUNT = "DeletedVmCount";
 
     public static final int CLOUD_CONFIG_DEFAULT_FILE_INDEX = 0;
 

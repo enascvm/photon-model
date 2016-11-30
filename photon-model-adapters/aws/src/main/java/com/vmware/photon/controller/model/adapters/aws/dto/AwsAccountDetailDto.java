@@ -22,21 +22,15 @@ public class AwsAccountDetailDto {
     public String name;
     public Long month;
     public Double cost = 0d;
-    public Map<String, AwsServiceDetailDto> serviceDetailsMap;
+    public Integer deletedVmCount = 0;
+    public Map<String, AwsServiceDetailDto> serviceDetailsMap = new HashMap<>();
     public Double signUpCharge = 0d;
 
     public AwsServiceDetailDto fetchServiceDetail(String serviceName) {
-        if (this.serviceDetailsMap != null) {
-            return this.serviceDetailsMap.get(serviceName);
-        }
-        return null;
+        return this.serviceDetailsMap.get(serviceName);
     }
 
     public void addToServiceDetailsMap(String serviceName, AwsServiceDetailDto serviceDetail) {
-        if (this.serviceDetailsMap == null) {
-            this.serviceDetailsMap = new HashMap<>();
-        }
         this.serviceDetailsMap.put(serviceName, serviceDetail);
     }
-
 }

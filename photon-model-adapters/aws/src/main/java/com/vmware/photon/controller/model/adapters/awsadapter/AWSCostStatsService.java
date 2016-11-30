@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
@@ -402,8 +403,27 @@ public class AWSCostStatsService extends StatelessService {
         }).sendWith(this);
     }
 
+    private void inferDeletedVmCounts(AWSCostStatsCreationContext context) {
+        for (AwsAccountDetailDto accountDetailDto : context.accountDetailsMap.values()) {
+            AwsServiceDetailDto ec2ServiceDetailDto = accountDetailDto.serviceDetailsMap
+                    .get(AWSCsvBillParser.AwsServices.ec2.getName());
+            if (ec2ServiceDetailDto == null) {
+                continue;
+            }
+            Set<String> allVmIds = ec2ServiceDetailDto.resourceDetailsMap.keySet().stream()
+                    .filter(id -> id.startsWith("i-")).collect(Collectors.toSet());
+            // For the current month the deleted VM count is the total count of all such instances
+            // which are present in the bill but not present in the system.
+            Set<String> liveVmIds = context.awsInstancesById.keySet();
+            Long deletedVmCount = allVmIds.stream().filter(vmId -> !liveVmIds.contains(vmId)).count();
+            accountDetailDto.deletedVmCount = deletedVmCount.intValue();
+        }
+    }
+
     private void createStats(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
+
+        inferDeletedVmCounts(statsData);
         int count = 0;
 
         for (Entry<String, AwsAccountDetailDto> accountDetailsMapEntry : statsData.accountDetailsMap.entrySet()) {
@@ -544,16 +564,31 @@ public class AWSCostStatsService extends StatelessService {
 
     private ComputeStats createComputeStatsForAccount(String accountComputeLink,
             AwsAccountDetailDto awsAccountDetailDto) {
-        ServiceStat stat = new ServiceStat();
-        stat.serviceReference = UriUtils.buildUri(this.getHost(), accountComputeLink);
-        stat.latestValue = awsAccountDetailDto.cost;
-        stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(awsAccountDetailDto.month);
-        stat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-        stat.name = AWSConstants.COST;
+
         ComputeStats accountStats = new ComputeStats();
         accountStats.statValues = new ConcurrentSkipListMap<>();
         accountStats.computeLink = accountComputeLink;
-        accountStats.statValues.put(stat.name, Collections.singletonList(stat));
+        URI accountUri = UriUtils.buildUri(this.getHost(), accountComputeLink);
+        long statTime = TimeUnit.MILLISECONDS.toMicros(awsAccountDetailDto.month);
+
+        // Account cost
+        ServiceStat costStat = new ServiceStat();
+        costStat.serviceReference = accountUri;
+        costStat.latestValue = awsAccountDetailDto.cost;
+        costStat.sourceTimeMicrosUtc = statTime;
+        costStat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
+        costStat.name = AWSConstants.COST;
+        accountStats.statValues.put(costStat.name, Collections.singletonList(costStat));
+
+        // Account deleted VM count
+        ServiceStat deletedVmCountStat = new ServiceStat();
+        deletedVmCountStat.serviceReference = accountUri;
+        deletedVmCountStat.latestValue = awsAccountDetailDto.deletedVmCount;
+        deletedVmCountStat.sourceTimeMicrosUtc = statTime;
+        deletedVmCountStat.unit = PhotonModelConstants.UNIT_COST;
+        deletedVmCountStat.name = PhotonModelConstants.DELETED_VM_COUNT;
+        accountStats.statValues
+                .put(deletedVmCountStat.name, Collections.singletonList(deletedVmCountStat));
 
         // Create metrics for service costs and add it at the account level.
         for (AwsServiceDetailDto serviceDetailDto : awsAccountDetailDto.serviceDetailsMap

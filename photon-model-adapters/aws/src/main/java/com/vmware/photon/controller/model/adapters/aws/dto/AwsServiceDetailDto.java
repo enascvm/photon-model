@@ -23,7 +23,7 @@ public class AwsServiceDetailDto {
     public Map<Long, Double> otherCosts = new HashMap<>();
     public Double remainingCost = 0d;
     public Double reservedRecurringCost = 0d;
-    public Map<String, AwsResourceDetailDto> resourceDetailsMap;
+    public Map<String, AwsResourceDetailDto> resourceDetailsMap = new HashMap<>();
     public String type;
 
     public void addToRemainingCost(Double otherCost) {
@@ -43,21 +43,14 @@ public class AwsServiceDetailDto {
     }
 
     public void addToReservedRecurringCost(Double reservedRecurringCost) {
-        this.reservedRecurringCost += this.reservedRecurringCost;
+        this.reservedRecurringCost += reservedRecurringCost;
     }
 
     public AwsResourceDetailDto getResourceDetail(String resourceId) {
-        if (this.resourceDetailsMap != null) {
-            return this.resourceDetailsMap.get(resourceId);
-        }
-        return null;
+        return this.resourceDetailsMap.get(resourceId);
     }
 
     public void addToResourceDetailMap(String resourceId, AwsResourceDetailDto resourceDetail) {
-        if (this.resourceDetailsMap == null) {
-            this.resourceDetailsMap = new HashMap<>();
-        }
         this.resourceDetailsMap.put(resourceId, resourceDetail);
     }
-
 }

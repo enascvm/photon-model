@@ -13,7 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DELETED_VM_COUNT;
 
 import java.util.List;
 import java.util.Map;
@@ -135,9 +138,15 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         Map<String, ComputeStats> computeStatsByLink = resp.statsList.stream()
                 .collect(Collectors.toMap(e -> e.computeLink, Function.identity()));
         ComputeStats computeStats = computeStatsByLink.get(account1SelfLink);
+        ComputeStats account2Stats = computeStatsByLink.get(account2SelfLink);
+
         //check total account cost
         assertTrue(computeStats.statValues.get(AWSConstants.COST)
                 .get(0).latestValue == account1TotalCost);
+
+        // check VM count stats
+        assertEquals(0, computeStats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
+        assertEquals(1, account2Stats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
 
         // check that service level stats exist
         String serviceCode = AWSCsvBillParser.AwsServices.ec2.getName().replaceAll(" ", "");
@@ -166,8 +175,7 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         }
 
         // Check the cost of linked account
-        ComputeStats account2ComputeStats = computeStatsByLink.get(account2SelfLink);
-        assertTrue(account2ComputeStats.statValues.get(AWSConstants.COST)
+        assertTrue(account2Stats.statValues.get(AWSConstants.COST)
                 .get(0).latestValue == account2TotalCost);
     }
 }
