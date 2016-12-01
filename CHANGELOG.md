@@ -1,7 +1,8 @@
 # CHANGELOG
 
-## 0.5.2-SNAPSHOT
+## 0.5.2
 
+* Fixed the getRawMetrics query in SingleResourceStatsAggregationTaskService.
 
 ## 0.5.1
 
