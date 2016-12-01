@@ -661,24 +661,32 @@ public class SingleResourceStatsAggregationTaskService extends
         for (Entry<String, Set<String>> entry : metricsToBeQueried.entrySet()) {
             String resourceId = entry.getKey();
             for (String metricKey : entry.getValue()) {
-                logFine("Querying raw metrics from disk for %s", metricKey);
-                for (Entry<String, Long> metricEntry : currentState.lastRollupTimeForMetric
-                        .entrySet()) {
-                    Query.Builder builder = Query.Builder.create(Occurance.SHOULD_OCCUR);
-                    builder.addKindFieldClause(ResourceMetrics.class);
-                    builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                            UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, resourceId),
-                            MatchType.PREFIX);
-                    builder.addRangeClause( QuerySpecification.buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, metricKey),
-                            NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
-                    if (metricEntry.getValue() != null) {
-                        builder.addRangeClause(ResourceMetrics.FIELD_NAME_TIMESTAMP,
-                                NumericRange.createGreaterThanOrEqualRange(
-                                    StatsUtil.computeIntervalBeginMicros(metricEntry.getValue() - 1,
-                                            lookupBinSize(metricEntry.getKey()))));
+                logInfo("Querying raw metrics from disk for %s", metricKey);
+                Long range = null;
+                int binSize = 0;
+                for (Entry<String, Long> metricEntry : currentState.lastRollupTimeForMetric.entrySet()) {
+                    if (metricEntry.getKey().startsWith(metricKey)) {
+                        if (range == null || range > metricEntry.getValue()) {
+                            binSize = lookupBinSize(metricEntry.getKey());
+                            range = metricEntry.getValue();
+                        }
                     }
-                    overallQueryBuilder.addClause(builder.build());
                 }
+                Query.Builder builder = Query.Builder.create(Occurance.SHOULD_OCCUR);
+                builder.addKindFieldClause(ResourceMetrics.class);
+                builder.addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                        UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, resourceId),
+                        MatchType.PREFIX);
+                builder.addRangeClause(QuerySpecification
+                        .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, metricKey),
+                        NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true,
+                                true));
+                if (range != null) {
+                    builder.addRangeClause(ResourceMetrics.FIELD_NAME_TIMESTAMP,
+                            NumericRange.createGreaterThanOrEqualRange(
+                                    StatsUtil.computeIntervalBeginMicros(range - 1, binSize)));
+                }
+                overallQueryBuilder.addClause(builder.build());
             }
         }
 
