@@ -181,6 +181,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         if (ctx.child.powerState == PowerState.ON) {
                             new PowerStateClient(connection).changePowerState(client.getVm(),
                                     PowerState.ON, null, 0);
+                            state.powerState = PowerState.ON;
 
                             Operation op = mgr.createTaskPatch(TaskStage.FINISHED);
 
