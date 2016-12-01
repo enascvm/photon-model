@@ -661,7 +661,7 @@ public class SingleResourceStatsAggregationTaskService extends
         for (Entry<String, Set<String>> entry : metricsToBeQueried.entrySet()) {
             String resourceId = entry.getKey();
             for (String metricKey : entry.getValue()) {
-                logInfo("Querying raw metrics from disk for %s", metricKey);
+                logFine("Querying raw metrics from disk for %s", metricKey);
                 Long range = null;
                 int binSize = 0;
                 for (Entry<String, Long> metricEntry : currentState.lastRollupTimeForMetric.entrySet()) {
