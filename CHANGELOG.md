@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## 0.5.3-SNAPSHOT
+## 0.5.3
+
+* Updated xenon to 1.3.2.
 
 ## 0.5.2
 
