@@ -267,6 +267,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
                     logInfo("Enumeration service has already been started for %s", enumKey);
+
                     return;
                 }
                 logInfo("Launching enumeration service for %s", enumKey);

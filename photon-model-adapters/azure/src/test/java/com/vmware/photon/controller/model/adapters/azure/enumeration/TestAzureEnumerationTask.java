@@ -14,12 +14,14 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultDiskState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultStorageAccountDescription;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createNetworkState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteServiceDocument;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
@@ -41,6 +43,9 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.credentials.AzureEnvironment;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
+import com.microsoft.azure.management.network.NetworkManagementClient;
+import com.microsoft.azure.management.network.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
 import com.microsoft.azure.management.storage.StorageManagementClient;
@@ -69,6 +74,7 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
@@ -93,6 +99,7 @@ import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  * PRE-REQUISITE: An Azure Resource Manager VM named <b>EnumTestVM-DoNotDelete</b>, with diagnostics enabled,
@@ -110,6 +117,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private static final int STALE_STORAGE_ACCOUNTS_COUNT = 5;
     private static final int STALE_CONTAINERS_COUNT = 5;
     private static final int STALE_BLOBS_COUNT = 5;
+    private static final int STALE_NETWORKS_COUNT = 5;
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -130,6 +138,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
     // fields that are used across method calls, stash them as private fields
     private String resourcePoolLink;
+    private String authLink;
     private ComputeState vmState;
     private ComputeState computeHost;
     private StorageDescription storageDescription;
@@ -139,6 +148,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private ComputeManagementClient computeManagementClient;
     private ResourceManagementClient resourceManagementClient;
     private StorageManagementClient storageManagementClient;
+    private NetworkManagementClient networkManagementClient;
 
     private String enumeratedComputeLink;
 
@@ -171,8 +181,10 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
                 this.storageManagementClient = new StorageManagementClientImpl(credentials);
                 this.storageManagementClient.setSubscriptionId(this.subscriptionId);
-            }
 
+                this.networkManagementClient = new NetworkManagementClientImpl(credentials);
+                this.networkManagementClient.setSubscriptionId(this.subscriptionId);
+            }
         } catch (Throwable e) {
             throw new Exception(e);
         }
@@ -228,9 +240,13 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         ResourcePoolState outPool = createDefaultResourcePool(this.host);
         this.resourcePoolLink = outPool.documentSelfLink;
 
+        AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(this.host,
+                this.clientID, this.clientKey, this.subscriptionId, this.tenantId);
+
+        this.authLink = authCredentials.documentSelfLink;
+
         // create a compute host for the Azure
-        this.computeHost = createDefaultComputeHost(this.host, this.clientID, this.clientKey,
-                this.subscriptionId, this.tenantId, this.resourcePoolLink);
+        this.computeHost = createDefaultComputeHost(this.host, this.resourcePoolLink, this.authLink);
 
         this.storageDescription = createDefaultStorageAccountDescription(this.host,
                 this.mockedStorageAccountName, this.computeHost.documentSelfLink,
@@ -300,6 +316,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         createAzureStorageAccounts(STALE_STORAGE_ACCOUNTS_COUNT);
         createAzureStorageContainers(STALE_CONTAINERS_COUNT);
         createAzureBlobs(STALE_BLOBS_COUNT);
+        createAzureNetworks(STALE_NETWORKS_COUNT);
 
         // stale resources + 1 compute host instance + 1 vm compute state
         ProvisioningUtils.queryComputeInstances(this.host, STALE_VM_RESOURCES_COUNT + 2);
@@ -314,6 +331,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         this.host.log(Level.INFO, "Initial VM Count: %d", this.vmCount);
         getAzureStorageResourcesCount();
 
+        int networksCount = getAzureNetworskCount();
+
         runEnumeration();
 
         // expect to find as many local accounts, containers, and blobs as there are on Azure
@@ -323,6 +342,9 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 ResourceGroupService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.blobCount,
                 DiskService.FACTORY_LINK, true);
+
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, networksCount,
+                NetworkService.FACTORY_LINK, true);
 
         // VM count + 1 compute host instance
         this.vmCount = this.vmCount + 1;
@@ -557,6 +579,21 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         this.host.log("Container count in Azure: %d", this.containerCount);
         this.host.log("Blob count in Azure: %d", this.blobCount);
+    }
+
+    private int getAzureNetworskCount() throws Exception {
+        ServiceResponse<List<VirtualNetwork>> networksResponse = this.networkManagementClient
+                .getVirtualNetworksOperations().listAll();
+        List<VirtualNetwork> networks = networksResponse.getBody();
+        return networks.size();
+    }
+
+    private void createAzureNetworks(int numOfNetworks) throws Throwable {
+        for (int i = 0; i < numOfNetworks; i++) {
+            String staleNetName = "staleNet-" + i;
+
+            createNetworkState(this.host, staleNetName, this.resourcePoolLink, this.authLink);
+        }
     }
 
     private StorageManagementClient getStorageManagementClient() {

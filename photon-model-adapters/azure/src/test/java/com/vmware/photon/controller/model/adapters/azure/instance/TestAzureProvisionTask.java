@@ -17,6 +17,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
@@ -54,6 +55,7 @@ import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 public class TestAzureProvisionTask extends BasicReusableHostTestCase {
     public String clientID = "clientID";
@@ -71,6 +73,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
     private ResourceManagementClient resourceManagementClient;
     private String resourcePoolLink;
     private ComputeState vmState;
+    private String authLink;
     private int numberOfVMsToDelete = 0;
     private int vmCount = 0;
 
@@ -127,10 +130,15 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
         ResourcePoolService.ResourcePoolState outPool = createDefaultResourcePool(this.host);
         this.resourcePoolLink = outPool.documentSelfLink;
 
-        // create a compute host for the Azure
-        ComputeState computeHost = createDefaultComputeHost(this.host, this.clientID,
+        AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(this.host, this.clientID,
                 this.clientKey,
-                this.subscriptionId, this.tenantId, this.resourcePoolLink);
+                this.subscriptionId, this.tenantId);
+
+        this.authLink = authCredentials.documentSelfLink;
+
+        // create a compute host for the Azure
+        ComputeState computeHost = createDefaultComputeHost(this.host, this.resourcePoolLink, this
+                .authLink);
 
         // create a Azure VM compute resoruce
         this.vmState = createDefaultVMResource(this.host, this.azureVMName,

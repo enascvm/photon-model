@@ -143,4 +143,8 @@ public class AzureConstants {
     public static final String AZURE_STORAGE_CONTAINER_LEASE_STATUS = "status";
     public static final String AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED = "LastModified";
 
+    // Virtual Network REST constants
+    public static final String NETWORK_REST_API_VERSION = "2015-06-15";
+    public static final String LIST_VIRTUAL_NETWORKS_URI = BASE_URI_FOR_REST
+            + "/subscriptions/{subscriptionId}/providers/Microsoft.Network/virtualnetworks";
 }

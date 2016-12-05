@@ -31,7 +31,7 @@ import com.vmware.xenon.common.StatelessService;
  */
 public class AzureEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_ENUMERATION_ADAPTER;
-    public static final Integer SERVICES_TO_REGISTER = 2;
+    public static final Integer SERVICES_TO_REGISTER = 3;
 
     public AzureEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -39,6 +39,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
 
     public static enum AzureEnumerationStages {
         TRIGGER_STORAGE_ENUMERATION,
+        TRIGGER_NETWORK_ENUMERATION,
         TRIGGER_COMPUTE_ENUMERATION,
         FINISHED,
         ERROR
@@ -93,10 +94,17 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 .createPost(this, AzureStorageEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
+        Operation postNetworkEnumAdapterService = Operation
+                .createPost(this, AzureNetworkEnumerationAdapterService.SELF_LINK)
+                .setReferer(this.getUri());
+
         this.getHost().startService(postComputeEnumAdapterService,
                 new AzureComputeEnumerationAdapterService());
         this.getHost().startService(postStorageEnumAdapterService,
                 new AzureStorageEnumerationAdapterService());
+        this.getHost().startService(postNetworkEnumAdapterService,
+                new AzureNetworkEnumerationAdapterService());
+
 
         AtomicInteger completionCount = new AtomicInteger(0);
         getHost().registerForServiceAvailability((o, e) -> {
@@ -120,6 +128,10 @@ public class AzureEnumerationAdapterService extends StatelessService {
         switch (context.stage) {
         case TRIGGER_STORAGE_ENUMERATION:
             triggerEnumerationAdapter(context, AzureStorageEnumerationAdapterService.SELF_LINK,
+                    AzureEnumerationStages.TRIGGER_NETWORK_ENUMERATION);
+            break;
+        case TRIGGER_NETWORK_ENUMERATION:
+            triggerEnumerationAdapter(context, AzureNetworkEnumerationAdapterService.SELF_LINK,
                     AzureEnumerationStages.TRIGGER_COMPUTE_ENUMERATION);
             break;
         case TRIGGER_COMPUTE_ENUMERATION:

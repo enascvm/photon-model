@@ -14,6 +14,8 @@
 package com.vmware.photon.controller.model.adapters.azure;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 
 /**
  * URI definitions for Azure adapter.
@@ -22,23 +24,25 @@ public class AzureUriPaths {
 
     public static final String PROVISIONING_AZURE = UriPaths.PROVISIONING
             + "/azure";
-    public static final String AZURE_INSTANCE_ADAPTER = PROVISIONING_AZURE
-            + "/instance-adapter";
-    public static final String AZURE_STATS_ADAPTER = PROVISIONING_AZURE
-            + "/stats-adapter";
+    public static final String AZURE_INSTANCE_ADAPTER = AdapterTypePath.INSTANCE_ADAPTER
+            .adapterLink(EndpointType.azure.name());
+    public static final String AZURE_STATS_ADAPTER = AdapterTypePath.STATS_ADAPTER
+            .adapterLink(EndpointType.azure.name());
     public static final String AZURE_COMPUTE_STATS_GATHERER = PROVISIONING_AZURE
             + "/compute-stats-gatherer";
     public static final String AZURE_COMPUTE_HOST_STATS_GATHERER = PROVISIONING_AZURE
             + "/compute-host-stats-gatherer";
     public static final String AZURE_COMPUTE_HOST_STORAGE_STATS_GATHERER = PROVISIONING_AZURE
             + "/compute-host-storage-stats-gatherer";
-    public static final String AZURE_ENUMERATION_ADAPTER =
-            PROVISIONING_AZURE + "/enumeration-adapter";
+    public static final String AZURE_ENUMERATION_ADAPTER = AdapterTypePath.ENUMERATION_ADAPTER
+            .adapterLink(EndpointType.azure.name());
     public static final String AZURE_COMPUTE_ENUMERATION_ADAPTER = PROVISIONING_AZURE
             + "/compute-enumeration-adapter";
     public static final String AZURE_STORAGE_ENUMERATION_ADAPTER = PROVISIONING_AZURE
             + "/storage-enumeration-adapter";
+    public static final String AZURE_NETWORK_ENUMERATION_ADAPTER = PROVISIONING_AZURE
+            + "/network-enumeration-adapter";
 
-    public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = PROVISIONING_AZURE
-            + "/endpoint-config-adapter";
+    public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
+            .adapterLink(EndpointType.azure.name());
 }
