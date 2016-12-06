@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -88,9 +89,11 @@ import com.microsoft.azure.management.resources.SubscriptionClientImpl;
 import com.microsoft.azure.management.resources.models.Provider;
 import com.microsoft.azure.management.resources.models.ResourceGroup;
 import com.microsoft.azure.management.resources.models.Subscription;
+import com.microsoft.azure.management.storage.StorageAccountsOperations;
 import com.microsoft.azure.management.storage.StorageManagementClient;
 import com.microsoft.azure.management.storage.StorageManagementClientImpl;
 import com.microsoft.azure.management.storage.models.AccountType;
+import com.microsoft.azure.management.storage.models.ProvisioningState;
 import com.microsoft.azure.management.storage.models.StorageAccount;
 import com.microsoft.azure.management.storage.models.StorageAccountCreateParameters;
 import com.microsoft.azure.management.storage.models.StorageAccountKeys;
@@ -535,66 +538,79 @@ public class AzureInstanceService extends StatelessService {
                 .getOrDefault(AZURE_STORAGE_ACCOUNT_TYPE, DEFAULT_STORAGE_ACCOUNT_TYPE.toValue());
         storageParameters.setAccountType(AccountType.fromValue(accountType));
 
-        logInfo("Creating storage account with name [%s]", ctx.storageAccountName);
+        String msg = "Creating Azure Storage Account [" + ctx.storageAccountName + "] for ["
+                + ctx.vmName + "] VM";
 
-        StorageManagementClient client = getStorageManagementClient(ctx);
+        StorageAccountsOperations azureClient = getStorageManagementClient(ctx)
+                .getStorageAccountsOperations();
 
-        // TODO: Use ProvisioningCallback.
-        client.getStorageAccountsOperations().createAsync(
+        azureClient.createAsync(
                 ctx.resourceGroup.getName(),
                 ctx.storageAccountName,
                 storageParameters,
-                new AzureAsyncCallback<StorageAccount>() {
+                new ProvisioningCallback<StorageAccount>(ctx, nextStage, msg) {
+
                     @Override
-                    public void onError(Throwable e) {
+                    void handleFailure(Throwable e) {
                         handleSubscriptionError(ctx, STORAGE_NAMESPACE, e);
                     }
 
                     @Override
-                    public void onSuccess(ServiceResponse<StorageAccount> result) {
-                        logInfo("Successfully created storage account [%s]",
-                                ctx.storageAccountName);
+                    CompletionStage<StorageAccount> handleProvisioningSucceeded(StorageAccount sa) {
 
-                        ctx.storage = result.getBody();
+                        ctx.storage = sa;
 
-                        StorageDescription storageDescription = new StorageDescription();
-                        storageDescription.name = ctx.storageAccountName;
-                        storageDescription.type = ctx.storage.getAccountType().name();
+                        StorageDescription storageDescriptionToCreate = new StorageDescription();
+                        storageDescriptionToCreate.name = ctx.storageAccountName;
+                        storageDescriptionToCreate.type = ctx.storage.getAccountType().name();
 
-                        Operation storageOp = Operation
-                                .createPost(getHost(),
-                                        StorageDescriptionService.FACTORY_LINK)
-                                .setBody(storageDescription)
-                                .setCompletion((o, e) -> {
-                                    if (e != null) {
-                                        logSevere(e.getMessage());
-                                        handleError(ctx, e);
-                                        return;
-                                    }
-                                    StorageDescription resultDesc = o
-                                            .getBody(StorageDescription.class);
-                                    logInfo("Successfully created the StorageDescription [%s]",
-                                            resultDesc.name);
-                                    ctx.storageDescription = resultDesc;
-                                    ctx.bootDisk.storageDescriptionLink = resultDesc.documentSelfLink;
-                                    Operation patch = Operation
-                                            .createPatch(UriUtils.buildUri(getHost(),
-                                                    ctx.bootDisk.documentSelfLink))
-                                            .setBody(ctx.bootDisk)
-                                            .setCompletion(((completedOp, failure) -> {
-                                                if (failure != null) {
-                                                    handleError(ctx, failure);
-                                                    return;
-                                                }
-                                                logInfo("Successfully updated boot disk [%s]",
-                                                        ctx.bootDisk.name);
+                        Operation createStorageDescOp = Operation
+                                .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
+                                .setBody(storageDescriptionToCreate);
 
-                                                handleAllocation(ctx, nextStage);
-                                            }));
-                                    sendRequest(patch);
-                                    return;
-                                });
-                        sendRequest(storageOp);
+                        Operation patchBootDiskOp = Operation
+                                .createPatch(
+                                        UriUtils.buildUri(getHost(), ctx.bootDisk.documentSelfLink))
+                                .setBody(ctx.bootDisk);
+
+                        return sendWithDeferredResult(createStorageDescOp, StorageDescription.class)
+                                // Consume created StorageDescription
+                                .thenAccept((storageDescription) -> {
+                                    ctx.storageDescription = storageDescription;
+                                    ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
+                                    logInfo("Creating StorageDescription [%s]: SUCCESS",
+                                            storageDescription.name);
+                                })
+                                // Start next op, patch boot disk, in the sequence
+                                .thenCompose((woid) -> sendWithDeferredResult(patchBootDiskOp))
+                                // Log boot disk patch success
+                                .thenRun(() -> {
+                                    logInfo("Updating boot disk [%s]: SUCCESS", ctx.bootDisk.name);
+                                })
+                                // Return original StorageAccount
+                                .thenApply((woid) -> sa)
+                                .toCompletionStage();
+                    }
+
+                    @Override
+                    String getProvisioningState(StorageAccount sa) {
+                        ProvisioningState provisioningState = sa.getProvisioningState();
+
+                        // For some reason SA.provisioningState is null, so consider it CREATING.
+                        if (provisioningState == null) {
+                            provisioningState = ProvisioningState.CREATING;
+                        }
+
+                        return provisioningState.name();
+                    }
+
+                    @Override
+                    Runnable checkProvisioningStateCall(
+                            ServiceCallback<StorageAccount> checkProvisioningStateCallback) {
+                        return () -> azureClient.getPropertiesAsync(
+                                ctx.resourceGroup.getName(),
+                                ctx.storageAccountName,
+                                checkProvisioningStateCallback);
                     }
                 });
     }
@@ -632,7 +648,7 @@ public class AzureInstanceService extends StatelessService {
                     }
 
                     @Override
-                    CompletableFuture<VirtualNetwork> handleProvisioningSucceeded(
+                    CompletionStage<VirtualNetwork> handleProvisioningSucceeded(
                             VirtualNetwork vNet) {
                         Subnet subnet = vNet.getSubnets().stream()
                                 .filter(s -> s.getName().equals(subnetName)).findFirst().get();
@@ -719,7 +735,7 @@ public class AzureInstanceService extends StatelessService {
                 new ProvisioningCallback<PublicIPAddress>(ctx, nextStage, msg) {
 
                     @Override
-                    CompletableFuture<PublicIPAddress> handleProvisioningSucceeded(
+                    CompletionStage<PublicIPAddress> handleProvisioningSucceeded(
                             PublicIPAddress publicIP) {
                         nicCtx.publicIP = publicIP;
 
@@ -783,7 +799,7 @@ public class AzureInstanceService extends StatelessService {
                 new ProvisioningCallback<NetworkSecurityGroup>(ctx, nextStage, msg) {
 
                     @Override
-                    CompletableFuture<NetworkSecurityGroup> handleProvisioningSucceeded(
+                    CompletionStage<NetworkSecurityGroup> handleProvisioningSucceeded(
                             NetworkSecurityGroup nsg) {
                         // Populate all NICs with same NSG.
                         for (NicAllocationContext nicCtx : ctx.nics) {
@@ -1829,10 +1845,7 @@ public class AzureInstanceService extends StatelessService {
 
         @Override
         public final void onError(Throwable e) {
-
-            e = new IllegalStateException(this.msg + ": FAILED", e);
-
-            this.handleFailure(e);
+            handleFailure(new IllegalStateException(this.msg + ": FAILED", e));
         }
 
         /**
@@ -1851,7 +1864,7 @@ public class AzureInstanceService extends StatelessService {
             logInfo(this.msg + ": SUCCESS");
 
             // First delegate to descendants to process result body
-            CompletableFuture<T> handleSuccess = handleSuccess(result.getBody());
+            CompletionStage<T> handleSuccess = handleSuccess(result.getBody());
 
             // Then transition upon completion
             handleSuccess.whenComplete((body, exc) -> {
@@ -1871,7 +1884,7 @@ public class AzureInstanceService extends StatelessService {
          * class to handle transition to next stage as defined by
          * {@link AzureInstanceService#handleAllocation(AzureAllocationContext, AzureStages)}.
          */
-        abstract CompletableFuture<T> handleSuccess(T resultBody);
+        abstract CompletionStage<T> handleSuccess(T resultBody);
 
         /**
          * Transition to the next stage of AzureInstanceService state machine once Azure call is
@@ -1891,7 +1904,7 @@ public class AzureInstanceService extends StatelessService {
      */
     private abstract class ProvisioningCallback<T> extends TransitionToCallback<T> {
 
-        private static final String WAIT_PROVISIONING_TO_SUCCEED_MSG = "WAIT for provisioning to succeed";
+        private static final String WAIT_PROVISIONING_TO_SUCCEED_MSG = "WAIT provisioning to succeed";
 
         private int numberOfWaits = 0;
         private CompletableFuture<T> waitProvisioningToSucceed = new CompletableFuture<>();
@@ -1901,14 +1914,24 @@ public class AzureInstanceService extends StatelessService {
         }
 
         /**
+         * Provides 'wait-for-provisioning-to-succeed' logic prior forwarding to actual resource
+         * create {@link #handleProvisioningSucceeded(Object) callback}.
+         */
+        @Override
+        final CompletionStage<T> handleSuccess(T body) {
+
+            return waitProvisioningToSucceed(body).thenCompose(this::handleProvisioningSucceeded);
+        }
+
+        /**
          * Hook to be implemented by descendants to handle 'Succeeded' Azure resource provisioning.
          * Since implementations might decide to trigger/initiate sync operation they are required
-         * to return {@link CompletableFuture} to track its completion.
+         * to return {@link CompletionStage} to track its completion.
          *
          * <p>
          * This call is introduced by analogy with {@link #handleSuccess(Object)}.
          */
-        abstract CompletableFuture<T> handleProvisioningSucceeded(T body);
+        abstract CompletionStage<T> handleProvisioningSucceeded(T body);
 
         /**
          * By design Azure resources do not have generic 'provisioningState' getter, so we enforce
@@ -1931,26 +1954,16 @@ public class AzureInstanceService extends StatelessService {
                 ServiceCallback<T> checkProvisioningStateCallback);
 
         /**
-         * Provides 'wait-for-provisioning-to-succeed' logic prior forwarding to actual resource
-         * create {@link #handleProvisioningSucceeded(Object) callback}.
-         */
-        @Override
-        final CompletableFuture<T> handleSuccess(T body) {
-
-            return waitProvisioningToSucceed(body).thenCompose(this::handleProvisioningSucceeded);
-        }
-
-        /**
          * The core logic that waits for provisioning to succeed. It polls periodically for resource
          * provisioning state.
          */
-        private CompletableFuture<T> waitProvisioningToSucceed(T body) {
+        private CompletionStage<T> waitProvisioningToSucceed(T body) {
 
             String provisioningState = getProvisioningState(body);
 
             logInfo(this.msg + ": provisioningState = " + provisioningState);
 
-            if (PROVISIONING_STATE_SUCCEEDED.equals(provisioningState)) {
+            if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(provisioningState)) {
 
                 // Resource 'provisioningState' has changed finally to 'Succeeded'
                 // Completes 'waitProvisioningToSucceed' task with success
@@ -1960,9 +1973,8 @@ public class AzureInstanceService extends StatelessService {
 
                 // Max number of re-tries has reached.
                 // Completes 'waitProvisioningToSucceed' task with exception.
-                this.waitProvisioningToSucceed.completeExceptionally(
-                        new IllegalStateException(
-                                WAIT_PROVISIONING_TO_SUCCEED_MSG + ": max waits exceeded"));
+                this.waitProvisioningToSucceed.completeExceptionally(new IllegalStateException(
+                        WAIT_PROVISIONING_TO_SUCCEED_MSG + ": max waits exceeded"));
 
             } else {
 
@@ -1970,8 +1982,8 @@ public class AzureInstanceService extends StatelessService {
 
                 this.numberOfWaits++;
 
-                logInfo("%s: %s - %s", this.msg, WAIT_PROVISIONING_TO_SUCCEED_MSG,
-                        this.numberOfWaits);
+                logInfo("%s: [%s] %s", this.msg, this.numberOfWaits,
+                        WAIT_PROVISIONING_TO_SUCCEED_MSG);
 
                 getHost().schedule(
                         checkProvisioningStateCall(new CheckProvisioningStateCallback()),
