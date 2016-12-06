@@ -1,6 +1,10 @@
 # CHANGELOG
 
-## 0.5.4-SNAPSHOT
+## 0.5.4
+
+* Updated xenon to 1.3.3.
+
+* Add resultLimit to raw metrics look up.
 
 ## 0.5.3
 
