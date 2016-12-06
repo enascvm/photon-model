@@ -116,6 +116,12 @@ public class SingleResourceStatsAggregationTaskService extends
     private static final long EXPIRATION_INTERVAL = Integer
             .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_DAYS, DEFAULT_RETENTION_LIMIT_DAYS);
 
+    public static final String RAW_METRICS_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
+            + "SingleResourceStatsAggregationTaskService.query.rawMetrics.resultLimit";
+    private static final int DEFAULT_RAW_METRICS_RESULT_LIMIT = 50000;
+    private static final int RAW_METRICS_LIMIT = Integer
+            .getInteger(RAW_METRICS_RESULT_LIMIT, DEFAULT_RAW_METRICS_RESULT_LIMIT);
+
     public static class SingleResourceStatsAggregationTaskState
             extends TaskService.TaskServiceState {
 
@@ -679,8 +685,7 @@ public class SingleResourceStatsAggregationTaskService extends
                         MatchType.PREFIX);
                 builder.addRangeClause(QuerySpecification
                         .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, metricKey),
-                        NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true,
-                                true));
+                        NumericRange.createDoubleRange(0.0, Double.MAX_VALUE, true, true));
                 if (range != null) {
                     builder.addRangeClause(ResourceMetrics.FIELD_NAME_TIMESTAMP,
                             NumericRange.createGreaterThanOrEqualRange(
@@ -707,6 +712,10 @@ public class SingleResourceStatsAggregationTaskService extends
 
         QueryTask task = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .addOption(QueryOption.SORT)
+                .orderDescending(ResourceMetrics.FIELD_NAME_TIMESTAMP, TypeName.LONG)
+                .setResultLimit(RAW_METRICS_LIMIT)
                 .setQuery(overallQueryBuilder.build()).build();
         sendRequest(Operation
                 .createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
