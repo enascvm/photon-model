@@ -53,7 +53,6 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.TagService;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -97,6 +96,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public Map<String, ComputeState> computeStatesToBeUpdated;
         // Map AWS VPC id to network state link for the discovered VPCs
         public Map<String, String> vpcs;
+        // Map AWS Subnet id to subnet state link for the discovered Subnets
+        public Map<String, String> subnets;
         public String resourcePoolLink;
         public String parentComputeLink;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
@@ -185,8 +186,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         default:
             Throwable t = new IllegalArgumentException(
                     "Unknown AWS enumeration:compute state creation stage");
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    context.computeState.parentTaskLink, t);
+            finishWithFailure(context, t);
             break;
         }
     }
@@ -222,8 +222,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         } else {
             OperationJoin.create(operations).setCompletion((ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
-                    AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                            context.computeState.parentTaskLink, exs.values().iterator().next());
+                    finishWithFailure(context, exs.values().iterator().next());
                     return;
                 }
 
@@ -259,8 +258,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     if (e != null) {
                         logWarning("Failure retrieving query results: %s",
                                 e.toString());
-                        AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                                context.computeState.parentTaskLink, e);
+                        finishWithFailure(context, e);
+                        return;
                     }
                     QueryTask responseTask = o.getBody(QueryTask.class);
                     if (responseTask != null && responseTask.results.documentCount > 0) {
@@ -422,18 +421,21 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 logSevere(
                         "Error creating a compute state and the associated network %s",
                         Utils.toString(exc));
-                AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                        context.computeState.parentTaskLink, exc.values().iterator().next());
-
+                finishWithFailure(context, exc.values().iterator().next());
+                return;
             }
             logInfo("Successfully created all the networks and compute states.");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
-            return;
         };
         OperationJoin joinOp = OperationJoin.create(context.enumerationOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(getHost());
-
     }
+
+    private void finishWithFailure(AWSComputeServiceCreationContext context, Throwable exc) {
+        context.awsAdapterOperation.fail(exc);
+        AdapterUtils.sendFailurePatchToEnumerationTask(this, context.computeState.parentTaskLink, exc);
+    }
+
 }

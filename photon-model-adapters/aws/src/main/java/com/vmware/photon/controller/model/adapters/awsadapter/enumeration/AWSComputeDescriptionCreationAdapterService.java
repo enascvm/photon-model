@@ -159,7 +159,7 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         default:
             Throwable t = new IllegalArgumentException(
                     "Unknown AWS enumeration:compute description creation stage");
-            AdapterUtils.sendFailurePatchToEnumerationTask(this, context.cdState.parentTaskLink, t);
+            finishWithFailure(context, t);
         }
     }
 
@@ -207,13 +207,12 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         sendRequest(Operation
                 .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
                 .setBody(q)
-                .setConnectionSharing(true)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         logWarning("Failure retrieving query results: %s",
                                 e.toString());
-                        AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                                context.cdState.parentTaskLink, e);
+                        finishWithFailure(context, e);
+                        return;
                     }
                     QueryTask responseTask = o.getBody(QueryTask.class);
                     if (responseTask != null && responseTask.results.documentCount > 0) {
@@ -354,16 +353,20 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
             if (exc != null) {
                 logSevere("Failure creating compute descriptions. Exception is %s",
                         Utils.toString(exc));
-                AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                        context.cdState.parentTaskLink, exc.values().iterator().next());
+                finishWithFailure(context, exc.values().iterator().next());
+                return;
             }
             logInfo("Successfully created all the compute descriptions");
             context.creationStage = next;
             handleComputeDescriptionCreation(context);
-            return;
         };
         OperationJoin joinOp = OperationJoin.create(context.createOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(getHost());
+    }
+
+    private void finishWithFailure(AWSComputeDescriptionCreationServiceContext context, Throwable exc) {
+        context.awsAdapterOperation.fail(exc);
+        AdapterUtils.sendFailurePatchToEnumerationTask(this, context.cdState.parentTaskLink, exc);
     }
 }

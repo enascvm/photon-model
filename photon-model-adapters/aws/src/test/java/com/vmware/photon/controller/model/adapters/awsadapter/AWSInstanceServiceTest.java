@@ -34,7 +34,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
  */
 @RunWith(AWSInstanceServiceTest.class)
 @SuiteClasses({ AWSInstanceServiceTest.HandleRequestTest.class})
-public class AWSInstanceServiceTest extends Suite{
+public class AWSInstanceServiceTest extends Suite {
 
     public AWSInstanceServiceTest(Class<?> klass, RunnerBuilder builder) throws InitializationError {
         super(klass, builder);

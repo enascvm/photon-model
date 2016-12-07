@@ -119,12 +119,11 @@ public class EndpointAdapterUtils {
                         Utils.toString(exc));
                 AdapterUtils.sendFailurePatchToEnumerationTask(service, body.taskReference,
                         exc.values().iterator().next());
-
+                return;
             }
             service.logInfo("Successfully completed %s endpoint configuration tasks.",
                     endpoint.endpointType);
             AdapterUtils.sendPatchToProvisioningTask(service, body.taskReference);
-            return;
         });
         joinOp.sendWith(service);
     }

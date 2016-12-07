@@ -24,32 +24,33 @@ public class AWSUriPaths {
     public static final String AWS = "/aws";
     public static final String PROVISIONING_AWS = UriPaths.PROVISIONING
             + AWS;
-    public static final String AWS_INSTANCE_ADAPTER = PROVISIONING_AWS
-            + "/instance-adapter";
-    public static final String AWS_NETWORK_ADAPTER = PROVISIONING_AWS
-            + "/network-adapter";
-    public static final String AWS_FIREWALL_ADAPTER = PROVISIONING_AWS
-            + "/firewall-adapter";
-    public static final String AWS_STATS_ADAPTER = PROVISIONING_AWS
-            + "/stats-adapter";
+
+    public static final String AWS_INSTANCE_ADAPTER = AdapterTypePath.INSTANCE_ADAPTER
+            .adapterLink(EndpointType.aws.name());
+    public static final String AWS_NETWORK_ADAPTER = AdapterTypePath.NETWORK_ADAPTER
+            .adapterLink(EndpointType.aws.name());
+    public static final String AWS_FIREWALL_ADAPTER = AdapterTypePath.FIREWALL_ADAPTER
+            .adapterLink(EndpointType.aws.name());
+    public static final String AWS_STATS_ADAPTER = AdapterTypePath.STATS_ADAPTER
+            .adapterLink(EndpointType.aws.name());
     public static final String AWS_COST_STATS_ADAPTER = PROVISIONING_AWS
             + "/cost-stats-adapter";
-    public static final String AWS_ENUMERATION_ADAPTER = PROVISIONING_AWS
-            + "/enumeration-adapter";
-    public static final String AWS_ENUMERATION_CREATION_ADAPTER = PROVISIONING_AWS
-            + "/enumeration-creation-adapter";
-    public static final String AWS_ENUMERATION_DELETION_ADAPTER = PROVISIONING_AWS
-            + "/enumeration-deletion-adapter";
+    public static final String AWS_ENUMERATION_ADAPTER = AdapterTypePath.ENUMERATION_ADAPTER
+            .adapterLink(EndpointType.aws.name());
+    public static final String AWS_ENUMERATION_CREATION_ADAPTER = AdapterTypePath.ENUMERATION_CREATION_ADAPTER
+            .adapterLink(EndpointType.aws.name());
+    public static final String AWS_ENUMERATION_DELETION_ADAPTER = AdapterTypePath.ENUMERATION_DELETION_ADAPTER
+            .adapterLink(EndpointType.aws.name());
     public static final String AWS_STORAGE_ENUMERATION_ADAPTER_SERVICE = PROVISIONING_AWS
             + "/storage-enumeration-adapter";
-    public static final String AWS_COMPUTE_DESCRIPTION_CREATION_ADAPTER = PROVISIONING_AWS
-            + "/compute-description-creation-adapter";
-    public static final String AWS_COMPUTE_STATE_CREATION_ADAPTER = PROVISIONING_AWS
-            + "/compute-state-creation-adapter";
+    public static final String AWS_COMPUTE_DESCRIPTION_CREATION_ADAPTER = AdapterTypePath.COMPUTE_DESCRIPTION_CREATION_ADAPTER
+            .adapterLink(EndpointType.aws.name());
+    public static final String AWS_COMPUTE_STATE_CREATION_ADAPTER = AdapterTypePath.COMPUTE_STATE_CREATION_ADAPTER
+            .adapterLink(EndpointType.aws.name());
     public static final String AWS_NETWORK_STATE_CREATION_ADAPTER = PROVISIONING_AWS
             + "/network-state-creation-adapter";
-    public static final String AWS_ENDPOINT_CONFIG_ADAPTER = PROVISIONING_AWS
-            + "/endpoint-config-adapter";
+    public static final String AWS_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
+            .adapterLink(EndpointType.aws.name());
 
     public static final String AWS_POWER_ADAPTER = AdapterTypePath.POWER_ADAPTER
             .adapterLink(EndpointType.aws.name());

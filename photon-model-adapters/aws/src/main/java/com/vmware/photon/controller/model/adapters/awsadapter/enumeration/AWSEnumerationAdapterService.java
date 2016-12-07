@@ -234,12 +234,11 @@ public class AWSEnumerationAdapterService extends StatelessService {
                 AdapterUtils.sendFailurePatchToEnumerationTask(this,
                         context.computeEnumerationRequest.taskReference,
                         exc.values().iterator().next());
-
+                return;
             }
             logInfo("Successfully completed the enumeration workflows for creation, deletion of compute states and storage.");
             context.stage = next;
             handleEnumerationRequest(context);
-            return;
         };
         OperationJoin joinOp = OperationJoin.create(context.enumerationOperations);
         joinOp.setCompletion(joinCompletion);

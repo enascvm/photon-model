@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -38,13 +39,15 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
@@ -68,10 +71,28 @@ public class AWSNetworkUtils {
         networkState.authCredentialsLink = authCredentialsLink;
         networkState.instanceAdapterReference = adapterUri;
         networkState.tenantLinks = tenantLinks;
-        networkState.customProperties = new HashMap<String, String>();
+        networkState.customProperties = new HashMap<>();
         networkState.customProperties.put("defaultInstance", String.valueOf(vpc.isDefault()));
 
         return networkState;
+    }
+
+    /**
+     * NOTE: Keep in mind that subnetState.networkLink is not set and it should be updated once
+     * valid NetworkState.documentSelfLink is available.
+     */
+    public static SubnetState mapSubnetToSubnetState(Subnet subnet, List<String> tenantLinks) {
+        if (subnet == null) {
+            throw new IllegalArgumentException(
+                    "Cannot map Subnet to subnet state for null instance");
+        }
+        SubnetState subnetState = new SubnetState();
+        subnetState.id = subnet.getSubnetId();
+        subnetState.name = subnet.getSubnetId();
+        subnetState.subnetCIDR = subnet.getCidrBlock();
+        subnetState.tenantLinks = tenantLinks;
+
+        return subnetState;
     }
 
     /**
@@ -205,28 +226,39 @@ public class AWSNetworkUtils {
      */
     public static QueryTask createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
             Set<String> vpcIds, List<String> tenantLinks) {
-        // instance Ids
-        QueryTask q = new QueryTask();
-        q.setDirect(true);
-        q.querySpec = new QueryTask.QuerySpecification();
-        q.querySpec.options.add(QueryOption.EXPAND_CONTENT);
-        q.querySpec.query = Query.Builder.create()
-                .addKindFieldClause(NetworkService.NetworkState.class)
+
+        return createQueryToGetExistingStatesFilteredByDiscoveredIds(
+                NetworkService.NetworkState.class, vpcIds, tenantLinks);
+    }
+
+    /**
+     * Creates the query to retrieve existing subnet states filtered by the discovered Subnets.
+     */
+    public static QueryTask createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
+            Set<String> subnetIds, List<String> tenantLinks) {
+
+        return createQueryToGetExistingStatesFilteredByDiscoveredIds(
+                SubnetService.SubnetState.class, subnetIds, tenantLinks);
+    }
+
+    private static QueryTask createQueryToGetExistingStatesFilteredByDiscoveredIds(
+            Class<? extends ResourceState> stateClass,
+            Set<String> stateIds,
+            List<String> tenantLinks) {
+
+        Query query = Query.Builder.create()
+                .addKindFieldClause(stateClass)
+                .addInClause(ResourceState.FIELD_NAME_ID, stateIds)
                 .build();
 
-        QueryTask.Query networkStateIdFilterParentQuery = new QueryTask.Query();
-        networkStateIdFilterParentQuery.occurance = Occurance.MUST_OCCUR;
-        for (String vpcId : vpcIds) {
-            QueryTask.Query networkStateIdFilter = new QueryTask.Query()
-                    .setTermPropertyName(ComputeState.FIELD_NAME_ID)
-                    .setTermMatchValue(vpcId);
-            networkStateIdFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
-            networkStateIdFilterParentQuery.addBooleanClause(networkStateIdFilter);
-        }
-        q.querySpec.query.addBooleanClause(networkStateIdFilterParentQuery);
-        q.documentSelfLink = UUID.randomUUID().toString();
-        q.tenantLinks = tenantLinks;
-        return q;
+        QueryTask queryTask = QueryTask.Builder.create()
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .setQuery(query)
+                .build();
+        queryTask.setDirect(true);
+        queryTask.tenantLinks = tenantLinks;
+
+        return queryTask;
     }
 
     /**

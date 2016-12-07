@@ -14,12 +14,10 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 
@@ -171,11 +169,9 @@ public class AzureEnumerationAdapterService extends StatelessService {
                         context.error);
                 return;
             }
-
             logInfo("Successfully completed Azure enumeration adapter %s", adapterSelfLink);
             context.stage = next;
             handleEnumerationRequest(context);
-            return;
         };
 
         Operation patchEnumAdapterService = Operation
@@ -189,16 +185,4 @@ public class AzureEnumerationAdapterService extends StatelessService {
         logInfo("Triggered Azure enumeration adapter %s", adapterSelfLink);
     }
 
-    /**
-     * Method to get the failed consumer to handle the error that was raised.
-     * @param ctx The enumeration context
-     * @return
-     */
-    private Consumer<Throwable> getFailureConsumer(EnumerationContext ctx) {
-        return (t) -> {
-            ctx.error = t;
-            ctx.stage = AzureEnumerationStages.ERROR;
-            handleEnumerationRequest(ctx);
-        };
-    }
 }
