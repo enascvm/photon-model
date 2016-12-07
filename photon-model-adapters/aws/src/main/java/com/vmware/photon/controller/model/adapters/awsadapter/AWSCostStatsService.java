@@ -600,6 +600,8 @@ public class AWSCostStatsService extends StatelessService {
         resourceStats.statValues = new ConcurrentSkipListMap<>();
         resourceStats.computeLink = resourceComputeLink;
         List<ServiceStat> resourceServiceStats = new ArrayList<>();
+        String normalizedStatKeyValue = AWSStatsNormalizer
+                .getNormalizedStatKeyValue(AWSConstants.COST);
         for (Entry<Long, Double> cost : resourceDetails.directCosts.entrySet()) {
             Long usageStartTime = cost.getKey();
             if (usageStartTime.compareTo(billProcessedTimeMillis) > 0) {
@@ -608,11 +610,11 @@ public class AWSCostStatsService extends StatelessService {
                 resourceStat.latestValue = cost.getValue();
                 resourceStat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(usageStartTime);
                 resourceStat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-                resourceStat.name = AWSConstants.COST;
+                resourceStat.name = normalizedStatKeyValue;
                 resourceServiceStats.add(resourceStat);
             }
         }
-        resourceStats.statValues.put(AWSConstants.COST, resourceServiceStats);
+        resourceStats.statValues.put(normalizedStatKeyValue, resourceServiceStats);
         return resourceStats;
     }
 
@@ -632,7 +634,7 @@ public class AWSCostStatsService extends StatelessService {
         costStat.latestValue = awsAccountDetailDto.cost;
         costStat.sourceTimeMicrosUtc = statTime;
         costStat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
-        costStat.name = AWSConstants.COST;
+        costStat.name = AWSStatsNormalizer.getNormalizedStatKeyValue(AWSConstants.COST);
         accountStats.statValues.put(costStat.name, Collections.singletonList(costStat));
 
         // Account deleted VM count

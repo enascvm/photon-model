@@ -32,6 +32,7 @@ import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService;
@@ -142,7 +143,9 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         ComputeStats account2Stats = computeStatsByLink.get(account2SelfLink);
 
         //check total account cost
-        assertTrue(computeStats.statValues.get(AWSConstants.COST)
+        String normalizedStatKeyValue = AWSStatsNormalizer
+                .getNormalizedStatKeyValue(AWSConstants.COST);
+        assertTrue(computeStats.statValues.get(normalizedStatKeyValue)
                 .get(0).latestValue == account1TotalCost);
 
         // check VM count stats
@@ -176,7 +179,8 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         }
 
         // Check the cost of linked account
-        assertTrue(account2Stats.statValues.get(AWSConstants.COST)
+        ComputeStats account2ComputeStats = computeStatsByLink.get(account2SelfLink);
+        assertTrue(account2ComputeStats.statValues.get(normalizedStatKeyValue)
                 .get(0).latestValue == account2TotalCost);
     }
 }

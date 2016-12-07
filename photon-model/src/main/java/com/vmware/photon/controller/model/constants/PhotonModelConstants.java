@@ -37,6 +37,7 @@ public class PhotonModelConstants {
     public static final String ESTIMATED_CHARGES = "EstimatedCharges";
     public static final String CURRENT_BURN_RATE_PER_HOUR = "CurrentBurnRatePerHour";
     public static final String AVERAGE_BURN_RATE_PER_HOUR = "AverageBurnRatePerHour";
+    public static final String COST = "Cost";
 
     public static final String DISK_WRITE_TIME_SECONDS = "DiskWriteTimeSeconds";
     public static final String DISK_READ_TIME_SECONDS = "DiskReadTimeSeconds";
@@ -83,6 +84,7 @@ public class PhotonModelConstants {
         statMap.put(STATUS_CHECK_FAILED_COUNT_INSTANCE, UNIT_COUNT);
         statMap.put(STATUS_CHECK_FAILED_COUNT_SYSTEM, UNIT_COUNT);
         statMap.put(ESTIMATED_CHARGES, UNIT_COST);
+        statMap.put(COST, UNIT_COST);
         statMap.put(CURRENT_BURN_RATE_PER_HOUR, UNIT_COST);
         statMap.put(AVERAGE_BURN_RATE_PER_HOUR, UNIT_COST);
         statMap.put(DISK_WRITE_TIME_SECONDS, UNIT_SECONDS);

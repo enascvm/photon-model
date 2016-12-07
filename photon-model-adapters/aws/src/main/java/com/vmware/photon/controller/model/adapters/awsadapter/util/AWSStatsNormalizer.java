@@ -73,6 +73,7 @@ public class AWSStatsNormalizer {
                 PhotonModelConstants.CURRENT_BURN_RATE_PER_HOUR);
         statMap.put(AWSConstants.AVERAGE_BURN_RATE,
                 PhotonModelConstants.AVERAGE_BURN_RATE_PER_HOUR);
+        statMap.put(AWSConstants.COST, PhotonModelConstants.COST);
         PHOTON_MODEL_STATS_MAP = Collections.unmodifiableMap(statMap);
     }
 
