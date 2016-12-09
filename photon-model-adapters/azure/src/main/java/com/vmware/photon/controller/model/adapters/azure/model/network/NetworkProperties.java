@@ -13,12 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model.network;
 
+import java.util.List;
+
 /**
- * Virtual Network resource.
+ * Describes properties of a virtual network.
  */
-public class VirtualNetwork {
-    public String id;
-    public String name;
-    public String location;
-    public NetworkProperties properties;
+public class NetworkProperties {
+    public AddressSpace addressSpace;
+    public List<Subnet> subnets;
 }

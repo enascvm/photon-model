@@ -14,11 +14,10 @@
 package com.vmware.photon.controller.model.adapters.azure.model.network;
 
 /**
- * Virtual Network resource.
+ * Subnet resource.
  */
-public class VirtualNetwork {
+public class Subnet {
     public String id;
     public String name;
-    public String location;
-    public NetworkProperties properties;
+    public SubnetProperties properties;
 }

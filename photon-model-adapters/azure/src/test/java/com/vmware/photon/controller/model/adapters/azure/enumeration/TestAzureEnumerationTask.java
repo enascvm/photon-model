@@ -21,7 +21,6 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultStorageAccountDescription;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createNetworkState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteServiceDocument;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
@@ -80,6 +79,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService.Resourc
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -103,13 +103,13 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 
 /**
  * PRE-REQUISITE: An Azure Resource Manager VM named <b>EnumTestVM-DoNotDelete</b>, with diagnostics enabled,
- *                is required for the stats collection on compute host to be successful.
- *
+ * is required for the stats collection on compute host to be successful.
+ * <p>
  * NOTE: Testing pagination related changes requires manual setup due to account limits, slowness
  * of vm creation on azure (this slowness is on azure), and cost associated.
- *
+ * <p>
  * For manual tests use Azure CLI to create multiple VMs using this bash command line:
- *
+ * <p>
  * for i in {1..55}; do azure vm quick-create resourcegroup vm$i westus linux canonical:UbuntuServer:12.04.3-LTS:12.04.201401270 azureuser Pa$$word% -z Standard_A0; done
  */
 public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
@@ -117,7 +117,6 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private static final int STALE_STORAGE_ACCOUNTS_COUNT = 5;
     private static final int STALE_CONTAINERS_COUNT = 5;
     private static final int STALE_BLOBS_COUNT = 5;
-    private static final int STALE_NETWORKS_COUNT = 5;
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -246,7 +245,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         this.authLink = authCredentials.documentSelfLink;
 
         // create a compute host for the Azure
-        this.computeHost = createDefaultComputeHost(this.host, this.resourcePoolLink, this.authLink);
+        this.computeHost = createDefaultComputeHost(this.host, this.resourcePoolLink,
+                this.authLink);
 
         this.storageDescription = createDefaultStorageAccountDescription(this.host,
                 this.mockedStorageAccountName, this.computeHost.documentSelfLink,
@@ -259,7 +259,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 this.mockedStorageAccountName, this.resourcePoolLink);
         // create an Azure VM compute resource (this also creates a disk and a storage account)
         this.vmState = createDefaultVMResource(this.host, this.azureVMName,
-                this.computeHost.documentSelfLink, this.resourcePoolLink);
+                this.computeHost.documentSelfLink, this.resourcePoolLink, this.authLink);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();
@@ -316,7 +316,9 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         createAzureStorageAccounts(STALE_STORAGE_ACCOUNTS_COUNT);
         createAzureStorageContainers(STALE_CONTAINERS_COUNT);
         createAzureBlobs(STALE_BLOBS_COUNT);
-        createAzureNetworks(STALE_NETWORKS_COUNT);
+
+        // No need to create stale networks or subnets since createAzureVMResources will create
+        // such for us.
 
         // stale resources + 1 compute host instance + 1 vm compute state
         ProvisioningUtils.queryComputeInstances(this.host, STALE_VM_RESOURCES_COUNT + 2);
@@ -326,12 +328,21 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 STALE_CONTAINERS_COUNT + 1, ResourceGroupService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_BLOBS_COUNT + 1,
                 DiskService.FACTORY_LINK, true);
+        // 1 network per each stale vm resource + 1 network for original vm conpute state.
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
+                STALE_VM_RESOURCES_COUNT + 1,
+                NetworkService.FACTORY_LINK, true);
+        // 1 subnet per network, 1 network per each stale vm resource + 1 subnet for the original
+        // compute state.
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_VM_RESOURCES_COUNT + 1,
+                SubnetService.FACTORY_LINK, true);
 
         this.vmCount = getAzureVMCount(this.computeManagementClient);
         this.host.log(Level.INFO, "Initial VM Count: %d", this.vmCount);
         getAzureStorageResourcesCount();
 
         int networksCount = getAzureNetworskCount();
+        int subnetsCount = getAzureSubnetCount();
 
         runEnumeration();
 
@@ -345,6 +356,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, networksCount,
                 NetworkService.FACTORY_LINK, true);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, subnetsCount,
+                SubnetService.FACTORY_LINK, true);
 
         // VM count + 1 compute host instance
         this.vmCount = this.vmCount + 1;
@@ -356,7 +369,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             if (!document.documentSelfLink.equals(this.computeHost.documentSelfLink)
                     && !document.documentSelfLink.equals(this.vmState.documentSelfLink)
                     && document.id.toLowerCase()
-                            .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
+                    .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
                 this.enumeratedComputeLink = document.documentSelfLink;
                 break;
             }
@@ -412,7 +425,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         for (int i = 0; i < numOfVMs; i++) {
             String staleVMName = "stalevm-" + i;
             createDefaultVMResource(this.host, staleVMName, this.computeHost.documentSelfLink,
-                    this.resourcePoolLink);
+                    this.resourcePoolLink, this.authLink);
         }
     }
 
@@ -588,12 +601,15 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         return networks.size();
     }
 
-    private void createAzureNetworks(int numOfNetworks) throws Throwable {
-        for (int i = 0; i < numOfNetworks; i++) {
-            String staleNetName = "staleNet-" + i;
+    private int getAzureSubnetCount() throws Exception {
+        ServiceResponse<List<VirtualNetwork>> networksResponse = this.networkManagementClient
+                .getVirtualNetworksOperations().listAll();
+        List<VirtualNetwork> networks = networksResponse.getBody();
 
-            createNetworkState(this.host, staleNetName, this.resourcePoolLink, this.authLink);
-        }
+        final int[] subnetCount = { 0 };
+        networks.forEach(virtualNetwork -> subnetCount[0] += virtualNetwork.getSubnets().size());
+
+        return subnetCount[0];
     }
 
     private StorageManagementClient getStorageManagementClient() {

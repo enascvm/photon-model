@@ -143,7 +143,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
         // create a Azure VM compute resoruce
         this.vmState = createDefaultVMResource(this.host, this.azureVMName,
                 computeHost.documentSelfLink,
-                this.resourcePoolLink);
+                this.resourcePoolLink, this.authLink);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();

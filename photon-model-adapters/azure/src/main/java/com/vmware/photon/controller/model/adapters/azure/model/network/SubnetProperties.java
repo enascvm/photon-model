@@ -14,8 +14,8 @@
 package com.vmware.photon.controller.model.adapters.azure.model.network;
 
 /**
- * Describes properties of a virtual network.
+ * Describes properties of a subnet.
  */
-public class Properties {
-    public AddressSpace addressSpace;
+public class SubnetProperties {
+    public String addressPrefix;
 }

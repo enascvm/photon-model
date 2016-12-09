@@ -110,7 +110,8 @@ public class AzureTestUtil {
         return returnPool;
     }
 
-    public static int getAzureVMCount(ComputeManagementClient computeManagementClient) throws Exception {
+    public static int getAzureVMCount(ComputeManagementClient computeManagementClient)
+            throws Exception {
         ServiceResponse<List<VirtualMachine>> response = computeManagementClient
                 .getVirtualMachinesOperations().listAll();
 
@@ -126,7 +127,8 @@ public class AzureTestUtil {
         return count;
     }
 
-    public static void deleteVMs(VerificationHost host, String documentSelfLink, boolean isMock, int numberOfRemainingVMs)
+    public static void deleteVMs(VerificationHost host, String documentSelfLink, boolean isMock,
+            int numberOfRemainingVMs)
             throws Throwable {
         host.testStart(1);
         ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
@@ -138,15 +140,15 @@ public class AzureTestUtil {
         deletionState.resourceQuerySpec = resourceQuerySpec;
         deletionState.isMockRequest = isMock;
         host.send(Operation
-                          .createPost(UriUtils.buildUri(host, ResourceRemovalTaskService.FACTORY_LINK))
-                          .setBody(deletionState)
-                          .setCompletion(host.getCompletion()));
+                .createPost(UriUtils.buildUri(host, ResourceRemovalTaskService.FACTORY_LINK))
+                .setBody(deletionState)
+                .setCompletion(host.getCompletion()));
         host.testWait();
         ProvisioningUtils.queryComputeInstances(host, numberOfRemainingVMs);
     }
 
     public static AuthCredentialsServiceState createDefaultAuthCredentials(VerificationHost host,
-            String clientID, String clientKey, String subscriptionId,String tenantId) throws
+            String clientID, String clientKey, String subscriptionId, String tenantId) throws
             Throwable {
 
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
@@ -165,7 +167,7 @@ public class AzureTestUtil {
      * Create a compute host description for an Azure instance
      */
     public static ComputeState createDefaultComputeHost(
-            VerificationHost host,  String resourcePoolLink, String authLink) throws Throwable {
+            VerificationHost host, String resourcePoolLink, String authLink) throws Throwable {
 
         ComputeDescription azureHostDescription = new ComputeDescription();
         azureHostDescription.id = UUID.randomUUID().toString();
@@ -215,7 +217,8 @@ public class AzureTestUtil {
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
-            String parentLink, String resourcePoolLink) throws Throwable {
+            String parentLink, String resourcePoolLink, String computeHostAuthLink) throws
+            Throwable {
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
         auth.userEmail = AZURE_ADMIN_USERNAME;
         auth.privateKey = AZURE_ADMIN_PASSWORD;
@@ -271,11 +274,12 @@ public class AzureTestUtil {
             networkState = new NetworkState();
             networkState.id = UUID.randomUUID().toString();
             networkState.name = azureVMName + "-vNet";
-            networkState.authCredentialsLink = authLink;
+            networkState.authCredentialsLink = computeHostAuthLink;
             networkState.resourcePoolLink = resourcePoolLink;
             networkState.subnetCIDR = AZURE_NETWORK_CIDR;
             networkState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
-            networkState.instanceAdapterReference = UriUtils.buildUri(host, "/dummyInstanceAdapterReference");
+            networkState.instanceAdapterReference = UriUtils
+                    .buildUri(host, "/dummyInstanceAdapterReference");
 
             networkState = TestUtils.doPost(host, networkState, NetworkState.class,
                     UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
@@ -302,8 +306,10 @@ public class AzureTestUtil {
             nicDescription.id = UUID.randomUUID().toString();
             nicDescription.assignment = IpAssignment.DYNAMIC;
 
-            nicDescription = TestUtils.doPost(host, nicDescription, NetworkInterfaceDescription.class,
-                    UriUtils.buildUri(host, NetworkInterfaceDescriptionService.FACTORY_LINK));
+            nicDescription = TestUtils
+                    .doPost(host, nicDescription, NetworkInterfaceDescription.class,
+                            UriUtils.buildUri(host,
+                                    NetworkInterfaceDescriptionService.FACTORY_LINK));
         }
 
         // Create NIC states.
@@ -399,7 +405,8 @@ public class AzureTestUtil {
         rGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_STATUS,
                 randomString(5));
         ResourceGroupState rGroup = TestUtils.doPost(host, rGroupState,
-                ResourceGroupState.class, UriUtils.buildUri(host, ResourceGroupService.FACTORY_LINK));
+                ResourceGroupState.class,
+                UriUtils.buildUri(host, ResourceGroupService.FACTORY_LINK));
         return rGroup;
     }
 
@@ -418,24 +425,5 @@ public class AzureTestUtil {
         DiskState dState = TestUtils.doPost(host, diskState, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
         return dState;
-    }
-
-    public static NetworkState createNetworkState(VerificationHost host, String
-            networkName, String resourcePoolLink, String authLink) throws Throwable {
-
-        NetworkState network = new NetworkState();
-        network.id = UUID.randomUUID().toString();
-        network.name = networkName;
-        network.resourcePoolLink = resourcePoolLink;
-        network.documentSelfLink = network.id;
-        network.subnetCIDR = "192.168.0.0/16";
-        network.regionId = AZURE_RESOURCE_GROUP_LOCATION;
-        network.authCredentialsLink = authLink;
-        network.instanceAdapterReference =
-                UriUtils.buildUri(host, "/dummyInstanceAdapterReference");
-
-        NetworkState vNet = TestUtils.doPost(host, network, NetworkState.class,
-                UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
-        return vNet;
     }
 }
