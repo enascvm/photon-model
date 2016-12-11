@@ -65,9 +65,7 @@ import com.microsoft.azure.storage.blob.CloudBlob;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.ListBlobItem;
-
 import com.microsoft.rest.ServiceResponse;
-
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
@@ -89,7 +87,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
-
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -98,7 +96,8 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.ServiceUriPaths;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * Enumeration adapter for data collection of storage artifacts in Azure.
@@ -492,17 +491,21 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     /**
      * Query all storage descriptions for the cluster filtered by the received set of storage account Ids
      */
-    private void getLocalStorageAccountDescriptions(StorageEnumContext context, StorageEnumStages next) {
+    private void getLocalStorageAccountDescriptions(StorageEnumContext context,
+            StorageEnumStages next) {
         Query query = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
                         context.computeHostDesc.documentSelfLink)
                 .build();
 
-        QueryTask.Query.Builder instanceIdFilterParentQuery = Query.Builder.create(QueryTask.Query.Occurance.MUST_OCCUR);
+        Query.Builder instanceIdFilterParentQuery = Query.Builder
+                .create(Occurance.MUST_OCCUR);
 
-        for (Map.Entry<String, StorageAccount> account : context.storageAccountsToUpdateCreate.entrySet()) {
-            QueryTask.Query instanceIdFilter = Query.Builder.create(QueryTask.Query.Occurance.SHOULD_OCCUR)
+        for (Map.Entry<String, StorageAccount> account : context.storageAccountsToUpdateCreate
+                .entrySet()) {
+            Query instanceIdFilter = Query.Builder
+                    .create(Occurance.SHOULD_OCCUR)
                     .addFieldClause(StorageDescription.FIELD_NAME_ID,
                             account.getValue().id).build();
             instanceIdFilterParentQuery.addClause(instanceIdFilter);
@@ -511,20 +514,19 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         query.addBooleanClause(instanceIdFilterParentQuery.build());
 
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                .setQuery(query).build();
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setQuery(query)
+                .setResultLimit(context.storageAccountsToUpdateCreate.size())
+                .build();
         q.tenantLinks = context.computeHostDesc.tenantLinks;
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
                         return;
                     }
-                    QueryTask queryTask = o.getBody(QueryTask.class);
-
                     logFine("Found %d matching storage descriptions for Azure storage accounts",
                             queryTask.results.documentCount);
 
@@ -549,7 +551,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
                     context.subStage = next;
                     handleSubStage(context);
-                }));
+                });
     }
 
     /**
@@ -709,26 +711,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      * - Storage account is not present on Azure.
      */
     private void deleteStorageDescription(StorageEnumContext context, StorageEnumStages next) {
-        Operation.CompletionHandler completionHandler = (o, e) -> {
-            if (e != null) {
-                handleError(context, e);
-                return;
-            }
-            QueryTask queryTask = o.getBody(QueryTask.class);
-
-            if (queryTask.results.nextPageLink == null) {
-                logInfo("No storage accounts found for deletion");
-                context.subStage = next;
-                handleSubStage(context);
-                return;
-            }
-
-            context.deletionNextPageLink = queryTask.results.nextPageLink;
-            deleteStorageDescriptionHelper(context);
-        };
-
         int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, 50);
-        QueryTask.Query query = QueryTask.Query.Builder.create()
+        Query query = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
                         context.computeHostDesc.documentSelfLink)
@@ -738,17 +722,29 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .build();
 
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
                 .setResultLimit(resultLimit)
                 .build();
         q.tenantLinks = context.computeHostDesc.tenantLinks;
 
         logFine("Querying storage descriptions for deletion");
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion(completionHandler));
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
+                    if (e != null) {
+                        handleError(context, e);
+                        return;
+                    }
+                    if (queryTask.results.nextPageLink == null) {
+                        logInfo("No storage accounts found for deletion");
+                        context.subStage = next;
+                        handleSubStage(context);
+                        return;
+                    }
+
+                    context.deletionNextPageLink = queryTask.results.nextPageLink;
+                    deleteStorageDescriptionHelper(context);
+                });
     }
 
     private void deleteStorageDescriptionHelper(StorageEnumContext context) {
@@ -859,10 +855,13 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .addFieldClause(computeHostProperty, context.computeHostDesc.documentSelfLink)
                 .build();
 
-        QueryTask.Query.Builder instanceIdFilterParentQuery = Query.Builder.create(QueryTask.Query.Occurance.MUST_OCCUR);
+        Query.Builder instanceIdFilterParentQuery = Query.Builder
+                .create(Occurance.MUST_OCCUR);
 
-        for (Map.Entry<String, CloudBlobContainer> container : context.storageContainers.entrySet()) {
-            QueryTask.Query instanceIdFilter = Query.Builder.create(QueryTask.Query.Occurance.SHOULD_OCCUR)
+        for (Map.Entry<String, CloudBlobContainer> container : context.storageContainers
+                .entrySet()) {
+            Query instanceIdFilter = Query.Builder
+                    .create(Occurance.SHOULD_OCCUR)
                     .addFieldClause(ResourceGroupState.FIELD_NAME_ID,
                             container.getValue().getUri().toString()).build();
             instanceIdFilterParentQuery.addClause(instanceIdFilter);
@@ -871,20 +870,19 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         query.addBooleanClause(instanceIdFilterParentQuery.build());
 
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                .setQuery(query).build();
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setQuery(query)
+                .setResultLimit(context.storageContainers.size())
+                .build();
         q.tenantLinks = context.computeHostDesc.tenantLinks;
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
                         return;
                     }
-                    QueryTask queryTask = o.getBody(QueryTask.class);
-
                     logFine("Found %d matching resource for Azure storage containers",
                             queryTask.results.documentCount);
 
@@ -904,7 +902,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
                     context.subStage = next;
                     handleSubStage(context);
-                }));
+                });
     }
 
     private void updateResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
@@ -939,19 +937,19 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .build();
 
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                .setQuery(query).build();
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setQuery(query)
+                .setResultLimit(1)
+                .build();
         q.tenantLinks = context.computeHostDesc.tenantLinks;
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         logWarning("Could not retrieve storage description link");
                         return;
                     }
-                    QueryTask queryTask = o.getBody(QueryTask.class);
                     logFine("Found %d matching resource group", queryTask.results.documentCount);
 
                     String storageDescSelfLink = null;
@@ -960,9 +958,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         storageDescSelfLink = queryTask.results.documentLinks.get(0);
 
                         if (queryTask.results.documentCount > 1) {
-                            StorageDescription storageDesc = Utils.fromJson(queryTask.results.documents
-                                            .get(queryTask.results.documentLinks.get(0)),
-                                    StorageDescription.class);
+                            StorageDescription storageDesc = Utils
+                                    .fromJson(queryTask.results.documents
+                                                    .get(queryTask.results.documentLinks.get(0)),
+                                            StorageDescription.class);
                             logWarning("Found multiple instance of the same storage description %s",
                                     storageDesc.name);
                         }
@@ -975,7 +974,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             createResourceGroupState(context, resourceGroupState, size);
                         }
                     }
-                }));
+                });
     }
 
     private  ResourceGroupState createResourceGroupStateObject (StorageEnumContext context,
@@ -1086,30 +1085,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      * - Storage container is not present on Azure.
      */
     private void deleteResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
-        Operation.CompletionHandler completionHandler = (o, e) -> {
-            if (e != null) {
-                handleError(context, e);
-                return;
-            }
-            QueryTask queryTask = o.getBody(QueryTask.class);
-
-            if (queryTask.results.nextPageLink == null) {
-                logInfo("No storage containers found for deletion");
-                context.subStage = next;
-                handleSubStage(context);
-                return;
-            }
-
-            context.deletionNextPageLink = queryTask.results.nextPageLink;
-            deleteResourceGroupHelper(context);
-        };
-
         int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, 50);
         String computeHostProperty = QueryTask.QuerySpecification
                 .buildCompositeFieldName(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                         FIELD_COMPUTE_HOST_LINK);
 
-        QueryTask.Query query = QueryTask.Query.Builder.create()
+        Query query = Query.Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
                 .addFieldClause(computeHostProperty, context.computeHostDesc.documentSelfLink)
                 .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
@@ -1118,17 +1099,29 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .build();
 
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
                 .setResultLimit(resultLimit)
                 .build();
         q.tenantLinks = context.computeHostDesc.tenantLinks;
 
         logFine("Querying resource group states for deletion");
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion(completionHandler));
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
+                    if (e != null) {
+                        handleError(context, e);
+                        return;
+                    }
+                    if (queryTask.results.nextPageLink == null) {
+                        logInfo("No storage containers found for deletion");
+                        context.subStage = next;
+                        handleSubStage(context);
+                        return;
+                    }
+
+                    context.deletionNextPageLink = queryTask.results.nextPageLink;
+                    deleteResourceGroupHelper(context);
+                });
     }
 
     private void deleteResourceGroupHelper(StorageEnumContext context) {
@@ -1234,11 +1227,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         context.computeHostDesc.documentSelfLink)
                 .build();
 
-        QueryTask.Query.Builder diskUriFilterParentQuery = QueryTask.Query.Builder
-                .create(QueryTask.Query.Occurance.MUST_OCCUR);
+        Query.Builder diskUriFilterParentQuery = Query.Builder.create(Occurance.MUST_OCCUR);
 
         for (Map.Entry<String, ListBlobItem> blob : context.storageBlobs.entrySet()) {
-            QueryTask.Query diskUriFilter = QueryTask.Query.Builder.create(QueryTask.Query.Occurance.SHOULD_OCCUR)
+            Query diskUriFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
                     .addFieldClause(DiskState.FIELD_NAME_ID, blob.getValue().getUri())
                     .build();
 
@@ -1250,15 +1242,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         String blobProperty = QueryTask.QuerySpecification
                 .buildCompositeFieldName(DiskState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AZURE_STORAGE_TYPE);
-        QueryTask.Query.Builder typeFilterQuery = QueryTask.Query.Builder
-                .create(QueryTask.Query.Occurance.MUST_OCCUR);
+        Query.Builder typeFilterQuery = Query.Builder
+                .create(Occurance.MUST_OCCUR);
 
-        QueryTask.Query blobFilter = QueryTask.Query.Builder.create(QueryTask.Query.Occurance.SHOULD_OCCUR)
+        Query blobFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
                 .addFieldClause(blobProperty, AZURE_STORAGE_BLOBS)
                 .build();
 
-        QueryTask.Query diskFilter = QueryTask.Query.Builder.create(
-                QueryTask.Query.Occurance.SHOULD_OCCUR)
+        Query diskFilter = Query.Builder.create(
+                Occurance.SHOULD_OCCUR)
                 .addFieldClause(blobProperty, AZURE_STORAGE_DISKS)
                 .build();
         typeFilterQuery.addClause(blobFilter);
@@ -1266,20 +1258,19 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         query.addBooleanClause(typeFilterQuery.build());
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                .setQuery(query).build();
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setQuery(query)
+                .setResultLimit(context.storageBlobs.size())
+                .build();
         q.tenantLinks = context.computeHostDesc.tenantLinks;
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
                         return;
                     }
-                    QueryTask queryTask = o.getBody(QueryTask.class);
-
                     logFine("Found %d matching disk states for Azure blobs",
                             queryTask.results.documentCount);
 
@@ -1296,9 +1287,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         context.diskStates.put(diskUri, diskState);
                     }
 
-                    context.subStage = StorageEnumStages.UPDATE_DISK_STATES;
+                    context.subStage = next;
                     handleSubStage(context);
-                }));
+                });
     }
 
     /**
@@ -1328,7 +1319,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             DiskState oldDiskState, AtomicInteger size) {
         try {
             // Associate blob with the resource group state (container) it belongs to
-            String containerId =  blob.getContainer().getUri().toString();
+            String containerId = blob.getContainer().getUri().toString();
             String computeHostProperty = QueryTask.QuerySpecification
                     .buildCompositeFieldName(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                             FIELD_COMPUTE_HOST_LINK);
@@ -1340,21 +1331,21 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     .build();
 
             QueryTask q = QueryTask.Builder.createDirectTask()
-                    .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                    .setQuery(query).build();
+                    .addOption(QueryOption.EXPAND_CONTENT)
+                    .addOption(QueryOption.TOP_RESULTS)
+                    .setQuery(query)
+                    .setResultLimit(1)
+                    .build();
             q.tenantLinks = context.computeHostDesc.tenantLinks;
 
-            sendRequest(Operation
-                    .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                    .setBody(q)
-                    .setCompletion((o, e) -> {
+            QueryUtils.startQueryTask(this, q)
+                    .whenComplete((queryTask, e) -> {
                         if (e != null) {
                             logWarning("Could not retrieve resource group state.");
                             return;
                         }
-                        QueryTask queryTask = o.getBody(QueryTask.class);
-
-                        logFine("Found %d matching resource group", queryTask.results.documentCount);
+                        logFine("Found %d matching resource group",
+                                queryTask.results.documentCount);
 
                         String containerSelfLink = null;
                         // the storage container names are unique so we should only get 1 result back
@@ -1362,9 +1353,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             containerSelfLink = queryTask.results.documentLinks.get(0);
 
                             if (queryTask.results.documentCount > 1) {
-                                ResourceGroupState rGState = Utils.fromJson(queryTask.results.documents
-                                                .get(queryTask.results.documentLinks.get(0)),
-                                        ResourceGroupState.class);
+                                ResourceGroupState rGState = Utils
+                                        .fromJson(queryTask.results.documents
+                                                        .get(queryTask.results.documentLinks.get(0)),
+                                                ResourceGroupState.class);
                                 logWarning("Found multiple instance of the same resource group %s",
                                         rGState.id);
                             }
@@ -1377,15 +1369,13 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         } else {
                             createDiskState(context, diskState, size);
                         }
-                    }));
+                    });
         } catch (URISyntaxException e) {
             logWarning("Could not set storage description link for blob: %s",
                     blob.getUri().toString());
-            return;
         } catch (StorageException e) {
             logWarning("Could not set storage description link for disk blob: %s",
                     blob.getUri().toString());
-            return;
         }
     }
 
@@ -1477,8 +1467,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private void createDiskState(StorageEnumContext context, DiskState diskState,
             AtomicInteger size) {
-        logInfo(diskState.id);
-        logInfo(diskState.documentSelfLink);
         sendRequest(Operation
                 .createPost(this, DiskService.FACTORY_LINK)
                 .setBody(diskState)
@@ -1508,25 +1496,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     * - blob is not present on Azure.
     */
     private void deleteDiskStates(StorageEnumContext context, StorageEnumStages next) {
-        Operation.CompletionHandler completionHandler = (o, e) -> {
-            if (e != null) {
-                handleError(context, e);
-                return;
-            }
-            QueryTask queryTask = o.getBody(QueryTask.class);
-
-            if (queryTask.results.nextPageLink == null) {
-                logInfo("No disk states found for deletion");
-                context.subStage = next;
-                handleSubStage(context);
-                return;
-            }
-
-            context.deletionNextPageLink = queryTask.results.nextPageLink;
-            deleteDisksHelper(context);
-        };
-
-        QueryTask.Query query = QueryTask.Query.Builder.create()
+        Query query = Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
                 .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
                         context.computeHostDesc.documentSelfLink)
@@ -1538,14 +1508,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         String blobProperty = QueryTask.QuerySpecification
                 .buildCompositeFieldName(DiskState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AZURE_STORAGE_TYPE);
-        QueryTask.Query.Builder typeFilterQuery = QueryTask.Query.Builder
-                .create(QueryTask.Query.Occurance.MUST_OCCUR);
+        Query.Builder typeFilterQuery = Query.Builder
+                .create(Occurance.MUST_OCCUR);
 
-        QueryTask.Query blobFilter = QueryTask.Query.Builder.create(QueryTask.Query.Occurance.SHOULD_OCCUR)
+        Query blobFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
                 .addFieldClause(blobProperty, AZURE_STORAGE_BLOBS)
                 .build();
 
-        QueryTask.Query diskFilter = QueryTask.Query.Builder.create(QueryTask.Query.Occurance.SHOULD_OCCUR)
+        Query diskFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
                 .addFieldClause(blobProperty, AZURE_STORAGE_DISKS)
                 .build();
         typeFilterQuery.addClause(blobFilter);
@@ -1553,19 +1523,32 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         query.addBooleanClause(typeFilterQuery.build());
 
-        int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, QUERY_RESULT_LIMIT);
+        int resultLimit = Integer
+                .getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, QUERY_RESULT_LIMIT);
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
                 .setResultLimit(resultLimit)
                 .build();
         q.tenantLinks = context.computeHostDesc.tenantLinks;
 
         logFine("Querying disk states for deletion");
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion(completionHandler));
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
+                    if (e != null) {
+                        handleError(context, e);
+                        return;
+                    }
+                    if (queryTask.results.nextPageLink == null) {
+                        logInfo("No disk states found for deletion");
+                        context.subStage = next;
+                        handleSubStage(context);
+                        return;
+                    }
+
+                    context.deletionNextPageLink = queryTask.results.nextPageLink;
+                    deleteDisksHelper(context);
+                });
     }
 
     private void deleteDisksHelper(StorageEnumContext context) {

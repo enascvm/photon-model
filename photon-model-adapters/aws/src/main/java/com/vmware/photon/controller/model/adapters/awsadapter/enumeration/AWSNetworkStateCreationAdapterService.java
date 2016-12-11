@@ -64,13 +64,13 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Stateless service for the creation of compute states. It accepts a list of AWS instances that
@@ -276,34 +276,31 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      */
     private void getLocalNetworkStates(AWSNetworkServiceCreationContext context,
             AWSNetworkCreationStage next) {
-        QueryTask q = createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
+        QueryTask queryTask = createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
                 context.vpcs.keySet(), context.networkRequest.tenantLinks);
-        // create the query to find resources
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        // create the query to find resources
+        QueryUtils.startQueryTask(this, queryTask)
+                .whenComplete((qrt, e) -> {
                     if (e != null) {
                         logSevere("Failure retrieving query results: %s",
                                 e.toString());
                         finishWithFailure(context, e);
                         return;
                     }
-                    QueryTask responseTask = o.getBody(QueryTask.class);
-                    if (responseTask.results.documents != null) {
-                        for (Object s : responseTask.results.documents.values()) {
-                            NetworkState networkState = Utils.fromJson(s,
-                                    NetworkState.class);
-                            context.localNetworkStateMap.put(networkState.id,
-                                    networkState.documentSelfLink);
+
+                    if (qrt.results.documents != null) {
+                        for (Object s : qrt.results.documents.values()) {
+                            NetworkState networkState = Utils.fromJson(s, NetworkState.class);
+                            context.localNetworkStateMap
+                                    .put(networkState.id, networkState.documentSelfLink);
                         }
                     }
-                    logInfo("Result of query to get local networks. There are %d network states known to the system.",
-                            responseTask.results.documentCount);
 
+                    logInfo("Result of query to get local networks. There are %d network states known to the system.",
+                            qrt.results.documentCount);
                     handleNetworkStateChanges(context, next);
-                }));
+                });
     }
 
     /**
@@ -328,32 +325,27 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             AWSNetworkCreationStage next) {
         QueryTask q = createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
                 context.subnets.keySet(), context.networkRequest.tenantLinks);
-        // create the query to find resources
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        // create the query to find resources
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
-                        logSevere("Failure retrieving query results: %s",
-                                e.toString());
+                        logSevere("Failure retrieving query results: %s", e.toString());
                         finishWithFailure(context, e);
                         return;
                     }
-                    QueryTask responseTask = o.getBody(QueryTask.class);
-                    if (responseTask.results.documents != null) {
-                        for (Object s : responseTask.results.documents.values()) {
-                            SubnetState subnetState = Utils.fromJson(s,
-                                    SubnetState.class);
+                    if (queryTask.results.documents != null) {
+                        for (Object s : queryTask.results.documents.values()) {
+                            SubnetState subnetState = Utils.fromJson(s, SubnetState.class);
                             context.localSubnetStateMap.put(subnetState.id,
                                     subnetState.documentSelfLink);
                         }
                     }
                     logInfo("Result of query to get local subnets. There are %d subnet states known to the system.",
-                            responseTask.results.documentCount);
+                            queryTask.results.documentCount);
 
                     handleNetworkStateChanges(context, next);
-                }));
+                });
     }
 
     /**

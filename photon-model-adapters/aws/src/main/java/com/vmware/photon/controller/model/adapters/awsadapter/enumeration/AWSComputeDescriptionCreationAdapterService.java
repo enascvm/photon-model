@@ -38,13 +38,13 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Stateless service for the creation of compute descriptions that are discovered during the enumeration phase.
@@ -199,24 +199,21 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
      */
     private void getLocalComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {
-        QueryTask q = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
+        QueryTask queryTask = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
                 context.representativeComputeDescriptionSet, context.cdState.tenantLinks,
-                this, context.cdState.parentTaskLink, context.cdState.parentDescription.regionId);
+                context.cdState.parentDescription.regionId);
 
         // create the query to find an existing compute description
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, queryTask)
+                .whenComplete((qrt, e) -> {
                     if (e != null) {
-                        logWarning("Failure retrieving query results: %s",
-                                e.toString());
+                        logWarning("Failure retrieving query results: %s", e.toString());
                         finishWithFailure(context, e);
                         return;
                     }
-                    QueryTask responseTask = o.getBody(QueryTask.class);
-                    if (responseTask != null && responseTask.results.documentCount > 0) {
-                        for (Object s : responseTask.results.documents.values()) {
+
+                    if (qrt != null && qrt.results.documentCount > 0) {
+                        for (Object s : qrt.results.documents.values()) {
                             ComputeDescription localComputeDescription = Utils.fromJson(s,
                                     ComputeDescription.class);
                             context.localComputeDescriptionMap.put(
@@ -232,8 +229,7 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
                     }
                     context.creationStage = next;
                     handleComputeDescriptionCreation(context);
-                }));
-
+                });
     }
 
     /**

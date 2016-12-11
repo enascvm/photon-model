@@ -265,6 +265,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
      * Get the metric definitions from Azure using the Endpoint "/metricDefinitions"
      * The request and response of the API is as described in
      * {@link https://msdn.microsoft.com/en-us/library/azure/dn931939.aspx} Insights REST.
+     *
      * @param statsData
      * @throws URISyntaxException
      * @throws IOException
@@ -291,6 +292,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
             if (ex != null) {
                 AdapterUtils.sendFailurePatchToProvisioningTask(this,
                         statsData.statsRequest.taskReference, ex);
+                return;
             }
             MetricDefinitions metricDefinitions = op.getBody(MetricDefinitions.class);
             DateTimeFormatter dateTimeFormatter = DateTimeFormat
@@ -497,7 +499,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                                 dp.setCount(properties.get(key).getValueAsIntegerObject());
                                 break;
                             default:
-                                logInfo("Invalid key [%s]", key);
+                                logFine("Unhandled columns [%s]", key);
                                 break;
                             }
                         }

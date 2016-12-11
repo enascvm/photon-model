@@ -251,11 +251,12 @@ public class AWSNetworkUtils {
                 .addInClause(ResourceState.FIELD_NAME_ID, stateIds)
                 .build();
 
-        QueryTask queryTask = QueryTask.Builder.create()
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(query)
+                .setResultLimit(stateIds.size())
                 .build();
-        queryTask.setDirect(true);
         queryTask.tenantLinks = tenantLinks;
 
         return queryTask;

@@ -44,6 +44,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -52,7 +53,7 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.ServiceUriPaths;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * Enumeration adapter for data collection of Network related resources on Azure.
@@ -410,19 +411,19 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
 
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                .setQuery(query).build();
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(context.virtualNetworks.size())
+                .setQuery(query)
+                .build();
         q.tenantLinks = context.computeHostDesc.tenantLinks;
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
                         return;
                     }
-                    QueryTask queryTask = o.getBody(QueryTask.class);
 
                     logFine("Found %d matching network statse for Azure virtual networks.",
                             queryTask.results.documentCount);
@@ -439,7 +440,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     });
 
                     handleSubStage(context, next);
-                }));
+                });
     }
 
     /**
@@ -573,7 +574,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void deleteNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
         logInfo("Delete Network States that no longer exists in Azure.");
 
-
         Query query = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
                 .addFieldClause(NetworkState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
@@ -592,21 +592,16 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         q.tenantLinks = context.computeHostDesc.tenantLinks;
 
         logFine("Querying Network States for deletion");
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
                         return;
                     }
 
-                    QueryTask queryTask = o.getBody(QueryTask.class);
                     context.deletionNextPageLink = queryTask.results.nextPageLink;
-
                     handleQueryTaskResult(context, next);
-
-                }));
+                });
     }
 
     private void handleQueryTaskResult(NetworkEnumContext context, NetworkEnumStages next) {

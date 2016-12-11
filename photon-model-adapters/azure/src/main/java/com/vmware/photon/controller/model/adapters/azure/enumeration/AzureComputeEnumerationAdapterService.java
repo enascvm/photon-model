@@ -59,9 +59,7 @@ import com.microsoft.azure.management.network.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.models.NetworkInterface;
 import com.microsoft.azure.management.network.models.PublicIPAddress;
 import com.microsoft.rest.ServiceResponse;
-
 import okhttp3.OkHttpClient;
-
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
@@ -87,6 +85,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -100,8 +99,8 @@ import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Enumeration adapter for data collection of VMs on Azure.
@@ -381,24 +380,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * The method paginates through list of resources for deletion.
      */
     private void deleteComputeStates(EnumerationContext ctx) {
-        CompletionHandler completionHandler = (o, e) -> {
-            if (e != null) {
-                handleError(ctx, e);
-                return;
-            }
-            QueryTask queryTask = o.getBody(QueryTask.class);
-
-            if (queryTask.results.nextPageLink == null) {
-                logInfo("No compute states match for deletion");
-                ctx.subStage = ComputeEnumerationSubStages.FINISHED;
-                handleSubStage(ctx);
-                return;
-            }
-
-            ctx.deletionNextPageLink = queryTask.results.nextPageLink;
-            deleteOrRetireHelper(ctx);
-        };
-
         Query query = Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
@@ -415,11 +396,23 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         q.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
         logFine("Querying compute resources for deletion");
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setConnectionSharing(true)
-                .setBody(q)
-                .setCompletion(completionHandler));
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
+                    if (e != null) {
+                        handleError(ctx, e);
+                        return;
+                    }
+
+                    if (queryTask.results.nextPageLink == null) {
+                        logInfo("No compute states match for deletion");
+                        ctx.subStage = ComputeEnumerationSubStages.FINISHED;
+                        handleSubStage(ctx);
+                        return;
+                    }
+
+                    ctx.deletionNextPageLink = queryTask.results.nextPageLink;
+                    deleteOrRetireHelper(ctx);
+                });
     }
 
     /**
@@ -616,58 +609,55 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Query all compute states for the cluster filtered by the received set of instance Ids.
      */
     private void queryForComputeStates(EnumerationContext ctx) {
-        QueryTask q = new QueryTask();
-        q.setDirect(true);
-        q.querySpec = new QueryTask.QuerySpecification();
-        q.querySpec.options.add(QueryOption.EXPAND_CONTENT);
-        q.querySpec.query = Query.Builder.create()
+        Query query = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
-                        ctx.enumRequest.resourceLink())
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, ctx.enumRequest.resourceLink())
                 .build();
 
         Query.Builder instanceIdFilterParentQuery = Query.Builder.create(Occurance.MUST_OCCUR);
 
         for (String instanceId : ctx.virtualMachines.keySet()) {
-            QueryTask.Query instanceIdFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
+            Query instanceIdFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
                     .addFieldClause(ComputeState.FIELD_NAME_ID, instanceId)
                     .build();
             instanceIdFilterParentQuery.addClause(instanceIdFilter);
         }
-        q.querySpec.query.addBooleanClause(instanceIdFilterParentQuery.build());
-        q.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setConnectionSharing(true)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        query.addBooleanClause(instanceIdFilterParentQuery.build());
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(ctx.virtualMachines.size())
+                .build();
+        queryTask.tenantLinks = ctx.computeHostDesc.tenantLinks;
+
+        QueryUtils.startQueryTask(this, queryTask)
+                .whenComplete((qrt, e) -> {
                     if (e != null) {
                         handleError(ctx, e);
                         return;
                     }
-                    QueryTask queryTask = o.getBody(QueryTask.class);
-
                     logFine("Found %d matching compute states for Azure VMs",
-                            queryTask.results.documentCount);
+                            qrt.results.documentCount);
 
                     // If there are no matches, there is nothing to update.
-                    if (queryTask.results.documentCount == 0) {
+                    if (qrt.results.documentCount == 0) {
                         ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
                         handleSubStage(ctx);
                         return;
                     }
 
-                    for (Object s : queryTask.results.documents.values()) {
-                        ComputeState computeState = Utils
-                                .fromJson(s, ComputeState.class);
+                    for (Object s : qrt.results.documents.values()) {
+                        ComputeState computeState = Utils.fromJson(s, ComputeState.class);
                         String instanceId = computeState.id;
                         ctx.computeStates.put(instanceId, computeState);
                     }
 
                     ctx.subStage = ComputeEnumerationSubStages.UPDATE_RESOURCES;
                     handleSubStage(ctx);
-                }));
+                });
     }
 
     /**
@@ -751,12 +741,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         ctx.computeHostDesc.documentSelfLink)
                 .build();
 
-        QueryTask.Query.Builder diskUriFilterParentQuery = QueryTask.Query.Builder
-                .create(QueryTask.Query.Occurance.MUST_OCCUR);
+        Query.Builder diskUriFilterParentQuery = Query.Builder.create();
         for (String instanceId : ctx.virtualMachines.keySet()) {
             String diskId = httpsToHttp(
-                    ctx.virtualMachines.get(instanceId).properties.storageProfile.getOsDisk().getVhd().getUri());
-            QueryTask.Query diskUriFilter = QueryTask.Query.Builder.create(QueryTask.Query.Occurance.SHOULD_OCCUR)
+                    ctx.virtualMachines.get(instanceId).properties.storageProfile.getOsDisk()
+                            .getVhd().getUri());
+            Query diskUriFilter = Query.Builder.create(Query.Occurance.SHOULD_OCCUR)
                     .addFieldClause(DiskState.FIELD_NAME_ID, diskId)
                     .build();
 
@@ -765,21 +755,19 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         query.addBooleanClause(diskUriFilterParentQuery.build());
 
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                .setQuery(query).build();
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(ctx.virtualMachines.size())
+                .setQuery(query)
+                .build();
         q.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setConnectionSharing(true)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         logWarning("Failed to get disk: %s", e.getMessage());
                         return;
                     }
-                    QueryTask queryTask = o.getBody(QueryTask.class);
-
                     logFine("Found %d matching disk states for Azure blobs",
                             queryTask.results.documentCount);
 
@@ -798,7 +786,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
                     ctx.subStage = ComputeEnumerationSubStages.GET_STORAGE_DESCRIPTIONS;
                     handleSubStage(ctx);
-                }));
+                });
     }
 
     /**
@@ -811,44 +799,42 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         ctx.computeHostDesc.documentSelfLink)
                 .build();
 
-        QueryTask.Query.Builder storageDescUriFilterParentQuery = QueryTask.Query.Builder
-                .create(QueryTask.Query.Occurance.MUST_OCCUR);
+        Query.Builder storageDescUriFilterParentQuery = Query.Builder
+                .create(Query.Occurance.MUST_OCCUR);
 
-        for (String instanceId : ctx.virtualMachines.keySet()) {
-            if (ctx.virtualMachines.get(instanceId).properties.diagnosticsProfile != null) {
-                String diagnosticStorageAccountUri = ctx.virtualMachines.get(instanceId)
-                        .properties.diagnosticsProfile.getBootDiagnostics().getStorageUri();
+        ctx.virtualMachines.keySet().stream().filter(instanceId ->
+                ctx.virtualMachines.get(instanceId).properties.diagnosticsProfile != null)
+                .forEach(instanceId -> {
+                    String diagnosticStorageAccountUri = ctx.virtualMachines.get(instanceId)
+                            .properties.diagnosticsProfile.getBootDiagnostics().getStorageUri();
 
-                String storageAccountProperty = QueryTask.QuerySpecification
-                        .buildCompositeFieldName(StorageDescription.FIELD_NAME_CUSTOM_PROPERTIES,
-                                AZURE_STORAGE_ACCOUNT_URI);
+                    String storageAccountProperty = QuerySpecification
+                            .buildCompositeFieldName(
+                                    StorageDescription.FIELD_NAME_CUSTOM_PROPERTIES,
+                                    AZURE_STORAGE_ACCOUNT_URI);
 
-                QueryTask.Query storageAccountUriFilter = QueryTask.Query.Builder.create(
-                        QueryTask.Query.Occurance.SHOULD_OCCUR)
-                        .addFieldClause(storageAccountProperty, diagnosticStorageAccountUri)
-                        .build();
+                    Query storageAccountUriFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
+                            .addFieldClause(storageAccountProperty, diagnosticStorageAccountUri)
+                            .build();
 
-                storageDescUriFilterParentQuery.addClause(storageAccountUriFilter);
-
-            }
-        }
+                    storageDescUriFilterParentQuery.addClause(storageAccountUriFilter);
+                });
         query.addBooleanClause(storageDescUriFilterParentQuery.build());
 
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
-                .setQuery(query).build();
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(ctx.virtualMachines.size())
+                .setQuery(query)
+                .build();
         q.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setConnectionSharing(true)
-                .setBody(q)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, q)
+                .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         logWarning("Failed to get storage accounts: %s", e.getMessage());
                         return;
                     }
-                    QueryTask queryTask = o.getBody(QueryTask.class);
 
                     logFine("Found %d matching diagnostics storage accounts",
                             queryTask.results.documentCount);
@@ -861,15 +847,16 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     }
 
                     for (Object d : queryTask.results.documents.values()) {
-                        StorageDescription storageDesc = Utils.fromJson(d, StorageDescription.class);
-                        String storageDescUri = storageDesc.customProperties.get(AZURE_STORAGE_ACCOUNT_URI);
+                        StorageDescription storageDesc = Utils
+                                .fromJson(d, StorageDescription.class);
+                        String storageDescUri = storageDesc.customProperties
+                                .get(AZURE_STORAGE_ACCOUNT_URI);
                         ctx.storageDescriptions.put(storageDescUri, storageDesc);
                     }
 
                     ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
                     handleSubStage(ctx);
-                }));
-
+                });
     }
 
     /**

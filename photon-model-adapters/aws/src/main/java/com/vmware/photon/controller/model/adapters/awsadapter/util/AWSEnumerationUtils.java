@@ -22,7 +22,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.ge
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.xenon.common.UriUtils.URI_PATH_CHAR;
 
-import java.net.URI;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,12 +39,10 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -123,41 +120,43 @@ public class AWSEnumerationUtils {
      */
     public static QueryTask getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
             Set<String> representativeComputeDescriptionSet, List<String> tenantLinks,
-            StatelessService service, URI parentTaskLink, String regionId) {
+            String regionId) {
         String sourceTaskName = QueryTask.QuerySpecification
-                .buildCompositeFieldName(ComputeService.ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                .buildCompositeFieldName(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         SOURCE_TASK_LINK);
-        QueryTask.Query customPropClause = new QueryTask.Query()
-                .setTermPropertyName(sourceTaskName).setTermMatchValue(
-                        ResourceEnumerationTaskService.FACTORY_LINK);
-        customPropClause.occurance = QueryTask.Query.Occurance.MUST_OCCUR;
 
-        QueryTask q = new QueryTask();
-        q.setDirect(true);
-        q.querySpec = new QueryTask.QuerySpecification();
-        q.querySpec.options.add(QueryOption.EXPAND_CONTENT);
-        q.querySpec.query = Query.Builder.create()
+        Query query = Query.Builder.create()
                 .addKindFieldClause(ComputeDescription.class)
                 .addFieldClause(ComputeDescription.FIELD_NAME_ENVIRONMENT_NAME,
                         AWSInstanceService.AWS_ENVIRONMENT_NAME)
                 .addFieldClause(ComputeDescription.FIELD_NAME_REGION_ID, regionId)
-                .build().addBooleanClause(customPropClause);
+                .addFieldClause(sourceTaskName, ResourceEnumerationTaskService.FACTORY_LINK)
+                .build();
 
         // Instance type should fall in one of the passed in values
-        QueryTask.Query instanceTypeFilterParentQuery = new QueryTask.Query();
+        Query instanceTypeFilterParentQuery = new Query();
         instanceTypeFilterParentQuery.occurance = Occurance.MUST_OCCUR;
         for (String key : representativeComputeDescriptionSet) {
-            QueryTask.Query instanceTypeFilter = new QueryTask.Query()
+            Query instanceTypeFilter = new Query()
                     .setTermPropertyName(ComputeDescription.FIELD_NAME_ID)
                     .setTermMatchValue(getInstanceTypeFromComputeDescriptionKey(key));
-            instanceTypeFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
+            instanceTypeFilter.occurance = Occurance.SHOULD_OCCUR;
             instanceTypeFilterParentQuery.addBooleanClause(instanceTypeFilter);
         }
-        q.querySpec.query.addBooleanClause(instanceTypeFilterParentQuery);
 
-        q.documentSelfLink = UUID.randomUUID().toString();
-        q.tenantLinks = tenantLinks;
-        return q;
+        query.addBooleanClause(instanceTypeFilterParentQuery);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(representativeComputeDescriptionSet.size())
+                .build();
+
+        queryTask.documentSelfLink = UUID.randomUUID().toString();
+        queryTask.tenantLinks = tenantLinks;
+
+        return queryTask;
     }
 
     /**
@@ -166,7 +165,7 @@ public class AWSEnumerationUtils {
     public static ComputeState mapInstanceToComputeState(Instance instance,
             String parentComputeLink, String resourcePoolLink, String computeDescriptionLink,
             List<String> tenantLinks) {
-        ComputeService.ComputeState computeState = new ComputeService.ComputeState();
+        ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
         computeState.name = instance.getInstanceId();
         computeState.parentLink = parentComputeLink;

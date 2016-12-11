@@ -56,8 +56,8 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -68,9 +68,7 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
-import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Block Storage Enumeration Adapter for the Amazon Web Services.
@@ -303,13 +301,13 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             AsyncHandler<DescribeVolumesRequest, DescribeVolumesResult> {
 
         private AWSBlockStorageEnumerationAdapterService service;
-        private BlockStorageEnumerationContext aws;
+        private BlockStorageEnumerationContext context;
         private OperationContext opContext;
 
         private AWSStorageEnumerationAsyncHandler(AWSBlockStorageEnumerationAdapterService service,
-                BlockStorageEnumerationContext aws) {
+                BlockStorageEnumerationContext context) {
             this.service = service;
-            this.aws = aws;
+            this.context = context;
             this.opContext = OperationContext.getOperationContext();
         }
 
@@ -317,7 +315,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.aws.computeEnumerationRequest.taskReference,
+                    this.context.computeEnumerationRequest.taskReference,
                     exception);
 
         }
@@ -328,20 +326,20 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             OperationContext.restoreOperationContext(this.opContext);
             result.getVolumes()
                     .forEach(volume -> {
-                        this.aws.remoteAWSVolumes.put(volume.getVolumeId(), volume);
-                        this.aws.remoteAWSVolumeIds.add(volume.getVolumeId());
+                        this.context.remoteAWSVolumes.put(volume.getVolumeId(), volume);
+                        this.context.remoteAWSVolumeIds.add(volume.getVolumeId());
                     });
 
             this.service.logFine("Successfully enumerated %d volumes on the AWS host",
                     result.getVolumes().size());
             // Save the reference to the next token that will be used to retrieve the next page of
             // results from AWS.
-            this.aws.nextToken = result.getNextToken();
-            if (this.aws.remoteAWSVolumes.size() == 0) {
-                if (this.aws.nextToken != null) {
-                    this.aws.subStage = EBSVolumesEnumerationSubStage.GET_NEXT_PAGE;
+            this.context.nextToken = result.getNextToken();
+            if (this.context.remoteAWSVolumes.size() == 0) {
+                if (this.context.nextToken != null) {
+                    this.context.subStage = EBSVolumesEnumerationSubStage.GET_NEXT_PAGE;
                 } else {
-                    this.aws.subStage = EBSVolumesEnumerationSubStage.DELETE_DISKS;
+                    this.context.subStage = EBSVolumesEnumerationSubStage.DELETE_DISKS;
                 }
             }
             handleReceivedEnumerationData();
@@ -357,7 +355,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * 5) Delete the disk states that correspond to deleted volumes on AWS.
          */
         private void handleReceivedEnumerationData() {
-            switch (this.aws.subStage) {
+            switch (this.context.subStage) {
             case QUERY_LOCAL_RESOURCES:
                 getLocalResources(EBSVolumesEnumerationSubStage.COMPARE);
                 break;
@@ -367,7 +365,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 break;
             case CREATE_UPDATE_DISK_STATES:
                 EBSVolumesEnumerationSubStage next;
-                if (this.aws.nextToken == null) {
+                if (this.context.nextToken == null) {
                     next = EBSVolumesEnumerationSubStage.DELETE_DISKS;
                 } else {
                     next = EBSVolumesEnumerationSubStage.GET_NEXT_PAGE;
@@ -399,56 +397,54 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             // query all disk state resources for the cluster filtered by the received set of
             // instance Ids. the filtering is performed on the selected resource pool and auth
             // credentials link.
-            QueryTask q = new QueryTask();
-            q.setDirect(true);
-            q.querySpec = new QueryTask.QuerySpecification();
-            q.querySpec.options.add(QueryOption.EXPAND_CONTENT);
-            q.querySpec.query = Query.Builder.create()
+            Query query = Query.Builder.create()
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
-                            this.aws.parentAuth.documentSelfLink)
+                            this.context.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
-                            this.aws.computeEnumerationRequest.resourcePoolLink)
+                            this.context.computeEnumerationRequest.resourcePoolLink)
                     .build();
 
-            QueryTask.Query volumeIdFilterParentQuery = new QueryTask.Query();
-            volumeIdFilterParentQuery.occurance = Occurance.MUST_OCCUR;
-            this.aws.remoteAWSVolumes.keySet().forEach(volumeId -> {
-                QueryTask.Query volumeIdFilter = new QueryTask.Query()
+            Query volumeIdFilterParentQuery = Query.Builder.create().build();
+            this.context.remoteAWSVolumes.keySet().forEach(volumeId -> {
+                Query volumeIdFilter = new Query()
                         .setTermPropertyName(ComputeState.FIELD_NAME_ID)
                         .setTermMatchValue(volumeId);
                 volumeIdFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
                 volumeIdFilterParentQuery.addBooleanClause(volumeIdFilter);
             });
-            q.querySpec.query.addBooleanClause(volumeIdFilterParentQuery);
-            q.tenantLinks = this.aws.parentCompute.tenantLinks;
-            // create the query to find resources
-            this.service.sendRequest(Operation
-                    .createPost(this.service, ServiceUriPaths.CORE_QUERY_TASKS)
-                    .setBody(q)
-                    .setConnectionSharing(true)
-                    .setCompletion((o, e) -> {
+
+            query.addBooleanClause(volumeIdFilterParentQuery);
+
+            QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                    .setQuery(query)
+                    .addOption(QueryOption.EXPAND_CONTENT)
+                    .addOption(QueryOption.TOP_RESULTS)
+                    .setResultLimit(this.context.remoteAWSVolumes.size())
+                    .build();
+            queryTask.tenantLinks = this.context.parentCompute.tenantLinks;
+
+            QueryUtils.startQueryTask(this.service, queryTask)
+                    .whenComplete((qrt, e) -> {
                         if (e != null) {
                             this.service.logSevere("Failure retrieving query results: %s",
                                     e.toString());
                             signalErrorToEnumerationAdapter(e);
                             return;
                         }
-                        QueryTask responseTask = o.getBody(QueryTask.class);
-                        responseTask.results.documents.values().forEach(documentJson -> {
+                        qrt.results.documents.values().forEach(documentJson -> {
                             DiskState localDisk = Utils.fromJson(documentJson,
                                     DiskState.class);
-                            this.aws.localDiskStateMap.put(localDisk.id,
+                            this.context.localDiskStateMap.put(localDisk.id,
                                     localDisk.documentSelfLink);
 
                         });
                         this.service.logFine(
                                 "Query result : There are %d disks known to the system.",
-                                responseTask.results.documentCount);
-                        this.aws.subStage = next;
+                                qrt.results.documentCount);
+                        this.context.subStage = next;
                         handleReceivedEnumerationData();
-                        return;
-                    }));
+                    });
         }
 
         /**
@@ -458,26 +454,26 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         private void compareLocalStateWithEnumerationData(
                 EBSVolumesEnumerationSubStage next) {
             // No remote disks
-            if (this.aws.remoteAWSVolumes == null || this.aws.remoteAWSVolumes.size() == 0) {
+            if (this.context.remoteAWSVolumes == null || this.context.remoteAWSVolumes.size() == 0) {
                 this.service.logFine(
                         "No disks discovered on the remote system. Nothing to be created locally");
                 // no local disks
-            } else if (this.aws.localDiskStateMap == null
-                    || this.aws.localDiskStateMap.size() == 0) {
-                this.aws.remoteAWSVolumes.entrySet().forEach(
-                        entry -> this.aws.volumesToBeCreated
+            } else if (this.context.localDiskStateMap == null
+                    || this.context.localDiskStateMap.size() == 0) {
+                this.context.remoteAWSVolumes.entrySet().forEach(
+                        entry -> this.context.volumesToBeCreated
                                 .add(entry.getValue()));
                 // Compare local and remote state and find candidates for update and create.
             } else {
-                for (String key : this.aws.remoteAWSVolumes.keySet()) {
-                    if (this.aws.localDiskStateMap.containsKey(key)) {
-                        this.aws.disksToBeUpdated.add(this.aws.remoteAWSVolumes.get(key));
+                for (String key : this.context.remoteAWSVolumes.keySet()) {
+                    if (this.context.localDiskStateMap.containsKey(key)) {
+                        this.context.disksToBeUpdated.add(this.context.remoteAWSVolumes.get(key));
                     } else {
-                        this.aws.volumesToBeCreated.add(this.aws.remoteAWSVolumes.get(key));
+                        this.context.volumesToBeCreated.add(this.context.remoteAWSVolumes.get(key));
                     }
                 }
             }
-            this.aws.subStage = next;
+            this.context.subStage = next;
             handleReceivedEnumerationData();
         }
 
@@ -491,39 +487,37 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             // For all the disks to be created..map them and create operations.
             // kick off the operation using a JOIN
             List<DiskState> diskStatesToBeCreated = new ArrayList<DiskState>();
-            this.aws.volumesToBeCreated.forEach(volume -> {
+            this.context.volumesToBeCreated.forEach(volume -> {
                 diskStatesToBeCreated.add(mapVolumeToDiskState(volume,
-                        this.aws.parentCompute.documentSelfLink,
-                        this.aws.computeEnumerationRequest.resourcePoolLink,
-                        this.aws.parentAuth.documentSelfLink,
-                        this.aws.parentCompute.tenantLinks));
+                        this.context.computeEnumerationRequest.resourcePoolLink,
+                        this.context.parentAuth.documentSelfLink,
+                        this.context.parentCompute.tenantLinks));
 
             });
             diskStatesToBeCreated.forEach(diskState -> {
-                this.aws.enumerationOperations.add(
+                this.context.enumerationOperations.add(
                         createPostOperation(this.service, diskState, DiskService.FACTORY_LINK));
             });
-            this.service.logFine("Creating %d disks", this.aws.volumesToBeCreated.size());
+            this.service.logFine("Creating %d disks", this.context.volumesToBeCreated.size());
             // For all the disks to be updated, map the updated state from the received
             // volumes and issue patch requests against the existing disk state representations
             // in the system
 
             List<DiskState> diskStatesToBeUpdated = new ArrayList<DiskState>();
-            this.aws.disksToBeUpdated.forEach(volume -> {
+            this.context.disksToBeUpdated.forEach(volume -> {
                 diskStatesToBeUpdated.add(mapVolumeToDiskState(volume,
-                        this.aws.parentCompute.documentSelfLink,
-                        this.aws.computeEnumerationRequest.resourcePoolLink,
-                        this.aws.parentAuth.documentSelfLink,
-                        this.aws.parentCompute.tenantLinks));
+                        this.context.computeEnumerationRequest.resourcePoolLink,
+                        this.context.parentAuth.documentSelfLink,
+                        this.context.parentCompute.tenantLinks));
 
             });
             diskStatesToBeUpdated.forEach(diskState -> {
-                this.aws.enumerationOperations.add(
+                this.context.enumerationOperations.add(
                         createPatchOperation(this.service, diskState,
-                                this.aws.localDiskStateMap.get(diskState.id)));
+                                this.context.localDiskStateMap.get(diskState.id)));
             });
 
-            this.service.logFine("Updating %d disks", this.aws.disksToBeUpdated.size());
+            this.service.logFine("Updating %d disks", this.context.disksToBeUpdated.size());
 
             OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                     exc) -> {
@@ -533,11 +527,11 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
 
                 }
                 this.service.logFine("Successfully created and updated all the disk states.");
-                this.aws.subStage = next;
+                this.context.subStage = next;
                 handleReceivedEnumerationData();
                 return;
             };
-            OperationJoin joinOp = OperationJoin.create(this.aws.enumerationOperations);
+            OperationJoin joinOp = OperationJoin.create(this.context.enumerationOperations);
             joinOp.setCompletion(joinCompletion);
             joinOp.sendWith(this.service.getHost());
         }
@@ -545,9 +539,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         /**
          * Map an EBS volume to a photon-model disk state.
          */
-        private DiskState mapVolumeToDiskState(Volume volume,
-                String parentComputeLink, String resourcePoolLink, String authCredentialsLink,
-                List<String> tenantLinks) {
+        private DiskState mapVolumeToDiskState(Volume volume, String resourcePoolLink,
+                String authCredentialsLink, List<String> tenantLinks) {
             DiskState diskState = new DiskState();
             diskState.id = volume.getVolumeId();
             // TODO Get the disk name from the tag if present. Else default to the volumeID.
@@ -640,11 +633,11 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             Query query = Builder.create()
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
-                            this.aws.computeEnumerationRequest.resourcePoolLink)
+                            this.context.computeEnumerationRequest.resourcePoolLink)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
-                            this.aws.parentAuth.documentSelfLink)
+                            this.context.parentAuth.documentSelfLink)
                     .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
-                            NumericRange.createLessThanRange(this.aws.enumerationStartTimeInMicros))
+                            NumericRange.createLessThanRange(this.context.enumerationStartTimeInMicros))
                     .addCompositeFieldClause(
                             ComputeService.ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                             SOURCE_TASK_LINK, ResourceEnumerationTaskService.FACTORY_LINK,
@@ -656,46 +649,41 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .setQuery(query)
                     .setResultLimit(getQueryResultLimit())
                     .build();
-            q.tenantLinks = this.aws.parentCompute.tenantLinks;
+            q.tenantLinks = this.context.parentCompute.tenantLinks;
 
             this.service.logFine("Querying disks for deletion");
-            this.service.sendRequest(Operation
-                    .createPost(this.service, ServiceUriPaths.CORE_QUERY_TASKS)
-                    .setBody(q)
-                    .setConnectionSharing(true)
-                    .setCompletion(
-                            (o, e) -> {
-                                if (e != null) {
-                                    signalErrorToEnumerationAdapter(e);
-                                    return;
-                                }
-                                QueryTask queryTask = o.getBody(QueryTask.class);
+            QueryUtils.startQueryTask(this.service, q)
+                    .whenComplete((queryTask, e) -> {
+                        if (e != null) {
+                            signalErrorToEnumerationAdapter(e);
+                            return;
+                        }
 
-                                if (queryTask.results.nextPageLink == null) {
-                                    this.service.logFine("No disk states match for deletion");
-                                    this.aws.subStage = next;
-                                    handleReceivedEnumerationData();
-                                    return;
-                                }
-                                this.aws.deletionNextPageLink = queryTask.results.nextPageLink;
-                                processDeletionRequest(next);
-                            }));
+                        if (queryTask.results.nextPageLink == null) {
+                            this.service.logFine("No disk states match for deletion");
+                            this.context.subStage = next;
+                            handleReceivedEnumerationData();
+                            return;
+                        }
+                        this.context.deletionNextPageLink = queryTask.results.nextPageLink;
+                        processDeletionRequest(next);
+                    });
         }
 
         /**
          * Helper method to paginate through resources to be deleted.
          */
         private void processDeletionRequest(EBSVolumesEnumerationSubStage next) {
-            if (this.aws.deletionNextPageLink == null) {
+            if (this.context.deletionNextPageLink == null) {
                 this.service.logFine("Finished deletion of disk states for AWS");
-                this.aws.subStage = next;
+                this.context.subStage = next;
                 handleReceivedEnumerationData();
                 return;
             }
             this.service.logFine("Querying page [%s] for resources to be deleted",
-                    this.aws.deletionNextPageLink);
+                    this.context.deletionNextPageLink);
             this.service
-                    .sendRequest(Operation.createGet(this.service, this.aws.deletionNextPageLink)
+                    .sendRequest(Operation.createGet(this.service, this.context.deletionNextPageLink)
                             .setCompletion((o, e) -> {
                                 if (e != null) {
                                     signalErrorToEnumerationAdapter(e);
@@ -703,7 +691,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                                 }
                                 QueryTask queryTask = o.getBody(QueryTask.class);
 
-                                this.aws.deletionNextPageLink = queryTask.results.nextPageLink;
+                                this.context.deletionNextPageLink = queryTask.results.nextPageLink;
                                 List<Operation> deleteOperations = new ArrayList<>();
                                 for (Object s : queryTask.results.documents.values()) {
                                     DiskState diskState = Utils
@@ -713,7 +701,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                                     // the document update timestamp/version does not change if
                                     // there are no changes to the attributes of the entity during
                                     // update.
-                                    if (!this.aws.remoteAWSVolumeIds.contains(diskState.id)) {
+                                    if (!this.context.remoteAWSVolumeIds.contains(diskState.id)) {
                                         deleteOperations.add(Operation.createDelete(this.service,
                                                 diskState.documentSelfLink));
                                     }
@@ -745,8 +733,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * in turn patch the parent task to indicate completion.
          */
         private void signalStopToEnumerationAdapter() {
-            this.aws.computeEnumerationRequest.enumerationAction = EnumerationAction.STOP;
-            this.service.handleEnumerationRequest(this.aws);
+            this.context.computeEnumerationRequest.enumerationAction = EnumerationAction.STOP;
+            this.service.handleEnumerationRequest(this.context);
         }
 
         /**
@@ -754,9 +742,9 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * and signal error to the parent task.
          */
         private void signalErrorToEnumerationAdapter(Throwable t) {
-            this.aws.error = t;
-            this.aws.stage = AWSStorageEnumerationStages.ERROR;
-            this.service.handleEnumerationRequest(this.aws);
+            this.context.error = t;
+            this.context.stage = AWSStorageEnumerationStages.ERROR;
+            this.service.handleEnumerationRequest(this.context);
         }
 
         /**
@@ -766,13 +754,13 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          */
         private void getNextPageFromEnumerationAdapter(EBSVolumesEnumerationSubStage next) {
             // Reset all the results from the last page that was processed.
-            this.aws.remoteAWSVolumes.clear();
-            this.aws.volumesToBeCreated.clear();
-            this.aws.disksToBeUpdated.clear();
-            this.aws.localDiskStateMap.clear();
-            this.aws.describeVolumesRequest.setNextToken(this.aws.nextToken);
-            this.aws.subStage = next;
-            this.service.handleEnumerationRequest(this.aws);
+            this.context.remoteAWSVolumes.clear();
+            this.context.volumesToBeCreated.clear();
+            this.context.disksToBeUpdated.clear();
+            this.context.localDiskStateMap.clear();
+            this.context.describeVolumesRequest.setNextToken(this.context.nextToken);
+            this.context.subStage = next;
+            this.service.handleEnumerationRequest(this.context);
         }
 
     }

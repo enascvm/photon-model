@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,8 +35,10 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeService;
-
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
@@ -46,6 +47,9 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
@@ -130,7 +134,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
             getComputeHost(dataHolder, ComputeHostMetricsStages.CALCULATE_METRICS);
             break;
         case CALCULATE_METRICS:
-            getComputeHostStats(dataHolder, ComputeHostMetricsStages.FINISHED);
+            getComputeHostStats(dataHolder);
             break;
         case FINISHED:
             dataHolder.computeHostStatsOp.setBody(dataHolder.statsResponse);
@@ -162,35 +166,27 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
     /**
      * Query all the children VMs of the compute host.
      */
-    private void getComputeHostStats(AzureStatsDataHolder statsData, ComputeHostMetricsStages next) {
-        URI queryUri = UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_QUERY_TASKS);
-        QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
+    private void getComputeHostStats(AzureStatsDataHolder statsData) {
+        Query query = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
+                        statsData.computeHost.documentSelfLink)
+                .build();
 
-        String kind = Utils.buildKind(ComputeService.ComputeState.class);
-        QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
-                ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(kind);
-        querySpec.query.addBooleanClause(kindClause);
+        // TODO VSYM-1270: Handle Pagination
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .build();
+        queryTask.tenantLinks = statsData.computeHost.tenantLinks;
 
-        QueryTask.Query parentClause = new QueryTask.Query()
-                .setTermMatchType(QueryTask.QueryTerm.MatchType.TERM)
-                .setTermPropertyName(ComputeService.ComputeState.FIELD_NAME_PARENT_LINK)
-                .setTermMatchValue(statsData.computeHost.documentSelfLink);
-        querySpec.query.addBooleanClause(parentClause);
-
-        // TODO: Handle Pagination - https://jira-hzn.eng.vmware.com/browse/VSYM-1270
-        QueryTask task = QueryTask.create(querySpec).setDirect(true);
-        task.tenantLinks = statsData.computeHost.tenantLinks;
-        Operation queryOp = Operation
-                .createPost(queryUri)
-                .setBody(task)
-                .setCompletion((o, f) -> handleComputeQueryCompletion(o, f, statsData));
-        sendRequest(queryOp);
+        QueryUtils.startQueryTask(this, queryTask)
+                .whenComplete((qrt, e) -> handleComputeQueryCompletion(qrt, e, statsData));
     }
 
     /**
      * Get all the children computes and create a query task for each to query the metrics.
      */
-    private void handleComputeQueryCompletion(Operation operation, Throwable failure,
+    private void handleComputeQueryCompletion(QueryTask queryTask, Throwable failure,
             AzureStatsDataHolder statsData) {
         if (failure != null) {
             logSevere(failure.getMessage());
@@ -200,15 +196,13 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
             return;
         }
 
-        QueryTask queryResult = operation.getBody(QueryTask.class);
-        if (queryResult == null || queryResult.results == null) {
+        if (queryTask == null || queryTask.results == null) {
             sendFailurePatch(statsData, new RuntimeException(
-                    String.format("Unexpected query result for '%s'",
-                            operation.getUri())));
+                    String.format("Unexpected query result for '%s'", queryTask.documentSelfLink)));
             return;
         }
 
-        int computeCount = Math.toIntExact(queryResult.results.documentCount);
+        int computeCount = Math.toIntExact(queryTask.results.documentCount);
 
         // No children found, proceed to finish
         if (computeCount <= 0) {
@@ -219,15 +213,15 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
 
         // Create multiple operations, one each for a VM compute.
         List<Operation> statOperations = new ArrayList<>(computeCount);
-        for (String computeLink : queryResult.results.documentLinks) {
+        for (String computeLink : queryTask.results.documentLinks) {
             Operation statsOp = getStatsQueryTaskOperation(statsData, computeLink);
             statOperations.add(statsOp);
         }
 
         OperationJoin.create(statOperations)
-                .setCompletion((ops, failures) -> handleQueryTaskResponseAndConsolidateStats(ops,
-                        failures, statsData))
-                .sendWith(this);
+                .setCompletion((ops, failures) ->
+                        handleQueryTaskResponseAndConsolidateStats(ops, failures, statsData))
+                .sendWith(this, 50);
     }
 
     /**
@@ -235,29 +229,25 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
      */
     private Operation getStatsQueryTaskOperation(AzureStatsDataHolder statsData, String computeLink) {
         String computeId = UriUtils.getLastPathSegment(computeLink);
-        URI queryUri = UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_QUERY_TASKS);
-        QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
+        String selfLink = UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, computeId);
 
-        String kind = Utils.buildKind(ResourceMetricsService.ResourceMetrics.class);
-        QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
-                ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(kind);
-        querySpec.query.addBooleanClause(kindClause);
+        // TODO VSYM-3695: Limit the time boundaries on Azure metrics retrieval for each compute
+        Query query = Query.Builder.create()
+                .addKindFieldClause(ResourceMetrics.class)
+                .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK, selfLink, MatchType.PREFIX)
+                .build();
 
-        String selfLinkValue = UriUtils
-                .buildUriPath(ResourceMetricsService.FACTORY_LINK, computeId);
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(query)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(QueryUtils.DEFAULT_MAX_RESULT_LIMIT)
+                .build();
+        queryTask.tenantLinks = statsData.computeHost.tenantLinks;
 
-        QueryTask.Query selfLinkClause = new QueryTask.Query()
-                .setTermMatchType(QueryTask.QueryTerm.MatchType.PREFIX)
-                .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
-                .setTermMatchValue(selfLinkValue);
-        querySpec.query.addBooleanClause(selfLinkClause);
-
-        QueryTask task = QueryTask.create(querySpec).setDirect(true);
-        task.querySpec.options = EnumSet.of(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT);
-        task.tenantLinks = statsData.computeHost.tenantLinks;
         Operation queryOp = Operation
-                .createPost(queryUri)
-                .setBody(task);
+                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .setBody(queryTask);
         return queryOp;
     }
 
@@ -300,9 +290,9 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
         for (QueryTask queryResult : items) {
             if (queryResult.results.documents != null) {
                 for (String key : queryResult.results.documents.keySet()) {
-                    ResourceMetricsService.ResourceMetrics metric = Utils
+                    ResourceMetrics metric = Utils
                             .fromJson(queryResult.results.documents.get(key),
-                            ResourceMetricsService.ResourceMetrics.class);
+                            ResourceMetrics.class);
                     for (Map.Entry<String, Double> entry : metric.entries.entrySet()) {
                         String metricName = entry.getKey();
                         if (statMap.containsKey(metricName)) {

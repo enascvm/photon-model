@@ -53,6 +53,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -60,7 +61,6 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Stateless service for the creation of compute states. It accepts a list of AWS instances that need to be created in the
@@ -244,26 +244,24 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         representativeCDSet.addAll(getRepresentativeListOfCDsFromInstanceList(
                 context.computeState.instancesToBeUpdated.values()));
 
-        QueryTask q = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(representativeCDSet,
+        QueryTask queryTask = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
+                representativeCDSet,
                 context.computeState.tenantLinks,
-                this, context.computeState.parentTaskLink, context.computeState.regionId);
-        q.querySpec.expectedResultCount = new Long(representativeCDSet.size());
-        q.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
+                context.computeState.regionId);
+        queryTask.querySpec.expectedResultCount = (long) representativeCDSet.size();
+        queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
+
         // create the query to find an existing compute description
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(q)
-                .setConnectionSharing(true)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, queryTask)
+                .whenComplete((qrt, e) -> {
                     if (e != null) {
-                        logWarning("Failure retrieving query results: %s",
-                                e.toString());
+                        logWarning("Failure retrieving query results: %s", e.toString());
                         finishWithFailure(context, e);
                         return;
                     }
-                    QueryTask responseTask = o.getBody(QueryTask.class);
-                    if (responseTask != null && responseTask.results.documentCount > 0) {
-                        for (Object s : responseTask.results.documents.values()) {
+
+                    if (qrt != null && qrt.results.documentCount > 0) {
+                        for (Object s : qrt.results.documents.values()) {
                             ComputeDescription localComputeDescription = Utils.fromJson(s,
                                     ComputeDescription.class);
                             context.computeDescriptionMap.put(
@@ -278,8 +276,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     }
                     context.creationStage = next;
                     handleComputeStateCreateOrUpdate(context);
-                }));
-
+                });
     }
 
     /**
