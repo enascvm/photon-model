@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.5.6-SNAPSHOT
+
 ## 0.5.5
 
 * Various enumeration query update to cap max results at 10000.
