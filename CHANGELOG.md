@@ -1,6 +1,12 @@
 # CHANGELOG
 
-## 0.5.5-SNAPSHOT
+## 0.5.5
+
+* Various enumeration query update to cap max results at 10000.
+* AWS subnets discovery.
+* Azure network discovery.
+* Azure storage container discovery.
+* Bug fixes and improvements.
 
 ## 0.5.4
 
