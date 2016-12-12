@@ -129,6 +129,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
             assertThat(getState.firewallLinks, is(startState.firewallLinks));
             assertThat(getState.networkLink, is(startState.networkLink));
             assertThat(getState.subnetLink, is(startState.subnetLink));
+            assertThat(getState.deviceIndex, is(startState.deviceIndex));
         }
     }
 }

@@ -262,6 +262,7 @@ public class NetworkInterfaceServiceTest extends Suite {
             assertThat(getState.networkInterfaceDescriptionLink,
                     is(this.startState.networkInterfaceDescriptionLink));
 
+            assertThat(getState.description.deviceIndex, is(this.startState.description.deviceIndex));
             assertThat(getState.description.id, is(this.startState.description.id));
         }
     }

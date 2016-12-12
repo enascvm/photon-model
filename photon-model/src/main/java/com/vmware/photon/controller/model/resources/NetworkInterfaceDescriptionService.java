@@ -66,6 +66,11 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
         public IpAssignment assignment = IpAssignment.DYNAMIC;
 
         /**
+         * Holds the device index of this network interface.
+         */
+        public int deviceIndex;
+
+        /**
          * Firewalls with which this compute instance is associated.
          */
         @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
@@ -81,6 +86,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
          * Subnet in which the network interface will be created.
          */
         public String subnetLink;
+
     }
 
     public NetworkInterfaceDescriptionService() {
@@ -149,6 +155,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
         template.address = "10.1.0.12";
         template.firewallLinks = Arrays
                 .asList(UriUtils.buildUriPath(FirewallService.FACTORY_LINK, "firewall-one"));
+        template.deviceIndex = 0;
 
         return template;
     }
