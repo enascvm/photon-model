@@ -34,6 +34,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSNetworkService.AWSNetworkClient;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 
 import com.vmware.xenon.common.CommandLineArgumentParser;
@@ -116,8 +117,8 @@ public class TestAWSUtils {
         AmazonEC2AsyncClient client = TestUtils.getClient(this.privateKeyId,this.privateKey,this.region,false);
 
         //create something to name
-        AWSNetworkService svc = new AWSNetworkService();
-        String vpcID = svc.createVPC("10.20.0.0/16",client);
+        AWSNetworkClient svc = new AWSNetworkService.AWSNetworkClient(client);
+        String vpcID = svc.createVPC("10.20.0.0/16");
         AWSUtils.tagResourcesWithName(client, TEST_NAME, vpcID);
         List<TagDescription> tags = AWSUtils.getResourceTags(vpcID,client);
 
@@ -130,7 +131,7 @@ public class TestAWSUtils {
         }
         // ensure we found the tag
         assertTrue(tagFound);
-        svc.deleteVPC(vpcID,client);
+        svc.deleteVPC(vpcID);
     }
 
     /**

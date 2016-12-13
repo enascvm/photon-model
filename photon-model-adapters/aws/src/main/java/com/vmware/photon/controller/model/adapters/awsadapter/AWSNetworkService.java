@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MAIN_ROUTE_ASSOCIATION;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 
@@ -54,7 +53,11 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService.ProvisionNetworkTaskState;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryForReferrers;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -66,17 +69,11 @@ public class AWSNetworkService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_NETWORK_ADAPTER;
     public static final String ROUTE_DEST_ALL = "0.0.0.0/0";
-    private AWSClientManager clientManager;
-
-    public AWSNetworkService() {
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
-    }
 
     /**
      * Stages for network provisioning.
      */
-    public enum NetworkStage {
+    private enum AWSNetworkStage {
         NETWORK_TASK_STATE,
         CREDENTIALS,
         AWS_CLIENT,
@@ -94,18 +91,31 @@ public class AWSNetworkService extends StatelessService {
     }
 
     /**
-     * Network request state.
+     * Network request context.
      */
-    public static class AWSNetworkRequestState {
-        transient Operation netOps;
-        public AuthCredentialsServiceState credentials;
-        public NetworkInstanceRequest networkRequest;
-        public NetworkState network;
-        public NetworkStage stage;
-        public ProvisionNetworkTaskState networkTaskState;
-        public Throwable error;
-        public AmazonEC2AsyncClient client;
+    private static class AWSNetworkContext {
 
+        final Operation networkOperation;
+        final NetworkInstanceRequest networkRequest;
+
+        AuthCredentialsServiceState credentials;
+        NetworkState network;
+        AWSNetworkStage stage;
+        ProvisionNetworkTaskState networkTaskState;
+        Throwable error;
+        AWSNetworkClient client;
+
+        AWSNetworkContext(NetworkInstanceRequest networkRequest, Operation networkOperation) {
+            this.networkRequest = networkRequest;
+            this.networkOperation = networkOperation;
+        }
+    }
+
+    private AWSClientManager clientManager;
+
+    public AWSNetworkService() {
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     @Override
@@ -124,323 +134,384 @@ public class AWSNetworkService extends StatelessService {
                 return;
             }
             // initialize allocation object
-            AWSNetworkRequestState awsNet = new AWSNetworkRequestState();
-            awsNet.netOps = op;
-            awsNet.networkRequest = op.getBody(NetworkInstanceRequest.class);
-            awsNet.stage = NetworkStage.NETWORK_TASK_STATE;
-            handleStages(awsNet);
+            AWSNetworkContext context = new AWSNetworkContext(
+                    op.getBody(NetworkInstanceRequest.class), op);
+            handleStages(context, AWSNetworkStage.NETWORK_TASK_STATE);
             break;
         default:
             super.handleRequest(op);
         }
     }
 
-    public void handleStages(AWSNetworkRequestState awsNet) {
-        switch (awsNet.stage) {
-        case NETWORK_TASK_STATE:
-            getNetworkTaskState(awsNet, NetworkStage.NETWORK_STATE);
-            break;
-        case NETWORK_STATE:
-            getNetworkState(awsNet, NetworkStage.CREDENTIALS);
-            break;
-        case CREDENTIALS:
-            getCredentials(awsNet, NetworkStage.AWS_CLIENT);
-            break;
-        case AWS_CLIENT:
-            awsNet.client = this.clientManager.getOrCreateEC2Client(
-                    awsNet.credentials, awsNet.network.regionId,
-                    this, awsNet.networkRequest.taskReference, false);
-            if (awsNet.networkRequest.requestType == NetworkInstanceRequest.InstanceRequestType.CREATE) {
-                awsNet.stage = NetworkStage.PROVISION_VPC;
-            } else {
-                awsNet.stage = NetworkStage.REMOVE_GATEWAY;
-            }
-            handleStages(awsNet);
-            break;
-        case PROVISION_VPC:
-            String vpcID = createVPC(awsNet.network.subnetCIDR, awsNet.client);
-            updateNetworkProperties(AWS_VPC_ID, vpcID, awsNet,
-                    NetworkStage.PROVISION_SUBNET);
-            break;
-        case PROVISION_SUBNET:
-            String subnetID = createSubnet(awsNet.network.subnetCIDR,
-                    getCustomProperty(awsNet, AWS_VPC_ID), awsNet.client);
-            updateNetworkProperties(AWS_SUBNET_ID, subnetID, awsNet,
-                    NetworkStage.PROVISION_GATEWAY);
-            break;
-        case PROVISION_GATEWAY:
-            String gatewayID = createInternetGateway(awsNet.client);
-            attachInternetGateway(getCustomProperty(awsNet, AWS_VPC_ID), gatewayID,
-                    awsNet.client);
-            updateNetworkProperties(AWS_GATEWAY_ID, gatewayID, awsNet,
-                    NetworkStage.PROVISION_ROUTE);
-            break;
-        case PROVISION_ROUTE:
-            RouteTable routeTable = getMainRouteTable(
-                    awsNet.network.customProperties.get(AWS_VPC_ID), awsNet.client);
-            createInternetRoute(getCustomProperty(awsNet, AWS_GATEWAY_ID),
-                    routeTable.getRouteTableId(), ROUTE_DEST_ALL, awsNet.client);
-            updateNetworkProperties(AWS_VPC_ROUTE_TABLE_ID,
-                    routeTable.getRouteTableId(), awsNet, NetworkStage.FINISHED);
-            break;
-        case REMOVE_GATEWAY:
-            detachInternetGateway(getCustomProperty(awsNet, AWS_VPC_ID),
-                    getCustomProperty(awsNet, AWS_GATEWAY_ID), awsNet.client);
-            deleteInternetGateway(getCustomProperty(awsNet, AWS_GATEWAY_ID),
-                    awsNet.client);
-            updateNetworkProperties(AWS_GATEWAY_ID, AWSUtils.NO_VALUE, awsNet,
-                    NetworkStage.REMOVE_SUBNET);
-            break;
-        case REMOVE_SUBNET:
-            deleteSubnet(getCustomProperty(awsNet, AWS_SUBNET_ID), awsNet.client);
-            updateNetworkProperties(AWS_SUBNET_ID, AWSUtils.NO_VALUE, awsNet,
-                    NetworkStage.REMOVE_ROUTE);
-            break;
-        case REMOVE_ROUTE:
-            // only need to update the document, the AWS artifact will be
-            // removed on VPC removal
-            updateNetworkProperties(AWS_VPC_ROUTE_TABLE_ID, AWSUtils.NO_VALUE,
-                    awsNet, NetworkStage.REMOVE_VPC);
-            break;
-        case REMOVE_VPC:
-            deleteVPC(getCustomProperty(awsNet, AWS_VPC_ID), awsNet.client);
-            updateNetworkProperties(AWS_VPC_ID, AWSUtils.NO_VALUE, awsNet,
-                    NetworkStage.FINISHED);
-            break;
-        case FAILED:
-            if (awsNet.networkRequest.taskReference != null) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        awsNet.networkRequest.taskReference,
-                        awsNet.error);
-            } else {
-                awsNet.netOps.fail(awsNet.error);
-            }
-            break;
-        case FINISHED:
-            awsNet.netOps.complete();
-            AdapterUtils.sendNetworkFinishPatch(this,
-                    awsNet.networkRequest.taskReference);
-            return;
-        default:
-            break;
-        }
-
+    private void handleStages(AWSNetworkContext context, Throwable exc) {
+        context.error = exc;
+        handleStages(context, AWSNetworkStage.FAILED);
     }
 
-    private String getCustomProperty(AWSNetworkRequestState aws, String key) {
-        return aws.network.customProperties.get(key);
+    private void handleStages(AWSNetworkContext context, AWSNetworkStage next) {
+        context.stage = next;
+        handleStages(context);
+    }
+
+    private void handleStages(AWSNetworkContext context) {
+        try {
+            switch (context.stage) {
+            case NETWORK_TASK_STATE:
+                getNetworkTaskState(context, AWSNetworkStage.NETWORK_STATE);
+                break;
+            case NETWORK_STATE:
+                getNetworkState(context, AWSNetworkStage.CREDENTIALS);
+                break;
+            case CREDENTIALS:
+                getCredentials(context, AWSNetworkStage.AWS_CLIENT);
+                break;
+            case AWS_CLIENT:
+                context.client = new AWSNetworkClient(
+                        this.clientManager.getOrCreateEC2Client(
+                                context.credentials, context.network.regionId,
+                                this, context.networkRequest.taskReference, false));
+                if (context.networkRequest.requestType == NetworkInstanceRequest.InstanceRequestType.CREATE) {
+                    context.stage = AWSNetworkStage.PROVISION_VPC;
+                } else {
+                    context.stage = AWSNetworkStage.REMOVE_GATEWAY;
+                }
+                handleStages(context);
+                break;
+            case PROVISION_VPC:
+                String vpcID = context.client.createVPC(context.network.subnetCIDR);
+
+                updateNetworkProperties(AWS_VPC_ID, vpcID, context,
+                        AWSNetworkStage.PROVISION_SUBNET);
+                break;
+            case PROVISION_SUBNET:
+                Subnet subnet = context.client.createSubnet(context.network.subnetCIDR,
+                        getCustomProperty(context, AWS_VPC_ID));
+
+                createSubnetState(subnet, context, AWSNetworkStage.PROVISION_GATEWAY);
+                break;
+            case PROVISION_GATEWAY:
+                String gatewayID = context.client.createInternetGateway();
+                context.client.attachInternetGateway(getCustomProperty(context, AWS_VPC_ID),
+                        gatewayID);
+
+                updateNetworkProperties(AWS_GATEWAY_ID, gatewayID, context,
+                        AWSNetworkStage.PROVISION_ROUTE);
+                break;
+            case PROVISION_ROUTE:
+                RouteTable routeTable = context.client.getMainRouteTable(
+                        context.network.customProperties.get(AWS_VPC_ID));
+                context.client.createInternetRoute(getCustomProperty(context, AWS_GATEWAY_ID),
+                        routeTable.getRouteTableId(), ROUTE_DEST_ALL);
+
+                updateNetworkProperties(AWS_VPC_ROUTE_TABLE_ID,
+                        routeTable.getRouteTableId(), context, AWSNetworkStage.FINISHED);
+                break;
+            case REMOVE_GATEWAY:
+                context.client.detachInternetGateway(getCustomProperty(context, AWS_VPC_ID),
+                        getCustomProperty(context, AWS_GATEWAY_ID));
+                context.client.deleteInternetGateway(getCustomProperty(context, AWS_GATEWAY_ID));
+
+                updateNetworkProperties(AWS_GATEWAY_ID, AWSUtils.NO_VALUE, context,
+                        AWSNetworkStage.REMOVE_SUBNET);
+                break;
+            case REMOVE_SUBNET:
+                // Iterate SubnetStates (page-by-page) and delete AWS Subnet and SubnetState
+                deleteSubnetStates(context, AWSNetworkStage.REMOVE_ROUTE);
+                break;
+            case REMOVE_ROUTE:
+                // only need to update the document, the AWS artifact will be
+                // removed on VPC removal
+                updateNetworkProperties(AWS_VPC_ROUTE_TABLE_ID, AWSUtils.NO_VALUE,
+                        context, AWSNetworkStage.REMOVE_VPC);
+                break;
+            case REMOVE_VPC:
+                context.client.deleteVPC(getCustomProperty(context, AWS_VPC_ID));
+
+                updateNetworkProperties(AWS_VPC_ID, AWSUtils.NO_VALUE, context,
+                        AWSNetworkStage.FINISHED);
+                break;
+            case FAILED:
+                if (context.networkRequest.taskReference != null) {
+                    AdapterUtils.sendFailurePatchToProvisioningTask(
+                            this, context.networkRequest.taskReference, context.error);
+                } else {
+                    context.networkOperation.fail(context.error);
+                }
+                break;
+            case FINISHED:
+                context.networkOperation.complete();
+                AdapterUtils.sendNetworkFinishPatch(
+                        this, context.networkRequest.taskReference);
+                break;
+            default:
+                break;
+            }
+        } catch (Throwable error) {
+            // Same as FAILED stage
+            if (context.networkRequest.taskReference != null) {
+                AdapterUtils.sendFailurePatchToProvisioningTask(
+                        this, context.networkRequest.taskReference, error);
+            } else {
+                context.networkOperation.fail(error);
+            }
+        }
+    }
+
+    private String getCustomProperty(AWSNetworkContext context, String key) {
+        return context.network.customProperties.get(key);
     }
 
     private void updateNetworkProperties(String key, String value,
-            AWSNetworkRequestState aws, NetworkStage next) {
-        if (aws.network.customProperties == null) {
-            aws.network.customProperties = new HashMap<>();
+            AWSNetworkContext context, AWSNetworkStage next) {
+        if (context.network.customProperties == null) {
+            context.network.customProperties = new HashMap<>();
         }
 
-        aws.network.customProperties.put(key, value);
+        context.network.customProperties.put(key, value);
 
         sendRequest(
-                Operation.createPatch(this.getHost(), aws.networkTaskState.networkDescriptionLink)
-                        .setBody(aws.network)
+                Operation.createPatch(this.getHost(),
+                        context.networkTaskState.networkDescriptionLink)
+                        .setBody(context.network)
                         .setCompletion((o, e) -> {
                             if (e != null) {
-                                aws.stage = NetworkStage.FAILED;
-                                aws.error = e;
-                                handleStages(aws);
+                                handleStages(context, e);
                                 return;
                             }
-                            aws.stage = next;
-                            handleStages(aws);
+                            handleStages(context, next);
                         }));
-
     }
 
-    private void getCredentials(AWSNetworkRequestState aws, NetworkStage next) {
+    /**
+     * Create SubnetState representing AWS Subnet instance.
+     */
+    private void createSubnetState(Subnet subnet, AWSNetworkContext context, AWSNetworkStage next) {
+        SubnetState subnetState = new SubnetState();
+        subnetState.id = subnet.getSubnetId();
+        subnetState.name = subnet.getSubnetId();
+        subnetState.subnetCIDR = subnet.getCidrBlock();
+        subnetState.networkLink = context.network.documentSelfLink;
 
-        sendRequest(Operation.createGet(this.getHost(), aws.networkRequest.authCredentialsLink)
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        aws.stage = NetworkStage.FAILED;
-                        aws.error = e;
-                        handleStages(aws);
-                        return;
-                    }
-                    aws.credentials = o.getBody(AuthCredentialsServiceState.class);
-                    aws.stage = next;
-                    handleStages(aws);
-                }));
-    }
-
-    private void getNetworkState(AWSNetworkRequestState aws, NetworkStage next) {
-
-        sendRequest(Operation.createGet(this.getHost(), aws.networkTaskState.networkDescriptionLink)
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        aws.stage = NetworkStage.FAILED;
-                        aws.error = e;
-                        handleStages(aws);
-                        return;
-                    }
-                    aws.network = o.getBody(NetworkState.class);
-                    aws.stage = next;
-                    handleStages(aws);
-                }));
-    }
-
-    private void getNetworkTaskState(AWSNetworkRequestState aws,
-            NetworkStage next) {
-        sendRequest(Operation.createGet(
-                aws.networkRequest.taskReference).setCompletion(
-                        (o, e) -> {
+        sendRequest(
+                Operation.createPost(this.getHost(), SubnetService.FACTORY_LINK)
+                        .setBody(subnetState)
+                        .setCompletion((o, e) -> {
                             if (e != null) {
-                                aws.stage = NetworkStage.FAILED;
-                                aws.error = e;
-                                handleStages(aws);
+                                handleStages(context, e);
                                 return;
                             }
-                            aws.networkTaskState = o
-                                    .getBody(ProvisionNetworkTaskState.class);
-                            aws.stage = next;
-                            handleStages(aws);
+                            handleStages(context, next);
                         }));
     }
 
-    public Vpc getVPC(String vpcID, AmazonEC2AsyncClient client) {
-        DescribeVpcsRequest req = new DescribeVpcsRequest().withVpcIds(vpcID);
-        DescribeVpcsResult result = client.describeVpcs(req);
-        List<Vpc> vpcs = result.getVpcs();
-        if (vpcs != null && vpcs.size() == 1) {
-            return vpcs.get(0);
-        }
-        return null;
+    private void getCredentials(AWSNetworkContext context, AWSNetworkStage next) {
+
+        sendRequest(Operation.createGet(this.getHost(), context.networkRequest.authCredentialsLink)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        handleStages(context, e);
+                        return;
+                    }
+                    context.credentials = o.getBody(AuthCredentialsServiceState.class);
+                    handleStages(context, next);
+                }));
     }
 
-    /*
-     * Get the default VPC - return null if no default specified
-     */
+    private void getNetworkState(AWSNetworkContext context, AWSNetworkStage next) {
 
-    public Vpc getDefaultVPC(AmazonEC2AsyncClient client) {
-        DescribeVpcsRequest req = new DescribeVpcsRequest();
-        DescribeVpcsResult result = client.describeVpcs(req);
-        List<Vpc> vpcs = result.getVpcs();
-        for (Vpc vpc : vpcs) {
-            if (vpc.isDefault()) {
-                return vpc;
+        sendRequest(
+                Operation.createGet(this.getHost(), context.networkTaskState.networkDescriptionLink)
+                        .setCompletion((o, e) -> {
+                            if (e != null) {
+                                handleStages(context, e);
+                                return;
+                            }
+                            context.network = o.getBody(NetworkState.class);
+                            handleStages(context, next);
+                        }));
+    }
+
+    private void getNetworkTaskState(AWSNetworkContext context,
+            AWSNetworkStage next) {
+        sendRequest(Operation.createGet(context.networkRequest.taskReference)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        handleStages(context, e);
+                        return;
+                    }
+                    context.networkTaskState = o
+                            .getBody(ProvisionNetworkTaskState.class);
+                    handleStages(context, next);
+                }));
+    }
+
+    /**
+     * This client abstracts the communication with Amazon Network service.
+     */
+    public static class AWSNetworkClient {
+
+        private final AmazonEC2AsyncClient client;
+
+        public AWSNetworkClient(AmazonEC2AsyncClient client) {
+            this.client = client;
+        }
+
+        public Vpc getVPC(String vpcId) {
+            DescribeVpcsRequest req = new DescribeVpcsRequest().withVpcIds(vpcId);
+            DescribeVpcsResult result = this.client.describeVpcs(req);
+            List<Vpc> vpcs = result.getVpcs();
+            if (vpcs != null && vpcs.size() == 1) {
+                return vpcs.get(0);
             }
+            return null;
         }
-        return null;
+
+        /**
+         * Get the default VPC - return null if no default specified
+         */
+        public Vpc getDefaultVPC() {
+            DescribeVpcsRequest req = new DescribeVpcsRequest();
+            DescribeVpcsResult result = this.client.describeVpcs(req);
+            List<Vpc> vpcs = result.getVpcs();
+            for (Vpc vpc : vpcs) {
+                if (vpc.isDefault()) {
+                    return vpc;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Creates the VPC and returns the VPC id
+         */
+        public String createVPC(String subnetCidr) {
+            CreateVpcRequest req = new CreateVpcRequest().withCidrBlock(subnetCidr);
+            CreateVpcResult vpc = this.client.createVpc(req);
+
+            return vpc.getVpc().getVpcId();
+        }
+
+        /**
+         * Delete the specified VPC
+         */
+        public void deleteVPC(String vpcId) {
+            DeleteVpcRequest req = new DeleteVpcRequest().withVpcId(vpcId);
+            this.client.deleteVpc(req);
+        }
+
+        public Subnet getSubnet(String subnetId) {
+            DescribeSubnetsRequest req = new DescribeSubnetsRequest()
+                    .withSubnetIds(subnetId);
+            DescribeSubnetsResult subnetResult = this.client.describeSubnets(req);
+            List<Subnet> subnets = subnetResult.getSubnets();
+            return subnets.isEmpty() ? null : subnets.get(0);
+        }
+
+        /**
+         * Creates the subnet and return it
+         */
+        public Subnet createSubnet(String subnetCidr, String vpcId) {
+            CreateSubnetRequest req = new CreateSubnetRequest()
+                    .withCidrBlock(subnetCidr)
+                    .withVpcId(vpcId);
+            CreateSubnetResult res = this.client.createSubnet(req);
+            return res.getSubnet();
+        }
+
+        /**
+         * Delete the specified subnet
+         */
+        public void deleteSubnet(String subnetId) {
+            DeleteSubnetRequest req = new DeleteSubnetRequest().withSubnetId(subnetId);
+            this.client.deleteSubnet(req);
+        }
+
+        public String createInternetGateway() {
+            CreateInternetGatewayResult res = this.client.createInternetGateway();
+            return res.getInternetGateway().getInternetGatewayId();
+        }
+
+        public InternetGateway getInternetGateway(String resourceId) {
+            DescribeInternetGatewaysRequest req = new DescribeInternetGatewaysRequest()
+                    .withInternetGatewayIds(resourceId);
+            DescribeInternetGatewaysResult res = this.client.describeInternetGateways(req);
+            List<InternetGateway> internetGateways = res.getInternetGateways();
+            return internetGateways.isEmpty() ? null : internetGateways.get(0);
+        }
+
+        public void deleteInternetGateway(String resourceID) {
+            DeleteInternetGatewayRequest req = new DeleteInternetGatewayRequest()
+                    .withInternetGatewayId(resourceID);
+            this.client.deleteInternetGateway(req);
+        }
+
+        public void attachInternetGateway(String vpcId, String gatewayId) {
+            AttachInternetGatewayRequest req = new AttachInternetGatewayRequest()
+                    .withVpcId(vpcId)
+                    .withInternetGatewayId(gatewayId);
+            this.client.attachInternetGateway(req);
+        }
+
+        public void detachInternetGateway(String vpcId, String gatewayId) {
+            DetachInternetGatewayRequest req = new DetachInternetGatewayRequest()
+                    .withVpcId(vpcId)
+                    .withInternetGatewayId(gatewayId);
+            this.client.detachInternetGateway(req);
+        }
+
+        /**
+         * Get the main route table for a given VPC
+         */
+        public RouteTable getMainRouteTable(String vpcId) {
+            // build filter list
+            List<Filter> filters = new ArrayList<>();
+            filters.add(AWSUtils.getFilter(AWSUtils.AWS_FILTER_VPC_ID, vpcId));
+            filters.add(AWSUtils.getFilter(AWS_MAIN_ROUTE_ASSOCIATION, "true"));
+
+            DescribeRouteTablesRequest req = new DescribeRouteTablesRequest()
+                    .withFilters(filters);
+            DescribeRouteTablesResult res = this.client.describeRouteTables(req);
+            List<RouteTable> routeTables = res.getRouteTables();
+            return routeTables.isEmpty() ? null : routeTables.get(0);
+        }
+
+        /**
+         * Create a route from a specified CIDR Subnet to a specific GW / Route Table
+         */
+        public void createInternetRoute(String gatewayId, String routeTableId, String subnetCidr) {
+            CreateRouteRequest req = new CreateRouteRequest()
+                    .withGatewayId(gatewayId)
+                    .withRouteTableId(routeTableId)
+                    .withDestinationCidrBlock(subnetCidr);
+            this.client.createRoute(req);
+        }
     }
 
-    /*
-     * Creates the VPC and returns the VPC id
+    /**
+     * Delete all subnet states that refer the NetworkState we are about to delete.
      */
-    public String createVPC(String subnet, AmazonEC2AsyncClient client) {
-        CreateVpcRequest req = new CreateVpcRequest().withCidrBlock(subnet);
-        CreateVpcResult vpc = client.createVpc(req);
+    private void deleteSubnetStates(AWSNetworkContext context, AWSNetworkStage next) {
 
-        return vpc.getVpc().getVpcId();
+        QueryForReferrers<SubnetState> subnetStates = new QueryForReferrers<>(
+                getHost(),
+                context.network.documentSelfLink,
+                SubnetState.class,
+                SubnetState.FIELD_NAME_NETWORK_LINK,
+                context.networkTaskState.tenantLinks);
+
+        DeferredResult<Void> query = subnetStates.queryDocuments(subnetState -> {
+            // First delete Subnet in AWS
+            context.client.deleteSubnet(subnetState.id);
+            // Then delete tracking SubnetState
+            Operation.createDelete(this, subnetState.documentSelfLink).sendWith(this);
+        });
+
+        query.whenComplete((v, e) -> {
+            if (e != null) {
+                handleStages(context, e);
+            } else {
+                handleStages(context, next);
+            }
+        });
     }
-
-    /*
-     * Delete the specified VPC
-     */
-    public void deleteVPC(String vpcID, AmazonEC2AsyncClient client) {
-        DeleteVpcRequest req = new DeleteVpcRequest().withVpcId(vpcID);
-        client.deleteVpc(req);
-    }
-
-    public Subnet getSubnet(String subnetID, AmazonEC2AsyncClient client) {
-        DescribeSubnetsRequest req = new DescribeSubnetsRequest()
-                .withSubnetIds(subnetID);
-        DescribeSubnetsResult subnetResult = client.describeSubnets(req);
-        // if subnet not found an error thrown
-        List<Subnet> subs = subnetResult.getSubnets();
-        return subs.get(0);
-    }
-
-    /*
-     * Creates the subnet and return the subnet id
-     */
-    public String createSubnet(String subnet, String vpcID,
-            AmazonEC2AsyncClient client) {
-        CreateSubnetRequest req = new CreateSubnetRequest().withCidrBlock(
-                subnet).withVpcId(vpcID);
-        CreateSubnetResult subnetResult = client.createSubnet(req);
-        return subnetResult.getSubnet().getSubnetId();
-    }
-
-    /*
-     * Delete the specified subnet
-     */
-    public void deleteSubnet(String subnetID, AmazonEC2AsyncClient client) {
-        DeleteSubnetRequest req = new DeleteSubnetRequest()
-                .withSubnetId(subnetID);
-        client.deleteSubnet(req);
-    }
-
-    public String createInternetGateway(AmazonEC2AsyncClient client) {
-        CreateInternetGatewayResult result = client.createInternetGateway();
-        return result.getInternetGateway().getInternetGatewayId();
-    }
-
-    public InternetGateway getInternetGateway(String resourceID,
-            AmazonEC2AsyncClient client) {
-        DescribeInternetGatewaysRequest req = new DescribeInternetGatewaysRequest()
-                .withInternetGatewayIds(resourceID);
-        DescribeInternetGatewaysResult result = client
-                .describeInternetGateways(req);
-        return result.getInternetGateways().get(0);
-    }
-
-    public void deleteInternetGateway(String resourceID,
-            AmazonEC2AsyncClient client) {
-        DeleteInternetGatewayRequest req = new DeleteInternetGatewayRequest()
-                .withInternetGatewayId(resourceID);
-        client.deleteInternetGateway(req);
-    }
-
-    public void attachInternetGateway(String vpcID, String gatewayID,
-            AmazonEC2AsyncClient client) {
-        AttachInternetGatewayRequest req = new AttachInternetGatewayRequest()
-                .withVpcId(vpcID).withInternetGatewayId(gatewayID);
-        client.attachInternetGateway(req);
-    }
-
-    public void detachInternetGateway(String vpcID, String gatewayID,
-            AmazonEC2AsyncClient client) {
-        DetachInternetGatewayRequest req = new DetachInternetGatewayRequest()
-                .withVpcId(vpcID).withInternetGatewayId(gatewayID);
-        client.detachInternetGateway(req);
-    }
-
-    /*
-     * Get the main route table for a given VPC
-     */
-    public RouteTable getMainRouteTable(String vpcID,
-            AmazonEC2AsyncClient client) {
-        // build filter list
-        List<Filter> filters = new ArrayList<>();
-        filters.add(AWSUtils.getFilter(AWSUtils.AWS_FILTER_VPC_ID, vpcID));
-        filters.add(AWSUtils.getFilter(AWS_MAIN_ROUTE_ASSOCIATION, "true"));
-
-        DescribeRouteTablesRequest req = new DescribeRouteTablesRequest()
-                .withFilters(filters);
-        DescribeRouteTablesResult result = client.describeRouteTables(req);
-
-        // if nothing found error thrown, otherwise should be 1
-        return result.getRouteTables().get(0);
-
-    }
-
-    /*
-     * Create a route from a specified CIDR Subnet to a specific GW / Route Table
-     */
-    public void createInternetRoute(String gatewayID, String routeTableID,
-            String subnet, AmazonEC2AsyncClient client) {
-        CreateRouteRequest req = new CreateRouteRequest()
-                .withGatewayId(gatewayID).withRouteTableId(routeTableID)
-                .withDestinationCidrBlock(subnet);
-        client.createRoute(req);
-    }
-
 }

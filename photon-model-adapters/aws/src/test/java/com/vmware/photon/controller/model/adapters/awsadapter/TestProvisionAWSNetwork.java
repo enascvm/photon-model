@@ -13,32 +13,35 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.net.URI;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSNetworkService.AWSNetworkClient;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService.ProvisionNetworkTaskState;
-
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
@@ -147,8 +150,6 @@ public class TestProvisionAWSNetwork {
                 .equalsIgnoreCase(AWSUtils.NO_VALUE));
         assertTrue(removedNetwork.customProperties.get(AWS_GATEWAY_ID)
                 .equalsIgnoreCase(AWSUtils.NO_VALUE));
-        assertTrue(removedNetwork.customProperties.get(AWS_SUBNET_ID)
-                .equalsIgnoreCase(AWSUtils.NO_VALUE));
         assertTrue(removedNetwork.customProperties.get(AWS_VPC_ROUTE_TABLE_ID)
                 .equalsIgnoreCase(AWSUtils.NO_VALUE));
     }
@@ -195,13 +196,15 @@ public class TestProvisionAWSNetwork {
 
         NetworkState net = getNetworkState(networkDescriptionLink);
 
-        AWSNetworkService netSVC = new AWSNetworkService();
         AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(creds, this.region, getExecutor());
+        AWSNetworkClient netSVC = new AWSNetworkService.AWSNetworkClient(client);
         // if any artifact is not present then an error will be thrown
-        assertNotNull(
-                netSVC.getVPC(net.customProperties.get(AWS_VPC_ID), client));
-        assertNotNull(netSVC.getInternetGateway(net.customProperties.get(AWS_GATEWAY_ID), client));
-        assertNotNull(netSVC.getSubnet(net.customProperties.get(AWS_SUBNET_ID), client));
+        assertNotNull(netSVC.getVPC(net.customProperties.get(AWS_VPC_ID)));
+        assertNotNull(netSVC.getInternetGateway(net.customProperties.get(AWS_GATEWAY_ID)));
+
+        List<SubnetState> subnetStates = TestUtils.getSubnetStates(this.host, net);
+        assertEquals(1, subnetStates.size());
+        assertNotNull(netSVC.getSubnet(subnetStates.get(0).id));
     }
 
     private NetworkState getNetworkState(String networkLink) throws Throwable {

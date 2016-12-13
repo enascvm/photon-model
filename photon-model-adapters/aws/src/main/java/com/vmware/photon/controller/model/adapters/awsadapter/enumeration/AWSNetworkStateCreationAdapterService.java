@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ATTACHMENT_VPC_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MAIN_ROUTE_ASSOCIATION;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.AWS_FILTER_VPC_ID;
@@ -54,7 +53,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkServiceCreationContext.SubnetStateWithParentVpcId;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkStateCreationContext.SubnetStateWithParentVpcId;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
@@ -84,7 +83,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
 
     private AWSClientManager clientManager;
 
-    public static enum AWSNetworkCreationStage {
+    enum AWSNetworkStateCreationStage {
         CLIENT,
         GET_REMOTE_VPC,
         GET_LOCAL_NETWORK_STATES,
@@ -122,7 +121,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * The service context that is created for representing the list of instances received into a
      * list of compute states that will be persisted in the system.
      */
-    static class AWSNetworkServiceCreationContext {
+    static class AWSNetworkStateCreationContext {
 
         static class SubnetStateWithParentVpcId {
             String parentVpcId;
@@ -136,7 +135,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
 
         public AmazonEC2AsyncClient amazonEC2Client;
         public AWSNetworkEnumeration networkRequest;
-        public AWSNetworkCreationStage networkCreationStage;
+        public AWSNetworkStateCreationStage networkCreationStage;
 
         // Map AWS VPC id to network state for discovered VPCs
         public Map<String, NetworkState> vpcs = new HashMap<>();
@@ -152,10 +151,10 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
         // states are successfully created.
         public final Operation awsAdapterOperation;
 
-        public AWSNetworkServiceCreationContext(AWSNetworkEnumeration networkRequest,
+        public AWSNetworkStateCreationContext(AWSNetworkEnumeration networkRequest,
                 Operation op) {
             this.networkRequest = networkRequest;
-            this.networkCreationStage = AWSNetworkCreationStage.CLIENT;
+            this.networkCreationStage = AWSNetworkStateCreationStage.CLIENT;
             this.awsAdapterOperation = op;
         }
     }
@@ -175,7 +174,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             return;
         }
         AWSNetworkEnumeration cs = op.getBody(AWSNetworkEnumeration.class);
-        AWSNetworkServiceCreationContext context = new AWSNetworkServiceCreationContext(cs, op);
+        AWSNetworkStateCreationContext context = new AWSNetworkStateCreationContext(cs, op);
         if (cs.enumerationRequest.isMockRequest) {
             op.complete();
         }
@@ -187,34 +186,34 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * from AWS. At the very least it gets the CIDR block information for the VPC, the connected
      * internet gateway (if any) and the main route table information for the VPC.
      */
-    private void handleNetworkStateChanges(AWSNetworkServiceCreationContext context) {
+    private void handleNetworkStateChanges(AWSNetworkStateCreationContext context) {
         switch (context.networkCreationStage) {
         case CLIENT:
-            getAWSAsyncClient(context, AWSNetworkCreationStage.GET_REMOTE_VPC);
+            getAWSAsyncClient(context, AWSNetworkStateCreationStage.GET_REMOTE_VPC);
             break;
         case GET_REMOTE_VPC:
-            refreshVPCInformation(context, AWSNetworkCreationStage.GET_LOCAL_NETWORK_STATES);
+            refreshVPCInformation(context, AWSNetworkStateCreationStage.GET_LOCAL_NETWORK_STATES);
             break;
         case GET_LOCAL_NETWORK_STATES:
-            getLocalNetworkStates(context, AWSNetworkCreationStage.GET_REMOTE_SUBNETS);
+            getLocalNetworkStates(context, AWSNetworkStateCreationStage.GET_REMOTE_SUBNETS);
             break;
         case GET_REMOTE_SUBNETS:
-            getSubnetInformation(context, AWSNetworkCreationStage.GET_LOCAL_SUBNET_STATES);
+            getSubnetInformation(context, AWSNetworkStateCreationStage.GET_LOCAL_SUBNET_STATES);
             break;
         case GET_LOCAL_SUBNET_STATES:
-            getLocalSubnetStates(context, AWSNetworkCreationStage.GET_INTERNET_GATEWAY);
+            getLocalSubnetStates(context, AWSNetworkStateCreationStage.GET_INTERNET_GATEWAY);
             break;
         case GET_INTERNET_GATEWAY:
-            getInternetGatewayInformation(context, AWSNetworkCreationStage.GET_MAIN_ROUTE_TABLE);
+            getInternetGatewayInformation(context, AWSNetworkStateCreationStage.GET_MAIN_ROUTE_TABLE);
             break;
         case GET_MAIN_ROUTE_TABLE:
-            getMainRouteTableInformation(context, AWSNetworkCreationStage.CREATE_NETWORKSTATE);
+            getMainRouteTableInformation(context, AWSNetworkStateCreationStage.CREATE_NETWORKSTATE);
             break;
         case CREATE_NETWORKSTATE:
-            createNetworkStateOperations(context, AWSNetworkCreationStage.CREATE_SUBNETSTATE);
+            createNetworkStateOperations(context, AWSNetworkStateCreationStage.CREATE_SUBNETSTATE);
             break;
         case CREATE_SUBNETSTATE:
-            createSubnetStateOperations(context, AWSNetworkCreationStage.SIGNAL_COMPLETION);
+            createSubnetStateOperations(context, AWSNetworkStateCreationStage.SIGNAL_COMPLETION);
             break;
         case SIGNAL_COMPLETION:
             setOperationDurationStat(context.awsAdapterOperation);
@@ -231,16 +230,16 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
 
     /**
      * Shortcut method that sets the next stage into the context and delegates to
-     * {@link #handleNetworkStateChanges(AWSNetworkServiceCreationContext)}.
+     * {@link #handleNetworkStateChanges(AWSNetworkStateCreationContext)}.
      */
     private void handleNetworkStateChanges(
-            AWSNetworkServiceCreationContext context,
-            AWSNetworkCreationStage next) {
+            AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
         context.networkCreationStage = next;
         handleNetworkStateChanges(context);
     }
 
-    private Object createResponse(AWSNetworkServiceCreationContext context) {
+    private Object createResponse(AWSNetworkStateCreationContext context) {
 
         NetworkEnumerationResponse response = new NetworkEnumerationResponse();
 
@@ -251,8 +250,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
         return response;
     }
 
-    private void refreshVPCInformation(AWSNetworkServiceCreationContext aws,
-            AWSNetworkCreationStage next) {
+    private void refreshVPCInformation(AWSNetworkStateCreationContext aws,
+            AWSNetworkStateCreationStage next) {
         DescribeVpcsRequest vpcRequest = new DescribeVpcsRequest();
         AWSVPCAsyncHandler asyncHandler = new AWSVPCAsyncHandler(next, aws);
         aws.amazonEC2Client.describeVpcsAsync(vpcRequest, asyncHandler);
@@ -261,8 +260,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
     /**
      * Method to instantiate the AWS Async client for future use
      */
-    private void getAWSAsyncClient(AWSNetworkServiceCreationContext context,
-            AWSNetworkCreationStage next) {
+    private void getAWSAsyncClient(AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
         context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
                 context.networkRequest.parentAuth, context.networkRequest.regionId,
                 this, context.networkRequest.enumerationRequest.taskReference, true);
@@ -274,8 +273,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * Gets the VPC information from the local database to perform updates to existing network
      * states.
      */
-    private void getLocalNetworkStates(AWSNetworkServiceCreationContext context,
-            AWSNetworkCreationStage next) {
+    private void getLocalNetworkStates(AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
         QueryTask queryTask = createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
                 context.vpcs.keySet(), context.networkRequest.tenantLinks);
 
@@ -307,8 +306,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * Gets the Subnets that are attached to the VPCs that were discovered during the enumeration
      * process.
      */
-    private void getSubnetInformation(AWSNetworkServiceCreationContext context,
-            AWSNetworkCreationStage next) {
+    private void getSubnetInformation(AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
         DescribeSubnetsRequest subnetRequest = new DescribeSubnetsRequest();
         List<String> vpcList = new ArrayList<String>(context.vpcs.keySet());
         Filter filter = new Filter(AWS_VPC_FILTER, vpcList);
@@ -321,8 +320,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * Gets the Subnet information from the local database to perform updates to existing subnet
      * states.
      */
-    private void getLocalSubnetStates(AWSNetworkServiceCreationContext context,
-            AWSNetworkCreationStage next) {
+    private void getLocalSubnetStates(AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
         QueryTask q = createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
                 context.subnets.keySet(), context.networkRequest.tenantLinks);
 
@@ -352,8 +351,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * Gets the Internet gateways that are attached to the VPCs that were discovered during the
      * enumeration process.
      */
-    private void getInternetGatewayInformation(AWSNetworkServiceCreationContext context,
-            AWSNetworkCreationStage next) {
+    private void getInternetGatewayInformation(AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
         DescribeInternetGatewaysRequest internetGatewayRequest = new DescribeInternetGatewaysRequest();
         List<String> vpcList = new ArrayList<String>(context.vpcs.keySet());
         Filter filter = new Filter(AWS_ATTACHMENT_VPC_FILTER, vpcList);
@@ -370,7 +369,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
     class AWSVPCAsyncHandler
             extends TransitionToAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> {
 
-        AWSVPCAsyncHandler(AWSNetworkCreationStage next, AWSNetworkServiceCreationContext context) {
+        AWSVPCAsyncHandler(AWSNetworkStateCreationStage next, AWSNetworkStateCreationContext context) {
             super(next, context);
         }
 
@@ -403,8 +402,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             TransitionToAsyncHandler<DescribeInternetGatewaysRequest, DescribeInternetGatewaysResult> {
 
         AWSInternetGatewayAsyncHandler(
-                AWSNetworkCreationStage next,
-                AWSNetworkServiceCreationContext context) {
+                AWSNetworkStateCreationStage next,
+                AWSNetworkStateCreationContext context) {
             super(next, context);
         }
 
@@ -438,8 +437,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             TransitionToAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult> {
 
         AWSSubnetAsyncHandler(
-                AWSNetworkCreationStage next,
-                AWSNetworkServiceCreationContext context) {
+                AWSNetworkStateCreationStage next,
+                AWSNetworkStateCreationContext context) {
             super(next, context);
         }
 
@@ -458,9 +457,6 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
                     continue;
                 }
 
-                NetworkState parentNetworkState = this.context.vpcs
-                        .get(subnet.getVpcId());
-
                 SubnetState subnetState = mapSubnetToSubnetState(subnet,
                         this.context.networkRequest.tenantLinks);
 
@@ -469,13 +465,9 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
                             subnet.toString());
                 }
 
-                // Update parent NetworkState with this Subnet
-                parentNetworkState.customProperties.put(AWS_SUBNET_ID,
-                        subnet.getSubnetId());
-
                 this.context.subnets.put(
                         subnet.getSubnetId(),
-                        new AWSNetworkServiceCreationContext.SubnetStateWithParentVpcId(
+                        new AWSNetworkStateCreationContext.SubnetStateWithParentVpcId(
                                 subnet.getVpcId(), subnetState));
             }
         }
@@ -485,8 +477,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * Gets the main route table information associated with a VPC that is being mapped to a network
      * state in the system. *
      */
-    private void getMainRouteTableInformation(AWSNetworkServiceCreationContext context,
-            AWSNetworkCreationStage next) {
+    private void getMainRouteTableInformation(AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
         DescribeRouteTablesRequest routeTablesRequest = new DescribeRouteTablesRequest();
         List<String> vpcList = new ArrayList<String>(context.vpcs.keySet());
 
@@ -508,8 +500,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             TransitionToAsyncHandler<DescribeRouteTablesRequest, DescribeRouteTablesResult> {
 
         AWSMainRouteTableAsyncHandler(
-                AWSNetworkCreationStage next,
-                AWSNetworkServiceCreationContext context) {
+                AWSNetworkStateCreationStage next,
+                AWSNetworkStateCreationContext context) {
             super(next, context);
         }
 
@@ -538,8 +530,9 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * Create the network state operations for all the VPCs that need to be created or updated in
      * the system.
      */
-    private void createNetworkStateOperations(AWSNetworkServiceCreationContext context,
-            AWSNetworkCreationStage next) {
+    private void createNetworkStateOperations(
+            AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
 
         if (context.vpcs.isEmpty()) {
             logInfo("No new VPCs have been discovered.Nothing to do.");
@@ -548,7 +541,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             return;
         }
 
-        List<Operation> networkOperations = new ArrayList<>();
+        final List<Operation> networkOperations = new ArrayList<>();
 
         for (String remoteVPCId : context.vpcs.keySet()) {
 
@@ -576,10 +569,12 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
                 return;
             }
             logInfo("Successfully created/updated all the network states.");
-            ops.values().forEach(op -> {
-                NetworkState networkState = op.getBody(NetworkState.class);
-                context.vpcs.put(networkState.id, networkState);
-            });
+            ops.values().stream()
+                    .filter(op -> op.getStatusCode() != Operation.STATUS_CODE_NOT_MODIFIED)
+                    .forEach(op -> {
+                        NetworkState networkState = op.getBody(NetworkState.class);
+                        context.vpcs.put(networkState.id, networkState);
+                    });
             handleNetworkStateChanges(context, next);
         };
         OperationJoin.create(networkOperations)
@@ -591,8 +586,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * Create the subnet state operations for all the Subnets that need to be created or updated in
      * the system.
      */
-    private void createSubnetStateOperations(AWSNetworkServiceCreationContext context,
-            AWSNetworkCreationStage next) {
+    private void createSubnetStateOperations(AWSNetworkStateCreationContext context,
+            AWSNetworkStateCreationStage next) {
 
         if (context.subnets.isEmpty()) {
             logInfo("No new Subnets have been discovered.Nothing to do.");
@@ -600,7 +595,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             return;
         }
 
-        List<Operation> subnetOperations = new ArrayList<>();
+        final List<Operation> subnetOperations = new ArrayList<>();
 
         for (String remoteSubnetId : context.subnets.keySet()) {
 
@@ -634,10 +629,12 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
                 return;
             }
             logInfo("Successfully created/updated all the subnet states.");
-            ops.values().forEach(op -> {
-                SubnetState subnetState = op.getBody(SubnetState.class);
-                context.subnets.get(subnetState.id).subnetState = subnetState;
-            });
+            ops.values().stream()
+                    .filter(op -> op.getStatusCode() != Operation.STATUS_CODE_NOT_MODIFIED)
+                    .forEach(op -> {
+                        SubnetState subnetState = op.getBody(SubnetState.class);
+                        context.subnets.get(subnetState.id).subnetState = subnetState;
+                    });
             handleNetworkStateChanges(context, next);
         };
 
@@ -650,7 +647,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
      * Release the {@link Operation} (that triggered this network enumeration) and sends failure
      * patch to enumeration task.
      */
-    private void finishWithFailure(AWSNetworkServiceCreationContext context, Throwable exc) {
+    private void finishWithFailure(AWSNetworkStateCreationContext context, Throwable exc) {
 
         context.awsAdapterOperation.fail(exc);
 
@@ -661,19 +658,19 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
     /**
      * A specialization of {@link AWSAsyncHandler} which upon AWS async call completion either
      * transitions to next state in the state machine (as defined by
-     * {@link AWSNetworkStateCreationAdapterService#handleNetworkStateChanges(AWSNetworkServiceCreationContext)})
+     * {@link AWSNetworkStateCreationAdapterService#handleNetworkStateChanges(AWSNetworkStateCreationContext)})
      * or finishes with failure (as defined by
-     * {@link AWSNetworkStateCreationAdapterService#finishWithFailure(AWSNetworkServiceCreationContext, Throwable)}).
+     * {@link AWSNetworkStateCreationAdapterService#finishWithFailure(AWSNetworkStateCreationContext, Throwable)}).
      */
     private abstract class TransitionToAsyncHandler<REQ extends AmazonWebServiceRequest, RES>
             extends AWSAsyncHandler<REQ, RES> {
 
-        final AWSNetworkCreationStage next;
-        final AWSNetworkServiceCreationContext context;
+        final AWSNetworkStateCreationStage next;
+        final AWSNetworkStateCreationContext context;
 
         TransitionToAsyncHandler(
-                AWSNetworkCreationStage next,
-                AWSNetworkServiceCreationContext context) {
+                AWSNetworkStateCreationStage next,
+                AWSNetworkStateCreationContext context) {
 
             this.next = next;
             this.context = context;

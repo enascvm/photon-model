@@ -53,7 +53,6 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceState;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
-import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagDescription;
 import com.amazonaws.services.ec2.model.Vpc;
@@ -345,30 +344,24 @@ public class AWSUtils {
         String groupId;
         try {
             String vpcId = null;
-            // get the subnet cidr from the subnet provided in description properties (if any)
-            String subnet = getSubnetFromDescription(aws);
-            if (subnet != null) {
-                // if the subnet is obtained from the custom properties, the vpc is also obtained
-                // from there
-                vpcId = getFromCustomProperties(aws.child.description, AWSConstants.AWS_VPC_ID);
-            } else {
-                // in case subnet will be obtained from the default vpc, the security group should
-                // as well be created there
-                Vpc defaultVPC = getDefaultVPC(aws);
-                if (defaultVPC != null) {
-                    vpcId = defaultVPC.getVpcId();
-                    subnet = defaultVPC.getCidrBlock();
-                }
+            // get the subnet cidr (if any)
+            String subnetCidr = null;
+            // in case subnet will be obtained from the default vpc, the security group should
+            // as well be created there
+            Vpc defaultVPC = getDefaultVPC(aws);
+            if (defaultVPC != null) {
+                vpcId = defaultVPC.getVpcId();
+                subnetCidr = defaultVPC.getCidrBlock();
             }
 
             // no subnet or no vpc is not an option...
-            if (subnet == null || vpcId == null) {
+            if (subnetCidr == null || vpcId == null) {
                 throw new AmazonServiceException("default VPC not found");
             }
 
             groupId = createSecurityGroup(aws.amazonEC2Client, vpcId);
             updateIngressRules(aws.amazonEC2Client, groupId,
-                    getDefaultRules(subnet));
+                    getDefaultRules(subnetCidr));
         } catch (AmazonServiceException t) {
             if (t.getMessage().contains(
                     DEFAULT_SECURITY_GROUP_NAME)) {
@@ -393,19 +386,6 @@ public class AWSUtils {
         DescribeSecurityGroupsResult groups = client
                 .describeSecurityGroups(req);
         return groups != null ? groups.getSecurityGroups() : Collections.emptyList();
-    }
-
-    public static String getSubnetFromDescription(AWSAllocation aws) {
-        String subnetId = getFromCustomProperties(aws.child.description,
-                AWSConstants.AWS_SUBNET_ID);
-
-        if (subnetId != null) {
-            AWSNetworkService netSvc = new AWSNetworkService();
-            Subnet subnet = netSvc.getSubnet(subnetId, aws.amazonEC2Client);
-            return subnet.getCidrBlock();
-        }
-
-        return null;
     }
 
     public static String getFromCustomProperties(

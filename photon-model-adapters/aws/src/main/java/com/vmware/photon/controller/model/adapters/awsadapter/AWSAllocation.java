@@ -29,11 +29,9 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 
@@ -45,16 +43,12 @@ public class AWSAllocation extends BaseAwsContext {
     public AWSStages stage;
 
     transient Operation awsOperation;
+
     public ComputeInstanceRequest computeRequest;
     public AmazonEC2AsyncClient amazonEC2Client;
     public Map<DiskType, DiskState> childDisks;
-    public String subnetId;
     public Throwable error;
     public long taskExpirationMicros;
-
-    public Map<String, FirewallState> childFirewalls;
-
-    public List<NetworkInterfaceState> networkInterfaces;
 
     /**
      * The class encapsulates NIC related data (both Photon Model and AWS model) used during

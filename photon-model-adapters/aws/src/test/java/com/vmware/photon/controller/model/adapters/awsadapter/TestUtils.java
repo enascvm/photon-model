@@ -19,10 +19,13 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 
@@ -32,6 +35,8 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryForReferrers;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -209,6 +214,24 @@ public class TestUtils {
         host.send(startGet);
         host.testWait();
 
+    }
+
+    /**
+     * Get all SubnetStates within passed NetworkState. In other words, get all subnet states that
+     * refer the network state passed.
+     */
+    public static List<SubnetState> getSubnetStates(
+            VerificationHost host,
+            NetworkState networkState) throws Throwable {
+
+        QueryForReferrers<SubnetState> querySubnetStatesReferrers = new QueryForReferrers<>(
+                host,
+                networkState.documentSelfLink,
+                SubnetState.class,
+                SubnetState.FIELD_NAME_NETWORK_LINK,
+                Collections.emptyList());
+
+        return querySubnetStatesReferrers.collectDocuments(Collectors.toList());
     }
 
     public static ExecutorService getExecutor() {

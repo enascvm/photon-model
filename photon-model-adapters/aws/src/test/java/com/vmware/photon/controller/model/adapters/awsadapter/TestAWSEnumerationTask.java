@@ -20,7 +20,6 @@ import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PRIVATE_INTERFACE;
@@ -80,6 +79,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -605,8 +605,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         assertNotNull(networkState.instanceAdapterReference);
         // This is assuming that the internet gateway is attached to the VPC by default
         assertNotNull(networkState.customProperties.get(AWS_GATEWAY_ID));
-        assertNotNull(networkState.customProperties.get(AWS_SUBNET_ID));
         assertNotNull(networkState.customProperties.get(AWS_VPC_ROUTE_TABLE_ID));
+
+        List<SubnetState> subnetStates = TestUtils.getSubnetStates(this.host, networkState);
+        assertFalse(subnetStates.isEmpty());
+        subnetStates.stream().forEach(subnetState -> assertNotNull(subnetState.subnetCIDR));
     }
 
     /**
