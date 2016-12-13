@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VIRTUAL_NETWORKS_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
@@ -723,10 +724,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             resultNetworkState.subnetCIDR = addressSpace.addressPrefixes.get(0);
         }
 
-        // TODO: There is no Azure Network Adapter Service. Add a dummy reference since this is
+        // TODO: There is no Azure Network Adapter Service. Add a default reference since this is
         // required field.
         resultNetworkState.instanceAdapterReference = UriUtils.buildUri(getHost(),
-                "/dummyInstanceAdapterReference");
+                DEFAULT_INSTANCE_ADAPTER_REFERENCE);
         resultNetworkState.tenantLinks = context.computeHostDesc.tenantLinks;
 
         return resultNetworkState;

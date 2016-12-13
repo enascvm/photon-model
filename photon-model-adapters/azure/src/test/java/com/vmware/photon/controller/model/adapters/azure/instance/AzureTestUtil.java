@@ -27,6 +27,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_CAPACITY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_SERVICE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.enumeration.AzureStorageEnumerationAdapterService.FIELD_COMPUTE_HOST_LINK;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
@@ -278,8 +279,8 @@ public class AzureTestUtil {
             networkState.resourcePoolLink = resourcePoolLink;
             networkState.subnetCIDR = AZURE_NETWORK_CIDR;
             networkState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
-            networkState.instanceAdapterReference = UriUtils
-                    .buildUri(host, "/dummyInstanceAdapterReference");
+            networkState.instanceAdapterReference = UriUtils.buildUri(host,
+                    DEFAULT_INSTANCE_ADAPTER_REFERENCE);
 
             networkState = TestUtils.doPost(host, networkState, NetworkState.class,
                     UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
