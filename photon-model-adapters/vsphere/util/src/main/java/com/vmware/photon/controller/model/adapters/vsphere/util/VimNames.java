@@ -18,6 +18,7 @@ package com.vmware.photon.controller.model.adapters.vsphere.util;
  */
 public class VimNames {
     public static final String PROPERTY_NAME = "name";
+    public static final String PROPERTY_PARENT = "parent";
 
     public static final String TYPE_VM = "VirtualMachine";
     public static final String TYPE_HOST = "HostSystem";
