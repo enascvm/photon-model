@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_SECURITY_GROUP_DESC;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_SECURITY_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.buildRules;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
@@ -260,8 +259,7 @@ public class AWSFirewallService extends StatelessService {
     }
 
     public void deleteSecurityGroup(AmazonEC2AsyncClient client) {
-        SecurityGroup group = getSecurityGroup(client,
-                DEFAULT_SECURITY_GROUP_NAME);
+        SecurityGroup group = getSecurityGroup(client);
         if (group != null) {
             deleteSecurityGroup(client, group.getGroupId());
         }

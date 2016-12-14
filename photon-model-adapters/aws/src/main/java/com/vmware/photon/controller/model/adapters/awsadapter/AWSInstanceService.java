@@ -311,7 +311,7 @@ public class AWSInstanceService extends StatelessService {
 
         vpcRequest.getFilters().add(
                 new Filter(AWSConstants.AWS_VPC_FILTER, Collections.singletonList(aws
-                        .getVmPrimaryNic().networkState.name)));
+                        .getVmPrimaryNic().networkState.id)));
 
         aws.amazonEC2Client.describeVpcsAsync(vpcRequest,
                 new AsyncHandler<DescribeVpcsRequest, DescribeVpcsResult>() {
@@ -336,6 +336,11 @@ public class AWSInstanceService extends StatelessService {
     }
 
     private void getAWSFirewalls(AWSAllocation aws, AWSStages next) {
+        if (aws.nics.isEmpty()) {
+            handleAllocation(aws, next);
+            return;
+        }
+
         List<String> securityGroupIds = getOrCreateSecurityGroups(aws.getVmPrimaryNic(), aws);
         for (NicAllocationContext nicCtx : aws.nics) {
             nicCtx.groupIds = securityGroupIds;
@@ -534,7 +539,7 @@ public class AWSInstanceService extends StatelessService {
      * method will retrieve firewalls for targeted image and set it to the primary NIC
      */
     private void getNICFirewallStates(AWSAllocation aws, AWSStages next) {
-        if ( aws.nics.size() > 0 && aws.getVmPrimaryNic().nicStateWithDesc.firewallLinks == null ) {
+        if ( aws.nics.isEmpty() || aws.getVmPrimaryNic().nicStateWithDesc.firewallLinks == null ) {
             handleAllocation(aws, next);
             return;
         }

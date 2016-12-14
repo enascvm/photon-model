@@ -332,7 +332,7 @@ public class TestAWSSetupUtils {
         NetworkState netState;
         {
             netState = new NetworkState();
-            netState.id = UUID.randomUUID().toString();
+            netState.id = AWS_DEFAULT_VPC_ID;
             netState.name = AWS_DEFAULT_VPC_ID;
             netState.documentSelfLink = netState.id;
             netState.authCredentialsLink = authCredentialsLink;

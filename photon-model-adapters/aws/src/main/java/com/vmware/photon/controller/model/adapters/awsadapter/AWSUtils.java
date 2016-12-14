@@ -68,7 +68,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillPar
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
-
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -292,7 +291,8 @@ public class AWSUtils {
      * in case that none of the above methods discover a security group, the default one is discovered from AWS
      * in case that none of the above method discover a security group, a new security group is created
      */
-    public static List<String> getOrCreateSecurityGroups(NicAllocationContext nicCtx, AWSAllocation aws) {
+    public static List<String> getOrCreateSecurityGroups(NicAllocationContext nicCtx,
+            AWSAllocation aws) {
         String groupId;
         SecurityGroup group;
 
@@ -301,7 +301,7 @@ public class AWSUtils {
         if (nicCtx != null) {
             if (nicCtx.firewallStates != null && !nicCtx.firewallStates.isEmpty()) {
                 List<SecurityGroup> securityGroups = getSecurityGroups(aws.amazonEC2Client,
-                        new ArrayList<>(nicCtx.firewallStates.keySet()));
+                        new ArrayList<>(nicCtx.firewallStates.keySet()), nicCtx.vpc.getVpcId());
                 for (SecurityGroup securityGroup : securityGroups) {
                     groupIds.add(securityGroup.getGroupId());
                 }
@@ -316,45 +316,55 @@ public class AWSUtils {
             return Arrays.asList(sgId);
         }
 
-        // if the group doesn't exist an exception is thrown. We won't throw a
-        // missing group exception
-        // we will continue and create the group
-        try {
-            group = getSecurityGroup(aws.amazonEC2Client);
-            if (group != null) {
-                return Arrays.asList(group.getGroupId());
-            }
-        } catch (AmazonServiceException t) {
-            if (!t.getMessage().contains(
-                    DEFAULT_SECURITY_GROUP_NAME)) {
-                throw t;
+        // in case no group is configured in the properties, attempt to discover the default one
+        if (nicCtx != null && nicCtx.vpc != null) {
+            try {
+                group = getSecurityGroup(aws.amazonEC2Client, DEFAULT_SECURITY_GROUP_NAME,
+                        nicCtx.vpc.getVpcId());
+                if (group != null) {
+                    return Arrays.asList(group.getGroupId());
+                }
+            } catch (AmazonServiceException t) {
+                if (!t.getMessage().contains(
+                        DEFAULT_SECURITY_GROUP_NAME)) {
+                    throw t;
+                }
             }
         }
 
+        // if the group doesn't exist an exception is thrown. We won't throw a
+        // missing group exception
+        // we will continue and create the group
         groupId = createAWSSecurityGroup(aws);
 
         return Arrays.asList(groupId);
     }
 
-    //method create a security group in the VPC provided in custom properties
+    // method create a security group in the VPC from custom properties or the default VPC
     private static String createAWSSecurityGroup(AWSAllocation aws) {
-        // get the subnet cidr from the subnet provided in description properties (if any)
-        String subnet = getSubnetFromDescription(aws);
-
-        // if no subnet provided then get the default one for the default vpc
-        if (subnet == null) {
-            subnet = getDefaultVPCSubnet(aws);
-        }
-
-        // no subnet is not an option...
-        if (subnet == null) {
-            throw new AmazonServiceException("default VPC not found");
-        }
         String groupId;
         try {
-            // create the security group for the the vpc
-            // provided in the description properties (if any)
-            String vpcId = getFromCustomProperties(aws.child.description, AWSConstants.AWS_VPC_ID);
+            String vpcId = null;
+            // get the subnet cidr from the subnet provided in description properties (if any)
+            String subnet = getSubnetFromDescription(aws);
+            if (subnet != null) {
+                // if the subnet is obtained from the custom properties, the vpc is also obtained
+                // from there
+                vpcId = getFromCustomProperties(aws.child.description, AWSConstants.AWS_VPC_ID);
+            } else {
+                // in case subnet will be obtained from the default vpc, the security group should
+                // as well be created there
+                Vpc defaultVPC = getDefaultVPC(aws);
+                if (defaultVPC != null) {
+                    vpcId = defaultVPC.getVpcId();
+                    subnet = defaultVPC.getCidrBlock();
+                }
+            }
+
+            // no subnet or no vpc is not an option...
+            if (subnet == null || vpcId == null) {
+                throw new AmazonServiceException("default VPC not found");
+            }
 
             groupId = createSecurityGroup(aws.amazonEC2Client, vpcId);
             updateIngressRules(aws.amazonEC2Client, groupId,
@@ -371,10 +381,15 @@ public class AWSUtils {
     }
 
     public static List<SecurityGroup> getSecurityGroups(AmazonEC2AsyncClient client,
-            List<String> names) {
+            List<String> names, String vpcId) {
 
-        DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest()
-                .withFilters(new Filter("group-name", names));
+        DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest();
+
+        req.withFilters(new Filter("group-name", names));
+        if (vpcId != null) {
+            req.withFilters(new Filter("vpc-id", Collections.singletonList(vpcId)));
+        }
+
         DescribeSecurityGroupsResult groups = client
                 .describeSecurityGroups(req);
         return groups != null ? groups.getSecurityGroups() : Collections.emptyList();
@@ -431,10 +446,18 @@ public class AWSUtils {
 
     public static SecurityGroup getSecurityGroup(AmazonEC2AsyncClient client,
             String name) {
+        return getSecurityGroup(client, name, null);
+    }
+
+    public static SecurityGroup getSecurityGroup(AmazonEC2AsyncClient client,
+            String name, String vpcId) {
         SecurityGroup cellGroup = null;
 
         DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest()
-                .withFilters(new Filter("group-name", Arrays.asList(name)));
+                .withFilters(new Filter("group-name", Collections.singletonList(name)));
+        if (vpcId != null) {
+            req.withFilters(new Filter("vpc-id", Collections.singletonList(vpcId)));
+        }
         DescribeSecurityGroupsResult cellGroups = client
                 .describeSecurityGroups(req);
         if (cellGroups != null && !cellGroups.getSecurityGroups().isEmpty()) {
@@ -503,19 +526,28 @@ public class AWSUtils {
     }
 
     /**
+     * Gets the default VPC
+     */
+    public static Vpc getDefaultVPC(AWSAllocation aws) {
+        DescribeVpcsResult result = aws.amazonEC2Client.describeVpcs();
+        List<Vpc> vpcs = result.getVpcs();
+        for (Vpc vpc : vpcs) {
+            if (vpc.isDefault()) {
+                return vpc;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Gets the subnet associated with the default VPC.
      */
     public static String getDefaultVPCSubnet(AWSAllocation aws) {
-        String subnet = null;
-        DescribeVpcsResult result = aws.amazonEC2Client.describeVpcs();
-        List<Vpc> vpcs = result.getVpcs();
-
-        for (Vpc vpc : vpcs) {
-            if (vpc.isDefault()) {
-                subnet = vpc.getCidrBlock();
-            }
+        Vpc defaultVpc = getDefaultVPC(aws);
+        if (defaultVpc != null) {
+            return defaultVpc.getCidrBlock();
         }
-        return subnet;
+        return null;
     }
 
     /**
