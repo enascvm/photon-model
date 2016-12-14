@@ -117,8 +117,8 @@ public class TestAWSSetupUtils {
     private static final String AWS_DEFAULT_SUBNET_NAME = "default";
     private static final String AWS_DEFAULT_SUBNET_ID = "subnet-1f82fe22";
     private static final String AWS_DEFAULT_SUBNET_CIDR = "172.31.32.0/20";
-    private static final String AWS_DEFAULT_GROUP_NAME = AWS_DEFAULT_SUBNET_NAME;
-    private static final String AWS_DEFAULT_GROUP_ID = "sg-240f995c";
+    private static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
+    private static final String AWS_DEFAULT_GROUP_ID = "sg-d46efeac";
     public static final int NUMBER_OF_NICS = 1;
 
     public static final String DEFAULT_AUTH_TYPE = "PublicKey";
