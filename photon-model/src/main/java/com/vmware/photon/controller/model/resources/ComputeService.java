@@ -89,8 +89,8 @@ public class ComputeService extends StatefulService {
         public static final String FIELD_NAME_POWER_STATE = "powerState";
         public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
         public static final String FIELD_NAME_PARENT_LINK = "parentLink";
+        public static final String FIELD_NAME_LIFECYCLE_STATE = "lifecycleState";
         public static final String FIELD_NAME_NETWORK_LINKS = "networkInterfaceLinks";
-        public static final String CUSTOM_PROPERTY_NAME_RUNTIME_INFO = "runtimeInfo";
 
         /**
          * URI reference to corresponding ComputeDescription.

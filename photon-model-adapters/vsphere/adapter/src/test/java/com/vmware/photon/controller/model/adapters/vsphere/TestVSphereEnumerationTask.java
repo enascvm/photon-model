@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static org.junit.Assert.assertEquals;
+
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.concurrent.ExecutionException;
@@ -73,10 +75,29 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
         captureFactoryState("initial");
 
+        String aComputeLink = null;
+        if (!isMock()) {
+            // clone a random compute and save it under different id
+            ComputeState vm = findRandomVm();
+            vm.documentSelfLink = null;
+            vm.id = "fake-vm-" + vm.id;
+
+            vm = TestUtils.doPost(this.host, vm,
+                    ComputeState.class,
+                    UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+            aComputeLink = vm.documentSelfLink;
+        }
         // do a second refresh to test update path
         doRefresh();
 
         captureFactoryState("updated");
+
+        if (aComputeLink != null) {
+            // the second enumeration must have deleted the fake vm
+            Operation op = Operation.createGet(this.host, aComputeLink);
+            op = this.host.waitForResponse(op);
+            assertEquals(Operation.STATUS_CODE_NOT_FOUND, op.getStatusCode());
+        }
     }
 
     protected void captureFactoryState(String marker)

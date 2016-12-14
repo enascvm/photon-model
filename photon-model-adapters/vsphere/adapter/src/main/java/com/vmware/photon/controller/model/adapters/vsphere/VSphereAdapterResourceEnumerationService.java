@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT;
-
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -38,6 +36,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.codehaus.jackson.node.ObjectNode;
 
@@ -56,6 +55,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -66,6 +66,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.PropertyFilterSpec;
@@ -85,8 +86,10 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
@@ -389,16 +392,15 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         // include hosts that are part of a non-DRS enabled cluster
-        hosts.removeIf(hs -> nonDrsClusters.get(hs.getParent().getValue()) == null);
+        hosts.removeIf(hs -> !nonDrsClusters.containsKey(hs.getParent().getValue()));
         enumerationContext.expectHostSystemCount(hosts.size());
         for (HostSystemOverlay hs : hosts) {
-            ComputeResourceOverlay cr = nonDrsClusters.get(hs.getParent().getValue());
-            processFoundHostSystem(enumerationContext, hs, cr, parent.tenantLinks);
+            processFoundHostSystem(enumerationContext, hs, parent.tenantLinks);
         }
 
         enumerationContext.expectComputeResourceCount(computeResources.size());
-        for (ComputeResourceOverlay cs : computeResources) {
-            processFoundComputeResource(enumerationContext, cs, parent.tenantLinks);
+        for (ComputeResourceOverlay cr : computeResources) {
+            processFoundComputeResource(enumerationContext, cr, parent.tenantLinks);
         }
 
         // checkpoint compute
@@ -427,7 +429,61 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         }
 
-        mgr.patchTask(TaskStage.FINISHED);
+        garbageCollectUntouchedComputeResources(mgr, request);
+    }
+
+    private void garbageCollectUntouchedComputeResources(TaskManager mgr, ComputeEnumerateResourceRequest request) {
+        // find all computes of the parent which are NOT enumerated by this task AND are enumerated at least once.
+
+        String enumerateByFieldName = QuerySpecification
+                .buildCompositeFieldName(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.ENUMERATED_BY_TASK_LINK);
+
+        Query q = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, request.resourceLink())
+                .addFieldClause(enumerateByFieldName, request.taskLink(), Occurance.MUST_NOT_OCCUR)
+                .addFieldClause(enumerateByFieldName, "", MatchType.PREFIX)
+                .addFieldClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE, LifecycleState.RETIRED.toString(), Occurance.MUST_NOT_OCCUR)
+                .build();
+
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .build();
+
+        QueryUtils.startQueryTask(this, task).whenComplete((result, e) -> {
+            if (e != null) {
+                // it's to harsh to fail the task because of failed GC, next time it may pass
+                logSevere(e);
+                mgr.patchTask(TaskStage.FINISHED);
+                return;
+            }
+
+            if (result.results.documentLinks == null || result.results.documentLinks.isEmpty()) {
+                mgr.patchTask(TaskStage.FINISHED);
+                return;
+            }
+
+            Stream<Operation> gcOps = result.results.documentLinks.stream()
+                    .map(link -> createComputeRemovalOp(request.preserveMissing, link));
+
+            OperationJoin.create(gcOps)
+                    .setCompletion((os, es) -> mgr.patchTask(TaskStage.FINISHED))
+                    .sendWith(this);
+        });
+    }
+
+    private Operation createComputeRemovalOp(boolean preserveMissing, String computeLink) {
+        if (preserveMissing) {
+            ComputeState body = new ComputeState();
+            body.lifecycleState = LifecycleState.RETIRED;
+            // set powerState for consistency with other adapters
+            body.powerState = PowerState.OFF;
+            return Operation.createPatch(this, computeLink)
+                    .setBody(body);
+        } else {
+            return Operation.createDelete(this, computeLink);
+        }
     }
 
     private void threadInterrupted(TaskManager mgr, InterruptedException e) {
@@ -450,8 +506,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (result.documentLinks.isEmpty()) {
                 createNewNetwork(enumerationContext, net, tenantLinks);
             } else {
-                NetworkState oldDocument = convertOnlyResultToComputeState(result,
-                        NetworkState.class);
+                NetworkState oldDocument = convertOnlyResultToDocument(result, NetworkState.class);
                 updateNetwork(oldDocument, enumerationContext, net, tenantLinks);
             }
         });
@@ -570,6 +625,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.adapterManagementReference = request.adapterManagementReference;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
         return state;
@@ -615,8 +671,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (result.documentLinks.isEmpty()) {
                 createNewStorageDescription(enumerationContext, ds, tenantLinks);
             } else {
-                StorageDescription oldDocument = convertOnlyResultToComputeState(result,
-                        StorageDescription.class);
+                StorageDescription oldDocument = convertOnlyResultToDocument(result, StorageDescription.class);
                 updateStorageDescription(oldDocument, enumerationContext, ds, tenantLinks);
             }
         });
@@ -665,30 +720,22 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.capacityBytes = ds.getCapacityBytes();
         res.regionId = regionId;
         CustomProperties.of(res)
-                .put(CustomProperties.MOREF, ds.getId());
+                .put(CustomProperties.MOREF, ds.getId())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink());
 
         return res;
     }
 
-    private QueryTask queryForStorage(URI adapterManagementReference, String name,
-            String regionId) {
-        QuerySpecification qs = new QuerySpecification();
-        qs.query.addBooleanClause(
-                Query.Builder.create().addFieldClause(StorageDescription.FIELD_NAME_NAME, name)
-                        .build());
+    private QueryTask queryForStorage(URI adapterManagementReference, String name, String regionId) {
+        Query q = Query.Builder.create()
+                .addFieldClause(StorageDescription.FIELD_NAME_ADAPTER_REFERENCE, adapterManagementReference.toString())
+                .addFieldClause(StorageDescription.FIELD_NAME_REGION_ID, regionId)
+                .addFieldClause(StorageDescription.FIELD_NAME_NAME, name)
+                .build();
 
-        qs.query.addBooleanClause(Query.Builder.create()
-                .addFieldClause(StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
-                        adapterManagementReference.toString())
-                .build());
-
-        qs.query.addBooleanClause(Query.Builder.create()
-                .addFieldClause(StorageDescription.FIELD_NAME_REGION_ID,
-                        regionId)
-                .build());
-        return QueryTask
-                .create(qs)
-                .setDirect(true);
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .build();
     }
 
     /**
@@ -703,23 +750,20 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void processFoundComputeResource(EnumerationContext enumerationContext,
             ComputeResourceOverlay cr, List<String> tenantLinks) {
         ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        QueryTask task = queryForCluster(request.resourceLink(),
-                cr.getId().getValue());
+        QueryTask task = queryForCluster(request.resourceLink(), cr.getId().getValue());
         task.tenantLinks = tenantLinks;
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
                 createNewComputeResource(enumerationContext, cr, tenantLinks);
             } else {
-                ComputeState oldDocument = convertOnlyResultToComputeState(result,
-                        ComputeState.class);
+                ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
                 updateCluster(oldDocument, enumerationContext, cr, tenantLinks);
             }
         });
     }
 
-    private <T> T convertOnlyResultToComputeState(ServiceDocumentQueryResult result,
-            Class<T> type) {
+    private <T> T convertOnlyResultToDocument(ServiceDocumentQueryResult result, Class<T> type) {
         return Utils.fromJson(result.documents.values().iterator().next(), type);
     }
 
@@ -803,7 +847,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         List<TagState> tags = null;
         try {
             tags = retrieveAttachedTags(endpoint, ref, tenantLinks);
-        } catch (IOException | RpcException e) {
+        } catch (IOException | RpcException ignore) {
 
         }
 
@@ -811,15 +855,18 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return new HashSet<>();
         }
 
-        OperationJoin.create(
-                tags.stream()
-                        .map(s -> Operation
-                                .createPost(UriUtils.buildFactoryUri(getHost(), TagService.class))
-                                .setReferer(getUri())
-                                .setBody(s)))
+        Stream<Operation> ops = tags.stream()
+                .map(s -> Operation
+                        .createPost(UriUtils.buildFactoryUri(getHost(), TagService.class))
+                        .setReferer(getUri())
+                        .setBody(s));
+
+        OperationJoin.create(ops)
                 .sendWith(this);
 
-        return tags.stream().map(s -> s.documentSelfLink).collect(Collectors.toSet());
+        return tags.stream()
+                .map(s -> s.documentSelfLink)
+                .collect(Collectors.toSet());
     }
 
     /**
@@ -887,50 +934,45 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, cr.getId())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, cr.getId().getType());
         return state;
     }
 
     private QueryTask queryForCluster(String parentComputeLink, String moRefId) {
-        QuerySpecification qs = new QuerySpecification();
-        qs.query.addBooleanClause(
-                Query.Builder.create().addFieldClause(ComputeState.FIELD_NAME_ID, moRefId)
-                        .build());
+        Query q = Query.Builder.create()
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink)
+                .addFieldClause(ComputeState.FIELD_NAME_ID, moRefId)
+                .build();
 
-        qs.query.addBooleanClause(Query.Builder.create()
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink).build());
-
-        return QueryTask
-                .create(qs)
-                .setDirect(true);
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .build();
     }
 
     /**
      * @param enumerationContext
      * @param hs
-     * @param cr parent ComputeResource
      * @param tenantLinks
      */
     private void processFoundHostSystem(EnumerationContext enumerationContext,
-            HostSystemOverlay hs, ComputeResourceOverlay cr, List<String> tenantLinks) {
+            HostSystemOverlay hs, List<String> tenantLinks) {
         ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
-        QueryTask task = queryForHostSystem(request.resourceLink(),
-                hs.getHardwareUuid());
+        QueryTask task = queryForHostSystem(request.resourceLink(), hs.getId().getValue());
         task.tenantLinks = tenantLinks;
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewHostSystem(enumerationContext, hs, cr, tenantLinks);
+                createNewHostSystem(enumerationContext, hs, tenantLinks);
             } else {
-                ComputeState oldDocument = convertOnlyResultToComputeState(result,
-                        ComputeState.class);
-                updateHostSystem(oldDocument, enumerationContext, hs, cr, tenantLinks);
+                ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
+                updateHostSystem(oldDocument, enumerationContext, hs, tenantLinks);
             }
         });
     }
 
     private void updateHostSystem(ComputeState oldDocument, EnumerationContext enumerationContext,
-            HostSystemOverlay hs, ComputeResourceOverlay cr, List<String> tenantLinks) {
-        ComputeState state = makeHostSystemFromResults(enumerationContext, hs, cr);
+            HostSystemOverlay hs, List<String> tenantLinks) {
+        ComputeState state = makeHostSystemFromResults(enumerationContext, hs);
         state.documentSelfLink = oldDocument.documentSelfLink;
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = tenantLinks;
@@ -951,14 +993,14 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void createNewHostSystem(EnumerationContext enumerationContext,
-            HostSystemOverlay hs, ComputeResourceOverlay cr, List<String> tenantLinks) {
+            HostSystemOverlay hs, List<String> tenantLinks) {
         ComputeDescription desc = makeDescriptionForHost(enumerationContext, hs);
         desc.tenantLinks = tenantLinks;
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(desc)
                 .sendWith(this);
 
-        ComputeState state = makeHostSystemFromResults(enumerationContext, hs, cr);
+        ComputeState state = makeHostSystemFromResults(enumerationContext, hs);
         state.descriptionLink = desc.documentSelfLink;
         state.tenantLinks = tenantLinks;
         populateTags(hs, enumerationContext.getEndpoint(), state, tenantLinks);
@@ -995,11 +1037,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return res;
     }
 
-    private ComputeState makeHostSystemFromResults(EnumerationContext enumerationContext,
-            HostSystemOverlay hs, ComputeResourceOverlay cr) {
+    private ComputeState makeHostSystemFromResults(EnumerationContext enumerationContext, HostSystemOverlay hs) {
         ComputeState state = new ComputeState();
-        state.id = hs.getHardwareUuid();
         state.type = ComputeType.VM_HOST;
+        state.id = hs.getId().getValue();
         state.adapterManagementReference = enumerationContext.getRequest().adapterManagementReference;
         state.parentLink = enumerationContext.getRequest().resourceLink();
         state.resourcePoolLink = enumerationContext.getRequest().resourcePoolLink;
@@ -1008,6 +1049,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.powerState = PowerState.ON;
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, hs.getId())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, hs.getId().getType());
         return state;
     }
@@ -1027,8 +1069,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (result.documentLinks.isEmpty()) {
                 createNewVm(enumerationContext, vm, tenantLinks);
             } else {
-                ComputeState oldDocument = convertOnlyResultToComputeState(result,
-                        ComputeState.class);
+                ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
                 updateVm(oldDocument, enumerationContext, vm, tenantLinks);
             }
         });
@@ -1143,6 +1184,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
                 .put(CustomProperties.TEMPLATE_FLAG, vm.isTemplate())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
         return state;
     }
@@ -1186,32 +1228,26 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         qs.query.addBooleanClause(Query.Builder.create()
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink).build());
 
-        return QueryTask
-                .create(qs)
+        return QueryTask.create(qs)
                 .setDirect(true);
     }
 
     /**
-     * Builds a query for finding a HostSystems by their hardwareUuid.
-     *
+     * Builds a query for finding a HostSystems by its manage object reference.
      * @param parentComputeLink
-     * @param hardwareUuid
+     * @param moRefId
      * @return
      */
-    private QueryTask queryForHostSystem(String parentComputeLink, String hardwareUuid) {
-        QuerySpecification qs = new QuerySpecification();
-        qs.query.addBooleanClause(
-                Query.Builder.create().addFieldClause(ComputeState.FIELD_NAME_ID, hardwareUuid)
-                        .build());
+    private QueryTask queryForHostSystem(String parentComputeLink, String moRefId) {
+        Query q = Query.Builder.create()
+                .addFieldClause(ComputeState.FIELD_NAME_ID, moRefId)
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink)
+                .build();
 
-        qs.query.addBooleanClause(Query.Builder.create()
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink).build());
-
-        // fetch the whole document to extract the description link
-        qs.options = EnumSet.of(EXPAND_CONTENT);
-        return QueryTask
-                .create(qs)
-                .setDirect(true);
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .build();
     }
 
     private void processUpdates(UpdateSet updateSet) {

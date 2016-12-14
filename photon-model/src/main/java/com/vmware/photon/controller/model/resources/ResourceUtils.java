@@ -42,7 +42,7 @@ public class ResourceUtils {
             ServiceDocumentDescription description, Class<T> stateClass,
             Function<Operation, Boolean> customPatchHandler) {
         try {
-            boolean hasStateChanged = false;
+            boolean hasStateChanged;
 
             // apply standard patch merging
             EnumSet<Utils.MergeResult> mergeResult =

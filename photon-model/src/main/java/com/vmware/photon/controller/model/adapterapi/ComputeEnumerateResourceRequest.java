@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapterapi;
 
 import java.net.URI;
 
-
 /**
  * Request to enumerate instantiated resources. The {@code resourceReference} value is the URI to
  * the parent compute host.
@@ -40,8 +39,8 @@ public class ComputeEnumerateResourceRequest extends ResourceRequest {
 
     /**
      * If set to true, the adapter must not delete the missing resources, but set their
-     * {@link com.vmware.photon.controller.model.resources.ResourceState#status} field to
-     * {@link com.vmware.photon.controller.model.resources.ResourceState.Status#RETIRED}
+     * {@link  com.vmware.photon.controller.model.resources.ComputeService.ComputeState#lifecycleState} field to
+     * {@link  com.vmware.photon.controller.model.resources.ComputeService.LifecycleState#RETIRED}
      */
     public boolean preserveMissing;
 }

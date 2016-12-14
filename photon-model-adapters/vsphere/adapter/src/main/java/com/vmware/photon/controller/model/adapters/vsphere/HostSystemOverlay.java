@@ -45,10 +45,6 @@ public class HostSystemOverlay extends AbstractOverlay {
         return (long) getOrFail(VimPath.host_summary_hardware_memorySize);
     }
 
-    public String getHardwareUuid() {
-        return (String) getOrFail(VimPath.host_summary_hardware_uuid);
-    }
-
     public ArrayOfManagedObjectReference getDatastore() {
         return (ArrayOfManagedObjectReference) getOrFail(VimPath.host_datastore);
     }

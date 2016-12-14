@@ -50,6 +50,11 @@ public class CustomProperties {
      */
     public static final String TYPE = "__computeType";
 
+    /**
+     * During enumeration, this custom property is set to point to the enumeration Task.
+     */
+    public static final String ENUMERATED_BY_TASK_LINK = "__enumTaskLink";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

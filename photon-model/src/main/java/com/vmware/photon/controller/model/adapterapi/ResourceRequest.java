@@ -55,4 +55,11 @@ public abstract class ResourceRequest {
     public String resourceLink() {
         return this.resourceReference.getPath();
     }
+
+    /**
+     * Returns the link to the calling Task.
+     */
+    public String taskLink() {
+        return this.taskReference.getPath();
+    }
 }
