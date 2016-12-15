@@ -15,26 +15,25 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
-import com.vmware.photon.controller.model.adapters.awsadapter.BaseAwsContext;
-import com.vmware.photon.controller.model.adapters.awsadapter.BaseAwsContext.BaseAwsStages;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStages;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
 
 /**
  * Enumeration Adapter for the Amazon Web Services. Performs a list call to the AWS API and
  * reconciles the local state with the state on the remote system. It lists the instances on the
  * remote system. Compares those with the local system and creates the instances that are missing in
  * the local system.
- *
  */
 public class AWSEnumerationAdapterService extends StatelessService {
 
@@ -51,36 +50,14 @@ public class AWSEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Holds the compute resource request and other data that is required by the helper flows to
-     * perform resource enumeration on AWS.
-     *
-     */
-    public static class AWSEnumerationRequest {
-        public ComputeEnumerateResourceRequest computeEnumerateResourceRequest;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-        public ComputeStateWithDescription parentCompute;
-
-        public AWSEnumerationRequest(ComputeEnumerateResourceRequest request,
-                AuthCredentialsService.AuthCredentialsServiceState parentAuth,
-                ComputeStateWithDescription parentCompute) {
-            this.computeEnumerateResourceRequest = request;
-            this.parentAuth = parentAuth;
-            this.parentCompute = parentCompute;
-
-        }
-    }
-
-    /**
      * The enumeration service context needed to spawn off control to the creation and deletion
      * adapters for AWS.
      */
-    public static class EnumerationContext extends BaseAwsContext {
+    public static class EnumerationContext extends BaseAdapterContext {
 
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
         public AWSEnumerationStages stage;
         public List<Operation> enumerationOperations;
-        public Throwable error;
-        public Operation awsAdapterOperation;
 
         public EnumerationContext(Service service, ComputeEnumerateResourceRequest request,
                 Operation op) {
@@ -88,7 +65,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
             this.computeEnumerationRequest = request;
             this.stage = AWSEnumerationStages.KICKOFF_ENUMERATION;
             this.enumerationOperations = new ArrayList<Operation>();
-            this.awsAdapterOperation = op;
+            this.adapterOperation = op;
         }
     }
 
@@ -114,14 +91,18 @@ public class AWSEnumerationAdapterService extends StatelessService {
             AdapterUtils.sendPatchToEnumerationTask(this, request.taskReference);
             return;
         }
-        BaseAwsContext.populateContextThen(new EnumerationContext(this, request, op),
-                BaseAwsStages.PARENTDESC, (context, t) -> {
-                    if (t != null) {
-                        context.error = t;
-                        context.stage = AWSEnumerationStages.ERROR;
-                    }
-                    handleEnumerationRequest(context);
-                });
+
+        BiConsumer<EnumerationContext, Throwable> onFinish = (context, t) -> {
+            if (t != null) {
+                context.error = t;
+                context.stage = AWSEnumerationStages.ERROR;
+            }
+            handleEnumerationRequest(context);
+        };
+
+        BaseAdapterContext.populateContextThen(
+                new EnumerationContext(this, request, op),
+                BaseAdapterStages.PARENTDESC, onFinish);
     }
 
     /**
@@ -163,7 +144,6 @@ public class AWSEnumerationAdapterService extends StatelessService {
     /**
      * Creates operations for the creation and deletion adapter services and spawns them off in
      * parallel
-     *
      */
     public void handleEnumerationRequest(EnumerationContext aws) {
         switch (aws.stage) {
@@ -171,7 +151,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
             kickOffEnumerationWorkFlows(aws, AWSEnumerationStages.PATCH_COMPLETION);
             break;
         case PATCH_COMPLETION:
-            setOperationDurationStat(aws.awsAdapterOperation);
+            setOperationDurationStat(aws.adapterOperation);
             AdapterUtils.sendPatchToEnumerationTask(this,
                     aws.computeEnumerationRequest.taskReference);
             break;
@@ -194,9 +174,10 @@ public class AWSEnumerationAdapterService extends StatelessService {
      */
     public void kickOffEnumerationWorkFlows(EnumerationContext context,
             AWSEnumerationStages next) {
-        AWSEnumerationRequest awsEnumerationRequest = new AWSEnumerationRequest(
-                context.computeEnumerationRequest, context.parentAuth,
-                context.parent);
+        ComputeEnumerateAdapterRequest awsEnumerationRequest =
+                new ComputeEnumerateAdapterRequest(
+                        context.computeEnumerationRequest, context.parentAuth,
+                        context.parent);
 
         Operation patchAWSCreationAdapterService = Operation
                 .createPatch(this, AWSEnumerationAndCreationAdapterService.SELF_LINK)

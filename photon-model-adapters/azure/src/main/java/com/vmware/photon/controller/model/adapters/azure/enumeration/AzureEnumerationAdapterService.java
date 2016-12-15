@@ -18,7 +18,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStages;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.StatelessService;
 
 /**
@@ -46,16 +50,17 @@ public class AzureEnumerationAdapterService extends StatelessService {
     /**
      * The enumeration service context needed trigger adapters for Azure.
      */
-    public static class EnumerationContext {
+    public static class EnumerationContext extends BaseAdapterContext {
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
         public AzureEnumerationStages stage;
-        public Throwable error;
-        public Operation azureAdapterOperation;
 
-        public EnumerationContext(ComputeEnumerateResourceRequest request, Operation op) {
+        public EnumerationContext(Service service, ComputeEnumerateResourceRequest request,
+                Operation op) {
+            super(service, request.resourceReference);
+
             this.computeEnumerationRequest = request;
             this.stage = AzureEnumerationStages.TRIGGER_STORAGE_ENUMERATION;
-            this.azureAdapterOperation = op;
+            this.adapterOperation = op;
         }
     }
 
@@ -74,10 +79,22 @@ public class AzureEnumerationAdapterService extends StatelessService {
         }
         op.complete();
 
-        EnumerationContext azureEnumerationContext  = new EnumerationContext(
-                op.getBody(ComputeEnumerateResourceRequest.class), op);
-        AdapterUtils.validateEnumRequest(azureEnumerationContext .computeEnumerationRequest);
-        handleEnumerationRequest(azureEnumerationContext );
+        ComputeEnumerateResourceRequest request = op.getBody(ComputeEnumerateResourceRequest.class);
+        AdapterUtils.validateEnumRequest(request);
+        if (request.isMockRequest) {
+            // patch status to parent task
+            AdapterUtils.sendPatchToEnumerationTask(this, request.taskReference);
+            return;
+        }
+
+        BaseAdapterContext.populateContextThen(new EnumerationContext(this, request, op),
+                BaseAdapterStages.PARENTDESC, (context, t) -> {
+                    if (t != null) {
+                        context.error = t;
+                        context.stage = AzureEnumerationStages.ERROR;
+                    }
+                    handleEnumerationRequest(context);
+                });
     }
 
     /**
@@ -137,7 +154,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
                     AzureEnumerationStages.FINISHED);
             break;
         case FINISHED:
-            setOperationDurationStat(context.azureAdapterOperation);
+            setOperationDurationStat(context.adapterOperation);
             AdapterUtils.sendPatchToEnumerationTask(this,
                     context.computeEnumerationRequest.taskReference);
             break;
@@ -174,9 +191,14 @@ public class AzureEnumerationAdapterService extends StatelessService {
             handleEnumerationRequest(context);
         };
 
+        ComputeEnumerateAdapterRequest azureEnumerationRequest =
+                new ComputeEnumerateAdapterRequest(
+                        context.computeEnumerationRequest, context.parentAuth,
+                        context.parent);
+
         Operation patchEnumAdapterService = Operation
                 .createPatch(this, adapterSelfLink)
-                .setBody(context.computeEnumerationRequest)
+                .setBody(azureEnumerationRequest)
                 .setReferer(this.getUri());
 
         patchEnumAdapterService

@@ -62,7 +62,7 @@ import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.transfer.TransferManager;
 
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSAllocation.NicAllocationContext;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSAllocationContext.NicAllocationContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -273,7 +273,7 @@ public class AWSUtils {
         }
     }
 
-    public static List<String> getOrCreateSecurityGroups(AWSAllocation aws) {
+    public static List<String> getOrCreateSecurityGroups(AWSAllocationContext aws) {
         if (aws.nics.size() > 0) {
             return getOrCreateSecurityGroups(aws.getVmPrimaryNic(), aws);
         } else {
@@ -291,7 +291,7 @@ public class AWSUtils {
      * in case that none of the above method discover a security group, a new security group is created
      */
     public static List<String> getOrCreateSecurityGroups(NicAllocationContext nicCtx,
-            AWSAllocation aws) {
+            AWSAllocationContext aws) {
         String groupId;
         SecurityGroup group;
 
@@ -340,7 +340,7 @@ public class AWSUtils {
     }
 
     // method create a security group in the VPC from custom properties or the default VPC
-    private static String createAWSSecurityGroup(AWSAllocation aws) {
+    private static String createAWSSecurityGroup(AWSAllocationContext aws) {
         String groupId;
         try {
             String vpcId = null;
@@ -508,7 +508,7 @@ public class AWSUtils {
     /**
      * Gets the default VPC
      */
-    public static Vpc getDefaultVPC(AWSAllocation aws) {
+    public static Vpc getDefaultVPC(AWSAllocationContext aws) {
         DescribeVpcsResult result = aws.amazonEC2Client.describeVpcs();
         List<Vpc> vpcs = result.getVpcs();
         for (Vpc vpc : vpcs) {
@@ -522,7 +522,7 @@ public class AWSUtils {
     /**
      * Gets the subnet associated with the default VPC.
      */
-    public static String getDefaultVPCSubnet(AWSAllocation aws) {
+    public static String getDefaultVPCSubnet(AWSAllocationContext aws) {
         Vpc defaultVpc = getDefaultVPC(aws);
         if (defaultVpc != null) {
             return defaultVpc.getCidrBlock();

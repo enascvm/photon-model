@@ -11,13 +11,12 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.awsadapter;
+package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -26,9 +25,9 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * Base context class for AWS adapters. Used to load endpoint related data.
+ * Base context class for adapters. Used to load endpoint related data.
  */
-public class BaseAwsContext {
+public class BaseAdapterContext {
 
     public ComputeStateWithDescription child;
     public ComputeStateWithDescription parent;
@@ -36,44 +35,53 @@ public class BaseAwsContext {
     public Service service;
     public URI resourceReference;
 
-    public enum BaseAwsStages {
+    /**
+     * Used to store an error that has occurred while transitioning to the error stage.
+     */
+    public Throwable error;
+    /**
+     * Used to store the calling operation.
+     */
+    public Operation adapterOperation;
+
+    public enum BaseAdapterStages {
         VMDESC,
         PARENTDESC,
         PARENTAUTH,
         DONE
     }
 
-    public BaseAwsContext(Service service, URI computeReference) {
+    public BaseAdapterContext(Service service, URI computeReference) {
         this.service = service;
         this.resourceReference = computeReference;
     }
 
-    public static void populateContextThen(Service service, BaseAwsStages stage,
+    public static void populateContextThen(Service service, BaseAdapterStages stage,
             URI computeReference,
-            BiConsumer<BaseAwsContext, Throwable> onSuccess) {
-        BaseAwsContext context = new BaseAwsContext(service, computeReference);
+            BiConsumer<BaseAdapterContext, Throwable> onSuccess) {
+        BaseAdapterContext context = new BaseAdapterContext(service, computeReference);
         populateContextThen(context, stage, onSuccess);
 
     }
 
-    public static <T extends BaseAwsContext> void populateContextThen(T context,
-            BaseAwsStages stage,
+    public static <T extends BaseAdapterContext> void populateContextThen(T context,
+            BaseAdapterStages stage,
             BiConsumer<T, Throwable> onSuccess) {
         doPopulateContextThen(context, stage, onSuccess);
     }
 
-    private static <T extends BaseAwsContext> void doPopulateContextThen(T context,
-            BaseAwsStages stage,
+    private static <T extends BaseAdapterContext> void doPopulateContextThen(T context,
+            BaseAdapterStages stage,
             BiConsumer<T, Throwable> onSuccess) {
         switch (stage) {
         case VMDESC:
-            getVMDescription(context, BaseAwsStages.PARENTDESC, onSuccess);
+            getVMDescription(context, BaseAdapterStages.PARENTDESC, onSuccess);
             break;
         case PARENTDESC:
-            getParentDescription(context, BaseAwsStages.PARENTAUTH, onSuccess);
+            getParentDescription(context, BaseAdapterStages.PARENTAUTH, onSuccess);
             break;
         case PARENTAUTH:
-            getParentAuth(context, BaseAwsStages.DONE, onSuccess);
+            getParentAuth(context, BaseAdapterStages.DONE, onSuccess);
             break;
         case DONE:
         default:
@@ -86,7 +94,7 @@ public class BaseAwsContext {
      * method will be responsible for getting the compute description for the requested resource and
      * then passing to the next step
      */
-    private static <T extends BaseAwsContext> void getVMDescription(T ctx, BaseAwsStages next,
+    private static <T extends BaseAdapterContext> void getVMDescription(T ctx, BaseAdapterStages next,
             BiConsumer<T, Throwable> callback) {
         Consumer<Operation> onSuccess = (op) -> {
             ctx.child = op.getBody(ComputeStateWithDescription.class);
@@ -102,7 +110,7 @@ public class BaseAwsContext {
     /*
      * Method will get the service for the identified link
      */
-    private static <T extends BaseAwsContext> void getParentDescription(T ctx, BaseAwsStages next,
+    private static <T extends BaseAdapterContext> void getParentDescription(T ctx, BaseAdapterStages next,
             BiConsumer<T, Throwable> callback) {
         Consumer<Operation> onSuccess = (op) -> {
             ctx.parent = op.getBody(ComputeStateWithDescription.class);
@@ -116,11 +124,11 @@ public class BaseAwsContext {
                 getFailureConsumer(ctx, callback));
     }
 
-    private static <T extends BaseAwsContext> void getParentAuth(T ctx, BaseAwsStages next,
+    private static <T extends BaseAdapterContext> void getParentAuth(T ctx, BaseAdapterStages next,
             BiConsumer<T, Throwable> callback) {
         URI authURI = ctx.parent == null ? ctx.resourceReference
                 : UriUtils.buildUri(ctx.service.getHost(),
-                        ctx.parent.description.authCredentialsLink);
+                ctx.parent.description.authCredentialsLink);
 
         Consumer<Operation> onSuccess = (op) -> {
             ctx.parentAuth = op.getBody(AuthCredentialsServiceState.class);
@@ -130,7 +138,7 @@ public class BaseAwsContext {
                 getFailureConsumer(ctx, callback));
     }
 
-    private static <T extends BaseAwsContext> Consumer<Throwable> getFailureConsumer(T ctx,
+    private static <T extends BaseAdapterContext> Consumer<Throwable> getFailureConsumer(T ctx,
             BiConsumer<T, Throwable> callback) {
         return (t) -> {
             callback.accept(ctx, t);

@@ -26,28 +26,26 @@ import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 
 /**
  * AWS allocation.
  */
-public class AWSAllocation extends BaseAwsContext {
+public class AWSAllocationContext extends BaseAdapterContext {
 
     public AWSStages stage;
 
-    transient Operation awsOperation;
 
     public ComputeInstanceRequest computeRequest;
     public AmazonEC2AsyncClient amazonEC2Client;
     public Map<DiskType, DiskState> childDisks;
-    public Throwable error;
     public long taskExpirationMicros;
 
     /**
@@ -82,11 +80,11 @@ public class AWSAllocation extends BaseAwsContext {
     /**
      * Initialize with request info and first stage.
      */
-    public AWSAllocation(Service service, ComputeInstanceRequest computeReq) {
+    public AWSAllocationContext(Service service, ComputeInstanceRequest computeReq) {
         this(service, computeReq, computeReq.resourceReference);
     }
 
-    public AWSAllocation(Service service, ComputeInstanceRequest computeReq,
+    public AWSAllocationContext(Service service, ComputeInstanceRequest computeReq,
             URI resourceReference) {
         super(service, resourceReference);
         this.computeRequest = computeReq;

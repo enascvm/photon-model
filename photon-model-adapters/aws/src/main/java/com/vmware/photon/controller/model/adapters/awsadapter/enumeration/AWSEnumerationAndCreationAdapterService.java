@@ -43,7 +43,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionCreationAdapterService.AWSComputeDescriptionCreationState;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService.AWSComputeStateForCreation;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService.AWSEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumeration;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.NetworkEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
@@ -51,6 +50,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -142,7 +142,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         public Map<String, String> subnets;
         public Map<String, ZoneData> zones;
 
-        public EnumerationCreationContext(AWSEnumerationRequest request, Operation op) {
+        public EnumerationCreationContext(ComputeEnumerateAdapterRequest request,
+                Operation op) {
             this.awsAdapterOperation = op;
             this.computeEnumerationRequest = request.computeEnumerateResourceRequest;
             this.parentAuth = request.parentAuth;
@@ -181,7 +182,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             return;
         }
         EnumerationCreationContext awsEnumerationContext = new EnumerationCreationContext(
-                op.getBody(AWSEnumerationRequest.class), op);
+                op.getBody(ComputeEnumerateAdapterRequest.class), op);
         if (awsEnumerationContext.computeEnumerationRequest.isMockRequest) {
             // patch status to parent task
             AdapterUtils.sendPatchToEnumerationTask(this,

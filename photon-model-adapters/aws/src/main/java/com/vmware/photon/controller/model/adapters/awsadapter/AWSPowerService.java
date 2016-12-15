@@ -22,10 +22,11 @@ import com.amazonaws.services.ec2.model.StopInstancesResult;
 
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
-import com.vmware.photon.controller.model.adapters.awsadapter.BaseAwsContext.BaseAwsStages;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStages;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -55,7 +56,8 @@ public class AWSPowerService extends StatelessService {
         if (pr.isMockRequest) {
             updateComputeState(pr);
         } else {
-            BaseAwsContext.populateContextThen(this, BaseAwsStages.VMDESC, pr.resourceReference,
+            BaseAdapterContext.populateContextThen(this, BaseAdapterStages.VMDESC, pr
+                            .resourceReference,
                     (c, e) -> {
                         AmazonEC2AsyncClient client = this.clientManager.getOrCreateEC2Client(
                                 c.parentAuth, c.child.description.regionId, this, pr.taskReference,
@@ -67,7 +69,7 @@ public class AWSPowerService extends StatelessService {
     }
 
     private void applyPowerOperation(AmazonEC2AsyncClient client, ComputePowerRequest pr,
-            BaseAwsContext c) {
+            BaseAdapterContext c) {
         switch (pr.powerState) {
         case OFF:
             powerOff(client, pr, c);
@@ -88,7 +90,8 @@ public class AWSPowerService extends StatelessService {
 
     }
 
-    private void powerOn(AmazonEC2AsyncClient client, ComputePowerRequest pr, BaseAwsContext c) {
+    private void powerOn(AmazonEC2AsyncClient client, ComputePowerRequest pr, BaseAdapterContext
+            c) {
         AWSPowerService powerService = this;
         OperationContext opContext = OperationContext.getOperationContext();
 
@@ -112,7 +115,8 @@ public class AWSPowerService extends StatelessService {
                 });
     }
 
-    private void powerOff(AmazonEC2AsyncClient client, ComputePowerRequest pr, BaseAwsContext c) {
+    private void powerOff(AmazonEC2AsyncClient client, ComputePowerRequest pr, BaseAdapterContext
+            c) {
         AWSPowerService powerService = this;
         OperationContext opContext = OperationContext.getOperationContext();
 

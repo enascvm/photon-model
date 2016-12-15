@@ -45,10 +45,10 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService.AWSEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -138,7 +138,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         // The time stamp at which the enumeration started.
         public long enumerationStartTimeInMicros;
 
-        public BlockStorageEnumerationContext(AWSEnumerationRequest request, Operation op) {
+        public BlockStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
+                Operation op) {
             this.awsAdapterOperation = op;
             this.computeEnumerationRequest = request.computeEnumerateResourceRequest;
             this.parentAuth = request.parentAuth;
@@ -176,7 +177,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             return;
         }
         BlockStorageEnumerationContext awsEnumerationContext = new BlockStorageEnumerationContext(
-                op.getBody(AWSEnumerationRequest.class), op);
+                op.getBody(ComputeEnumerateAdapterRequest.class), op);
         if (awsEnumerationContext.computeEnumerationRequest.isMockRequest) {
             // patch status to parent task
             AdapterUtils.sendPatchToEnumerationTask(this,

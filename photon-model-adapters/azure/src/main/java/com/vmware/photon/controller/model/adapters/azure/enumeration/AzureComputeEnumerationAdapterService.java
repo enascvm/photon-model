@@ -73,6 +73,7 @@ import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachine
 import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachineListResult;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -161,7 +162,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private static class EnumerationContext {
         ComputeEnumerateResourceRequest enumRequest;
-        ComputeDescription computeHostDesc;
+        ComputeStateWithDescription parentCompute;
         EnumerationStages stage;
         Throwable error;
         AuthCredentialsServiceState parentAuth;
@@ -193,9 +194,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         NetworkManagementClient networkClient;
         ComputeManagementClient computeClient;
 
-        EnumerationContext(ComputeEnumerateResourceRequest request, Operation op) {
-            this.enumRequest = request;
-            this.stage = EnumerationStages.HOSTDESC;
+        EnumerationContext(ComputeEnumerateAdapterRequest request, Operation op) {
+            this.enumRequest = request.computeEnumerateResourceRequest;
+            this.parentAuth = request.parentAuth;
+            this.parentCompute = request.parentCompute;
+
+            this.stage = EnumerationStages.CLIENT;
             this.azureComputeAdapterOperation = op;
         }
     }
@@ -209,7 +213,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             return;
         }
         EnumerationContext ctx = new EnumerationContext(
-                op.getBody(ComputeEnumerateResourceRequest.class), op);
+                op.getBody(ComputeEnumerateAdapterRequest.class), op);
         AdapterUtils.validateEnumRequest(ctx.enumRequest);
         if (ctx.enumRequest.isMockRequest) {
             op.complete();
@@ -220,12 +224,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     private void handleEnumerationRequest(EnumerationContext ctx) {
         switch (ctx.stage) {
-        case HOSTDESC:
-            getHostComputeDescription(ctx, EnumerationStages.PARENTAUTH);
-            break;
-        case PARENTAUTH:
-            getParentAuth(ctx, EnumerationStages.CLIENT);
-            break;
         case CLIENT:
             if (ctx.credentials == null) {
                 try {
@@ -394,7 +392,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(QUERY_RESULT_LIMIT)
                 .build();
-        q.tenantLinks = ctx.computeHostDesc.tenantLinks;
+        q.tenantLinks = ctx.parentCompute.tenantLinks;
 
         logFine("Querying compute resources for deletion");
         QueryUtils.startQueryTask(this, q)
@@ -494,38 +492,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .setCompletion(completionHandler));
     }
 
-    /**
-     * Method to retrieve the parent compute host on which the enumeration task will be performed.
-     */
-    private void getHostComputeDescription(EnumerationContext ctx, EnumerationStages next) {
-        Consumer<Operation> onSuccess = (op) -> {
-            ComputeStateWithDescription csd = op.getBody(ComputeStateWithDescription.class);
-            ctx.computeHostDesc = csd.description;
-            ctx.stage = next;
-            handleEnumerationRequest(ctx);
-        };
 
-        URI computeUri = UriUtils
-                .extendUriWithQuery(
-                        UriUtils.buildUri(this.getHost(), ctx.enumRequest.resourceLink()),
-                        UriUtils.URI_PARAM_ODATA_EXPAND,
-                        Boolean.TRUE.toString());
-        AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(ctx));
-    }
-
-    /**
-     * Method to arrive at the credentials needed to call the Azure API for enumerating the instances.
-     */
-    private void getParentAuth(EnumerationContext ctx, EnumerationStages next) {
-        URI authUri = UriUtils.buildUri(this.getHost(),
-                ctx.computeHostDesc.authCredentialsLink);
-        Consumer<Operation> onSuccess = (op) -> {
-            ctx.parentAuth = op.getBody(AuthCredentialsServiceState.class);
-            ctx.stage = next;
-            handleEnumerationRequest(ctx);
-        };
-        AdapterUtils.getServiceState(this, authUri, onSuccess, getFailureConsumer(ctx));
-    }
 
     private Consumer<Throwable> getFailureConsumer(EnumerationContext ctx) {
         return (t) -> {
@@ -632,7 +599,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(ctx.virtualMachines.size())
                 .build();
-        queryTask.tenantLinks = ctx.computeHostDesc.tenantLinks;
+        queryTask.tenantLinks = ctx.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
@@ -739,7 +706,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
                 .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
-                        ctx.computeHostDesc.documentSelfLink)
+                        ctx.parentCompute.documentSelfLink)
                 .build();
 
         Query.Builder diskUriFilterParentQuery = Query.Builder.create();
@@ -761,7 +728,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .setResultLimit(ctx.virtualMachines.size())
                 .setQuery(query)
                 .build();
-        q.tenantLinks = ctx.computeHostDesc.tenantLinks;
+        q.tenantLinks = ctx.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -797,7 +764,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
-                        ctx.computeHostDesc.documentSelfLink)
+                        ctx.parentCompute.documentSelfLink)
                 .build();
 
         Query.Builder storageDescUriFilterParentQuery = Query.Builder
@@ -828,7 +795,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .setResultLimit(ctx.virtualMachines.size())
                 .setQuery(query)
                 .build();
-        q.tenantLinks = ctx.computeHostDesc.tenantLinks;
+        q.tenantLinks = ctx.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -891,7 +858,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             auth.userEmail = virtualMachine.properties.osProfile.getAdminUsername();
             auth.privateKey = virtualMachine.properties.osProfile.getAdminPassword();
             auth.documentSelfLink = UUID.randomUUID().toString();
-            auth.tenantLinks = ctx.computeHostDesc.tenantLinks;
+            auth.tenantLinks = ctx.parentCompute.tenantLinks;
 
             String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
                     auth.documentSelfLink);
@@ -910,15 +877,17 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.documentSelfLink = computeDescription.id;
             computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
             computeDescription.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
-            computeDescription.instanceAdapterReference = ctx.computeHostDesc.instanceAdapterReference;
-            computeDescription.statsAdapterReference = ctx.computeHostDesc.statsAdapterReference;
+            computeDescription.instanceAdapterReference = ctx.parentCompute.description
+                    .instanceAdapterReference;
+            computeDescription.statsAdapterReference = ctx.parentCompute
+                    .description.statsAdapterReference;
             computeDescription.customProperties = new HashMap<>();
 
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1268
             String resourceGroupName = getResourceGroupName(virtualMachine.id);
             computeDescription.customProperties.put(AZURE_RESOURCE_GROUP_NAME,
                     resourceGroupName);
-            computeDescription.tenantLinks = ctx.computeHostDesc.tenantLinks;
+            computeDescription.tenantLinks = ctx.parentCompute.tenantLinks;
 
             Operation compDescOp = Operation
                     .createPost(getHost(), ComputeDescriptionService.FACTORY_LINK)
@@ -1001,7 +970,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 networkState.id = networkInterfaceReference.getId();
                 // Setting to the same ID since there is nothing obtained during enumeration other than the ID
                 networkState.networkLink = networkInterfaceReference.getId();
-                networkState.tenantLinks = ctx.computeHostDesc.tenantLinks;
+                networkState.tenantLinks = ctx.parentCompute.tenantLinks;
                 Operation networkOp = Operation
                         .createPost(getHost(), NetworkInterfaceService.FACTORY_LINK)
                         .setBody(networkState);
@@ -1073,7 +1042,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             storageDesk.documentSelfLink);
                 }
             }
-            resource.tenantLinks = ctx.computeHostDesc.tenantLinks;
+            resource.tenantLinks = ctx.parentCompute.tenantLinks;
             resource.networkInterfaceLinks = networkLinks;
 
             ctx.computeStatesForPatching.put(resource.id, resource);
@@ -1284,7 +1253,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         StringBuilder sb = new StringBuilder();
         sb.append("hostLink:").append(ctx.enumRequest.resourceLink());
         sb.append("-enumerationAdapterReference:")
-                .append(ctx.computeHostDesc.enumerationAdapterReference);
+                .append(ctx.parentCompute.description.enumerationAdapterReference);
         return sb.toString();
     }
 

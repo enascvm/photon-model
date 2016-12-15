@@ -43,9 +43,9 @@ import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNe
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetworkListResult;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
-import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -101,7 +101,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         }
 
         ComputeEnumerateResourceRequest enumRequest;
-        ComputeDescriptionService.ComputeDescription computeHostDesc;
+        ComputeStateWithDescription parentCompute;
 
         // The time when enumeration starts. This field is used also to identify stale resources
         // that should be deleted during deletion stage.
@@ -142,9 +142,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Azure credentials.
         ApplicationTokenCredentials credentials;
 
-        NetworkEnumContext(ComputeEnumerateResourceRequest request, Operation op) {
-            this.enumRequest = request;
-            this.stage = EnumerationStages.HOSTDESC;
+        NetworkEnumContext(ComputeEnumerateAdapterRequest request, Operation op) {
+            this.enumRequest = request.computeEnumerateResourceRequest;
+            this.parentAuth = request.parentAuth;
+            this.parentCompute = request.parentCompute;
+
+            this.stage = EnumerationStages.CLIENT;
             this.azureNetworkAdapterOperation = op;
         }
     }
@@ -176,8 +179,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        NetworkEnumContext ctx = new NetworkEnumContext(op.getBody(ComputeEnumerateResourceRequest
-                .class), op);
+        NetworkEnumContext ctx = new NetworkEnumContext(op.getBody
+                (ComputeEnumerateAdapterRequest.class), op);
         AdapterUtils.validateEnumRequest(ctx.enumRequest);
         if (ctx.enumRequest.isMockRequest) {
             op.complete();
@@ -195,12 +198,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      */
     private void handleNetworkEnumeration(NetworkEnumContext context) {
         switch (context.stage) {
-        case HOSTDESC:
-            getHostComputeDescription(context);
-            break;
-        case PARENTAUTH:
-            getParentAuth(context);
-            break;
+
         case CLIENT:
             if (context.credentials == null) {
                 try {
@@ -321,39 +319,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         handleSubStage(ctx);
     }
 
-    /**
-     * Method to retrieve the parent compute host on which the enumeration task will be performed.
-     */
-    private void getHostComputeDescription(NetworkEnumContext ctx) {
-        Consumer<Operation> onSuccess = (op) -> {
-            ComputeService.ComputeStateWithDescription csd = op
-                    .getBody(ComputeService.ComputeStateWithDescription.class);
-            ctx.computeHostDesc = csd.description;
-            ctx.stage = EnumerationStages.PARENTAUTH;
-            handleNetworkEnumeration(ctx);
-        };
-
-        URI computeUri = UriUtils.extendUriWithQuery(
-                UriUtils.buildUri(this.getHost(), ctx.enumRequest.resourceLink()),
-                UriUtils.URI_PARAM_ODATA_EXPAND,
-                Boolean.TRUE.toString());
-        AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(ctx));
-    }
-
-    /**
-     * Method to arrive at the credentials needed to call the Azure API for enumerating the instances.
-     */
-    private void getParentAuth(NetworkEnumContext ctx) {
-        URI authUri = UriUtils.buildUri(this.getHost(),
-                ctx.computeHostDesc.authCredentialsLink);
-        Consumer<Operation> onSuccess = (op) -> {
-            ctx.parentAuth = op.getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
-            ctx.stage = EnumerationStages.CLIENT;
-            handleNetworkEnumeration(ctx);
-        };
-        AdapterUtils.getServiceState(this, authUri, onSuccess, getFailureConsumer(ctx));
-    }
-
     private Consumer<Throwable> getFailureConsumer(NetworkEnumContext ctx) {
         return (t) -> handleError(ctx, t);
     }
@@ -371,7 +336,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private String getEnumKey(NetworkEnumContext ctx) {
         return "hostLink:" + ctx.enumRequest.resourceLink() +
                 "-enumerationAdapterReference:" +
-                ctx.computeHostDesc.enumerationAdapterReference;
+                ctx.parentCompute.description.enumerationAdapterReference;
     }
 
     /**
@@ -453,7 +418,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             if (virtualNetwork.properties.subnets != null) {
                 virtualNetwork.properties.subnets.forEach(subnet -> {
 
-                    SubnetState subnetState = mapSubnetState(subnet, context.computeHostDesc
+                    SubnetState subnetState = mapSubnetState(subnet, context.parentCompute
                             .tenantLinks);
                     SubnetStateWithParentVNetId subnetStateWithParentVNetId = new
                             SubnetStateWithParentVNetId(virtualNetwork.id, subnetState);
@@ -504,7 +469,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .setResultLimit(context.virtualNetworks.size())
                 .setQuery(query)
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -545,7 +510,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(context.subnets.size())
                 .setQuery(query).build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -728,7 +693,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // required field.
         resultNetworkState.instanceAdapterReference = UriUtils.buildUri(getHost(),
                 DEFAULT_INSTANCE_ADAPTER_REFERENCE);
-        resultNetworkState.tenantLinks = context.computeHostDesc.tenantLinks;
+        resultNetworkState.tenantLinks = context.parentCompute.tenantLinks;
 
         return resultNetworkState;
     }
@@ -745,7 +710,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
                 .addFieldClause(NetworkState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
-                        context.computeHostDesc.authCredentialsLink)
+                        context.parentCompute.description.authCredentialsLink)
                 .addRangeClause(NetworkState.FIELD_NAME_UPDATE_TIME_MICROS, QueryTask.NumericRange
                         .createLessThanRange(context.enumerationStartTimeInMicros))
                 .build();
@@ -757,7 +722,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(resultLimit)
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         logFine("Querying Network States for deletion.");
 
@@ -787,7 +752,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(resultLimit)
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         logFine("Querying Subnet States for deletion.");
         sendDeleteQueryTask(q, context, next, null);

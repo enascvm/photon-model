@@ -83,9 +83,9 @@ import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAc
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccountResultList;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
-import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
@@ -162,7 +162,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     public static class StorageEnumContext {
         ComputeEnumerateResourceRequest enumRequest;
-        ComputeDescriptionService.ComputeDescription computeHostDesc;
+        ComputeStateWithDescription parentCompute;
         long enumerationStartTimeInMicros;
         EnumerationStages stage;
         String enumNextPageLink;
@@ -201,9 +201,13 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         public OkHttpClient.Builder clientBuilder;
         public OkHttpClient httpClient;
 
-        public StorageEnumContext(ComputeEnumerateResourceRequest request, Operation op) {
-            this.enumRequest = request;
-            this.stage = EnumerationStages.HOSTDESC;
+        public StorageEnumContext(ComputeEnumerateAdapterRequest request,
+                Operation op) {
+            this.enumRequest = request.computeEnumerateResourceRequest;
+            this.parentAuth = request.parentAuth;
+            this.parentCompute = request.parentCompute;
+
+            this.stage = EnumerationStages.CLIENT;
             this.azureStorageAdapterOperation = op;
         }
     }
@@ -216,8 +220,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        StorageEnumContext context = new StorageEnumContext(
-                op.getBody(ComputeEnumerateResourceRequest.class), op);
+        StorageEnumContext context = new StorageEnumContext(op.getBody
+                (ComputeEnumerateAdapterRequest.class), op);
         AdapterUtils.validateEnumRequest(context.enumRequest);
         if (context.enumRequest.isMockRequest) {
             op.complete();
@@ -234,12 +238,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private void handleStorageEnumeration(StorageEnumContext context) {
         switch (context.stage) {
-        case HOSTDESC:
-            getHostComputeDescription(context);
-            break;
-        case PARENTAUTH:
-            getParentAuth(context);
-            break;
         case CLIENT:
             if (context.credentials == null) {
                 try {
@@ -388,39 +386,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
     }
 
-    /**
-     * Method to retrieve the parent compute host on which the enumeration task will be performed.
-     */
-    private void getHostComputeDescription(StorageEnumContext context) {
-        Consumer<Operation> onSuccess = (op) -> {
-            ComputeService.ComputeStateWithDescription csd =
-                    op.getBody(ComputeService.ComputeStateWithDescription.class);
-            context.computeHostDesc = csd.description;
-            context.stage = EnumerationStages.PARENTAUTH;
-            handleStorageEnumeration(context);
-        };
-
-        URI computeUri = UriUtils.extendUriWithQuery(
-                UriUtils.buildUri(this.getHost(), context.enumRequest.resourceLink()),
-                UriUtils.URI_PARAM_ODATA_EXPAND,
-                Boolean.TRUE.toString());
-        AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(context));
-    }
-
-    /**
-     * Method to arrive at the credentials needed to call the Azure API for enumerating the instances.
-     */
-    private void getParentAuth(StorageEnumContext context) {
-        URI authUri = UriUtils.buildUri(this.getHost(),
-                context.computeHostDesc.authCredentialsLink);
-        Consumer<Operation> onSuccess = (op) -> {
-            context.parentAuth = op.getBody(AuthCredentialsService.AuthCredentialsServiceState.class);
-            context.stage = EnumerationStages.CLIENT;
-            handleStorageEnumeration(context);
-        };
-        AdapterUtils.getServiceState(this, authUri, onSuccess, getFailureConsumer(context));
-    }
-
     private Consumer<Throwable> getFailureConsumer(StorageEnumContext context) {
         return (t) -> {
             context.stage = EnumerationStages.ERROR;
@@ -443,7 +408,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         StringBuilder sb = new StringBuilder();
         sb.append("hostLink:").append(context.enumRequest.resourceLink());
         sb.append("-enumerationAdapterReference:")
-                .append(context.computeHostDesc.enumerationAdapterReference);
+                .append(context.parentCompute.description.enumerationAdapterReference);
         return sb.toString();
     }
 
@@ -519,7 +484,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
-                        context.computeHostDesc.documentSelfLink)
+                        context.parentCompute.documentSelfLink)
                 .build();
 
         Query.Builder instanceIdFilterParentQuery = Query.Builder
@@ -542,7 +507,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(context.storageAccountsToUpdateCreate.size())
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -678,7 +643,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageAuth.customProperties = new HashMap<>();
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, keys.getBody().getKey1());
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, keys.getBody().getKey2());
-            storageAuth.tenantLinks = context.computeHostDesc.tenantLinks;
+            storageAuth.tenantLinks = context.parentCompute.tenantLinks;
 
             Operation storageAuthOp = Operation
                     .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
@@ -698,12 +663,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageDescription.authCredentialsLink = storageAuthLink;
             storageDescription.resourcePoolLink = context.enumRequest.resourcePoolLink;
             storageDescription.documentSelfLink = UUID.randomUUID().toString();
-            storageDescription.computeHostLink = context.computeHostDesc.documentSelfLink;
+            storageDescription.computeHostLink = context.parentCompute.documentSelfLink;
             storageDescription.customProperties = new HashMap<>();
             storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
             storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI,
                     storageAccount.properties.primaryEndpoints.blob);
-            storageDescription.tenantLinks = context.computeHostDesc.tenantLinks;
+            storageDescription.tenantLinks = context.parentCompute.tenantLinks;
 
             Operation storageDescOp = Operation
                     .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
@@ -753,7 +718,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
-                        context.computeHostDesc.documentSelfLink)
+                        context.parentCompute.documentSelfLink)
                 .addRangeClause(StorageDescription.FIELD_NAME_UPDATE_TIME_MICROS,
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros))
@@ -764,7 +729,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(resultLimit)
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         logFine("Querying storage descriptions for deletion");
         QueryUtils.startQueryTask(this, q)
@@ -890,7 +855,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
-                .addFieldClause(computeHostProperty, context.computeHostDesc.documentSelfLink)
+                .addFieldClause(computeHostProperty, context.parentCompute.documentSelfLink)
                 .build();
 
         Query.Builder instanceIdFilterParentQuery = Query.Builder
@@ -913,7 +878,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(context.storageContainers.size())
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -970,7 +935,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
-                        context.computeHostDesc.documentSelfLink)
+                        context.parentCompute.documentSelfLink)
                 .addFieldClause(StorageDescription.FIELD_NAME_NAME, storageAcctName)
                 .build();
 
@@ -980,7 +945,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(1)
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -1038,8 +1003,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             resourceGroupState.documentSelfLink = oldResourceGroupState.documentSelfLink;
         } else {
             resourceGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
-                    context.computeHostDesc.documentSelfLink);
-            resourceGroupState.tenantLinks = context.computeHostDesc.tenantLinks;
+                    context.parentCompute.documentSelfLink);
+            resourceGroupState.tenantLinks = context.parentCompute.tenantLinks;
         }
         return resourceGroupState;
     }
@@ -1130,7 +1095,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
-                .addFieldClause(computeHostProperty, context.computeHostDesc.documentSelfLink)
+                .addFieldClause(computeHostProperty, context.parentCompute.documentSelfLink)
                 .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros))
@@ -1141,7 +1106,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(resultLimit)
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         logFine("Querying resource group states for deletion");
         QueryUtils.startQueryTask(this, q)
@@ -1275,7 +1240,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
                 .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
-                        context.computeHostDesc.documentSelfLink)
+                        context.parentCompute.documentSelfLink)
                 .build();
 
         Query.Builder diskUriFilterParentQuery = Query.Builder.create(Occurance.MUST_OCCUR);
@@ -1313,7 +1278,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(context.storageBlobs.size())
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -1376,7 +1341,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             Query query = Query.Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
                     .addFieldClause(computeHostProperty,
-                            context.computeHostDesc.documentSelfLink)
+                            context.parentCompute.documentSelfLink)
                     .addFieldClause(ResourceGroupState.FIELD_NAME_ID, containerId)
                     .build();
 
@@ -1386,7 +1351,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     .setQuery(query)
                     .setResultLimit(1)
                     .build();
-            q.tenantLinks = context.computeHostDesc.tenantLinks;
+            q.tenantLinks = context.parentCompute.tenantLinks;
 
             QueryUtils.startQueryTask(this, q)
                     .whenComplete((queryTask, e) -> {
@@ -1488,8 +1453,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             diskState.storageDescriptionLink = containerLink;
         }
         diskState.resourcePoolLink = context.enumRequest.resourcePoolLink;
-        diskState.computeHostLink = context.computeHostDesc.documentSelfLink;
-        diskState.tenantLinks = context.computeHostDesc.tenantLinks;
+        diskState.computeHostLink = context.parentCompute.documentSelfLink;
+        diskState.tenantLinks = context.parentCompute.tenantLinks;
         long bLength = 0;
         if (blob instanceof CloudBlob) {
             CloudBlob blobItem = (CloudBlob) blob;
@@ -1550,7 +1515,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
                 .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
-                        context.computeHostDesc.documentSelfLink)
+                        context.parentCompute.documentSelfLink)
                 .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros))
@@ -1581,7 +1546,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .setResultLimit(resultLimit)
                 .build();
-        q.tenantLinks = context.computeHostDesc.tenantLinks;
+        q.tenantLinks = context.parentCompute.tenantLinks;
 
         logFine("Querying disk states for deletion");
         QueryUtils.startQueryTask(this, q)

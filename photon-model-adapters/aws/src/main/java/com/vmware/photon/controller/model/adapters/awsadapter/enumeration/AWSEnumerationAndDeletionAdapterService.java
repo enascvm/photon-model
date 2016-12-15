@@ -36,10 +36,10 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService.AWSEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
@@ -97,7 +97,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public ComputeStateWithDescription parentCompute;
-        public ComputeState hostComputeState;
         public AWSEnumerationDeletionStages stage;
         public AWSEnumerationDeletionSubStage subStage;
         public Throwable error;
@@ -112,14 +111,15 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         public String nextPageLink;
         public int pageNo = 0;
 
-        public EnumerationDeletionContext(AWSEnumerationRequest request, Operation op) {
+        public EnumerationDeletionContext(ComputeEnumerateAdapterRequest request,
+                Operation op) {
             this.computeEnumerationRequest = request.computeEnumerateResourceRequest;
             this.awsAdapterOperation = op;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
-            this.localInstanceIds = new ConcurrentSkipListMap<String, ComputeState>();
-            this.remoteInstanceIds = new HashSet<String>();
-            this.instancesToBeDeleted = new ArrayList<ComputeState>();
+            this.localInstanceIds = new ConcurrentSkipListMap<>();
+            this.remoteInstanceIds = new HashSet<>();
+            this.instancesToBeDeleted = new ArrayList<>();
             this.stage = AWSEnumerationDeletionStages.ENUMERATE;
             this.subStage = AWSEnumerationDeletionSubStage.GET_LOCAL_RESOURCES;
         }
@@ -140,7 +140,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             return;
         }
         EnumerationDeletionContext awsEnumerationContext = new EnumerationDeletionContext(
-                op.getBody(AWSEnumerationRequest.class), op);
+                op.getBody(ComputeEnumerateAdapterRequest.class), op);
         if (awsEnumerationContext.computeEnumerationRequest.isMockRequest) {
             // patch status to parent task
             AdapterUtils.sendPatchToEnumerationTask(this,
