@@ -112,7 +112,8 @@ public class ComputeDescriptionService extends StatefulService {
         /**
          * List of compute types this host supports actuating.
          */
-        @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
+        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL, indexing = {
+                PropertyIndexingOption.EXPAND })
         public List<String> supportedChildren;
 
         /**
