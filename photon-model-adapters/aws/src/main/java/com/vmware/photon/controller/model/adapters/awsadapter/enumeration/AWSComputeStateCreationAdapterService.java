@@ -64,9 +64,10 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 
 /**
- * Stateless service for the creation of compute states. It accepts a list of AWS instances that need to be created in the
- * local system.It also accepts a few additional fields required for mapping the referential integrity relationships
- * for the compute state when it is persisted in the local system.
+ * Stateless service for the creation of compute states. It accepts a list of AWS instances that
+ * need to be created in the local system.It also accepts a few additional fields required for
+ * mapping the referential integrity relationships for the compute state when it is persisted in the
+ * local system.
  */
 public class AWSComputeStateCreationAdapterService extends StatelessService {
 
@@ -84,11 +85,13 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
     public AWSComputeStateCreationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory.getClientManager(AWSConstants.AwsClientType.EC2);
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     /**
-     * Data holder for information related a compute state that needs to be created in the local system.
+     * Data holder for information related a compute state that needs to be created in the local
+     * system.
      *
      */
     public static class AWSComputeStateForCreation {
@@ -110,8 +113,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * The service context that is created for representing the list of instances received into a list of compute states
-     * that will be persisted in the system.
+     * The service context that is created for representing the list of instances received into a
+     * list of compute states that will be persisted in the system.
      *
      */
     public static class AWSComputeServiceCreationContext {
@@ -142,7 +145,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
     @Override
     public void handleStop(Operation op) {
-        AWSClientManagerFactory.returnClientManager(this.clientManager, AWSConstants.AwsClientType.EC2);
+        AWSClientManagerFactory.returnClientManager(this.clientManager,
+                AWSConstants.AwsClientType.EC2);
         super.handleStop(op);
     }
 
@@ -162,9 +166,12 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Creates the compute states in the local document store based on the AWS instances received from the remote endpoint.
-     * @param context The local service context that has all the information needed to create the additional compute states
-     * in the local system.
+     * Creates the compute states in the local document store based on the AWS instances received
+     * from the remote endpoint.
+     *
+     * @param context
+     *            The local service context that has all the information needed to create the
+     *            additional compute states in the local system.
      */
     private void handleComputeStateCreateOrUpdate(AWSComputeServiceCreationContext context) {
         switch (context.creationStage) {
@@ -216,7 +223,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
                 .map(t -> mapTagToTagState(t, context.computeState.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
-                        .setBody(tagState)).collect(Collectors.toList());
+                        .setBody(tagState))
+                .collect(Collectors.toList());
 
         if (operations.isEmpty()) {
             context.creationStage = next;
@@ -235,7 +243,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Looks up the compute descriptions associated with the compute states to be created in the system.
+     * Looks up the compute descriptions associated with the compute states to be created in the
+     * system.
      */
     private void getRelatedComputeDescriptions(AWSComputeServiceCreationContext context,
             AWSComputeStateCreationStage next) {
@@ -246,12 +255,17 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         representativeCDSet.addAll(getRepresentativeListOfCDsFromInstanceList(
                 context.computeState.instancesToBeUpdated.values(), context.computeState.zones));
 
+        if (representativeCDSet.isEmpty()) {
+            context.creationStage = next;
+            handleComputeStateCreateOrUpdate(context);
+            return;
+        }
+
         QueryTask queryTask = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
                 representativeCDSet,
                 context.computeState.tenantLinks,
                 this, context.computeState.parentTaskLink,
                 context.computeState.regionId);
-        queryTask.querySpec.expectedResultCount = (long) representativeCDSet.size();
         queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
 
         // create the query to find an existing compute description
@@ -317,7 +331,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Populates the compute state / network link associated with an AWS VM instance and creates an operation for posting it.
+     * Populates the compute state / network link associated with an AWS VM instance and creates an
+     * operation for posting it.
      */
     private void populateComputeStateAndNetworksForCreation(
             AWSComputeServiceCreationContext context,
@@ -348,8 +363,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Populates the compute state / network link associated with an AWS VM instance and creates an operation for PATCHing existing
-     * compute and network interfaces .
+     * Populates the compute state / network link associated with an AWS VM instance and creates an
+     * operation for PATCHing existing compute and network interfaces .
      */
     private void populateComputeStateAndNetworksForUpdates(AWSComputeServiceCreationContext context,
             Instance instance, ComputeState existingComputeState) {
@@ -408,9 +423,9 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Kicks off the creation of all the identified compute states and networks and
-     * creates a join handler for the successful completion of each one of those.
-     * Patches completion to parent once all the entities are created successfully.
+     * Kicks off the creation of all the identified compute states and networks and creates a join
+     * handler for the successful completion of each one of those. Patches completion to parent once
+     * all the entities are created successfully.
      */
     private void kickOffComputeStateCreation(AWSComputeServiceCreationContext context,
             AWSComputeStateCreationStage next) {
@@ -441,7 +456,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
     private void finishWithFailure(AWSComputeServiceCreationContext context, Throwable exc) {
         context.awsAdapterOperation.fail(exc);
-        AdapterUtils.sendFailurePatchToEnumerationTask(this, context.computeState.parentTaskLink, exc);
+        AdapterUtils.sendFailurePatchToEnumerationTask(this, context.computeState.parentTaskLink,
+                exc);
     }
 
 }
