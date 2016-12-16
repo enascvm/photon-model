@@ -444,7 +444,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, request.resourceLink())
                 .addFieldClause(enumerateByFieldName, request.taskLink(), Occurance.MUST_NOT_OCCUR)
                 .addFieldClause(enumerateByFieldName, "", MatchType.PREFIX)
-                .addFieldClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE, LifecycleState.RETIRED.toString(), Occurance.MUST_NOT_OCCUR)
+                .addFieldClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE, LifecycleState.RETIRED.toString(),
+                        Occurance.MUST_NOT_OCCUR)
                 .build();
 
         QueryTask task = QueryTask.Builder.createDirectTask()
@@ -635,27 +636,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         URI adapterManagementReference = ctx.getParent().adapterManagementReference;
         String regionId = ctx.getParent().description.regionId;
 
-        QuerySpecification qs = new QuerySpecification();
-        qs.query.addBooleanClause(
-                Query.Builder.create()
-                        .addFieldClause(NetworkState.FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE,
-                                adapterManagementReference.toString())
-                        .build());
+        Query q = Query.Builder.create()
+                .addFieldClause(NetworkState.FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE,
+                        adapterManagementReference.toString())
+                .addFieldClause(NetworkState.FIELD_NAME_NAME, name)
+                .addFieldClause(NetworkState.FIELD_NAME_REGION_ID, regionId)
+                .build();
 
-        qs.query.addBooleanClause(
-                Query.Builder.create()
-                        .addFieldClause(NetworkState.FIELD_NAME_NAME,
-                                name)
-                        .build());
-
-        qs.query.addBooleanClause(Query.Builder.create()
-                .addFieldClause(NetworkState.FIELD_NAME_REGION_ID,
-                        regionId)
-                .build());
-
-        return QueryTask
-                .create(qs)
-                .setDirect(true);
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .build();
     }
 
     private void processFoundDatastore(EnumerationContext enumerationContext,
@@ -1220,16 +1210,14 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * @return
      */
     private QueryTask queryForVm(String parentComputeLink, String instanceUuid) {
-        QuerySpecification qs = new QuerySpecification();
-        qs.query.addBooleanClause(
-                Query.Builder.create().addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid)
-                        .build());
+        Query q = Query.Builder.create()
+                .addFieldClause(ComputeState.FIELD_NAME_ID, instanceUuid)
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink)
+                .build();
 
-        qs.query.addBooleanClause(Query.Builder.create()
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, parentComputeLink).build());
-
-        return QueryTask.create(qs)
-                .setDirect(true);
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .build();
     }
 
     /**
