@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 import org.joda.time.LocalDateTime;
@@ -65,8 +66,7 @@ public class AWSCsvBillParser {
     public static final String ACCOUNT_TOTAL = "AccountTotal";
 
     public Map<String, AwsAccountDetailDto> parseDetailedCsvBill(
-            List<String> ignorableInvoiceCharge, Path csvBillZipFilePath,
-            LocalDate monthDate) throws IOException {
+            List<String> ignorableInvoiceCharge, Path csvBillZipFilePath) throws IOException {
 
         Path workingDirPath = csvBillZipFilePath.getParent();
         unzip(csvBillZipFilePath.toString(), workingDirPath.toString());
@@ -83,15 +83,10 @@ public class AWSCsvBillParser {
             Files.deleteIfExists(unzippedCsvFilePath);
         }
 
-        for (Map.Entry<String, AwsAccountDetailDto> accountDetailEntry : accountToDetailsMap
-                .entrySet()) {
-            AwsAccountDetailDto accountDetail = accountDetailEntry.getValue();
-            accountDetail.month = monthDate.toDateTimeAtCurrentTime(DateTimeZone.UTC).getMillis();
-        }
         return accountToDetailsMap;
     }
 
-    public Map<String, AwsAccountDetailDto> parseDetailedCsvBill(InputStream inputStream,
+    private Map<String, AwsAccountDetailDto> parseDetailedCsvBill(InputStream inputStream,
             Collection<String> ignorableInvoiceCharge)
             throws IOException {
         final CsvPreference STANDARD_SKIP_COMMENTS = new CsvPreference.Builder(
@@ -132,6 +127,7 @@ public class AWSCsvBillParser {
                     awsAccountDetail.cost = awsAccountDetail.cost - signUpCharge;
                 }
             }
+
             return monthlyBill;
         }
     }
@@ -184,14 +180,7 @@ public class AWSCsvBillParser {
      **/
     private void readRow(Map<String, Object> rowMap, Map<String, AwsAccountDetailDto> monthlyBill,
             List<String> tagHeaders, Collection<String> ignorableInvoiceCharge) {
-        Long billProcessedTimeMillis = 0L;
-        String payerAccountId = (String) rowMap.get(DetailedCsvHeaders.PAYER_ACCOUNT_ID);
-        if (payerAccountId != null && monthlyBill.get(payerAccountId) != null) {
-            billProcessedTimeMillis = monthlyBill.get(payerAccountId).billProcessedTimeMillis;
-            if (billProcessedTimeMillis == null) {
-                billProcessedTimeMillis = 0L;
-            }
-        }
+
         final String linkedAccountId = getStringFieldValue(rowMap,
                 DetailedCsvHeaders.LINKED_ACCOUNT_ID);
         String serviceName = getStringFieldValue(rowMap, DetailedCsvHeaders.PRODUCT_NAME);
@@ -233,10 +222,7 @@ public class AWSCsvBillParser {
                 // populating this as a resource while getting services- refer
                 // AwsInventoryServiceImpl#getAwsServicesCost()
                 serviceDetail.addToDirectCosts(millisForBillHour, 0d);
-                if (millisForBillHour.compareTo(billProcessedTimeMillis) > 0
-                        && monthlyBill.get(payerAccountId) != null) {
-                    monthlyBill.get(payerAccountId).billProcessedTimeMillis = millisForBillHour;
-                }
+                setBillProcessedTime(accountDetails, millisForBillHour);
             } else {
                 serviceDetail.addToRemainingCost(resourceCost);
             }
@@ -247,14 +233,27 @@ public class AWSCsvBillParser {
                 .get(DetailedCsvHeaders.USAGE_START_DATE);
         Long millisForBillHour = getMillisForHour(usageStartTimeFromCsv);
         serviceDetail.addToDirectCosts(millisForBillHour, resourceCost);
-        AwsResourceDetailDto resourceDetail = createOrGetResourceDetailObject(rowMap,
-                serviceDetail,
-                resourceId);
-        resourceDetail.addToDirectCosts(millisForBillHour, resourceCost);
-        setLatestResourceValues(rowMap, tagHeaders, resourceDetail);
-        if (millisForBillHour.compareTo(billProcessedTimeMillis) > 0 && monthlyBill.get(
-                payerAccountId) != null) {
-            monthlyBill.get(payerAccountId).billProcessedTimeMillis = millisForBillHour;
+
+        DateTime firstDayOfCurrentMonth = LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1).toDateTimeAtStartOfDay(DateTimeZone.UTC);
+        if (firstDayOfCurrentMonth.toLocalDateTime().isBefore(usageStartTimeFromCsv)) {
+            // Populate resource stats only for current month since resource stats are not needed
+            // for previous months.
+            AwsResourceDetailDto resourceDetail = createOrGetResourceDetailObject(rowMap,
+                    serviceDetail,
+                    resourceId);
+            resourceDetail.addToDirectCosts(millisForBillHour, resourceCost);
+            setLatestResourceValues(rowMap, tagHeaders, resourceDetail);
+        }
+        setBillProcessedTime(accountDetails, millisForBillHour);
+    }
+
+    /**
+     * Set billProcessedTimeMillis for linked accounts as well as primary account.
+     */
+    private void setBillProcessedTime(AwsAccountDetailDto accountDetails,
+            Long millisForBillHour) {
+        if (millisForBillHour > accountDetails.billProcessedTimeMillis) {
+            accountDetails.billProcessedTimeMillis = millisForBillHour;
         }
     }
 
@@ -408,7 +407,7 @@ public class AWSCsvBillParser {
             // The AccountId is not obtained from LinkedAccountId in case of
             // non-consolidated bills and has to be fetched from PayerAccountId
             // column from the bill file
-            awsAccountDetail = accountDetails.get(rowMap.get(DetailedCsvHeaders.PAYER_ACCOUNT_ID));
+            awsAccountDetail = accountDetails.get(rowMap.get(DetailedCsvHeaders.PAYER_ACCOUNT_ID).toString());
         } else {
             awsAccountDetail = accountDetails.get(linkedAccountId);
         }
@@ -490,7 +489,7 @@ public class AWSCsvBillParser {
 
     private static class ParseLocalDateTimeInDetailedCsv extends CellProcessorAdaptor {
 
-        public ParseLocalDateTimeInDetailedCsv() {
+        private ParseLocalDateTimeInDetailedCsv() {
             super();
         }
 
@@ -576,7 +575,7 @@ public class AWSCsvBillParser {
         }
     }
 
-    public enum PublicCloudServiceType {
+    private enum PublicCloudServiceType {
         COMPUTE, STORAGE, DATABASE, OTHERS;
 
         public String toString() {

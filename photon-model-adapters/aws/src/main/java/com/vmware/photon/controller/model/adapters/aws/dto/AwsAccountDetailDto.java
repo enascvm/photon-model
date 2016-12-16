@@ -20,16 +20,15 @@ public class AwsAccountDetailDto {
 
     public String id;
     public String name;
-    public Long month;
     public Double cost = 0d;
     public Integer deletedVmCount = 0;
     public Map<String, AwsServiceDetailDto> serviceDetailsMap = new HashMap<>();
     public Double signUpCharge = 0d;
-    // Will contain the last usageStartTime of the row that was successfully persisted in
+    // Will contain the usageStartTime of the row in the bill that was successfully persisted in
     // the last collection cycle. The bill records (rows) will be processed beginning from
     // the next record in the bill being processed in the current collection cycle. In case
-    // this value is null, the complete bill be processed and persisted.
-    public Long billProcessedTimeMillis;
+    // this value is 0, the complete bill be processed and persisted.
+    public long billProcessedTimeMillis;
 
     public AwsServiceDetailDto fetchServiceDetail(String serviceName) {
         return this.serviceDetailsMap.get(serviceName);

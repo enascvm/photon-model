@@ -13,11 +13,13 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 
 import org.joda.time.LocalDate;
 
@@ -64,6 +66,9 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
 
     protected void scheduleDownload(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
+
+        validatePastMonthsBillsAreScheduledForDownload(statsData);
+
         AWSCsvBillParser parser = new AWSCsvBillParser();
         //sample bill used is for September month of 2016.
         LocalDate monthDate = new LocalDate(2016, 9, 1);
@@ -72,15 +77,41 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
             csvBillZipFilePath = TestUtils.getTestResourcePath(TestAWSCostAdapterService.class,
                     TestAWSSetupUtils.SAMPLE_AWS_BILL);
 
-            statsData.accountDetailsMap = parser
-                    .parseDetailedCsvBill(statsData.ignorableInvoiceCharge, csvBillZipFilePath,
-                            monthDate);
+            statsData.accountsHistoricalDetailsMap.put(monthDate, parser
+                    .parseDetailedCsvBill(statsData.ignorableInvoiceCharge, csvBillZipFilePath
+                    ));
         } catch (Throwable e) {
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     statsData.statsRequest.taskReference, new RuntimeException(e));
         }
         statsData.stage = next;
         handleCostStatsCreationRequest(statsData);
+    }
+
+    private void validatePastMonthsBillsAreScheduledForDownload(
+            AWSCostStatsCreationContext statsData) {
+
+        // Backup the accountIdToBillProcessedTimeMap and restore after test
+        Map<String, Long> accountIdToBillProcessedTimeBackup = statsData.accountIdToBillProcessedTime;
+
+        // Set billProcessedTime to 0 for this test case
+        for (Map.Entry<String, Long> entries : statsData.accountIdToBillProcessedTime.entrySet()) {
+            entries.setValue(0L);
+        }
+        AWSCostStatsService costStatsService = new AWSCostStatsService();
+        costStatsService.populateBillMonthToProcess(statsData, "");
+
+        String property = System.getProperty(AWSCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
+        int numberOfMonthsToDownloadBill = AWSConstants.DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS;
+
+        if (property != null) {
+            numberOfMonthsToDownloadBill = new Integer(property);
+        }
+
+        assertEquals("Bill collection starting month is incorrect. Expected: %s Got: %s",
+                LocalDate.now().getMonthOfYear(), statsData.billMonthToDownload
+                        .plusMonths(numberOfMonthsToDownloadBill).getMonthOfYear());
+        statsData.accountIdToBillProcessedTime = accountIdToBillProcessedTimeBackup;
     }
 
     protected void queryInstances(AWSCostStatsCreationContext statsData,
@@ -132,11 +163,10 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     protected void setBillProcessedTime(AWSCostStatsCreationContext statsData) {
 
         assertTrue("Last bill processed time is not correct. " +
-                        "Expected: " + billProcessedTimeMillis.toString() +
-                        " Got: " + statsData.accountDetailsMap.values().iterator()
-                        .next().billProcessedTimeMillis.toString(),
-                statsData.accountDetailsMap.values().iterator()
-                        .next().billProcessedTimeMillis.toString()
-                        .equals(billProcessedTimeMillis.toString()));
+                        "Expected: " + billProcessedTimeMillis.toString() + " Got: "
+                        + statsData.accountsHistoricalDetailsMap.values().iterator().next().values()
+                        .iterator().next().billProcessedTimeMillis,
+                statsData.accountsHistoricalDetailsMap.values().iterator().next().values()
+                        .iterator().next().billProcessedTimeMillis == billProcessedTimeMillis);
     }
 }

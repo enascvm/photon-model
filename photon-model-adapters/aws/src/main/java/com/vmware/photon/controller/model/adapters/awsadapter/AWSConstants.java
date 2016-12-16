@@ -45,6 +45,8 @@ public class AWSConstants {
     public static final String AWS_ATTACHMENT_VPC_FILTER = "attachment.vpc-id";
     public static final String AWS_BILLS_S3_BUCKET_NAME_KEY = "billsBucketName";
     public static final String AWS_ACCOUNT_ID_KEY = "accountId";
+    public static final int NO_OF_DAYS_MARGIN_FOR_AWS_TO_UPDATE_BILL = 5;
+    public static final int DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS = 11;
     public static final String AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS =
             "billProcessedTimeMillis";
     public static final String AWS_INVALID_INSTANCE_ID_ERROR_CODE = "InvalidInstanceID.NotFound";
@@ -101,6 +103,7 @@ public class AWSConstants {
     public static final String UNIT_BYTES = "Bytes";
     public static final String UNIT_PERCENT = "Percent";
     public static final String UNIT_COST = "USD";
+    public static final int ONE_SECOND_IN_MILLISECONDS = 1000;
 
     public static final String WINDOWS_PLATFORM = "windows";
 

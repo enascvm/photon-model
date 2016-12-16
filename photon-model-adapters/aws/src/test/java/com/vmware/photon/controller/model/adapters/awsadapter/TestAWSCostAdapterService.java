@@ -105,7 +105,8 @@ public class TestAWSCostAdapterService extends BasicTestCase {
 
                     SingleResourceStatsCollectionTaskState resp = op
                             .getBody(SingleResourceStatsCollectionTaskState.class);
-                    if (resp.statsList.size() != 4) {
+                    if (resp.statsList.size() != 2) {
+                        // Only account cost will be stored for current month, hence only 2 stats will be stored.
                         TestAWSCostAdapterService.this.host.failIteration(
                                 new IllegalStateException("response size was incorrect."));
                         return;
@@ -150,7 +151,7 @@ public class TestAWSCostAdapterService extends BasicTestCase {
 
         // check VM count stats
         assertEquals(0, computeStats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
-        assertEquals(1, account2Stats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
+        assertEquals(0, account2Stats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
 
         // check that service level stats exist
         String serviceCode = AWSCsvBillParser.AwsServices.ec2.getName().replaceAll(" ", "");
@@ -183,4 +184,5 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         assertTrue(account2ComputeStats.statValues.get(normalizedStatKeyValue)
                 .get(0).latestValue == account2TotalCost);
     }
+
 }
