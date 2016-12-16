@@ -319,10 +319,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         handleSubStage(ctx);
     }
 
-    private Consumer<Throwable> getFailureConsumer(NetworkEnumContext ctx) {
-        return (t) -> handleError(ctx, t);
-    }
-
     private void handleError(NetworkEnumContext ctx, Throwable e) {
         logSevere("Failed at stage %s with exception: %s", ctx.stage, Utils.toString(e));
         ctx.error = e;

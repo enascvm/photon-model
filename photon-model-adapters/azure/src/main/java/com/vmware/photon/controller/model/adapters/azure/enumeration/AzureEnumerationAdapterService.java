@@ -19,7 +19,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
-import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStages;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -50,7 +50,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
     /**
      * The enumeration service context needed trigger adapters for Azure.
      */
-    public static class EnumerationContext extends BaseAdapterContext {
+    public static class EnumerationContext extends BaseAdapterContext<EnumerationContext> {
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
         public AzureEnumerationStages stage;
 
@@ -87,8 +87,9 @@ public class AzureEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        BaseAdapterContext.populateContextThen(new EnumerationContext(this, request, op),
-                BaseAdapterStages.PARENTDESC, (context, t) -> {
+        new EnumerationContext(this, request, op)
+                .populateContext(BaseAdapterStage.PARENTDESC)
+                .whenComplete((context, t) -> {
                     if (t != null) {
                         context.error = t;
                         context.stage = AzureEnumerationStages.ERROR;

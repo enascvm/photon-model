@@ -14,29 +14,50 @@
 package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * Base context class for adapters. Used to load endpoint related data.
+ * Base class for contexts used by adapters. It {@link #populateContext(BaseAdapterStage) loads}:
+ * <ul>
+ * <li>{@link ComputeStateWithDescription child}</li>
+ * <li>{@link ComputeStateWithDescription parent}</li>
+ * <li>{@link AuthCredentialsServiceState parentAuth}</li>
+ * </ul>
  */
-public class BaseAdapterContext {
+public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
 
-    public ComputeStateWithDescription child;
-    public ComputeStateWithDescription parent;
-    public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-    public Service service;
+    /**
+     * Default version of {@link BaseAdapterContext} used when there's no need to extend from base.
+     */
+    public static final class DefaultAdapterContext
+            extends BaseAdapterContext<DefaultAdapterContext> {
+
+        public DefaultAdapterContext(Service service, URI computeReference) {
+            super(service, computeReference);
+        }
+    }
+
+    /**
+     * The service that is creating and using this context.
+     */
+    public final Service service;
     public URI resourceReference;
 
     /**
-     * Used to store an error that has occurred while transitioning to the error stage.
+     * The compute state that is to be provisioned.
+     */
+    public ComputeStateWithDescription child;
+    public ComputeStateWithDescription parent;
+    public AuthCredentialsServiceState parentAuth;
+
+    /**
+     * The error that has occurred while transitioning to the error stage.
      */
     public Throwable error;
     /**
@@ -44,11 +65,8 @@ public class BaseAdapterContext {
      */
     public Operation adapterOperation;
 
-    public enum BaseAdapterStages {
-        VMDESC,
-        PARENTDESC,
-        PARENTAUTH,
-        DONE
+    public enum BaseAdapterStage {
+        VMDESC, PARENTDESC, PARENTAUTH
     }
 
     public BaseAdapterContext(Service service, URI computeReference) {
@@ -56,92 +74,78 @@ public class BaseAdapterContext {
         this.resourceReference = computeReference;
     }
 
-    public static void populateContextThen(Service service, BaseAdapterStages stage,
-            URI computeReference,
-            BiConsumer<BaseAdapterContext, Throwable> onSuccess) {
-        BaseAdapterContext context = new BaseAdapterContext(service, computeReference);
-        populateContextThen(context, stage, onSuccess);
-
-    }
-
-    public static <T extends BaseAdapterContext> void populateContextThen(T context,
-            BaseAdapterStages stage,
-            BiConsumer<T, Throwable> onSuccess) {
-        doPopulateContextThen(context, stage, onSuccess);
-    }
-
-    private static <T extends BaseAdapterContext> void doPopulateContextThen(T context,
-            BaseAdapterStages stage,
-            BiConsumer<T, Throwable> onSuccess) {
+    public DeferredResult<T> populateContext(BaseAdapterStage stage) {
+        if (stage == null) {
+            stage = BaseAdapterStage.VMDESC;
+        }
         switch (stage) {
         case VMDESC:
-            getVMDescription(context, BaseAdapterStages.PARENTDESC, onSuccess);
-            break;
+            return getVMDescription(self())
+                    .thenCompose(c -> populateContext(BaseAdapterStage.PARENTDESC));
         case PARENTDESC:
-            getParentDescription(context, BaseAdapterStages.PARENTAUTH, onSuccess);
-            break;
+            return getParentDescription(self())
+                    .thenCompose(c -> populateContext(BaseAdapterStage.PARENTAUTH));
         case PARENTAUTH:
-            getParentAuth(context, BaseAdapterStages.DONE, onSuccess);
-            break;
-        case DONE:
+            return getParentAuth(self());
         default:
-            onSuccess.accept(context, null);
-            break;
+            return DeferredResult.completed(self());
         }
     }
 
-    /*
-     * method will be responsible for getting the compute description for the requested resource and
-     * then passing to the next step
+    /**
+     * Isolate all cases when this instance should be cast to CHILD. For internal use only.
      */
-    private static <T extends BaseAdapterContext> void getVMDescription(T ctx, BaseAdapterStages next,
-            BiConsumer<T, Throwable> callback) {
-        Consumer<Operation> onSuccess = (op) -> {
-            ctx.child = op.getBody(ComputeStateWithDescription.class);
-            doPopulateContextThen(ctx, next, callback);
-        };
-        URI computeUri = UriUtils.extendUriWithQuery(
-                ctx.resourceReference, UriUtils.URI_PARAM_ODATA_EXPAND,
-                Boolean.TRUE.toString());
-        AdapterUtils.getServiceState(ctx.service, computeUri, onSuccess,
-                getFailureConsumer(ctx, callback));
+    @SuppressWarnings("unchecked")
+    protected T self() {
+        return (T) this;
     }
 
-    /*
-     * Method will get the service for the identified link
-     */
-    private static <T extends BaseAdapterContext> void getParentDescription(T ctx, BaseAdapterStages next,
-            BiConsumer<T, Throwable> callback) {
-        Consumer<Operation> onSuccess = (op) -> {
-            ctx.parent = op.getBody(ComputeStateWithDescription.class);
-            doPopulateContextThen(ctx, next, callback);
-        };
-        URI baseUri = ctx.child == null ? ctx.resourceReference
-                : UriUtils.buildUri(ctx.service.getHost(), ctx.child.parentLink);
+    private DeferredResult<T> getVMDescription(T context) {
 
-        URI parentExpandURI = ComputeStateWithDescription.buildUri(baseUri);
-        AdapterUtils.getServiceState(ctx.service, parentExpandURI, onSuccess,
-                getFailureConsumer(ctx, callback));
+        URI uri = ComputeStateWithDescription.buildUri(context.resourceReference);
+
+        Operation op = Operation.createGet(uri);
+
+        return context.service
+                .sendWithDeferredResult(op, ComputeStateWithDescription.class)
+                .thenApply(state -> {
+                    context.child = state;
+                    return context;
+                });
     }
 
-    private static <T extends BaseAdapterContext> void getParentAuth(T ctx, BaseAdapterStages next,
-            BiConsumer<T, Throwable> callback) {
-        URI authURI = ctx.parent == null ? ctx.resourceReference
-                : UriUtils.buildUri(ctx.service.getHost(),
-                ctx.parent.description.authCredentialsLink);
+    private DeferredResult<T> getParentDescription(T context) {
 
-        Consumer<Operation> onSuccess = (op) -> {
-            ctx.parentAuth = op.getBody(AuthCredentialsServiceState.class);
-            doPopulateContextThen(ctx, next, callback);
-        };
-        AdapterUtils.getServiceState(ctx.service, authURI, onSuccess,
-                getFailureConsumer(ctx, callback));
+        URI uri = context.child != null
+                ? UriUtils.buildUri(context.service.getHost(), context.child.parentLink)
+                : context.resourceReference;
+
+        uri = ComputeStateWithDescription.buildUri(uri);
+
+        Operation op = Operation.createGet(uri);
+
+        return context.service
+                .sendWithDeferredResult(op, ComputeStateWithDescription.class)
+                .thenApply(state -> {
+                    context.parent = state;
+                    return context;
+                });
     }
 
-    private static <T extends BaseAdapterContext> Consumer<Throwable> getFailureConsumer(T ctx,
-            BiConsumer<T, Throwable> callback) {
-        return (t) -> {
-            callback.accept(ctx, t);
-        };
+    private DeferredResult<T> getParentAuth(T context) {
+        URI uri = context.parent != null
+                ? UriUtils.buildUri(context.service.getHost(),
+                        context.parent.description.authCredentialsLink)
+                : context.resourceReference;
+
+        Operation op = Operation.createGet(uri);
+
+        return context.service
+                .sendWithDeferredResult(op, AuthCredentialsServiceState.class)
+                .thenApply(state -> {
+                    context.parentAuth = state;
+                    return context;
+                });
     }
+
 }

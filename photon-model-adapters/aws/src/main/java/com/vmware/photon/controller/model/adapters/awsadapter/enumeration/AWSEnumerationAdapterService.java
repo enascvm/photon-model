@@ -21,7 +21,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
-import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStages;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -53,7 +53,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
      * The enumeration service context needed to spawn off control to the creation and deletion
      * adapters for AWS.
      */
-    public static class EnumerationContext extends BaseAdapterContext {
+    public static class EnumerationContext extends BaseAdapterContext<EnumerationContext> {
 
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
         public AWSEnumerationStages stage;
@@ -100,9 +100,9 @@ public class AWSEnumerationAdapterService extends StatelessService {
             handleEnumerationRequest(context);
         };
 
-        BaseAdapterContext.populateContextThen(
-                new EnumerationContext(this, request, op),
-                BaseAdapterStages.PARENTDESC, onFinish);
+        new EnumerationContext(this, request, op)
+                .populateContext(BaseAdapterStage.PARENTDESC)
+                .whenComplete(onFinish);
     }
 
     /**

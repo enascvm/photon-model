@@ -46,7 +46,6 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
@@ -59,6 +58,7 @@ import com.microsoft.azure.management.network.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.models.NetworkInterface;
 import com.microsoft.azure.management.network.models.PublicIPAddress;
 import com.microsoft.rest.ServiceResponse;
+
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
@@ -490,16 +490,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 ctx.enumRequest.preserveMissing ? "retire" : "delete");
         sendRequest(Operation.createGet(this, ctx.deletionNextPageLink)
                 .setCompletion(completionHandler));
-    }
-
-
-
-    private Consumer<Throwable> getFailureConsumer(EnumerationContext ctx) {
-        return (t) -> {
-            ctx.stage = EnumerationStages.ERROR;
-            ctx.error = t;
-            handleEnumerationRequest(ctx);
-        };
     }
 
     /**

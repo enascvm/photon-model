@@ -16,7 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 /**
  * AWS stages.
  */
-public enum AWSStages {
+public enum AWSInstanceStage {
 
     PROVISIONTASK,
     CLIENT,

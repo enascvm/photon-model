@@ -53,20 +53,16 @@ import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSAllocationContext.NicAllocationContext;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStages;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -117,23 +113,24 @@ public class AWSInstanceService extends StatelessService {
 
         ComputeInstanceRequest request = op.getBody(ComputeInstanceRequest.class);
 
+        final BiConsumer<AWSInstanceContext, Throwable> onPopulateContext;
+
         switch (request.requestType) {
         case VALIDATE_CREDENTIALS:
-            BiConsumer<AWSAllocationContext, Throwable> onFinish = (context, t) -> {
+            onPopulateContext = (context, t) -> {
                 if (t != null) {
                     handleError(context, t);
-                } else {
-                    context.adapterOperation = op;
-                    handleAllocation(context, AWSStages.CLIENT);
+                    return;
                 }
+                context.adapterOperation = op;
+                handleAllocation(context, AWSInstanceStage.CLIENT);
             };
 
-            AWSAllocationContext.populateContextThen(
-                    new AWSAllocationContext(
-                            this,
-                            request,
-                            UriUtils.buildUri(this.getHost(), request.authCredentialsLink)),
-                    BaseAdapterStages.PARENTAUTH, onFinish);
+            URI authCredentialsUri = UriUtils.buildUri(this.getHost(), request.authCredentialsLink);
+
+            new AWSInstanceContext(this, request, authCredentialsUri)
+                    .populateContext(BaseAdapterStage.PARENTAUTH)
+                    .whenComplete(onPopulateContext);
             break;
         default:
             op.complete();
@@ -143,36 +140,37 @@ public class AWSInstanceService extends StatelessService {
                 return;
             }
 
-            BiConsumer<AWSAllocationContext, Throwable> onFinishHandler = (context, t) -> {
+            onPopulateContext = (context, t) -> {
                 if (t != null) {
                     handleError(context, t);
                     return;
                 }
-                handleAllocation(context);
+                handleAllocation(context, AWSInstanceStage.PROVISIONTASK);
             };
-            AWSAllocationContext.populateContextThen(
-                    new AWSAllocationContext(this, request),
-                    BaseAdapterStages.VMDESC, onFinishHandler);
-        }
 
+            new AWSInstanceContext(this, request)
+                    .populateContext(BaseAdapterStage.VMDESC)
+                    .whenComplete(onPopulateContext);
+            break;
+        }
     }
 
     /**
      * Shortcut method that sets the next stage into the context and delegates to
-     * {@link #handleAllocation(AWSAllocationContext)}.
+     * {@link #handleAllocation(AWSInstanceContext)}.
      */
-    private void handleAllocation(AWSAllocationContext aws, AWSStages nextStage) {
+    private void handleAllocation(AWSInstanceContext aws, AWSInstanceStage nextStage) {
         aws.stage = nextStage;
         handleAllocation(aws);
     }
 
     /**
      * Shortcut method that stores the error into context, sets next stage to
-     * {@link AWSStages#ERROR} and delegates to {@link #handleAllocation(AWSAllocationContext)}.
+     * {@link AWSInstanceStage#ERROR} and delegates to {@link #handleAllocation(AWSInstanceContext)}.
      */
-    private void handleError(AWSAllocationContext aws, Throwable e) {
+    private void handleError(AWSInstanceContext aws, Throwable e) {
         aws.error = e;
-        aws.stage = AWSStages.ERROR;
+        aws.stage = AWSInstanceStage.ERROR;
         handleAllocation(aws);
     }
 
@@ -184,13 +182,13 @@ public class AWSInstanceService extends StatelessService {
      * Each stage is responsible for setting the next stage on success -- the next stage is passed
      * into action methods
      *
-     * @see #handleError(AWSAllocationContext, Throwable)
-     * @see #handleAllocation(AWSAllocationContext, AWSStages)
+     * @see #handleError(AWSInstanceContext, Throwable)
+     * @see #handleAllocation(AWSInstanceContext, AWSInstanceStage)
      */
-    private void handleAllocation(AWSAllocationContext aws) {
+    private void handleAllocation(AWSInstanceContext aws) {
         switch (aws.stage) {
         case PROVISIONTASK:
-            getProvisioningTaskReference(aws, AWSStages.CLIENT);
+            getProvisioningTaskReference(aws, AWSInstanceStage.CLIENT);
             break;
         case CLIENT:
             aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
@@ -199,10 +197,10 @@ public class AWSInstanceService extends StatelessService {
             // now that we have a client lets move onto the next step
             switch (aws.computeRequest.requestType) {
             case CREATE:
-                handleAllocation(aws, AWSStages.VM_DISKS);
+                handleAllocation(aws, AWSInstanceStage.VM_DISKS);
                 break;
             case DELETE:
-                handleAllocation(aws, AWSStages.DELETE);
+                handleAllocation(aws, AWSInstanceStage.DELETE);
                 break;
             case VALIDATE_CREDENTIALS:
                 validateAWSCredentials(aws);
@@ -216,34 +214,31 @@ public class AWSInstanceService extends StatelessService {
             deleteInstance(aws);
             break;
         case VM_DISKS:
-            getVMDisks(aws, AWSStages.GET_NIC_STATES);
+            getVMDisks(aws, AWSInstanceStage.GET_NIC_STATES);
             break;
         case GET_NIC_STATES:
-            getNICStates(aws, AWSStages.GET_SUBNET_STATES);
-            break;
-        case GET_SUBNET_STATES:
-            getNICSubnetStates(aws, AWSStages.GET_NETWORK_STATES);
-            break;
-        case GET_NETWORK_STATES:
-            getNICNetworkStates(aws, AWSStages.GET_FIREWALL_STATES);
-            break;
-        case GET_FIREWALL_STATES:
-            getNICFirewallStates(aws, AWSStages.GET_NETWORKS);
+            aws.populateNicContext().whenComplete((context, exc) -> {
+                if (exc != null) {
+                    handleError(context, exc);
+                    return;
+                }
+                handleAllocation(context, AWSInstanceStage.GET_NETWORKS);
+            });
             break;
         case GET_NETWORKS:
             // Should be handled in advance by AWSNetworkService
-            getAWSNetworks(aws, AWSStages.GET_SUBNETS);
+            getAWSNetworks(aws, AWSInstanceStage.GET_SUBNETS);
             break;
         case GET_SUBNETS:
             // Should be handled in advance by AWSNetworkService
-            getAWSSubnets(aws, AWSStages.GET_FIREWALLS);
+            getAWSSubnets(aws, AWSInstanceStage.GET_FIREWALLS);
             break;
         case GET_FIREWALLS:
-            getAWSFirewalls(aws, AWSStages.CREATE_INSTANCE_NICs);
+            getAWSFirewalls(aws, AWSInstanceStage.CREATE_INSTANCE_NICs);
             break;
         case CREATE_INSTANCE_NICs:
             // One VPC for all VMs, one Subnet per VM
-            createAWSNICSpecs(aws, AWSStages.CREATE);
+            createAWSNICSpecs(aws, AWSInstanceStage.CREATE);
             break;
         case CREATE:
             createInstance(aws);
@@ -264,7 +259,7 @@ public class AWSInstanceService extends StatelessService {
         }
     }
 
-    private void getAWSSubnets(AWSAllocationContext aws, AWSStages next) {
+    private void getAWSSubnets(AWSInstanceContext aws, AWSInstanceStage next) {
         if (aws.nics.isEmpty()) {
             handleAllocation(aws, next);
             return;
@@ -274,10 +269,10 @@ public class AWSInstanceService extends StatelessService {
 
         subnetRequest.getFilters().add(
                 new Filter(AWSConstants.AWS_VPC_FILTER, Collections.singletonList(aws
-                        .getVmPrimaryNic().vpc.getVpcId())));
+                        .getPrimaryNic().vpc.getVpcId())));
         subnetRequest.getFilters().add(
                 new Filter(AWSConstants.AWS_SUBNET_FILTER, Collections.singletonList(aws
-                        .getVmPrimaryNic().subnetState.id)));
+                        .getPrimaryNic().subnetState.id)));
 
         aws.amazonEC2Client.describeSubnetsAsync(subnetRequest,
                 new AsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult>() {
@@ -293,7 +288,7 @@ public class AWSInstanceService extends StatelessService {
                             DescribeSubnetsResult result) {
 
                         if (!result.getSubnets().isEmpty()) {
-                            for (NicAllocationContext nicCtx : aws.nics) {
+                            for (AWSNicContext nicCtx : aws.nics) {
                                 nicCtx.subnet = result.getSubnets().get(0);
                             }
                             handleAllocation(aws, next);
@@ -310,7 +305,7 @@ public class AWSInstanceService extends StatelessService {
      * Obtains the VPC ID from the network state name and discovers the Virtual Private Cloud object
      * from AWS.
      */
-    private void getAWSNetworks(AWSAllocationContext aws, AWSStages next) {
+    private void getAWSNetworks(AWSInstanceContext aws, AWSInstanceStage next) {
         if (aws.nics.isEmpty()) {
             handleAllocation(aws, next);
             return;
@@ -320,7 +315,7 @@ public class AWSInstanceService extends StatelessService {
 
         vpcRequest.getFilters().add(
                 new Filter(AWSConstants.AWS_VPC_FILTER, Collections.singletonList(aws
-                        .getVmPrimaryNic().networkState.id)));
+                        .getPrimaryNic().networkState.id)));
 
         aws.amazonEC2Client.describeVpcsAsync(vpcRequest,
                 new AsyncHandler<DescribeVpcsRequest, DescribeVpcsResult>() {
@@ -335,7 +330,7 @@ public class AWSInstanceService extends StatelessService {
                     public void onSuccess(DescribeVpcsRequest request, DescribeVpcsResult result) {
                         if (!result.getVpcs().isEmpty()) {
                             Vpc vpc = result.getVpcs().get(0);
-                            for (NicAllocationContext nicCtx : aws.nics) {
+                            for (AWSNicContext nicCtx : aws.nics) {
                                 nicCtx.vpc = vpc;
                             }
                         }
@@ -345,30 +340,30 @@ public class AWSInstanceService extends StatelessService {
                 });
     }
 
-    private void getAWSFirewalls(AWSAllocationContext aws, AWSStages next) {
+    private void getAWSFirewalls(AWSInstanceContext aws, AWSInstanceStage next) {
         if (aws.nics.isEmpty()) {
             handleAllocation(aws, next);
             return;
         }
 
-        List<String> securityGroupIds = getOrCreateSecurityGroups(aws.getVmPrimaryNic(), aws);
-        for (NicAllocationContext nicCtx : aws.nics) {
+        List<String> securityGroupIds = getOrCreateSecurityGroups(aws.getPrimaryNic(), aws);
+        for (AWSNicContext nicCtx : aws.nics) {
             nicCtx.groupIds = securityGroupIds;
         }
         handleAllocation(aws, next);
     }
 
-    private void createAWSNICSpecs(AWSAllocationContext aws, AWSStages next) {
+    private void createAWSNICSpecs(AWSInstanceContext aws, AWSInstanceStage next) {
 
         int index = 0;
-        for (NicAllocationContext nicCtx : aws.nics) {
+        for (AWSNicContext nicCtx : aws.nics) {
             createInstanceNetworkInterfaceSpecification(aws, nicCtx, index++);
         }
         handleAllocation(aws, next);
     }
 
     private void createInstanceNetworkInterfaceSpecification(
-            AWSAllocationContext aws, NicAllocationContext nicCtx, int deviceIndex) {
+            AWSInstanceContext aws, AWSNicContext nicCtx, int deviceIndex) {
 
         if (nicCtx.subnet != null) {
             nicCtx.nicSpec = new InstanceNetworkInterfaceSpecification()
@@ -383,116 +378,11 @@ public class AWSInstanceService extends StatelessService {
 
     }
 
-    /**
-     * Get {@link NetworkState}s containing the {@link SubnetState}s
-     * {@link com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState#subnetLink assigned} to the NICs.
-     *
-     * @see #getNICSubnetStates(AWSAllocationContext, AWSStages)
-     */
-    private void getNICNetworkStates(AWSAllocationContext aws, AWSStages next) {
-        if (aws.nics.isEmpty()) {
-            handleAllocation(aws, next);
-            return;
-        }
-
-        Stream<Operation> getNetworksOps = aws.nics.stream()
-                .map(nicCtx -> Operation.createGet(this.getHost(), nicCtx.subnetState.networkLink)
-                        .setCompletion((op, ex) -> {
-                            if (ex == null) {
-                                nicCtx.networkState = op.getBody(NetworkState.class);
-                            }
-                        }));
-
-        OperationJoin operationJoin = OperationJoin.create(getNetworksOps)
-                .setCompletion((ops, excs) -> {
-                    if (excs != null && excs.size() > 0) {
-                        handleError(aws, new IllegalStateException(
-                                "Error getting network states.", excs.get(0)));
-                        return;
-                    }
-                    handleAllocation(aws, next);
-                });
-        operationJoin.sendWith(this);
-    }
-
-    /**
-     * Get {@link SubnetState}s
-     * {@link com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState#subnetLink assigned} to the NICs.
-     */
-    private void getNICSubnetStates(AWSAllocationContext aws, AWSStages next) {
-        if (aws.nics.isEmpty()) {
-            handleAllocation(aws, next);
-            return;
-        }
-
-        Stream<Operation> getSubnetsOps = aws.nics.stream()
-                .map(nicCtx -> Operation
-                        .createGet(this.getHost(), nicCtx.nicStateWithDesc.subnetLink)
-                        .setCompletion((op, ex) -> {
-                            if (ex == null) {
-                                nicCtx.subnetState = op.getBody(SubnetState.class);
-                            }
-                        }));
-
-        OperationJoin operationJoin = OperationJoin.create(getSubnetsOps)
-                .setCompletion((ops, excs) -> {
-                    if (excs != null && excs.size() > 0) {
-                        handleError(aws, new IllegalStateException(
-                                "Error getting subnet states.", excs.get(0)));
-                        return;
-                    }
-                    handleAllocation(aws, next);
-                });
-        operationJoin.sendWith(this);
-    }
-
-    private void getNICStates(AWSAllocationContext aws, AWSStages next) {
-        if (aws.child.networkInterfaceLinks == null
-                || aws.child.networkInterfaceLinks.size() == 0) {
-            handleAllocation(aws, next);
-            return;
-        }
-
-        List<Operation> getNICsOps = new ArrayList<>();
-
-        for (String nicStateLink : aws.child.networkInterfaceLinks) {
-
-            NicAllocationContext nicCtx = new NicAllocationContext();
-
-            aws.nics.add(nicCtx);
-
-            URI nicStateUri = NetworkInterfaceStateWithDescription
-                    .buildUri(UriUtils.buildUri(getHost(), nicStateLink));
-
-            Operation getNicOp = Operation.createGet(nicStateUri).setCompletion((op, exc) -> {
-                if (exc == null) {
-                    // Handle SUCCESS; error is handled by the join handler.
-                    nicCtx.nicStateWithDesc = op
-                            .getBody(NetworkInterfaceStateWithDescription.class);
-                }
-            });
-
-            getNICsOps.add(getNicOp);
-        }
-
-        OperationJoin operationJoin = OperationJoin.create(getNICsOps)
-                .setCompletion(
-                        (ops, excs) -> {
-                            if (excs != null && excs.size() > 0) {
-                                handleError(aws, new IllegalStateException(
-                                        "Error getting network interface states.", excs.get(0)));
-                                return;
-                            }
-                            handleAllocation(aws, next);
-                        });
-        operationJoin.sendWith(this);
-    }
-
     /*
      * Gets the provisioning task reference for this operation. Sets the task expiration time in the
      * context to be used for bounding the status checks for creation and termination requests.
      */
-    private void getProvisioningTaskReference(AWSAllocationContext aws, AWSStages next) {
+    private void getProvisioningTaskReference(AWSInstanceContext aws, AWSInstanceStage next) {
         Consumer<Operation> onSuccess = (op) -> {
             ProvisionComputeTaskState provisioningTaskState = op
                     .getBody(ProvisionComputeTaskState.class);
@@ -503,18 +393,18 @@ public class AWSInstanceService extends StatelessService {
                 getFailureConsumer(aws));
     }
 
-    private Consumer<Throwable> getFailureConsumer(AWSAllocationContext aws) {
+    private Consumer<Throwable> getFailureConsumer(AWSInstanceContext aws) {
         return (t) -> handleError(aws, t);
     }
 
     /*
      * method will retrieve disks for targeted image
      */
-    private void getVMDisks(AWSAllocationContext aws, AWSStages next) {
+    private void getVMDisks(AWSInstanceContext aws, AWSInstanceStage next) {
         if (aws.child.diskLinks == null || aws.child.diskLinks.size() == 0) {
             aws.error = new IllegalStateException(
                     "a minimum of 1 disk is required");
-            aws.stage = AWSStages.ERROR;
+            aws.stage = AWSInstanceStage.ERROR;
             handleAllocation(aws);
             return;
         }
@@ -530,7 +420,7 @@ public class AWSInstanceService extends StatelessService {
                             if (exc != null && exc.size() > 0) {
                                 aws.error = new IllegalStateException(
                                         "Error getting disk information", exc.get(0));
-                                aws.stage = AWSStages.ERROR;
+                                aws.stage = AWSInstanceStage.ERROR;
                                 handleAllocation(aws);
                                 return;
                             }
@@ -546,41 +436,7 @@ public class AWSInstanceService extends StatelessService {
         operationJoin.sendWith(this);
     }
 
-    /*
-     * method will retrieve firewalls for targeted image and set it to the primary NIC
-     */
-    private void getNICFirewallStates(AWSAllocationContext aws, AWSStages next) {
-        if (aws.nics.isEmpty() || aws.getVmPrimaryNic().nicStateWithDesc.firewallLinks == null) {
-            handleAllocation(aws, next);
-            return;
-        }
-
-        Stream<Operation> firewallOps = aws.getVmPrimaryNic().nicStateWithDesc.firewallLinks
-                .stream()
-                .map(link -> Operation.createGet(this.getHost(), link));
-
-        OperationJoin operationJoin = OperationJoin.create(firewallOps)
-                .setCompletion(
-                        (ops, exc) -> {
-                            if (exc != null && exc.size() > 0) {
-                                handleError(aws, new IllegalStateException(
-                                        "Error getting NIC Firewall States.", exc.get(0)));
-                                return;
-                            }
-
-                            for (Operation op : ops.values()) {
-                                FirewallState firewall = op.getBody(FirewallState.class);
-                                // Populate all NICs with same Firewall state.
-                                for (NicAllocationContext nicCtx : aws.nics) {
-                                    nicCtx.firewallStates.put(firewall.name, firewall);
-                                }
-                            }
-                            handleAllocation(aws, next);
-                        });
-        operationJoin.sendWith(this);
-    }
-
-    private void createInstance(AWSAllocationContext aws) {
+    private void createInstance(AWSInstanceContext aws) {
         if (aws.computeRequest.isMockRequest) {
             AdapterUtils.sendPatchToProvisioningTask(this,
                     aws.computeRequest.taskReference);
@@ -624,7 +480,7 @@ public class AWSInstanceService extends StatelessService {
         if (instanceType == null) {
             aws.error = new IllegalStateException(
                     "AWS Instance type not specified");
-            aws.stage = AWSStages.ERROR;
+            aws.stage = AWSInstanceStage.ERROR;
             handleAllocation(aws);
             return;
         }
@@ -647,7 +503,7 @@ public class AWSInstanceService extends StatelessService {
             } catch (UnsupportedEncodingException e) {
                 aws.error = new IllegalStateException(
                         "Error encoding user data");
-                aws.stage = AWSStages.ERROR;
+                aws.stage = AWSInstanceStage.ERROR;
                 handleAllocation(aws);
                 return;
             }
@@ -807,7 +663,7 @@ public class AWSInstanceService extends StatelessService {
                 amazonEC2Client, taskExpirationTimeMicros);
     }
 
-    private void deleteInstance(AWSAllocationContext aws) {
+    private void deleteInstance(AWSInstanceContext aws) {
 
         if (aws.computeRequest.isMockRequest) {
             AdapterUtils.sendPatchToProvisioningTask(this, aws.computeRequest.taskReference);
@@ -818,7 +674,7 @@ public class AWSInstanceService extends StatelessService {
         if (instanceId == null) {
             aws.error = new IllegalStateException(
                     "AWS InstanceId not available");
-            aws.stage = AWSStages.ERROR;
+            aws.stage = AWSInstanceStage.ERROR;
             handleAllocation(aws);
             return;
         }
@@ -902,7 +758,7 @@ public class AWSInstanceService extends StatelessService {
      * Simple helper method to get the region id from either the compute request or the child
      * description. The child description will be null during a credential validation operation.
      */
-    private String getRequestRegionId(AWSAllocationContext aws) {
+    private String getRequestRegionId(AWSInstanceContext aws) {
         String regionId;
         if (aws.child == null) {
             regionId = aws.computeRequest.regionId;
@@ -912,7 +768,7 @@ public class AWSInstanceService extends StatelessService {
         return regionId;
     }
 
-    private void validateAWSCredentials(final AWSAllocationContext aws) {
+    private void validateAWSCredentials(final AWSInstanceContext aws) {
         if (aws.computeRequest.isMockRequest || AWSUtils.isAwsClientMock()) {
             aws.adapterOperation.complete();
             return;

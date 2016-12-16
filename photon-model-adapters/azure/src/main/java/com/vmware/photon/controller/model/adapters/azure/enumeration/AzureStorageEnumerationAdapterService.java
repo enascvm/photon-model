@@ -53,7 +53,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
 import com.microsoft.azure.CloudException;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -71,6 +70,7 @@ import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.ContainerListingDetails;
 import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.rest.ServiceResponse;
+
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
@@ -384,14 +384,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         default:
             break;
         }
-    }
-
-    private Consumer<Throwable> getFailureConsumer(StorageEnumContext context) {
-        return (t) -> {
-            context.stage = EnumerationStages.ERROR;
-            context.error = t;
-            handleStorageEnumeration(context);
-        };
     }
 
     private void handleError(StorageEnumContext context, Throwable e) {
