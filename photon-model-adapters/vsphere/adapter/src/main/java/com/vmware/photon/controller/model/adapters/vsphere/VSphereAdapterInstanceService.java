@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
@@ -66,8 +67,8 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 public class VSphereAdapterInstanceService extends StatelessService {
 
     public static final String SELF_LINK = VSphereUriPaths.INSTANCE_SERVICE;
-    private static final int IP_CHECK_INTERVAL_SECONDS = 20;
-    private static final int IP_CHECK_ATTEMPT_COUNT = 10;
+    private static final int IP_CHECK_INTERVAL_SECONDS = 30;
+    private static final int IP_CHECK_TOTAL_WAIT_SECONDS = 10 * 60;
 
     @Override
     public void handlePatch(Operation op) {
@@ -231,21 +232,24 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
     private Runnable createCheckForIpTask(VSphereIOThreadPool pool,
             Operation taskFinisher,
-            ManagedObjectReference vm,
+            ManagedObjectReference vmRef,
             Connection connection,
             String computeLink) {
         return new Runnable() {
-            int attemptsLeft = IP_CHECK_ATTEMPT_COUNT - 1;
+            int attemptsLeft = IP_CHECK_TOTAL_WAIT_SECONDS / IP_CHECK_INTERVAL_SECONDS - 1;
 
             @Override
             public void run() {
                 String ip;
                 try {
                     GetMoRef get = new GetMoRef(connection);
-                    ip = get.entityProp(vm, VimPath.vm_summary_guest_ipAddress);
+                    // fetch enough to make guessPublicIpV4Address() work
+                    Map<String, Object> props = get.entityProps(vmRef, VimPath.vm_guest_net);
+                    VmOverlay vm = new VmOverlay(vmRef, props);
+                    ip = vm.guessPublicIpV4Address();
                 } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg e) {
                     log(Level.WARNING, "Error getting IP of vm %s, %s, aborting ",
-                            VimUtils.convertMoRefToString(vm),
+                            VimUtils.convertMoRefToString(vmRef),
                             computeLink);
                     // complete the task, IP could be assigned during next enumeration cycle
                     taskFinisher.sendWith(VSphereAdapterInstanceService.this);

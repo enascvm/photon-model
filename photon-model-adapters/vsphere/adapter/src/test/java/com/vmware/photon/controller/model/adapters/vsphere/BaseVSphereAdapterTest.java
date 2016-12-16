@@ -104,7 +104,8 @@ public class BaseVSphereAdapterTest {
         this.host.waitForServiceAvailable(ExampleService.FACTORY_LINK);
 
         // TODO: VSYM-992 - improve test/fix arbitrary timeout
-        this.host.setTimeoutSeconds(600);
+        // must be at least 10min as default timeout to get an IP is 10min
+        this.host.setTimeoutSeconds(15 * 60);
 
         try {
             PhotonModelServices.startServices(this.host);
