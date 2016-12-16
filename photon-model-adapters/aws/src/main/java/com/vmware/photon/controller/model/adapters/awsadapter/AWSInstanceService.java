@@ -69,7 +69,6 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -277,7 +276,8 @@ public class AWSInstanceService extends StatelessService {
 
                     @Override
                     public void onError(Exception e) {
-                        AWSInstanceService.this.handleError(aws, new IllegalStateException("Error obtaining AWS subnets.", e));
+                        AWSInstanceService.this.handleError(aws,
+                                new IllegalStateException("Error obtaining AWS subnets.", e));
                     }
 
                     @Override
@@ -290,7 +290,8 @@ public class AWSInstanceService extends StatelessService {
                             }
                             handleAllocation(aws, next);
                         } else {
-                            AWSInstanceService.this.handleError(aws, new IllegalStateException("Error obtaining AWS subnets."));
+                            AWSInstanceService.this.handleError(aws,
+                                    new IllegalStateException("Error obtaining AWS subnets."));
                         }
                     }
 
@@ -318,7 +319,8 @@ public class AWSInstanceService extends StatelessService {
 
                     @Override
                     public void onError(Exception e) {
-                        AWSInstanceService.this.handleError(aws, new IllegalStateException("Error obtaining VPC.", e));
+                        AWSInstanceService.this.handleError(aws,
+                                new IllegalStateException("Error obtaining VPC.", e));
                     }
 
                     @Override
@@ -375,7 +377,8 @@ public class AWSInstanceService extends StatelessService {
 
     /**
      * Get {@link NetworkState}s containing the {@link SubnetState}s
-     * {@link NetworkInterfaceState#subnetLink assigned} to the NICs.
+     * {@link com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState#subnetLink
+     * assigned} to the NICs.
      *
      * @see #getSubnetStates(AWSAllocation, AWSStages)
      */
@@ -406,7 +409,9 @@ public class AWSInstanceService extends StatelessService {
     }
 
     /**
-     * Get {@link SubnetState}s {@link NetworkInterfaceState#subnetLink assigned} to the NICs.
+     * Get {@link SubnetState}s
+     * {@link com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState#subnetLink
+     * assigned} to the NICs.
      */
     private void getNICSubnetStates(AWSAllocation aws, AWSStages next) {
         if (aws.nics.isEmpty()) {
@@ -539,7 +544,7 @@ public class AWSInstanceService extends StatelessService {
      * method will retrieve firewalls for targeted image and set it to the primary NIC
      */
     private void getNICFirewallStates(AWSAllocation aws, AWSStages next) {
-        if ( aws.nics.isEmpty() || aws.getVmPrimaryNic().nicStateWithDesc.firewallLinks == null ) {
+        if (aws.nics.isEmpty() || aws.getVmPrimaryNic().nicStateWithDesc.firewallLinks == null) {
             handleAllocation(aws, next);
             return;
         }
@@ -552,7 +557,8 @@ public class AWSInstanceService extends StatelessService {
                 .setCompletion(
                         (ops, exc) -> {
                             if (exc != null && exc.size() > 0) {
-                                handleError(aws, new IllegalStateException("Error getting NIC Firewall States.", exc.get(0)));
+                                handleError(aws, new IllegalStateException(
+                                        "Error getting NIC Firewall States.", exc.get(0)));
                                 return;
                             }
 
@@ -620,8 +626,13 @@ public class AWSInstanceService extends StatelessService {
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
                 .withImageId(imageId.toString()).withInstanceType(instanceType)
                 .withMinCount(1).withMaxCount(1)
-                .withMonitoring(true)
-                .withNetworkInterfaces(aws.getAWSNicSpecs());
+                .withMonitoring(true);
+
+        if (!aws.nics.isEmpty()) {
+            runInstancesRequest.withNetworkInterfaces(aws.getAWSNicSpecs());
+        } else {
+            runInstancesRequest.withSecurityGroupIds(getOrCreateSecurityGroups(null, aws));
+        }
 
         if (cloudConfig != null) {
             try {

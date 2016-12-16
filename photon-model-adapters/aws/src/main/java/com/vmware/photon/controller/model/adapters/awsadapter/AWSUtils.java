@@ -80,8 +80,8 @@ public class AWSUtils {
     public static final String NO_VALUE = "no-value";
     public static final String TILDA = "~";
     private static final int EXECUTOR_SHUTDOWN_INTERVAL_MINUTES = 5;
-    public static final String DEFAULT_SECURITY_GROUP_NAME = "cell-manager-security-group";
-    public static final String DEFAULT_SECURITY_GROUP_DESC = "VMware Cell Manager security group";
+    public static final String DEFAULT_SECURITY_GROUP_NAME = "photon-model-sg";
+    public static final String DEFAULT_SECURITY_GROUP_DESC = "VMware Photon model security group";
     public static final int[] DEFAULT_ALLOWED_PORTS = { 22, 443, 80, 8080,
             2376, 2375, 1 };
     public static final String DEFAULT_ALLOWED_NETWORK = "0.0.0.0/0";
