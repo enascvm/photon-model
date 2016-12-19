@@ -47,6 +47,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootCo
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
+import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayUpdateOperation;
 import com.vmware.vim25.FileAlreadyExists;
@@ -144,18 +145,26 @@ public class InstanceClient extends BaseHelper {
         this.get = new GetMoRef(this.connection);
     }
 
-    public ComputeState createInstanceFromTemplate(ManagedObjectReference template)
-            throws Exception {
+    public ComputeState createInstanceFromTemplate(ManagedObjectReference template) throws Exception {
         ManagedObjectReference vm = cloneVm(template);
 
         VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
-        if (populateCloudConfig(spec)) {
-            ManagedObjectReference task = getVimPort().reconfigVMTask(vm, spec);
-            TaskInfo info = waitTaskEnd(task);
 
-            if (info.getState() == TaskInfoState.ERROR) {
-                return VimUtils.rethrow(info.getError());
-            }
+        // even though this is a clone, hw config from the compute resource
+        // is takes precedence
+        spec.setNumCPUs((int) this.state.description.cpuCount);
+        spec.setGuestId(VirtualMachineGuestOsIdentifier.OTHER_GUEST_64.value());
+        spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
+
+        // set ovf environment
+        ArrayOfVAppPropertyInfo infos = this.get.entityProp(vm, VimPath.vm_config_vAppConfig_property);
+        populateCloudConfig(spec, infos);
+
+        ManagedObjectReference task = getVimPort().reconfigVMTask(vm, spec);
+        TaskInfo info = waitTaskEnd(task);
+
+        if (info.getState() == TaskInfoState.ERROR) {
+            return VimUtils.rethrow(info.getError());
         }
 
         if (vm == null) {
@@ -274,7 +283,7 @@ public class InstanceClient extends BaseHelper {
 
         URI archiveUri = cust.getUri(OvfParser.PROP_OVF_ARCHIVE_URI);
         if (archiveUri != null) {
-            logger.info("Prefer ova {} uri to ovf {}",  archiveUri, ovfUri);
+            logger.info("Prefer ova {} uri to ovf {}", archiveUri, ovfUri);
             OvfRetriever retriever = deployer.getRetriever();
             ovfUri = retriever.downloadIfOva(archiveUri);
         }
@@ -695,7 +704,7 @@ public class InstanceClient extends BaseHelper {
         String datastoreName = this.get.entityProp(datastore, "name");
         VirtualMachineConfigSpec spec = buildVirtualMachineConfigSpec(datastoreName);
 
-        populateCloudConfig(spec);
+        populateCloudConfig(spec, null);
         ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool, host);
 
         TaskInfo info = waitTaskEnd(vmTask);
@@ -716,57 +725,90 @@ public class InstanceClient extends BaseHelper {
     /**
      * Puts the cloud-config user data in the OVF environment
      * @param spec
+     * @param currentProps
      */
-    private boolean populateCloudConfig(VirtualMachineConfigSpec spec) {
+    private boolean populateCloudConfig(VirtualMachineConfigSpec spec, ArrayOfVAppPropertyInfo currentProps) {
         if (this.disks == null || this.disks.size() == 0) {
             return false;
         }
 
-        DiskState bootDisk = this.disks.stream().filter(d -> d.type == DiskType.HDD)
-                .findFirst().orElse(null);
+        DiskState bootDisk = this.disks.stream()
+                .filter(d -> d.type == DiskType.HDD)
+                .findFirst()
+                .orElse(null);
 
         if (bootDisk == null) {
             return false;
         }
 
         boolean customizationsApplied = false;
+        int nextKey = 1;
+        if (currentProps != null) {
+            nextKey = currentProps.getVAppPropertyInfo().stream()
+                    .mapToInt(VAppPropertyInfo::getKey)
+                    .max()
+                    .orElse(1);
+        }
 
-        VmConfigSpec vapp = new VmConfigSpec();
-        vapp.getOvfEnvironmentTransport().add(OvfDeployer.TRANSPORT_ISO);
+        VmConfigSpec configSpec = new VmConfigSpec();
+        configSpec.getOvfEnvironmentTransport().add(OvfDeployer.TRANSPORT_ISO);
 
         String cloudConfig = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_USER_DATA);
         if (cloudConfig != null) {
-            VAppPropertySpec property = new VAppPropertySpec();
-            property.setOperation(ArrayUpdateOperation.ADD);
-            VAppPropertyInfo userDataInfo = new VAppPropertyInfo();
-            userDataInfo.setType("string");
-            userDataInfo.setUserConfigurable(true);
-            userDataInfo.setId(CLOUD_CONFIG_PROPERTY_USER_DATA);
+            VAppPropertySpec propertySpec = new VAppPropertySpec();
+
+            VAppPropertyInfo userDataInfo = null;
+            if (currentProps != null) {
+                userDataInfo = currentProps.getVAppPropertyInfo().stream()
+                        .filter(p -> p.getId().equals(CLOUD_CONFIG_PROPERTY_USER_DATA))
+                        .findFirst()
+                        .orElse(null);
+            }
+            if (userDataInfo != null) {
+                propertySpec.setOperation(ArrayUpdateOperation.EDIT);
+            } else {
+                userDataInfo = new VAppPropertyInfo();
+                userDataInfo.setId(CLOUD_CONFIG_PROPERTY_USER_DATA);
+                userDataInfo.setType("string");
+                userDataInfo.setKey(nextKey++);
+                propertySpec.setOperation(ArrayUpdateOperation.ADD);
+            }
             userDataInfo.setValue(Base64.getEncoder().encodeToString(cloudConfig.getBytes()));
-            property.setInfo(userDataInfo);
-            vapp.getProperty().add(property);
+
+            propertySpec.setInfo(userDataInfo);
+            configSpec.getProperty().add(propertySpec);
             customizationsApplied = true;
         }
 
         String publicKeys = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
         if (publicKeys != null) {
-            VAppPropertySpec property = new VAppPropertySpec();
-            property.setOperation(ArrayUpdateOperation.ADD);
-            VAppPropertyInfo publicKeysInfo = new VAppPropertyInfo();
-            if (customizationsApplied) {
-                publicKeysInfo.setKey(1);
+            VAppPropertySpec propertySpec = new VAppPropertySpec();
+
+            VAppPropertyInfo sshKeyInfo = null;
+            if (currentProps != null) {
+                sshKeyInfo = currentProps.getVAppPropertyInfo().stream()
+                        .filter(p -> p.getId().equals(CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS))
+                        .findFirst()
+                        .orElse(null);
             }
-            publicKeysInfo.setType("string");
-            publicKeysInfo.setUserConfigurable(true);
-            publicKeysInfo.setId(CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
-            publicKeysInfo.setValue(publicKeys);
-            property.setInfo(publicKeysInfo);
-            vapp.getProperty().add(property);
+            if (sshKeyInfo != null) {
+                propertySpec.setOperation(ArrayUpdateOperation.EDIT);
+            } else {
+                sshKeyInfo = new VAppPropertyInfo();
+                sshKeyInfo.setType("string");
+                sshKeyInfo.setId(CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
+                sshKeyInfo.setKey(nextKey++);
+                propertySpec.setOperation(ArrayUpdateOperation.ADD);
+            }
+            sshKeyInfo.setValue(publicKeys);
+
+            propertySpec.setInfo(sshKeyInfo);
+            configSpec.getProperty().add(propertySpec);
             customizationsApplied = true;
         }
 
         if (customizationsApplied) {
-            spec.setVAppConfig(vapp);
+            spec.setVAppConfig(configSpec);
         }
 
         return customizationsApplied;

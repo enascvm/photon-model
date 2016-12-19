@@ -66,12 +66,10 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
     // password is 123456
     private static final String SIMPLE_USER_DATA =
             "#cloud-config\n"
-                    + "---\n"
-                    + "users:\n"
-                    + "  - name: \"photon-model\"\n"
-                    + "    passwd: \"$1$tNRvQQ/2$iUotEMQkP5kEivG0tvT9c1\"\n"
-                    + "    groups:\n"
-                    + "      - \"sudo\"\n";
+            + "\n"
+            + "write_files:\n"
+            + "- path: /tmp/hello.txt\n"
+            + "  content: \"world\"\n";
 
     // fields that are used across method calls, stash them as private fields
     private ResourcePoolState resourcePool;
