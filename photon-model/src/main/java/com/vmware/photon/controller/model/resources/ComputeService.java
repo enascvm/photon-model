@@ -91,6 +91,7 @@ public class ComputeService extends StatefulService {
         public static final String FIELD_NAME_PARENT_LINK = "parentLink";
         public static final String FIELD_NAME_LIFECYCLE_STATE = "lifecycleState";
         public static final String FIELD_NAME_NETWORK_LINKS = "networkInterfaceLinks";
+        public static final String FIELD_NAME_DISK_LINKS = "diskLinks";
 
         /**
          * URI reference to corresponding ComputeDescription.

@@ -448,13 +448,17 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         Occurance.MUST_NOT_OCCUR)
                 .build();
 
+        // fetch compute resources with their links
         QueryTask task = QueryTask.Builder.createDirectTask()
+                .addLinkTerm(ComputeState.FIELD_NAME_NETWORK_LINKS)
+                .addLinkTerm(ComputeState.FIELD_NAME_DISK_LINKS)
+                .addOption(QueryOption.SELECT_LINKS)
                 .setQuery(q)
                 .build();
 
         QueryUtils.startQueryTask(this, task).whenComplete((result, e) -> {
             if (e != null) {
-                // it's to harsh to fail the task because of failed GC, next time it may pass
+                // it's too harsh to fail the task because of failed GC, next time it may pass
                 logSevere(e);
                 mgr.patchTask(TaskStage.FINISHED);
                 return;
@@ -463,6 +467,14 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             if (result.results.documentLinks == null || result.results.documentLinks.isEmpty()) {
                 mgr.patchTask(TaskStage.FINISHED);
                 return;
+            }
+
+            if (!request.preserveMissing) {
+                // delete dependent resources without waiting for response
+                for (String diskOrNicLink : result.results.selectedLinks) {
+                    Operation.createDelete(getHost(), diskOrNicLink)
+                            .sendWith(this);
+                }
             }
 
             Stream<Operation> gcOps = result.results.documentLinks.stream()
