@@ -88,7 +88,6 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         this.subnet.domain = "local";
         this.subnet.subnetCIDR = "10.0.0.0/24";
 
-
         // Create a resource pool where the VM will be housed
         this.resourcePool = createResourcePool();
         this.auth = createAuth();
@@ -132,8 +131,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
     protected String findPortGroup(String name) throws Throwable {
         Query q = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
-                .addFieldClause(QuerySpecification
-                                .buildCompositeFieldName(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE),
+                .addCompositeFieldClause(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE,
                         VimNames.TYPE_PORTGROUP)
                 .addFieldClause(NetworkState.FIELD_NAME_NAME, name)
                 .build();
@@ -259,7 +257,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
     private ComputeDescription createVmDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
-        computeDesc.id = getVmName();
+        computeDesc.id = nextName("vm");
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils
@@ -309,9 +307,5 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
-    }
-
-    private String getVmName() {
-        return "vm-" + String.valueOf(System.currentTimeMillis());
     }
 }

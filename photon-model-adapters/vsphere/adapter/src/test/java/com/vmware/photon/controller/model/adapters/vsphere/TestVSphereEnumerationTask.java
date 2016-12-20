@@ -18,7 +18,6 @@ import static org.junit.Assert.assertEquals;
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.junit.Test;
@@ -39,12 +38,10 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.R
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
@@ -54,6 +51,7 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
     private ComputeDescription computeHostDescription;
+
     private ComputeState computeHost;
 
     @Test
@@ -113,27 +111,24 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
     private ComputeState findRandomVm()
             throws InterruptedException, TimeoutException, ExecutionException {
-        QuerySpecification qs = new QuerySpecification();
-        qs.options.add(QueryOption.EXPAND_CONTENT);
+        Query q = Query.Builder.create()
+                .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE, VimNames.TYPE_VM)
+                .addKindFieldClause(ComputeState.class)
+                .build();
 
-        qs.query.addBooleanClause(
-                Query.Builder.create()
-                        .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                                CustomProperties.TYPE, VimNames.TYPE_VM)
-                        .addFieldClause(ServiceDocument.FIELD_NAME_KIND,
-                                Utils.buildKind(ComputeState.class))
-                        .build());
-        QueryTask qt = QueryTask.create(qs).setDirect(true);
+        QueryTask qt = QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .build();
 
         Operation op = Operation
                 .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
                 .setBody(qt);
 
-        QueryTask result = this.host.sendWithFuture(op).thenApply(o -> o.getBody(QueryTask.class))
-                .get(10, TimeUnit.SECONDS);
+        QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);
 
-        return Utils
-                .fromJson(result.results.documents.values().iterator().next(), ComputeState.class);
+        Object firstResult = result.results.documents.values().iterator().next();
+        return Utils.fromJson(firstResult, ComputeState.class);
     }
 
     private void doRefresh() throws Throwable {

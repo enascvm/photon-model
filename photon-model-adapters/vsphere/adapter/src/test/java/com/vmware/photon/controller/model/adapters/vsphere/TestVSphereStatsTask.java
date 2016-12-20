@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.EnumSet;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
@@ -112,7 +111,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
      */
     private ComputeState createComputeHost() throws Throwable {
         ComputeState computeState = new ComputeState();
-        computeState.id = UUID.randomUUID().toString();
+        computeState.id = nextName("host");
         computeState.name = this.computeHostDescription.name;
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;

@@ -19,6 +19,8 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URI;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -27,6 +29,8 @@ import java.util.concurrent.ExecutionException;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -59,6 +63,7 @@ import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.QueryResultsProcessor;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.StatefulService;
@@ -95,6 +100,9 @@ public class BaseVSphereAdapterTest {
     protected ResourcePoolState resourcePool;
     public NetworkInterfaceDescription nicDescription;
     public SubnetState subnet;
+
+    @Rule
+    public TestName testName = new TestName();
 
     @Before
     public void setUp() throws Throwable {
@@ -376,14 +384,13 @@ public class BaseVSphereAdapterTest {
                 Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
                         .setBody(qt));
 
-        qt = result.getBody(QueryTask.class);
-        if (qt.results.documents.isEmpty()) {
+        QueryResultsProcessor rp = QueryResultsProcessor.create(result);
+        if (!rp.hasResults()) {
             throw new IllegalStateException(
                     "Nothing found for " + Utils.toJsonHtml(q) + ". Expected at least one result");
         }
 
-        // TODO rewrite using QueryResultsProcessor
-        return Utils.fromJson(qt.results.documents.values().iterator().next(), type);
+        return rp.streamDocuments(type).findFirst().orElse(null);
     }
 
     protected String createNic(String name, String networkLink) throws Throwable {
@@ -414,5 +421,25 @@ public class BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host, NetworkInterfaceService.FACTORY_LINK));
 
         return nic.documentSelfLink;
+    }
+
+    protected String nextName() {
+        return nextName(null);
+    }
+
+    /**
+     * Returns a unique mnemonic string.
+     * @param prefix
+     * @return
+     */
+    protected String nextName(String prefix) {
+        if (prefix == null || prefix.length() == 0) {
+            prefix = "";
+        } else {
+            prefix = prefix + "-";
+        }
+
+        String now = DateTimeFormatter.ofPattern("D_HH_mm_ssSSS").format(LocalDateTime.now());
+        return prefix + System.getProperty("user.name") + "-" + now;
     }
 }

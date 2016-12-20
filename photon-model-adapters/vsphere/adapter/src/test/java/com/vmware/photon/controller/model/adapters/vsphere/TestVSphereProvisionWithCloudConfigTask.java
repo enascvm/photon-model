@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.io.IOUtils;
@@ -46,13 +45,11 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.R
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
@@ -66,10 +63,10 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
     // password is 123456
     private static final String SIMPLE_USER_DATA =
             "#cloud-config\n"
-            + "\n"
-            + "write_files:\n"
-            + "- path: /tmp/hello.txt\n"
-            + "  content: \"world\"\n";
+                    + "\n"
+                    + "write_files:\n"
+                    + "- path: /tmp/hello.txt\n"
+                    + "  content: \"world\"\n";
 
     // fields that are used across method calls, stash them as private fields
     private ResourcePoolState resourcePool;
@@ -110,26 +107,25 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
     private ComputeState findTemplate()
             throws InterruptedException, ExecutionException, TimeoutException {
         String templateVmName = System.getProperty("vc.templateVmName");
-        QuerySpecification qs = new QuerySpecification();
-        qs.options.add(QueryOption.EXPAND_CONTENT);
 
-        qs.query.addBooleanClause(
-                Query.Builder.create()
-                        .addFieldClause(ComputeState.FIELD_NAME_NAME, templateVmName)
-                        .addFieldClause(ServiceDocument.FIELD_NAME_KIND,
-                                Utils.buildKind(ComputeState.class))
-                        .build());
-        QueryTask qt = QueryTask.create(qs).setDirect(true);
+        Query q = Query.Builder.create()
+                .addFieldClause(ComputeState.FIELD_NAME_NAME, templateVmName)
+                .addKindFieldClause(ComputeState.class)
+                .build();
+
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .setQuery(q)
+                .build();
 
         Operation op = Operation
                 .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
-                .setBody(qt);
+                .setBody(task);
 
-        QueryTask result = this.host.sendWithFuture(op).thenApply(o -> o.getBody(QueryTask.class))
-                .get(10, TimeUnit.SECONDS);
+        QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);
 
-        return Utils
-                .fromJson(result.results.documents.values().iterator().next(), ComputeState.class);
+        Object firstResult = result.results.documents.values().iterator().next();
+        return Utils.fromJson(firstResult, ComputeState.class);
     }
 
     private void doRefresh() throws Throwable {
@@ -207,7 +203,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
     private ComputeDescription createVmDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
-        computeDesc.id = getVmName();
+        computeDesc.id = nextName("vm");
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils
@@ -242,7 +238,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
     private ComputeDescription createComputeHostDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
-        computeDesc.id = UUID.randomUUID().toString();
+        computeDesc.id = nextName("host");
         computeDesc.name = computeDesc.id;
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
@@ -257,9 +253,5 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
-    }
-
-    private String getVmName() {
-        return "vm-" + String.valueOf(System.currentTimeMillis());
     }
 }

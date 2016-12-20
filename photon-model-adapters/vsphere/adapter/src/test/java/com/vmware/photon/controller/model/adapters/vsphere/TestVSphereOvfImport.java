@@ -13,13 +13,11 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
 
@@ -34,7 +32,6 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
@@ -67,23 +64,22 @@ public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
                 .setBody(req)
                 .setReferer(this.host.getPublicUri());
 
-        CompletableFuture<Operation> f = this.host.sendWithFuture(op);
-        f.get(30, TimeUnit.SECONDS);
+        op = this.host.waitForResponse(op);
+        assertEquals(Operation.STATUS_CODE_OK, op.getStatusCode());
 
-        QuerySpecification qs = new QuerySpecification();
-        qs.query.addBooleanClause(
-                Query.Builder.create()
-                        .addFieldClause(ComputeState.FIELD_NAME_ID, "ovf-", MatchType.PREFIX)
-                        .build());
-        QueryTask qt = QueryTask.create(qs).setDirect(true);
+        Query q = Query.Builder.create()
+                .addFieldClause(ComputeState.FIELD_NAME_ID, "ovf-", MatchType.PREFIX)
+                .build();
+        QueryTask task = QueryTask.Builder.createDirectTask()
+                .setQuery(q)
+                .build();
 
         op = Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
-                .setBody(qt);
+                .setBody(task);
 
-        QueryTask result = this.host.sendWithFuture(op).thenApply(o -> o.getBody(QueryTask.class))
-                .get(10, TimeUnit.SECONDS);
+        task = this.host.waitForResponse(op).getBody(QueryTask.class);
 
-        assertTrue(result.results.documentLinks.size() > 5);
+        assertTrue(task.results.documentLinks.size() > 5);
 
         snapshotFactoryState("ovf", ComputeDescriptionService.class);
     }
@@ -93,7 +89,7 @@ public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
      */
     private ComputeState createComputeHost() throws Throwable {
         ComputeState computeState = new ComputeState();
-        computeState.id = UUID.randomUUID().toString();
+        computeState.id = nextName("vm");
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;

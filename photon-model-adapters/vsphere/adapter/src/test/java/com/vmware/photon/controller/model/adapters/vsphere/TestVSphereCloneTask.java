@@ -51,7 +51,6 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
@@ -227,7 +226,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         Query q = Builder.create()
                 .addFieldClause(ServiceDocument.FIELD_NAME_KIND,
                         Utils.buildKind(NetworkState.class))
-                .addFieldClause(QuerySpecification.buildCompositeFieldName(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE),
+                .addCompositeFieldClause(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE,
                         VimNames.TYPE_NETWORK)
                 .build();
 
@@ -267,7 +266,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
     private ComputeDescription createVmDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
-        computeDesc.id = "vm-" + String.valueOf(System.currentTimeMillis());
+        computeDesc.id = nextName("vm");
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils

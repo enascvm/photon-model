@@ -166,7 +166,7 @@ public class VSphereProvisioningTestSuite {
         private ComputeDescription createVmDescription() throws Throwable {
             ComputeDescription computeDesc = new ComputeDescription();
 
-            computeDesc.id = getVmName();
+            computeDesc.id = nextName("vm");
             computeDesc.documentSelfLink = computeDesc.id;
             computeDesc.supportedChildren = new ArrayList<>();
             computeDesc.instanceAdapterReference = UriUtils
@@ -196,10 +196,6 @@ public class VSphereProvisioningTestSuite {
             } else {
                 return URI.create(diskUri);
             }
-        }
-
-        private String getVmName() {
-            return "vm-" + String.valueOf(System.currentTimeMillis());
         }
     }
 

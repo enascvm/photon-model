@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -132,7 +131,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
     private ComputeState createVmState(String descriptionLink) throws Throwable {
         ComputeState computeState = new ComputeState();
-        computeState.id = computeState.name = "from-ovf-" + UUID.randomUUID();
+        computeState.id = computeState.name = nextName("from-ovf");
         computeState.documentSelfLink = computeState.id;
         computeState.descriptionLink = descriptionLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
