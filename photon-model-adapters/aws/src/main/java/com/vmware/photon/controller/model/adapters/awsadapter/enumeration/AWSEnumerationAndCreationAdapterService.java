@@ -53,6 +53,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumeratio
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -506,6 +507,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             computeState.parentLink = this.context.parentCompute.documentSelfLink;
             computeState.resourcePoolLink = this.context.computeEnumerationRequest.resourcePoolLink;
             computeState.descriptionLink = cd.documentSelfLink;
+            computeState.type = ComputeType.VM_HOST;
 
             computeState.powerState = PowerState.ON;
 
