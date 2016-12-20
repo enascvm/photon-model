@@ -187,6 +187,7 @@ public class OvfDeployer extends BaseHelper {
         // only the guestInfo is enabled by default
         VmConfigSpec spec = new VmConfigSpec();
         spec.getOvfEnvironmentTransport().add(TRANSPORT_GUESTINFO);
+        spec.getOvfEnvironmentTransport().add(TRANSPORT_ISO);
         VirtualMachineConfigSpec reconfig = new VirtualMachineConfigSpec();
         reconfig.setVAppConfig(spec);
 

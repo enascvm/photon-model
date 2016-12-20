@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -57,9 +58,9 @@ public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskServic
 
         public ServiceTaskCallback<E> serviceTaskCallback;
 
-        public Set<ResourceOperationResponse> failures;
+        public Set<ResourceOperationResponse> failures = new HashSet<>();
 
-        public Set<ResourceOperationResponse> completed;
+        public Set<ResourceOperationResponse> completed = new HashSet<>();
 
         /**
          * Tenant links.

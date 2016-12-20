@@ -161,9 +161,9 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
                 return false;
             }
             ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
-            if (TaskState.isFailed(response.taskState)) {
+            if (TaskState.isFailed(response.taskInfo)) {
                 ctx.failIteration(
-                        new IllegalStateException(response.taskState.failure.message));
+                        new IllegalStateException(response.taskInfo.failure.message));
             } else {
                 ctx.completeIteration();
             }

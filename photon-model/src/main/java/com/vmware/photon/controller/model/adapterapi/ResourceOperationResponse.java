@@ -26,7 +26,7 @@ public class ResourceOperationResponse {
 
     public String resourceLink;
 
-    public TaskState taskState;
+    public TaskState taskInfo;
 
     public String documentKind = KIND;
 
@@ -45,15 +45,15 @@ public class ResourceOperationResponse {
     public static ResourceOperationResponse fail(String resourceLink,
             ServiceErrorResponse error) {
         ResourceOperationResponse r = response(resourceLink, TaskStage.FAILED);
-        r.taskState.failure = error;
+        r.taskInfo.failure = error;
         return r;
     }
 
     private static ResourceOperationResponse response(String resourceLink, TaskStage stage) {
         ResourceOperationResponse r = new ResourceOperationResponse();
         r.resourceLink = resourceLink;
-        r.taskState = new TaskState();
-        r.taskState.stage = stage;
+        r.taskInfo = new TaskState();
+        r.taskInfo.stage = stage;
         return r;
     }
 }
