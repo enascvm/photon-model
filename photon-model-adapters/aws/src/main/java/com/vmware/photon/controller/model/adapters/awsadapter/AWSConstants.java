@@ -104,7 +104,6 @@ public class AWSConstants {
     public static final String UNIT_BYTES = "Bytes";
     public static final String UNIT_PERCENT = "Percent";
     public static final String UNIT_COST = "USD";
-    public static final int ONE_SECOND_IN_MILLISECONDS = 1000;
 
     public static final String WINDOWS_PLATFORM = "windows";
 

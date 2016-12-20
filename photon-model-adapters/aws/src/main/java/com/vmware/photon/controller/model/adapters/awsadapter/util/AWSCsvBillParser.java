@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -253,7 +254,15 @@ public class AWSCsvBillParser {
     private void setBillProcessedTime(AwsAccountDetailDto accountDetails,
             Long millisForBillHour) {
         if (millisForBillHour > accountDetails.billProcessedTimeMillis) {
-            accountDetails.billProcessedTimeMillis = millisForBillHour;
+            // TODO gjobin: Re-align the bill processed time once the aggregation window moves
+            // to start time instead of the current end-time
+            // Need to subtract a small amount of time from the bill processed time
+            // since this time is being incremented by an hour when stats are aggregated
+            // leading to the cost becoming a metric of the next month (since
+            // the billProcessedTime for the past months is the last hour of the last day
+            // of the month.
+            accountDetails.billProcessedTimeMillis =
+                    millisForBillHour - TimeUnit.SECONDS.toMillis(1);
         }
     }
 
