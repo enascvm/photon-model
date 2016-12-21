@@ -36,12 +36,12 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Tag;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
@@ -52,7 +52,6 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
@@ -90,18 +89,17 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Data holder for information related a compute state that needs to be created in the local
-     * system.
-     *
+     * Request accepted by this service to trigger create or update of Compute states
+     * representing compute instances in Amazon.
      */
-    public static class AWSComputeStateForCreation {
+    public static class AWSComputeStateCreationRequest {
         public List<Instance> instancesToBeCreated;
         public Map<String, Instance> instancesToBeUpdated;
         public Map<String, ComputeState> computeStatesToBeUpdated;
-        // Map AWS VPC id to network state link for the discovered VPCs
-        public Map<String, String> vpcs;
-        // Map AWS Subnet id to subnet state link for the discovered Subnets
-        public Map<String, String> subnets;
+        /**
+         * Discovered/Enumerated networks in Amazon.
+         */
+        public AWSNetworkEnumerationResponse enumeratedNetworks;
         public Map<String, ZoneData> zones;
         public String resourcePoolLink;
         public String parentComputeLink;
@@ -117,26 +115,21 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      * list of compute states that will be persisted in the system.
      *
      */
-    public static class AWSComputeServiceCreationContext {
-        public AmazonEC2AsyncClient amazonEC2Client;
-        public AWSComputeStateForCreation computeState;
+    private static class AWSComputeStateCreationContext {
+        public AWSComputeStateCreationRequest request;
         public List<Operation> enumerationOperations;
-        public int instanceToBeCreatedCounter = 0;
         public AWSComputeStateCreationStage creationStage;
         // Holds the mapping between the instanceType (t2.micro etc) and the document self link to
         // that compute description.
         public Map<InstanceDescKey, String> computeDescriptionMap;
-        // Map for local network states. The key is the vpc-id.
-        public Map<String, NetworkState> localNetworkStateMap;
         // Cached operation to signal completion to the AWS instance adapter once all the compute
         // states are successfully created.
         public Operation awsAdapterOperation;
 
-        public AWSComputeServiceCreationContext(AWSComputeStateForCreation computeState,
+        public AWSComputeStateCreationContext(AWSComputeStateCreationRequest request,
                 Operation op) {
-            this.computeState = computeState;
+            this.request = request;
             this.enumerationOperations = new ArrayList<Operation>();
-            this.localNetworkStateMap = new HashMap<String, NetworkState>();
             this.computeDescriptionMap = new HashMap<>();
             this.creationStage = AWSComputeStateCreationStage.GET_RELATED_COMPUTE_DESCRIPTIONS;
             this.awsAdapterOperation = op;
@@ -157,8 +150,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        AWSComputeStateForCreation cs = op.getBody(AWSComputeStateForCreation.class);
-        AWSComputeServiceCreationContext context = new AWSComputeServiceCreationContext(cs, op);
+        AWSComputeStateCreationRequest cs = op.getBody(AWSComputeStateCreationRequest.class);
+        AWSComputeStateCreationContext context = new AWSComputeStateCreationContext(cs, op);
         if (cs.isMock) {
             op.complete();
         }
@@ -173,7 +166,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      *            The local service context that has all the information needed to create the
      *            additional compute states in the local system.
      */
-    private void handleComputeStateCreateOrUpdate(AWSComputeServiceCreationContext context) {
+    private void handleComputeStateCreateOrUpdate(AWSComputeStateCreationContext context) {
         switch (context.creationStage) {
         case GET_RELATED_COMPUTE_DESCRIPTIONS:
             getRelatedComputeDescriptions(context,
@@ -201,14 +194,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     private void createTags(
-            AWSComputeServiceCreationContext context,
+            AWSComputeStateCreationContext context,
             AWSComputeStateCreationStage next) {
         // Get all tags from the instances to be created and the instances to be updated
-        Set<Tag> create = context.computeState.instancesToBeCreated.stream()
+        Set<Tag> create = context.request.instancesToBeCreated.stream()
                 .flatMap(i -> i.getTags().stream())
                 .collect(Collectors.toSet());
 
-        Set<Tag> update = context.computeState.instancesToBeUpdated.values().stream()
+        Set<Tag> update = context.request.instancesToBeUpdated.values().stream()
                 .flatMap(i -> i.getTags().stream())
                 .collect(Collectors.toSet());
 
@@ -221,7 +214,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // tags, so filter them out
         List<Operation> operations = allTags.stream()
                 .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                .map(t -> mapTagToTagState(t, context.computeState.tenantLinks))
+                .map(t -> mapTagToTagState(t, context.request.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
                         .setBody(tagState))
                 .collect(Collectors.toList());
@@ -246,14 +239,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      * Looks up the compute descriptions associated with the compute states to be created in the
      * system.
      */
-    private void getRelatedComputeDescriptions(AWSComputeServiceCreationContext context,
+    private void getRelatedComputeDescriptions(AWSComputeStateCreationContext context,
             AWSComputeStateCreationStage next) {
         // Get the related compute descriptions for all the compute states are to be updated and
         // created.
         Set<InstanceDescKey> representativeCDSet = getRepresentativeListOfCDsFromInstanceList(
-                context.computeState.instancesToBeCreated, context.computeState.zones);
+                context.request.instancesToBeCreated, context.request.zones);
         representativeCDSet.addAll(getRepresentativeListOfCDsFromInstanceList(
-                context.computeState.instancesToBeUpdated.values(), context.computeState.zones));
+                context.request.instancesToBeUpdated.values(), context.request.zones));
 
         if (representativeCDSet.isEmpty()) {
             context.creationStage = next;
@@ -263,9 +256,9 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
         QueryTask queryTask = getCDsRepresentingVMsInLocalSystemCreatedByEnumerationQuery(
                 representativeCDSet,
-                context.computeState.tenantLinks,
-                this, context.computeState.parentTaskLink,
-                context.computeState.regionId);
+                context.request.tenantLinks,
+                this, context.request.parentTaskLink,
+                context.request.regionId);
         queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QUERY_TASK_EXPIRY_MICROS;
 
         // create the query to find an existing compute description
@@ -299,30 +292,30 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     /**
      * Method to create Compute States associated with the instances received from the AWS host.
      */
-    private void populateOperations(AWSComputeServiceCreationContext context,
+    private void populateOperations(AWSComputeStateCreationContext context,
             AWSComputeStateCreationStage next) {
-        if (context.computeState.instancesToBeCreated == null
-                || context.computeState.instancesToBeCreated.size() == 0) {
+        if (context.request.instancesToBeCreated == null
+                || context.request.instancesToBeCreated.size() == 0) {
             logInfo("No instances need to be created in the local system");
         } else {
             logInfo("Need to create %d compute states in the local system",
-                    context.computeState.instancesToBeCreated.size());
-            for (int i = 0; i < context.computeState.instancesToBeCreated.size(); i++) {
+                    context.request.instancesToBeCreated.size());
+            for (int i = 0; i < context.request.instancesToBeCreated.size(); i++) {
                 populateComputeStateAndNetworksForCreation(context,
-                        context.computeState.instancesToBeCreated.get(i));
+                        context.request.instancesToBeCreated.get(i));
             }
         }
-        if (context.computeState.instancesToBeUpdated == null
-                || context.computeState.instancesToBeUpdated.size() == 0) {
+        if (context.request.instancesToBeUpdated == null
+                || context.request.instancesToBeUpdated.size() == 0) {
             logInfo("No instances need to be updated in the local system");
         } else {
             logInfo("Need to update %d compute states in the local system",
-                    context.computeState.instancesToBeUpdated.size());
-            for (String instanceId : context.computeState.instancesToBeUpdated
+                    context.request.instancesToBeUpdated.size());
+            for (String instanceId : context.request.instancesToBeUpdated
                     .keySet()) {
                 populateComputeStateAndNetworksForUpdates(context,
-                        context.computeState.instancesToBeUpdated.get(instanceId),
-                        context.computeState.computeStatesToBeUpdated.get(instanceId));
+                        context.request.instancesToBeUpdated.get(instanceId),
+                        context.request.computeStatesToBeUpdated.get(instanceId));
             }
         }
         context.creationStage = next;
@@ -335,24 +328,24 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      * operation for posting it.
      */
     private void populateComputeStateAndNetworksForCreation(
-            AWSComputeServiceCreationContext context,
+            AWSComputeStateCreationContext context,
             Instance instance) {
         String zoneId = instance.getPlacement().getAvailabilityZone();
-        ZoneData zoneData = context.computeState.zones.get(zoneId);
+        ZoneData zoneData = context.request.zones.get(zoneId);
         String regionId = zoneData.regionId;
 
         InstanceDescKey descKey = InstanceDescKey.build(regionId, zoneId,
                 instance.getInstanceType());
 
         ComputeService.ComputeState computeState = mapInstanceToComputeState(instance,
-                context.computeState.parentComputeLink, zoneData.computeLink,
-                context.computeState.resourcePoolLink,
+                context.request.parentComputeLink, zoneData.computeLink,
+                context.request.resourcePoolLink,
                 context.computeDescriptionMap.get(descKey),
-                context.computeState.tenantLinks);
+                context.request.tenantLinks);
 
         // Create operations
         List<Operation> networkOperations = mapInstanceIPAddressToNICCreationOperations(
-                instance, computeState, context.computeState.tenantLinks, this);
+                instance, computeState, context.request.tenantLinks, this, context.request.enumeratedNetworks);
         if (networkOperations != null && !networkOperations.isEmpty()) {
             context.enumerationOperations.addAll(networkOperations);
         }
@@ -366,29 +359,30 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      * Populates the compute state / network link associated with an AWS VM instance and creates an
      * operation for PATCHing existing compute and network interfaces .
      */
-    private void populateComputeStateAndNetworksForUpdates(AWSComputeServiceCreationContext context,
+    private void populateComputeStateAndNetworksForUpdates(AWSComputeStateCreationContext context,
             Instance instance, ComputeState existingComputeState) {
         String zoneId = instance.getPlacement().getAvailabilityZone();
-        ZoneData zoneData = context.computeState.zones.get(zoneId);
+        ZoneData zoneData = context.request.zones.get(zoneId);
 
         // Operation for update to compute state.
         ComputeService.ComputeState computeState = mapInstanceToComputeState(instance,
-                context.computeState.parentComputeLink, zoneData.computeLink,
-                context.computeState.resourcePoolLink,
+                context.request.parentComputeLink, zoneData.computeLink,
+                context.request.resourcePoolLink,
                 existingComputeState.descriptionLink,
-                context.computeState.tenantLinks);
+                context.request.tenantLinks);
+
+        computeState.networkInterfaceLinks = new ArrayList<String>();
 
         String existingNICLink = null;
         // NIC - Private
         if (instance.getPrivateIpAddress() != null) {
             existingNICLink = getExistingNetworkInterfaceLink(existingComputeState, false);
             NetworkInterfaceState privateNICState = mapIPAddressToNetworkInterfaceState(instance,
-                    false, context.computeState.tenantLinks, existingNICLink);
+                    false, context.request.tenantLinks, existingNICLink, context.request.enumeratedNetworks);
             Operation privateNICOperation = createOperationToUpdateOrCreateNetworkInterface(
                     existingComputeState, privateNICState,
-                    context.computeState.tenantLinks, this, false);
+                    context.request.tenantLinks, this, false);
             context.enumerationOperations.add(privateNICOperation);
-            computeState.networkInterfaceLinks = new ArrayList<String>();
             computeState.networkInterfaceLinks.add(UriUtils.buildUriPath(
                     NetworkInterfaceService.FACTORY_LINK,
                     privateNICState.documentSelfLink));
@@ -398,13 +392,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         if (instance.getPublicIpAddress() != null) {
             existingNICLink = getExistingNetworkInterfaceLink(existingComputeState, true);
             NetworkInterfaceState publicNICState = mapIPAddressToNetworkInterfaceState(instance,
-                    true, context.computeState.tenantLinks, existingNICLink);
-            Operation postPublicNetworkInterfaceOperation = createOperationToUpdateOrCreateNetworkInterface(
+                    true, context.request.tenantLinks, existingNICLink, context.request.enumeratedNetworks);
+            Operation privateNICOperation = createOperationToUpdateOrCreateNetworkInterface(
                     existingComputeState, publicNICState,
-                    context.computeState.tenantLinks, this, true);
-            context.enumerationOperations.add(postPublicNetworkInterfaceOperation);
+                    context.request.tenantLinks, this, true);
+            context.enumerationOperations.add(privateNICOperation);
             computeState.networkInterfaceLinks.add(UriUtils.buildUriPath(
-                    NetworkInterfaceService.FACTORY_LINK, publicNICState.documentSelfLink));
+                    NetworkInterfaceService.FACTORY_LINK,
+                    publicNICState.documentSelfLink));
         } else {
             existingNICLink = getExistingNetworkInterfaceLink(existingComputeState, true);
             if (existingNICLink != null) {
@@ -419,7 +414,6 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         Operation patchComputeState = createPatchOperation(this,
                 computeState, existingComputeState.documentSelfLink);
         context.enumerationOperations.add(patchComputeState);
-
     }
 
     /**
@@ -427,7 +421,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      * handler for the successful completion of each one of those. Patches completion to parent once
      * all the entities are created successfully.
      */
-    private void kickOffComputeStateCreation(AWSComputeServiceCreationContext context,
+    private void kickOffComputeStateCreation(AWSComputeStateCreationContext context,
             AWSComputeStateCreationStage next) {
         if (context.enumerationOperations == null
                 || context.enumerationOperations.size() == 0) {
@@ -454,9 +448,9 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         joinOp.sendWith(getHost());
     }
 
-    private void finishWithFailure(AWSComputeServiceCreationContext context, Throwable exc) {
+    private void finishWithFailure(AWSComputeStateCreationContext context, Throwable exc) {
         context.awsAdapterOperation.fail(exc);
-        AdapterUtils.sendFailurePatchToEnumerationTask(this, context.computeState.parentTaskLink,
+        AdapterUtils.sendFailurePatchToEnumerationTask(this, context.request.parentTaskLink,
                 exc);
     }
 

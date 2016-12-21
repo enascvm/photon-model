@@ -81,6 +81,36 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_NETWORK_STATE_CREATION_ADAPTER;
 
+    /**
+     * Request accepted by this service to trigger enumeration of Network entities in Amazon.
+     *
+     * @see {@link AWSNetworkEnumerationResponse}
+     */
+    public static class AWSNetworkEnumerationRequest {
+        public ComputeEnumerateResourceRequest enumerationRequest;
+        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+        public String regionId;
+        public List<String> tenantLinks;
+    }
+
+    /**
+     * Response returned by this service as a result of enumerating Network entities in Amazon.
+     *
+     * @see {@link AWSNetworkEnumerationRequest}
+     */
+    public static class AWSNetworkEnumerationResponse {
+        /**
+         * Map discovered AWS VPC {@link Vpc#getVpcId() id} to network state
+         * {@link ServiceDocument#documentSelfLink self link}.
+         */
+        public Map<String, String> vpcs = new HashMap<>();
+        /**
+         * Map discovered AWS Subnet {@link Subnet#getSubnetId() id} to subnet state
+         * {@link ServiceDocument#documentSelfLink self link}.
+         */
+        public Map<String, String> subnets = new HashMap<>();
+    }
+
     private AWSClientManager clientManager;
 
     enum AWSNetworkStateCreationStage {
@@ -103,21 +133,6 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Data holder for information related a network state that needs to be enumerated.
-     */
-    public static class AWSNetworkEnumeration {
-        public ComputeEnumerateResourceRequest enumerationRequest;
-        public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-        public String regionId;
-        public List<String> tenantLinks;
-    }
-
-    public static class NetworkEnumerationResponse {
-        public Map<String, String> vpcs = new HashMap<>();
-        public Map<String, String> subnets = new HashMap<>();
-    }
-
-    /**
      * The service context that is created for representing the list of instances received into a
      * list of compute states that will be persisted in the system.
      */
@@ -134,7 +149,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
         }
 
         public AmazonEC2AsyncClient amazonEC2Client;
-        public AWSNetworkEnumeration networkRequest;
+        public AWSNetworkEnumerationRequest networkRequest;
         public AWSNetworkStateCreationStage networkCreationStage;
 
         // Map AWS VPC id to network state for discovered VPCs
@@ -151,7 +166,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
         // states are successfully created.
         public final Operation awsAdapterOperation;
 
-        public AWSNetworkStateCreationContext(AWSNetworkEnumeration networkRequest,
+        public AWSNetworkStateCreationContext(AWSNetworkEnumerationRequest networkRequest,
                 Operation op) {
             this.networkRequest = networkRequest;
             this.networkCreationStage = AWSNetworkStateCreationStage.CLIENT;
@@ -173,7 +188,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        AWSNetworkEnumeration cs = op.getBody(AWSNetworkEnumeration.class);
+        AWSNetworkEnumerationRequest cs = op.getBody(AWSNetworkEnumerationRequest.class);
         AWSNetworkStateCreationContext context = new AWSNetworkStateCreationContext(cs, op);
         if (cs.enumerationRequest.isMockRequest) {
             op.complete();
@@ -204,7 +219,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             getLocalSubnetStates(context, AWSNetworkStateCreationStage.GET_INTERNET_GATEWAY);
             break;
         case GET_INTERNET_GATEWAY:
-            getInternetGatewayInformation(context, AWSNetworkStateCreationStage.GET_MAIN_ROUTE_TABLE);
+            getInternetGatewayInformation(context,
+                    AWSNetworkStateCreationStage.GET_MAIN_ROUTE_TABLE);
             break;
         case GET_MAIN_ROUTE_TABLE:
             getMainRouteTableInformation(context, AWSNetworkStateCreationStage.CREATE_NETWORKSTATE);
@@ -241,7 +257,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
 
     private Object createResponse(AWSNetworkStateCreationContext context) {
 
-        NetworkEnumerationResponse response = new NetworkEnumerationResponse();
+        AWSNetworkEnumerationResponse response = new AWSNetworkEnumerationResponse();
 
         context.vpcs.forEach((k, v) -> response.vpcs.put(k, v.documentSelfLink));
 
@@ -369,7 +385,8 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
     class AWSVPCAsyncHandler
             extends TransitionToAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> {
 
-        AWSVPCAsyncHandler(AWSNetworkStateCreationStage next, AWSNetworkStateCreationContext context) {
+        AWSVPCAsyncHandler(AWSNetworkStateCreationStage next,
+                AWSNetworkStateCreationContext context) {
             super(next, context);
         }
 

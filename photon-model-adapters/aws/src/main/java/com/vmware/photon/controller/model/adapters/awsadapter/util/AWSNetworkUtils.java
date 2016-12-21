@@ -34,6 +34,7 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Vpc;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationResponse;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -110,9 +111,12 @@ public class AWSNetworkUtils {
      * @return
      */
     public static NetworkInterfaceState mapIPAddressToNetworkInterfaceState(Instance instance,
-            boolean publicInterfaceFlag, List<String> tenantLinks, String existingLink) {
+            boolean publicInterfaceFlag, List<String> tenantLinks, String existingLink,
+            AWSNetworkEnumerationResponse enumeratedNetworks) {
+
         NetworkInterfaceState networkInterface = new NetworkInterfaceState();
         networkInterface.tenantLinks = tenantLinks;
+
         // Map public interface
         if (publicInterfaceFlag) {
             networkInterface.address = instance.getPublicIpAddress();
@@ -136,6 +140,13 @@ public class AWSNetworkUtils {
                 networkInterface.documentSelfLink = getIdFromDocumentLink(existingLink);
             }
         }
+
+        if (enumeratedNetworks != null
+                && enumeratedNetworks.subnets != null) {
+            // Populate subnetLink only. The networkLink should be accessed through SubnetState.networkLink
+            networkInterface.subnetLink = enumeratedNetworks.subnets.get(instance.getSubnetId());
+        }
+
         return networkInterface;
     }
 
@@ -192,17 +203,20 @@ public class AWSNetworkUtils {
      */
     public static List<Operation> mapInstanceIPAddressToNICCreationOperations(
             Instance instance, ComputeState resultDesc, List<String> tenantLinks,
-            StatelessService service) {
+            StatelessService service, AWSNetworkEnumerationResponse enumeratedNetworks) {
+
+        resultDesc.networkInterfaceLinks = new ArrayList<String>();
+
         List<Operation> createOperations = new ArrayList<Operation>();
+
         // NIC - Private
         if (instance.getPrivateIpAddress() != null) {
             NetworkInterfaceState privateNICState = mapIPAddressToNetworkInterfaceState(
-                    instance, false, tenantLinks, null);
+                    instance, false, tenantLinks, null, enumeratedNetworks);
             Operation postPrivateNetworkInterface = createPostOperation(
                     service, privateNICState, NetworkInterfaceService.FACTORY_LINK);
             createOperations.add(postPrivateNetworkInterface);
             // Compute State Network Links
-            resultDesc.networkInterfaceLinks = new ArrayList<String>();
             resultDesc.networkInterfaceLinks.add(UriUtils.buildUriPath(
                     NetworkInterfaceService.FACTORY_LINK,
                     privateNICState.documentSelfLink));
@@ -210,7 +224,7 @@ public class AWSNetworkUtils {
         // NIC - Public
         if (instance.getPublicIpAddress() != null) {
             NetworkInterfaceState publicNICState = mapIPAddressToNetworkInterfaceState(
-                    instance, true, tenantLinks, null);
+                    instance, true, tenantLinks, null, enumeratedNetworks);
             Operation postPublicNetworkInterface = createPostOperation(
                     service, publicNICState, NetworkInterfaceService.FACTORY_LINK);
             createOperations.add(postPublicNetworkInterface);

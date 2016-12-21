@@ -719,7 +719,8 @@ public class AWSInstanceService extends StatelessService {
                 cs.lifecycleState = LifecycleState.READY;
                 // Create operations
                 List<Operation> networkOperations = mapInstanceIPAddressToNICCreationOperations(
-                        instance, cs, this.computeDesc.tenantLinks, this.service);
+                        instance, cs, this.computeDesc.tenantLinks, this.service,
+                        null /*enumeratedNetworks*/);
                 if (networkOperations != null && !networkOperations.isEmpty()) {
                     createOperations.addAll(networkOperations);
                 }

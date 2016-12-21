@@ -42,9 +42,9 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionCreationAdapterService.AWSComputeDescriptionCreationState;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService.AWSComputeStateForCreation;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumeration;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.NetworkEnumerationResponse;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService.AWSComputeStateCreationRequest;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationRequest;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
@@ -138,8 +138,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         // there are no more results to return.
         public String nextToken;
         public Operation awsAdapterOperation;
-        public Map<String, String> vpcs;
-        public Map<String, String> subnets;
+        /**
+         * Discovered/Enumerated networks in Amazon.
+         */
+        public AWSNetworkEnumerationResponse enumeratedNetworks;
         public Map<String, ZoneData> zones;
 
         public EnumerationCreationContext(ComputeEnumerateAdapterRequest request,
@@ -339,7 +341,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
     private void refreshVPCInformation(EnumerationCreationContext aws,
             AWSEnumerationRefreshSubStage next) {
-        AWSNetworkEnumeration networkEnumeration = new AWSNetworkEnumeration();
+        AWSNetworkEnumerationRequest networkEnumeration = new AWSNetworkEnumerationRequest();
         networkEnumeration.tenantLinks = aws.parentCompute.tenantLinks;
         networkEnumeration.parentAuth = aws.parentAuth;
         networkEnumeration.regionId = aws.parentCompute.description.regionId;
@@ -359,11 +361,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                         return;
                     } else {
                         logInfo("Successfully Network-Subnet states. Proceeding to next state.");
-                        NetworkEnumerationResponse body = o.getBody(
-                                AWSNetworkStateCreationAdapterService.NetworkEnumerationResponse.class);
-
-                        aws.vpcs = body.vpcs;
-                        aws.subnets = body.subnets;
+                        aws.enumeratedNetworks = o.getBody(
+                                AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationResponse.class);
 
                         aws.refreshSubStage = next;
                         processRefreshSubStages(aws);
@@ -755,7 +754,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
          * @param next
          */
         private void createComputeStates(AWSComputeEnumerationCreationSubStage next) {
-            AWSComputeStateForCreation awsComputeState = new AWSComputeStateForCreation();
+            AWSComputeStateCreationRequest awsComputeState = new AWSComputeStateCreationRequest();
             awsComputeState.instancesToBeCreated = this.context.instancesToBeCreated;
             awsComputeState.instancesToBeUpdated = this.context.instancesToBeUpdated;
             awsComputeState.computeStatesToBeUpdated = this.context.computeStatesToBeUpdated;
@@ -765,8 +764,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.tenantLinks = this.context.parentCompute.tenantLinks;
             awsComputeState.parentAuth = this.context.parentAuth;
             awsComputeState.regionId = this.context.parentCompute.description.regionId;
-            awsComputeState.vpcs = this.context.vpcs;
-            awsComputeState.subnets = this.context.subnets;
+            awsComputeState.enumeratedNetworks = this.context.enumeratedNetworks;
             awsComputeState.zones = this.context.zones;
 
             this.service.sendRequest(Operation
