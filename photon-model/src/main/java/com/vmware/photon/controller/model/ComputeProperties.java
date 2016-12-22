@@ -46,6 +46,21 @@ public class ComputeProperties {
      */
     public static final String PLACEMENT_LINK = "__placementLink";
 
+    /**
+     * A key for the custom properties property which value stores the specific type of the
+     * resource state.
+     * <p>
+     * Useful when one resource state class can represent more than one target system type
+     * (e.g. Both Azure Resource Groups and Storage containers are represented by
+     * {@link com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState}
+     */
+    public static final String RESOURCE_TYPE_KEY = "__type";
+
+    /**
+     * A key for the custom properties property which value stores the parent compute host link.
+     */
+    public static final String FIELD_COMPUTE_HOST_LINK = "computeHostLink";
+
     public enum OSType {
         WINDOWS, LINUX;
     }

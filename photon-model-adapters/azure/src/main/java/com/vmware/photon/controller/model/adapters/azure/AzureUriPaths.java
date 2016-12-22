@@ -42,6 +42,8 @@ public class AzureUriPaths {
             + "/storage-enumeration-adapter";
     public static final String AZURE_NETWORK_ENUMERATION_ADAPTER = PROVISIONING_AZURE
             + "/network-enumeration-adapter";
+    public static final String AZURE_RESOURCE_GROUP_ENUMERATION_ADAPTER = PROVISIONING_AZURE
+            + "/resource-group-enumeration-adapter";
 
     public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
             .adapterLink(EndpointType.azure.name());

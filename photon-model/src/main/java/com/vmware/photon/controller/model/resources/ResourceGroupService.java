@@ -34,7 +34,6 @@ public class ResourceGroupService extends StatefulService {
      * {@link com.vmware.photon.controller.model.resources.ResourceGroupService}.
      */
     public static class ResourceGroupState extends ResourceState {
-
         @Documentation(description = "Query used to define resource group membership")
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Query query;

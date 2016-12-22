@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
+import static com.vmware.photon.controller.model.ComputeProperties.FIELD_COMPUTE_HOST_LINK;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
@@ -74,11 +75,13 @@ import com.microsoft.rest.ServiceResponse;
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccountResultList;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
@@ -111,7 +114,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_STORAGE_ENUMERATION_ADAPTER;
     private static final String VHD_EXTENSION = ".vhd";
     public static final int B_TO_MB_FACTOR = 1024 * 1024;
-    public static final String FIELD_COMPUTE_HOST_LINK = "computeHostLink";
 
     private static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT =
             UriPaths.PROPERTY_PREFIX + "AzureStorageEnumerationAdapterService.QUERY_RESULT_LIMIT";
@@ -990,6 +992,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .getProperties().getLeaseState().toString());
         resourceGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_STATUS,
                 container.getProperties().getLeaseStatus().toString());
+        resourceGroupState.customProperties.put(ComputeProperties.RESOURCE_TYPE_KEY,
+                ResourceGroupStateType.AzureStorageContainer.name());
 
         if (oldResourceGroupState != null) {
             resourceGroupState.documentSelfLink = oldResourceGroupState.documentSelfLink;
@@ -1084,10 +1088,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         String computeHostProperty = QueryTask.QuerySpecification
                 .buildCompositeFieldName(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                         FIELD_COMPUTE_HOST_LINK);
+        String resourceTypeProperty = QueryTask.QuerySpecification.buildCompositeFieldName
+                (ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES, ComputeProperties
+                        .RESOURCE_TYPE_KEY);
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
                 .addFieldClause(computeHostProperty, context.parentCompute.documentSelfLink)
+                .addFieldClause(resourceTypeProperty,
+                        ResourceGroupStateType.AzureStorageContainer.name())
                 .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros))

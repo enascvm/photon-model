@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
+import static com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService.AzureEnumerationStages.TRIGGER_RESOURCE_GROUP_ENUMERATION;
+import static com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService.AzureEnumerationStages.TRIGGER_STORAGE_ENUMERATION;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
@@ -33,13 +36,14 @@ import com.vmware.xenon.common.StatelessService;
  */
 public class AzureEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_ENUMERATION_ADAPTER;
-    public static final Integer SERVICES_TO_REGISTER = 3;
+    public static final Integer SERVICES_TO_REGISTER = 4;
 
     public AzureEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
-    public static enum AzureEnumerationStages {
+    public enum AzureEnumerationStages {
+        TRIGGER_RESOURCE_GROUP_ENUMERATION,
         TRIGGER_STORAGE_ENUMERATION,
         TRIGGER_NETWORK_ENUMERATION,
         TRIGGER_COMPUTE_ENUMERATION,
@@ -59,7 +63,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
             super(service, request.resourceReference);
 
             this.computeEnumerationRequest = request;
-            this.stage = AzureEnumerationStages.TRIGGER_STORAGE_ENUMERATION;
+            this.stage = TRIGGER_RESOURCE_GROUP_ENUMERATION;
             this.adapterOperation = op;
         }
     }
@@ -114,13 +118,18 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 .createPost(this, AzureNetworkEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
+        Operation postResourceGroupEnumAdapterService = Operation
+                .createPost(this, AzureResourceGroupEnumerationAdapterService.SELF_LINK)
+                .setReferer(this.getUri());
+
         this.getHost().startService(postComputeEnumAdapterService,
                 new AzureComputeEnumerationAdapterService());
         this.getHost().startService(postStorageEnumAdapterService,
                 new AzureStorageEnumerationAdapterService());
         this.getHost().startService(postNetworkEnumAdapterService,
                 new AzureNetworkEnumerationAdapterService());
-
+        this.getHost().startService(postResourceGroupEnumAdapterService,
+                new AzureResourceGroupEnumerationAdapterService());
 
         AtomicInteger completionCount = new AtomicInteger(0);
         getHost().registerForServiceAvailability((o, e) -> {
@@ -142,6 +151,11 @@ public class AzureEnumerationAdapterService extends StatelessService {
      */
     public void handleEnumerationRequest(EnumerationContext context) {
         switch (context.stage) {
+        case TRIGGER_RESOURCE_GROUP_ENUMERATION:
+            triggerEnumerationAdapter(context,
+                    AzureResourceGroupEnumerationAdapterService.SELF_LINK,
+                    TRIGGER_STORAGE_ENUMERATION);
+            break;
         case TRIGGER_STORAGE_ENUMERATION:
             triggerEnumerationAdapter(context, AzureStorageEnumerationAdapterService.SELF_LINK,
                     AzureEnumerationStages.TRIGGER_NETWORK_ENUMERATION);

@@ -49,6 +49,7 @@ import com.microsoft.azure.management.network.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
+import com.microsoft.azure.management.resources.models.ResourceGroup;
 import com.microsoft.azure.management.storage.StorageManagementClient;
 import com.microsoft.azure.management.storage.StorageManagementClientImpl;
 import com.microsoft.azure.management.storage.models.StorageAccount;
@@ -71,6 +72,7 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -116,6 +118,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  * canonical:UbuntuServer:12.04.3-LTS:12.04.201401270 azureuser Pa$$word% -z Standard_A0; done
  */
 public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
+    private static final int STALE_RG_COUNT = 3;
     private static final int STALE_VM_RESOURCES_COUNT = 100;
     private static final int STALE_STORAGE_ACCOUNTS_COUNT = 5;
     private static final int STALE_CONTAINERS_COUNT = 5;
@@ -256,7 +259,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 this.resourcePoolLink);
 
         this.resourceGroupState = createDefaultResourceGroupState(this.host,
-                this.mockedStorageAccountName, this.computeHost.documentSelfLink);
+                this.mockedStorageAccountName, this.computeHost.documentSelfLink,
+                ResourceGroupStateType.AzureResourceGroup.name());
 
         this.diskState = createDefaultDiskState(this.host, this.mockedStorageAccountName,
                 this.mockedStorageAccountName, this.resourcePoolLink);
@@ -315,6 +319,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         // create stale resource states for deletion
         // these should be deleted as part of first enumeration cycle.
+        createAzureResourceGroups(STALE_RG_COUNT);
         createAzureVMResources(STALE_VM_RESOURCES_COUNT);
         createAzureStorageAccounts(STALE_STORAGE_ACCOUNTS_COUNT);
         createAzureStorageContainers(STALE_CONTAINERS_COUNT);
@@ -328,7 +333,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_STORAGE_ACCOUNTS_COUNT + 1, StorageDescriptionService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
-                STALE_CONTAINERS_COUNT + 1, ResourceGroupService.FACTORY_LINK, true);
+                STALE_CONTAINERS_COUNT + STALE_RG_COUNT + 1, ResourceGroupService.FACTORY_LINK,
+                true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_BLOBS_COUNT + 1,
                 DiskService.FACTORY_LINK, true);
         // 1 network per each stale vm resource + 1 network for original vm conpute state.
@@ -345,15 +351,17 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         this.host.log(Level.INFO, "Initial VM Count: %d", this.vmCount);
         getAzureStorageResourcesCount();
 
-        int networksCount = getAzureNetworskCount();
+        int networksCount = getAzureNetworksCount();
         int subnetsCount = getAzureSubnetCount();
+        int resourceGroupsCount = getAzureResourceGroupCount();
 
         runEnumeration();
 
         // expect to find as many local accounts, containers, and blobs as there are on Azure
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.storageAcctCount,
                 StorageDescriptionService.FACTORY_LINK, true);
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.containerCount,
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.containerCount +
+                        resourceGroupsCount,
                 ResourceGroupService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.blobCount,
                 DiskService.FACTORY_LINK, true);
@@ -429,6 +437,15 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // clean up
         this.vmState = null;
         this.resourceManagementClient.getResourceGroupsOperations().beginDelete(this.azureVMName);
+    }
+
+    private void createAzureResourceGroups(int numOfResourceGroups) throws Throwable {
+        for (int i = 0; i < numOfResourceGroups; i++) {
+            String staleResourceGroupName = "stalerg-" + i;
+            createDefaultResourceGroupState(this.host, staleResourceGroupName,
+                    this.computeHost.documentSelfLink,
+                    ResourceGroupStateType.AzureResourceGroup.name());
+        }
     }
 
     private void createAzureVMResources(int numOfVMs) throws Throwable {
@@ -560,7 +577,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         for (int i = 0; i < numOfCont; i++) {
             String staleContName = "staleCont-" + i;
             createDefaultResourceGroupState(this.host, staleContName,
-                    this.computeHost.documentSelfLink);
+                    this.computeHost.documentSelfLink,
+                    ResourceGroupStateType.AzureStorageContainer.name());
         }
     }
 
@@ -570,6 +588,13 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             createDefaultDiskState(this.host, staleBlobName, this.computeHost.documentSelfLink,
                     this.resourcePoolLink);
         }
+    }
+
+    private int getAzureResourceGroupCount() throws Exception {
+        ServiceResponse<List<ResourceGroup>> resourceGroupsResponse = this.resourceManagementClient
+                .getResourceGroupsOperations().list(null, null);
+        List<ResourceGroup> resourceGroups = resourceGroupsResponse.getBody();
+        return resourceGroups.size();
     }
 
     private void getAzureStorageResourcesCount() throws Exception {
@@ -587,8 +612,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
             String connectionString = String.format(STORAGE_CONNECTION_STRING,
                     storageAcct.getName(), keys.getBody().getKey1());
-            CloudStorageAccount storageAccount = null;
-            storageAccount = CloudStorageAccount.parse(connectionString);
+            CloudStorageAccount storageAccount = CloudStorageAccount.parse(connectionString);
             CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
             Iterable<CloudBlobContainer> containerList = blobClient.listContainers();
             for (CloudBlobContainer container : containerList) {
@@ -603,7 +627,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         this.host.log("Blob count in Azure: %d", this.blobCount);
     }
 
-    private int getAzureNetworskCount() throws Exception {
+    private int getAzureNetworksCount() throws Exception {
         ServiceResponse<List<VirtualNetwork>> networksResponse = this.networkManagementClient
                 .getVirtualNetworksOperations().listAll();
         List<VirtualNetwork> networks = networksResponse.getBody();

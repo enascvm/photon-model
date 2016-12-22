@@ -148,6 +148,22 @@ public class AzureConstants {
     public static final String LIST_VIRTUAL_NETWORKS_URI = BASE_URI_FOR_REST
             + "/subscriptions/{subscriptionId}/providers/Microsoft.Network/virtualnetworks";
 
+    // Resource Group REST constants
+    public static final String RESOURCE_GROUP_REST_API_VERSION = "2015-11-01";
+    public static final String LIST_RESOURCE_GROUPS_URI = BASE_URI_FOR_REST
+            + "/subscriptions/{subscriptionId}/resourcegroups";
+
     // Azure network properties
     public static final String DEFAULT_INSTANCE_ADAPTER_REFERENCE = "defaultInstanceAdapterReference";
+
+    /**
+     * Describes the type of a specific
+     * {@link com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState}.
+     *
+     * {@see com.vmware.photon.controller.model.ComputeProperties#RESOURCE_TYPE_KEY}
+     */
+    public enum ResourceGroupStateType {
+        AzureResourceGroup,
+        AzureStorageContainer
+    }
 }

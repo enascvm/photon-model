@@ -23,7 +23,7 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * Base class for contexts used by adapters. It {@link #populateContext(BaseAdapterStage) loads}:
+ * Base class for contexts used by adapters. Its {@link #populateContext(BaseAdapterStage) loads}:
  * <ul>
  * <li>{@link ComputeStateWithDescription child}</li>
  * <li>{@link ComputeStateWithDescription parent}</li>
@@ -93,7 +93,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     }
 
     /**
-     * Isolate all cases when this instance should be cast to CHILD. For internal use only.
+     * Isolate all cases when this instance should be cast to T. For internal use only.
      */
     @SuppressWarnings("unchecked")
     protected T self() {

@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import static com.vmware.photon.controller.model.ComputeProperties.FIELD_COMPUTE_HOST_LINK;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
@@ -28,7 +29,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_SERVICE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
-import static com.vmware.photon.controller.model.adapters.azure.enumeration.AzureStorageEnumerationAdapterService.FIELD_COMPUTE_HOST_LINK;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
 import java.net.URI;
@@ -43,6 +43,7 @@ import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.models.VirtualMachine;
 import com.microsoft.rest.ServiceResponse;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureComputeEnumerationAdapterService;
@@ -391,7 +392,8 @@ public class AzureTestUtil {
     }
 
     public static ResourceGroupState createDefaultResourceGroupState(VerificationHost host,
-            String containerName, String parentLink) throws Throwable {
+            String containerName, String parentLink, String resourceGroupType)
+            throws Throwable {
         ResourceGroupState rGroupState = new ResourceGroupState();
         rGroupState.id = "testStorCont-" + randomString(4);
         rGroupState.name = containerName;
@@ -406,6 +408,7 @@ public class AzureTestUtil {
                 randomString(5));
         rGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_STATUS,
                 randomString(5));
+        rGroupState.customProperties.put(ComputeProperties.RESOURCE_TYPE_KEY, resourceGroupType);
         ResourceGroupState rGroup = TestUtils.doPost(host, rGroupState,
                 ResourceGroupState.class,
                 UriUtils.buildUri(host, ResourceGroupService.FACTORY_LINK));
