@@ -337,7 +337,6 @@ public class ComputeServiceTest extends Suite {
 
             ComputeService.ComputeState patchBody = new ComputeService.ComputeState();
             patchBody.type = ComputeType.DOCKER_CONTAINER;
-
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchBody);
         }

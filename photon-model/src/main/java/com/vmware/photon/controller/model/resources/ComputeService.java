@@ -297,63 +297,62 @@ public class ComputeService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         ComputeState currentState = getState(patch);
-        Function<Operation, Boolean> customPatchHandler = new Function<Operation, Boolean>() {
-            @Override
-            public Boolean apply(Operation t) {
-                boolean hasStateChanged = false;
-                ComputeState patchBody = patch.getBody(ComputeState.class);
-                if (patchBody.type != null && currentState.type != null
-                        && patchBody.type != currentState.type) {
-                    throw new IllegalArgumentException("Compute type can not be changed");
-                } else {
+        Function<Operation, Boolean> customPatchHandler = t -> {
+            boolean hasStateChanged = false;
+            ComputeState patchBody = patch.getBody(ComputeState.class);
+
+            if (patchBody.type != null) {
+                if (currentState.type == null) {
                     currentState.type = patchBody.type;
                     hasStateChanged = true;
+                } else if (patchBody.type != currentState.type) {
+                    throw new IllegalArgumentException("Compute type can not be changed");
                 }
-
-                if (patchBody.address != null
-                        && !patchBody.address.equals(currentState.address)) {
-                    InetAddressValidator.getInstance().isValidInet4Address(
-                            patchBody.address);
-                    currentState.address = patchBody.address;
-                    hasStateChanged = true;
-                }
-
-                if (patchBody.powerState != null
-                        && patchBody.powerState != PowerState.UNKNOWN
-                        && patchBody.powerState != currentState.powerState) {
-                    currentState.powerState = patchBody.powerState;
-                    hasStateChanged = true;
-                }
-
-                if (patchBody.diskLinks != null) {
-                    if (currentState.diskLinks == null) {
-                        currentState.diskLinks = patchBody.diskLinks;
-                        hasStateChanged = true;
-                    } else {
-                        for (String link : patchBody.diskLinks) {
-                            if (!currentState.diskLinks.contains(link)) {
-                                currentState.diskLinks.add(link);
-                                hasStateChanged = true;
-                            }
-                        }
-                    }
-                }
-
-                if (patchBody.networkInterfaceLinks != null) {
-                    if (currentState.networkInterfaceLinks == null) {
-                        currentState.networkInterfaceLinks = patchBody.networkInterfaceLinks;
-                        hasStateChanged = true;
-                    } else {
-                        for (String link : patchBody.networkInterfaceLinks) {
-                            if (!currentState.networkInterfaceLinks.contains(link)) {
-                                currentState.networkInterfaceLinks.add(link);
-                                hasStateChanged = true;
-                            }
-                        }
-                    }
-                }
-                return hasStateChanged;
             }
+
+            if (patchBody.address != null
+                    && !patchBody.address.equals(currentState.address)) {
+                InetAddressValidator.getInstance().isValidInet4Address(
+                        patchBody.address);
+                currentState.address = patchBody.address;
+                hasStateChanged = true;
+            }
+
+            if (patchBody.powerState != null
+                    && patchBody.powerState != PowerState.UNKNOWN
+                    && patchBody.powerState != currentState.powerState) {
+                currentState.powerState = patchBody.powerState;
+                hasStateChanged = true;
+            }
+
+            if (patchBody.diskLinks != null) {
+                if (currentState.diskLinks == null) {
+                    currentState.diskLinks = patchBody.diskLinks;
+                    hasStateChanged = true;
+                } else {
+                    for (String link : patchBody.diskLinks) {
+                        if (!currentState.diskLinks.contains(link)) {
+                            currentState.diskLinks.add(link);
+                            hasStateChanged = true;
+                        }
+                    }
+                }
+            }
+
+            if (patchBody.networkInterfaceLinks != null) {
+                if (currentState.networkInterfaceLinks == null) {
+                    currentState.networkInterfaceLinks = patchBody.networkInterfaceLinks;
+                    hasStateChanged = true;
+                } else {
+                    for (String link : patchBody.networkInterfaceLinks) {
+                        if (!currentState.networkInterfaceLinks.contains(link)) {
+                            currentState.networkInterfaceLinks.add(link);
+                            hasStateChanged = true;
+                        }
+                    }
+                }
+            }
+            return hasStateChanged;
         };
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
                 ComputeState.class, customPatchHandler);
