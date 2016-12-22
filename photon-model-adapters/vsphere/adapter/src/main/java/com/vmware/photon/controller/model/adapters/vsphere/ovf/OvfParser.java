@@ -348,21 +348,4 @@ public class OvfParser {
 
         return this.xpath;
     }
-
-    /**
-     * Coverts the string ovf.prop:abc into abc. If the propame is not prefixed return null.
-     * @param propName
-     * @return
-     */
-    public static String stripPrefix(String propName) {
-        if (propName == null) {
-            return null;
-        }
-
-        if (propName.startsWith(PREFIX_OVF_PROP)) {
-            return propName.substring(PREFIX_OVF_NET.length() + 1);
-        }
-
-        return null;
-    }
 }

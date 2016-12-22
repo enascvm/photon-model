@@ -21,8 +21,10 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -92,6 +94,7 @@ import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSCSISharing;
 import com.vmware.vim25.VirtualSIOController;
 import com.vmware.vim25.VmConfigSpec;
+import com.vmware.xenon.common.Utils;
 
 /**
  * A simple client for vsphere. Consist of a valid connection and some context.
@@ -103,7 +106,14 @@ public class InstanceClient extends BaseHelper {
     private static final Logger logger = LoggerFactory.getLogger(InstanceClient.class.getName());
 
     private static final String CLOUD_CONFIG_PROPERTY_USER_DATA = "user-data";
+    private static final String COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA = "guestinfo.coreos.config.data";
+
+    private static final String CLOUD_CONFIG_PROPERTY_HOSTNAME = "hostname";
+    private static final String COREOS_CLOUD_CONFIG_PROPERTY_HOSTNAME = "guestinfo.guestinfo.hostname";
+
     private static final String CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS = "public-keys";
+    private static final String OVF_PROPERTY_ENV = "ovf-env";
+
     private final ComputeStateWithDescription state;
     private final ComputeStateWithDescription parent;
     private final List<DiskState> disks;
@@ -275,6 +285,7 @@ public class InstanceClient extends BaseHelper {
                 cp.getString(OvfParser.PROP_OVF_ARCHIVE_URI) != null;
     }
 
+    @SuppressWarnings("unchecked")
     private ManagedObjectReference deployOvf() throws Exception {
         OvfDeployer deployer = new OvfDeployer(this.connection);
         CustomProperties cust = CustomProperties.of(this.state.description);
@@ -294,29 +305,91 @@ public class InstanceClient extends BaseHelper {
         ManagedObjectReference ds = getDatastore();
         ManagedObjectReference resourcePool = getResourcePool();
 
-        List<KeyValue> props = new ArrayList<>();
-        for (Map.Entry<String, String> e : this.state.customProperties.entrySet()) {
-            String s = OvfParser.stripPrefix(e.getKey());
-            if (s != null) {
+        Map<String, KeyValue> props = new HashMap<>();
+
+        DiskState bootDisk = findBootDisk();
+        String ovfEnv = getFileItemByPath(bootDisk, OVF_PROPERTY_ENV);
+        if (ovfEnv != null) {
+            Map<String, String> map = Utils.fromJson(ovfEnv, Map.class);
+            for (Entry<String, String> entry : map.entrySet()) {
                 KeyValue kv = new KeyValue();
-                kv.setKey(s);
-                kv.setValue(e.getValue());
-                props.add(kv);
+                kv.setKey(entry.getKey());
+                kv.setValue(entry.getValue());
+                props.put(kv.getKey(), kv);
             }
         }
+        mergeCloudConfigPropsIntoOvfEnv(props, bootDisk);
 
         String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
 
         String vmName = this.state.name;
 
         ManagedObjectReference vm = deployer
-                .deployOvf(ovfUri, host, folder, vmName, network, ds, props, config, resourcePool);
+                .deployOvf(ovfUri, host, folder, vmName, network, ds, props.values(), config, resourcePool);
 
         // Sometimes ComputeDescriptions created from an OVF can be modified. For such
         // cases one more reconfiguration is needed to set the cpu/mem correctly.
         reconfigure(vm);
 
         return vm;
+    }
+
+    /**
+     * Converts all cloud-config properties from the bootDisk to OVF properties. There are two implementations
+     * of cloud config currently, the second being from CoreOS. As a result a single cloud-config prop can be added
+     * under different keys.
+     * @param props
+     * @param bootDisk
+     */
+    private void mergeCloudConfigPropsIntoOvfEnv(Map<String, KeyValue> props, DiskState bootDisk) {
+        String userData = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_USER_DATA);
+        if (userData != null) {
+            KeyValue kv = new KeyValue();
+            kv.setKey(CLOUD_CONFIG_PROPERTY_USER_DATA);
+            kv.setValue(userData);
+            props.put(kv.getKey(), kv);
+
+            kv = new KeyValue();
+            kv.setKey(COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA);
+            kv.setValue(userData);
+            props.put(kv.getKey(), kv);
+        }
+
+        String sshKeys = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
+        if (sshKeys != null) {
+            KeyValue kv = new KeyValue();
+            kv.setKey(CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
+            kv.setValue(sshKeys);
+            props.put(kv.getKey(), kv);
+        }
+
+        String hostname = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_HOSTNAME);
+        if (hostname != null) {
+            KeyValue kv = new KeyValue();
+            kv.setKey(CLOUD_CONFIG_PROPERTY_HOSTNAME);
+            kv.setValue(hostname);
+            props.put(kv.getKey(), kv);
+
+            kv = new KeyValue();
+            kv.setKey(COREOS_CLOUD_CONFIG_PROPERTY_HOSTNAME);
+            kv.setValue(hostname);
+            props.put(kv.getKey(), kv);
+        }
+    }
+
+    /**
+     * The first HDD disk is considered the boot disk.
+     * @return
+     */
+    private DiskState findBootDisk() {
+        if (this.disks == null) {
+            return null;
+        }
+
+        return this.disks.stream()
+                .filter(d -> d.type == DiskType.HDD)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -341,6 +414,10 @@ public class InstanceClient extends BaseHelper {
      * The given diskStates are enriched with data from vSphere and can be patched back to xenon.
      */
     public void attachDisks(List<DiskState> diskStates) throws Exception {
+        if (isOvfDeploy()) {
+            return;
+        }
+
         if (this.vm == null) {
             throw new IllegalStateException("Cannot attach diskStates if VM is not created");
         }
@@ -732,10 +809,7 @@ public class InstanceClient extends BaseHelper {
             return false;
         }
 
-        DiskState bootDisk = this.disks.stream()
-                .filter(d -> d.type == DiskType.HDD)
-                .findFirst()
-                .orElse(null);
+        DiskState bootDisk = findBootDisk();
 
         if (bootDisk == null) {
             return false;
@@ -763,7 +837,15 @@ public class InstanceClient extends BaseHelper {
                         .filter(p -> p.getId().equals(CLOUD_CONFIG_PROPERTY_USER_DATA))
                         .findFirst()
                         .orElse(null);
+                if (userDataInfo == null) {
+                    // try coreOS key
+                    userDataInfo = currentProps.getVAppPropertyInfo().stream()
+                            .filter(p -> p.getId().equals(COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA))
+                            .findFirst()
+                            .orElse(null);
+                }
             }
+
             if (userDataInfo != null) {
                 propertySpec.setOperation(ArrayUpdateOperation.EDIT);
             } else {
@@ -773,7 +855,8 @@ public class InstanceClient extends BaseHelper {
                 userDataInfo.setKey(nextKey++);
                 propertySpec.setOperation(ArrayUpdateOperation.ADD);
             }
-            userDataInfo.setValue(Base64.getEncoder().encodeToString(cloudConfig.getBytes()));
+            String encodedUserData = Base64.getEncoder().encodeToString(cloudConfig.getBytes());
+            userDataInfo.setValue(encodedUserData);
 
             propertySpec.setInfo(userDataInfo);
             configSpec.getProperty().add(propertySpec);

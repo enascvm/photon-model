@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere.ovf;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -90,7 +91,7 @@ public class OvfDeployer extends BaseHelper {
             String vmName,
             List<OvfNetworkMapping> networks,
             ManagedObjectReference datastore,
-            List<KeyValue> ovfProps,
+            Collection<KeyValue> ovfProps,
             String deploymentConfig,
             ManagedObjectReference resourcePool) throws Exception {
 

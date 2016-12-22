@@ -60,14 +60,6 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 @Ignore
 public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterTest {
 
-    // password is 123456
-    private static final String SIMPLE_USER_DATA =
-            "#cloud-config\n"
-                    + "\n"
-                    + "write_files:\n"
-                    + "- path: /tmp/hello.txt\n"
-                    + "  content: \"world\"\n";
-
     // fields that are used across method calls, stash them as private fields
     private ResourcePoolState resourcePool;
 
@@ -164,7 +156,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeState.parentLink = this.computeHost.documentSelfLink;
 
         computeState.diskLinks = new ArrayList<>(1);
-        computeState.diskLinks.add(createBootDisk(SIMPLE_USER_DATA).documentSelfLink);
+        computeState.diskLinks.add(createBootDisk(TestVSphereOvfProvisionTask.CLOUD_CONFIG_DATA).documentSelfLink);
 
         Query q = createQueryForComputeResource();
         CustomProperties.of(computeState)
