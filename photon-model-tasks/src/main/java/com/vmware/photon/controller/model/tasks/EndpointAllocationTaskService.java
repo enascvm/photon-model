@@ -533,7 +533,6 @@ public class EndpointAllocationTaskService
         enumTaskState.resourcePoolLink = currentState.enumerationRequest.resourcePoolLink;
         enumTaskState.adapterManagementReference = adapterManagementReference;
         enumTaskState.tenantLinks = endpoint.tenantLinks;
-        enumTaskState.documentSelfLink = id;
         enumTaskState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
         if (currentState.options.contains(TaskOption.IS_MOCK)) {
             enumTaskState.options.add(TaskOption.IS_MOCK);
