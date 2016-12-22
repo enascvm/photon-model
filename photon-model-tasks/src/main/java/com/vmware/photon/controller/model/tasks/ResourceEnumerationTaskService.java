@@ -93,6 +93,11 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
          * Task options
          */
         public EnumSet<TaskOption> options;
+
+        /**
+         * Link to the cloud account endpoint.
+         */
+        public String endpointLink;
     }
 
     public ResourceEnumerationTaskService() {
@@ -186,6 +191,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
                 state.documentSelfLink);
         req.isMockRequest = state.options.contains(TaskOption.IS_MOCK);
         req.preserveMissing = state.options.contains(TaskOption.PRESERVE_MISSING_RESOUCES);
+        req.endpointLink = state.endpointLink;
 
         // Patch the enumerate service URI from the CHD
         CompletionHandler descriptionCompletion = (o, ex) -> {

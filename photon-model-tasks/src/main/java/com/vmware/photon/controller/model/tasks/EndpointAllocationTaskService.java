@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.ComputeProperties.ENDPOINT_LINK_PROP_NAME;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.getAdapterUri;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.sendFailurePatch;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
@@ -497,7 +498,8 @@ public class EndpointAllocationTaskService
                                 return;
                             }
                             if (currentState.enumerationRequest.resourcePoolLink == null) {
-                                currentState.enumerationRequest.resourcePoolLink = currentState.endpointState.resourcePoolLink;
+                                currentState.enumerationRequest.resourcePoolLink =
+                                        currentState.endpointState.resourcePoolLink;
                             }
                             doTriggerEnumeration(currentState, next,
                                     o.getBody(ComputeState.class).adapterManagementReference);
@@ -530,6 +532,7 @@ public class EndpointAllocationTaskService
 
         ResourceEnumerationTaskState enumTaskState = new ResourceEnumerationTaskState();
         enumTaskState.parentComputeLink = endpoint.computeLink;
+        enumTaskState.endpointLink = endpoint.documentSelfLink;
         enumTaskState.resourcePoolLink = currentState.enumerationRequest.resourcePoolLink;
         enumTaskState.adapterManagementReference = adapterManagementReference;
         enumTaskState.tenantLinks = endpoint.tenantLinks;
@@ -695,6 +698,7 @@ public class EndpointAllocationTaskService
             authState.customProperties.putAll(state.customProperties);
         }
         authState.customProperties.put(CUSTOM_PROP_ENPOINT_TYPE, state.endpointType);
+        authState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK, state.documentSelfLink);
 
         return authState;
     }
@@ -704,6 +708,7 @@ public class EndpointAllocationTaskService
         // setting up a host, so all have VM_HOST as a child
         ComputeDescription cd = new ComputeDescription();
         cd.tenantLinks = state.tenantLinks;
+        cd.endpointLink = state.documentSelfLink;
         cd.authCredentialsLink = state.authCredentialsLink;
         cd.name = state.name;
         cd.id = UUID.randomUUID().toString();
@@ -721,6 +726,7 @@ public class EndpointAllocationTaskService
         computeHost.id = UUID.randomUUID().toString();
         computeHost.name = state.name;
         computeHost.tenantLinks = state.tenantLinks;
+        computeHost.endpointLink = state.documentSelfLink;
         computeHost.customProperties = new HashMap<>();
         if (state.customProperties != null) {
             computeHost.customProperties.putAll(state.customProperties);

@@ -42,9 +42,7 @@ public class NetworkInterfaceService extends StatefulService {
     public static class NetworkInterfaceState extends ResourceState {
 
         public static final String FIELD_NAME_NETWORK_LINK = "networkLink";
-
         public static final String FIELD_NAME_SUBNET_LINK = "subnetLink";
-
         public static final String FIELD_NAME_DESCRIPTION_LINK = "networkInterfaceDescriptionLink";
 
         /**
@@ -85,6 +83,12 @@ public class NetworkInterfaceService extends StatefulService {
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_1)
         public String networkInterfaceDescriptionLink;
+
+        /**
+         * Link to the cloud account endpoint the network interface belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
+        public String endpointLink;
     }
 
     /**

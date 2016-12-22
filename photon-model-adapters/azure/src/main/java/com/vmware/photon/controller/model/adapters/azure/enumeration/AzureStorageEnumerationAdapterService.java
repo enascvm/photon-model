@@ -36,6 +36,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
 
 import java.io.IOException;
 import java.net.URI;
@@ -560,6 +561,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageDescriptionToUpdate.authCredentialsLink = storageDescription.authCredentialsLink;
             storageDescriptionToUpdate.regionId = storageAccount.location;
             storageDescriptionToUpdate.documentSelfLink = storageDescription.documentSelfLink;
+            storageDescriptionToUpdate.endpointLink = storageDescription.endpointLink;
 
             // populate connectionStrings
             if (!context.storageConnectionStrings.containsKey(storageDescription.id)) {
@@ -638,6 +640,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, keys.getBody().getKey1());
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, keys.getBody().getKey2());
             storageAuth.tenantLinks = context.parentCompute.tenantLinks;
+            storageAuth.customProperties.put(StorageDescription.FIELD_NAME_ENDPOINT_LINK,
+                    context.enumRequest.endpointLink);
 
             Operation storageAuthOp = Operation
                     .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
@@ -657,6 +661,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageDescription.authCredentialsLink = storageAuthLink;
             storageDescription.resourcePoolLink = context.enumRequest.resourcePoolLink;
             storageDescription.documentSelfLink = UUID.randomUUID().toString();
+            storageDescription.endpointLink = context.enumRequest.endpointLink;
             storageDescription.computeHostLink = context.parentCompute.documentSelfLink;
             storageDescription.customProperties = new HashMap<>();
             storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
@@ -985,6 +990,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             resourceGroupState.groupLinks.add(storageLink);
         }
         resourceGroupState.customProperties = new HashMap<>();
+        resourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+                context.enumRequest.endpointLink);
         resourceGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
         resourceGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED,
                 container.getProperties().getLastModified().toString());
@@ -998,8 +1005,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         if (oldResourceGroupState != null) {
             resourceGroupState.documentSelfLink = oldResourceGroupState.documentSelfLink;
         } else {
-            resourceGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
-                    context.parentCompute.documentSelfLink);
             resourceGroupState.tenantLinks = context.parentCompute.tenantLinks;
         }
         return resourceGroupState;
@@ -1455,6 +1460,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
         diskState.resourcePoolLink = context.enumRequest.resourcePoolLink;
         diskState.computeHostLink = context.parentCompute.documentSelfLink;
+        diskState.endpointLink = context.enumRequest.endpointLink;
         diskState.tenantLinks = context.parentCompute.tenantLinks;
         long bLength = 0;
         if (blob instanceof CloudBlob) {

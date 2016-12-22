@@ -19,6 +19,7 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SERVICE_USE;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -26,17 +27,28 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatefulService;
@@ -44,6 +56,7 @@ import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
@@ -60,6 +73,27 @@ public class EndpointRemovalTaskService
 
     public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
             .toMicros(10);
+    private static final String PROPERTY_NAME_QUERY_RESULT_LIMIT =
+            UriPaths.PROPERTY_PREFIX + "EndpointRemovalTaskService.QUERY_RESULT_LIMIT";
+    private static final int QUERY_RESULT_LIMIT = 50;
+
+    public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
+    public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
+
+    public static final String[] RESOURCE_TYPES_TO_DELETE = {
+            Utils.buildKind(AuthCredentialsServiceState.class),
+            Utils.buildKind(DiskState.class),
+            Utils.buildKind(ComputeState.class),
+            Utils.buildKind(ComputeDescription.class),
+            Utils.buildKind(ComputeStateWithDescription.class),
+            Utils.buildKind(NetworkState.class),
+            Utils.buildKind(NetworkInterfaceState.class),
+            Utils.buildKind(NetworkInterfaceDescription.class),
+            Utils.buildKind(SecurityGroupState.class),
+            Utils.buildKind(SubnetState.class),
+            Utils.buildKind(StorageDescription.class),
+            Utils.buildKind(ResourceGroupState.class)
+    };
 
     /**
      * SubStage.
@@ -255,16 +289,12 @@ public class EndpointRemovalTaskService
      * Delete associated resource, e.g. enumeration task if started.
      */
     private void deleteAssociatedDocuments(EndpointRemovalTaskState state, SubStage next) {
-        Query resourceQuery = Query.Builder
-                .create()
-                .addFieldClause(
-                        QuerySpecification
-                                .buildCompositeFieldName(
-                                        ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                                        ComputeProperties.ENDPOINT_LINK_PROP_NAME),
-                        state.endpoint.documentSelfLink)
-                .build();
-        QueryTask resourceQueryTask = QueryTask.Builder.createDirectTask().setQuery(resourceQuery)
+        Query resourceQuery = getAssociatedDocumentsQuery(state);
+        int resultLimit = Integer
+                .getInteger(PROPERTY_NAME_QUERY_RESULT_LIMIT, QUERY_RESULT_LIMIT);
+        QueryTask resourceQueryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(resourceQuery)
+                .setResultLimit(resultLimit)
                 .build();
         resourceQueryTask.tenantLinks = state.tenantLinks;
 
@@ -279,42 +309,106 @@ public class EndpointRemovalTaskService
                             }
 
                             QueryTask rsp = queryOp.getBody(QueryTask.class);
-                            if (rsp.results.documentLinks.isEmpty()) {
+                            if (rsp.results.nextPageLink == null) {
                                 sendSelfPatch(TaskStage.STARTED, next);
                                 return;
                             }
 
-                            Stream<Operation> deleteOps = rsp.results.documentLinks.stream()
-                                    .map(resultDoc -> Operation.createDelete(
-                                            UriUtils.buildUri(getHost(), resultDoc))
-                                            .setReferer(getUri()));
-                            OperationJoin joinOp = OperationJoin.create(deleteOps);
-                            JoinedCompletionHandler joinHandler = (ops, exc) -> {
-                                if (exc != null) {
-                                    logFine("Failed delete some of the associated resources, reason %s",
-                                            Utils.toString(exc));
-                                }
-                                // all resources deleted;
-                                sendSelfPatch(TaskStage.STARTED, next);
-                            };
-                            joinOp.setCompletion(joinHandler);
-                            joinOp.sendWith(getHost());
+                            deleteAssociatedDocumentsHelper(rsp.results.nextPageLink, next);
                         })
                 .sendWith(this);
+    }
+
+    private void deleteAssociatedDocumentsHelper (String nextPageLink, SubStage next) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                logWarning(e.getMessage());
+                sendSelfPatch(TaskStage.STARTED, next);
+                return;
+            }
+
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            List<Operation> deleteOps = new ArrayList<>();
+            for (String selfLink : queryTask.results.documentLinks) {
+                deleteOps.add(Operation.createDelete(
+                        UriUtils.buildUri(getHost(), selfLink))
+                        .setReferer(getUri()));
+            }
+
+            if (deleteOps.size() == 0) {
+                sendSelfPatch(TaskStage.STARTED, next);
+                return;
+            }
+
+            OperationJoin joinOp = OperationJoin.create(deleteOps);
+            JoinedCompletionHandler joinHandler = (ops, exc) -> {
+                if (exc != null) {
+                    logFine("Failed delete some of the associated resources, reason %s",
+                            Utils.toString(exc));
+                }
+
+                if (queryTask.results.nextPageLink == null) {
+                    // all resources deleted;
+                    sendSelfPatch(TaskStage.STARTED, next);
+                    return;
+                }
+                deleteAssociatedDocumentsHelper(queryTask.results.nextPageLink, next);
+            };
+            joinOp.setCompletion(joinHandler);
+            joinOp.sendWith(getHost());
+        };
+        sendRequest(Operation.createGet(this, nextPageLink)
+                .setCompletion(completionHandler));
+    }
+
+    private Query getAssociatedDocumentsQuery(EndpointRemovalTaskState state) {
+        Query resourceQuery = Query.Builder.create().build();
+
+        Query documentKindFilter = new QueryTask.Query();
+        documentKindFilter.occurance = QueryTask.Query.Occurance.MUST_OCCUR;
+        for (String documentKind : RESOURCE_TYPES_TO_DELETE) {
+            QueryTask.Query kindFilter = new QueryTask.Query()
+                    .setTermPropertyName(ServiceDocument.FIELD_NAME_KIND)
+                    .setTermMatchValue(documentKind);
+            kindFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
+            documentKindFilter.addBooleanClause(kindFilter);
+        }
+        resourceQuery.addBooleanClause(documentKindFilter);
+
+        Query endpointFilter = new QueryTask.Query();
+        endpointFilter.occurance = QueryTask.Query.Occurance.MUST_OCCUR;
+        //query for document that have the endpointLink field as a primary property
+        Query endpointLinkFilter = new QueryTask.Query()
+                .setTermPropertyName(FIELD_NAME_ENDPOINT_LINK)
+                .setTermMatchValue(state.endpoint.documentSelfLink);
+        endpointLinkFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
+        endpointFilter.addBooleanClause(endpointLinkFilter);
+
+        // query for document that have the endpointLink field as a custom property
+        String computeHostCompositeField = QueryTask.QuerySpecification
+                .buildCompositeFieldName(FIELD_NAME_CUSTOM_PROPERTIES,
+                        ComputeProperties.ENDPOINT_LINK_PROP_NAME);
+        endpointLinkFilter = new QueryTask.Query()
+                .setTermPropertyName(computeHostCompositeField)
+                .setTermMatchValue(state.endpoint.documentSelfLink);
+        endpointLinkFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
+        endpointFilter.addBooleanClause(endpointLinkFilter);
+
+        resourceQuery.addBooleanClause(endpointFilter);
+        return resourceQuery;
     }
 
     /**
      * Delete computes discovered with this endpoint.
      */
     private void deleteResources(EndpointRemovalTaskState state, SubStage next) {
-        Query resourceQuery = Query.Builder
-                .create()
+        QuerySpecification qSpec = new QuerySpecification();
+        qSpec.query = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, state.endpoint.computeLink,
                         Occurance.SHOULD_OCCUR)
                 .build();
-        QuerySpecification qSpec = new QuerySpecification();
-        qSpec.query = resourceQuery;
-
         ResourceRemovalTaskState removalServiceState = new ResourceRemovalTaskState();
         removalServiceState.documentSelfLink = UUID.randomUUID().toString();
         removalServiceState.resourceQuerySpec = qSpec;

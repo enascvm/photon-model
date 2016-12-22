@@ -163,7 +163,7 @@ public class AWSEnumerationUtils {
      */
     public static ComputeState mapInstanceToComputeState(Instance instance,
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
-            String computeDescriptionLink,
+            String endpointLink,  String computeDescriptionLink,
             List<String> tenantLinks) {
         ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
@@ -172,6 +172,7 @@ public class AWSEnumerationUtils {
         computeState.type = ComputeType.VM_GUEST;
 
         computeState.resourcePoolLink = resourcePoolLink;
+        computeState.endpointLink = endpointLink;
         // Compute descriptions are looked up by the instanceType in the local list of CDs.
         computeState.descriptionLink = computeDescriptionLink;
 

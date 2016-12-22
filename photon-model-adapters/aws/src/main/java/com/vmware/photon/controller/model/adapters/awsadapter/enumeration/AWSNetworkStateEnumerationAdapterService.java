@@ -401,6 +401,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 NetworkState networkState = mapVPCToNetworkState(resultVPC,
                         this.context.networkRequest.regionId,
                         this.context.networkRequest.enumerationRequest.resourcePoolLink,
+                        this.context.networkRequest.enumerationRequest.endpointLink,
                         this.context.networkRequest.parentAuth.documentSelfLink,
                         this.context.networkRequest.tenantLinks,
                         adapterUri);
@@ -477,7 +478,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 }
 
                 SubnetState subnetState = mapSubnetToSubnetState(subnet,
-                        this.context.networkRequest.tenantLinks);
+                        this.context.networkRequest.tenantLinks,
+                        this.context.networkRequest.enumerationRequest.endpointLink);
 
                 if (subnetState.subnetCIDR == null) {
                     logWarning("AWS did not return CIDR information for Subnet %s",

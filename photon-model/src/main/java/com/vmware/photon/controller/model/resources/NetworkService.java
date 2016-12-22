@@ -16,9 +16,11 @@ package com.vmware.photon.controller.model.resources;
 import java.net.URI;
 import java.util.UUID;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -80,6 +82,12 @@ public class NetworkService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI adapterManagementReference;
+
+        /**
+         * Link to the cloud account endpoint the network belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
+        public String endpointLink;
     }
 
     public NetworkService() {

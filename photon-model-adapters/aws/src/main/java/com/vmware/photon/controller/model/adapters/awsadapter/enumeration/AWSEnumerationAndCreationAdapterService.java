@@ -511,7 +511,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                         .values()
                                         .stream()
                                         .map(o -> o.getBody(ComputeDescription.class))
-                                        .map(cd -> createComputeInstace(cd))
+                                        .map(cd -> createComputeInstance(cd))
                                         .map(c -> Operation
                                                 .createPost(this.service,
                                                         ComputeService.FACTORY_LINK)
@@ -554,13 +554,14 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .sendWith(this.service);
         }
 
-        private ComputeState createComputeInstace(ComputeDescription cd) {
+        private ComputeState createComputeInstance(ComputeDescription cd) {
             ComputeService.ComputeState computeState = new ComputeService.ComputeState();
             computeState.name = cd.name;
             computeState.id = cd.id;
             computeState.adapterManagementReference = this.context.parentCompute.adapterManagementReference;
             computeState.parentLink = this.context.parentCompute.documentSelfLink;
             computeState.resourcePoolLink = this.context.computeEnumerationRequest.resourcePoolLink;
+            computeState.endpointLink = this.context.computeEnumerationRequest.endpointLink;
             computeState.descriptionLink = cd.documentSelfLink;
             computeState.type = ComputeType.VM_HOST;
 
@@ -584,6 +585,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.id = z.getZoneName();
             cd.zoneId = z.getZoneName();
             cd.name = z.getZoneName();
+            cd.endpointLink = this.context.computeEnumerationRequest.endpointLink;
             // Book keeping information about the creation of the compute description in the system.
             if (cd.customProperties == null) {
                 cd.customProperties = new HashMap<String, String>();
@@ -840,6 +842,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.authCredentiaslLink = this.context.parentAuth.documentSelfLink;
             cd.tenantLinks = this.context.parentCompute.tenantLinks;
             cd.parentDescription = this.context.parentCompute.description;
+            cd.endpointLink = this.context.computeEnumerationRequest.endpointLink;
             cd.regionId = this.context.parentCompute.description.regionId;
             cd.zones = this.context.zones;
 
@@ -879,6 +882,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.computeStatesToBeUpdated = this.context.computeStatesToBeUpdated;
             awsComputeState.parentComputeLink = this.context.parentCompute.documentSelfLink;
             awsComputeState.resourcePoolLink = this.context.computeEnumerationRequest.resourcePoolLink;
+            awsComputeState.endpointLink = this.context.computeEnumerationRequest.endpointLink;
             awsComputeState.parentTaskLink = this.context.computeEnumerationRequest.taskReference;
             awsComputeState.tenantLinks = this.context.parentCompute.tenantLinks;
             awsComputeState.parentAuth = this.context.parentAuth;

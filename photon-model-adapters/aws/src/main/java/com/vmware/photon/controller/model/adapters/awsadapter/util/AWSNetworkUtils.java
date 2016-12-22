@@ -48,8 +48,8 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
 public class AWSNetworkUtils {
 
     public static NetworkState mapVPCToNetworkState(Vpc vpc, String regionId,
-            String resourcePoolLink, String authCredentialsLink, List<String> tenantLinks,
-            URI adapterUri) {
+            String resourcePoolLink, String endpointLink, String authCredentialsLink,
+            List<String> tenantLinks, URI adapterUri) {
         if (vpc == null) {
             throw new IllegalArgumentException("Cannot map VPC to network state for null instance");
         }
@@ -59,6 +59,7 @@ public class AWSNetworkUtils {
         networkState.subnetCIDR = vpc.getCidrBlock();
         networkState.regionId = regionId;
         networkState.resourcePoolLink = resourcePoolLink;
+        networkState.endpointLink = endpointLink;
         networkState.authCredentialsLink = authCredentialsLink;
         networkState.instanceAdapterReference = adapterUri;
         networkState.tenantLinks = tenantLinks;
@@ -72,7 +73,8 @@ public class AWSNetworkUtils {
      * NOTE: Keep in mind that subnetState.networkLink is not set and it should be updated once
      * valid NetworkState.documentSelfLink is available.
      */
-    public static SubnetState mapSubnetToSubnetState(Subnet subnet, List<String> tenantLinks) {
+    public static SubnetState mapSubnetToSubnetState(Subnet subnet, List<String> tenantLinks,
+            String endpointLink) {
         if (subnet == null) {
             throw new IllegalArgumentException(
                     "Cannot map Subnet to subnet state for null instance");
@@ -82,6 +84,7 @@ public class AWSNetworkUtils {
         subnetState.name = subnet.getSubnetId();
         subnetState.subnetCIDR = subnet.getCidrBlock();
         subnetState.tenantLinks = tenantLinks;
+        subnetState.endpointLink = endpointLink;
 
         return subnetState;
     }

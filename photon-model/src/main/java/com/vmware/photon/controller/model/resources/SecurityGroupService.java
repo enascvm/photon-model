@@ -18,9 +18,11 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -120,6 +122,13 @@ public class SecurityGroupService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public List<Rule> egress;
+
+
+        /**
+         * Link to the cloud account endpoint the disk belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
+        public String endpointLink;
 
         /**
          * Represents a security group rule.

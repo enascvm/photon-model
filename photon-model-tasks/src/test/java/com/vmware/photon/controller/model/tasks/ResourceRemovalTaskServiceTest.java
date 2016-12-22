@@ -29,6 +29,8 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
+import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.SubStage;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
@@ -49,8 +51,8 @@ public class ResourceRemovalTaskServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static ResourceRemovalTaskService.ResourceRemovalTaskState buildValidStartState() {
-        ResourceRemovalTaskService.ResourceRemovalTaskState startState = new ResourceRemovalTaskService.ResourceRemovalTaskState();
+    private static ResourceRemovalTaskState buildValidStartState() {
+        ResourceRemovalTaskState startState = new ResourceRemovalTaskState();
 
         startState.resourceQuerySpec = new QueryTask.QuerySpecification();
         QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
@@ -104,24 +106,24 @@ public class ResourceRemovalTaskServiceTest extends Suite {
 
         @Test
         public void testMissingResourceQuerySpec() throws Throwable {
-            ResourceRemovalTaskService.ResourceRemovalTaskState startState = buildValidStartState();
+            ResourceRemovalTaskState startState = buildValidStartState();
             startState.resourceQuerySpec = null;
 
             postServiceSynchronously(
                     ResourceRemovalTaskService.FACTORY_LINK, startState,
-                    ResourceRemovalTaskService.ResourceRemovalTaskState.class,
+                    ResourceRemovalTaskState.class,
                     IllegalArgumentException.class);
         }
 
         @Test
         public void testMissingTaskInfo() throws Throwable {
-            ResourceRemovalTaskService.ResourceRemovalTaskState startState = buildValidStartState();
+            ResourceRemovalTaskState startState = buildValidStartState();
             startState.taskInfo = null;
 
-            ResourceRemovalTaskService.ResourceRemovalTaskState returnState = postServiceSynchronously(
+            ResourceRemovalTaskState returnState = postServiceSynchronously(
                     ResourceRemovalTaskService.FACTORY_LINK,
                     startState,
-                    ResourceRemovalTaskService.ResourceRemovalTaskState.class);
+                    ResourceRemovalTaskState.class);
 
             assertThat(returnState.taskInfo, notNullValue());
             assertThat(returnState.taskInfo.stage,
@@ -130,18 +132,18 @@ public class ResourceRemovalTaskServiceTest extends Suite {
 
         @Test
         public void testMissingTaskSubStage() throws Throwable {
-            ResourceRemovalTaskService.ResourceRemovalTaskState startState = buildValidStartState();
+            ResourceRemovalTaskState startState = buildValidStartState();
             startState.taskSubStage = null;
 
-            ResourceRemovalTaskService.ResourceRemovalTaskState returnState = postServiceSynchronously(
+            ResourceRemovalTaskState returnState = postServiceSynchronously(
                     ResourceRemovalTaskService.FACTORY_LINK,
                     startState,
-                    ResourceRemovalTaskService.ResourceRemovalTaskState.class);
+                    ResourceRemovalTaskState.class);
 
             assertThat(returnState.taskSubStage, notNullValue());
             assertThat(
                     returnState.taskSubStage,
-                    is(ResourceRemovalTaskService.SubStage.WAITING_FOR_QUERY_COMPLETION));
+                    is(SubStage.WAITING_FOR_QUERY_COMPLETION));
         }
     }
 
@@ -158,46 +160,46 @@ public class ResourceRemovalTaskServiceTest extends Suite {
 
         @Test
         public void testQueryResourceReturnZeroDocument() throws Throwable {
-            ResourceRemovalTaskService.ResourceRemovalTaskState startState = buildValidStartState();
+            ResourceRemovalTaskState startState = buildValidStartState();
 
-            ResourceRemovalTaskService.ResourceRemovalTaskState returnState = this
+            ResourceRemovalTaskState returnState = this
                     .postServiceSynchronously(
                             ResourceRemovalTaskService.FACTORY_LINK,
                             startState,
-                            ResourceRemovalTaskService.ResourceRemovalTaskState.class);
+                            ResourceRemovalTaskState.class);
 
             returnState = this
                     .waitForServiceState(
-                            ResourceRemovalTaskService.ResourceRemovalTaskState.class,
+                            ResourceRemovalTaskState.class,
                             returnState.documentSelfLink,
                             state -> state.taskInfo.stage == TaskState.TaskStage.FINISHED);
 
             assertThat(returnState.taskSubStage,
-                    is(ResourceRemovalTaskService.SubStage.FINISHED));
+                    is(SubStage.FINISHED));
         }
 
         @Test
         public void testResourceRemovalSuccess() throws Throwable {
-            ResourceRemovalTaskService.ResourceRemovalTaskState startState = buildValidStartState();
+            ResourceRemovalTaskState startState = buildValidStartState();
             ComputeService.ComputeStateWithDescription cs = ModelUtils
                     .createComputeWithDescription(this,
                             MockAdapter.MockSuccessInstanceAdapter.SELF_LINK,
                             null);
 
-            ResourceRemovalTaskService.ResourceRemovalTaskState returnState = this
+            ResourceRemovalTaskState returnState = this
                     .postServiceSynchronously(
                             ResourceRemovalTaskService.FACTORY_LINK,
                             startState,
-                            ResourceRemovalTaskService.ResourceRemovalTaskState.class);
+                            ResourceRemovalTaskState.class);
 
             returnState = this
                     .waitForServiceState(
-                            ResourceRemovalTaskService.ResourceRemovalTaskState.class,
+                            ResourceRemovalTaskState.class,
                             returnState.documentSelfLink,
                             state -> state.taskInfo.stage == TaskState.TaskStage.FINISHED);
 
             assertThat(returnState.taskSubStage,
-                    is(ResourceRemovalTaskService.SubStage.FINISHED));
+                    is(SubStage.FINISHED));
 
             // Clean up the compute and description documents
             this.deleteServiceSynchronously(cs.documentSelfLink);
@@ -211,7 +213,7 @@ public class ResourceRemovalTaskServiceTest extends Suite {
 
         @Test
         public void testLocalResourceRemovalOnlySuccess() throws Throwable {
-            ResourceRemovalTaskService.ResourceRemovalTaskState startState = buildValidStartState();
+            ResourceRemovalTaskState startState = buildValidStartState();
             startState.options = EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY);
 
             ComputeService.ComputeStateWithDescription cs = ModelUtils
@@ -219,20 +221,20 @@ public class ResourceRemovalTaskServiceTest extends Suite {
                             MockAdapter.MockFailOnInvokeInstanceAdapter.SELF_LINK,
                             null);
 
-            ResourceRemovalTaskService.ResourceRemovalTaskState returnState = this
+            ResourceRemovalTaskState returnState = this
                     .postServiceSynchronously(
                             ResourceRemovalTaskService.FACTORY_LINK,
                             startState,
-                            ResourceRemovalTaskService.ResourceRemovalTaskState.class);
+                            ResourceRemovalTaskState.class);
 
             returnState = this
                     .waitForServiceState(
-                            ResourceRemovalTaskService.ResourceRemovalTaskState.class,
+                            ResourceRemovalTaskState.class,
                             returnState.documentSelfLink,
                             state -> state.taskInfo.stage == TaskState.TaskStage.FINISHED);
 
             assertThat(returnState.taskSubStage,
-                    is(ResourceRemovalTaskService.SubStage.FINISHED));
+                    is(SubStage.FINISHED));
 
             // Clean up the compute and description documents
             this.deleteServiceSynchronously(cs.documentSelfLink);
@@ -248,20 +250,20 @@ public class ResourceRemovalTaskServiceTest extends Suite {
 
         @Test
         public void testResourceRemovalFailure() throws Throwable {
-            ResourceRemovalTaskService.ResourceRemovalTaskState startState = buildValidStartState();
+            ResourceRemovalTaskState startState = buildValidStartState();
             ComputeService.ComputeStateWithDescription cs = ModelUtils
                     .createComputeWithDescription(this,
                             MockAdapter.MockFailureInstanceAdapter.SELF_LINK,
                             null);
 
-            ResourceRemovalTaskService.ResourceRemovalTaskState returnState = this
+            ResourceRemovalTaskState returnState = this
                     .postServiceSynchronously(
                             ResourceRemovalTaskService.FACTORY_LINK,
                             startState,
-                            ResourceRemovalTaskService.ResourceRemovalTaskState.class);
+                            ResourceRemovalTaskState.class);
 
             this.waitForServiceState(
-                    ResourceRemovalTaskService.ResourceRemovalTaskState.class,
+                    ResourceRemovalTaskState.class,
                     returnState.documentSelfLink,
                     state -> state.taskInfo.stage == TaskState.TaskStage.FAILED);
 

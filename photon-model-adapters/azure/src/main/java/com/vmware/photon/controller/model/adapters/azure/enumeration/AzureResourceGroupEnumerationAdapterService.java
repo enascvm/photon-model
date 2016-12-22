@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -180,6 +181,8 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 resultResourceGroupState.customProperties = new HashMap<>();
                 resultResourceGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
                         this.parentCompute.documentSelfLink);
+                resultResourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+                        this.enumRequest.endpointLink);
                 resultResourceGroupState.customProperties.put(RESOURCE_TYPE_KEY,
                         ResourceGroupStateType.AzureResourceGroup.name());
             }

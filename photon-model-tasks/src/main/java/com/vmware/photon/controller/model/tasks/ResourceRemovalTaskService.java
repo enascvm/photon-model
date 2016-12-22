@@ -23,8 +23,8 @@ import java.util.stream.Stream;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
-import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
@@ -278,7 +278,6 @@ public class ResourceRemovalTaskService
                     sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
                 })
                 .sendWith(this);
-
     }
 
     private void doInstanceDeletes(ResourceRemovalTaskState currentState,
@@ -298,7 +297,7 @@ public class ResourceRemovalTaskService
         // a DELETE request to its associated instance service.
 
         for (String resourceLink : queryTask.results.documentLinks) {
-            URI u = ComputeService.ComputeStateWithDescription
+            URI u = ComputeStateWithDescription
                     .buildUri(UriUtils.buildUri(getHost(), resourceLink));
             sendRequest(Operation
                     .createGet(u)
@@ -364,8 +363,7 @@ public class ResourceRemovalTaskService
 
     private void sendInstanceDelete(String resourceLink, String subTaskLink,
             Operation o, ResourceRemovalTaskState currentState) {
-        ComputeService.ComputeStateWithDescription chd = o
-                .getBody(ComputeService.ComputeStateWithDescription.class);
+        ComputeStateWithDescription chd = o.getBody(ComputeStateWithDescription.class);
         if (chd.description.instanceAdapterReference != null) {
             ComputeInstanceRequest deleteReq = new ComputeInstanceRequest();
             deleteReq.resourceReference = UriUtils.buildUri(getHost(), resourceLink);
@@ -390,7 +388,8 @@ public class ResourceRemovalTaskService
                             }));
         } else {
             logWarning(
-                    "Compute instance %s doesn't not have configured instanceAdapter. Only local resource will be deleted.",
+                    "Compute instance %s doesn't not have configured instanceAdapter. Only local "
+                            + "resource will be deleted.",
                     resourceLink);
             ResourceOperationResponse subTaskPatchBody = ResourceOperationResponse
                     .finish(resourceLink);

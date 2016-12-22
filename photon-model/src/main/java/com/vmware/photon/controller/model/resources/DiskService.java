@@ -18,8 +18,10 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
-import com.vmware.photon.controller.model.UriPaths;
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
+import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -153,10 +155,17 @@ public class DiskService extends StatefulService {
         public Long creationTimeMicros;
 
         /**
-         * Link to the compute host the disk belongs too. This property is not used to associate the
-         * diskState with it's compute (VM). That association happens through the compute's diskLinks property.
+         * Link to the compute host the disk belongs to. This property is not used to associate the
+         * diskState with it's compute (VM). That association happens through the compute's
+         * diskLinks property.
          */
         public String computeHostLink;
+
+        /**
+         * Link to the cloud account endpoint the disk belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
+        public String endpointLink;
 
         /**
          * This class represents the boot configuration for the disk service

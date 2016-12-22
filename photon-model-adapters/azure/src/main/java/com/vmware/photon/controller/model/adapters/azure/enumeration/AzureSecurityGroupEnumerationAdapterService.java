@@ -221,6 +221,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             resultSecurityGroupState.name = networkSecurityGroup.name;
             resultSecurityGroupState.regionId = networkSecurityGroup.location;
             resultSecurityGroupState.resourcePoolLink = this.enumRequest.resourcePoolLink;
+            resultSecurityGroupState.endpointLink = this.enumRequest.endpointLink;
             resultSecurityGroupState.tenantLinks = this.parentCompute.tenantLinks;
 
             // TODO: AzureFirewallService currently doesn't exist.

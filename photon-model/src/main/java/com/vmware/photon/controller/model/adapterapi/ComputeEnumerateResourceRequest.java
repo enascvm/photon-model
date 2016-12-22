@@ -43,4 +43,9 @@ public class ComputeEnumerateResourceRequest extends ResourceRequest {
      * {@link  com.vmware.photon.controller.model.resources.ComputeService.LifecycleState#RETIRED}
      */
     public boolean preserveMissing;
+
+    /**
+     * Link reference to the cloud account endpoint of this host
+     */
+    public String endpointLink;
 }

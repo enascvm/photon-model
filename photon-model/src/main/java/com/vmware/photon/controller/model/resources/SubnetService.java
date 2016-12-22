@@ -90,6 +90,12 @@ public class SubnetService extends StatefulService {
          */
         @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL, indexing = PropertyIndexingOption.EXPAND)
         public Set<String> dnsSearchDomains;
+
+        /**
+         * Link to the cloud account endpoint the sub-network belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
+        public String endpointLink;
     }
 
     public SubnetService() {

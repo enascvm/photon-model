@@ -49,7 +49,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
-import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
@@ -492,6 +491,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 diskStatesToBeCreated.add(mapVolumeToDiskState(volume,
                         this.context.computeEnumerationRequest.resourcePoolLink,
                         this.context.parentAuth.documentSelfLink,
+                        this.context.computeEnumerationRequest.endpointLink,
                         this.context.parentCompute.tenantLinks));
 
             });
@@ -509,6 +509,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 diskStatesToBeUpdated.add(mapVolumeToDiskState(volume,
                         this.context.computeEnumerationRequest.resourcePoolLink,
                         this.context.parentAuth.documentSelfLink,
+                        this.context.computeEnumerationRequest.endpointLink,
                         this.context.parentCompute.tenantLinks));
 
             });
@@ -540,7 +541,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * Map an EBS volume to a photon-model disk state.
          */
         private DiskState mapVolumeToDiskState(Volume volume, String resourcePoolLink,
-                String authCredentialsLink, List<String> tenantLinks) {
+                String authCredentialsLink, String endpointLink, List<String> tenantLinks) {
             DiskState diskState = new DiskState();
             diskState.id = volume.getVolumeId();
             // TODO Get the disk name from the tag if present. Else default to the volumeID.
@@ -551,6 +552,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             diskState.zoneId = volume.getAvailabilityZone();
             diskState.authCredentialsLink = authCredentialsLink;
             diskState.resourcePoolLink = resourcePoolLink;
+            diskState.endpointLink = endpointLink;
             diskState.tenantLinks = tenantLinks;
             if (volume.getCreateTime() != null) {
                 diskState.creationTimeMicros = TimeUnit.MILLISECONDS
@@ -639,7 +641,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
                             NumericRange.createLessThanRange(this.context.enumerationStartTimeInMicros))
                     .addCompositeFieldClause(
-                            ComputeService.ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                             SOURCE_TASK_LINK, ResourceEnumerationTaskService.FACTORY_LINK,
                             QueryTask.Query.Occurance.MUST_OCCUR)
                     .build();

@@ -126,6 +126,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public AWSSecurityGroupEnumerationResponse enumeratedSecurityGroups;
         public Map<String, ZoneData> zones;
         public String resourcePoolLink;
+        public String endpointLink;
         public String parentComputeLink;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public String regionId;
@@ -202,7 +203,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             createTags(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES_OPERATIONS);
             break;
         case CREATE_COMPUTESTATES_OPERATIONS:
-            populateCreateOperations(context, AWSComputeStateCreationStage.UPDATE_COMPUTESTATES_OPERATIONS);
+            populateCreateOperations(context,
+                    AWSComputeStateCreationStage.UPDATE_COMPUTESTATES_OPERATIONS);
             break;
         case UPDATE_COMPUTESTATES_OPERATIONS:
             populateUpdateOperations(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES);
@@ -347,6 +349,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         instance,
                         context.request.parentComputeLink, zoneData.computeLink,
                         context.request.resourcePoolLink,
+                        context.request.endpointLink,
                         context.computeDescriptionMap.get(descKey),
                         context.request.tenantLinks);
                 computeStateToBeCreated.networkInterfaceLinks = new ArrayList<>();
@@ -449,6 +452,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 ComputeService.ComputeState computeStateToBeUpdated = mapInstanceToComputeState(instance,
                         context.request.parentComputeLink, zoneData.computeLink,
                         context.request.resourcePoolLink,
+                        context.request.endpointLink,
                         existingComputeState.descriptionLink,
                         context.request.tenantLinks);
                 computeStateToBeUpdated.documentSelfLink = existingComputeState.documentSelfLink;

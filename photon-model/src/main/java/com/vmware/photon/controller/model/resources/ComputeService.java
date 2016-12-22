@@ -172,6 +172,12 @@ public class ComputeService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public Long creationTimeMicros;
+
+        /**
+         * Link to the cloud account endpoint the compute belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
+        public String endpointLink;
     }
 
     /**

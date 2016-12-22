@@ -15,15 +15,19 @@ package com.vmware.photon.controller.model.tasks;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
 
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
+import java.util.UUID;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -33,9 +37,17 @@ import org.junit.runners.Suite.SuiteClasses;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
@@ -44,6 +56,10 @@ import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.services.common.AuthCredentialsService;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * This class implements tests for the {@link EndpointRemovalTaskService} class.
@@ -54,6 +70,7 @@ import com.vmware.xenon.common.UriUtils;
         EndpointRemovalTaskServiceTest.HandleStartTest.class,
         EndpointRemovalTaskServiceTest.EndToEndTest.class })
 public class EndpointRemovalTaskServiceTest extends Suite {
+    public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
 
     public EndpointRemovalTaskServiceTest(Class<?> klass,
             RunnerBuilder builder) throws InitializationError {
@@ -126,6 +143,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         @Test
         public void testSuccess() throws Throwable {
             EndpointState endpoint = createEndpoint(this);
+            createAssociatedDocuments(this, endpoint.documentSelfLink, endpoint.tenantLinks);
 
             EndpointRemovalTaskState removalTaskState = createEndpointRemovalTaskState(endpoint);
 
@@ -144,11 +162,16 @@ public class EndpointRemovalTaskServiceTest extends Suite {
             assertThat(completeState.taskInfo.stage,
                     is(TaskState.TaskStage.FINISHED));
 
+            // there should be no associated documents found
+            long assocDocCount = getAssociatedDocumentsCount(this, endpoint.documentSelfLink,
+                    endpoint.tenantLinks);
+            assertEquals(0, assocDocCount);
         }
 
         @Test
         public void testFailOnMissingEndpointToDelete() throws Throwable {
             EndpointState endpoint = createEndpointState();
+
             endpoint.documentSelfLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
                     "fake-endpoint");
 
@@ -234,6 +257,102 @@ public class EndpointRemovalTaskServiceTest extends Suite {
 
         return getServiceSynchronously(test, endpointState.documentSelfLink,
                 EndpointState.class);
+    }
+
+    private static void createAssociatedDocuments(BaseModelTest test, String endpointLink,
+            List<String> tenantLinks) throws Throwable {
+        createComputeState(test, endpointLink, tenantLinks);
+        createDiskState(test, endpointLink, tenantLinks);
+        createNetworkState(test, endpointLink, tenantLinks);
+        createAuthCredentials(test, endpointLink, tenantLinks);
+    }
+
+    private static void createComputeState(BaseModelTest test, String endpointLink,
+            List<String> tenantLinks) throws Throwable {
+        ComputeState cs = new ComputeState();
+        cs.id = UUID.randomUUID().toString();
+        cs.name = "computeState";
+        cs.descriptionLink = "descriptionLink";
+        cs.tenantLinks = tenantLinks;
+        cs.endpointLink = endpointLink;
+
+        ComputeState computeState = test.postServiceSynchronously(ComputeService.FACTORY_LINK, cs,
+                ComputeService.ComputeState.class);
+    }
+
+    private static void createDiskState(BaseModelTest test, String endpointLink,
+            List<String> tenantLinks) throws Throwable {
+        DiskState d = new DiskState();
+        d.id = UUID.randomUUID().toString();
+        d.type = DiskType.HDD;
+        d.name = "disk";
+        d.capacityMBytes = 100L;
+        d.tenantLinks = tenantLinks;
+        d.endpointLink = endpointLink;
+        DiskState disk = test.postServiceSynchronously(DiskService.FACTORY_LINK, d,
+                DiskState.class);
+    }
+
+    private static void createNetworkState(BaseModelTest test, String endpointLink,
+            List<String> tenantLinks) throws Throwable {
+        NetworkState net = new NetworkState();
+        net.name = "network";
+        net.subnetCIDR = "0.0.0.0/0";
+        net.tenantLinks = tenantLinks;
+        net.endpointLink = endpointLink;
+        net.authCredentialsLink = "authCredsLink";
+        net.resourcePoolLink = "resourcePoolLink";
+        net.regionId = "region-id";
+        net.instanceAdapterReference = UriUtils.buildUri(test.getHost(), "instance-adapter");
+        NetworkState networkState = test.postServiceSynchronously(NetworkService.FACTORY_LINK, net,
+                NetworkState.class);
+    }
+
+    private static void createAuthCredentials(BaseModelTest test, String endpointLink,
+            List<String> tenantLinks) throws Throwable {
+        AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
+        auth.userEmail = "email";
+        auth.privateKey = "pass";
+        auth.customProperties = new HashMap<>();
+        auth.tenantLinks = tenantLinks;
+        auth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK, endpointLink);
+        AuthCredentialsServiceState authCreds = test
+                .postServiceSynchronously(AuthCredentialsService.FACTORY_LINK, auth,
+                        AuthCredentialsServiceState.class);
+    }
+
+    private static long getAssociatedDocumentsCount(BaseModelTest test, String endpointLink,
+            List<String> tenantLinks) throws Throwable {
+        QueryTask.Query resourceQuery = QueryTask.Query.Builder.create().build();
+        QueryTask.Query endpointFilter = new QueryTask.Query();
+        endpointFilter.occurance = QueryTask.Query.Occurance.MUST_OCCUR;
+        //query for document that have the endpointLink field as a primary property
+        QueryTask.Query endpointLinkFilter = new QueryTask.Query()
+                .setTermPropertyName(FIELD_NAME_ENDPOINT_LINK)
+                .setTermMatchValue(endpointLink);
+        endpointLinkFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
+        endpointFilter.addBooleanClause(endpointLinkFilter);
+
+        // query for document that have the endpointLink field as a custom property
+        String computeHostCompositeField = QueryTask.QuerySpecification
+                .buildCompositeFieldName(CUSTOM_PROP_ENPOINT_LINK,
+                        ComputeProperties.ENDPOINT_LINK_PROP_NAME);
+        endpointLinkFilter = new QueryTask.Query()
+                .setTermPropertyName(computeHostCompositeField)
+                .setTermMatchValue(endpointLink);
+        endpointLinkFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
+        endpointFilter.addBooleanClause(endpointLinkFilter);
+
+        resourceQuery.addBooleanClause(endpointFilter);
+        QueryTask resourceQueryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(resourceQuery)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .build();
+        resourceQueryTask.tenantLinks = tenantLinks;
+
+        QueryTask queryTask = test.querySynchronously(resourceQueryTask);
+
+        return queryTask.results.documentCount;
     }
 
     private static <T extends ServiceDocument> T getServiceSynchronously(BaseModelTest test,

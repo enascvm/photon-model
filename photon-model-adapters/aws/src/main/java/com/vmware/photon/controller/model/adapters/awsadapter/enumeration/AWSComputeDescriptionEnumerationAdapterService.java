@@ -80,6 +80,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         public List<String> tenantLinks;
         public Map<String, ZoneData> zones;
         public ComputeDescription parentDescription;
+        public String endpointLink;
     }
 
     /**
@@ -90,7 +91,6 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         public List<Operation> createOperations;
         public Map<InstanceDescKey, String> localComputeDescriptionMap;
         public Set<InstanceDescKey> representativeComputeDescriptionSet;
-        public int instanceToBeCreatedCounter = 0;
         public List<InstanceDescKey> computeDescriptionsToBeCreatedList;
         public AWSComputeDescCreationStage creationStage;
         public AWSComputeDescriptionCreationState cdState;
@@ -319,6 +319,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         computeDescription.id = cd.instanceType;
         computeDescription.instanceType = cd.instanceType;
         computeDescription.name = cd.instanceType;
+        computeDescription.endpointLink = cdState.endpointLink;
         computeDescription.tenantLinks = cdState.tenantLinks;
         // Book keeping information about the creation of the compute description in the system.
         computeDescription.customProperties = new HashMap<String, String>();

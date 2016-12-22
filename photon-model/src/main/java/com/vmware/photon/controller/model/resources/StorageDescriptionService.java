@@ -15,7 +15,10 @@ package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
@@ -41,6 +44,7 @@ public class StorageDescriptionService extends StatefulService {
         public static final String FIELD_NAME_ADAPTER_REFERENCE = "adapterManagementReference";
         public static final String FIELD_NAME_REGION_ID = "regionId";
         public static final String FIELD_NAME_COMPUTE_HOST_LINK = "computeHostLink";
+        public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
 
         /**
          * Region or the Location the storage belongs to.
@@ -83,6 +87,12 @@ public class StorageDescriptionService extends StatefulService {
          * Reference to compute host instance.
          */
         public String computeHostLink;
+
+        /**
+         * Link to the cloud account endpoint the disk belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
+        public String endpointLink;
     }
 
     @Override

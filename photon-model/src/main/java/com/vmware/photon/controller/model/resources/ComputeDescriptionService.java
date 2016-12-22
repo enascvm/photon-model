@@ -198,6 +198,12 @@ public class ComputeDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI enumerationAdapterReference;
+
+        /**
+         * Link to the cloud account endpoint the compute belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
+        public String endpointLink;
     }
 
     public ComputeDescriptionService() {

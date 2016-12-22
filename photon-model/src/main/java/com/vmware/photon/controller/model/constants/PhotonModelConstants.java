@@ -108,4 +108,6 @@ public class PhotonModelConstants {
         gpc,
         vsphere;
     }
+
+    public static final String CUSTOM_PROP_ENPOINT_LINK = "__endpointLink";
 }

@@ -708,6 +708,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     // NetworkState.documentSelfLink
                     subnetState.networkLink = context.networkStates.get
                             (subnetStateWithParentVNetId.parentVNetId).documentSelfLink;
+                    subnetState.endpointLink = context.enumRequest.endpointLink;
 
                     return context.subnetStates.containsKey(subnetId) ?
                             // Update case
@@ -767,6 +768,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         resultNetworkState.name = azureVirtualNetwork.name;
         resultNetworkState.regionId = azureVirtualNetwork.location;
         resultNetworkState.resourcePoolLink = context.enumRequest.resourcePoolLink;
+        resultNetworkState.endpointLink = context.enumRequest.endpointLink;
 
         AddressSpace addressSpace = azureVirtualNetwork.properties.addressSpace;
         if (addressSpace != null
