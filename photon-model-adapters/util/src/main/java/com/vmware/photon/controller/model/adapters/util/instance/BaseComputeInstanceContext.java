@@ -197,10 +197,12 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     }
 
     protected DeferredResult<T> getNicFirewallStates(T context) {
+        if (context.nics.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
 
         List<String> firewallLinks = context.getPrimaryNic().nicStateWithDesc.firewallLinks;
-
-        if (context.nics.isEmpty() || firewallLinks == null || firewallLinks.isEmpty()) {
+        if (firewallLinks == null || firewallLinks.isEmpty()) {
             return DeferredResult.completed(context);
         }
 
