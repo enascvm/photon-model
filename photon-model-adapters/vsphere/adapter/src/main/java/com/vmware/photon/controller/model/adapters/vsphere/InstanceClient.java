@@ -107,6 +107,8 @@ public class InstanceClient extends BaseHelper {
 
     private static final String CLOUD_CONFIG_PROPERTY_USER_DATA = "user-data";
     private static final String COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA = "guestinfo.coreos.config.data";
+    private static final String COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA_ENCODING = "guestinfo.coreos.config.data.encoding";
+    private static final String CLOUD_CONFIG_BASE64_ENCODING = "base64";
 
     private static final String CLOUD_CONFIG_PROPERTY_HOSTNAME = "hostname";
     private static final String COREOS_CLOUD_CONFIG_PROPERTY_HOSTNAME = "guestinfo.guestinfo.hostname";
@@ -344,14 +346,21 @@ public class InstanceClient extends BaseHelper {
     private void mergeCloudConfigPropsIntoOvfEnv(Map<String, KeyValue> props, DiskState bootDisk) {
         String userData = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_USER_DATA);
         if (userData != null) {
+            String encoded = Base64.getEncoder().encodeToString(userData.getBytes());
             KeyValue kv = new KeyValue();
             kv.setKey(CLOUD_CONFIG_PROPERTY_USER_DATA);
-            kv.setValue(userData);
+            kv.setValue(encoded);
+            props.put(kv.getKey(), kv);
+
+            // CoreOs specific ovf keys
+            kv = new KeyValue();
+            kv.setKey(COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA);
+            kv.setValue(encoded);
             props.put(kv.getKey(), kv);
 
             kv = new KeyValue();
-            kv.setKey(COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA);
-            kv.setValue(userData);
+            kv.setKey(COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA_ENCODING);
+            kv.setValue(CLOUD_CONFIG_BASE64_ENCODING);
             props.put(kv.getKey(), kv);
         }
 
