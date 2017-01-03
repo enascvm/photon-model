@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
@@ -66,6 +67,7 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
@@ -101,12 +103,12 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
     public static class AWSNetworkEnumerationResponse {
         /**
          * Map discovered AWS VPC {@link Vpc#getVpcId() id} to network state
-         * {@link ServiceDocument#documentSelfLink self link}.
+         * {@code documentSelfLink}.
          */
         public Map<String, String> vpcs = new HashMap<>();
         /**
          * Map discovered AWS Subnet {@link Subnet#getSubnetId() id} to subnet state
-         * {@link ServiceDocument#documentSelfLink self link}.
+         * {@code documentSelfLink}.
          */
         public Map<String, String> subnets = new HashMap<>();
     }
@@ -552,7 +554,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
 
         if (context.vpcs.isEmpty()) {
-            logInfo("No new VPCs have been discovered.Nothing to do.");
+            logInfo("No new VPCs have been discovered. Nothing to do.");
 
             handleNetworkStateChanges(context, next);
             return;
@@ -567,10 +569,10 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             final Operation networkStateOp;
             if (context.localNetworkStateMap.containsKey(remoteVPCId)) {
                 // If the local network state already exists for the VPC -> Update it.
-                String localNetworkStateSelfLink = context.localNetworkStateMap.get(remoteVPCId);
+                networkState.documentSelfLink = context.localNetworkStateMap.get(remoteVPCId);
 
                 networkStateOp = createPatchOperation(this,
-                        networkState, localNetworkStateSelfLink);
+                        networkState, networkState.documentSelfLink);
             } else {
                 networkStateOp = createPostOperation(this,
                         networkState, NetworkService.FACTORY_LINK);
@@ -578,11 +580,13 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             networkOperations.add(networkStateOp);
         }
 
-        OperationJoin.JoinedCompletionHandler joinCompletion = (ops,
-                exc) -> {
-            if (exc != null) {
-                logSevere("Error creating/updating a Network state %s", Utils.toString(exc));
-                finishWithFailure(context, exc.values().iterator().next());
+        JoinedCompletionHandler joinCompletion = (ops, excs) -> {
+            if (excs != null) {
+                Entry<Long, Throwable> excEntry = excs.entrySet().iterator().next();
+                Throwable exc = excEntry.getValue();
+                Operation op = ops.get(excEntry.getKey());
+                logSevere("Error %s-ing a Network state: %s", op.getAction(), Utils.toString(excs));
+                finishWithFailure(context, exc);
                 return;
             }
             logInfo("Successfully created/updated all the network states.");
@@ -594,6 +598,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
                     });
             handleNetworkStateChanges(context, next);
         };
+
         OperationJoin.create(networkOperations)
                 .setCompletion(joinCompletion)
                 .sendWith(this);
@@ -607,7 +612,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
 
         if (context.subnets.isEmpty()) {
-            logInfo("No new Subnets have been discovered.Nothing to do.");
+            logInfo("No new Subnets have been discovered. Nothing to do.");
             handleNetworkStateChanges(context, next);
             return;
         }
@@ -627,11 +632,10 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             final Operation subnetStateOp;
             if (context.localSubnetStateMap.containsKey(remoteSubnetId)) {
                 // If the local subnet state already exists for the Subnet -> Update it.
-                String localSubnetStateSelfLink = context.localSubnetStateMap
-                        .get(remoteSubnetId);
+                subnetState.documentSelfLink = context.localSubnetStateMap.get(remoteSubnetId);
 
                 subnetStateOp = createPatchOperation(this,
-                        subnetState, localSubnetStateSelfLink);
+                        subnetState, subnetState.documentSelfLink);
             } else {
                 subnetStateOp = createPostOperation(this,
                         subnetState, SubnetService.FACTORY_LINK);
@@ -639,10 +643,13 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             subnetOperations.add(subnetStateOp);
         }
 
-        OperationJoin.JoinedCompletionHandler joinCompletion = (ops, exc) -> {
-            if (exc != null) {
-                logSevere("Error creating/updating a Subnet state %s", Utils.toString(exc));
-                finishWithFailure(context, exc.values().iterator().next());
+        JoinedCompletionHandler joinCompletion = (ops, excs) -> {
+            if (excs != null) {
+                Entry<Long, Throwable> excEntry = excs.entrySet().iterator().next();
+                Throwable exc = excEntry.getValue();
+                Operation op = ops.get(excEntry.getKey());
+                logSevere("Error %s-ing a Subnet state: %s", op.getAction(), Utils.toString(excs));
+                finishWithFailure(context, exc);
                 return;
             }
             logInfo("Successfully created/updated all the subnet states.");

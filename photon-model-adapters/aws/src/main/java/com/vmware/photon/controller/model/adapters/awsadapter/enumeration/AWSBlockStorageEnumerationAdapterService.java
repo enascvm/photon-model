@@ -525,12 +525,11 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 if (exc != null) {
                     this.service.logSevere("Error creating/updating disk %s", Utils.toString(exc));
                     signalErrorToEnumerationAdapter(exc.values().iterator().next());
-
+                    return;
                 }
                 this.service.logFine("Successfully created and updated all the disk states.");
                 this.context.subStage = next;
                 handleReceivedEnumerationData();
-                return;
             };
             OperationJoin joinOp = OperationJoin.create(this.context.enumerationOperations);
             joinOp.setCompletion(joinCompletion);
