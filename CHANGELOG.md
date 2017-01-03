@@ -2,6 +2,8 @@
 
 ## 0.5.6-SNAPSHOT
 
+* Updating xenon to 1.3.4.
+
 ## 0.5.5
 
 * Various enumeration query update to cap max results at 10000.
