@@ -16,7 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ATTACHMENT_VPC_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MAIN_ROUTE_ASSOCIATION;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_FILTER;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.AWS_FILTER_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs;
@@ -328,7 +328,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
         DescribeSubnetsRequest subnetRequest = new DescribeSubnetsRequest();
         List<String> vpcList = new ArrayList<String>(context.vpcs.keySet());
-        Filter filter = new Filter(AWS_VPC_FILTER, vpcList);
+        Filter filter = new Filter(AWS_VPC_ID_FILTER, vpcList);
         subnetRequest.getFilters().add(filter);
         AWSSubnetAsyncHandler asyncHandler = new AWSSubnetAsyncHandler(next, context);
         context.amazonEC2Client.describeSubnetsAsync(subnetRequest, asyncHandler);

@@ -21,8 +21,9 @@ public class AWSConstants {
     public static final String AWS_SECURITY_GROUP_ID = "awsSecurityGroupId";
     public static final String AWS_TAG_NAME = "Name";
     public static final String AWS_VPC_ID = "awsVpcId";
-    public static final String AWS_VPC_FILTER = "vpc-id";
-    public static final String AWS_SUBNET_FILTER = "subnet-id";
+    public static final String AWS_VPC_ID_FILTER = "vpc-id";
+    public static final String AWS_SUBNET_ID_FILTER = "subnet-id";
+    public static final String AWS_GROUP_NAME_FILTER = "group-name";
     public static final String AWS_GATEWAY_ID = "awsGatewayID";
     public static final String AWS_VPC_ROUTE_TABLE_ID = "awsMainRouteTableID";
     public static final String AWS_MAIN_ROUTE_ASSOCIATION = "association.main";

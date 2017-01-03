@@ -334,7 +334,6 @@ public class TestAWSSetupUtils {
             netState = new NetworkState();
             netState.id = AWS_DEFAULT_VPC_ID;
             netState.name = AWS_DEFAULT_VPC_ID;
-            netState.documentSelfLink = netState.id;
             netState.authCredentialsLink = authCredentialsLink;
             netState.resourcePoolLink = resourcePoolLink;
             netState.subnetCIDR = AWS_DEFAULT_VPC_CIDR;
@@ -352,13 +351,10 @@ public class TestAWSSetupUtils {
             subnetState = new SubnetState();
             subnetState.id = AWS_DEFAULT_SUBNET_ID;
             subnetState.name = AWS_DEFAULT_SUBNET_NAME;
-            subnetState.documentSelfLink = subnetState.id;
-            subnetState.networkLink = UriUtils.buildUriPath(
-                    NetworkService.FACTORY_LINK,
-                    netState.id);
+            subnetState.networkLink = netState.documentSelfLink;
             subnetState.subnetCIDR = AWS_DEFAULT_SUBNET_CIDR;
 
-            TestUtils.doPost(host, subnetState, SubnetState.class,
+            subnetState = TestUtils.doPost(host, subnetState, SubnetState.class,
                     UriUtils.buildUri(host, SubnetService.FACTORY_LINK));
         }
 
@@ -412,26 +408,21 @@ public class TestAWSSetupUtils {
             firewallState.instanceAdapterReference = new URI(
                     "http://instanceAdapterReference");
 
-            TestUtils.doPost(host, firewallState, FirewallState.class,
+            firewallState = TestUtils.doPost(host, firewallState, FirewallState.class,
                     UriUtils.buildUri(host, FirewallService.FACTORY_LINK));
         }
 
         // Create nics
-        List<String> nics = new ArrayList<>();
+        List<String> nicLinks = new ArrayList<>();
         for (int i = 0; i < NUMBER_OF_NICS; i++) {
             NetworkInterfaceState nicState;
             {
                 nicState = new NetworkInterfaceState();
                 nicState.id = UUID.randomUUID().toString();
-                nicState.documentSelfLink = nicState.id;
                 nicState.name = awsVMDesc.name + "-nic-" + i;
 
-                nicState.networkLink = UriUtils.buildUriPath(
-                        NetworkService.FACTORY_LINK,
-                        netState.id);
-                nicState.subnetLink = UriUtils.buildUriPath(
-                        SubnetService.FACTORY_LINK,
-                        subnetState.id);
+                nicState.networkLink = netState.documentSelfLink;
+                nicState.subnetLink = subnetState.documentSelfLink;
                 nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
 
                 String firewallLink = UriUtils.buildUriPath(
@@ -443,7 +434,7 @@ public class TestAWSSetupUtils {
                 nicState = TestUtils.doPost(host, nicState, NetworkInterfaceState.class,
                         UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
 
-                nics.add(UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK, nicState.id));
+                nicLinks.add(nicState.documentSelfLink);
             }
         }
 
@@ -456,7 +447,7 @@ public class TestAWSSetupUtils {
             resource.parentLink = parentLink;
             resource.descriptionLink = vmComputeDesc.documentSelfLink;
             resource.resourcePoolLink = resourcePoolLink;
-            resource.networkInterfaceLinks = nics;
+            resource.networkInterfaceLinks = nicLinks;
             resource.diskLinks = vmDisks;
             resource.tagLinks = tagLinks;
         }

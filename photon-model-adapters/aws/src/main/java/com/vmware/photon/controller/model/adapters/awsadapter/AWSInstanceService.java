@@ -268,10 +268,10 @@ public class AWSInstanceService extends StatelessService {
         DescribeSubnetsRequest subnetRequest = new DescribeSubnetsRequest();
 
         subnetRequest.getFilters().add(
-                new Filter(AWSConstants.AWS_VPC_FILTER, Collections.singletonList(aws
+                new Filter(AWSConstants.AWS_VPC_ID_FILTER, Collections.singletonList(aws
                         .getPrimaryNic().vpc.getVpcId())));
         subnetRequest.getFilters().add(
-                new Filter(AWSConstants.AWS_SUBNET_FILTER, Collections.singletonList(aws
+                new Filter(AWSConstants.AWS_SUBNET_ID_FILTER, Collections.singletonList(aws
                         .getPrimaryNic().subnetState.id)));
 
         aws.amazonEC2Client.describeSubnetsAsync(subnetRequest,
@@ -314,7 +314,7 @@ public class AWSInstanceService extends StatelessService {
         DescribeVpcsRequest vpcRequest = new DescribeVpcsRequest();
 
         vpcRequest.getFilters().add(
-                new Filter(AWSConstants.AWS_VPC_FILTER, Collections.singletonList(aws
+                new Filter(AWSConstants.AWS_VPC_ID_FILTER, Collections.singletonList(aws
                         .getPrimaryNic().networkState.id)));
 
         aws.amazonEC2Client.describeVpcsAsync(vpcRequest,

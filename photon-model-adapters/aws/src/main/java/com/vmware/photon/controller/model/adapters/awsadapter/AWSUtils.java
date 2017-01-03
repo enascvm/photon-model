@@ -13,7 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GROUP_NAME_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_PENDING;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_RUNNING;
@@ -378,9 +380,9 @@ public class AWSUtils {
 
         DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest();
 
-        req.withFilters(new Filter("group-name", names));
+        req.withFilters(new Filter(AWS_GROUP_NAME_FILTER, names));
         if (vpcId != null) {
-            req.withFilters(new Filter("vpc-id", Collections.singletonList(vpcId)));
+            req.withFilters(new Filter(AWS_VPC_ID_FILTER, Collections.singletonList(vpcId)));
         }
 
         DescribeSecurityGroupsResult groups = client
