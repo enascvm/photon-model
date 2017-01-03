@@ -30,7 +30,11 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.test.VerificationHost;
 
 /**
  * Utility class to create service documents for tests.
@@ -156,5 +160,44 @@ public class ModelUtils {
 
         return test.postServiceSynchronously(ResourcePoolService.FACTORY_LINK, poolState,
                 ResourcePoolState.class);
+    }
+
+
+    public static SecurityGroupState createSecurityGroup(VerificationHost host,
+            String securityGroupName, String resourcePoolLink, String computeHostAuthLink)
+            throws Throwable {
+
+        SecurityGroupState securityGroupState = new SecurityGroupState();
+        securityGroupState.id = UUID.randomUUID().toString();
+        securityGroupState.name = securityGroupName;
+        securityGroupState.authCredentialsLink = computeHostAuthLink;
+        securityGroupState.resourcePoolLink = resourcePoolLink;
+
+        Rule ssh = new Rule();
+        ssh.name = "ssh";
+        ssh.protocol = "tcp";
+        ssh.ipRangeCidr = "0.0.0.0/0";
+        ssh.ports = "22";
+        securityGroupState.ingress = new ArrayList<>();
+        securityGroupState.ingress.add(ssh);
+
+
+        Rule out = new Rule();
+        out.name = "out";
+        out.protocol = "tcp";
+        out.ipRangeCidr = "0.0.0.0/0";
+        out.ports = "1-65535";
+        securityGroupState.egress = new ArrayList<>();
+        securityGroupState.egress.add(out);
+
+        securityGroupState.regionId = "regionId";
+        securityGroupState.resourcePoolLink = "/link/to/rp";
+        securityGroupState.instanceAdapterReference = new URI(
+                "http://instanceAdapterReference");
+
+        securityGroupState = TestUtils.doPost(host, securityGroupState, SecurityGroupState.class,
+                UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK));
+
+        return securityGroupState;
     }
 }

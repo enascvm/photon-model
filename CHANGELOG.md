@@ -2,6 +2,8 @@
 
 ## 0.5.7-SNAPSHOT
 
+* FirewallService marked as deprecated. Use SecurityGroupService instead.
+
 ## 0.5.6
 
 * Add support for subnet enumeration in Azure.

@@ -44,7 +44,12 @@ public class AzureUriPaths {
             + "/network-enumeration-adapter";
     public static final String AZURE_RESOURCE_GROUP_ENUMERATION_ADAPTER = PROVISIONING_AZURE
             + "/resource-group-enumeration-adapter";
+    public static final String AZURE_FIREWALL_ENUMERATION_ADAPTER = PROVISIONING_AZURE
+            + "/firewall-enumeration-adapter";
 
     public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
+            .adapterLink(EndpointType.azure.name());
+
+    public static final String AZURE_FIREWALL_ADAPTER = AdapterTypePath.FIREWALL_ADAPTER
             .adapterLink(EndpointType.azure.name());
 }

@@ -30,6 +30,7 @@ import com.vmware.xenon.common.Utils;
 
 /**
  * Represents a firewall resource.
+ * Note: This service is deprecated. Use {@link SecurityGroupService} instead.
  */
 public class FirewallService extends StatefulService {
 

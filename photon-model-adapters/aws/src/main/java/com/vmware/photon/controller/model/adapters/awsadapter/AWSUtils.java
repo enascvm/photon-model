@@ -68,7 +68,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -93,6 +93,7 @@ public class AWSUtils {
     /**
      * Flag to use aws-mock, will be set in test files.
      * Aws-mock is a open-source tool for testing AWS services in a mock EC2 environment.
+     *
      * @see <a href="https://github.com/treelogic-swe/aws-mock">aws-mock</a>
      */
     private static boolean IS_AWS_CLIENT_MOCK = false;
@@ -121,7 +122,8 @@ public class AWSUtils {
     }
 
     public static AmazonEC2AsyncClient getAsyncClient(
-            AuthCredentialsServiceState credentials, String region, ExecutorService executorService) {
+            AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService) {
         AmazonEC2AsyncClient ec2AsyncClient = new AmazonEC2AsyncClient(
                 new BasicAWSCredentials(credentials.privateKeyId,
                         credentials.privateKey),
@@ -223,6 +225,7 @@ public class AWSUtils {
 
     /**
      * Maps the Aws machine state to {@link PowerState}
+     *
      * @param state
      * @return the {@link PowerState} of the machine
      */
@@ -243,6 +246,7 @@ public class AWSUtils {
 
     /**
      * Creates a filter for the instances that are in non terminated state on the AWS endpoint.
+     *
      * @return
      */
     public static Filter getAWSNonTerminatedInstancesFilter() {
@@ -287,8 +291,10 @@ public class AWSUtils {
      * method will create new or validate existing security group has the necessary settings for CM
      * to function. It will return the security group id that is required during instance
      * provisioning.
-     * for each nicContext element provided, for each of its firewallStates, security group is discovered from AWS
-     * in case that there are no firewallStates, security group ID is obtained from the custom properties
+     * for each nicContext element provided, for each of its securityGroupStates, security group is
+     * discovered from AWS
+     * in case that there are no securityGroupStates, security group ID is obtained from the custom
+     * properties
      * in case that none of the above methods discover a security group, the default one is discovered from AWS
      * in case that none of the above method discover a security group, a new security group is created
      */
@@ -300,9 +306,10 @@ public class AWSUtils {
         List<String> groupIds = new ArrayList<>();
 
         if (nicCtx != null) {
-            if (nicCtx.firewallStates != null && !nicCtx.firewallStates.isEmpty()) {
+            if (nicCtx.securityGroupStates != null && !nicCtx.securityGroupStates.isEmpty()) {
                 List<SecurityGroup> securityGroups = getSecurityGroups(aws.amazonEC2Client,
-                        new ArrayList<>(nicCtx.firewallStates.keySet()), nicCtx.vpc.getVpcId());
+                        new ArrayList<>(nicCtx.securityGroupStates.keySet()),
+                        nicCtx.vpc.getVpcId());
                 for (SecurityGroup securityGroup : securityGroups) {
                     groupIds.add(securityGroup.getGroupId());
                 }
@@ -461,7 +468,7 @@ public class AWSUtils {
     }
 
     public static void updateIngressRules(AmazonEC2AsyncClient client,
-            List<Allow> rules, String groupId) {
+            List<Rule> rules, String groupId) {
         updateIngressRules(client, groupId, buildRules(rules));
     }
 
@@ -486,23 +493,21 @@ public class AWSUtils {
     /**
      * Builds the white list rules for the firewall
      */
-    public static List<IpPermission> buildRules(List<Allow> allowRules) {
+    public static List<IpPermission> buildRules(List<Rule> allowRules) {
         ArrayList<IpPermission> awsRules = new ArrayList<>();
-        for (Allow rule : allowRules) {
-            for (String port : rule.ports) {
-                int fromPort;
-                int toPort;
-                if (port.contains("-")) {
-                    String[] ports = port.split("-");
-                    fromPort = Integer.parseInt(ports[0]);
-                    toPort = Integer.parseInt(ports[1]);
-                } else {
-                    fromPort = Integer.parseInt(port);
-                    toPort = fromPort;
-                }
-                awsRules.add(createRule(fromPort, toPort, rule.ipRange,
-                        rule.protocol));
+        for (Rule rule : allowRules) {
+            int fromPort;
+            int toPort;
+            if (rule.ports.contains("-")) {
+                String[] ports = rule.ports.split("-");
+                fromPort = Integer.parseInt(ports[0]);
+                toPort = Integer.parseInt(ports[1]);
+            } else {
+                fromPort = Integer.parseInt(rule.ports);
+                toPort = fromPort;
             }
+            awsRules.add(createRule(fromPort, toPort, rule.ipRangeCidr,
+                    rule.protocol));
         }
         return awsRules;
     }
@@ -558,7 +563,7 @@ public class AWSUtils {
         double averageBurnRate = (latestDatapoint.getAverage()
                 - oldestDatapoint.getAverage())
                 / getDateDifference(oldestDatapoint.getTimestamp(),
-                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
         // If there are only 2 datapoints and the oldestDatapoint is greater than the latestDatapoint, value will be negative.
         // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
         // In such cases, set the burn rate value to 0
@@ -592,7 +597,7 @@ public class AWSUtils {
         double currentBurnRate = (latestDatapoint.getAverage()
                 - dayOldDatapoint.getAverage())
                 / getDateDifference(dayOldDatapoint.getTimestamp(),
-                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
         // If there are only 2 datapoints and the oldestDatapoint is greater than the latestDatapoint, value will be negative.
         // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
         // In such cases, set the burn rate value to 0

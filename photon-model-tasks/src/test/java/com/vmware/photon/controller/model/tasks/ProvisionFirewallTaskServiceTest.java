@@ -30,9 +30,10 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.resources.FirewallService;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
 
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -58,32 +59,30 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
             boolean success) throws Throwable {
         ProvisionFirewallTaskService.ProvisionFirewallTaskState startState = new ProvisionFirewallTaskService.ProvisionFirewallTaskState();
 
-        FirewallState fState = new FirewallState();
-        fState.networkDescriptionLink = "/networkLink";
-        fState.authCredentialsLink = "authCredentialsLink";
-        fState.name = "firewall-name";
-        fState.regionId = "regionId";
-        fState.resourcePoolLink = "/resourcePoolLink";
+        SecurityGroupState securityGroupState = new SecurityGroupState();
+        securityGroupState.authCredentialsLink = "authCredentialsLink";
+        securityGroupState.name = "security-group-name";
+        securityGroupState.regionId = "regionId";
+        securityGroupState.resourcePoolLink = "/resourcePoolLink";
         if (success) {
-            fState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
+            securityGroupState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
                     MockAdapter.MockFirewallInstanceSuccessAdapter.SELF_LINK);
         } else {
-            fState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
+            securityGroupState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
                     MockAdapter.MockFirewallInstanceFailureAdapter.SELF_LINK);
         }
-        fState.id = UUID.randomUUID().toString();
-        ArrayList<FirewallService.FirewallState.Allow> rules = new ArrayList<>();
-        FirewallService.FirewallState.Allow ssh = new FirewallService.FirewallState.Allow();
+        securityGroupState.id = UUID.randomUUID().toString();
+        ArrayList<Rule> rules = new ArrayList<>();
+        Rule ssh = new Rule();
         ssh.name = "ssh";
         ssh.protocol = "tcp";
-        ssh.ipRange = "0.0.0.0/0";
-        ssh.ports = new ArrayList<>();
-        ssh.ports.add("22");
+        ssh.ipRangeCidr = "0.0.0.0/0";
+        ssh.ports = "22";
         rules.add(ssh);
-        fState.ingress = rules;
-        fState.egress = rules;
-        FirewallState returnState = test.postServiceSynchronously(
-                FirewallService.FACTORY_LINK, fState, FirewallState.class);
+        securityGroupState.ingress = rules;
+        securityGroupState.egress = rules;
+        SecurityGroupState returnState = test.postServiceSynchronously(
+                SecurityGroupService.FACTORY_LINK, securityGroupState, SecurityGroupState.class);
         startState.requestType = requestType;
         startState.firewallDescriptionLink = returnState.documentSelfLink;
 
@@ -226,7 +225,7 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
         }
 
         @Test
-        public void testCreateFirewallServiceAdapterFailure() throws Throwable {
+        public void testCreateSecurityGroupServiceAdapterFailure() throws Throwable {
             ProvisionFirewallTaskService.ProvisionFirewallTaskState startState = buildValidStartState(
                     this, FirewallInstanceRequest.InstanceRequestType.CREATE,
                     false);

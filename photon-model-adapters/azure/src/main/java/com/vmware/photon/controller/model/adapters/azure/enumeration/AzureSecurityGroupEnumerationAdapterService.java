@@ -14,11 +14,11 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.FIELD_COMPUTE_HOST_LINK;
-import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_TYPE_KEY;
+import static com.vmware.photon.controller.model.adapters.azure.AzureUriPaths.AZURE_FIREWALL_ADAPTER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_RESOURCE_GROUPS_URI;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_NETWORK_SECURITY_GROUP_URI;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 
 import java.net.URI;
@@ -30,20 +30,24 @@ import java.util.concurrent.ConcurrentSkipListSet;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 
+import org.apache.commons.net.util.SubnetUtils;
+
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
-import com.vmware.photon.controller.model.adapters.azure.model.resourcegroup.ResourceGroup;
-import com.vmware.photon.controller.model.adapters.azure.model.resourcegroup.ResourceGroupListResult;
+import com.vmware.photon.controller.model.adapters.azure.model.network.NetworkSecurityGroup;
+import com.vmware.photon.controller.model.adapters.azure.model.network.NetworkSecurityGroupListResult;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
-import com.vmware.photon.controller.model.resources.ResourceGroupService;
-import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -57,60 +61,64 @@ import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 
 /**
- * Enumeration adapter for data collection of Azure resource groups.
+ * Enumeration adapter for data collection of Azure network security groups.
  */
-public class AzureResourceGroupEnumerationAdapterService extends StatelessService {
-    public static final String SELF_LINK = AzureUriPaths.AZURE_RESOURCE_GROUP_ENUMERATION_ADAPTER;
+public class AzureSecurityGroupEnumerationAdapterService extends StatelessService {
+    public static final String SELF_LINK = AzureUriPaths.AZURE_FIREWALL_ENUMERATION_ADAPTER;
 
-    public static class ResourceGroupEnumContext extends
-            BaseEnumerationAdapterContext<ResourceGroupEnumContext, ResourceGroupState,
-                    ResourceGroup> {
+    public static class SecurityGroupEnumContext extends
+            BaseEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState,
+                    NetworkSecurityGroup> {
+
+        private static final String SECURITY_RULE_ACCESS_ALLOW = "allow";
+        private static final String SECURITY_RULE_DIRECTION_INBOUND = "inbound";
 
         ComputeEnumerateResourceRequest enumRequest;
         AuthCredentialsService.AuthCredentialsServiceState parentAuth;
 
         EnumerationStages stage;
 
-        // Stored operation to signal completion to the Azure resource group enumeration once all]
+        // Stored operation to signal completion to the Azure security group enumeration once all
         // the stages are successfully completed.
-        Operation azureResourceGroupAdapterOperation;
+        Operation azureSecurityGroupAdapterOperation;
 
         // Azure credentials.
         ApplicationTokenCredentials credentials;
-
-        List<String> resourceGroupIds = new ArrayList<>();
 
         // The time when enumeration starts. This field is used also to identify stale resources
         // that should be deleted during deletion stage.
         long enumerationStartTimeInMicros;
 
+        List<String> securityGroupIds = new ArrayList<>();
+
         // Used to store an error while transferring to the error stage.
         Throwable error;
 
-        ResourceGroupEnumContext(ComputeEnumerateAdapterRequest request, Operation op,
+        SecurityGroupEnumContext(ComputeEnumerateAdapterRequest request, Operation op,
                 StatelessService service) {
-            super(service, ResourceGroupState.class, ResourceGroupService.FACTORY_LINK, request
+            super(service, SecurityGroupState.class, SecurityGroupService.FACTORY_LINK, request
                     .parentCompute);
 
             this.enumRequest = request.computeEnumerateResourceRequest;
             this.parentAuth = request.parentAuth;
 
             this.stage = EnumerationStages.CLIENT;
-            this.azureResourceGroupAdapterOperation = op;
+            this.azureSecurityGroupAdapterOperation = op;
         }
 
         @Override
         public DeferredResult<RemoteResourcesPage> getExternalResources(String nextPageLink) {
             URI uri;
             if (nextPageLink == null) {
-                // First request to fetch Resource Groups from Azure.
-                String uriStr = AdapterUriUtil.expandUriPathTemplate(LIST_RESOURCE_GROUPS_URI,
-                        this.parentAuth.userLink);
+                // First request to fetch Network Security Groups from Azure.
+                String uriStr = AdapterUriUtil
+                        .expandUriPathTemplate(LIST_NETWORK_SECURITY_GROUP_URI,
+                                this.parentAuth.userLink);
                 uri = UriUtils.extendUriWithQuery(
                         UriUtils.buildUri(uriStr),
-                        QUERY_PARAM_API_VERSION, RESOURCE_GROUP_REST_API_VERSION);
+                        QUERY_PARAM_API_VERSION, NETWORK_REST_API_VERSION);
             } else {
-                // Request to fetch next page of Virtual Networks from Azure.
+                // Request to fetch next page of Network Security Groups from Azure.
                 uri = UriUtils.buildUri(nextPageLink);
             }
 
@@ -126,14 +134,15 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 return DeferredResult.failed(ex);
             }
 
-            return this.service.sendWithDeferredResult(operation, ResourceGroupListResult.class)
+            return this.service
+                    .sendWithDeferredResult(operation, NetworkSecurityGroupListResult.class)
                     .thenApply(results -> {
                         RemoteResourcesPage page = new RemoteResourcesPage();
 
                         if (results.value != null) {
-                            results.value.forEach(resourceGroup -> {
-                                page.resourcesPage.put(resourceGroup.id, resourceGroup);
-                                this.resourceGroupIds.add(resourceGroup.id);
+                            results.value.forEach(securityGroup -> {
+                                page.resourcesPage.put(securityGroup.id, securityGroup);
+                                this.securityGroupIds.add(securityGroup.id);
                             });
                         }
                         page.nextPageLink = results.nextLink;
@@ -144,56 +153,105 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
 
         @Override
         protected Query getDeleteQuery() {
-            String rgTypeProperty = QuerySpecification
-                    .buildCompositeFieldName(
-                            ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                            ComputeProperties.RESOURCE_TYPE_KEY);
-
             String computeHostProperty = QuerySpecification.buildCompositeFieldName(
-                    ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                    SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                     ComputeProperties.FIELD_COMPUTE_HOST_LINK);
 
             return Builder.create()
-                    .addKindFieldClause(ResourceGroupState.class)
+                    .addKindFieldClause(SecurityGroupState.class)
                     .addFieldClause(computeHostProperty,
                             this.parentCompute.documentSelfLink)
-                    .addFieldClause(rgTypeProperty,
-                            ResourceGroupStateType.AzureResourceGroup.name())
-                    .addInClause(ResourceGroupState.FIELD_NAME_ID, this.resourceGroupIds, Occurance
+                    .addInClause(SecurityGroupState.FIELD_NAME_ID, this.securityGroupIds, Occurance
                             .MUST_NOT_OCCUR)
-                    .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
+                    .addRangeClause(NetworkState.FIELD_NAME_UPDATE_TIME_MICROS,
                             QueryTask.NumericRange
                                     .createLessThanRange(this.enumerationStartTimeInMicros))
                     .build();
         }
 
         @Override
-        protected ResourceGroupState buildLocalResourceState(
-                ResourceGroup remoteResourceGroup,
-                ResourceGroupState localResourceGroupState) {
+        protected SecurityGroupState buildLocalResourceState(
+                NetworkSecurityGroup networkSecurityGroup,
+                SecurityGroupState localSecurityGroupState) {
 
-            ResourceGroupState resultResourceGroupState = new ResourceGroupState();
+            SecurityGroupState resultSecurityGroupState = new SecurityGroupState();
+            if (localSecurityGroupState != null) {
+                resultSecurityGroupState.documentSelfLink = localSecurityGroupState.documentSelfLink;
+                resultSecurityGroupState.authCredentialsLink = localSecurityGroupState.authCredentialsLink;
 
-            if (localResourceGroupState != null) {
-                resultResourceGroupState.documentSelfLink = localResourceGroupState.documentSelfLink;
             } else {
-                resultResourceGroupState.customProperties = new HashMap<>();
-                resultResourceGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
+                resultSecurityGroupState.authCredentialsLink = this.parentAuth.documentSelfLink;
+                resultSecurityGroupState.customProperties = new HashMap<>();
+                resultSecurityGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
                         this.parentCompute.documentSelfLink);
-                resultResourceGroupState.customProperties.put(RESOURCE_TYPE_KEY,
-                        ResourceGroupStateType.AzureResourceGroup.name());
             }
 
-            resultResourceGroupState.name = remoteResourceGroup.name;
-            resultResourceGroupState.tenantLinks = this.parentCompute.tenantLinks;
+            resultSecurityGroupState.name = networkSecurityGroup.name;
+            resultSecurityGroupState.regionId = networkSecurityGroup.location;
+            resultSecurityGroupState.resourcePoolLink = this.enumRequest.resourcePoolLink;
+            resultSecurityGroupState.tenantLinks = this.parentCompute.tenantLinks;
 
-            return resultResourceGroupState;
+            // TODO: AzureFirewallService currently doesn't exist.
+            resultSecurityGroupState.instanceAdapterReference = UriUtils.buildUri(this.service.getHost(),
+                    AZURE_FIREWALL_ADAPTER);
+
+            resultSecurityGroupState.ingress = new ArrayList<>();
+            resultSecurityGroupState.egress = new ArrayList<>();
+
+            if (networkSecurityGroup.properties == null ||
+                    networkSecurityGroup.properties.securityRules == null) {
+                // No rules.
+                return resultSecurityGroupState;
+            }
+
+            networkSecurityGroup.properties.securityRules.forEach(securityRule -> {
+
+                Rule rule = new Rule();
+                rule.name = securityRule.name;
+                rule.access = SECURITY_RULE_ACCESS_ALLOW
+                        .equalsIgnoreCase(securityRule.properties.access) ?
+                        Access.Allow : Access.Deny;
+                rule.protocol = securityRule.properties.protocol;
+
+                List<SecurityGroupState.Rule> rulesList;
+                String ports;
+
+                if (SECURITY_RULE_DIRECTION_INBOUND.equalsIgnoreCase(
+                        securityRule.properties.direction)) {
+                    // ingress rule.
+                    rule.ipRangeCidr = securityRule.properties.sourceAddressPrefix;
+                    ports = securityRule.properties.sourcePortRange;
+                    rulesList = resultSecurityGroupState.ingress;
+                } else {
+                    // egress rule.
+                    rule.ipRangeCidr = securityRule.properties.destinationPortRange;
+                    ports = securityRule.properties.destinationPortRange;
+                    rulesList = resultSecurityGroupState.egress;
+                }
+
+                if (SecurityGroupService.ANY.equals(ports)) {
+                    ports = "1-65535";
+                }
+
+                rule.ports = ports;
+                try {
+                    if (!SecurityGroupService.ANY.equals(rule.ipRangeCidr)) {
+                        new SubnetUtils(rule.ipRangeCidr);
+                    }
+                    rulesList.add(rule);
+                } catch (IllegalArgumentException e) {
+                    // Ignore this rule as not supported by the system.
+                    this.service.logWarning("Network Security Rule is ignored. Rule ip "
+                            + "range: %s.", rule.ipRangeCidr);
+                }
+            });
+            return resultSecurityGroupState;
         }
     }
 
-    private Set<String> ongoingEnumerations = new ConcurrentSkipListSet<>();
+    Set<String> ongoingEnumerations = new ConcurrentSkipListSet<>();
 
-    public AzureResourceGroupEnumerationAdapterService() {
+    public AzureSecurityGroupEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
@@ -203,24 +261,24 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        ResourceGroupEnumContext ctx = new ResourceGroupEnumContext(op.getBody
+        SecurityGroupEnumContext ctx = new SecurityGroupEnumContext(op.getBody
                 (ComputeEnumerateAdapterRequest.class), op, this);
         AdapterUtils.validateEnumRequest(ctx.enumRequest);
         if (ctx.enumRequest.isMockRequest) {
             op.complete();
             return;
         }
-        handleResourceGroupEnumeration(ctx);
+        handleEnumeration(ctx);
     }
 
     /**
-     * Creates the resource group states in the local document store based on the resource groups
+     * Creates the firewall states in the local document store based on the network security groups
      * received from the remote endpoint.
      *
      * @param context The local service context that has all the information needed to create the
      *                additional description states in the local system.
      */
-    private void handleResourceGroupEnumeration(ResourceGroupEnumContext context) {
+    private void handleEnumeration(SecurityGroupEnumContext context) {
         switch (context.stage) {
 
         case CLIENT:
@@ -233,7 +291,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 }
             }
             context.stage = EnumerationStages.ENUMERATE;
-            handleResourceGroupEnumeration(context);
+            handleEnumeration(context);
             break;
         case ENUMERATE:
             String enumKey = getEnumKey(context);
@@ -242,24 +300,24 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 if (!this.ongoingEnumerations.add(enumKey)) {
                     logInfo("Enumeration service has already been started for %s", enumKey);
                     context.stage = EnumerationStages.FINISHED;
-                    handleResourceGroupEnumeration(context);
+                    handleEnumeration(context);
                     return;
                 }
                 logInfo("Launching enumeration service for %s", enumKey);
                 context.enumRequest.enumerationAction = EnumerationAction.REFRESH;
-                handleResourceGroupEnumeration(context);
+                handleEnumeration(context);
                 break;
             case REFRESH:
                 context.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 // Allow base context class to enumerate the resources.
                 context.enumerate()
-                        .whenComplete((resourceGroupEnumContext, throwable) -> {
+                        .whenComplete((c, throwable) -> {
                             if (throwable != null) {
-                                handleError(context, throwable);
+                                handleError(c, throwable);
                                 return;
                             }
                             context.stage = EnumerationStages.FINISHED;
-                            handleResourceGroupEnumeration(context);
+                            handleEnumeration(c);
                         });
                 break;
             case STOP:
@@ -270,7 +328,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                             enumKey);
                 }
                 context.stage = EnumerationStages.FINISHED;
-                handleResourceGroupEnumeration(context);
+                handleEnumeration(context);
                 break;
             default:
                 handleError(context, new RuntimeException(
@@ -279,12 +337,12 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
             }
             break;
         case FINISHED:
-            context.azureResourceGroupAdapterOperation.complete();
+            context.azureSecurityGroupAdapterOperation.complete();
             logInfo("Enumeration finished for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
-            context.azureResourceGroupAdapterOperation.fail(context.error);
+            context.azureSecurityGroupAdapterOperation.fail(context.error);
             logWarning("Enumeration error for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
@@ -300,16 +358,16 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
     /**
      * Return a key to uniquely identify enumeration for compute host instance.
      */
-    private String getEnumKey(ResourceGroupEnumContext ctx) {
+    private String getEnumKey(SecurityGroupEnumContext ctx) {
         return "hostLink:" + ctx.enumRequest.resourceLink() +
                 "-enumerationAdapterReference:" +
                 ctx.parentCompute.description.enumerationAdapterReference;
     }
 
-    private void handleError(ResourceGroupEnumContext ctx, Throwable e) {
+    private void handleError(SecurityGroupEnumContext ctx, Throwable e) {
         logSevere("Failed at stage %s with exception: %s", ctx.stage, Utils.toString(e));
         ctx.error = e;
         ctx.stage = EnumerationStages.ERROR;
-        handleResourceGroupEnumeration(ctx);
+        handleEnumeration(ctx);
     }
 }

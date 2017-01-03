@@ -415,9 +415,12 @@ public class AzureTestUtil {
         return rGroup;
     }
 
+    /**
+     * Create a disk state
+     */
     public static DiskState createDefaultDiskState(VerificationHost host, String diskName,
             String storageContainerLink, String resourcePoolLink) throws Throwable {
-        // Create a disk state
+
         DiskState diskState = new DiskState();
         diskState.id = UUID.randomUUID().toString();
         diskState.name = diskName;
@@ -431,4 +434,7 @@ public class AzureTestUtil {
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
         return dState;
     }
+
+
+
 }

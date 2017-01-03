@@ -31,10 +31,9 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionFirewallTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionFirewallTaskService.ProvisionFirewallTaskState;
@@ -112,47 +111,35 @@ public class TestProvisionAWSFirewall {
         TestUtils.postResourcePool(this.host, poolResponse);
         ResourcePoolState pool = poolResponse.getBody(ResourcePoolState.class);
 
-        // first create network service
-        Operation response = new Operation();
-        NetworkState initialState = TestUtils.buildNetworkState(this.host);
-        initialState.authCredentialsLink = creds.documentSelfLink;
-        initialState.resourcePoolLink = pool.documentSelfLink;
-        initialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
-                this.host.getPort(),
-                AWSUriPaths.AWS_FIREWALL_ADAPTER,
-                null);
-        TestUtils.postNetwork(this.host, initialState, response);
-        NetworkState networkState = response.getBody(NetworkState.class);
-
         // create fw service
-        Operation fwResponse = new Operation();
-        FirewallState fwInitialState = buildFirewallState();
-        fwInitialState.networkDescriptionLink = networkState.documentSelfLink;
-        fwInitialState.ingress = getGlobalSSHRule();
-        fwInitialState.egress = getGlobalSSHRule();
-        fwInitialState.egress.get(0).ipRange = this.subnet;
-        fwInitialState.authCredentialsLink = creds.documentSelfLink;
-        fwInitialState.authCredentialsLink = creds.documentSelfLink;
-        fwInitialState.resourcePoolLink = pool.documentSelfLink;
-        fwInitialState.regionId = this.region;
-        fwInitialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
+        Operation securityGroupResponse = new Operation();
+        SecurityGroupState initialSecurityGroupState = buildSecurityGroupState();
+        initialSecurityGroupState.ingress = getGlobalSSHRule();
+        initialSecurityGroupState.egress = getGlobalSSHRule();
+        initialSecurityGroupState.egress.get(0).ipRangeCidr = this.subnet;
+        initialSecurityGroupState.authCredentialsLink = creds.documentSelfLink;
+        initialSecurityGroupState.authCredentialsLink = creds.documentSelfLink;
+        initialSecurityGroupState.resourcePoolLink = pool.documentSelfLink;
+        initialSecurityGroupState.regionId = this.region;
+        initialSecurityGroupState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
                 AWSUriPaths.AWS_FIREWALL_ADAPTER,
                 null);
 
-        TestUtils.postFirewall(this.host, fwInitialState, fwResponse);
-        FirewallState firewallState = fwResponse.getBody(FirewallState.class);
+        TestUtils.postSecurityGroup(this.host, initialSecurityGroupState, securityGroupResponse);
+        SecurityGroupState securityGroupState = securityGroupResponse.getBody(SecurityGroupState
+                .class);
 
         // set up firewall task state
         ProvisionFirewallTaskState task = new ProvisionFirewallTaskState();
         task.requestType = FirewallInstanceRequest.InstanceRequestType.CREATE;
-        task.firewallDescriptionLink = firewallState.documentSelfLink;
+        task.firewallDescriptionLink = securityGroupState.documentSelfLink;
 
         Operation provision = new Operation();
         provisionFirewall(task, provision);
         ProvisionFirewallTaskState ps = provision.getBody(ProvisionFirewallTaskState.class);
         waitForTaskCompletion(this.host, UriUtils.buildUri(this.host, ps.documentSelfLink));
-        validateAWSArtifacts(firewallState.documentSelfLink, creds);
+        validateAWSArtifacts(securityGroupState.documentSelfLink, creds);
 
         // reuse previous task, but switch to a delete
         task.requestType = FirewallInstanceRequest.InstanceRequestType.DELETE;
@@ -162,7 +149,7 @@ public class TestProvisionAWSFirewall {
         waitForTaskCompletion(this.host, UriUtils.buildUri(this.host, removeTask.documentSelfLink));
 
         // verify custom property is now set to no value
-        FirewallState removedFW = getFirewallState(firewallState.documentSelfLink);
+        SecurityGroupState removedFW = getSecurityGroupState(securityGroupState.documentSelfLink);
         assertTrue(removedFW.customProperties.get(AWSFirewallService.SECURITY_GROUP_ID)
                 .equalsIgnoreCase(AWSUtils.NO_VALUE));
 
@@ -180,39 +167,26 @@ public class TestProvisionAWSFirewall {
         TestUtils.postResourcePool(this.host, poolResponse);
         ResourcePoolState pool = poolResponse.getBody(ResourcePoolState.class);
 
-        // first create network service
-        Operation response = new Operation();
-        NetworkState initialState = TestUtils.buildNetworkState(this.host);
-        initialState.authCredentialsLink = creds.documentSelfLink;
-        initialState.resourcePoolLink = pool.documentSelfLink;
-        initialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
-                this.host.getPort(),
-                AWSUriPaths.AWS_FIREWALL_ADAPTER,
-                null);
-        TestUtils.postNetwork(this.host, initialState, response);
-        NetworkState networkState = response.getBody(NetworkState.class);
-
         // create fw service
-        Operation fwResponse = new Operation();
-        FirewallState fwInitialState = buildFirewallState();
-        fwInitialState.networkDescriptionLink = networkState.documentSelfLink;
-        fwInitialState.ingress = getGlobalSSHRule();
-        fwInitialState.egress = getGlobalSSHRule();
-        fwInitialState.authCredentialsLink = creds.documentSelfLink;
-        fwInitialState.resourcePoolLink = pool.documentSelfLink;
-        fwInitialState.regionId = this.region;
-        fwInitialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
+        Operation securityGroupResponse = new Operation();
+        SecurityGroupState securityGroupInitialState = buildSecurityGroupState();
+        securityGroupInitialState.ingress = getGlobalSSHRule();
+        securityGroupInitialState.egress = getGlobalSSHRule();
+        securityGroupInitialState.authCredentialsLink = creds.documentSelfLink;
+        securityGroupInitialState.resourcePoolLink = pool.documentSelfLink;
+        securityGroupInitialState.regionId = this.region;
+        securityGroupInitialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
                 AWSUriPaths.AWS_FIREWALL_ADAPTER,
                 null);
 
-        TestUtils.postFirewall(this.host, fwInitialState, fwResponse);
-        FirewallState firewallState = fwResponse.getBody(FirewallState.class);
+        TestUtils.postSecurityGroup(this.host, securityGroupInitialState, securityGroupResponse);
+        SecurityGroupState securityGroupState = securityGroupResponse.getBody(SecurityGroupState.class);
 
         // set up firewall task state
         ProvisionFirewallTaskState task = new ProvisionFirewallTaskState();
         task.requestType = FirewallInstanceRequest.InstanceRequestType.CREATE;
-        task.firewallDescriptionLink = firewallState.documentSelfLink;
+        task.firewallDescriptionLink = securityGroupState.documentSelfLink;
 
         Operation provision = new Operation();
         provisionFirewall(task, provision);
@@ -224,19 +198,19 @@ public class TestProvisionAWSFirewall {
     private void validateAWSArtifacts(String firewallDescriptionLink,
             AuthCredentialsServiceState creds) throws Throwable {
 
-        FirewallState fw = getFirewallState(firewallDescriptionLink);
+        SecurityGroupState securityGroup = getSecurityGroupState(firewallDescriptionLink);
 
         AWSFirewallService fwSVC = new AWSFirewallService();
         AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(creds, this.region, getExecutor());
         // if any artifact is not present then an error will be thrown
         assertNotNull(fwSVC.getSecurityGroupByID(client,
-                fw.customProperties.get(AWSFirewallService.SECURITY_GROUP_ID)));
+                securityGroup.customProperties.get(AWSFirewallService.SECURITY_GROUP_ID)));
     }
 
-    private FirewallState getFirewallState(String firewallLink) throws Throwable {
+    private SecurityGroupState getSecurityGroupState(String firewallLink) throws Throwable {
         Operation response = new Operation();
         getFirewallState(firewallLink, response);
-        return response.getBody(FirewallState.class);
+        return response.getBody(SecurityGroupState.class);
     }
 
     private void provisionFirewall(ProvisionFirewallTaskState ps, Operation response)
@@ -267,7 +241,7 @@ public class TestProvisionAWSFirewall {
                         this.host.failIteration(e);
                         return;
                     }
-                    response.setBody(o.getBody(FirewallState.class));
+                    response.setBody(o.getBody(SecurityGroupState.class));
                     this.host.completeIteration();
                 });
         this.host.send(startGet);
@@ -275,14 +249,14 @@ public class TestProvisionAWSFirewall {
 
     }
 
-    private FirewallState buildFirewallState() {
+    private SecurityGroupState buildSecurityGroupState() {
         URI tenantFactoryURI = UriUtils.buildFactoryUri(this.host, TenantService.class);
-        FirewallState firewall = new FirewallState();
-        firewall.id = UUID.randomUUID().toString();
+        SecurityGroupState securityGroup = new SecurityGroupState();
+        securityGroup.id = UUID.randomUUID().toString();
 
-        firewall.tenantLinks = new ArrayList<>();
-        firewall.tenantLinks.add(UriUtils.buildUriPath(tenantFactoryURI.getPath(), "tenantA"));
-        return firewall;
+        securityGroup.tenantLinks = new ArrayList<>();
+        securityGroup.tenantLinks.add(UriUtils.buildUriPath(tenantFactoryURI.getPath(), "tenantA"));
+        return securityGroup;
     }
 
     public static void waitForTaskCompletion(VerificationHost host, URI provisioningTaskUri)
@@ -338,15 +312,14 @@ public class TestProvisionAWSFirewall {
         throw new TimeoutException("Some tasks never finished");
     }
 
-    private static ArrayList<Allow> getGlobalSSHRule() {
-        ArrayList<Allow> rules = new ArrayList<>();
+    private static ArrayList<Rule> getGlobalSSHRule() {
+        ArrayList<Rule> rules = new ArrayList<>();
 
-        Allow ssh = new Allow();
+        Rule ssh = new Rule();
         ssh.name = "ssh-allow";
         ssh.protocol = "tcp";
-        ssh.ipRange = "0.0.0.0/0";
-        ssh.ports = new ArrayList<String>();
-        ssh.ports.add("22");
+        ssh.ipRangeCidr = "0.0.0.0/0";
+        ssh.ports = "22";
         rules.add(ssh);
 
         return rules;

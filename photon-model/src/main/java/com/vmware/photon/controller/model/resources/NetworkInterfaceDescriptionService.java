@@ -53,8 +53,6 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
      */
     public static class NetworkInterfaceDescription extends ResourceState {
 
-        public static final String FIELD_NAME_NETWORK_LINK = "networkLink";
-
         /**
          * The static IP of the interface. Optional.
          */
@@ -154,7 +152,8 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
         template.assignment = IpAssignment.STATIC;
         template.address = "10.1.0.12";
         template.firewallLinks = Arrays
-                .asList(UriUtils.buildUriPath(FirewallService.FACTORY_LINK, "firewall-one"));
+                .asList(UriUtils.buildUriPath(SecurityGroupService.FACTORY_LINK,
+                        "security-group-one"));
         template.deviceIndex = 0;
 
         return template;

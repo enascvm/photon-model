@@ -35,8 +35,8 @@ import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -79,7 +79,7 @@ public class AWSFirewallService extends StatelessService {
         transient Operation fwOperation;
         public AuthCredentialsServiceState credentials;
         public FirewallInstanceRequest firewallRequest;
-        public FirewallState firewall;
+        public SecurityGroupState securityGroup;
         public String securityGroupID;
         public FirewallStage stage;
         public Throwable error;
@@ -125,7 +125,7 @@ public class AWSFirewallService extends StatelessService {
             break;
         case AWS_CLIENT:
             requestState.client = this.clientManager.getOrCreateEC2Client(requestState.credentials,
-                    requestState.firewall.regionId, this,
+                    requestState.securityGroup.regionId, this,
                     requestState.firewallRequest.taskReference, false);
             if (requestState.firewallRequest.requestType == FirewallInstanceRequest.InstanceRequestType.CREATE) {
                 requestState.stage = FirewallStage.PROVISION_SECURITY_GROUP;
@@ -135,11 +135,11 @@ public class AWSFirewallService extends StatelessService {
             handleStages(requestState);
             break;
         case PROVISION_SECURITY_GROUP:
-            String sgName = requestState.firewall.name;
+            String sgName = requestState.securityGroup.name;
             String vpcId = getCustomProperty(requestState, AWSConstants.AWS_VPC_ID);
             requestState.securityGroupID = createSecurityGroup(
                     requestState.client, sgName, DEFAULT_SECURITY_GROUP_DESC, vpcId);
-            requestState.firewall.id = requestState.securityGroupID;
+            requestState.securityGroup.id = requestState.securityGroupID;
 
             updateFirewallProperties(SECURITY_GROUP_ID,
                     requestState.securityGroupID, requestState,
@@ -147,14 +147,14 @@ public class AWSFirewallService extends StatelessService {
             break;
         case UPDATE_RULES:
             updateIngressRules(requestState.client,
-                    requestState.firewall.ingress, requestState.securityGroupID);
+                    requestState.securityGroup.ingress, requestState.securityGroupID);
             updateEgressRules(requestState.client,
-                    requestState.firewall.egress, requestState.securityGroupID);
+                    requestState.securityGroup.egress, requestState.securityGroupID);
             requestState.stage = FirewallStage.FINISHED;
             handleStages(requestState);
             break;
         case REMOVE_SECURITY_GROUP:
-            deleteSecurityGroup(requestState.client, requestState.firewall.id);
+            deleteSecurityGroup(requestState.client, requestState.securityGroup.id);
             updateFirewallProperties(SECURITY_GROUP_ID, AWSUtils.NO_VALUE,
                     requestState, FirewallStage.FINISHED);
             break;
@@ -180,23 +180,23 @@ public class AWSFirewallService extends StatelessService {
 
     private String getCustomProperty(AWSFirewallRequestState requestState,
             String key) {
-        if (requestState.firewall.customProperties != null) {
-            return requestState.firewall.customProperties.get(key);
+        if (requestState.securityGroup.customProperties != null) {
+            return requestState.securityGroup.customProperties.get(key);
         }
         return null;
     }
 
     private void updateFirewallProperties(String key, String value,
             AWSFirewallRequestState requestState, FirewallStage next) {
-        if (requestState.firewall.customProperties == null) {
-            requestState.firewall.customProperties = new HashMap<>();
+        if (requestState.securityGroup.customProperties == null) {
+            requestState.securityGroup.customProperties = new HashMap<>();
         }
 
-        requestState.firewall.customProperties.put(key, value);
+        requestState.securityGroup.customProperties.put(key, value);
 
         URI firewallURI = requestState.firewallRequest.resourceReference;
         sendRequest(Operation.createPatch(firewallURI)
-                .setBody(requestState.firewall).setCompletion((o, e) -> {
+                .setBody(requestState.securityGroup).setCompletion((o, e) -> {
                     if (e != null) {
                         requestState.stage = FirewallStage.FAILED;
                         requestState.error = e;
@@ -212,7 +212,7 @@ public class AWSFirewallService extends StatelessService {
     private void getCredentials(AWSFirewallRequestState requestState,
             FirewallStage next) {
         sendRequest(Operation.createGet(this.getHost(),
-                requestState.firewall.authCredentialsLink).setCompletion(
+                requestState.securityGroup.authCredentialsLink).setCompletion(
                         (o, e) -> {
                             if (e != null) {
                                 requestState.stage = FirewallStage.FAILED;
@@ -238,7 +238,7 @@ public class AWSFirewallService extends StatelessService {
                                 handleStages(requestState);
                                 return;
                             }
-                            requestState.firewall = o.getBody(FirewallState.class);
+                            requestState.securityGroup = o.getBody(SecurityGroupState.class);
                             requestState.stage = next;
                             handleStages(requestState);
                         }));
@@ -274,7 +274,7 @@ public class AWSFirewallService extends StatelessService {
     }
 
     public void updateEgressRules(AmazonEC2AsyncClient client,
-            List<Allow> rules, String groupId) {
+            List<Rule> rules, String groupId) {
         updateEgressRules(client, groupId, buildRules(rules));
     }
 

@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.DeferredResult;
@@ -74,7 +73,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     protected String enumNextPageLink;
     protected String deletionNextPageLink;
 
-    private Class<LOCAL_STATE> localStateClass;
+    protected Class<LOCAL_STATE> localStateClass;
+    protected String localStateServiceFactoryLink;
 
     protected enum BaseEnumerationAdapterStage {
         GET_REMOTE_RESOURCES,
@@ -106,11 +106,14 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      *
      * @param service         The service that is creating and using this context.
      * @param localStateClass The class representing the local resource states.
+     * @param parentCompute   Parent compute with description.
      */
     public BaseEnumerationAdapterContext(StatelessService service, Class<LOCAL_STATE>
-            localStateClass, ComputeStateWithDescription parentCompute) {
+            localStateClass, String localStateServiceFactoryLink, ComputeStateWithDescription
+            parentCompute) {
         this.service = service;
         this.localStateClass = localStateClass;
+        this.localStateServiceFactoryLink = localStateServiceFactoryLink;
         this.parentCompute = parentCompute;
     }
 
@@ -140,12 +143,12 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * resource.
      *
      * @param remoteResource        remote resource.
-     * @param existingLocalResource existing local resource that matches the remote resource.
+     * @param existingLocalResourceState existing local resource that matches the remote resource.
      *                              null is no local resource matches the remote one.
      * @return a resource state that describes the remote resource.
      */
     protected abstract LOCAL_STATE buildLocalResourceState(
-            REMOTE remoteResource, LOCAL_STATE existingLocalResource);
+            REMOTE remoteResource, LOCAL_STATE existingLocalResourceState);
 
     protected abstract Query getDeleteQuery();
 
@@ -228,8 +231,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
                     // If there are no matches, there is nothing to update.
                     if (queryTask.results != null && queryTask.results.documentCount > 0) {
-                        queryTask.results.documents.values().forEach(localResource -> {
-                            LOCAL_STATE localState = Utils.fromJson(localResource,
+                        queryTask.results.documents.values().forEach(localResourceState -> {
+                            LOCAL_STATE localState = Utils.fromJson(localResourceState,
                                     this.localStateClass);
                             context.localResourceStates.put(localState.id,
                                     localState);
@@ -246,7 +249,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      */
     protected DeferredResult<T> createUpdateLocalResourceStates(T context) {
         this.service.logInfo("Create or update local resource with the actual state from "
-                        + "remote system.");
+                + "remote system.");
 
         if (context.remoteResources.size() == 0) {
             this.service.logInfo("No resources available for create/update.");
@@ -255,31 +258,28 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
         CompletionHandler handler = (completedOp, failure) -> {
             if (failure != null) {
-                // Process successful operations only.
                 this.service.logWarning("Error: %s", failure.getMessage());
-                return;
             }
         };
 
         List<Operation> operations = new ArrayList<>();
         context.remoteResources
                 .forEach((id, remoteResource) -> {
-                    LOCAL_STATE existingLocalResource = this.localResourceStates.get(id);
+                    boolean existsLocally = this.localResourceStates.containsKey(id);
 
                     LOCAL_STATE localResourceState = buildLocalResourceState(
                             remoteResource,
-                            existingLocalResource);
+                            existsLocally ? this.localResourceStates.get(id) : null);
 
                     // Explicitly set the local resource state id to be equal to the remote
                     // resource state id. This is important in the query for local states.
                     localResourceState.id = id;
-
-                    Operation op = existingLocalResource != null ?
+                    Operation op = existsLocally ?
                             // Update case.
                             Operation.createPatch(this.service, localResourceState
                                     .documentSelfLink) :
                             // Create case.
-                            Operation.createPost(this.service, ResourceGroupService.FACTORY_LINK);
+                            Operation.createPost(this.service, this.localStateServiceFactoryLink);
 
                     op.setBody(localResourceState).setCompletion(handler);
 

@@ -34,6 +34,9 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -41,61 +44,61 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.TenantService;
 
 /**
- * This class implements tests for the {@link FirewallService} class.
+ * This class implements tests for the {@link SecurityGroupService} class.
  */
-@RunWith(FirewallServiceTest.class)
-@SuiteClasses({ FirewallServiceTest.ConstructorTest.class,
-        FirewallServiceTest.HandleStartTest.class,
-        FirewallServiceTest.HandlePatchTest.class,
-        FirewallServiceTest.QueryTest.class })
-public class FirewallServiceTest extends Suite {
+@RunWith(SecurityGroupServiceTest.class)
+@SuiteClasses({ SecurityGroupServiceTest.ConstructorTest.class,
+        SecurityGroupServiceTest.HandleStartTest.class,
+        SecurityGroupServiceTest.HandlePatchTest.class,
+        SecurityGroupServiceTest.QueryTest.class })
+public class SecurityGroupServiceTest extends Suite {
 
-    public FirewallServiceTest(Class<?> klass, RunnerBuilder builder)
+    public SecurityGroupServiceTest(Class<?> klass, RunnerBuilder builder)
             throws InitializationError {
         super(klass, builder);
     }
 
-    private static FirewallService.FirewallState buildValidStartState() {
-        FirewallService.FirewallState firewallState = new FirewallService.FirewallState();
-        firewallState.id = UUID.randomUUID().toString();
-        firewallState.name = firewallState.id;
-        firewallState.networkDescriptionLink = "/link/to/desc";
-        firewallState.tenantLinks = new ArrayList<>();
-        firewallState.tenantLinks.add("tenant-linkA");
-        firewallState.ingress = getAllowIngressRules();
-        firewallState.egress = getAllowEgressRules();
-        firewallState.regionId = "regionId";
-        firewallState.authCredentialsLink = "/link/to/auth";
-        firewallState.resourcePoolLink = "/link/to/rp";
+    private static SecurityGroupService.SecurityGroupState buildValidStartState() {
+        SecurityGroupService.SecurityGroupState securityGroupState =
+                new SecurityGroupService.SecurityGroupState();
+        securityGroupState.id = UUID.randomUUID().toString();
+        securityGroupState.name = securityGroupState.id;
+        securityGroupState.tenantLinks = new ArrayList<>();
+        securityGroupState.tenantLinks.add("tenant-linkA");
+        securityGroupState.ingress = getAllowIngressRules();
+        securityGroupState.egress = getAllowEgressRules();
+        securityGroupState.regionId = "regionId";
+        securityGroupState.authCredentialsLink = "/link/to/auth";
+        securityGroupState.resourcePoolLink = "/link/to/rp";
         try {
-            firewallState.instanceAdapterReference = new URI(
+            securityGroupState.instanceAdapterReference = new URI(
                     "http://instanceAdapterReference");
         } catch (Exception e) {
-            firewallState.instanceAdapterReference = null;
+            securityGroupState.instanceAdapterReference = null;
         }
-        return firewallState;
+        return securityGroupState;
     }
 
-    public static ArrayList<FirewallService.FirewallState.Allow> getAllowIngressRules() {
-        ArrayList<FirewallService.FirewallState.Allow> rules = new ArrayList<>();
-        FirewallService.FirewallState.Allow ssh = new FirewallService.FirewallState.Allow();
+    public static ArrayList<Rule> getAllowIngressRules() {
+        ArrayList<Rule> rules = new ArrayList<>();
+        Rule ssh = new Rule();
         ssh.name = "ssh";
         ssh.protocol = "tcp";
-        ssh.ipRange = "0.0.0.0/0";
-        ssh.ports = new ArrayList<>();
-        ssh.ports.add("22");
+        ssh.ipRangeCidr = "0.0.0.0/0";
+        ssh.ports = "22";
+        ssh.access = Access.Allow;
         rules.add(ssh);
         return rules;
     }
 
-    public static ArrayList<FirewallService.FirewallState.Allow> getAllowEgressRules() {
-        ArrayList<FirewallService.FirewallState.Allow> rules = new ArrayList<>();
-        FirewallService.FirewallState.Allow out = new FirewallService.FirewallState.Allow();
+    public static ArrayList<Rule> getAllowEgressRules() {
+        ArrayList<Rule> rules = new ArrayList<>();
+        Rule out = new Rule();
         out.name = "out";
-        out.protocol = "tcp";
-        out.ipRange = "0.0.0.0/0";
-        out.ports = new ArrayList<>();
-        out.ports.add("1-65535");
+        out.protocol = SecurityGroupService.ANY;
+        out.ipRangeCidr = "0.0.0.0/0";
+        out.ports = "1-65535";
+        out.access = Access.Deny;
         rules.add(out);
         return rules;
     }
@@ -104,11 +107,11 @@ public class FirewallServiceTest extends Suite {
      * This class implements tests for the constructor.
      */
     public static class ConstructorTest {
-        private FirewallService firewallService = new FirewallService();
+        private SecurityGroupService securityGroupService = new SecurityGroupService();
 
         @Before
         public void setupTest() {
-            this.firewallService = new FirewallService();
+            this.securityGroupService = new SecurityGroupService();
         }
 
         @Test
@@ -120,7 +123,7 @@ public class FirewallServiceTest extends Suite {
                     Service.ServiceOption.OWNER_SELECTION,
                     Service.ServiceOption.IDEMPOTENT_POST);
 
-            assertThat(this.firewallService.getOptions(), is(expected));
+            assertThat(this.securityGroupService.getOptions(), is(expected));
         }
     }
 
@@ -130,15 +133,13 @@ public class FirewallServiceTest extends Suite {
     public static class HandleStartTest extends BaseModelTest {
         @Test
         public void testValidStartState() throws Throwable {
-            FirewallService.FirewallState startState = buildValidStartState();
-            FirewallService.FirewallState returnState = postServiceSynchronously(
-                    FirewallService.FACTORY_LINK,
-                            startState, FirewallService.FirewallState.class);
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState();
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                            startState, SecurityGroupService.SecurityGroupState.class);
 
             assertNotNull(returnState);
             assertThat(returnState.id, is(startState.id));
-            assertThat(returnState.networkDescriptionLink,
-                    is(startState.networkDescriptionLink));
             assertThat(returnState.regionId, is(startState.regionId));
             assertThat(returnState.authCredentialsLink,
                     is(startState.authCredentialsLink));
@@ -154,58 +155,50 @@ public class FirewallServiceTest extends Suite {
 
         @Test
         public void testDuplicatePost() throws Throwable {
-            FirewallService.FirewallState startState = buildValidStartState();
-            FirewallService.FirewallState returnState = postServiceSynchronously(
-                    FirewallService.FACTORY_LINK,
-                            startState, FirewallService.FirewallState.class);
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState();
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                            startState, SecurityGroupService.SecurityGroupState.class);
 
             assertNotNull(returnState);
             assertThat(returnState.regionId, is(startState.regionId));
             startState.regionId = "new-regionId";
-            returnState = postServiceSynchronously(FirewallService.FACTORY_LINK,
-                    startState, FirewallService.FirewallState.class);
+            returnState = postServiceSynchronously(SecurityGroupService.FACTORY_LINK,
+                    startState, SecurityGroupService.SecurityGroupState.class);
             assertThat(returnState.regionId, is(startState.regionId));
 
         }
 
         @Test
         public void testInvalidValues() throws Throwable {
-            FirewallService.FirewallState missingNetworkDescriptionLink = buildValidStartState();
+            SecurityGroupState missingIngressRuleName = buildValidStartState();
+            SecurityGroupState missingEgressRuleName = buildValidStartState();
 
-            FirewallService.FirewallState missingIngress = buildValidStartState();
-            FirewallService.FirewallState missingEgress = buildValidStartState();
-            FirewallService.FirewallState missingIngressRuleName = buildValidStartState();
-            FirewallService.FirewallState missingEgressRuleName = buildValidStartState();
+            SecurityGroupState missingIngressProtocol = buildValidStartState();
+            SecurityGroupState missingEgressProtocol = buildValidStartState();
 
-            FirewallService.FirewallState missingIngressProtocol = buildValidStartState();
-            FirewallService.FirewallState missingEgressProtocol = buildValidStartState();
+            SecurityGroupState invalidIngressProtocol = buildValidStartState();
+            SecurityGroupState invalidEgressProtocol = buildValidStartState();
 
-            FirewallService.FirewallState invalidIngressProtocol = buildValidStartState();
-            FirewallService.FirewallState invalidEgressProtocol = buildValidStartState();
+            SecurityGroupState invalidIngressIpRangeNoSubnet = buildValidStartState();
+            SecurityGroupState invalidIngressIpRangeInvalidIP = buildValidStartState();
+            SecurityGroupState invalidIngressIpRangeInvalidSubnet = buildValidStartState();
 
-            FirewallService.FirewallState invalidIngressIpRangeNoSubnet = buildValidStartState();
-            FirewallService.FirewallState invalidIngressIpRangeInvalidIP = buildValidStartState();
-            FirewallService.FirewallState invalidIngressIpRangeInvalidSubnet = buildValidStartState();
+            SecurityGroupState invalidEgressIpRangeNoSubnet = buildValidStartState();
+            SecurityGroupState invalidEgressIpRangeInvalidIP = buildValidStartState();
+            SecurityGroupState invalidEgressIpRangeInvalidSubnet = buildValidStartState();
 
-            FirewallService.FirewallState invalidEgressIpRangeNoSubnet = buildValidStartState();
-            FirewallService.FirewallState invalidEgressIpRangeInvalidIP = buildValidStartState();
-            FirewallService.FirewallState invalidEgressIpRangeInvalidSubnet = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidIngressPorts0 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidIngressPorts1 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidIngressPorts2 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidIngressPorts3 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidIngressPorts4 = buildValidStartState();
 
-            FirewallService.FirewallState invalidIngressPorts0 = buildValidStartState();
-            FirewallService.FirewallState invalidIngressPorts1 = buildValidStartState();
-            FirewallService.FirewallState invalidIngressPorts2 = buildValidStartState();
-            FirewallService.FirewallState invalidIngressPorts3 = buildValidStartState();
-            FirewallService.FirewallState invalidIngressPorts4 = buildValidStartState();
-
-            FirewallService.FirewallState invalidEgressPorts0 = buildValidStartState();
-            FirewallService.FirewallState invalidEgressPorts1 = buildValidStartState();
-            FirewallService.FirewallState invalidEgressPorts2 = buildValidStartState();
-            FirewallService.FirewallState invalidEgressPorts3 = buildValidStartState();
-            FirewallService.FirewallState invalidEgressPorts4 = buildValidStartState();
-
-            missingNetworkDescriptionLink.networkDescriptionLink = null;
-            missingIngress.ingress = null;
-            missingEgress.egress = null;
+            SecurityGroupService.SecurityGroupState invalidEgressPorts0 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidEgressPorts1 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidEgressPorts2 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidEgressPorts3 = buildValidStartState();
+            SecurityGroupService.SecurityGroupState invalidEgressPorts4 = buildValidStartState();
 
             missingIngressRuleName.ingress.get(0).name = null;
             missingEgressRuleName.egress.get(0).name = null;
@@ -216,29 +209,28 @@ public class FirewallServiceTest extends Suite {
             invalidIngressProtocol.ingress.get(0).protocol = "not-tcp-udp-icmp-protocol";
             invalidEgressProtocol.egress.get(0).protocol = "not-tcp-udp-icmp-protocol";
 
-            invalidIngressIpRangeNoSubnet.ingress.get(0).ipRange = "10.0.0.0";
-            invalidIngressIpRangeInvalidIP.ingress.get(0).ipRange = "10.0.0.FOO";
-            invalidIngressIpRangeInvalidSubnet.ingress.get(0).ipRange = "10.0.0.0/33";
+            invalidIngressIpRangeNoSubnet.ingress.get(0).ipRangeCidr = "10.0.0.0";
+            invalidIngressIpRangeInvalidIP.ingress.get(0).ipRangeCidr = "10.0.0.FOO";
+            invalidIngressIpRangeInvalidSubnet.ingress.get(0).ipRangeCidr = "10.0.0.0/33";
 
-            invalidEgressIpRangeNoSubnet.ingress.get(0).ipRange = "10.0.0.0";
-            invalidEgressIpRangeInvalidIP.ingress.get(0).ipRange = "10.0.0.FOO";
-            invalidEgressIpRangeInvalidSubnet.ingress.get(0).ipRange = "10.0.0.0/33";
+            invalidEgressIpRangeNoSubnet.ingress.get(0).ipRangeCidr = "10.0.0.0";
+            invalidEgressIpRangeInvalidIP.ingress.get(0).ipRangeCidr = "10.0.0.FOO";
+            invalidEgressIpRangeInvalidSubnet.ingress.get(0).ipRangeCidr = "10.0.0.0/33";
 
-            invalidIngressPorts0.ingress.get(0).ports.clear();
-            invalidIngressPorts1.ingress.get(0).ports.add(0, "1-1024-6535");
-            invalidIngressPorts2.ingress.get(0).ports.add(0, "-1");
-            invalidIngressPorts3.ingress.get(0).ports.add(0, "badString");
-            invalidIngressPorts4.ingress.get(0).ports.add(0, "100-1");
+            invalidIngressPorts0.ingress.get(0).ports = null;
+            invalidIngressPorts1.ingress.get(0).ports = "1-1024-6535";
+            invalidIngressPorts2.ingress.get(0).ports = "-1";
+            invalidIngressPorts3.ingress.get(0).ports = "badString";
+            invalidIngressPorts4.ingress.get(0).ports = "100-1";
 
-            invalidEgressPorts0.ingress.get(0).ports.clear();
-            invalidEgressPorts1.ingress.get(0).ports.add(0, "1-1024-6535");
-            invalidEgressPorts2.ingress.get(0).ports.add(0, "-1");
-            invalidEgressPorts3.ingress.get(0).ports.add(0, "badString");
-            invalidEgressPorts4.ingress.get(0).ports.add(0, "100-1");
+            invalidEgressPorts0.ingress.get(0).ports = null;
+            invalidEgressPorts1.ingress.get(0).ports = "1-1024-6535";
+            invalidEgressPorts2.ingress.get(0).ports =  "-1";
+            invalidEgressPorts3.ingress.get(0).ports = "badString";
+            invalidEgressPorts4.ingress.get(0).ports = "100-1";
 
-            FirewallService.FirewallState[] stateArray = {
-                    missingNetworkDescriptionLink, missingIngress,
-                    missingEgress, missingIngressRuleName,
+            SecurityGroupService.SecurityGroupState[] stateArray = {
+                    missingIngressRuleName,
                     missingEgressRuleName, missingIngressProtocol,
                     missingEgressProtocol, invalidIngressProtocol,
                     invalidEgressProtocol, invalidIngressIpRangeNoSubnet,
@@ -253,9 +245,9 @@ public class FirewallServiceTest extends Suite {
                     invalidEgressPorts0, invalidEgressPorts1,
                     invalidEgressPorts2, invalidEgressPorts3,
                     invalidEgressPorts4 };
-            for (FirewallService.FirewallState state : stateArray) {
-                postServiceSynchronously(FirewallService.FACTORY_LINK,
-                        state, FirewallService.FirewallState.class,
+            for (SecurityGroupService.SecurityGroupState state : stateArray) {
+                postServiceSynchronously(SecurityGroupService.FACTORY_LINK,
+                        state, SecurityGroupService.SecurityGroupState.class,
                         IllegalArgumentException.class);
             }
 
@@ -268,27 +260,25 @@ public class FirewallServiceTest extends Suite {
     public static class HandlePatchTest extends BaseModelTest {
         @Test
         public void testPatch() throws Throwable {
-            FirewallService.FirewallState startState = buildValidStartState();
+            SecurityGroupService.SecurityGroupState startState = buildValidStartState();
 
-            FirewallService.FirewallState returnState = postServiceSynchronously(
-                    FirewallService.FACTORY_LINK,
-                            startState, FirewallService.FirewallState.class);
+            SecurityGroupService.SecurityGroupState returnState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                            startState, SecurityGroupService.SecurityGroupState.class);
 
-            FirewallService.FirewallState.Allow newIngressrule = new FirewallService.FirewallState.Allow();
+            Rule newIngressrule = new Rule();
             newIngressrule.name = "ssh";
             newIngressrule.protocol = "tcp";
-            newIngressrule.ipRange = "10.10.10.10/10";
-            newIngressrule.ports = new ArrayList<>();
-            newIngressrule.ports.add("44");
+            newIngressrule.ipRangeCidr = "10.10.10.10/10";
+            newIngressrule.ports = "44";
 
-            FirewallService.FirewallState.Allow newEgressRule = new FirewallService.FirewallState.Allow();
+            Rule newEgressRule = new Rule();
             newEgressRule.name = "out";
             newEgressRule.protocol = "tcp";
-            newEgressRule.ipRange = "0.0.0.0/0";
-            newEgressRule.ports = new ArrayList<>();
-            newEgressRule.ports.add("1-65535");
+            newEgressRule.ipRangeCidr = SecurityGroupService.ANY;
+            newEgressRule.ports = "1-65535";
 
-            FirewallService.FirewallState patchState = new FirewallService.FirewallState();
+            SecurityGroupService.SecurityGroupState patchState = new SecurityGroupService.SecurityGroupState();
             patchState.name = "newName";
             patchState.ingress = new ArrayList<>();
             patchState.egress = new ArrayList<>();
@@ -306,16 +296,16 @@ public class FirewallServiceTest extends Suite {
             } catch (Exception e) {
                 patchState.instanceAdapterReference = null;
             }
-            patchState.tenantLinks = new ArrayList<String>();
+            patchState.tenantLinks = new ArrayList<>();
             patchState.tenantLinks.add("tenant1");
-            patchState.groupLinks = new HashSet<String>();
+            patchState.groupLinks = new HashSet<>();
             patchState.groupLinks.add("group1");
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
 
             returnState = getServiceSynchronously(
                     returnState.documentSelfLink,
-                    FirewallService.FirewallState.class);
+                    SecurityGroupService.SecurityGroupState.class);
 
             assertThat(returnState.regionId, is(patchState.regionId));
             assertThat(returnState.authCredentialsLink,
@@ -351,21 +341,21 @@ public class FirewallServiceTest extends Suite {
     public static class QueryTest extends BaseModelTest {
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            FirewallService.FirewallState firewallState = buildValidStartState();
+            SecurityGroupService.SecurityGroupState securityGroupState = buildValidStartState();
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
-            firewallState.tenantLinks = new ArrayList<>();
-            firewallState.tenantLinks.add(UriUtils.buildUriPath(
+            securityGroupState.tenantLinks = new ArrayList<>();
+            securityGroupState.tenantLinks.add(UriUtils.buildUriPath(
                     tenantUri.getPath(), "tenantA"));
-            FirewallService.FirewallState startState = postServiceSynchronously(
-                    FirewallService.FACTORY_LINK,
-                            firewallState, FirewallService.FirewallState.class);
+            SecurityGroupService.SecurityGroupState startState = postServiceSynchronously(
+                    SecurityGroupService.FACTORY_LINK,
+                            securityGroupState, SecurityGroupService.SecurityGroupState.class);
 
-            String kind = Utils.buildKind(FirewallService.FirewallState.class);
+            String kind = Utils.buildKind(SecurityGroupService.SecurityGroupState.class);
             String propertyName = QueryTask.QuerySpecification
                     .buildCollectionItemName(ResourceState.FIELD_NAME_TENANT_LINKS);
 
             QueryTask q = createDirectQueryTask(kind, propertyName,
-                    firewallState.tenantLinks.get(0));
+                    securityGroupState.tenantLinks.get(0));
             q = querySynchronously(q);
             assertNotNull(q.results.documentLinks);
             assertThat(q.results.documentCount, is(1L));

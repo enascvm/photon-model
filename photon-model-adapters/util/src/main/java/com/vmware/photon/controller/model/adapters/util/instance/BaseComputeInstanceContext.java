@@ -25,10 +25,10 @@ import java.util.stream.Collectors;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -43,7 +43,7 @@ import com.vmware.xenon.common.UriUtils;
  * <li>{@link SubnetState subnetState}</li>
  * <li>{@link NetworkState networkState}</li>
  * <li>map of {@link ResourceGroupState resourceGroupStates} of networkState</li>
- * <li>map of {@link FirewallState firewallStates}</li>
+ * <li>map of {@link SecurityGroupState securityGroupStates}</li>
  * </ul>
  * in addition to the states loaded by {@link BaseAdapterContext}.
  */
@@ -79,7 +79,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         /**
          * Resolved from {@code NetworkInterfaceStateWithDescription.firewallLinks}.
          */
-        public Map<String, FirewallState> firewallStates = new LinkedHashMap<>();
+        public Map<String, SecurityGroupState> securityGroupStates = new LinkedHashMap<>();
     }
 
     /**
@@ -226,7 +226,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     }
 
     /**
-     * Get {@link FirewallState}s assigned to NICs.
+     * Get {@link SecurityGroupState}s assigned to NICs.
      */
     protected DeferredResult<T> getNicFirewallStates(T context) {
         if (context.nics.isEmpty()) {
@@ -242,11 +242,11 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
                 .map(firewallLink -> {
                     Operation op = Operation.createGet(context.service.getHost(), firewallLink);
                     return context.service
-                            .sendWithDeferredResult(op, FirewallState.class)
+                            .sendWithDeferredResult(op, SecurityGroupState.class)
                             .thenAccept(firewallState -> {
                                 // Populate all NICs with same Firewall state.
                                 for (BaseNicContext nicCtx : context.nics) {
-                                    nicCtx.firewallStates.put(firewallState.name, firewallState);
+                                    nicCtx.securityGroupStates.put(firewallState.name, firewallState);
                                 }
                             });
                 })

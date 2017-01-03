@@ -38,12 +38,11 @@ import com.amazonaws.services.ec2.model.SecurityGroup;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState.Allow;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
@@ -77,7 +76,7 @@ public class TestAWSFirewallService {
     AWSFirewallService svc;
     AWSInstanceContext aws;
 
-    @Rule
+    @org.junit.Rule
     public ExpectedException expectedEx = ExpectedException.none();
 
     @Before
@@ -213,7 +212,7 @@ public class TestAWSFirewallService {
 
     @Test
     public void testBuildRules() throws Throwable {
-        ArrayList<Allow> rules = TestUtils.getAllowIngressRules();
+        ArrayList<Rule> rules = TestUtils.getAllowIngressRules();
         List<IpPermission> awsRules = buildRules(rules);
 
         for (IpPermission rule : awsRules) {
@@ -230,7 +229,7 @@ public class TestAWSFirewallService {
     @Test
     public void testUpdateIngressRules() throws Throwable {
         String groupID = createSecurityGroup(this.client, null);
-        ArrayList<Allow> rules = TestUtils.getAllowIngressRules();
+        ArrayList<Rule> rules = TestUtils.getAllowIngressRules();
         updateIngressRules(this.client, groupID, buildRules(rules));
         SecurityGroup awsSG = this.svc.getSecurityGroupByID(this.client,groupID);
 

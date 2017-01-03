@@ -35,7 +35,7 @@ import com.vmware.xenon.common.StatelessService;
  */
 public class AzureEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_ENUMERATION_ADAPTER;
-    public static final Integer SERVICES_TO_REGISTER = 4;
+    public static final Integer SERVICES_TO_REGISTER = 5;
 
     public AzureEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -44,6 +44,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
     public enum AzureEnumerationStages {
         TRIGGER_RESOURCE_GROUP_ENUMERATION,
         TRIGGER_STORAGE_ENUMERATION,
+        TRIGGER_FIREWALL_ENUMERATION,
         TRIGGER_NETWORK_ENUMERATION,
         TRIGGER_COMPUTE_ENUMERATION,
         FINISHED,
@@ -105,12 +106,17 @@ public class AzureEnumerationAdapterService extends StatelessService {
      * Starts the related services for the Enumeration Service
      */
     public void startHelperServices() {
+
         Operation postComputeEnumAdapterService = Operation
                 .createPost(this, AzureComputeEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
         Operation postStorageEnumAdapterService = Operation
                 .createPost(this, AzureStorageEnumerationAdapterService.SELF_LINK)
+                .setReferer(this.getUri());
+
+        Operation postSecurityGroupEnumAdapterService = Operation
+                .createPost(this, AzureSecurityGroupEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
         Operation postNetworkEnumAdapterService = Operation
@@ -125,6 +131,8 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 new AzureComputeEnumerationAdapterService());
         this.getHost().startService(postStorageEnumAdapterService,
                 new AzureStorageEnumerationAdapterService());
+        this.getHost().startService(postSecurityGroupEnumAdapterService,
+                new AzureSecurityGroupEnumerationAdapterService());
         this.getHost().startService(postNetworkEnumAdapterService,
                 new AzureNetworkEnumerationAdapterService());
         this.getHost().startService(postResourceGroupEnumAdapterService,
@@ -141,12 +149,14 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 this.logFine("Successfully started up all Azure Enumeration Adapter Services");
             }
         }, AzureComputeEnumerationAdapterService.SELF_LINK,
-                AzureStorageEnumerationAdapterService.SELF_LINK);
+                AzureStorageEnumerationAdapterService.SELF_LINK,
+                AzureSecurityGroupEnumerationAdapterService.SELF_LINK,
+                AzureNetworkEnumerationAdapterService.SELF_LINK,
+                AzureResourceGroupEnumerationAdapterService.SELF_LINK);
     }
 
     /**
      * Creates operations to trigger off adapter services in parallel
-     *
      */
     public void handleEnumerationRequest(EnumerationContext context) {
         switch (context.stage) {
@@ -157,6 +167,11 @@ public class AzureEnumerationAdapterService extends StatelessService {
             break;
         case TRIGGER_STORAGE_ENUMERATION:
             triggerEnumerationAdapter(context, AzureStorageEnumerationAdapterService.SELF_LINK,
+                    AzureEnumerationStages.TRIGGER_FIREWALL_ENUMERATION);
+            break;
+        case TRIGGER_FIREWALL_ENUMERATION:
+            triggerEnumerationAdapter(context,
+                    AzureSecurityGroupEnumerationAdapterService.SELF_LINK,
                     AzureEnumerationStages.TRIGGER_NETWORK_ENUMERATION);
             break;
         case TRIGGER_NETWORK_ENUMERATION:
@@ -192,7 +207,8 @@ public class AzureEnumerationAdapterService extends StatelessService {
             AzureEnumerationStages next) {
         Operation.CompletionHandler completionHandler = (o, e) -> {
             if (e != null) {
-                String error = String.format("Error triggering Azure enumeration adapter %s", adapterSelfLink);
+                String error = String
+                        .format("Error triggering Azure enumeration adapter %s", adapterSelfLink);
                 logSevere(error);
                 context.error = new IllegalStateException(error);
                 AdapterUtils.sendFailurePatchToEnumerationTask(this,

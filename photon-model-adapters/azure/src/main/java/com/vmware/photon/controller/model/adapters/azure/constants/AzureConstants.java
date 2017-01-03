@@ -148,6 +148,10 @@ public class AzureConstants {
     public static final String LIST_VIRTUAL_NETWORKS_URI = BASE_URI_FOR_REST
             + "/subscriptions/{subscriptionId}/providers/Microsoft.Network/virtualnetworks";
 
+    // Network Security Groups
+    public static final String LIST_NETWORK_SECURITY_GROUP_URI = BASE_URI_FOR_REST
+            + "/subscriptions/{subscriptionId}/providers/Microsoft.Network/networkSecurityGroups";
+
     // Resource Group REST constants
     public static final String RESOURCE_GROUP_REST_API_VERSION = "2015-11-01";
     public static final String LIST_RESOURCE_GROUPS_URI = BASE_URI_FOR_REST

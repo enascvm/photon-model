@@ -30,6 +30,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.randomString;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
+import static com.vmware.photon.controller.model.tasks.ModelUtils.createSecurityGroup;
 
 import java.net.URI;
 import java.util.EnumSet;
@@ -46,6 +47,7 @@ import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
 import com.microsoft.azure.management.network.NetworkManagementClient;
 import com.microsoft.azure.management.network.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
 import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
@@ -82,6 +84,7 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -123,6 +126,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private static final int STALE_STORAGE_ACCOUNTS_COUNT = 5;
     private static final int STALE_CONTAINERS_COUNT = 5;
     private static final int STALE_BLOBS_COUNT = 5;
+    private static final int STALE_SECURITY_GROUPS_COUNT = 4;
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -324,6 +328,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         createAzureStorageAccounts(STALE_STORAGE_ACCOUNTS_COUNT);
         createAzureStorageContainers(STALE_CONTAINERS_COUNT);
         createAzureBlobs(STALE_BLOBS_COUNT);
+        createAzureSecurityGroups(STALE_SECURITY_GROUPS_COUNT);
 
         // No need to create stale networks or subnets since createAzureVMResources will create
         // such for us.
@@ -346,6 +351,9 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_VM_RESOURCES_COUNT + 1,
                 SubnetService.FACTORY_LINK, true);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
+                STALE_SECURITY_GROUPS_COUNT,
+                SecurityGroupService.FACTORY_LINK, true);
 
         this.vmCount = getAzureVMCount(this.computeManagementClient);
         this.host.log(Level.INFO, "Initial VM Count: %d", this.vmCount);
@@ -354,6 +362,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         int networksCount = getAzureNetworksCount();
         int subnetsCount = getAzureSubnetCount();
         int resourceGroupsCount = getAzureResourceGroupCount();
+        int securityGroupsCount = getAzureNetworkSecurityGroups();
 
         runEnumeration();
 
@@ -370,6 +379,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 NetworkService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, subnetsCount,
                 SubnetService.FACTORY_LINK, true);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, securityGroupsCount,
+                SecurityGroupService.FACTORY_LINK, true);
 
         // VM count + 1 compute host instance
         this.vmCount = this.vmCount + 1;
@@ -590,6 +601,14 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         }
     }
 
+    private void createAzureSecurityGroups(int numOfSecurityGroups) throws Throwable {
+        for (int i = 0; i < numOfSecurityGroups; i++) {
+            String staleSecurityGroupName = "staleSecurityGroup-" + i;
+            createSecurityGroup(this.host, staleSecurityGroupName,
+                    this.resourcePoolLink, this.authLink);
+        }
+    }
+
     private int getAzureResourceGroupCount() throws Exception {
         ServiceResponse<List<ResourceGroup>> resourceGroupsResponse = this.resourceManagementClient
                 .getResourceGroupsOperations().list(null, null);
@@ -625,6 +644,14 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         this.host.log("Container count in Azure: %d", this.containerCount);
         this.host.log("Blob count in Azure: %d", this.blobCount);
+    }
+
+    private int getAzureNetworkSecurityGroups() throws Exception {
+        ServiceResponse<List<NetworkSecurityGroup>> securityGroupsResponse = this
+                .networkManagementClient
+                .getNetworkSecurityGroupsOperations().listAll();
+        List<NetworkSecurityGroup> securityGroups = securityGroupsResponse.getBody();
+        return securityGroups.size();
     }
 
     private int getAzureNetworksCount() throws Exception {

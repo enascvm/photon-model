@@ -18,7 +18,7 @@ import java.util.List;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest.InstanceRequestType;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -194,14 +194,14 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
         }
     }
 
-    private FirewallInstanceRequest toReq(FirewallState firewallState,
+    private FirewallInstanceRequest toReq(SecurityGroupState securityGroupState,
             ProvisionFirewallTaskState taskState) {
         FirewallInstanceRequest req = new FirewallInstanceRequest();
         req.requestType = taskState.requestType;
         req.resourceReference = UriUtils.buildUri(this.getHost(),
                 taskState.firewallDescriptionLink);
-        req.authCredentialsLink = firewallState.authCredentialsLink;
-        req.resourcePoolLink = firewallState.resourcePoolLink;
+        req.authCredentialsLink = securityGroupState.authCredentialsLink;
+        req.resourcePoolLink = securityGroupState.resourcePoolLink;
         req.taskReference = this.getUri();
         req.isMockRequest = taskState.isMockRequest;
 
@@ -220,14 +220,14 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
                                 sendSelfPatch(TaskState.TaskStage.FAILED, e);
                                 return;
                             }
-                            FirewallState firewallState = o
-                                    .getBody(FirewallState.class);
-                            FirewallInstanceRequest req = toReq(firewallState,
+                            SecurityGroupState securityGroupState = o
+                                    .getBody(SecurityGroupState.class);
+                            FirewallInstanceRequest req = toReq(securityGroupState,
                                     taskState);
 
                             sendRequest(Operation
                                     .createPatch(
-                                            firewallState.instanceAdapterReference)
+                                            securityGroupState.instanceAdapterReference)
                                     .setBody(req)
                                     .setCompletion(
                                             (oo, ee) -> {

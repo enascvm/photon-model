@@ -64,8 +64,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.photon.controller.model.resources.FirewallService;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
@@ -76,6 +74,9 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
@@ -139,7 +140,7 @@ public class TestAWSSetupUtils {
     public static final String AWS_INSTANCE_PREFIX = "i-";
 
     public static final String EC2_LINUX_AMI = "ami-0d4cfd66";
-    public static final String EC2_WINDOWS_AMI = "ami-30540427";
+    public static final String EC2_WINDOWS_AMI = "ami-34706423";
 
     /**
      * Class to hold the baseline counts for the compute states and the compute descriptions that
@@ -365,51 +366,49 @@ public class TestAWSSetupUtils {
             nicDescription.id = UUID.randomUUID().toString();
             nicDescription.assignment = IpAssignment.DYNAMIC;
 
-            nicDescription = TestUtils.doPost(host, nicDescription, NetworkInterfaceDescription.class,
-                    UriUtils.buildUri(host, NetworkInterfaceDescriptionService.FACTORY_LINK));
+            nicDescription = TestUtils
+                    .doPost(host, nicDescription, NetworkInterfaceDescription.class,
+                            UriUtils.buildUri(host,
+                                    NetworkInterfaceDescriptionService.FACTORY_LINK));
         }
 
-        // Create firewall state
-        FirewallState firewallState;
+        // Create security group state
+        SecurityGroupState securityGroupState;
         {
-            firewallState = new FirewallState();
-            firewallState.authCredentialsLink = authCredentialsLink;
-            firewallState.id = AWS_DEFAULT_GROUP_ID;
-            firewallState.documentSelfLink = firewallState.id;
-            firewallState.name = AWS_DEFAULT_GROUP_NAME;
-            firewallState.networkDescriptionLink = UriUtils.buildUriPath(
-                    NetworkService.FACTORY_LINK,
-                    nicDescription.id);
-            firewallState.tenantLinks = new ArrayList<>();
-            firewallState.tenantLinks.add("tenant-linkA");
-            ArrayList<FirewallService.FirewallState.Allow> ingressRules = new ArrayList<>();
+            securityGroupState = new SecurityGroupState();
+            securityGroupState.authCredentialsLink = authCredentialsLink;
+            securityGroupState.id = AWS_DEFAULT_GROUP_ID;
+            securityGroupState.documentSelfLink = securityGroupState.id;
+            securityGroupState.name = AWS_DEFAULT_GROUP_NAME;
+            securityGroupState.tenantLinks = new ArrayList<>();
+            securityGroupState.tenantLinks.add("tenant-linkA");
+            ArrayList<Rule> ingressRules = new ArrayList<>();
 
-            FirewallService.FirewallState.Allow ssh = new FirewallService.FirewallState.Allow();
+            Rule ssh = new Rule();
             ssh.name = "ssh";
             ssh.protocol = "tcp";
-            ssh.ipRange = "0.0.0.0/0";
-            ssh.ports = new ArrayList<>();
-            ssh.ports.add("22");
+            ssh.ipRangeCidr = "0.0.0.0/0";
+            ssh.ports = "22";
             ingressRules.add(ssh);
-            firewallState.ingress = ingressRules;
+            securityGroupState.ingress = ingressRules;
 
-            ArrayList<FirewallService.FirewallState.Allow> egressRules = new ArrayList<>();
-            FirewallService.FirewallState.Allow out = new FirewallService.FirewallState.Allow();
+            ArrayList<Rule> egressRules = new ArrayList<>();
+            Rule out = new Rule();
             out.name = "out";
             out.protocol = "tcp";
-            out.ipRange = "0.0.0.0/0";
-            out.ports = new ArrayList<>();
-            out.ports.add("1-65535");
+            out.ipRangeCidr = "0.0.0.0/0";
+            out.ports = "1-65535";
             egressRules.add(out);
-            firewallState.egress = egressRules;
+            securityGroupState.egress = egressRules;
 
-            firewallState.regionId = "regionId";
-            firewallState.resourcePoolLink = "/link/to/rp";
-            firewallState.instanceAdapterReference = new URI(
+            securityGroupState.regionId = "regionId";
+            securityGroupState.resourcePoolLink = "/link/to/rp";
+            securityGroupState.instanceAdapterReference = new URI(
                     "http://instanceAdapterReference");
 
-            firewallState = TestUtils.doPost(host, firewallState, FirewallState.class,
-                    UriUtils.buildUri(host, FirewallService.FACTORY_LINK));
+            securityGroupState = TestUtils.doPost(host, securityGroupState,
+                    SecurityGroupState.class, UriUtils.buildUri(host, SecurityGroupService
+                            .FACTORY_LINK));
         }
 
         // Create nics
@@ -425,11 +424,11 @@ public class TestAWSSetupUtils {
                 nicState.subnetLink = subnetState.documentSelfLink;
                 nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
 
-                String firewallLink = UriUtils.buildUriPath(
-                        FirewallService.FACTORY_LINK,
-                        firewallState.id);
+                String securityGroupLink = UriUtils.buildUriPath(
+                        SecurityGroupService.FACTORY_LINK,
+                        securityGroupState.id);
                 nicState.firewallLinks = new ArrayList<>();
-                nicState.firewallLinks.add(firewallLink);
+                nicState.firewallLinks.add(securityGroupLink);
 
                 nicState = TestUtils.doPost(host, nicState, NetworkInterfaceState.class,
                         UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
@@ -578,10 +577,8 @@ public class TestAWSSetupUtils {
     /**
      * Method for deleting a document with the said identifier.
      *
-     * @param host
-     *            The verification host
-     * @param documentToDelete
-     *            The identifier of the document to be deleted.
+     * @param host             The verification host
+     * @param documentToDelete The identifier of the document to be deleted.
      * @throws Throwable
      */
     public static void deleteDocument(VerificationHost host, String documentToDelete)
@@ -778,11 +775,9 @@ public class TestAWSSetupUtils {
      * Method that sets basic information in {@link AWSUtils} for aws-mock. Aws-mock is a
      * open-source tool for testing AWS services in a mock EC2 environment.
      *
+     * @param isAwsClientMock          flag to use aws-mock
+     * @param awsMockEndpointReference ec2 endpoint of aws-mock
      * @see <a href="https://github.com/treelogic-swe/aws-mock">aws-mock</a>
-     * @param isAwsClientMock
-     *            flag to use aws-mock
-     * @param awsMockEndpointReference
-     *            ec2 endpoint of aws-mock
      */
     public static void setAwsClientMockInfo(boolean isAwsClientMock,
             String awsMockEndpointReference) {
@@ -792,7 +787,6 @@ public class TestAWSSetupUtils {
 
     /**
      * Handler class to spawn off instances on the AWS EC2 endpoint.
-     *
      */
     public static class AWSRunInstancesAsyncHandler implements
             AsyncHandler<RunInstancesRequest, RunInstancesResult> {
@@ -845,7 +839,7 @@ public class TestAWSSetupUtils {
      * provisioned correctly.
      *
      * @return boolean if the required instances have been turned ON on AWS with some acceptable
-     *         error rate.
+     * error rate.
      */
     public static boolean computeInstancesStartedStateWithAcceptedErrorRate(
             AmazonEC2AsyncClient client,
@@ -986,12 +980,9 @@ public class TestAWSSetupUtils {
     /**
      * Method to perform compute resource enumeration on the AWS endpoint.
      *
-     * @param resourcePoolLink
-     *            The link to the AWS resource pool.
-     * @param computeDescriptionLink
-     *            The link to the compute description for the AWS host.
-     * @param parentComputeLink
-     *            The compute state associated with the AWS host.
+     * @param resourcePoolLink       The link to the AWS resource pool.
+     * @param computeDescriptionLink The link to the compute description for the AWS host.
+     * @param parentComputeLink      The compute state associated with the AWS host.
      * @return
      * @throws Throwable
      */
@@ -1054,7 +1045,6 @@ public class TestAWSSetupUtils {
 
     /**
      * Async handler for the deletion of instances from the AWS endpoint.
-     *
      */
     public static class AWSTerminateHandlerAsync implements
             AsyncHandler<TerminateInstancesRequest, TerminateInstancesResult> {
@@ -1201,7 +1191,6 @@ public class TestAWSSetupUtils {
 
     /**
      * Async handler for the stop of instances from the AWS endpoint.
-     *
      */
     public static class AWSStopHandlerAsync implements
             AsyncHandler<StopInstancesRequest, StopInstancesResult> {

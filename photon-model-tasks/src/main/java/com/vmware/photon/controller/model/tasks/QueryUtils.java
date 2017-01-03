@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static java.util.stream.Collector.Characteristics.IDENTITY_FINISH;
+
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
@@ -47,10 +49,8 @@ public class QueryUtils {
     /**
      * Executes the given query task.
      *
-     * @param service
-     *            The service executing the query task.
-     * @param queryTask
-     *            The query task.
+     * @param service   The service executing the query task.
+     * @param queryTask The query task.
      */
     public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask) {
         // We don't want any unbounded queries. By default, we cap the query results to 10000.
@@ -79,8 +79,8 @@ public class QueryUtils {
          * <p>
          * <b>Note</b>: Use with care, for example within tests.
          */
-        public static void waitToComplete(DeferredResult<Void> dr) {
-            ((CompletableFuture<Void>) dr.toCompletionStage()).join();
+        public static <S> S waitToComplete(DeferredResult<S> dr) {
+            return ((CompletableFuture<S>) dr.toCompletionStage()).join();
         }
 
         /**
@@ -113,10 +113,8 @@ public class QueryUtils {
         /**
          * Default constructor.
          *
-         * @param host
-         *            The host initiating the query.
-         * @param documentClass
-         *            The class of documents to query for.
+         * @param host          The host initiating the query.
+         * @param documentClass The class of documents to query for.
          * @param tenantLinks
          */
         public QueryByPages(ServiceHost host,
@@ -134,7 +132,7 @@ public class QueryUtils {
 
         /**
          * Configure the number of max documents per page.
-         *
+         * <p>
          * <p>
          * If not explicitly specified use the system default as returned by
          * {@link #getDefaultMaxPageSize()}.
@@ -147,8 +145,7 @@ public class QueryUtils {
         /**
          * Query for all documents which satisfy passed query.
          *
-         * @param documentConsumer
-         *            The callback interface of documents consumer.
+         * @param documentConsumer The callback interface of documents consumer.
          */
         public DeferredResult<Void> queryDocuments(Consumer<T> documentConsumer) {
 
@@ -165,10 +162,9 @@ public class QueryUtils {
         /**
          * Query for all document links which satisfy passed query.
          *
-         * @param documentConsumer
-         *            The callback interface of document links consumer.
+         * @param linkConsumer The callback interface of document links consumer.
          */
-        public DeferredResult<Void> queryLinks(Consumer<String> referrerConsumer) {
+        public DeferredResult<Void> queryLinks(Consumer<String> linkConsumer) {
 
             QueryTask queryTask = QueryTask.Builder.createDirectTask()
                     .setQuery(this.query)
@@ -176,57 +172,45 @@ public class QueryUtils {
                     .build();
             queryTask.tenantLinks = this.tenantLinks;
 
-            return queryImpl(queryTask, referrerConsumer);
+            return queryImpl(queryTask, linkConsumer);
         }
 
         /**
          * Performs a mutable reduction operation on the elements of this query using a
          * {@code Collector}. The method is inspired by {@link Stream#collect(Collector)}.
-         *
-         * <p>
-         * <b>Note</b>: Use with care. Keep in mind the method is blocking (it waits to collect all
-         * query results).
          *
          * @see {@link #queryDocuments(Consumer)}
          */
         @SuppressWarnings("unchecked")
-        public <R, A> R collectDocuments(Collector<T, A, R> collector) {
+        public <R, A> DeferredResult<R> collectDocuments(Collector<T, A, R> collector) {
 
             A container = collector.supplier().get();
             BiConsumer<A, T> accumulator = collector.accumulator();
 
-            waitToComplete(queryDocuments(referrerDoc -> {
+            return queryDocuments(referrerDoc -> {
                 accumulator.accept(container, referrerDoc);
-            }));
-
-            return collector.characteristics().contains(Collector.Characteristics.IDENTITY_FINISH)
+            }).thenApply(ignore -> collector.characteristics().contains(IDENTITY_FINISH)
                     ? (R) container
-                    : collector.finisher().apply(container);
+                    : collector.finisher().apply(container));
         }
 
         /**
          * Performs a mutable reduction operation on the elements of this query using a
          * {@code Collector}. The method is inspired by {@link Stream#collect(Collector)}.
          *
-         * <p>
-         * <b>Note</b>: Use with care. Keep in mind the method is blocking (it waits to collect all
-         * query results).
-         *
          * @see {@link #queryLinks(Consumer)}
          */
         @SuppressWarnings("unchecked")
-        public <R, A> R collectLinks(Collector<String, A, R> collector) {
+        public <R, A> DeferredResult<R> collectLinks(Collector<String, A, R> collector) {
 
             A container = collector.supplier().get();
             BiConsumer<A, String> accumulator = collector.accumulator();
 
-            waitToComplete(queryLinks(referrerLink -> {
+            return queryLinks(referrerLink -> {
                 accumulator.accept(container, referrerLink);
-            }));
-
-            return collector.characteristics().contains(Collector.Characteristics.IDENTITY_FINISH)
+            }).thenApply(ignore -> collector.characteristics().contains(IDENTITY_FINISH)
                     ? (R) container
-                    : collector.finisher().apply(container);
+                    : collector.finisher().apply(container));
         }
 
         @SuppressWarnings("rawtypes")
@@ -305,14 +289,10 @@ public class QueryUtils {
         /**
          * Default constructor.
          *
-         * @param host
-         *            The host initiating the query.
-         * @param referredDocumentSelfLink
-         *            All referrers point to this document.
-         * @param referrerClass
-         *            The class of referrers that we want to query for.
-         * @param referrerLinkFieldName
-         *            The name of the "foreign key link" field of the referrer class.
+         * @param host                     The host initiating the query.
+         * @param referredDocumentSelfLink All referrers point to this document.
+         * @param referrerClass            The class of referrers that we want to query for.
+         * @param referrerLinkFieldName    The name of the "foreign key link" field of the referrer class.
          * @param tenantLinks
          */
         public QueryForReferrers(ServiceHost host,

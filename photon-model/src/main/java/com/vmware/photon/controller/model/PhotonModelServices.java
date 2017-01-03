@@ -27,6 +27,7 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.ResourceDescriptionService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SnapshotService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -41,6 +42,7 @@ import com.vmware.xenon.common.UriUtils;
 /**
  * Helper class that starts all the photon model provisioning services
  */
+@SuppressWarnings( "deprecation" )
 public class PhotonModelServices {
 
     public static final String[] LINKS = {
@@ -54,6 +56,7 @@ public class PhotonModelServices {
             NetworkInterfaceDescriptionService.FACTORY_LINK,
             ResourceGroupService.FACTORY_LINK,
             NetworkService.FACTORY_LINK,
+            SecurityGroupService.FACTORY_LINK,
             FirewallService.FACTORY_LINK,
             StorageDescriptionService.FACTORY_LINK,
             ResourceMetricsService.FACTORY_LINK,
@@ -76,6 +79,7 @@ public class PhotonModelServices {
         host.startFactory(new ResourceGroupService());
         host.startFactory(new NetworkService());
         host.startFactory(new FirewallService());
+        host.startFactory(new SecurityGroupService());
         host.startFactory(new StorageDescriptionService());
         host.startFactory(new EndpointService());
         host.startFactory(new InMemoryResourceMetricService());

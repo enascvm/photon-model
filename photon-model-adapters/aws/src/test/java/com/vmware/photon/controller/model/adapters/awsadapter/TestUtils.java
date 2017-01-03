@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_ALLOWED_NETWORK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_PROTOCOL;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
+import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages.waitToComplete;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -24,19 +25,20 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 
-import com.vmware.photon.controller.model.resources.FirewallService;
-import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryForReferrers;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -65,50 +67,46 @@ public class TestUtils {
         return true;
     }
 
-    public static ArrayList<FirewallService.FirewallState.Allow> getAllowIngressRules() {
-        ArrayList<FirewallService.FirewallState.Allow> rules = new ArrayList<>();
+    public static ArrayList<Rule> getAllowIngressRules() {
+        ArrayList<Rule> rules = new ArrayList<>();
 
-        FirewallService.FirewallState.Allow ssh = new FirewallService.FirewallState.Allow();
+        Rule ssh = new Rule();
         ssh.protocol = DEFAULT_PROTOCOL;
-        ssh.ipRange = DEFAULT_ALLOWED_NETWORK;
-        ssh.ports = new ArrayList<String>();
-        ssh.ports.add("22");
+        ssh.ipRangeCidr = DEFAULT_ALLOWED_NETWORK;
+        ssh.ports = "22";
         rules.add(ssh);
 
-        FirewallService.FirewallState.Allow http = new FirewallService.FirewallState.Allow();
+        Rule http = new Rule();
         http.protocol = DEFAULT_PROTOCOL;
-        http.ipRange = DEFAULT_ALLOWED_NETWORK;
-        http.ports = new ArrayList<String>();
-        http.ports.add("80");
+        http.ipRangeCidr = DEFAULT_ALLOWED_NETWORK;
+        http.ports = "80";
         rules.add(http);
 
-        FirewallService.FirewallState.Allow range = new FirewallService.FirewallState.Allow();
+        Rule range = new Rule();
         range.protocol = DEFAULT_PROTOCOL;
-        range.ipRange = DEFAULT_ALLOWED_NETWORK;
-        range.ports = new ArrayList<String>();
-        range.ports.add("41000-42000");
+        range.ipRangeCidr = DEFAULT_ALLOWED_NETWORK;
+        range.ports = "41000-42000";
         rules.add(range);
-
 
         return rules;
     }
 
-    public static ArrayList<FirewallService.FirewallState.Allow> getAllowEgressRules(String subnet) {
-        ArrayList<FirewallService.FirewallState.Allow> rules = new ArrayList<>();
+    public static ArrayList<Rule> getAllowEgressRules(String subnet) {
+        ArrayList<Rule> rules = new ArrayList<>();
 
-        FirewallService.FirewallState.Allow out = new FirewallService.FirewallState.Allow();
+        Rule out = new Rule();
         out.protocol = DEFAULT_PROTOCOL;
-        out.ipRange = subnet;
-        out.ports = new ArrayList<String>();
-        out.ports.add("1-65535");
+        out.ipRangeCidr = subnet;
+        out.ports = "1-65535";
         rules.add(out);
 
         return rules;
     }
 
-    public static void postFirewall(VerificationHost host, FirewallState state, Operation response)
+    public static void postSecurityGroup(VerificationHost host, SecurityGroupState state, Operation
+            response)
             throws Throwable {
-        URI firewallFactory = UriUtils.buildUri(host, FirewallService.FACTORY_LINK);
+        URI firewallFactory = UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK);
         host.testStart(1);
         Operation startPost = Operation.createPost(firewallFactory)
                 .setBody(state)
@@ -117,7 +115,7 @@ public class TestUtils {
                         host.failIteration(e);
                         return;
                     }
-                    response.setBody(o.getBody(FirewallState.class));
+                    response.setBody(o.getBody(SecurityGroupState.class));
                     host.completeIteration();
                 });
         host.send(startPost);
@@ -231,15 +229,14 @@ public class TestUtils {
                 SubnetState.FIELD_NAME_NETWORK_LINK,
                 Collections.emptyList());
 
-        return querySubnetStatesReferrers.collectDocuments(Collectors.toList());
+        DeferredResult<List<SubnetState>> subnetDR =
+                querySubnetStatesReferrers.collectDocuments(Collectors.toList());
+
+        return waitToComplete(subnetDR);
     }
 
     public static ExecutorService getExecutor() {
-        return Executors.newFixedThreadPool(Utils.DEFAULT_THREAD_COUNT, new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-                return new Thread(r, "test/" + Utils.getNowMicrosUtc());
-            }
-        });
+        return Executors.newFixedThreadPool(Utils.DEFAULT_THREAD_COUNT,
+                r -> new Thread(r, "test/" + Utils.getNowMicrosUtc()));
     }
 }

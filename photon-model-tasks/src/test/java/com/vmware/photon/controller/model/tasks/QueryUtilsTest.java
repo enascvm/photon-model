@@ -18,6 +18,8 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 
+import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages.waitToComplete;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -32,6 +34,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryForReferrers;
+import com.vmware.xenon.common.DeferredResult;
 
 /**
  * Tests for {@link QueryUtils} class.
@@ -64,7 +67,7 @@ public class QueryUtilsTest extends BaseModelTest {
                 ModelUtils.createCompute(this, cd).documentSelfLink));
 
         // The class under testing
-        QueryForReferrers<ComputeState> queryReferrers = new QueryForReferrers<ComputeState>(
+        QueryForReferrers<ComputeState> queryReferrers = new QueryForReferrers<>(
                 getHost(),
                 cd.documentSelfLink,
                 ComputeState.class,
@@ -73,19 +76,21 @@ public class QueryUtilsTest extends BaseModelTest {
 
         {
             // The method under testing
-            Set<String> actual = queryReferrers.collectDocuments(
+            DeferredResult<Set<String>> documentLinksDR = queryReferrers.collectDocuments(
                     Collectors.mapping(cs -> cs.documentSelfLink, Collectors.toSet()));
+            Set<String> actual = waitToComplete(documentLinksDR);
 
             assertThat(actual, equalTo(expected));
         }
 
         {
             // The method under testing
-            Set<String> actual = queryReferrers
+            DeferredResult<Set<String>> linkDocumentsDR = queryReferrers
                     // Configure custom page size
                     .setMaxPageSize(3)
                     .collectLinks(Collectors.toSet());
 
+            Set<String> actual = waitToComplete(linkDocumentsDR);
             assertThat(actual, equalTo(expected));
         }
     }
@@ -107,15 +112,18 @@ public class QueryUtilsTest extends BaseModelTest {
 
         {
             // The method under testing
-            Set<String> actual = queryReferrers.collectDocuments(
+            DeferredResult<Set<String>> documentLinksDR = queryReferrers.collectDocuments(
                     Collectors.mapping(cs -> cs.documentSelfLink, Collectors.toSet()));
+
+            Set<String> actual = waitToComplete(documentLinksDR);
 
             assertThat(actual, equalTo(expected));
         }
 
         {
             // The method under testing
-            Set<String> actual = queryReferrers.collectLinks(Collectors.toSet());
+            DeferredResult<Set<String>> documentLinksDR = queryReferrers.collectLinks(Collectors.toSet());
+            Set<String> actual = waitToComplete(documentLinksDR);
 
             assertThat(actual, equalTo(expected));
         }
@@ -139,7 +147,7 @@ public class QueryUtilsTest extends BaseModelTest {
         Set<String> actual = new HashSet<>();
 
         // The method under testing
-        QueryForReferrers.waitToComplete(
+        waitToComplete(
                 queryReferrers.queryDocuments(cs -> {
                     if (actual.isEmpty()) {
                         actual.add(cs.documentSelfLink);

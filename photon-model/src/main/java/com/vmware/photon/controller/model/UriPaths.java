@@ -28,6 +28,7 @@ public class UriPaths {
     public static final String RESOURCES_NETWORK_INTERFACES = RESOURCES + "/network-interfaces";
     public static final String RESOURCES_NETWORK_INTERFACE_DESCRIPTIONS = RESOURCES + "/network-interfaces-descriptions";
     public static final String RESOURCES_SUBNETS = RESOURCES + "/sub-networks";
+    public static final String RESOURCES_SECURITY_GROUPS = RESOURCES + "/security-groups";
 
     public static final String MONITORING = "/monitoring";
 
