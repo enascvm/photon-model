@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.credentials.AzureEnvironment;
+
 import okhttp3.OkHttpClient;
 
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
@@ -32,7 +33,8 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AzureUtils {
     private static final int EXECUTOR_SHUTDOWN_INTERVAL_MINUTES = 5;
-    private static final Pattern RESOURCE_GROUP_NAME_PATTERN = Pattern.compile(".*/resourcegroups/([^/]*)");
+    private static final Pattern RESOURCE_GROUP_NAME_PATTERN =
+            Pattern.compile(".*/resourcegroups/([^/]*)", Pattern.CASE_INSENSITIVE);
 
     /**
      * Waits for termination of given executor service.
@@ -83,11 +85,41 @@ public class AzureUtils {
                 AzureEnvironment.AZURE);
     }
 
-    public static String getResourceGroupName(String storageAcctId) {
-        Matcher matcher = RESOURCE_GROUP_NAME_PATTERN.matcher(storageAcctId.toLowerCase());
+    /**
+     * Returns the resource group name from an arbitrary Azure resource id.
+     * <p>
+     * Example of Azure virtual network resource id:
+     * "/subscriptions/[Id]/resourceGroups/TestRG/providers/Microsoft.Network/virtualNetworks/vNet"
+     * <p>
+     * The returned name of the resource group is TestRG.
+     * @param azureResourceId Azure resource id.
+     * @return the resource group name (in lower case) where the resource belong to.
+     */
+    public static String getResourceGroupName(String azureResourceId) {
+        Matcher matcher = RESOURCE_GROUP_NAME_PATTERN.matcher(azureResourceId);
         if (matcher.find()) {
-            return matcher.group(1).toLowerCase();
+            return matcher.group(1);
         }
-        return storageAcctId;
+        return azureResourceId;
     }
+
+    /**
+     * Returns the id of a resource group where an arbitrary Azure resource belongs to.
+     * <p>
+     * Example of Azure virtual network resource id:
+     *  "/subscriptions/[Id]/resourceGroups/TestRG/providers/Microsoft.Network/virtualNetworks/vNet"
+     *  <p>
+     *  The id of the resource group that will be returned is:
+     *  "/subscriptions/[Id]/resourceGroups/TestRG"
+     * @param azureResourceId Azure resource id.
+     * @return the resource group id where the resource belong to.
+     */
+    public static String getResourceGroupId(String azureResourceId) {
+        Matcher matcher = RESOURCE_GROUP_NAME_PATTERN.matcher(azureResourceId);
+        if (matcher.find()) {
+            return matcher.group(0);
+        }
+        return azureResourceId;
+    }
+
 }

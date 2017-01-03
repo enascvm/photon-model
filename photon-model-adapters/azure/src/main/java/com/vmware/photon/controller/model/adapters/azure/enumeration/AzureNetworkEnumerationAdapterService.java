@@ -22,25 +22,30 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureNetworkEnumerationAdapterService.NetworkEnumContext.SubnetStateWithParentVNetId;
 import com.vmware.photon.controller.model.adapters.azure.model.network.AddressSpace;
 import com.vmware.photon.controller.model.adapters.azure.model.network.Subnet;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetworkListResult;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
@@ -48,6 +53,7 @@ import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
@@ -60,6 +66,9 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Builder;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
@@ -103,10 +112,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         ComputeEnumerateResourceRequest enumRequest;
         ComputeStateWithDescription parentCompute;
 
-        // The time when enumeration starts. This field is used also to identify stale resources
-        // that should be deleted during deletion stage.
-        long enumerationStartTimeInMicros;
-
         EnumerationStages stage;
         NetworkEnumStages subStage;
 
@@ -124,6 +129,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Stores the link to NetworkStates that created/updated/deleted in the current enumeration
         // in the local document store. This list is used during SubnetStates deletion.
         List<String> modifiedNetworksLinks = new ArrayList<>();
+        // Stores the map of resource groups state ids to document self links.
+        // key -> resource group id; value - link to the local ResourceGroupState object.
+        Map<String, String> resourceGroupStates = new ConcurrentHashMap<>();
 
         Map<String, SubnetStateWithParentVNetId> subnets = new ConcurrentHashMap<>();
         // Local subnet states map.
@@ -133,6 +141,15 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Stored operation to signal completion to the Azure network enumeration once all the
         // stages are successfully completed.
         Operation azureNetworkAdapterOperation;
+
+        // The time when enumeration starts. This field is used also to identify stale resources
+        // that should be deleted during deletion stage.
+        long enumerationStartTimeInMicros;
+
+        // List to temporary store all virtual network ids
+        List<String> virtualNetworkIds = new ArrayList<>();
+        // List to temporary store all subnet ids
+        List<String> subnetIds = new ArrayList<>();
 
         // Stores the next page when retrieving Virtual Networks from Azure.
         String enumNextPageLink;
@@ -150,6 +167,25 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             this.stage = EnumerationStages.CLIENT;
             this.azureNetworkAdapterOperation = op;
         }
+
+        // Clear results from previous page of resources.
+        void clearPageTempData() {
+            this.virtualNetworks.clear();
+            this.networkStates.clear();
+            this.subnets.clear();
+            this.subnetStates.clear();
+            this.resourceGroupStates.clear();
+        }
+
+        void addVirtualNetwork(VirtualNetwork virtualNetwork) {
+            this.virtualNetworks.put(virtualNetwork.id, virtualNetwork);
+            this.virtualNetworkIds.add(virtualNetwork.id);
+        }
+
+        void addSubnet(Subnet subnet, SubnetStateWithParentVNetId subnetStateWithParentVNetId) {
+            this.subnets.put(subnet.id, subnetStateWithParentVNetId);
+            this.subnetIds.add(subnet.id);
+        }
     }
 
     /**
@@ -158,6 +194,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private enum NetworkEnumStages {
         GET_VNETS,
         GET_SUBNETS,
+        QUERY_RESOURCE_GROUP_STATES,
         QUERY_NETWORK_STATES,
         QUERY_SUBNET_STATES,
         CREATE_UPDATE_NETWORK_STATES,
@@ -224,11 +261,11 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     return;
                 }
                 logInfo("Launching enumeration service for %s", enumKey);
-                context.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 context.enumRequest.enumerationAction = EnumerationAction.REFRESH;
                 handleNetworkEnumeration(context);
                 break;
             case REFRESH:
+                context.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 context.subStage = NetworkEnumStages.GET_VNETS;
                 handleSubStage(context);
                 break;
@@ -277,10 +314,14 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         switch (context.subStage) {
         case GET_VNETS:
+            context.clearPageTempData();
             getVirtualNetworks(context, NetworkEnumStages.GET_SUBNETS);
             break;
         case GET_SUBNETS:
-            getSubnets(context, NetworkEnumStages.QUERY_NETWORK_STATES);
+            getSubnets(context, NetworkEnumStages.QUERY_RESOURCE_GROUP_STATES);
+            break;
+        case QUERY_RESOURCE_GROUP_STATES:
+            queryResourceGroupStates(context, NetworkEnumStages.QUERY_NETWORK_STATES);
             break;
         case QUERY_NETWORK_STATES:
             queryNetworkStates(context, NetworkEnumStages.QUERY_SUBNET_STATES);
@@ -342,9 +383,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void getVirtualNetworks(NetworkEnumContext context, NetworkEnumStages next) {
         logInfo("Enumerating Virtual Networks from Azure.");
 
-        // Clear any previous results.
-        context.networkStates.clear();
-
         URI uri;
         if (context.enumNextPageLink == null) {
             // First request to fetch Virtual Networks from Azure.
@@ -392,8 +430,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             logFine("Next page link %s", context.enumNextPageLink);
 
             // Store virtual networks for further processing during the next stages.
-            virtualNetworks.forEach(virtualNetwork ->
-                    context.virtualNetworks.put(virtualNetwork.id, virtualNetwork));
+            virtualNetworks.forEach(virtualNetwork -> {
+                context.addVirtualNetwork(virtualNetwork);
+            });
 
             logFine("Processing %d virtual networks", context.virtualNetworks.size());
 
@@ -414,12 +453,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             if (virtualNetwork.properties.subnets != null) {
                 virtualNetwork.properties.subnets.forEach(subnet -> {
 
-                    SubnetState subnetState = mapSubnetState(subnet, context.parentCompute
+                    SubnetState subnetState = buildSubnetState(subnet, context.parentCompute
                             .tenantLinks);
                     SubnetStateWithParentVNetId subnetStateWithParentVNetId = new
                             SubnetStateWithParentVNetId(virtualNetwork.id, subnetState);
 
-                    context.subnets.put(subnet.id, subnetStateWithParentVNetId);
+                    context.addSubnet(subnet, subnetStateWithParentVNetId);
                 });
             }
         });
@@ -430,7 +469,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     /**
      * Map Azure subnet to {@link SubnetState}.
      */
-    private SubnetState mapSubnetState(Subnet subnet, List<String> tenantLinks) {
+    private SubnetState buildSubnetState(Subnet subnet, List<String> tenantLinks) {
         if (subnet == null) {
             throw new IllegalArgumentException("Cannot map Subnet to subnet state for null "
                     + "instance.");
@@ -442,9 +481,61 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         if (subnet.properties != null) {
             subnetState.subnetCIDR = subnet.properties.addressPrefix;
         }
+
         subnetState.tenantLinks = tenantLinks;
 
         return subnetState;
+    }
+
+    /**
+     * Query resource group states stored in the local document store based on the retrieved azure
+     * virtual networks.
+     */
+    private void queryResourceGroupStates(NetworkEnumContext context, NetworkEnumStages next) {
+        List<String> resourceGroupIds = context.virtualNetworks.values().stream()
+                .map(vNet -> AzureUtils.getResourceGroupId(vNet.id))
+                .collect(Collectors.toList());
+
+        String rgTypeProperty = QuerySpecification
+                .buildCompositeFieldName(
+                        ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        ComputeProperties.RESOURCE_TYPE_KEY);
+        String computeHostProperty = QuerySpecification.buildCompositeFieldName(
+                ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                ComputeProperties.FIELD_COMPUTE_HOST_LINK);
+
+        Query query = Builder.create()
+                .addKindFieldClause(ResourceGroupState.class)
+                .addFieldClause(computeHostProperty,
+                        context.parentCompute.documentSelfLink)
+                .addFieldClause(rgTypeProperty,
+                        ResourceGroupStateType.AzureResourceGroup.name())
+                .addInClause(ResourceGroupState.FIELD_NAME_ID, resourceGroupIds)
+                .build();
+
+        QueryTask qt = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(resourceGroupIds.size())
+                .setQuery(query)
+                .build();
+
+        QueryUtils.startQueryTask(this, qt)
+                .whenComplete((queryTask, e) -> {
+                    if (e != null) {
+                        handleError(context, e);
+                        return;
+                    }
+                    if (queryTask.results != null && queryTask.results.documentCount > 0) {
+                        queryTask.results.documents.values().forEach(document -> {
+                            ResourceGroupState rgState = Utils.fromJson(document, ResourceGroupState
+                                    .class);
+                            context.resourceGroupStates.put(rgState.id, rgState.documentSelfLink);
+                        });
+                    }
+
+                    handleSubStage(context, next);
+                });
     }
 
     /**
@@ -550,7 +641,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     NetworkState existingNetworkState = context.networkStates
                             .get(virtualNetwork.id);
 
-                    NetworkState networkState = newOrUpdateNetworkState(context, virtualNetwork,
+                    NetworkState networkState = buildNetworkState(context, virtualNetwork,
                             existingNetworkState);
 
                     CompletionHandler handler = (completedOp, failure) -> {
@@ -659,7 +750,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     /**
      * @param localNetworkState null to do a create, non null to update an existing network state
      */
-    private NetworkState newOrUpdateNetworkState(NetworkEnumContext context,
+    private NetworkState buildNetworkState(NetworkEnumContext context,
             VirtualNetwork azureVirtualNetwork, NetworkState localNetworkState) {
 
         NetworkState resultNetworkState = new NetworkState();
@@ -667,6 +758,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             resultNetworkState.id = localNetworkState.id;
             resultNetworkState.authCredentialsLink = localNetworkState.authCredentialsLink;
             resultNetworkState.documentSelfLink = localNetworkState.documentSelfLink;
+            resultNetworkState.groupLinks = localNetworkState.groupLinks;
         } else {
             resultNetworkState.id = azureVirtualNetwork.id;
             resultNetworkState.authCredentialsLink = context.parentAuth.documentSelfLink;
@@ -689,6 +781,18 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // required field.
         resultNetworkState.instanceAdapterReference = UriUtils.buildUri(getHost(),
                 DEFAULT_INSTANCE_ADAPTER_REFERENCE);
+        String resourceGroupId = AzureUtils.getResourceGroupId(azureVirtualNetwork.id);
+        String resourceGroupStateLink = context.resourceGroupStates.get(resourceGroupId);
+        if (resourceGroupStateLink != null) {
+            if (resultNetworkState.groupLinks == null) {
+                resultNetworkState.groupLinks = new HashSet<>();
+            }
+            // Add if a resource group state with this name exists.
+            // If not then the resource group was not enumerated yet. The groupLink will be filled
+            // during the next enumeration cycle.
+            resultNetworkState.groupLinks.add(resourceGroupStateLink);
+        }
+
         resultNetworkState.tenantLinks = context.parentCompute.tenantLinks;
 
         return resultNetworkState;
@@ -707,8 +811,11 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .addKindFieldClause(NetworkState.class)
                 .addFieldClause(NetworkState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                         context.parentCompute.description.authCredentialsLink)
-                .addRangeClause(NetworkState.FIELD_NAME_UPDATE_TIME_MICROS, QueryTask.NumericRange
-                        .createLessThanRange(context.enumerationStartTimeInMicros))
+                .addInClause(ResourceGroupState.FIELD_NAME_ID, context.virtualNetworkIds, Occurance
+                        .MUST_NOT_OCCUR)
+                .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
+                        QueryTask.NumericRange
+                                .createLessThanRange(context.enumerationStartTimeInMicros))
                 .build();
 
         int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT,
@@ -737,8 +844,11 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         Query query = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
                 .addInClause(SubnetState.FIELD_NAME_NETWORK_LINK, context.modifiedNetworksLinks)
-                .addRangeClause(SubnetState.FIELD_NAME_UPDATE_TIME_MICROS, QueryTask.NumericRange
-                        .createLessThanRange(context.enumerationStartTimeInMicros))
+                .addInClause(ResourceGroupState.FIELD_NAME_ID, context.virtualNetworkIds, Occurance
+                        .MUST_NOT_OCCUR)
+                .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
+                        QueryTask.NumericRange
+                                .createLessThanRange(context.enumerationStartTimeInMicros))
                 .build();
 
         int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT,

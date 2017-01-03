@@ -22,7 +22,9 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 
@@ -40,7 +42,6 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -51,6 +52,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 
 /**
@@ -74,6 +76,12 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
 
         // Azure credentials.
         ApplicationTokenCredentials credentials;
+
+        List<String> resourceGroupIds = new ArrayList<>();
+
+        // The time when enumeration starts. This field is used also to identify stale resources
+        // that should be deleted during deletion stage.
+        long enumerationStartTimeInMicros;
 
         // Used to store an error while transferring to the error stage.
         Throwable error;
@@ -121,8 +129,10 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                         RemoteResourcesPage page = new RemoteResourcesPage();
 
                         if (results.value != null) {
-                            results.value.forEach(resourceGroup ->
-                                    page.resourcesPage.put(resourceGroup.id, resourceGroup));
+                            results.value.forEach(resourceGroup -> {
+                                page.resourcesPage.put(resourceGroup.id, resourceGroup);
+                                this.resourceGroupIds.add(resourceGroup.id);
+                            });
                         }
                         page.nextPageLink = results.nextLink;
 
@@ -136,6 +146,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                     .buildCompositeFieldName(
                             ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.RESOURCE_TYPE_KEY);
+
             String computeHostProperty = QuerySpecification.buildCompositeFieldName(
                     ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                     ComputeProperties.FIELD_COMPUTE_HOST_LINK);
@@ -146,7 +157,9 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                             this.parentCompute.documentSelfLink)
                     .addFieldClause(rgTypeProperty,
                             ResourceGroupStateType.AzureResourceGroup.name())
-                    .addRangeClause(NetworkState.FIELD_NAME_UPDATE_TIME_MICROS,
+                    .addInClause(ResourceGroupState.FIELD_NAME_ID, this.resourceGroupIds, Occurance
+                            .MUST_NOT_OCCUR)
+                    .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
                             QueryTask.NumericRange
                                     .createLessThanRange(this.enumerationStartTimeInMicros))
                     .build();
@@ -158,6 +171,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 ResourceGroupState localResourceGroupState) {
 
             ResourceGroupState resultResourceGroupState = new ResourceGroupState();
+
             if (localResourceGroupState != null) {
                 resultResourceGroupState.documentSelfLink = localResourceGroupState.documentSelfLink;
             } else {
@@ -234,6 +248,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 handleResourceGroupEnumeration(context);
                 break;
             case REFRESH:
+                context.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 // Allow base context class to enumerate the resources.
                 context.enumerate()
                         .whenComplete((resourceGroupEnumContext, throwable) -> {

@@ -66,10 +66,6 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      */
     public Map<String, LOCAL_STATE> localResourceStates = new ConcurrentHashMap<>();
 
-    // The time when enumeration starts. This field is used also to identify stale resources
-    // that should be deleted during deletion stage.
-    public long enumerationStartTimeInMicros;
-
     /**
      * The service that is creating and using this context.
      */
@@ -123,8 +119,6 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * completion.
      */
     public DeferredResult<T> enumerate() {
-        this.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
-
         return enumerate(BaseEnumerationAdapterStage.GET_REMOTE_RESOURCES);
     }
 
