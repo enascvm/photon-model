@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.5.7-SNAPSHOT
+
 ## 0.5.6
 
 * Add support for subnet enumeration in Azure.
