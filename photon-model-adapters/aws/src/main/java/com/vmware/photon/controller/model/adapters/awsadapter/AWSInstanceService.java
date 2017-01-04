@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getOrCreateSecurityGroups;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapInstanceIPAddressToNICCreationOperations;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
@@ -44,6 +43,7 @@ import com.amazonaws.services.ec2.model.DescribeVpcsRequest;
 import com.amazonaws.services.ec2.model.DescribeVpcsResult;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterfaceSpecification;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
@@ -55,18 +55,21 @@ import com.amazonaws.services.ec2.model.Vpc;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -182,69 +185,69 @@ public class AWSInstanceService extends StatelessService {
      * @see #handleError(AWSInstanceContext, Throwable)
      * @see #handleAllocation(AWSInstanceContext, AWSInstanceStage)
      */
-    private void handleAllocation(AWSInstanceContext aws) {
-        switch (aws.stage) {
+    private void handleAllocation(AWSInstanceContext context) {
+        switch (context.stage) {
         case PROVISIONTASK:
-            getProvisioningTaskReference(aws, AWSInstanceStage.CLIENT);
+            getProvisioningTaskReference(context, AWSInstanceStage.CLIENT);
             break;
         case CLIENT:
-            aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
-                    getRequestRegionId(aws), this,
-                    aws.computeRequest.taskReference, false);
+            context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(context.parentAuth,
+                    getRequestRegionId(context), this,
+                    context.computeRequest.taskReference, false);
             // now that we have a client lets move onto the next step
-            switch (aws.computeRequest.requestType) {
+            switch (context.computeRequest.requestType) {
             case CREATE:
-                handleAllocation(aws, AWSInstanceStage.VM_DISKS);
+                handleAllocation(context, AWSInstanceStage.VM_DISKS);
                 break;
             case DELETE:
-                handleAllocation(aws, AWSInstanceStage.DELETE);
+                handleAllocation(context, AWSInstanceStage.DELETE);
                 break;
             case VALIDATE_CREDENTIALS:
-                validateAWSCredentials(aws);
+                validateAWSCredentials(context);
                 break;
             default:
-                handleError(aws, new Exception("Unknown AWS provisioning stage"));
+                handleError(context, new Exception("Unknown AWS provisioning stage"));
             }
             break;
         case DELETE:
-            deleteInstance(aws);
+            deleteInstance(context);
             break;
         case VM_DISKS:
-            getVMDisks(aws, AWSInstanceStage.GET_NIC_STATES);
+            getVMDisks(context, AWSInstanceStage.GET_NIC_STATES);
             break;
         case GET_NIC_STATES:
-            aws.populateContext().whenComplete(handleAllocation(AWSInstanceStage.GET_NETWORKS));
+            context.populateContext().whenComplete(handleAllocation(AWSInstanceStage.GET_NETWORKS));
             break;
         case GET_NETWORKS:
             // Should be handled in advance by AWSNetworkService
-            getAWSNetworks(aws, AWSInstanceStage.GET_SUBNETS);
+            getAWSNetworks(context, AWSInstanceStage.GET_SUBNETS);
             break;
         case GET_SUBNETS:
             // Should be handled in advance by AWSNetworkService
-            getAWSSubnets(aws, AWSInstanceStage.GET_FIREWALLS);
+            getAWSSubnets(context, AWSInstanceStage.GET_FIREWALLS);
             break;
         case GET_FIREWALLS:
-            getAWSFirewalls(aws, AWSInstanceStage.CREATE_INSTANCE_NICs);
+            getAWSFirewalls(context, AWSInstanceStage.CREATE_INSTANCE_NICs);
             break;
         case CREATE_INSTANCE_NICs:
             // One VPC for all VMs, one Subnet per VM
-            createAWSNICSpecs(aws, AWSInstanceStage.CREATE);
+            createAWSNICSpecs(context, AWSInstanceStage.CREATE);
             break;
         case CREATE:
-            createInstance(aws);
+            createInstance(context);
             break;
         case ERROR:
-            if (aws.computeRequest.taskReference != null) {
+            if (context.computeRequest.taskReference != null) {
                 AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        aws.computeRequest.taskReference, aws.error);
+                        context.computeRequest.taskReference, context.error);
             } else {
-                aws.adapterOperation.fail(aws.error);
+                context.adapterOperation.fail(context.error);
             }
             break;
         case DONE:
             break;
         default:
-            logSevere("Unhandled stage: %s", aws.stage.toString());
+            logSevere("Unhandled stage: %s", context.stage.toString());
             break;
         }
     }
@@ -345,9 +348,8 @@ public class AWSInstanceService extends StatelessService {
 
     private void createAWSNICSpecs(AWSInstanceContext aws, AWSInstanceStage next) {
 
-        int index = 0;
         for (AWSNicContext nicCtx : aws.nics) {
-            createInstanceNetworkInterfaceSpecification(aws, nicCtx, index++);
+            createInstanceNetworkInterfaceSpecification(aws, nicCtx, nicCtx.nicStateWithDesc.deviceIndex);
         }
         handleAllocation(aws, next);
     }
@@ -491,60 +493,43 @@ public class AWSInstanceService extends StatelessService {
                 runInstancesRequest.setUserData(Base64.getEncoder()
                         .encodeToString(cloudConfig.getBytes(Utils.CHARSET)));
             } catch (UnsupportedEncodingException e) {
-                aws.error = new IllegalStateException(
-                        "Error encoding user data");
-                aws.stage = AWSInstanceStage.ERROR;
-                handleAllocation(aws);
+                handleError(aws, new IllegalStateException(
+                        "Error encoding user data"));
                 return;
             }
         }
 
         // handler invoked once the EC2 runInstancesAsync commands completes
-        AsyncHandler<RunInstancesRequest, RunInstancesResult> creationHandler = buildCreationCallbackHandler(
-                this, aws.computeRequest, aws.child, aws.amazonEC2Client,
-                aws.taskExpirationMicros);
+        AsyncHandler<RunInstancesRequest, RunInstancesResult> creationHandler = new AWSCreationHandler(
+                this, aws);
         aws.amazonEC2Client.runInstancesAsync(runInstancesRequest, creationHandler);
     }
 
-    private static class AWSCreationHandler implements
-            AsyncHandler<RunInstancesRequest, RunInstancesResult> {
+    private class AWSCreationHandler extends AWSAsyncHandler<RunInstancesRequest, RunInstancesResult> {
 
         private StatelessService service;
-        private ComputeInstanceRequest computeReq;
-        private ComputeStateWithDescription computeDesc;
-        private AmazonEC2AsyncClient amazonEC2Client;
-        private OperationContext opContext;
-        private long taskExpirationTimeMicros;
+        private AWSInstanceContext context;
 
-        private AWSCreationHandler(StatelessService service,
-                ComputeInstanceRequest computeReq,
-                ComputeStateWithDescription computeDesc,
-                AmazonEC2AsyncClient amazonEC2Client, long taskExpirationTimeMicros) {
+        private AWSCreationHandler(StatelessService service, AWSInstanceContext context) {
             this.service = service;
-            this.computeReq = computeReq;
-            this.computeDesc = computeDesc;
-            this.amazonEC2Client = amazonEC2Client;
-            this.opContext = OperationContext.getOperationContext();
-            this.taskExpirationTimeMicros = taskExpirationTimeMicros;
+            this.context = context;
         }
 
         @Override
-        public void onError(Exception exception) {
-            OperationContext.restoreOperationContext(this.opContext);
+        protected void handleError(Exception exception) {
             AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                    this.computeReq.taskReference, exception);
+                    this.context.computeRequest.taskReference, exception);
         }
 
         @Override
-        public void onSuccess(RunInstancesRequest request,
-                RunInstancesResult result) {
-            List<Operation> createOperations = new ArrayList<Operation>();
+        protected void handleSuccess(RunInstancesRequest request, RunInstancesResult result) {
+
             // consumer to be invoked once a VM is in the running state
             Consumer<Instance> consumer = instance -> {
-                OperationContext.restoreOperationContext(this.opContext);
+                List<Operation> patchOperations = new ArrayList<Operation>();
                 if (instance == null) {
                     AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                            this.computeReq.taskReference,
+                            this.context.computeRequest.taskReference,
                             new IllegalStateException("Error getting instance EC2 instance"));
                     return;
                 }
@@ -553,42 +538,38 @@ public class AWSInstanceService extends StatelessService {
                 cs.id = instance.getInstanceId();
                 cs.address = instance.getPublicIpAddress();
                 cs.powerState = AWSUtils.mapToPowerState(instance.getState());
-                if (this.computeDesc.customProperties == null) {
+                if (this.context.child.customProperties == null) {
                     cs.customProperties = new HashMap<String, String>();
                 } else {
-                    cs.customProperties = this.computeDesc.customProperties;
+                    cs.customProperties = this.context.child.customProperties;
                 }
                 cs.customProperties.put(SOURCE_TASK_LINK,
                         ProvisionComputeTaskService.FACTORY_LINK);
                 cs.customProperties.put(AWSConstants.AWS_VPC_ID,
                         instance.getVpcId());
                 cs.lifecycleState = LifecycleState.READY;
-                // Create operations
-                List<Operation> networkOperations = mapInstanceIPAddressToNICCreationOperations(
-                        instance, cs, this.computeDesc.tenantLinks, this.service,
-                        null /*enumeratedNetworks*/);
-                if (networkOperations != null && !networkOperations.isEmpty()) {
-                    createOperations.addAll(networkOperations);
-                }
+
+                patchOperations.addAll(createPatchNICStatesOperations(this.context.nics, instance));
+
                 Operation patchState = Operation
-                        .createPatch(this.computeReq.resourceReference)
+                        .createPatch(this.context.computeRequest.resourceReference)
                         .setBody(cs)
                         .setReferer(this.service.getHost().getUri());
-                createOperations.add(patchState);
+                patchOperations.add(patchState);
 
                 OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                         exc) -> {
                     if (exc != null) {
                         this.service.logSevere("Error updating VM state. %s", Utils.toString(exc));
                         AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                                this.computeReq.taskReference,
+                                this.context.computeRequest.taskReference,
                                 new IllegalStateException("Error updating VM state"));
                         return;
                     }
                     AdapterUtils.sendPatchToProvisioningTask(this.service,
-                            this.computeReq.taskReference);
+                            this.context.computeRequest.taskReference);
                 };
-                OperationJoin joinOp = OperationJoin.create(createOperations);
+                OperationJoin joinOp = OperationJoin.create(patchOperations);
                 joinOp.setCompletion(joinCompletion);
                 joinOp.sendWith(this.service.getHost());
             };
@@ -596,23 +577,48 @@ public class AWSInstanceService extends StatelessService {
             String instanceId = result.getReservation().getInstances().get(0)
                     .getInstanceId();
 
-            tagInstanceAndStartStatusChecker(instanceId, this.computeDesc.tagLinks, consumer);
+            tagInstanceAndStartStatusChecker(instanceId, this.context.child.tagLinks, consumer);
         }
+
+        private List<Operation> createPatchNICStatesOperations(List<AWSNicContext> nics, Instance instance) {
+
+            List<Operation> patchOperations = new ArrayList<>();
+            for (InstanceNetworkInterface instanceNic : instance.getNetworkInterfaces()) {
+                List<NetworkInterfaceState> nicStates = nics.stream().map(
+                        nicCtx -> {
+                            return nicCtx.nicStateWithDesc;
+                        }).collect(Collectors.toList());
+                NetworkInterfaceState nicStateWithDesc = AWSNetworkUtils
+                        .getNICStateByDeviceId(nicStates, instanceNic.getAttachment()
+                                .getDeviceIndex());
+                NetworkInterfaceState updateNicState = new NetworkInterfaceState();
+                updateNicState.address = instanceNic.getPrivateIpAddress();
+
+                patchOperations.add(Operation.createPatch(this.service.getHost(),
+                        nicStateWithDesc.documentSelfLink)
+                        .setBody(updateNicState)
+                        .setReferer(this.service.getHost().getUri()));
+            }
+
+            return patchOperations;
+        }
+
 
         private void tagInstanceAndStartStatusChecker(String instanceId, Set<String> tagLinks,
                 Consumer<Instance> consumer) {
 
             final List<Tag> tagsToCreate = new ArrayList<>();
-            Tag nameTag = new Tag(AWSConstants.AWS_TAG_NAME, this.computeDesc.name);
+            Tag nameTag = new Tag(AWSConstants.AWS_TAG_NAME, this.context.child.name);
             tagsToCreate.add(nameTag);
 
             Runnable proceed = () -> {
-                AWSUtils.tagResources(this.amazonEC2Client, tagsToCreate, instanceId);
+                AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, instanceId);
 
                 AWSTaskStatusChecker
-                        .create(this.amazonEC2Client, instanceId,
-                                AWSInstanceService.AWS_RUNNING_NAME, consumer, this.computeReq,
-                                this.service, this.taskExpirationTimeMicros)
+                        .create(this.context.amazonEC2Client, instanceId,
+                                AWSInstanceService.AWS_RUNNING_NAME, consumer,
+                                this.context.computeRequest,
+                                this.service, this.context.taskExpirationMicros)
                         .start();
             };
 
@@ -626,7 +632,7 @@ public class AWSInstanceService extends StatelessService {
             OperationJoin.JoinedCompletionHandler joinedCompletionHandler = (ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
                     AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                            this.computeReq.taskReference, exs.values().iterator().next());
+                            this.context.computeRequest.taskReference, exs.values().iterator().next());
                 }
 
                 tagsToCreate.addAll(ops.values().stream()
@@ -642,15 +648,8 @@ public class AWSInstanceService extends StatelessService {
             OperationJoin.create(getTagOperations).setCompletion(joinedCompletionHandler)
                     .sendWith(this.service);
         }
-    }
 
-    // callback to be invoked when a VM creation operation returns
-    private AsyncHandler<RunInstancesRequest, RunInstancesResult> buildCreationCallbackHandler(
-            StatelessService service, ComputeInstanceRequest computeReq,
-            ComputeStateWithDescription computeDesc,
-            AmazonEC2AsyncClient amazonEC2Client, long taskExpirationTimeMicros) {
-        return new AWSCreationHandler(service, computeReq, computeDesc,
-                amazonEC2Client, taskExpirationTimeMicros);
+
     }
 
     private void deleteInstance(AWSInstanceContext aws) {

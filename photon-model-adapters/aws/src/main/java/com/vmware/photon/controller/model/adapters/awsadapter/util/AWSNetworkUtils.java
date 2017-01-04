@@ -13,13 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PRIVATE_INTERFACE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PUBLIC_INTERFACE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getIdFromDocumentLink;
-import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
-import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
-
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,21 +21,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
-import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Vpc;
 
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationResponse;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
@@ -97,142 +87,19 @@ public class AWSNetworkUtils {
     }
 
     /**
-     * Maps the IP address on the EC2 instance to the corresponding Network Interface Cards in the
-     * local system.
-     *
-     * @param instance
-     *            The EC2 instance for which the NICs are to be created.
-     * @param publicInterfaceFlag
-     *            The flag that indicates if this a public or private IP address
-     * @param tenantLinks
-     *            The tenants that can access this entity once persisted in the system.
-     * @param existingLink
-     *            The link to the NIC that is already associated with the compute state.
-     * @return
+     * Returns the NetworkInterfaceState object, which corresponds to a particular
+     * deviceIndex. In case that there is only one Nic for this ComputeState, and the deviceIndex is 0,
+     * even if the Nic State Description was not mapped to an index, the algorithm returns this only state.
      */
-    public static NetworkInterfaceState mapIPAddressToNetworkInterfaceState(Instance instance,
-            boolean publicInterfaceFlag, List<String> tenantLinks, String existingLink,
-            AWSNetworkEnumerationResponse enumeratedNetworks) {
-
-        NetworkInterfaceState networkInterface = new NetworkInterfaceState();
-        networkInterface.tenantLinks = tenantLinks;
-
-        // Map public interface
-        if (publicInterfaceFlag) {
-            networkInterface.address = instance.getPublicIpAddress();
-            networkInterface.id = instance.getInstanceId() + TILDA + PUBLIC_INTERFACE;
-            // Setting the public/private keyword in the documentSelfLink to aid in the UPDATE
-            // scenario.
-            if (existingLink == null) {
-                networkInterface.documentSelfLink = UUID.randomUUID().toString() + TILDA
-                        + PUBLIC_INTERFACE;
-            } else {
-                networkInterface.documentSelfLink = getIdFromDocumentLink(existingLink);
-            }
-        } else {
-            // Map private interface
-            networkInterface.address = instance.getPrivateIpAddress();
-            networkInterface.id = instance.getInstanceId() + TILDA + PRIVATE_INTERFACE;
-            if (existingLink == null) {
-                networkInterface.documentSelfLink = UUID.randomUUID().toString() + TILDA
-                        + PRIVATE_INTERFACE;
-            } else {
-                networkInterface.documentSelfLink = getIdFromDocumentLink(existingLink);
-            }
-        }
-
-        if (enumeratedNetworks != null
-                && enumeratedNetworks.subnets != null) {
-            // Populate subnetLink only. The networkLink should be accessed through SubnetState.networkLink
-            networkInterface.subnetLink = enumeratedNetworks.subnets.get(instance.getSubnetId());
-        }
-
-        return networkInterface;
-    }
-
-    /**
-     * Compares the IP addresses of the instance on AWS and maps those to the network interfaces in
-     * the system. 1) If an existing mapping is found for a private or public interface then it is
-     * updated. 2) Else a new mapping is creating. 3) The string
-     * "public-interface/private-interfaces" is embedded in the document self link along with the
-     * UUID to avoid collisions while save some extra lookups during updates.
-     */
-    public static Operation createOperationToUpdateOrCreateNetworkInterface(
-            ComputeState existingComputeState, NetworkInterfaceState networkInterface,
-            List<String> tenantLinks, StatelessService service, boolean isPublic) {
-        String existingInterfaceLink = getExistingNetworkInterfaceLink(existingComputeState,
-                isPublic);
-        Operation networkInterfaceOperation = null;
-        // If existing NIC is null create one.
-        if (existingInterfaceLink == null) {
-            networkInterfaceOperation = createPostOperation(service, networkInterface,
-                    NetworkInterfaceService.FACTORY_LINK);
-        } else {
-            networkInterfaceOperation = createPatchOperation(
-                    service, networkInterface, existingInterfaceLink);
-        }
-        return networkInterfaceOperation;
-    }
-
-    /**
-     * Returns the link to the existing network interface based on the public/private identifier
-     * embedded in the documentSelfLink
-     */
-    public static String getExistingNetworkInterfaceLink(ComputeState existingComputeState,
-            boolean isPublic) {
-        String existingInterfaceLink = null;
-        // Determine the URI representing the existing public/private interfaces.
-        if (existingComputeState.networkInterfaceLinks == null) {
-            return existingInterfaceLink;
-        }
-        for (String networkLink : existingComputeState.networkInterfaceLinks) {
-            if (isPublic && networkLink.contains(PUBLIC_INTERFACE)) {
-                existingInterfaceLink = networkLink;
-                break;
-            } else if (!isPublic && networkLink.contains(PRIVATE_INTERFACE)) {
-                existingInterfaceLink = networkLink;
-                break;
-            }
-        }
-        return existingInterfaceLink;
-    }
-
-    /**
-     * Maps the ip addresses of the instances on AWS to create operations for the network interface
-     * cards.
-     */
-    public static List<Operation> mapInstanceIPAddressToNICCreationOperations(
-            Instance instance, ComputeState resultDesc, List<String> tenantLinks,
-            StatelessService service, AWSNetworkEnumerationResponse enumeratedNetworks) {
-
-        resultDesc.networkInterfaceLinks = new ArrayList<String>();
-
-        List<Operation> createOperations = new ArrayList<Operation>();
-
-        // NIC - Private
-        if (instance.getPrivateIpAddress() != null) {
-            NetworkInterfaceState privateNICState = mapIPAddressToNetworkInterfaceState(
-                    instance, false, tenantLinks, null, enumeratedNetworks);
-            Operation postPrivateNetworkInterface = createPostOperation(
-                    service, privateNICState, NetworkInterfaceService.FACTORY_LINK);
-            createOperations.add(postPrivateNetworkInterface);
-            // Compute State Network Links
-            resultDesc.networkInterfaceLinks.add(UriUtils.buildUriPath(
-                    NetworkInterfaceService.FACTORY_LINK,
-                    privateNICState.documentSelfLink));
-        }
-        // NIC - Public
-        if (instance.getPublicIpAddress() != null) {
-            NetworkInterfaceState publicNICState = mapIPAddressToNetworkInterfaceState(
-                    instance, true, tenantLinks, null, enumeratedNetworks);
-            Operation postPublicNetworkInterface = createPostOperation(
-                    service, publicNICState, NetworkInterfaceService.FACTORY_LINK);
-            createOperations.add(postPublicNetworkInterface);
-            resultDesc.networkInterfaceLinks.add(UriUtils.buildUriPath(
-                    NetworkInterfaceService.FACTORY_LINK,
-                    publicNICState.documentSelfLink));
-        }
-        return createOperations;
+    public static NetworkInterfaceState getNICStateByDeviceId(
+            List<NetworkInterfaceState> nicStates,
+            int deviceIndex) {
+        return nicStates
+                .stream()
+                .filter(nicState -> nicState != null)
+                .filter(nicState -> nicState.deviceIndex == deviceIndex)
+                .findFirst()
+                .orElse(null);
     }
 
     /**

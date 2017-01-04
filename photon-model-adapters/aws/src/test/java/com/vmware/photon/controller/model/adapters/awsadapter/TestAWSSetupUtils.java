@@ -420,13 +420,15 @@ public class TestAWSSetupUtils {
                 nicState.id = UUID.randomUUID().toString();
                 nicState.name = awsVMDesc.name + "-nic-" + i;
 
-                nicState.networkLink = netState.documentSelfLink;
+                nicState.networkLink = subnetState.networkLink;
                 nicState.subnetLink = subnetState.documentSelfLink;
                 nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
 
                 String securityGroupLink = UriUtils.buildUriPath(
                         SecurityGroupService.FACTORY_LINK,
                         securityGroupState.id);
+                nicState.deviceIndex = i;
+
                 nicState.firewallLinks = new ArrayList<>();
                 nicState.firewallLinks.add(securityGroupLink);
 

@@ -40,9 +40,6 @@ public class AWSConstants {
     public static final String DISK_IOPS = "iops";
     public static final String DISK_ENCRYPTED_FLAG = "encrypted";
     public static final String VOLUME_TYPE = "volumeType";
-    public static final String HYPHEN = "-";
-    public static final String PUBLIC_INTERFACE = "public-interface";
-    public static final String PRIVATE_INTERFACE = "private-interface";
     public static final String AWS_ATTACHMENT_VPC_FILTER = "attachment.vpc-id";
     public static final String AWS_BILLS_S3_BUCKET_NAME_KEY = "billsBucketName";
     public static final String AWS_ACCOUNT_ID_KEY = "accountId";

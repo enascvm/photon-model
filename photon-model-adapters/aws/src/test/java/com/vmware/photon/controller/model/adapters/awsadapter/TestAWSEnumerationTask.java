@@ -22,12 +22,11 @@ import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYP
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PRIVATE_INTERFACE;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.PUBLIC_INTERFACE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
+
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_LINUX_AMI;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_WINDOWS_AMI;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
@@ -64,7 +63,9 @@ import com.amazonaws.services.ec2.model.Tag;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.PhotonModelServices;
@@ -136,6 +137,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     public String secretKey = "secretKey";
     public int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
 
+    @Rule
+    public TestName currentTestName = new TestName();
+
     @Before
     public void setUp() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this);
@@ -178,6 +182,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     // Runs the enumeration task on the AWS endpoint to list all the instances on the endpoint.
     @Test
     public void testEnumeration() throws Throwable {
+
+        this.host.log("Running test: " + this.currentTestName);
+
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
                 this.outPool.documentSelfLink, TestAWSSetupUtils.class, null);
 
@@ -235,8 +242,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Update Scenario : Check that the tag information is present for the VM tagged above.
         String vpCId = validateTagAndNetworkAndComputeDescriptionInformation(vmState);
         validateVPCInformation(vpCId);
-        // Count should be 2 NICs per discovered VM
-        int totalNetworkInterfaceStateCount = count6 * 2;
+        // Count should be 1 NICs per discovered VM.
+        int totalNetworkInterfaceStateCount = count6 * TestAWSSetupUtils.NUMBER_OF_NICS;
         validateNetworkInterfaceCount(totalNetworkInterfaceStateCount);
         // One VPC should be discovered in the test.
         queryDocumentsAndAssertExpectedCount(this.host, count1,
@@ -309,6 +316,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
     @Test
     public void testEnumerationPreserveLocalStates() throws Throwable {
+
+        this.host.log("Running test: " + this.currentTestName);
+
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
                 this.outPool.documentSelfLink, TestAWSSetupUtils.class, null);
 
@@ -387,6 +397,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
 
+        this.host.log("Running test: " + this.currentTestName);
+
         String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
         this.instancesToCleanUp.add(linuxVMId);
 
@@ -422,6 +434,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
 
+        this.host.log("Running test: " + this.currentTestName);
+
         String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
         this.instancesToCleanUp.add(linuxVMId);
 
@@ -452,6 +466,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         if (this.isMock) {
             return;
         }
+
+        this.host.log("Running test: " + this.currentTestName);
 
         Tag tag1 = new Tag("key1", "value1");
         Tag tag2 = new Tag("key2", "value2");
@@ -535,19 +551,18 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return null;
         }
 
+        this.host.log("Running test: " + this.currentTestName);
+
         ComputeState taggedComputeState = getComputeByAWSId(this.host, computeState.id);
 
         assertEquals(taggedComputeState.descriptionLink, computeState.descriptionLink);
         assertTrue(taggedComputeState.networkInterfaceLinks != null);
-        assertTrue(taggedComputeState.networkInterfaceLinks.size() == (TestAWSSetupUtils.NUMBER_OF_NICS * 3));
+        assertEquals(TestAWSSetupUtils.NUMBER_OF_NICS, taggedComputeState.networkInterfaceLinks.size());
 
         List<URI> networkLinkURIs = new ArrayList<>();
         for (int i = 0; i < taggedComputeState.networkInterfaceLinks.size(); i++) {
-            if (taggedComputeState.networkInterfaceLinks.get(i).contains(PUBLIC_INTERFACE)
-                    || taggedComputeState.networkInterfaceLinks.get(i).contains(PRIVATE_INTERFACE)) {
-                networkLinkURIs.add(UriUtils.buildUri(this.host,
+            networkLinkURIs.add(UriUtils.buildUri(this.host,
                         taggedComputeState.networkInterfaceLinks.get(i)));
-            }
         }
 
         // Assert that both the public and private IP addresses have been mapped to separated NICs
@@ -638,10 +653,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         ComputeState stoppedComputeState = getComputeByAWSId(this.host, instanceId);
         assertNotNull(stoppedComputeState);
-        // make sure that the stopped instance has no public network interface
-        for (String networkLink : stoppedComputeState.networkInterfaceLinks) {
-            assertFalse(networkLink.contains(PUBLIC_INTERFACE));
-        }
 
         validateNetworkInterfaceCount(desiredNetworkInterfaceStateCount);
     }

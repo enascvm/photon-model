@@ -18,11 +18,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnu
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getRepresentativeListOfCDsFromInstanceList;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.mapInstanceToComputeState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.mapTagToTagState;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.createOperationToUpdateOrCreateNetworkInterface;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.getExistingNetworkInterfaceLink;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapIPAddressToNetworkInterfaceState;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapInstanceIPAddressToNICCreationOperations;
-import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.removeNetworkLinkAndDocument;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.getNICStateByDeviceId;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
 
@@ -33,10 +29,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.Tag;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
@@ -44,16 +42,21 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -76,7 +79,20 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
     public static enum AWSComputeStateCreationStage {
         GET_RELATED_COMPUTE_DESCRIPTIONS,
-        POPULATE_COMPUTESTATES,
+        /**
+         * Create the operations for creating ComputeStates
+         * and their corresponding NetworkInterfaceStates
+         */
+        CREATE_COMPUTESTATES_OPERATIONS,
+        /**
+         * For each ComputeState which needs an update
+         * create post operation. Update corresponding NetworkInterfaceStates
+         */
+        UPDATE_COMPUTESTATES_OPERATIONS,
+        /**
+         * Execute all the crete and update operations,
+         * generated during the previous stages
+         */
         CREATE_COMPUTESTATES,
         SIGNAL_COMPLETION,
         CREATE_TAGS,
@@ -93,9 +109,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      * representing compute instances in Amazon.
      */
     public static class AWSComputeStateCreationRequest {
+
         public List<Instance> instancesToBeCreated;
+
         public Map<String, Instance> instancesToBeUpdated;
         public Map<String, ComputeState> computeStatesToBeUpdated;
+        // Expands computeStatesToBeUpdated with corresponding NICs
+        public Map<String, List<NetworkInterfaceState>> nicStatesToBeUpdated;
+
         /**
          * Discovered/Enumerated networks in Amazon.
          */
@@ -167,16 +188,21 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      *            additional compute states in the local system.
      */
     private void handleComputeStateCreateOrUpdate(AWSComputeStateCreationContext context) {
+
+        this.logInfo("Transition to: %s", context.creationStage);
         switch (context.creationStage) {
         case GET_RELATED_COMPUTE_DESCRIPTIONS:
             getRelatedComputeDescriptions(context,
                     AWSComputeStateCreationStage.CREATE_TAGS);
             break;
         case CREATE_TAGS:
-            createTags(context, AWSComputeStateCreationStage.POPULATE_COMPUTESTATES);
+            createTags(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES_OPERATIONS);
             break;
-        case POPULATE_COMPUTESTATES:
-            populateOperations(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES);
+        case CREATE_COMPUTESTATES_OPERATIONS:
+            populateCreateOperations(context, AWSComputeStateCreationStage.UPDATE_COMPUTESTATES_OPERATIONS);
+            break;
+        case UPDATE_COMPUTESTATES_OPERATIONS:
+            populateUpdateOperations(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES);
             break;
         case CREATE_COMPUTESTATES:
             kickOffComputeStateCreation(context, AWSComputeStateCreationStage.SIGNAL_COMPLETION);
@@ -292,128 +318,182 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     /**
      * Method to create Compute States associated with the instances received from the AWS host.
      */
-    private void populateOperations(AWSComputeStateCreationContext context,
+    private void populateCreateOperations(AWSComputeStateCreationContext context,
             AWSComputeStateCreationStage next) {
         if (context.request.instancesToBeCreated == null
                 || context.request.instancesToBeCreated.size() == 0) {
             logInfo("No instances need to be created in the local system");
+            context.creationStage = next;
+            handleComputeStateCreateOrUpdate(context);
         } else {
-            logInfo("Need to create %d compute states in the local system",
+            logInfo("Need to CREATE %d compute states in the local system",
                     context.request.instancesToBeCreated.size());
+
             for (int i = 0; i < context.request.instancesToBeCreated.size(); i++) {
-                populateComputeStateAndNetworksForCreation(context,
-                        context.request.instancesToBeCreated.get(i));
+
+                Instance instance = context.request.instancesToBeCreated.get(i);
+
+                String zoneId = instance.getPlacement().getAvailabilityZone();
+                ZoneData zoneData = context.request.zones.get(zoneId);
+                String regionId = zoneData.regionId;
+
+                InstanceDescKey descKey = InstanceDescKey.build(regionId, zoneId,
+                        instance.getInstanceType());
+
+                ComputeService.ComputeState computeStateToBeCreated = mapInstanceToComputeState(
+                        instance,
+                        context.request.parentComputeLink, zoneData.computeLink,
+                        context.request.resourcePoolLink,
+                        context.computeDescriptionMap.get(descKey),
+                        context.request.tenantLinks);
+                computeStateToBeCreated.networkInterfaceLinks = new ArrayList<>();
+
+                if (!AWSEnumerationUtils.instanceIsInStoppedState(instance)) {
+                    // for each NIC create Description and State create operations. Link the
+                    // ComputeState to be created to the NIC State
+                    for (InstanceNetworkInterface awsNic : instance.getNetworkInterfaces()) {
+
+                        final NetworkInterfaceDescription nicDescription;
+                        {
+                            nicDescription = new NetworkInterfaceDescription();
+                            nicDescription.id = UUID.randomUUID().toString();
+                            nicDescription.name = "nic-" + awsNic.getAttachment().getDeviceIndex()
+                                    + "-desc";
+                            nicDescription.assignment = IpAssignment.DYNAMIC;
+                            nicDescription.deviceIndex = awsNic.getAttachment().getDeviceIndex();
+                            // Link is set, because it's referenced by NICState before post
+                            nicDescription.documentSelfLink = UUID.randomUUID().toString();
+
+                            Operation postNetworkInterfaceDescription = createPostOperation(
+                                    this, nicDescription,
+                                    NetworkInterfaceDescriptionService.FACTORY_LINK);
+
+                            context.enumerationOperations
+                                    .add(postNetworkInterfaceDescription);
+                        }
+
+                        final NetworkInterfaceState nicState;
+                        {
+                            nicState = new NetworkInterfaceState();
+                            nicState.id = awsNic.getNetworkInterfaceId();
+                            nicState.name = nicState.id;
+                            nicState.address = awsNic.getPrivateIpAddress();
+                            nicState.subnetLink = context.request.enumeratedNetworks.subnets
+                                    .get(awsNic.getSubnetId());
+
+                            nicState.deviceIndex = nicDescription.deviceIndex;
+                            nicState.networkInterfaceDescriptionLink = UriUtils
+                                    .buildUriPath(
+                                            NetworkInterfaceDescriptionService.FACTORY_LINK,
+                                            nicDescription.documentSelfLink);
+                            // Link is set, because it's referenced by CS before post
+                            nicState.documentSelfLink = UUID.randomUUID().toString();
+
+                            Operation postNetworkInterfaceState = createPostOperation(
+                                    this, nicState,
+                                    NetworkInterfaceService.FACTORY_LINK);
+
+                            context.enumerationOperations
+                                    .add(postNetworkInterfaceState);
+                        }
+
+                        computeStateToBeCreated.networkInterfaceLinks.add(UriUtils
+                                .buildUriPath(
+                                        NetworkInterfaceService.FACTORY_LINK,
+                                        nicState.documentSelfLink));
+                    }
+                }
+
+                Operation postComputeState = createPostOperation(this, computeStateToBeCreated,
+                        ComputeService.FACTORY_LINK);
+
+                context.enumerationOperations.add(postComputeState);
             }
+
+            context.creationStage = next;
+            handleComputeStateCreateOrUpdate(context);
         }
+    }
+
+    private void populateUpdateOperations(AWSComputeStateCreationContext context,
+            AWSComputeStateCreationStage next) {
         if (context.request.instancesToBeUpdated == null
                 || context.request.instancesToBeUpdated.size() == 0) {
             logInfo("No instances need to be updated in the local system");
+            context.creationStage = next;
+            handleComputeStateCreateOrUpdate(context);
         } else {
-            logInfo("Need to update %d compute states in the local system",
+            logInfo("Need to UPDATE %d compute states in the local system",
                     context.request.instancesToBeUpdated.size());
-            for (String instanceId : context.request.instancesToBeUpdated
-                    .keySet()) {
-                populateComputeStateAndNetworksForUpdates(context,
-                        context.request.instancesToBeUpdated.get(instanceId),
-                        context.request.computeStatesToBeUpdated.get(instanceId));
-            }
-        }
-        context.creationStage = next;
-        handleComputeStateCreateOrUpdate(context);
 
+            for (String instanceId : context.request.instancesToBeUpdated.keySet()) {
+
+                Instance instance = context.request.instancesToBeUpdated.get(instanceId);
+
+                // Update the ComputeState
+                ComputeState existingComputeState = context.request.computeStatesToBeUpdated
+                        .get(instanceId);
+                String zoneId = instance.getPlacement().getAvailabilityZone();
+                ZoneData zoneData = context.request.zones.get(zoneId);
+
+                ComputeService.ComputeState computeStateToBeUpdated = mapInstanceToComputeState(instance,
+                        context.request.parentComputeLink, zoneData.computeLink,
+                        context.request.resourcePoolLink,
+                        existingComputeState.descriptionLink,
+                        context.request.tenantLinks);
+                computeStateToBeUpdated.documentSelfLink = existingComputeState.documentSelfLink;
+
+                Operation patchComputeState = createPatchOperation(this,
+                        computeStateToBeUpdated, computeStateToBeUpdated.documentSelfLink);
+
+                context.enumerationOperations.add(patchComputeState);
+
+                // The stopped or stopping instance does not have full network settings.
+                if (!AWSEnumerationUtils.instanceIsInStoppedState(instance)) {
+
+                    // Update the NetworkInterfaceStates for this ComputeState
+                    List<NetworkInterfaceState> existingNicStates = context.request.nicStatesToBeUpdated
+                            .get(instanceId);
+                    if (existingNicStates != null) {
+                        List<Operation> patchNICsOperations = createPatchNICsOperations(instance,
+                                existingNicStates);
+
+                        context.enumerationOperations.addAll(patchNICsOperations);
+                    }
+                }
+            }
+
+            context.creationStage = next;
+            handleComputeStateCreateOrUpdate(context);
+        }
     }
 
     /**
-     * Populates the compute state / network link associated with an AWS VM instance and creates an
-     * operation for posting it.
+     * For each NetworkInterfaceState, obtain the corresponding AWS NIC, and generate POST operation to update its private address
      */
-    private void populateComputeStateAndNetworksForCreation(
-            AWSComputeStateCreationContext context,
-            Instance instance) {
-        String zoneId = instance.getPlacement().getAvailabilityZone();
-        ZoneData zoneData = context.request.zones.get(zoneId);
-        String regionId = zoneData.regionId;
+    private List<Operation> createPatchNICsOperations(Instance instance, List<NetworkInterfaceState> nicStatesWithDesc) {
 
-        InstanceDescKey descKey = InstanceDescKey.build(regionId, zoneId,
-                instance.getInstanceType());
+        List<Operation> updateNICsOperations = new ArrayList<>();
 
-        ComputeService.ComputeState computeState = mapInstanceToComputeState(instance,
-                context.request.parentComputeLink, zoneData.computeLink,
-                context.request.resourcePoolLink,
-                context.computeDescriptionMap.get(descKey),
-                context.request.tenantLinks);
+        for (InstanceNetworkInterface awsNic : instance.getNetworkInterfaces()) {
 
-        // Create operations
-        List<Operation> networkOperations = mapInstanceIPAddressToNICCreationOperations(
-                instance, computeState, context.request.tenantLinks, this, context.request.enumeratedNetworks);
-        if (networkOperations != null && !networkOperations.isEmpty()) {
-            context.enumerationOperations.addAll(networkOperations);
-        }
-        // Create operation for compute state once all the
-        Operation postComputeState = createPostOperation(this, computeState,
-                ComputeService.FACTORY_LINK);
-        context.enumerationOperations.add(postComputeState);
-    }
+            // get existing NICState corresponding to this device index
+            NetworkInterfaceState existingNicState = getNICStateByDeviceId(
+                    nicStatesWithDesc, awsNic.getAttachment().getDeviceIndex());
 
-    /**
-     * Populates the compute state / network link associated with an AWS VM instance and creates an
-     * operation for PATCHing existing compute and network interfaces .
-     */
-    private void populateComputeStateAndNetworksForUpdates(AWSComputeStateCreationContext context,
-            Instance instance, ComputeState existingComputeState) {
-        String zoneId = instance.getPlacement().getAvailabilityZone();
-        ZoneData zoneData = context.request.zones.get(zoneId);
+            if (existingNicState != null) {
 
-        // Operation for update to compute state.
-        ComputeService.ComputeState computeState = mapInstanceToComputeState(instance,
-                context.request.parentComputeLink, zoneData.computeLink,
-                context.request.resourcePoolLink,
-                existingComputeState.descriptionLink,
-                context.request.tenantLinks);
+                // create a new NetworkInterfaceState for updating the address
+                NetworkInterfaceState updateNicState = new NetworkInterfaceState();
+                updateNicState.address = awsNic.getPrivateIpAddress();
 
-        computeState.networkInterfaceLinks = new ArrayList<String>();
-
-        String existingNICLink = null;
-        // NIC - Private
-        if (instance.getPrivateIpAddress() != null) {
-            existingNICLink = getExistingNetworkInterfaceLink(existingComputeState, false);
-            NetworkInterfaceState privateNICState = mapIPAddressToNetworkInterfaceState(instance,
-                    false, context.request.tenantLinks, existingNICLink, context.request.enumeratedNetworks);
-            Operation privateNICOperation = createOperationToUpdateOrCreateNetworkInterface(
-                    existingComputeState, privateNICState,
-                    context.request.tenantLinks, this, false);
-            context.enumerationOperations.add(privateNICOperation);
-            computeState.networkInterfaceLinks.add(UriUtils.buildUriPath(
-                    NetworkInterfaceService.FACTORY_LINK,
-                    privateNICState.documentSelfLink));
-        }
-
-        // NIC - Public
-        if (instance.getPublicIpAddress() != null) {
-            existingNICLink = getExistingNetworkInterfaceLink(existingComputeState, true);
-            NetworkInterfaceState publicNICState = mapIPAddressToNetworkInterfaceState(instance,
-                    true, context.request.tenantLinks, existingNICLink, context.request.enumeratedNetworks);
-            Operation privateNICOperation = createOperationToUpdateOrCreateNetworkInterface(
-                    existingComputeState, publicNICState,
-                    context.request.tenantLinks, this, true);
-            context.enumerationOperations.add(privateNICOperation);
-            computeState.networkInterfaceLinks.add(UriUtils.buildUriPath(
-                    NetworkInterfaceService.FACTORY_LINK,
-                    publicNICState.documentSelfLink));
-        } else {
-            existingNICLink = getExistingNetworkInterfaceLink(existingComputeState, true);
-            if (existingNICLink != null) {
-                // delete public network interface link and its document
-                removeNetworkLinkAndDocument(this, existingComputeState,
-                        existingNICLink, context.enumerationOperations);
+                // create update operation
+                Operation updateNicOperation = createPatchOperation(this, updateNicState,
+                        existingNicState.documentSelfLink);
+                updateNICsOperations.add(updateNicOperation);
             }
         }
-
-        // Create operation for compute state once all the associated network entities are accounted
-        // for.
-        Operation patchComputeState = createPatchOperation(this,
-                computeState, existingComputeState.documentSelfLink);
-        context.enumerationOperations.add(patchComputeState);
+        return updateNICsOperations;
     }
 
     /**

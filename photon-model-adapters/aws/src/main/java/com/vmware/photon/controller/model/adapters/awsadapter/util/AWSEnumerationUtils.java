@@ -217,6 +217,15 @@ public class AWSEnumerationUtils {
         return computeState;
     }
 
+    public static boolean instanceIsInStoppedState(Instance instance) {
+        return instance.getState().getName()
+                .equals(AWSConstants.INSTANCE_STATE_SHUTTING_DOWN)
+                || instance.getState().getName()
+                        .equals(AWSConstants.INSTANCE_STATE_STOPPED)
+                || instance.getState().getName()
+                        .equals(AWSConstants.INSTANCE_STATE_STOPPING);
+    }
+
     public static TagState mapTagToTagState(Tag tag, List<String> tenantLinks) {
         TagState tagState = new TagState();
         tagState.key = tag.getKey() == null ? "" : tag.getKey();

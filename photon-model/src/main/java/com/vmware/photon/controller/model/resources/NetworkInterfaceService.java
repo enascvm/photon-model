@@ -75,6 +75,12 @@ public class NetworkInterfaceService extends StatefulService {
         public List<String> firewallLinks;
 
         /**
+         * Holds the device index of this network interface.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_6)
+        public int deviceIndex;
+
+        /**
          * The link to the desire state, from which this Network interface was created.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_1)
@@ -111,6 +117,7 @@ public class NetworkInterfaceService extends StatefulService {
             stateWithDesc.networkLink = state.networkLink;
             stateWithDesc.subnetLink = state.subnetLink;
             stateWithDesc.firewallLinks = state.firewallLinks;
+            stateWithDesc.deviceIndex = state.deviceIndex;
 
             // Then extend with 'description' data
             stateWithDesc.networkInterfaceDescriptionLink = description.documentSelfLink;
