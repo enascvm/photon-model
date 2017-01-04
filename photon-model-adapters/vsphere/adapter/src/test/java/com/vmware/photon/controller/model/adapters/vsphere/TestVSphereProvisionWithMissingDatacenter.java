@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -13,13 +13,15 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
+
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.UUID;
 
-import org.junit.Assert;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -30,29 +32,15 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
-import com.vmware.photon.controller.model.resources.DiskService;
-import com.vmware.photon.controller.model.resources.DiskService.DiskState;
-import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
-import com.vmware.photon.controller.model.resources.NetworkService;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.Query.Builder;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
-public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
+public class TestVSphereProvisionWithMissingDatacenter extends BaseVSphereAdapterTest {
 
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
@@ -63,46 +51,33 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         this.resourcePool = createResourcePool();
 
         if (isMock()) {
-            createNetwork(networkId);
+            // this test makes no sense in mock mode as the adapter doesn't process mock requests at all
+            return;
         }
+
+        // clear the datacenterId to cause misconfiguration
+        this.datacenterId = null;
+
         this.computeHostDescription = createComputeDescription();
         this.computeHost = createComputeHost(this.computeHostDescription);
 
-        doRefresh();
-
-        snapshotFactoryState("clone-refresh", NetworkService.class);
         ComputeDescription vmDescription = createVmDescription();
         ComputeState vm = createVmState(vmDescription);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = createProvisionTask(vm);
-        awaitTaskEnd(provisionTask);
 
-        vm = getComputeState(vm);
-        // put fake moref in the vm
-        if (isMock()) {
-            ManagedObjectReference moref = new ManagedObjectReference();
-            moref.setValue("vm-0");
-            moref.setType(VimNames.TYPE_VM);
-            CustomProperties.of(vm).put(CustomProperties.MOREF, moref);
-            vm = doPost(this.host, vm,
-                    ComputeState.class,
-                    UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
+        try {
+            awaitTaskEnd(provisionTask);
+        } catch (AssertionError e) {
+            Operation operation = this.host
+                    .waitForResponse(Operation.createGet(this.host, provisionTask.documentSelfLink));
+            ProvisionComputeTaskState task = operation.getBody(ProvisionComputeTaskState.class);
+            assertTrue(task.taskInfo.failure.message.contains("regionId"));
+            return;
         }
 
-        // create state & desc of the clone
-        ComputeDescription cloneDescription = createCloneDescription(vm.documentSelfLink);
-        ComputeState clonedVm = createCloneVmState(cloneDescription);
-
-        provisionTask = createProvisionTask(clonedVm);
-        awaitTaskEnd(provisionTask);
-
-        clonedVm = getComputeState(clonedVm);
-
-        if (!isMock()) {
-            deleteVmAndWait(vm);
-            deleteVmAndWait(clonedVm);
-        }
+        fail("Task should have failed");
     }
 
     private void doRefresh() throws Throwable {
@@ -116,7 +91,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         task.parentComputeLink = this.computeHost.documentSelfLink;
         task.resourcePoolLink = this.resourcePool.documentSelfLink;
 
-        ResourceEnumerationTaskState outTask = doPost(this.host,
+        ResourceEnumerationTaskState outTask = TestUtils.doPost(this.host,
                 task,
                 ResourceEnumerationTaskState.class,
                 UriUtils.buildUri(this.host,
@@ -128,8 +103,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
     private ComputeDescription createCloneDescription(String templateComputeLink) throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
-        computeDesc.id = nextName("cloned-vm");
-        computeDesc.regionId = this.datacenterId;
+        computeDesc.id = "cloned-" + UUID.randomUUID().toString();
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils
@@ -141,7 +115,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         CustomProperties.of(computeDesc)
                 .put(CustomProperties.TEMPLATE_LINK, templateComputeLink);
 
-        return doPost(this.host, computeDesc,
+        return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }
@@ -159,25 +133,12 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
 
         computeState.parentLink = this.computeHost.documentSelfLink;
 
-        computeState.networkInterfaceLinks = new ArrayList<>(1);
-
-        NetworkInterfaceState iface = new NetworkInterfaceState();
-        iface.networkLink = findFirstNetwork();
-        iface.name = "unit test";
-        iface = TestUtils.doPost(this.host, iface,
-                NetworkInterfaceState.class,
-                UriUtils.buildUri(this.host, NetworkInterfaceService.FACTORY_LINK));
-
-        computeState.networkInterfaceLinks.add(iface.documentSelfLink);
-
-        computeState.diskLinks = new ArrayList<>(2);
-        computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri()).documentSelfLink);
-        computeState.diskLinks.add(createDisk("A", DiskType.FLOPPY, null).documentSelfLink);
-        String placementLink = findRandomResourcePoolOwningCompute();
+        // placement host makes no sense but it is a negative test anyway
+        ComputeState placementHost = createPlacementHost();
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
-                .put(ComputeProperties.PLACEMENT_LINK, placementLink);
+                .put(ComputeProperties.PLACEMENT_LINK, placementHost.documentSelfLink);
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
@@ -188,25 +149,15 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         return returnState;
     }
 
-    private String findRandomResourcePoolOwningCompute() {
-        // find a random compute that has a resource pool
-        String placementLink = "/link/to/nowhere";
-        if (!isMock()) {
-            Query q = createQueryForComputeResource();
-            placementLink = findFirstMatching(q, ComputeState.class).documentSelfLink;
-        }
+    private ComputeState createPlacementHost() throws Throwable {
 
-        return placementLink;
-    }
-
-    private ComputeState createCloneVmState(ComputeDescription vmDescription) throws Throwable {
         ComputeState computeState = new ComputeState();
-        computeState.id = vmDescription.name;
+        computeState.id = "place here";
         computeState.documentSelfLink = computeState.id;
-        computeState.descriptionLink = vmDescription.documentSelfLink;
+        computeState.descriptionLink = this.computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
         computeState.adapterManagementReference = getAdapterManagementReference();
-        computeState.name = vmDescription.name;
+        computeState.name = "placement host";
 
         computeState.powerState = PowerState.ON;
 
@@ -214,7 +165,10 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
-                .put(ComputeProperties.PLACEMENT_LINK, findRandomResourcePoolOwningCompute());
+                .put(CustomProperties.MOREF, VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE + ":c123");
+
+        CustomProperties.of(computeState)
+                .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder);
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,
@@ -222,52 +176,10 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         return returnState;
     }
 
-    private String findFirstNetwork() {
-        Query q = Builder.create()
-                .addFieldClause(ServiceDocument.FIELD_NAME_KIND,
-                        Utils.buildKind(NetworkState.class))
-                .addCompositeFieldClause(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE,
-                        VimNames.TYPE_NETWORK)
-                .build();
-
-        QueryTask task = QueryTask.Builder.createDirectTask()
-                .setQuery(q)
-                .build();
-
-        Operation op = Operation
-                .createPost(this.host, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setBody(task);
-
-        Operation result = this.host.waitForResponse(op);
-
-        try {
-            return result.getBody(QueryTask.class).results.documentLinks.get(0);
-        } catch (Exception e) {
-            Assert.fail(e.getMessage());
-            // never gets here
-            return null;
-        }
-    }
-
-    private DiskState createDisk(String alias, DiskType type, URI sourceImageReference)
-            throws Throwable {
-        DiskState res = new DiskState();
-        res.capacityMBytes = 2048;
-        res.bootOrder = 1;
-        res.type = type;
-        res.id = res.name = "disk-" + alias;
-
-        res.sourceImageReference = sourceImageReference;
-        return doPost(this.host, res,
-                DiskState.class,
-                UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
-    }
-
     private ComputeDescription createVmDescription() throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 
         computeDesc.id = nextName("vm");
-        computeDesc.regionId = this.datacenterId;
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils
@@ -276,7 +188,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
 
-        return doPost(this.host, computeDesc,
+        return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
     }

@@ -54,11 +54,7 @@ public class Finder extends Recurser {
     public Finder(Connection connection, String datacenterPath)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         super(connection);
-        if (datacenterPath == null) {
-            this.datacenter = defaultDatacenter();
-        } else {
-            this.datacenter = datacenter(datacenterPath);
-        }
+        this.datacenter = datacenter(datacenterPath);
     }
 
     public static List<String> toParts(String p) {

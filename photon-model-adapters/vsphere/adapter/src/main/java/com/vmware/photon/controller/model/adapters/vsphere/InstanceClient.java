@@ -147,6 +147,10 @@ public class InstanceClient extends BaseHelper {
         // the regionId is used as a ref to a vSphere datacenter name
         String id = resource.description.regionId;
 
+        if (id == null || id.length() == 0) {
+            throw new IllegalArgumentException("The regionId is mandatory for vSphere resources, it's missing for "
+                    + resource.description.documentSelfLink);
+        }
         try {
             this.finder = new Finder(connection, id);
         } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {

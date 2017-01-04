@@ -258,6 +258,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         ComputeDescription computeDesc = new ComputeDescription();
 
         computeDesc.id = nextName("vm");
+        computeDesc.regionId = this.datacenterId;
         computeDesc.documentSelfLink = computeDesc.id;
         computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils

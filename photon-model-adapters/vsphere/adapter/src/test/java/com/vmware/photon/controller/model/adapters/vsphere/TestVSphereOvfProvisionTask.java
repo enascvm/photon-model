@@ -189,6 +189,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
     private ComputeDescription createTemplate() {
         ComputeDescription computeDesc = new ComputeDescription();
         computeDesc.supportedChildren = new ArrayList<>();
+        computeDesc.regionId = this.datacenterId;
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
