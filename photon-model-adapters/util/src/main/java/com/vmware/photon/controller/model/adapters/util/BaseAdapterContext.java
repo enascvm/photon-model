@@ -18,12 +18,12 @@ import java.net.URI;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * Base class for contexts used by adapters. Its {@link #populateContext(BaseAdapterStage) loads}:
+ * Base class for contexts used by adapters. It {@link #populateContext(BaseAdapterStage) loads}:
  * <ul>
  * <li>{@link ComputeStateWithDescription child}</li>
  * <li>{@link ComputeStateWithDescription parent}</li>
@@ -38,16 +38,17 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     public static final class DefaultAdapterContext
             extends BaseAdapterContext<DefaultAdapterContext> {
 
-        public DefaultAdapterContext(Service service, URI computeReference) {
+        public DefaultAdapterContext(StatelessService service, URI computeReference) {
             super(service, computeReference);
         }
     }
 
-    /**
-     * The service that is creating and using this context.
-     */
-    public final Service service;
-    public URI resourceReference;
+    public static enum BaseAdapterStage {
+        VMDESC, PARENTDESC, PARENTAUTH
+    }
+
+    public final StatelessService service;
+    public final URI resourceReference;
 
     /**
      * The compute state that is to be provisioned.
@@ -65,13 +66,24 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
      */
     public Operation adapterOperation;
 
-    public enum BaseAdapterStage {
-        VMDESC, PARENTDESC, PARENTAUTH
-    }
-
-    public BaseAdapterContext(Service service, URI computeReference) {
+    /**
+     * @param service
+     *            The service that is creating and using this context.
+     * @param resourceReference
+     *            The URI of the resource that is used to start the
+     *            {@link #populateContext(BaseAdapterStage) state machine}.
+     *            <ul>
+     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#VMDESC} then
+     *            this should point to <b>child</b> resource.</li>
+     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTDESC}
+     *            then this should point to <b>parent</b> resource.</li>
+     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTAUTH}
+     *            then this should point to <b>parent auth</b> resource.</li>
+     *            </ul>
+     */
+    public BaseAdapterContext(StatelessService service, URI resourceReference) {
         this.service = service;
-        this.resourceReference = computeReference;
+        this.resourceReference = resourceReference;
     }
 
     public DeferredResult<T> populateContext(BaseAdapterStage stage) {
@@ -100,11 +112,14 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
         return (T) this;
     }
 
-    private DeferredResult<T> getVMDescription(T context) {
+    /**
+     * Populate context with child {@code ComputeStateWithDescription}.
+     */
+    protected DeferredResult<T> getVMDescription(T context) {
 
-        URI uri = ComputeStateWithDescription.buildUri(context.resourceReference);
+        URI ref = ComputeStateWithDescription.buildUri(context.resourceReference);
 
-        Operation op = Operation.createGet(uri);
+        Operation op = Operation.createGet(ref);
 
         return context.service
                 .sendWithDeferredResult(op, ComputeStateWithDescription.class)
@@ -114,15 +129,23 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
                 });
     }
 
-    private DeferredResult<T> getParentDescription(T context) {
+    /**
+     * Populate context with parent {@code ComputeStateWithDescription}.
+     *
+     * <p>
+     * By default {@code context.child.parentLink} is used as source.
+     */
+    protected DeferredResult<T> getParentDescription(T context) {
 
-        URI uri = context.child != null
+        URI ref = context.child != null
+                // 'child' is already resolved so used it
                 ? UriUtils.buildUri(context.service.getHost(), context.child.parentLink)
+                // state machine starts from here so resRef should point to the parent
                 : context.resourceReference;
 
-        uri = ComputeStateWithDescription.buildUri(uri);
+        ref = ComputeStateWithDescription.buildUri(ref);
 
-        Operation op = Operation.createGet(uri);
+        Operation op = Operation.createGet(ref);
 
         return context.service
                 .sendWithDeferredResult(op, ComputeStateWithDescription.class)
@@ -132,13 +155,16 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
                 });
     }
 
-    private DeferredResult<T> getParentAuth(T context) {
-        URI uri = context.parent != null
-                ? UriUtils.buildUri(context.service.getHost(),
-                        context.parent.description.authCredentialsLink)
-                : context.resourceReference;
+    /**
+     * Populate context with parent {@code AuthCredentialsServiceState}.
+     *
+     * @see {@link #getParentAuthLink(BaseAdapterContext)} for any customization
+     */
+    protected DeferredResult<T> getParentAuth(T context) {
 
-        Operation op = Operation.createGet(uri);
+        URI parentAuthRef = getParentAuthRef(context);
+
+        Operation op = Operation.createGet(parentAuthRef);
 
         return context.service
                 .sendWithDeferredResult(op, AuthCredentialsServiceState.class)
@@ -146,6 +172,18 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
                     context.parentAuth = state;
                     return context;
                 });
+    }
+
+    /**
+     * Descendants might implement this hook to provide custom link to parent auth.
+     */
+    protected URI getParentAuthRef(T context) {
+        return context.parent != null
+                // 'parent' is already resolved so used it
+                ? UriUtils.buildUri(context.service.getHost(),
+                        context.parent.description.authCredentialsLink)
+                // state machine starts from here so resRef should point to the parentAuth
+                : context.resourceReference;
     }
 
 }

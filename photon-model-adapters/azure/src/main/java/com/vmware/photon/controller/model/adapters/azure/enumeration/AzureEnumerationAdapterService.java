@@ -25,7 +25,6 @@ import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.StatelessService;
 
 /**
@@ -58,7 +57,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         public ComputeEnumerateResourceRequest computeEnumerationRequest;
         public AzureEnumerationStages stage;
 
-        public EnumerationContext(Service service, ComputeEnumerateResourceRequest request,
+        public EnumerationContext(StatelessService service, ComputeEnumerateResourceRequest request,
                 Operation op) {
             super(service, request.resourceReference);
 

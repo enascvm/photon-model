@@ -25,7 +25,6 @@ import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseA
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
-import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 
@@ -59,7 +58,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
         public AWSEnumerationStages stage;
         public List<Operation> enumerationOperations;
 
-        public EnumerationContext(Service service, ComputeEnumerateResourceRequest request,
+        public EnumerationContext(StatelessService service, ComputeEnumerateResourceRequest request,
                 Operation op) {
             super(service, request.resourceReference);
             this.computeEnumerationRequest = request;

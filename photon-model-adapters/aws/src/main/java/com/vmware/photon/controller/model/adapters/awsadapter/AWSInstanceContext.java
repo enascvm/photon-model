@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
-import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,18 +26,13 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.StatelessService;
 
 /**
  * AWS allocation.
  */
-public class AWSInstanceContext extends BaseComputeInstanceContext<AWSInstanceContext, AWSInstanceContext.AWSNicContext> {
-
-    public AWSInstanceStage stage;
-
-    public AmazonEC2AsyncClient amazonEC2Client;
-    public Map<DiskType, DiskState> childDisks;
-    public long taskExpirationMicros;
+public class AWSInstanceContext
+        extends BaseComputeInstanceContext<AWSInstanceContext, AWSInstanceContext.AWSNicContext> {
 
     /**
      * The class encapsulates NIC related data (both Photon Model and AWS model) used during
@@ -58,16 +52,14 @@ public class AWSInstanceContext extends BaseComputeInstanceContext<AWSInstanceCo
         public InstanceNetworkInterfaceSpecification nicSpec;
     }
 
-    /**
-     * Initialize with request info and first stage.
-     */
-    public AWSInstanceContext(Service service, ComputeInstanceRequest computeRequest) {
-        super(service, computeRequest, AWSNicContext::new);
-    }
+    public AWSInstanceStage stage;
 
-    public AWSInstanceContext(Service service, ComputeInstanceRequest computeRequest,
-            URI resourceReference) {
-        super(service, resourceReference, computeRequest, AWSNicContext::new);
+    public AmazonEC2AsyncClient amazonEC2Client;
+    public Map<DiskType, DiskState> childDisks;
+    public long taskExpirationMicros;
+
+    public AWSInstanceContext(StatelessService service, ComputeInstanceRequest computeRequest) {
+        super(service, computeRequest, AWSNicContext::new);
     }
 
     /**

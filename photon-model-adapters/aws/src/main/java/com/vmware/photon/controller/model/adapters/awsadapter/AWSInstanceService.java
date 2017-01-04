@@ -53,6 +53,7 @@ import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
@@ -71,7 +72,6 @@ import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -111,48 +111,32 @@ public class AWSInstanceService extends StatelessService {
             return;
         }
 
-        ComputeInstanceRequest request = op.getBody(ComputeInstanceRequest.class);
+        AWSInstanceContext ctx = new AWSInstanceContext(this,
+                op.getBody(ComputeInstanceRequest.class));
 
-        final BiConsumer<AWSInstanceContext, Throwable> onPopulateContext;
+        final BaseAdapterStage startingStage;
+        final AWSInstanceStage nextStage;
 
-        switch (request.requestType) {
+        switch (ctx.computeRequest.requestType) {
         case VALIDATE_CREDENTIALS:
-            onPopulateContext = (context, t) -> {
-                if (t != null) {
-                    handleError(context, t);
-                    return;
-                }
-                context.adapterOperation = op;
-                handleAllocation(context, AWSInstanceStage.CLIENT);
-            };
-
-            URI authCredentialsUri = UriUtils.buildUri(this.getHost(), request.authCredentialsLink);
-
-            new AWSInstanceContext(this, request, authCredentialsUri)
-                    .populateContext(BaseAdapterStage.PARENTAUTH)
-                    .whenComplete(onPopulateContext);
+            ctx.adapterOperation = op;
+            startingStage = BaseAdapterStage.PARENTAUTH;
+            nextStage = AWSInstanceStage.CLIENT;
             break;
         default:
             op.complete();
-            if (request.isMockRequest
-                    && request.requestType == ComputeInstanceRequest.InstanceRequestType.CREATE) {
-                AdapterUtils.sendPatchToProvisioningTask(this, request.taskReference);
+            if (ctx.computeRequest.isMockRequest
+                    && ctx.computeRequest.requestType == InstanceRequestType.CREATE) {
+                AdapterUtils.sendPatchToProvisioningTask(this, ctx.computeRequest.taskReference);
                 return;
             }
-
-            onPopulateContext = (context, t) -> {
-                if (t != null) {
-                    handleError(context, t);
-                    return;
-                }
-                handleAllocation(context, AWSInstanceStage.PROVISIONTASK);
-            };
-
-            new AWSInstanceContext(this, request)
-                    .populateContext(BaseAdapterStage.VMDESC)
-                    .whenComplete(onPopulateContext);
+            startingStage = BaseAdapterStage.VMDESC;
+            nextStage = AWSInstanceStage.PROVISIONTASK;
             break;
         }
+
+        // Populate BaseAdapterContext and then continue with this state machine
+        ctx.populateContext(startingStage).whenComplete(handleAllocation(nextStage));
     }
 
     /**
@@ -172,6 +156,19 @@ public class AWSInstanceService extends StatelessService {
         aws.error = e;
         aws.stage = AWSInstanceStage.ERROR;
         handleAllocation(aws);
+    }
+
+    /**
+     * {@code handleAllocation} version suitable for chaining to {@code DeferredResult.whenComplete}.
+     */
+    private BiConsumer<AWSInstanceContext, Throwable> handleAllocation(AWSInstanceStage next) {
+        return (ctx, exc) -> {
+            if (exc != null) {
+                handleError(ctx, exc);
+                return;
+            }
+            handleAllocation(ctx, next);
+        };
     }
 
     /**
@@ -208,7 +205,6 @@ public class AWSInstanceService extends StatelessService {
             default:
                 handleError(aws, new Exception("Unknown AWS provisioning stage"));
             }
-
             break;
         case DELETE:
             deleteInstance(aws);
@@ -217,13 +213,7 @@ public class AWSInstanceService extends StatelessService {
             getVMDisks(aws, AWSInstanceStage.GET_NIC_STATES);
             break;
         case GET_NIC_STATES:
-            aws.populateNicContext().whenComplete((context, exc) -> {
-                if (exc != null) {
-                    handleError(context, exc);
-                    return;
-                }
-                handleAllocation(context, AWSInstanceStage.GET_NETWORKS);
-            });
+            aws.populateContext().whenComplete(handleAllocation(AWSInstanceStage.GET_NETWORKS));
             break;
         case GET_NETWORKS:
             // Should be handled in advance by AWSNetworkService

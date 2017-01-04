@@ -11,9 +11,8 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.model;
+package com.vmware.photon.controller.model.adapters.azure.instance;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -33,28 +32,53 @@ import com.microsoft.azure.management.storage.models.StorageAccount;
 import okhttp3.OkHttpClient;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
-import com.vmware.photon.controller.model.adapters.azure.instance.AzureStages;
-import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
-import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.services.common.AuthCredentialsService;
+import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  * Context object to store relevant information during different stages.
  */
-public class AzureAllocationContext {
+public class AzureInstanceContext extends
+        BaseComputeInstanceContext<AzureInstanceContext, AzureInstanceContext.AzureNicContext> {
 
-    public AzureStages stage;
+    /**
+     * The class encapsulates NIC related data (both Photon Model and Azure model) used during
+     * provisioning.
+     */
+    public static class AzureNicContext extends BaseComputeInstanceContext.BaseNicContext {
 
-    public ComputeInstanceRequest computeRequest;
-    public ComputeService.ComputeStateWithDescription child;
-    public ComputeService.ComputeStateWithDescription parent;
-    public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
-    public AuthCredentialsService.AuthCredentialsServiceState childAuth;
+        /**
+         * The Azure vNet this NIC is associated to. It is created by this service.
+         */
+        public VirtualNetwork vNet;
+        /**
+         * The Azure subnet this NIC is associated to. It is created by this service.
+         */
+        public Subnet subnet;
+
+        /**
+         * The actual NIC object in Azure. It is created by this service.
+         */
+        public NetworkInterface nic;
+
+        /**
+         * The public IP assigned to the NIC. It is created by this service.
+         */
+        public PublicIPAddress publicIP;
+
+        /**
+         * The security group this NIC is assigned to. It is created by this service.
+         */
+        public NetworkSecurityGroup securityGroup;
+    }
+
+    public AzureInstanceStage stage;
+
+    public AuthCredentialsServiceState childAuth;
 
     public StorageDescription storageDescription;
     public DiskState bootDisk;
@@ -67,42 +91,6 @@ public class AzureAllocationContext {
     public ResourceGroup resourceGroup;
     public StorageAccount storage;
 
-    /**
-     * The class encapsulates NIC related data (both Photon Model and Azure model) used during
-     * provisioning.
-     */
-    public static class NicAllocationContext {
-
-        // NIC related states (resolved by links) related to the ComputeState that is provisioned.
-        public NetworkInterfaceStateWithDescription nicStateWithDesc;
-        public NetworkState networkState;
-        public SubnetState subnetState;
-
-        // The Azure vNet-subnet pair this NIC is associated to. It is created by this service.
-        public VirtualNetwork vNet;
-        public Subnet subnet;
-
-        // The actual NIC object in Azure. It is created by this service.
-        public NetworkInterface nic;
-
-        // The public IP assigned to the NIC. It is created by this service.
-        public PublicIPAddress publicIP;
-        // The security group this NIC is assigned to. It is created by this service.
-        public NetworkSecurityGroup securityGroup;
-    }
-
-    /**
-     * Holds allocation data for all VM NICs.
-     */
-    public List<NicAllocationContext> nics = new ArrayList<>();
-
-    /**
-     * First NIC is considered primary.
-     */
-    public NicAllocationContext getVmPrimaryNic() {
-        return this.nics.get(0);
-    }
-
     public String storageAccountName;
     public ImageReference imageReference;
     public String operatingSystemFamily;
@@ -114,14 +102,21 @@ public class AzureAllocationContext {
     public OkHttpClient.Builder clientBuilder;
     public OkHttpClient httpClient;
 
-    public Throwable error;
-    public Operation operation;
+    public AzureInstanceContext(StatelessService service, ComputeInstanceRequest computeRequest) {
+        super(service, computeRequest, AzureNicContext::new);
+    }
 
     /**
-     * Initialize with request info and first stage.
+     * Hook into parent populate behavior.
      */
-    public AzureAllocationContext(ComputeInstanceRequest computeReq) {
-        this.computeRequest = computeReq;
-        this.stage = AzureStages.VMDESC;
+    @Override
+    protected DeferredResult<AzureInstanceContext> getVMDescription(AzureInstanceContext context) {
+        return super.getVMDescription(context)
+                // Populate vm name
+                .thenApply(ctx -> {
+                    ctx.vmName = ctx.child.name != null ? ctx.child.name : ctx.child.id;
+                    return ctx;
+                });
     }
+
 }

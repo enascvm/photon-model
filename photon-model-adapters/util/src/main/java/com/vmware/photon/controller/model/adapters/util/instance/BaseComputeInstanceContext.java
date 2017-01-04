@@ -15,30 +15,34 @@ package com.vmware.photon.controller.model.adapters.util.instance;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.resources.FirewallService.FirewallState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 
 /**
  * Base context class for adapters that handle {@link ComputeInstanceRequest} request. It
- * {@link #populateNicContext() loads} NIC related states:
+ * {@link #populateContext() loads} NIC related states:
  * <ul>
  * <li>{@link NetworkInterfaceStateWithDescription nicStateWithDesc}</li>
- * <li>{@link NetworkState networkState}</li>
  * <li>{@link SubnetState subnetState}</li>
+ * <li>{@link NetworkState networkState}</li>
+ * <li>map of {@link ResourceGroupState resourceGroupStates} of networkState</li>
  * <li>map of {@link FirewallState firewallStates}</li>
  * </ul>
  * in addition to the states loaded by {@link BaseAdapterContext}.
@@ -47,16 +51,35 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         extends BaseAdapterContext<T> {
 
     /**
-     * The class encapsulates NIC related states used during compute provisioning.
+     * The class encapsulates NIC related states (resolved by links related to the ComputeState)
+     * used during compute provisioning.
      */
     public static class BaseNicContext {
 
-        // NIC related states (resolved by links) related to the ComputeState that is provisioned.
+        /**
+         * Resolved from {@code ComputeState.networkInterfaceLinks[i]}.
+         */
         public NetworkInterfaceStateWithDescription nicStateWithDesc;
-        public NetworkState networkState;
+
+        /**
+         * Resolved from {@code NetworkInterfaceStateWithDescription.subnetLink}.
+         */
         public SubnetState subnetState;
 
-        public Map<String, FirewallState> firewallStates = new HashMap<>();
+        /**
+         * Resolved from {@code SubnetState.networkLink}.
+         */
+        public NetworkState networkState;
+
+        /**
+         * Resolved from {@code NetworkState.groupLinks}.
+         */
+        public Map<String, ResourceGroupState> networkResourceGroupStates = new LinkedHashMap<>();
+
+        /**
+         * Resolved from {@code NetworkInterfaceStateWithDescription.firewallLinks}.
+         */
+        public Map<String, FirewallState> firewallStates = new LinkedHashMap<>();
     }
 
     /**
@@ -69,24 +92,29 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
      */
     public final ComputeInstanceRequest computeRequest;
 
+    /**
+     * Supplier/Factory for creating context specific {@link BaseNicContext} instances.
+     */
     protected final Supplier<S> nicContextSupplier;
 
-    public BaseComputeInstanceContext(Service service,
+    public BaseComputeInstanceContext(StatelessService service,
             ComputeInstanceRequest computeRequest,
             Supplier<S> nicContextSupplier) {
 
-        this(service, computeRequest.resourceReference, computeRequest, nicContextSupplier);
-    }
-
-    public BaseComputeInstanceContext(Service service,
-            URI resourceReference,
-            ComputeInstanceRequest computeRequest,
-            Supplier<S> nicContextSupplier) {
-
-        super(service, resourceReference);
+        super(service, computeRequest.resourceReference);
 
         this.computeRequest = computeRequest;
         this.nicContextSupplier = nicContextSupplier;
+    }
+
+    @Override
+    protected URI getParentAuthRef(T context) {
+        if (context.computeRequest.requestType == InstanceRequestType.VALIDATE_CREDENTIALS) {
+            return UriUtils.buildUri(
+                    context.service.getHost(),
+                    context.computeRequest.authCredentialsLink);
+        }
+        return super.getParentAuthRef(context);
     }
 
     /**
@@ -96,11 +124,12 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         return this.nics.get(0);
     }
 
-    public DeferredResult<T> populateNicContext() {
+    public DeferredResult<T> populateContext() {
         return DeferredResult.completed(self())
                 .thenCompose(this::getNicStates)
                 .thenCompose(this::getNicSubnetStates)
                 .thenCompose(this::getNicNetworkStates)
+                // .thenCompose(this::getNicNetworkResourceGroupStates)
                 .thenCompose(this::getNicFirewallStates);
     }
 
@@ -196,6 +225,9 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         });
     }
 
+    /**
+     * Get {@link FirewallState}s assigned to NICs.
+     */
     protected DeferredResult<T> getNicFirewallStates(T context) {
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
@@ -223,6 +255,44 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
                 throw new IllegalStateException("Error getting NIC firewall states.", exc);
+            }
+            return context;
+        });
+    }
+
+    /**
+     * Get {@link ResourceGroupState}s of the {@link NetworkState}s the NICs are assigned to.
+     */
+    protected DeferredResult<T> getNicNetworkResourceGroupStates(T context) {
+        if (context.nics.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
+
+        List<DeferredResult<Void>> getStatesDR = new ArrayList<>();
+        Collector<DeferredResult<Void>, ?, List<DeferredResult<Void>>> getStatesDRCollector = Collectors
+                .toCollection(() -> getStatesDR);
+
+        for (S nicCtx : context.nics) {
+            if (nicCtx.networkState.groupLinks == null
+                    || nicCtx.networkState.groupLinks.isEmpty()) {
+                continue;
+            }
+
+            nicCtx.networkState.groupLinks.stream()
+                    .map(groupLink -> {
+                        Operation op = Operation.createGet(context.service.getHost(), groupLink);
+                        return context.service
+                                .sendWithDeferredResult(op, ResourceGroupState.class)
+                                .thenAccept(rgState -> nicCtx.networkResourceGroupStates
+                                        .put(rgState.name, rgState));
+                    })
+                    .collect(getStatesDRCollector);
+        }
+
+        return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
+            if (exc != null) {
+                throw new IllegalStateException(
+                        "Error getting resource group states of NIC network states.", exc);
             }
             return context;
         });

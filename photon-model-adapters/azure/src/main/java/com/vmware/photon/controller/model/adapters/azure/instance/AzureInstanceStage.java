@@ -16,7 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 /**
  * Azure stages required to create/delete a VM.
  */
-public enum AzureStages {
+public enum AzureInstanceStage {
 
     /**
      * This stage gets the vm description.
@@ -72,14 +72,6 @@ public enum AzureStages {
      * Stage where network interface states are initialized.
      */
     GET_NIC_STATES,
-    /**
-     * Stage where NICs' network states are initialized.
-     */
-    GET_NETWORK_STATES,
-    /**
-     * Stage where NICs' subnet states are initialized.
-     */
-    GET_SUBNET_STATES,
 
     /**
      * Stage where networks (vNet-subnet pair) are created.
