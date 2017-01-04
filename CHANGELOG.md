@@ -1,7 +1,15 @@
 # CHANGELOG
 
-## 0.5.6-SNAPSHOT
+## 0.5.6
 
+* Add support for subnet enumeration in Azure.
+* Introduce a field compute type in ComputeState.
+* Enumerate Aws availability zones as a compute. These are used for VM placements.
+* Add a new service in vSphere to enumerate datacenters before endpoint creation.
+* Add fixes in AWS Network enumeration to ensure that security groups and subnets
+belong to the same VPC.
+* Fix default provisioning in AWS when no NICs are provided.
+* Delete related entities when deleting computes during vSphere enumeration.
 * Updating xenon to 1.3.4.
 
 ## 0.5.5
