@@ -49,7 +49,7 @@ public class AWSConstants {
     public static final int NO_OF_DAYS_MARGIN_FOR_AWS_TO_UPDATE_BILL = 5;
     public static final int DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS = 11;
     public static final String AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS =
-            "billProcessedTimeMillis";
+            "BillProcessedTimeMillis";
     public static final String AWS_INVALID_INSTANCE_ID_ERROR_CODE = "InvalidInstanceID.NotFound";
     public static final String PROPERTY_NAME_QUERY_PAGE_SIZE = UriPaths.PROPERTY_PREFIX
             + AWSConstants.class.getSimpleName() + ".QUERY_PAGE_SIZE";

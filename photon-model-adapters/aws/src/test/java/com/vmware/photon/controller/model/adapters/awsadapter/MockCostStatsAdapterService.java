@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
@@ -23,6 +24,7 @@ import java.util.Map;
 
 import org.joda.time.LocalDate;
 
+import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -35,7 +37,7 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     public static final String SELF_LINK = AWSUriPaths.PROVISIONING_AWS
             + "/mock-costs-stats-adapter";
 
-    public static final Long billProcessedTimeMillis = 1475276400000L;
+    public static final Long billProcessedTimeMillis = 1475276399000L;
 
     @Override
     protected void getAccountDescription(AWSCostStatsCreationContext statsData,
@@ -160,7 +162,8 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     }
 
     @Override
-    protected void setBillProcessedTime(AWSCostStatsCreationContext statsData) {
+    protected void setBillProcessedTime(AWSCostStatsCreationContext statsData,
+            ComputeStatsResponse.ComputeStats accountStats, URI accountUri) {
 
         assertTrue("Last bill processed time is not correct. " +
                         "Expected: " + billProcessedTimeMillis.toString() + " Got: "
