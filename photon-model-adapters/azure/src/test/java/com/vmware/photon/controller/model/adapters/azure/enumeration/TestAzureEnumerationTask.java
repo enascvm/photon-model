@@ -264,7 +264,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         this.resourceGroupState = createDefaultResourceGroupState(this.host,
                 this.mockedStorageAccountName, this.computeHost.documentSelfLink,
-                ResourceGroupStateType.AzureResourceGroup.name());
+                ResourceGroupStateType.AzureResourceGroup);
 
         this.diskState = createDefaultDiskState(this.host, this.mockedStorageAccountName,
                 this.mockedStorageAccountName, this.resourcePoolLink);
@@ -455,7 +455,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             String staleResourceGroupName = "stalerg-" + i;
             createDefaultResourceGroupState(this.host, staleResourceGroupName,
                     this.computeHost.documentSelfLink,
-                    ResourceGroupStateType.AzureResourceGroup.name());
+                    ResourceGroupStateType.AzureResourceGroup);
         }
     }
 
@@ -589,7 +589,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             String staleContName = "staleCont-" + i;
             createDefaultResourceGroupState(this.host, staleContName,
                     this.computeHost.documentSelfLink,
-                    ResourceGroupStateType.AzureStorageContainer.name());
+                    ResourceGroupStateType.AzureStorageContainer);
         }
     }
 

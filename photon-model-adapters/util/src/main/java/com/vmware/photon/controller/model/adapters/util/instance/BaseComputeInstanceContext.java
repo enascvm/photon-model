@@ -19,7 +19,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -42,10 +41,10 @@ import com.vmware.xenon.common.UriUtils;
  * <li>{@link NetworkInterfaceStateWithDescription nicStateWithDesc}</li>
  * <li>{@link SubnetState subnetState}</li>
  * <li>{@link NetworkState networkState}</li>
- * <li>map of {@link ResourceGroupState resourceGroupStates} of networkState</li>
+ * <li>network {@link ResourceGroupState resourceGroupState}</li>
  * <li>map of {@link SecurityGroupState securityGroupStates}</li>
  * </ul>
- * in addition to the states loaded by {@link BaseAdapterContext}.
+ * in addition to the states loaded by parent {@link BaseAdapterContext}.
  */
 public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, S>, S extends BaseComputeInstanceContext.BaseNicContext>
         extends BaseAdapterContext<T> {
@@ -72,9 +71,9 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         public NetworkState networkState;
 
         /**
-         * Resolved from {@code NetworkState.groupLinks}.
+         * Resolved from FIRST {@code NetworkState.groupLinks}.
          */
-        public Map<String, ResourceGroupState> networkResourceGroupStates = new LinkedHashMap<>();
+        public ResourceGroupState networkResourceGroupState;
 
         /**
          * Resolved from {@code NetworkInterfaceStateWithDescription.firewallLinks}.
@@ -85,7 +84,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     /**
      * Holds allocation data for all VM NICs.
      */
-    public List<S> nics = new ArrayList<>();
+    public final List<S> nics = new ArrayList<>();
 
     /**
      * The {@link ComputeInstanceRequest request} that is being processed.
@@ -119,9 +118,11 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
     /**
      * First NIC is considered primary.
+     *
+     * @return <code>null</code> if there are no NICs
      */
     public S getPrimaryNic() {
-        return this.nics.get(0);
+        return this.nics.isEmpty() ? null : this.nics.get(0);
     }
 
     public DeferredResult<T> populateContext() {
@@ -129,8 +130,8 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
                 .thenCompose(this::getNicStates)
                 .thenCompose(this::getNicSubnetStates)
                 .thenCompose(this::getNicNetworkStates)
-                // .thenCompose(this::getNicNetworkResourceGroupStates)
-                .thenCompose(this::getNicFirewallStates);
+                .thenCompose(this::getNicNetworkResourceGroupStates)
+                .thenCompose(this::getNicSecurityGroupStates);
     }
 
     /**
@@ -189,7 +190,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
-                throw new IllegalStateException("Error getting NIC subnet states.", exc);
+                throw new IllegalStateException("Error getting NIC Subnet states.", exc);
             }
             return context;
         });
@@ -219,7 +220,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
-                throw new IllegalStateException("Error getting NIC network states.", exc);
+                throw new IllegalStateException("Error getting NIC Network states.", exc);
             }
             return context;
         });
@@ -228,25 +229,26 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     /**
      * Get {@link SecurityGroupState}s assigned to NICs.
      */
-    protected DeferredResult<T> getNicFirewallStates(T context) {
+    protected DeferredResult<T> getNicSecurityGroupStates(T context) {
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
         }
 
-        List<String> firewallLinks = context.getPrimaryNic().nicStateWithDesc.firewallLinks;
-        if (firewallLinks == null || firewallLinks.isEmpty()) {
+        List<String> securityGroupLinks = context.getPrimaryNic().nicStateWithDesc.firewallLinks;
+
+        if (securityGroupLinks == null || securityGroupLinks.isEmpty()) {
             return DeferredResult.completed(context);
         }
 
-        List<DeferredResult<Void>> getStatesDR = firewallLinks.stream()
-                .map(firewallLink -> {
-                    Operation op = Operation.createGet(context.service.getHost(), firewallLink);
+        List<DeferredResult<Void>> getStatesDR = securityGroupLinks.stream()
+                .map(securityGroupLink -> {
+                    Operation op = Operation.createGet(context.service.getHost(), securityGroupLink);
                     return context.service
                             .sendWithDeferredResult(op, SecurityGroupState.class)
-                            .thenAccept(firewallState -> {
-                                // Populate all NICs with same Firewall state.
+                            .thenAccept(securityGroupState -> {
+                                // Populate _all_ NICs with _same_ SecurityGroup state.
                                 for (BaseNicContext nicCtx : context.nics) {
-                                    nicCtx.securityGroupStates.put(firewallState.name, firewallState);
+                                    nicCtx.securityGroupStates.put(securityGroupState.name, securityGroupState);
                                 }
                             });
                 })
@@ -254,7 +256,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
-                throw new IllegalStateException("Error getting NIC firewall states.", exc);
+                throw new IllegalStateException("Error getting NIC SecurityGroup states.", exc);
             }
             return context;
         });
@@ -268,31 +270,32 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
             return DeferredResult.completed(context);
         }
 
-        List<DeferredResult<Void>> getStatesDR = new ArrayList<>();
-        Collector<DeferredResult<Void>, ?, List<DeferredResult<Void>>> getStatesDRCollector = Collectors
-                .toCollection(() -> getStatesDR);
+        List<DeferredResult<Void>> getStatesDR = context.nics
+                .stream()
+                .filter(nicCtx -> nicCtx.networkState.groupLinks != null
+                        && !nicCtx.networkState.groupLinks.isEmpty())
+                .map(nicCtx -> {
+                    String rgLink = nicCtx.networkState.groupLinks.iterator().next();
 
-        for (S nicCtx : context.nics) {
-            if (nicCtx.networkState.groupLinks == null
-                    || nicCtx.networkState.groupLinks.isEmpty()) {
-                continue;
-            }
+                    // NOTE: Get first RG Link! If there are more than one link log a warning.
+                    if (nicCtx.networkState.groupLinks.size() > 1) {
+                        context.service.logSevere(
+                                "More than one resource group links are assigned to [%s] NIC's Network state. Get: %s",
+                                nicCtx.networkState.name, rgLink);
+                    }
 
-            nicCtx.networkState.groupLinks.stream()
-                    .map(groupLink -> {
-                        Operation op = Operation.createGet(context.service.getHost(), groupLink);
-                        return context.service
-                                .sendWithDeferredResult(op, ResourceGroupState.class)
-                                .thenAccept(rgState -> nicCtx.networkResourceGroupStates
-                                        .put(rgState.name, rgState));
-                    })
-                    .collect(getStatesDRCollector);
-        }
+                    Operation op = Operation.createGet(context.service.getHost(), rgLink);
+
+                    return context.service
+                            .sendWithDeferredResult(op, ResourceGroupState.class)
+                            .thenAccept(rgState -> nicCtx.networkResourceGroupState = rgState);
+                })
+                .collect(Collectors.toList());
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
                 throw new IllegalStateException(
-                        "Error getting resource group states of NIC network states.", exc);
+                        "Error getting ResourceGroup states of NIC Network states.", exc);
             }
             return context;
         });

@@ -33,11 +33,13 @@ import static com.vmware.photon.controller.model.resources.ComputeDescriptionSer
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.models.VirtualMachine;
@@ -46,6 +48,7 @@ import com.microsoft.rest.ServiceResponse;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureComputeEnumerationAdapterService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -85,15 +88,30 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 public class AzureTestUtil {
     public static final String AZURE_ADMIN_USERNAME = "azureuser";
     public static final String AZURE_ADMIN_PASSWORD = "Pa$$word1";
+
+    // This instance size DOES support 2 NICs! If you change it please correct NUMBER_OF_NICS.
     public static final String AZURE_VM_SIZE = "Standard_A3";
+
     public static final String IMAGE_REFERENCE = "Canonical:UbuntuServer:14.04.3-LTS:latest";
+
     public static final String AZURE_RESOURCE_GROUP_LOCATION = "westus";
+
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "storage";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_RAGRS";
-    public static final String AZURE_NETWORK_CIDR = "192.168.100.0/22";
-    public static final String AZURE_SUBNET_CIDR = "192.168.100.0/24";
-    public static final String DEFAULT_OS_DISK_CACHING = "None";
+
     public static final int NUMBER_OF_NICS = 2;
+    public static final String AZURE_NETWORK_NAME = "vNet";
+    public static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
+    public static final String AZURE_SUBNET_NAME = "subnet";
+    public static final String[] AZURE_SUBNET_CIDR;
+
+    static {
+        AZURE_SUBNET_CIDR = new String[NUMBER_OF_NICS];
+        AZURE_SUBNET_CIDR[0] = "172.16.0.0/17";
+        AZURE_SUBNET_CIDR[1] = "172.16.128.0/17";
+    }
+
+    public static final String DEFAULT_OS_DISK_CACHING = "None";
 
     public static ResourcePoolState createDefaultResourcePool(
             VerificationHost host)
@@ -105,9 +123,8 @@ public class AzureTestUtil {
         inPool.minCpuCount = 1L;
         inPool.minMemoryBytes = 1024L;
 
-        ResourcePoolState returnPool =
-                TestUtils.doPost(host, inPool, ResourcePoolState.class,
-                        UriUtils.buildUri(host, ResourcePoolService.FACTORY_LINK));
+        ResourcePoolState returnPool = TestUtils.doPost(host, inPool, ResourcePoolState.class,
+                UriUtils.buildUri(host, ResourcePoolService.FACTORY_LINK));
 
         return returnPool;
     }
@@ -150,8 +167,8 @@ public class AzureTestUtil {
     }
 
     public static AuthCredentialsServiceState createDefaultAuthCredentials(VerificationHost host,
-            String clientID, String clientKey, String subscriptionId, String tenantId) throws
-            Throwable {
+            String clientID, String clientKey, String subscriptionId, String tenantId)
+            throws Throwable {
 
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
         auth.privateKeyId = clientID;
@@ -202,8 +219,7 @@ public class AzureTestUtil {
     }
 
     /**
-     * Generate random names. For Azure, storage account names need to be unique across
-     * Azure.
+     * Generate random names. For Azure, storage account names need to be unique across Azure.
      */
     public static String generateName(String prefix) {
         return prefix + randomString(5);
@@ -219,8 +235,28 @@ public class AzureTestUtil {
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
-            String parentLink, String resourcePoolLink, String computeHostAuthLink) throws
-            Throwable {
+            String parentLink, String resourcePoolLink, String computeHostAuthLink)
+            throws Throwable {
+
+        return createDefaultVMResource(host, azureVMName, parentLink, resourcePoolLink,
+                computeHostAuthLink, null /* networkRGLink */);
+    }
+
+    public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
+            String parentLink, String resourcePoolLink, String computeHostAuthLink,
+            String networkRGLink)
+            throws Throwable {
+
+        ResourceGroupState vmRG = createDefaultResourceGroupState(
+                host, azureVMName, parentLink, ResourceGroupStateType.AzureResourceGroup);
+
+        String resourceGroupLink = vmRG.documentSelfLink;
+
+        if (networkRGLink == null) {
+            // The RG where the VM is deployed is also used as RG for the Network!
+            networkRGLink = resourceGroupLink;
+        }
+
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
         auth.userEmail = AZURE_ADMIN_USERNAME;
         auth.privateKey = AZURE_ADMIN_PASSWORD;
@@ -270,69 +306,10 @@ public class AzureTestUtil {
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
         vmDisks.add(UriUtils.buildUriPath(DiskService.FACTORY_LINK, rootDisk.id));
 
-        // Create network state.
-        NetworkState networkState;
-        {
-            networkState = new NetworkState();
-            networkState.id = UUID.randomUUID().toString();
-            networkState.name = azureVMName + "-vNet";
-            networkState.authCredentialsLink = computeHostAuthLink;
-            networkState.resourcePoolLink = resourcePoolLink;
-            networkState.subnetCIDR = AZURE_NETWORK_CIDR;
-            networkState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
-            networkState.instanceAdapterReference = UriUtils.buildUri(host,
-                    DEFAULT_INSTANCE_ADAPTER_REFERENCE);
-
-            networkState = TestUtils.doPost(host, networkState, NetworkState.class,
-                    UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
-        }
-
-        // Create subnet state.
-        SubnetState subnetState;
-        {
-            subnetState = new SubnetState();
-
-            subnetState.id = UUID.randomUUID().toString();
-            subnetState.name = azureVMName + "-subnet";
-            subnetState.networkLink = networkState.documentSelfLink;
-            subnetState.subnetCIDR = AZURE_SUBNET_CIDR;
-
-            subnetState = TestUtils.doPost(host, subnetState, SubnetState.class,
-                    UriUtils.buildUri(host, SubnetService.FACTORY_LINK));
-        }
-
-        // Create network interface descriptions.
-        NetworkInterfaceDescription nicDescription;
-        {
-            nicDescription = new NetworkInterfaceDescription();
-            nicDescription.id = UUID.randomUUID().toString();
-            nicDescription.assignment = IpAssignment.DYNAMIC;
-
-            nicDescription = TestUtils
-                    .doPost(host, nicDescription, NetworkInterfaceDescription.class,
-                            UriUtils.buildUri(host,
-                                    NetworkInterfaceDescriptionService.FACTORY_LINK));
-        }
-
-        // Create NIC states.
-        List<String> nicLinks;
-        {
-            nicLinks = new ArrayList<>();
-            for (int i = 0; i < NUMBER_OF_NICS; i++) {
-                NetworkInterfaceState nicState = new NetworkInterfaceState();
-                nicState.id = UUID.randomUUID().toString();
-                nicState.documentSelfLink = nicState.id;
-                nicState.name = azureVMName + "-nic" + i;
-                nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
-                nicState.networkLink = networkState.documentSelfLink;
-                nicState.subnetLink = subnetState.documentSelfLink;
-
-                nicState = TestUtils.doPost(host, nicState, NetworkInterfaceState.class,
-                        UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
-
-                nicLinks.add(nicState.documentSelfLink);
-            }
-        }
+        // Create NICs
+        List<String> nicLinks = createDefaultNicStates(host, networkRGLink, resourcePoolLink,
+                computeHostAuthLink, azureVMName)
+                        .stream().map(nic -> nic.documentSelfLink).collect(Collectors.toList());
 
         // Finally create the compute resource state to provision using all constructs above.
         ComputeState resource = new ComputeState();
@@ -346,6 +323,8 @@ public class AzureTestUtil {
         resource.networkInterfaceLinks = nicLinks;
         resource.customProperties = new HashMap<>();
         resource.customProperties.put(RESOURCE_GROUP_NAME, azureVMName);
+        resource.groupLinks = new HashSet<>();
+        resource.groupLinks.add(resourceGroupLink);
 
         resource = TestUtils.doPost(host, resource, ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
@@ -392,13 +371,17 @@ public class AzureTestUtil {
     }
 
     public static ResourceGroupState createDefaultResourceGroupState(VerificationHost host,
-            String containerName, String parentLink, String resourceGroupType)
+            String resourceGroupName, String parentLink, ResourceGroupStateType resourceGroupType)
             throws Throwable {
+
         ResourceGroupState rGroupState = new ResourceGroupState();
-        rGroupState.id = "testStorCont-" + randomString(4);
-        rGroupState.name = containerName;
+
+        rGroupState.id = "testResGroup-" + randomString(4);
+        rGroupState.name = resourceGroupName;
+
         rGroupState.groupLinks = new HashSet<>();
-        rGroupState.groupLinks.add("testStorAcct-" + randomString(4));
+        rGroupState.groupLinks.add("testResGroup-" + randomString(4));
+
         rGroupState.customProperties = new HashMap<>();
         rGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK, parentLink);
         rGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
@@ -408,10 +391,13 @@ public class AzureTestUtil {
                 randomString(5));
         rGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_STATUS,
                 randomString(5));
-        rGroupState.customProperties.put(ComputeProperties.RESOURCE_TYPE_KEY, resourceGroupType);
+        rGroupState.customProperties.put(ComputeProperties.RESOURCE_TYPE_KEY,
+                resourceGroupType.name());
+
         ResourceGroupState rGroup = TestUtils.doPost(host, rGroupState,
                 ResourceGroupState.class,
                 UriUtils.buildUri(host, ResourceGroupService.FACTORY_LINK));
+
         return rGroup;
     }
 
@@ -435,6 +421,79 @@ public class AzureTestUtil {
         return dState;
     }
 
+    public static List<NetworkInterfaceState> createDefaultNicStates(VerificationHost host,
+            String networkRGLink,
+            String resourcePoolLink,
+            String computeHostAuthLink,
+            String vmName) throws Throwable {
+
+        // Create network state.
+        NetworkState networkState;
+        {
+            networkState = new NetworkState();
+
+            networkState.id = networkState.name = "vNet";
+            networkState.authCredentialsLink = computeHostAuthLink;
+            networkState.resourcePoolLink = resourcePoolLink;
+            networkState.subnetCIDR = AZURE_NETWORK_CIDR;
+            networkState.groupLinks = Collections.singleton(networkRGLink);
+            networkState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
+            networkState.instanceAdapterReference = UriUtils.buildUri(host,
+                    DEFAULT_INSTANCE_ADAPTER_REFERENCE);
+
+            networkState = TestUtils.doPost(host, networkState,
+                    NetworkState.class,
+                    UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
+        }
+
+        // Create NIC states.
+        List<NetworkInterfaceState> nics = new ArrayList<>();
+
+        for (int i = 0; i < NUMBER_OF_NICS; i++) {
+
+            // Create subnet state per NIC.
+            SubnetState subnetState;
+            {
+                subnetState = new SubnetState();
+
+                subnetState.id = subnetState.name = "subnet" + i;
+                subnetState.networkLink = networkState.documentSelfLink;
+                subnetState.subnetCIDR = AZURE_SUBNET_CIDR[i];
+
+                subnetState = TestUtils.doPost(host, subnetState,
+                        SubnetState.class,
+                        UriUtils.buildUri(host, SubnetService.FACTORY_LINK));
+            }
+
+            // Create NIC description.
+            NetworkInterfaceDescription nicDescription;
+            {
+                nicDescription = new NetworkInterfaceDescription();
+
+                nicDescription.id = nicDescription.name = "nicDesc" + i;
+                nicDescription.deviceIndex = i;
+                nicDescription.assignment = IpAssignment.DYNAMIC;
+
+                nicDescription = TestUtils.doPost(host, nicDescription,
+                        NetworkInterfaceDescription.class,
+                        UriUtils.buildUri(host, NetworkInterfaceDescriptionService.FACTORY_LINK));
+            }
+
+            NetworkInterfaceState nicState = new NetworkInterfaceState();
+
+            nicState.id = nicState.name = "nic" + i;
+            nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
+            nicState.subnetLink = subnetState.documentSelfLink;
+            nicState.networkLink = subnetState.networkLink;
+
+            nicState = TestUtils.doPost(host, nicState, NetworkInterfaceState.class,
+                    UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
+
+            nics.add(nicState);
+        }
+
+        return nics;
+    }
 
 
 }

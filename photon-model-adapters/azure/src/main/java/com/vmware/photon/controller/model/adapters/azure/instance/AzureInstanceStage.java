@@ -74,6 +74,11 @@ public enum AzureInstanceStage {
     GET_NIC_STATES,
 
     /**
+     * Stage where networks (vNet-subnet pair) are get.
+     */
+    GET_NETWORKS,
+
+    /**
      * Stage where networks (vNet-subnet pair) are created.
      */
     CREATE_NETWORKS,

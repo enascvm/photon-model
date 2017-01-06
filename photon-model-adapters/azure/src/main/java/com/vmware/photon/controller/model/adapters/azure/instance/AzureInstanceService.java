@@ -73,6 +73,7 @@ import com.microsoft.azure.management.network.NetworkManagementClient;
 import com.microsoft.azure.management.network.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.NetworkSecurityGroupsOperations;
 import com.microsoft.azure.management.network.PublicIPAddressesOperations;
+import com.microsoft.azure.management.network.SubnetsOperations;
 import com.microsoft.azure.management.network.VirtualNetworksOperations;
 import com.microsoft.azure.management.network.models.AddressSpace;
 import com.microsoft.azure.management.network.models.NetworkInterface;
@@ -205,7 +206,8 @@ public class AzureInstanceService extends StatelessService {
         }
 
         // Populate BaseAdapterContext and then continue with this state machine
-        ctx.populateContext(startingStage).whenComplete(handleAllocation(AzureInstanceStage.CLIENT));
+        ctx.populateContext(startingStage)
+                .whenComplete(handleAllocation(AzureInstanceStage.CLIENT));
     }
 
     /**
@@ -229,7 +231,8 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * {@code handleAllocation} version suitable for chaining to {@code DeferredResult.whenComplete}.
+     * {@code handleAllocation} version suitable for chaining to
+     * {@code DeferredResult.whenComplete}.
      */
     private BiConsumer<AzureInstanceContext, Throwable> handleAllocation(AzureInstanceStage next) {
         return (ctx, exc) -> {
@@ -285,7 +288,7 @@ public class AzureInstanceService extends StatelessService {
                 getVMDisks(ctx, AzureInstanceStage.INIT_RES_GROUP);
                 break;
             case INIT_RES_GROUP:
-                initResourceGroup(ctx, AzureInstanceStage.GET_DISK_OS_FAMILY);
+                createResourceGroup(ctx, AzureInstanceStage.GET_DISK_OS_FAMILY);
                 break;
             case GET_DISK_OS_FAMILY:
                 differentiateVMImages(ctx, AzureInstanceStage.INIT_STORAGE);
@@ -294,11 +297,16 @@ public class AzureInstanceService extends StatelessService {
                 initStorageAccount(ctx, AzureInstanceStage.GET_NIC_STATES);
                 break;
             case GET_NIC_STATES:
-                ctx.populateContext().whenComplete(handleAllocation(AzureInstanceStage.CREATE_NETWORKS));
+                ctx.populateContext()
+                        .whenComplete(handleAllocation(AzureInstanceStage.GET_NETWORKS));
                 break;
-            // Create Azure networks, PIPs and NSGs required by NICs
+            // Try to lookup Azure vNet-subnets that are referred by NIC states
+            case GET_NETWORKS:
+                lookupSubnets(ctx, AzureInstanceStage.CREATE_NETWORKS);
+                break;
+            // Create Azure networks, PIPs and NSGs referred by NIC states
             case CREATE_NETWORKS:
-                createNetworks(ctx, AzureInstanceStage.CREATE_PUBLIC_IPS);
+                createSubnetsIfNotExist(ctx, AzureInstanceStage.CREATE_PUBLIC_IPS);
                 break;
             case CREATE_PUBLIC_IPS:
                 createPublicIPs(ctx, AzureInstanceStage.CREATE_SECURITY_GROUPS);
@@ -309,6 +317,7 @@ public class AzureInstanceService extends StatelessService {
             case CREATE_NICS:
                 createNICs(ctx, AzureInstanceStage.CREATE);
                 break;
+            // Finally provision the VM
             case CREATE:
                 createVM(ctx, AzureInstanceStage.GET_PUBLIC_IP_ADDRESS);
                 break;
@@ -389,21 +398,14 @@ public class AzureInstanceService extends StatelessService {
             throw new IllegalArgumentException("Resource group name is required");
         }
 
-        logInfo("Deleting resource group with name [%s]", resourceGroupName);
+        String msg = "Deleting resource group [" + resourceGroupName + "] for [" + ctx.vmName + "] VM";
 
-        ResourceManagementClient client = getResourceManagementClient(ctx);
-
-        client.getResourceGroupsOperations().beginDeleteAsync(resourceGroupName,
-                new AzureAsyncCallback<Void>() {
+        getResourceManagementClient(ctx).getResourceGroupsOperations().beginDeleteAsync(
+                resourceGroupName,
+                new TransitionToCallback<Void>(ctx, AzureInstanceStage.FINISHED, msg) {
                     @Override
-                    public void onError(Throwable e) {
-                        handleError(ctx, e);
-                    }
-
-                    @Override
-                    public void onSuccess(ServiceResponse<Void> result) {
-                        logInfo("Successfully deleted resource group [%s]", resourceGroupName);
-                        handleAllocation(ctx, AzureInstanceStage.FINISHED);
+                    CompletionStage<Void> handleSuccess(Void resultBody) {
+                        return CompletableFuture.completedFuture((Void) null);
                     }
                 });
     }
@@ -487,29 +489,24 @@ public class AzureInstanceService extends StatelessService {
         cleanUpHttpClient(this, ctx.httpClient);
     }
 
-    private void initResourceGroup(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+    private void createResourceGroup(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+
         String resourceGroupName = getResourceGroupName(ctx);
 
-        logInfo("Creating resource group with name [%s]", resourceGroupName);
+        ResourceGroup resourceGroup = new ResourceGroup();
+        resourceGroup.setLocation(ctx.child.description.regionId);
 
-        ResourceGroup group = new ResourceGroup();
-        group.setLocation(ctx.child.description.regionId);
+        String msg = "Creating Azure Resource Group [" + resourceGroupName + "] for [" + ctx.vmName
+                + "] VM";
 
-        ResourceManagementClient client = getResourceManagementClient(ctx);
-
-        client.getResourceGroupsOperations().createOrUpdateAsync(resourceGroupName, group,
-                new AzureAsyncCallback<ResourceGroup>() {
+        getResourceManagementClient(ctx).getResourceGroupsOperations().createOrUpdateAsync(
+                resourceGroupName,
+                resourceGroup,
+                new TransitionToCallback<ResourceGroup>(ctx, nextStage, msg) {
                     @Override
-                    public void onError(Throwable e) {
-                        handleError(ctx, e);
-                    }
-
-                    @Override
-                    public void onSuccess(ServiceResponse<ResourceGroup> result) {
-                        logInfo("Successfully created resource group [%s]",
-                                result.getBody().getName());
-                        ctx.resourceGroup = result.getBody();
-                        handleAllocation(ctx, nextStage);
+                    CompletionStage<ResourceGroup> handleSuccess(ResourceGroup rg) {
+                        ctx.resourceGroup = rg;
+                        return CompletableFuture.completedFuture(rg);
                     }
                 });
     }
@@ -570,7 +567,8 @@ public class AzureInstanceService extends StatelessService {
 
                         Operation patchBootDiskOp = Operation
                                 .createPatch(
-                                        UriUtils.buildUri(getHost(), ctx.bootDisk.documentSelfLink))
+                                        UriUtils.buildUri(getHost(),
+                                                ctx.bootDisk.documentSelfLink))
                                 .setBody(ctx.bootDisk);
 
                         return sendWithDeferredResult(createStorageDescOp, StorageDescription.class)
@@ -585,7 +583,8 @@ public class AzureInstanceService extends StatelessService {
                                 .thenCompose((woid) -> sendWithDeferredResult(patchBootDiskOp))
                                 // Log boot disk patch success
                                 .thenRun(() -> {
-                                    logInfo("Updating boot disk [%s]: SUCCESS", ctx.bootDisk.name);
+                                    logInfo("Updating boot disk [%s]: SUCCESS",
+                                            ctx.bootDisk.name);
                                 })
                                 // Return original StorageAccount
                                 .thenApply((woid) -> sa)
@@ -615,31 +614,95 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
-    private void createNetworks(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+    private void lookupSubnets(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+
         if (ctx.nics.isEmpty()) {
             handleAllocation(ctx, nextStage);
             return;
         }
 
+        AzureCallContext callContext = AzureCallContext
+                .newBatchCallContext(ctx.nics.size())
+                // Getting an error from Azure if a Subnet does not exist is acceptable.
+                .withFailOnError(false);
+
+        SubnetsOperations azureClient = getNetworkManagementClient(ctx).getSubnetsOperations();
+
+        for (AzureNicContext nicCtx : ctx.nics) {
+
+            String msg = "Getting Azure Subnet ["
+                    + nicCtx.networkResourceGroupState.name + "\\"
+                    + nicCtx.networkState.name + "\\"
+                    + nicCtx.subnetState.name
+                    + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for [" + ctx.vmName
+                    + "] VM";
+
+            azureClient.getAsync(
+                    nicCtx.networkResourceGroupState.name,
+                    nicCtx.networkState.name,
+                    nicCtx.subnetState.name,
+                    null /* expand */,
+                    new TransitionToCallback<Subnet>(ctx, nextStage, callContext, msg) {
+                        @Override
+                        CompletionStage<Subnet> handleSuccess(Subnet subnet) {
+                            nicCtx.subnet = subnet;
+                            return CompletableFuture.completedFuture(subnet);
+                        }
+                    });
+        }
+    }
+
+    private void createSubnetsIfNotExist(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+        if (ctx.nics.isEmpty()) {
+            handleAllocation(ctx, nextStage);
+            return;
+        }
+
+        // Get NICs with not existing subnets
+        List<Subnet> subnetsToCreate = ctx.nics.stream()
+                .filter(nicCtx -> nicCtx.subnet == null)
+                .map(nicCtx -> newAzureSubnet(ctx, nicCtx))
+                .collect(Collectors.toList());
+
+        if (subnetsToCreate.isEmpty()) {
+            handleAllocation(ctx, nextStage);
+            return;
+        }
+
+        createSubnets(ctx, nextStage, subnetsToCreate);
+    }
+
+    private void createSubnets(
+            AzureInstanceContext ctx,
+            AzureInstanceStage nextStage,
+            List<Subnet> subnetsToCreate) {
+
+        // All subnets MUST be at the same vNet, so we select the Primary vNet.
+        final AzureNicContext primaryNic = ctx.getPrimaryNic();
+
+        final VirtualNetwork vNetToCreate = newAzureVirtualNetwork(
+                ctx, primaryNic, subnetsToCreate);
+
+        final String vNetToCreateName = primaryNic.networkState.name;
+
+        final String vNetToCreateRGName = primaryNic.networkResourceGroupState.name;
+
         VirtualNetworksOperations azureClient = getNetworkManagementClient(ctx)
                 .getVirtualNetworksOperations();
 
-        // NOTE: for now we create single vNet-Subnet per VM.
-        // NEXT: create vNet-Subnet OR use enumerated vNet-Subnet per NIC.
+        final String subnetNames = vNetToCreate.getSubnets().stream()
+                .map(Subnet::getName)
+                .collect(Collectors.joining(","));
 
-        final AzureNicContext primaryNic = ctx.getPrimaryNic();
-        final String vNetName = primaryNic.networkState.name;
-        final String subnetName = primaryNic.subnetState.name;
-
-        final VirtualNetwork vNet = newAzureVirtualNetwork(ctx, primaryNic);
-
-        String msg = "Creating Azure vNet-subnet [" + vNetName + ":" + subnetName + "] for ["
+        final String msg = "Creating Azure vNet-Subnet [v=" + vNetToCreateName + "; s="
+                + subnetNames
+                + "] for ["
                 + ctx.vmName + "] VM";
 
         azureClient.beginCreateOrUpdateAsync(
-                ctx.resourceGroup.getName(),
-                vNetName,
-                vNet,
+                vNetToCreateRGName,
+                vNetToCreateName,
+                vNetToCreate,
                 new ProvisioningCallback<VirtualNetwork>(ctx, nextStage, msg) {
 
                     @Override
@@ -650,37 +713,45 @@ public class AzureInstanceService extends StatelessService {
                     @Override
                     CompletionStage<VirtualNetwork> handleProvisioningSucceeded(
                             VirtualNetwork vNet) {
-                        Subnet subnet = vNet.getSubnets().stream()
-                                .filter(s -> s.getName().equals(subnetName)).findFirst().get();
-
-                        // Populate all NICs with same vNet-Subnet.
+                        // Populate NICs with Azure Subnet
                         for (AzureNicContext nicCtx : ctx.nics) {
-                            nicCtx.vNet = vNet;
-                            nicCtx.subnet = subnet;
+                            if (nicCtx.subnet == null) {
+                                nicCtx.subnet = vNet.getSubnets().stream()
+                                        .filter(subnet -> subnet.getName()
+                                                .equals(nicCtx.subnetState.name))
+                                        .findFirst().get();
+                            }
                         }
                         return CompletableFuture.completedFuture(vNet);
                     }
 
                     @Override
                     String getProvisioningState(VirtualNetwork vNet) {
-                        Subnet subnet = vNet.getSubnets().stream()
-                                .filter(s -> s.getName().equals(subnetName)).findFirst().get();
+                        // Return first NOT Succeeded state,
+                        // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
+                        String subnetPS = vNet.getSubnets().stream()
+                                .map(Subnet::getProvisioningState)
+                                // Get if any is NOT Succeeded...
+                                .filter(ps -> !PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(ps))
+                                // ...and return it.
+                                .findFirst()
+                                // Otherwise consider all are Succeeded
+                                .orElse(PROVISIONING_STATE_SUCCEEDED);
 
                         if (PROVISIONING_STATE_SUCCEEDED.equals(vNet.getProvisioningState())
-                                && PROVISIONING_STATE_SUCCEEDED
-                                        .equals(subnet.getProvisioningState())) {
+                                && PROVISIONING_STATE_SUCCEEDED.equals(subnetPS)) {
 
                             return PROVISIONING_STATE_SUCCEEDED;
                         }
-                        return vNet.getProvisioningState() + ":" + subnet.getProvisioningState();
+                        return vNet.getProvisioningState() + ":" + subnetPS;
                     }
 
                     @Override
                     Runnable checkProvisioningStateCall(
                             ServiceCallback<VirtualNetwork> checkProvisioningStateCallback) {
                         return () -> azureClient.getAsync(
-                                ctx.resourceGroup.getName(),
-                                vNetName,
+                                vNetToCreateRGName,
+                                vNetToCreateName,
                                 null /* expand */ ,
                                 checkProvisioningStateCallback);
                     }
@@ -688,9 +759,29 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * Converts Photon model constructs to underlying Azure VirtualNetwork-Subnet model.
+     * Converts Photon model constructs to underlying Azure VirtualNetwork model.
      */
     private VirtualNetwork newAzureVirtualNetwork(
+            AzureInstanceContext ctx,
+            AzureNicContext nicCtx,
+            List<Subnet> subnetsToCreate) {
+
+        VirtualNetwork vNet = new VirtualNetwork();
+        vNet.setLocation(ctx.resourceGroup.getLocation());
+
+        vNet.setAddressSpace(new AddressSpace());
+        vNet.getAddressSpace()
+                .setAddressPrefixes(Collections.singletonList(nicCtx.networkState.subnetCIDR));
+
+        vNet.setSubnets(subnetsToCreate);
+
+        return vNet;
+    }
+
+    /**
+     * Converts Photon model constructs to underlying Azure VirtualNetwork-Subnet model.
+     */
+    private Subnet newAzureSubnet(
             AzureInstanceContext ctx,
             AzureNicContext nicCtx) {
 
@@ -698,17 +789,7 @@ public class AzureInstanceService extends StatelessService {
         subnet.setName(nicCtx.subnetState.name);
         subnet.setAddressPrefix(nicCtx.subnetState.subnetCIDR);
 
-        VirtualNetwork vNet = new VirtualNetwork();
-        vNet.setLocation(ctx.resourceGroup.getLocation());
-
-        vNet.setAddressSpace(new AddressSpace());
-        vNet.getAddressSpace().setAddressPrefixes(new ArrayList<>());
-        vNet.getAddressSpace().getAddressPrefixes().add(nicCtx.networkState.subnetCIDR);
-
-        vNet.setSubnets(new ArrayList<>());
-        vNet.getSubnets().add(subnet);
-
-        return vNet;
+        return subnet;
     }
 
     private void createPublicIPs(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
@@ -871,8 +952,7 @@ public class AzureInstanceService extends StatelessService {
         }
 
         // Shared state between multi async calls {{
-        AtomicInteger numberOfCalls = new AtomicInteger(ctx.nics.size());
-        AtomicBoolean hasFailed = new AtomicBoolean(false);
+        AzureCallContext callContext = AzureCallContext.newBatchCallContext(ctx.nics.size());
         NetworkInterfacesOperations azureClient = getNetworkManagementClient(ctx)
                 .getNetworkInterfacesOperations();
         // }}
@@ -889,12 +969,12 @@ public class AzureInstanceService extends StatelessService {
                     ctx.resourceGroup.getName(),
                     nicName,
                     nic,
-                    new FailFastAzureAsyncCallback<NetworkInterface>(ctx, nextStage,
-                            numberOfCalls, hasFailed, msg) {
-
+                    new TransitionToCallback<NetworkInterface>(ctx, nextStage, callContext, msg) {
                         @Override
-                        protected void handleSuccess(NetworkInterface nic) {
+                        protected CompletionStage<NetworkInterface> handleSuccess(
+                                NetworkInterface nic) {
                             nicCtx.nic = nic;
+                            return CompletableFuture.completedFuture(nic);
                         }
                     });
         }
@@ -1588,114 +1668,121 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * Use this Azure callback in case of multiple async calls. It transitions to next stage upon
-     * FIRST error. Subsequent calls (either success or failure) are just ignored.
+     * The class represents the context of async calls(either single or batch) to Azure cloud.
+     *
+     * @see {@link TransitionToCallback}
      */
-    private abstract class FailFastAzureAsyncCallback<T> extends AzureAsyncCallback<T> {
+    static class AzureCallContext {
 
-        final AzureInstanceContext ctx;
-        final AzureInstanceStage nextStage;
+        static AzureCallContext newSingleCallContext() {
+            return new AzureCallContext(1);
+        }
 
+        static AzureCallContext newBatchCallContext(int numberOfCalls) {
+            return new AzureCallContext(numberOfCalls);
+        }
+
+        /**
+         * The number of calls associated with this context.
+         */
         final AtomicInteger numberOfCalls;
-        final AtomicBoolean hasAnyFailed;
-
-        final String msg;
-
-        FailFastAzureAsyncCallback(
-                AzureInstanceContext ctx,
-                AzureInstanceStage nextStage,
-                AtomicInteger numberOfCalls,
-                AtomicBoolean hasAnyFailed,
-                String message) {
-            this.ctx = ctx;
-            this.nextStage = nextStage;
-            this.numberOfCalls = numberOfCalls;
-            this.hasAnyFailed = hasAnyFailed;
-            this.msg = message;
-
-            logInfo(this.msg + ": STARTED");
-        }
-
-        @Override
-        public final void onError(Throwable e) {
-
-            e = new IllegalStateException(this.msg + ": FAILED", e);
-
-            if (this.hasAnyFailed.compareAndSet(false, true)) {
-                // Check whether this is the first failure and proceed to next stage.
-                // i.e. fail-fast on batch operations.
-                this.handleFailure(e);
-            } else {
-                // Any subsequent failure is just logged.
-                logSevere(e);
-            }
-        }
 
         /**
-         * Hook to be implemented by descendants to handle failed Azure call.
-         *
-         * <p>
-         * Default error handler delegates to
-         * {@link AzureInstanceService#handleError(AzureInstanceContext, Throwable)}.
+         * Flag indicating whether any call has failed.
          */
-        void handleFailure(Throwable e) {
-            AzureInstanceService.this.handleError(this.ctx, e);
-        }
-
-        @Override
-        public final void onSuccess(ServiceResponse<T> result) {
-            if (this.hasAnyFailed.get()) {
-                logInfo(this.msg + ": SUCCESS. Still batch calls has failed so skip this result.");
-                return;
-            }
-
-            logInfo(this.msg + ": SUCCESS");
-
-            handleSuccess(result.getBody());
-
-            if (this.numberOfCalls.decrementAndGet() == 0) {
-                // Check whether all calls have succeeded and proceed to next stage.
-                AzureInstanceService.this.handleAllocation(this.ctx, this.nextStage);
-            }
-        }
+        final AtomicBoolean hasAnyFailed = new AtomicBoolean(false);
 
         /**
-         * Core logic (implemented by descendants) handling successful Azure call.
-         *
-         * <p>
-         * The implementation should focus on consuming the response/result. It is responsibility of
-         * this class to handle transition to next stage as defined by
-         * {@link AzureInstanceService#handleAllocation(AzureInstanceContext, AzureInstanceStage)}.
+         * Flag indicating whether Azure error should be considered as exceptional. Default behavior
+         * is to fail on error.
          */
-        abstract void handleSuccess(T resultBody);
+        boolean failOnError = true;
 
+        private AzureCallContext(int numberOfCalls) {
+            this.numberOfCalls = new AtomicInteger(numberOfCalls);
+        }
+
+        AzureCallContext withFailOnError(boolean failOnError) {
+            this.failOnError = failOnError;
+            return this;
+        }
     }
 
     /**
-     * Use this Azure callback in case of single async call. It transitions to next stage upon
-     * success.
+     * Azure async callback implementation that transitions to the next stage of the
+     * AzureInstanceService state machine once over.
      */
     private abstract class TransitionToCallback<T> extends AzureAsyncCallback<T> {
 
         final AzureInstanceContext ctx;
+
+        /**
+         * The next stage of {@code AzureInstanceService} state machine to transition once over.
+         */
         final AzureInstanceStage nextStage;
 
+        /**
+         * The execution context of this call indicating whether it is executed single or in batch
+         * mode.
+         */
+        final AzureCallContext callCtx;
+
+        /**
+         * Informative message to log while executing this call.
+         */
         final String msg;
 
+        /**
+         * Use this callback in case of single Azure async call.
+         */
         TransitionToCallback(
                 AzureInstanceContext ctx,
                 AzureInstanceStage nextStage,
                 String message) {
+
+            this(ctx, nextStage, AzureCallContext.newSingleCallContext(), message);
+        }
+
+        /**
+         * Use this callback in case of multiple/batch Azure async calls. It transitions to next
+         * stage when ALL calls have succeeded or transitions exceptionally upon FIRST error. If
+         * latter subsequent calls (either success or failure) are just ignored.
+         */
+        TransitionToCallback(
+                AzureInstanceContext ctx,
+                AzureInstanceStage nextStage,
+                AzureCallContext azureCallContext,
+                String message) {
+
             this.ctx = ctx;
             this.nextStage = nextStage;
+            this.callCtx = azureCallContext;
             this.msg = message;
 
-            logInfo(this.msg + ": STARTED");
+            AzureInstanceService.this.logInfo(this.msg + ": STARTED");
         }
 
         @Override
         public final void onError(Throwable e) {
-            handleFailure(new IllegalStateException(this.msg + ": FAILED", e));
+
+            if (this.callCtx.failOnError) {
+
+                e = new IllegalStateException(this.msg + ": FAILED. Details: " + e.getMessage(), e);
+
+                if (this.callCtx.hasAnyFailed.compareAndSet(false, true)) {
+                    // Check whether this is the first failure and proceed to next stage.
+                    // i.e. fail-fast on batch operations.
+                    handleFailure(e);
+                } else {
+                    // Any subsequent failure is just logged.
+                    AzureInstanceService.this.logSevere(e);
+                }
+            } else {
+                AzureInstanceService.this.logFine("%s: SUCCESS with error. Details: %s",
+                        this.msg, e.getMessage());
+
+                transition();
+            }
         }
 
         /**
@@ -1711,7 +1798,14 @@ public class AzureInstanceService extends StatelessService {
 
         @Override
         public final void onSuccess(ServiceResponse<T> result) {
-            logInfo(this.msg + ": SUCCESS");
+
+            if (this.callCtx.hasAnyFailed.get()) {
+                AzureInstanceService.this.logInfo(
+                        this.msg + ": SUCCESS. Still batch calls have failed so SKIP this result.");
+                return;
+            }
+
+            AzureInstanceService.this.logInfo(this.msg + ": SUCCESS");
 
             // First delegate to descendants to process result body
             CompletionStage<T> handleSuccess = handleSuccess(result.getBody());
@@ -1737,11 +1831,14 @@ public class AzureInstanceService extends StatelessService {
         abstract CompletionStage<T> handleSuccess(T resultBody);
 
         /**
-         * Transition to the next stage of AzureInstanceService state machine once Azure call is
-         * complete.
+         * Transition to the next stage of AzureInstanceService state machine once all Azure calls
+         * are completed.
          */
-        private void transition() {
-            AzureInstanceService.this.handleAllocation(this.ctx, this.nextStage);
+        void transition() {
+            if (this.callCtx.numberOfCalls.decrementAndGet() == 0) {
+                // Check whether all calls have succeeded and proceed to next stage.
+                AzureInstanceService.this.handleAllocation(this.ctx, this.nextStage);
+            }
         }
     }
 

@@ -23,7 +23,6 @@ import com.microsoft.azure.management.network.models.NetworkInterface;
 import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
 import com.microsoft.azure.management.network.models.PublicIPAddress;
 import com.microsoft.azure.management.network.models.Subnet;
-import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.models.ResourceGroup;
 import com.microsoft.azure.management.storage.StorageManagementClient;
@@ -52,11 +51,7 @@ public class AzureInstanceContext extends
     public static class AzureNicContext extends BaseComputeInstanceContext.BaseNicContext {
 
         /**
-         * The Azure vNet this NIC is associated to. It is created by this service.
-         */
-        public VirtualNetwork vNet;
-        /**
-         * The Azure subnet this NIC is associated to. It is created by this service.
+         * The Azure subnet this NIC is associated to. It is either resolved from Azure or created by this service.
          */
         public Subnet subnet;
 

@@ -19,11 +19,14 @@ import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -31,25 +34,35 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.credentials.AzureEnvironment;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
+import com.microsoft.azure.management.network.NetworkManagementClient;
+import com.microsoft.azure.management.network.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.models.AddressSpace;
+import com.microsoft.azure.management.network.models.Subnet;
+import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
+import com.microsoft.azure.management.resources.models.ResourceGroup;
 
 import org.junit.After;
+import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
-import com.vmware.photon.controller.model.resources.ResourcePoolService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
-import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
@@ -58,6 +71,13 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 public class TestAzureProvisionTask extends BasicReusableHostTestCase {
+
+    // SHARED Compute Host / End-point between test runs. {{
+    private static ComputeState computeHost;
+    private static String resourcePoolLink;
+    private static String authLink;
+    // }}
+
     public String clientID = "clientID";
     public String clientKey = "clientKey";
     public String subscriptionId = "subscriptionId";
@@ -71,108 +91,104 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
     // fields that are used across method calls, stash them as private fields
     private ComputeManagementClient computeManagementClient;
     private ResourceManagementClient resourceManagementClient;
-    private String resourcePoolLink;
+    private NetworkManagementClient networkManagementClient;
+
     private ComputeState vmState;
-    private String authLink;
-    private int numberOfVMsToDelete = 0;
-    private int vmCount = 0;
+
+    @Rule
+    public TestName currentTestName = new TestName();
 
     @Before
     public void setUp() throws Exception {
         try {
-            this.azureVMName = this.azureVMName == null ? generateName(this.azureVMNamePrefix)
-                    : this.azureVMName;
-            PhotonModelServices.startServices(this.host);
-            PhotonModelTaskServices.startServices(this.host);
-            AzureAdapters.startServices(this.host);
+            /*
+             * Init Class-specific (shared between test runs) vars.
+             *
+             * NOTE: Ultimately this should go to @BeforeClass, BUT BasicReusableHostTestCase.HOST
+             * is not accessible.
+             */
+            if (computeHost == null) {
+                PhotonModelServices.startServices(this.host);
+                PhotonModelTaskServices.startServices(this.host);
+                AzureAdapters.startServices(this.host);
 
-            this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
+                this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
+                this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+                this.host.waitForServiceAvailable(AzureAdapters.LINKS);
+
+                // TODO: VSYM-992 - improve test/fix arbitrary timeout
+                this.host.setTimeoutSeconds(1200);
+
+                // Create a resource pool where the VM will be housed
+                ResourcePoolState outPool = createDefaultResourcePool(this.host);
+                resourcePoolLink = outPool.documentSelfLink;
+
+                AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
+                        this.host,
+                        this.clientID,
+                        this.clientKey,
+                        this.subscriptionId,
+                        this.tenantId);
+                authLink = authCredentials.documentSelfLink;
+
+                // create a compute host for the Azure
+                computeHost = createDefaultComputeHost(this.host, resourcePoolLink, authLink);
+            }
 
             if (!this.isMock) {
                 ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
-                        this.clientID,
-                        this.tenantId, this.clientKey, AzureEnvironment.AZURE);
+                        this.clientID, this.tenantId, this.clientKey, AzureEnvironment.AZURE);
+
                 this.computeManagementClient = new ComputeManagementClientImpl(credentials);
                 this.computeManagementClient.setSubscriptionId(this.subscriptionId);
 
                 this.resourceManagementClient = new ResourceManagementClientImpl(credentials);
                 this.resourceManagementClient.setSubscriptionId(this.subscriptionId);
 
+                this.networkManagementClient = new NetworkManagementClientImpl(credentials);
+                this.networkManagementClient.setSubscriptionId(this.subscriptionId);
             }
 
-            // TODO: VSYM-992 - improve test/fix arbitrary timeout
-            this.host.setTimeoutSeconds(1200);
+            this.azureVMName = generateName(this.azureVMNamePrefix);
+
         } catch (Throwable e) {
             throw new Exception(e);
         }
     }
 
     @After
-    public void tearDown() throws InterruptedException {
-        // try to delete the VMs
+    public void tearDown() throws Exception {
         if (this.vmState != null) {
             try {
-                deleteVMs(this.host, this.vmState.documentSelfLink, this.isMock, 1);
-            } catch (Throwable deleteEx) {
+                this.host.log(Level.INFO, "%s: Deleting [%s] VM",
+                        this.currentTestName.getMethodName(), this.vmState.name);
+
+                // ONLY computeHost MUST remain!
+                int computeStatesToRemain = 1;
+
+                deleteVMs(this.host, this.vmState.documentSelfLink, this.isMock,
+                        computeStatesToRemain);
+            } catch (Throwable deleteExc) {
                 // just log and move on
-                this.host.log(Level.WARNING, "Exception deleting VM - %s", deleteEx.getMessage());
+                this.host.log(Level.WARNING, "%s: Deleting [%s] VM: FAILED. Details: %s",
+                        this.currentTestName.getMethodName(), this.vmState.name,
+                        deleteExc.getMessage());
             }
         }
     }
 
-    // Creates a Azure instance via a provision task.
+    /**
+     * Creates a Azure instance via a provision task.
+     */
     @Test
     public void testProvision() throws Throwable {
-
-        // Create a resource pool where the VM will be housed
-        ResourcePoolService.ResourcePoolState outPool = createDefaultResourcePool(this.host);
-        this.resourcePoolLink = outPool.documentSelfLink;
-
-        AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(this.host, this.clientID,
-                this.clientKey,
-                this.subscriptionId, this.tenantId);
-
-        this.authLink = authCredentials.documentSelfLink;
-
-        // create a compute host for the Azure
-        ComputeState computeHost = createDefaultComputeHost(this.host, this.resourcePoolLink, this
-                .authLink);
 
         // create a Azure VM compute resoruce
         this.vmState = createDefaultVMResource(this.host, this.azureVMName,
                 computeHost.documentSelfLink,
-                this.resourcePoolLink, this.authLink);
+                resourcePoolLink, authLink);
 
-        // kick off a provision task to do the actual VM creation
-        ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();
-
-        provisionTask.computeLink = this.vmState.documentSelfLink;
-        provisionTask.isMockRequest = this.isMock;
-        provisionTask.taskSubStage = ProvisionComputeTaskState.SubStage.CREATING_HOST;
-
-        ProvisionComputeTaskState outTask = TestUtils.doPost(this.host,
-                provisionTask,
-                ProvisionComputeTaskState.class,
-                UriUtils.buildUri(this.host,
-                        ProvisionComputeTaskService.FACTORY_LINK));
-
-        this.host.waitForFinishedTask(ProvisionComputeTaskState.class, outTask.documentSelfLink);
-
-        this.numberOfVMsToDelete++;
-
-        if (this.isMock) {
-            deleteVMs(this.host, this.vmState.documentSelfLink, this.isMock, 1);
-            this.vmState = null;
-            ProvisioningUtils.queryComputeInstances(this.host, 1);
-            return;
-        }
-
-        // Host + created VM
-        this.vmCount = 1 + this.numberOfVMsToDelete;
-        // check that the VM has been created
-        ProvisioningUtils.queryComputeInstances(this.host, this.vmCount);
+        kickOffProvisionTask();
 
         assertVmNetworksConfiguration();
 
@@ -188,10 +204,90 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 return true;
             });
         }
+    }
 
-        // clean up
-        this.vmState = null;
-        this.resourceManagementClient.getResourceGroupsOperations().beginDelete(this.azureVMName);
+    /**
+     * Creates Azure instance that uses shared/existing Network via a provision task.
+     *
+     * It duplicates {@link #testProvision()} and just points to an external/shared Network.
+     */
+    @Test
+    public void testProvisionVMUsingSharedNetwork() throws Throwable {
+
+        // The test is only suitable for real (non-mocking env).
+        Assume.assumeFalse(this.isMock);
+
+        /*
+         * Create SHARED vNet-Subnets in a separate RG.
+         *
+         * NOTE1: The names of the vNet and Subnets MUST be equal to the ones set by
+         * AzureTestUtil.createDefaultNicStates.
+         *
+         * NOTE2: Since this is SHARED vNet it's not deleted after the test.
+         */
+        final ResourceGroup sharedNetworkRG;
+        {
+            sharedNetworkRG = new ResourceGroup();
+            sharedNetworkRG.setName("sharedNetworkRG");
+            sharedNetworkRG.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+            this.resourceManagementClient.getResourceGroupsOperations()
+                    .createOrUpdate(sharedNetworkRG.getName(), sharedNetworkRG);
+
+            VirtualNetwork vNet = new VirtualNetwork();
+            vNet.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+            vNet.setAddressSpace(new AddressSpace());
+            vNet.getAddressSpace().setAddressPrefixes(
+                    Collections.singletonList(AzureTestUtil.AZURE_NETWORK_CIDR));
+
+            vNet.setSubnets(new ArrayList<>());
+
+            for (int i = 0; i < AzureTestUtil.NUMBER_OF_NICS; i++) {
+                Subnet subnet = new Subnet();
+                subnet.setName(AzureTestUtil.AZURE_SUBNET_NAME + i);
+                subnet.setAddressPrefix(AzureTestUtil.AZURE_SUBNET_CIDR[i]);
+
+                vNet.getSubnets().add(subnet);
+            }
+
+            this.networkManagementClient.getVirtualNetworksOperations().createOrUpdate(
+                    sharedNetworkRG.getName(), AzureTestUtil.AZURE_NETWORK_NAME, vNet);
+        }
+
+        this.azureVMName += "-sharedNetwork";
+
+        ResourceGroupState networkRG = createDefaultResourceGroupState(
+                this.host, sharedNetworkRG.getName(), computeHost.documentSelfLink,
+                ResourceGroupStateType.AzureResourceGroup);
+
+        // create a Azure VM compute resoruce
+        this.vmState = createDefaultVMResource(this.host, this.azureVMName,
+                computeHost.documentSelfLink,
+                resourcePoolLink, authLink, networkRG.documentSelfLink);
+
+        kickOffProvisionTask();
+
+        assertVmNetworksConfiguration();
+    }
+
+    // kick off a provision task to do the actual VM creation
+    private void kickOffProvisionTask() throws Throwable {
+
+        ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();
+
+        provisionTask.computeLink = this.vmState.documentSelfLink;
+        provisionTask.isMockRequest = this.isMock;
+        provisionTask.taskSubStage = ProvisionComputeTaskState.SubStage.CREATING_HOST;
+
+        provisionTask = TestUtils.doPost(this.host,
+                provisionTask,
+                ProvisionComputeTaskState.class,
+                UriUtils.buildUri(this.host, ProvisionComputeTaskService.FACTORY_LINK));
+
+        this.host.waitForFinishedTask(
+                ProvisionComputeTaskState.class,
+                provisionTask.documentSelfLink);
     }
 
     private void issueStatsRequest(ComputeState vm) throws Throwable {
@@ -239,6 +335,14 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
     private void assertVmNetworksConfiguration() {
 
+        // This assert is only suitable for real (non-mocking env).
+        if (this.isMock) {
+            return;
+        }
+
+        this.host.log(Level.INFO, "%s: Assert network configuration for [%s] VM",
+                this.currentTestName.getMethodName(), this.vmState.name);
+
         ComputeState vm = this.host.getServiceState(null,
                 ComputeState.class,
                 UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
@@ -251,7 +355,8 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
         assertNotNull("Primary NIC public IP should be set.", primaryNicState.address);
 
-        assertEquals("VM address should be the same as primary NIC public IP.", vm.address, primaryNicState.address);
+        assertEquals("VM address should be the same as primary NIC public IP.", vm.address,
+                primaryNicState.address);
 
         for (int i = 1; i < vm.networkInterfaceLinks.size(); i++) {
             NetworkInterfaceState nonPrimaryNicState = this.host.getServiceState(null,
