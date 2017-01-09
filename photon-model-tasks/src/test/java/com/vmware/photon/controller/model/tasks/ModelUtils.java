@@ -114,6 +114,7 @@ public class ModelUtils {
         nis.name = name;
         nis.documentSelfLink = nis.id;
         nis.address = "10.0.0.0";
+        nis.subnetLink = "/resources/subnet/subnet9";
 
         NetworkInterfaceState returnState = test.postServiceSynchronously(
                 NetworkInterfaceService.FACTORY_LINK, nis, NetworkInterfaceState.class);

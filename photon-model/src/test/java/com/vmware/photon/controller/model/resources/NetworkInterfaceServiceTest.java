@@ -68,6 +68,7 @@ public class NetworkInterfaceServiceTest extends Suite {
         networkInterfaceState.address = "9.9.9.9";
         networkInterfaceState.firewallLinks = Collections.singletonList("/resources/firewall/fw9");
         networkInterfaceState.networkInterfaceDescriptionLink = "/resources/nicDesc/nicDesc9";
+        networkInterfaceState.subnetLink = "/resources/subnet/subnet9";
 
         return networkInterfaceState;
     }
@@ -185,6 +186,7 @@ public class NetworkInterfaceServiceTest extends Suite {
             NetworkInterfaceService.NetworkInterfaceState startState = buildValidStartState();
             startState.address = null;
             startState.networkLink = null;
+            startState.subnetLink = null;
             postServiceSynchronously(
                     NetworkInterfaceService.FACTORY_LINK,
                     startState,

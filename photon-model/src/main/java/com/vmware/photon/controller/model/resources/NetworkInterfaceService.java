@@ -212,10 +212,9 @@ public class NetworkInterfaceService extends StatefulService {
                     state.address)) {
                 throw new IllegalArgumentException("IP address is invalid");
             }
-
-        } else if (state.networkLink == null) {
+        } else if (state.networkLink == null && state.subnetLink == null) {
             throw new IllegalArgumentException(
-                    "either IP or networkLink must be set");
+                    "either subnetLink,networkLink or IP address must be set");
         }
     }
 }
