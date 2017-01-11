@@ -31,6 +31,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,8 +42,17 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.microsoft.azure.CloudException;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.models.VirtualMachine;
+import com.microsoft.azure.management.network.NetworkManagementClient;
+import com.microsoft.azure.management.network.models.PublicIPAddress;
+import com.microsoft.azure.management.network.models.SubResource;
+import com.microsoft.azure.management.network.models.Subnet;
+import com.microsoft.azure.management.network.models.VirtualNetworkGateway;
+import com.microsoft.azure.management.network.models.VirtualNetworkGatewayIPConfiguration;
+import com.microsoft.azure.management.network.models.VirtualNetworkGatewaySku;
+import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -102,18 +112,35 @@ public class AzureTestUtil {
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "storage";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_RAGRS";
 
+    // If you change the number of NICs, please do so with the CIDRs!
     public static final int NUMBER_OF_NICS = 2;
     public static final String AZURE_NETWORK_NAME = "vNet";
     public static final String AZURE_SECURITY_GROUP_NAME = "NSG-name";
     public static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
     public static final String AZURE_SUBNET_NAME = "subnet";
+
+    // As prerequisite Azure Gateway requires subnet named "GatewaySubnet".
+    public static final String AZURE_GATEWAY_SUBNET_NAME = "GatewaySubnet";
+
     public static final String[] AZURE_SUBNET_CIDR;
 
+    // Split the address space among the subnets attached to NICs and Gateway
+    // The first [number of NICs] Subnet CIDRs are reserved for the NICs and the last one for the
+    // Gateway.
     static {
-        AZURE_SUBNET_CIDR = new String[NUMBER_OF_NICS];
-        AZURE_SUBNET_CIDR[0] = "172.16.0.0/17";
-        AZURE_SUBNET_CIDR[1] = "172.16.128.0/17";
+        AZURE_SUBNET_CIDR = new String[NUMBER_OF_NICS + 1];
+        AZURE_SUBNET_CIDR[0] = "172.16.0.0/18";
+        AZURE_SUBNET_CIDR[1] = "172.16.64.0/18";
+        AZURE_SUBNET_CIDR[2] = "172.16.128.0/18";
     }
+
+    public static final String AZURE_GATEWAY_NAME = "gateway";
+    public static final String AZURE_GATEWAY_IP_CONFIGURATION_NAME = "gateway-ipconfig";
+    public static final String AZURE_GATEWAY_PUBLIC_IP_NAME = "gateway-pip";
+    public static final String AZURE_GATEWAY_IP_ALLOCATION_METHOD = "Dynamic";
+    public static final String AZURE_GATEWAY_SKU = "Standard";
+    public static final String AZURE_GATEWAY_TYPE = "Vpn";
+    public static final String AZURE_GATEWAY_VPN_TYPE = "RouteBased";
 
     public static final String DEFAULT_OS_DISK_CACHING = "None";
 
@@ -313,10 +340,10 @@ public class AzureTestUtil {
 
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
-                 host, resourcePoolLink, computeHostAuthLink, networkRGLink)
-                        .stream()
-                        .map(nic -> nic.documentSelfLink)
-                        .collect(Collectors.toList());
+                host, resourcePoolLink, computeHostAuthLink, networkRGLink)
+                .stream()
+                .map(nic -> nic.documentSelfLink)
+                .collect(Collectors.toList());
 
         // Finally create the compute resource state to provision using all constructs above.
         ComputeState resource = new ComputeState();
@@ -442,7 +469,6 @@ public class AzureTestUtil {
         NetworkState networkState;
         {
             networkState = new NetworkState();
-
             networkState.id = AZURE_NETWORK_NAME;
             networkState.name = AZURE_NETWORK_NAME;
             networkState.subnetCIDR = AZURE_NETWORK_CIDR;
@@ -556,5 +582,78 @@ public class AzureTestUtil {
         }
 
         return nics;
+    }
+
+    /**
+     * Adds Gateway to Virtual Network in Azure
+     */
+    public static void addAzureGatewayToVirtualNetwork(NetworkManagementClient
+            networkManagementClient, String resourceGroupName, String azureNetworkName)
+            throws CloudException, IOException, InterruptedException {
+
+        // create Gateway Subnet
+        Subnet gatewaySubnetParams = new Subnet();
+        gatewaySubnetParams.setName(AZURE_GATEWAY_SUBNET_NAME);
+        gatewaySubnetParams.setAddressPrefix(AZURE_SUBNET_CIDR[NUMBER_OF_NICS]);
+        Subnet gatewaySubnet = networkManagementClient
+                .getSubnetsOperations()
+                .createOrUpdate(resourceGroupName, azureNetworkName,
+                        AZURE_GATEWAY_SUBNET_NAME,
+                        gatewaySubnetParams).getBody();
+
+        // create Public IP
+        PublicIPAddress publicIPAddressParams = new PublicIPAddress();
+        publicIPAddressParams.setPublicIPAllocationMethod(AZURE_GATEWAY_IP_ALLOCATION_METHOD);
+        publicIPAddressParams.setLocation(AZURE_RESOURCE_GROUP_LOCATION);
+
+        PublicIPAddress publicIPAddress = networkManagementClient
+                .getPublicIPAddressesOperations()
+                .createOrUpdate(resourceGroupName, AZURE_GATEWAY_PUBLIC_IP_NAME,
+                        publicIPAddressParams).getBody();
+
+        SubResource publicIPSubResource = new SubResource();
+        publicIPSubResource.setId(publicIPAddress.getId());
+
+        // create IP Configuration
+        VirtualNetworkGatewayIPConfiguration ipConfiguration = new
+                VirtualNetworkGatewayIPConfiguration();
+        ipConfiguration.setName(AZURE_GATEWAY_IP_CONFIGURATION_NAME);
+        ipConfiguration.setSubnet(gatewaySubnet);
+        ipConfiguration.setPrivateIPAllocationMethod(AZURE_GATEWAY_IP_ALLOCATION_METHOD);
+
+        ipConfiguration.setPublicIPAddress(publicIPSubResource);
+
+        // create Virtual Network Gateway
+        VirtualNetworkGateway virtualNetworkGateway = new VirtualNetworkGateway();
+        virtualNetworkGateway.setGatewayType(AZURE_GATEWAY_TYPE);
+        virtualNetworkGateway.setVpnType(AZURE_GATEWAY_VPN_TYPE);
+        VirtualNetworkGatewaySku vNetGatewaySku = new VirtualNetworkGatewaySku();
+        vNetGatewaySku.setName(AZURE_GATEWAY_SKU);
+        vNetGatewaySku.setTier(AZURE_GATEWAY_SKU);
+        vNetGatewaySku.setCapacity(2);
+        virtualNetworkGateway.setSku(vNetGatewaySku);
+        virtualNetworkGateway.setLocation(AZURE_RESOURCE_GROUP_LOCATION);
+
+        List<VirtualNetworkGatewayIPConfiguration> ipConfigurations = new ArrayList<>();
+        ipConfigurations.add(ipConfiguration);
+        virtualNetworkGateway.setIpConfigurations(ipConfigurations);
+
+        // Call the async variant because the virtual network gateway provisioning depends on
+        // the public IP address assignment which is time-consuming operation
+        networkManagementClient.getVirtualNetworkGatewaysOperations().createOrUpdateAsync(
+                resourceGroupName, AZURE_GATEWAY_NAME, virtualNetworkGateway, new
+                        ServiceCallback<VirtualNetworkGateway>() {
+                            @Override
+                            public void failure(Throwable throwable) {
+                                throw new RuntimeException(
+                                        "Error creating Azure Virtual Network Gateway.");
+                            }
+
+                            @Override
+                            public void success(
+                                    ServiceResponse<VirtualNetworkGateway> serviceResponse) {
+
+                            }
+                        });
     }
 }

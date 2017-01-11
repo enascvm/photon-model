@@ -13,12 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model.network;
 
-import java.util.List;
-
 /**
- * Describes properties of a subnet.
+ * Describes IP Configuration that holds the ID of the Virtual Network Gateway attached to
+ * specific Virtual Network.
  */
-public class SubnetProperties {
-    public String addressPrefix;
-    public List<IPConfiguration> ipConfigurations;
+public class IPConfiguration {
+    public String id;
 }

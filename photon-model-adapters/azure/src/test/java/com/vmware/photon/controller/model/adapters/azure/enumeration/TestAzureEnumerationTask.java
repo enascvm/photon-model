@@ -14,8 +14,13 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_GATEWAY_SUBNET_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_NETWORK_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.addAzureGatewayToVirtualNetwork;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultDiskState;
@@ -31,15 +36,19 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.photon.controller.model.tasks.ModelUtils.createSecurityGroup;
+import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages.waitToComplete;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.credentials.AzureEnvironment;
@@ -67,6 +76,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
@@ -82,6 +92,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
@@ -89,11 +100,13 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryForReferrers;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
@@ -102,12 +115,14 @@ import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCo
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 
 import com.vmware.xenon.common.BasicReusableHostTestCase;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -288,6 +303,12 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         this.host.waitForFinishedTask(ProvisionComputeTaskState.class, outTask.documentSelfLink);
 
+        // Add Gateway to vNet
+        if (!this.isMock) {
+            addAzureGatewayToVirtualNetwork(this.networkManagementClient, this.azureVMName,
+                    AZURE_NETWORK_NAME);
+        }
+
         // Check resources have been created
         // expected VM count = 2 (1 compute host instance + 1 vm compute state)
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 2,
@@ -348,7 +369,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_BLOBS_COUNT + 1,
                 DiskService.FACTORY_LINK, true);
-        // 1 network per each stale vm resource + 1 network for original vm conpute state.
+        // 1 network per each stale vm resource + 1 network for original vm compute state.
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_VM_RESOURCES_COUNT + 1,
                 NetworkService.FACTORY_LINK, true);
@@ -404,11 +425,14 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             if (!document.documentSelfLink.equals(this.computeHost.documentSelfLink)
                     && !document.documentSelfLink.equals(this.vmState.documentSelfLink)
                     && document.id.toLowerCase()
-                            .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
+                    .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
                 this.enumeratedComputeLink = document.documentSelfLink;
                 break;
             }
         }
+
+        // Post enumeration validate Gateway information is attached in NetworkState custom property
+        validateVirtualNetworkGateways();
 
         try {
             // Test stats for the VM that was just enumerated from Azure.
@@ -677,6 +701,62 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         networks.forEach(virtualNetwork -> subnetCount[0] += virtualNetwork.getSubnets().size());
 
         return subnetCount[0];
+    }
+
+    /**
+     * Validates that the Gateway information discovered from Azure has been propagated to the
+     * NetworkState custom properties.
+     *
+     * @throws Throwable
+     */
+    private void validateVirtualNetworkGateways() throws Throwable {
+        if (this.isMock) {
+            return;
+        }
+
+        //Query all network states in the system
+        Map<String, NetworkState> networkStatesMap =
+                ProvisioningUtils.<NetworkState>getResourceStates(this.host, NetworkService
+                        .FACTORY_LINK, NetworkState.class);
+
+        networkStatesMap.values().stream().forEach(networkState -> {
+            List<SubnetState> subnetStates = getSubnetStates(this.host, networkState);
+            assertFalse(subnetStates.isEmpty());
+
+            if (networkState.name.contains(AZURE_NETWORK_NAME)) {
+                Map<String, SubnetState> subnetStatesMap =
+                        subnetStates.stream().collect(Collectors.toMap(subnetState -> subnetState
+                                .name, subnetState -> subnetState));
+
+                if (subnetStatesMap.containsKey(AZURE_GATEWAY_SUBNET_NAME)) {
+                    assertNotNull(
+                            networkState.customProperties.get(ComputeProperties
+                                    .FIELD_VIRTUAL_GATEWAY));
+                }
+            }
+        });
+    }
+
+    /**
+     * Get all SubnetStates within passed NetworkState. In other words, get all subnet states that
+     * refer the network state passed.
+     */
+    // TODO : Duplicated from AWS TestUtils. Please advice where to put common test utils
+    public static List<SubnetState> getSubnetStates(
+            VerificationHost host,
+            NetworkState networkState) {
+
+        QueryForReferrers<SubnetState> querySubnetStatesReferrers = new QueryForReferrers<>(
+                host,
+                networkState.documentSelfLink,
+                SubnetState.class,
+                SubnetState.FIELD_NAME_NETWORK_LINK,
+                Collections.emptyList());
+
+        DeferredResult<List<SubnetState>> subnetDR =
+                querySubnetStatesReferrers.collectDocuments(Collectors.toList());
+
+        return waitToComplete(subnetDR);
     }
 
     private StorageManagementClient getStorageManagementClient() {

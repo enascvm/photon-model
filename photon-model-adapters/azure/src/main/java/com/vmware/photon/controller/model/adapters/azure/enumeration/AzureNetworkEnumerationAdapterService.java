@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -565,7 +566,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         return;
                     }
 
-                    logFine("Found %d matching network statse for Azure virtual networks.",
+                    logFine("Found %d matching network states for Azure virtual networks.",
                             queryTask.results.documentCount);
 
                     // If there are no matches, there is nothing to update.
@@ -728,8 +729,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
             // Process successful operations.
             ops.values().stream()
-                    .filter(operation -> failures != null && !failures.containsKey(operation.getId()))
-                    .filter(operation -> operation.getStatusCode() != Operation.STATUS_CODE_NOT_MODIFIED)
+                    .filter(operation -> failures != null && !failures
+                            .containsKey(operation.getId()))
+                    .filter(operation -> operation.getStatusCode()
+                            != Operation.STATUS_CODE_NOT_MODIFIED)
                     .forEach(operation -> {
                         SubnetState subnetState = operation.getBody(SubnetState.class);
                         context.subnets.get(subnetState.id).subnetState = subnetState;
@@ -777,6 +780,15 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
             // TODO: Get the first address prefix for now.
             resultNetworkState.subnetCIDR = addressSpace.addressPrefixes.get(0);
+        }
+
+        // Add gateway as custom property in case gateway is defined
+        String gatewayId = AzureUtils.getVirtualNetworkGatewayId(azureVirtualNetwork);
+        if (gatewayId != null) {
+            resultNetworkState.customProperties = Collections.singletonMap(ComputeProperties
+                            .FIELD_VIRTUAL_GATEWAY,
+                    gatewayId);
+            logInfo("Added Gateway %s for Network State %s.", gatewayId, resultNetworkState.name);
         }
 
         // TODO: There is no Azure Network Adapter Service. Add a default reference since this is

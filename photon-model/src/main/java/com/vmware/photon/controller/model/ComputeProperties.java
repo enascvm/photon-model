@@ -61,6 +61,8 @@ public class ComputeProperties {
      */
     public static final String FIELD_COMPUTE_HOST_LINK = "computeHostLink";
 
+    public static final String FIELD_VIRTUAL_GATEWAY = "__virtualGateway";
+
     public enum OSType {
         WINDOWS, LINUX;
     }

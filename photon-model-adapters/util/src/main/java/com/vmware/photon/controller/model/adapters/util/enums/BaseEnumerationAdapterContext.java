@@ -210,6 +210,10 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     protected DeferredResult<T> queryLocalStates(T context) {
         this.service.logInfo("Query Resource Group States from local document store.");
 
+        if (context.remoteResources == null || context.remoteResources.isEmpty()) {
+            return DeferredResult.completed(context);
+        }
+
         Query query = Query.Builder.create()
                 .addKindFieldClause(this.localStateClass)
                 .addInClause(ResourceState.FIELD_NAME_ID, context.remoteResources.keySet())
