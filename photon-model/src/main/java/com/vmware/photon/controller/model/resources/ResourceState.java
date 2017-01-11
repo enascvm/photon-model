@@ -45,14 +45,14 @@ public class ResourceState extends ServiceDocument {
      * Name of the resource instance
      */
     @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-    @PropertyOptions(indexing = PropertyIndexingOption.SORT)
+    @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.SORT })
     public String name;
 
     /**
      * Custom property bag that can be used to store disk specific properties.
      */
     @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-    @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND,
+    @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.EXPAND,
             PropertyIndexingOption.FIXED_ITEM_NAME })
     public Map<String, String> customProperties;
 

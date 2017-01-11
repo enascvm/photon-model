@@ -42,7 +42,7 @@ public class EndpointService extends StatefulService {
     public static class EndpointState extends ResourceState {
 
         @Documentation(description = "Endpoint type of the endpoint instance,e.g. aws,azure,...")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, REQUIRED })
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, REQUIRED }, indexing = PropertyIndexingOption.CASE_INSENSITIVE)
         public String endpointType;
 
         @Documentation(description = "The link to the credentials to authenticate against this endpoint.")
@@ -64,6 +64,7 @@ public class EndpointService extends StatefulService {
         @Documentation(description = "Endpoint specfic properties. The specific endpoint adapter will extract "
                 + "them and enhance the linked Credentials,Compute and ComputeDescription.")
         @PropertyOptions(usage = { AUTO_MERGE_IF_NOT_NULL }, indexing = {
+                PropertyIndexingOption.CASE_INSENSITIVE,
                 PropertyIndexingOption.EXPAND,
                 PropertyIndexingOption.FIXED_ITEM_NAME })
         public Map<String, String> endpointProperties;

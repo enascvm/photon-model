@@ -28,6 +28,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
 import com.vmware.xenon.common.UriUtils;
@@ -115,6 +116,7 @@ public class ComputeService extends StatefulService {
         /**
          * Ip address of this compute instance.
          */
+        @PropertyOptions(indexing = PropertyIndexingOption.CASE_INSENSITIVE)
         public String address;
 
         /**
