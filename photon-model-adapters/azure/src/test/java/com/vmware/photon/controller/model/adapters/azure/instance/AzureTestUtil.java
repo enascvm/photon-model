@@ -307,9 +307,11 @@ public class AzureTestUtil {
         vmDisks.add(UriUtils.buildUriPath(DiskService.FACTORY_LINK, rootDisk.id));
 
         // Create NICs
-        List<String> nicLinks = createDefaultNicStates(host, networkRGLink, resourcePoolLink,
-                computeHostAuthLink, azureVMName)
-                        .stream().map(nic -> nic.documentSelfLink).collect(Collectors.toList());
+        List<String> nicLinks = createDefaultNicStates(
+                 host, resourcePoolLink, computeHostAuthLink, networkRGLink)
+                        .stream()
+                        .map(nic -> nic.documentSelfLink)
+                        .collect(Collectors.toList());
 
         // Finally create the compute resource state to provision using all constructs above.
         ComputeState resource = new ComputeState();
@@ -421,21 +423,26 @@ public class AzureTestUtil {
         return dState;
     }
 
-    public static List<NetworkInterfaceState> createDefaultNicStates(VerificationHost host,
-            String networkRGLink,
+    /*
+     * NOTE: It is highly recommended to keep this method in sync with its AWS counterpart:
+     * TestAWSSetupUtils.createAWSNicStates
+     */
+    public static List<NetworkInterfaceState> createDefaultNicStates(
+            VerificationHost host,
             String resourcePoolLink,
-            String computeHostAuthLink,
-            String vmName) throws Throwable {
+            String authCredentialsLink,
+            String networkRGLink) throws Throwable {
 
         // Create network state.
         NetworkState networkState;
         {
             networkState = new NetworkState();
 
-            networkState.id = networkState.name = "vNet";
-            networkState.authCredentialsLink = computeHostAuthLink;
-            networkState.resourcePoolLink = resourcePoolLink;
+            networkState.id = AZURE_NETWORK_NAME;
+            networkState.name = AZURE_NETWORK_NAME;
             networkState.subnetCIDR = AZURE_NETWORK_CIDR;
+            networkState.authCredentialsLink = authCredentialsLink;
+            networkState.resourcePoolLink = resourcePoolLink;
             networkState.groupLinks = Collections.singleton(networkRGLink);
             networkState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
@@ -456,7 +463,8 @@ public class AzureTestUtil {
             {
                 subnetState = new SubnetState();
 
-                subnetState.id = subnetState.name = "subnet" + i;
+                subnetState.id = AZURE_SUBNET_NAME + i;
+                subnetState.name = AZURE_SUBNET_NAME + i;
                 subnetState.networkLink = networkState.documentSelfLink;
                 subnetState.subnetCIDR = AZURE_SUBNET_CIDR[i];
 
@@ -470,7 +478,8 @@ public class AzureTestUtil {
             {
                 nicDescription = new NetworkInterfaceDescription();
 
-                nicDescription.id = nicDescription.name = "nicDesc" + i;
+                nicDescription.id = "nicDesc" + i;
+                nicDescription.name = "nicDesc" + i;
                 nicDescription.deviceIndex = i;
                 nicDescription.assignment = IpAssignment.DYNAMIC;
 
@@ -481,12 +490,19 @@ public class AzureTestUtil {
 
             NetworkInterfaceState nicState = new NetworkInterfaceState();
 
-            nicState.id = nicState.name = "nic" + i;
+            nicState.id = "nic" + i;
+            nicState.name = "nic" + i;
+            nicState.deviceIndex = nicDescription.deviceIndex;
+
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
             nicState.subnetLink = subnetState.documentSelfLink;
             nicState.networkLink = subnetState.networkLink;
 
-            nicState = TestUtils.doPost(host, nicState, NetworkInterfaceState.class,
+            // For now empty for completeness. To be changed in next CL.
+            nicState.firewallLinks = new ArrayList<>();
+
+            nicState = TestUtils.doPost(host, nicState,
+                    NetworkInterfaceState.class,
                     UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
 
             nics.add(nicState);

@@ -51,7 +51,7 @@ public class AzureInstanceContext extends
     public static class AzureNicContext extends BaseComputeInstanceContext.BaseNicContext {
 
         /**
-         * The Azure subnet this NIC is associated to. It is either resolved from Azure or created by this service.
+         * The Azure subnet this NIC is associated to. It is either looked up from Azure or created by this service.
          */
         public Subnet subnet;
 

@@ -14,9 +14,13 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.MULTI_NIC_SPECS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.SINGLE_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
@@ -38,20 +42,23 @@ import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.Tag;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
-import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.BaseLineState;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
@@ -61,7 +68,6 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -92,6 +98,9 @@ public class TestAWSProvisionTask {
     private AmazonEC2AsyncClient client;
     // the default collection period is 5 mins; set a value that spans 2 periods
     public int timeElapsedSinceLastCollectionInMinutes = 11;
+
+    @Rule
+    public TestName currentTestName = new TestName();
 
     @Before
     public void setUp() throws Exception {
@@ -156,7 +165,9 @@ public class TestAWSProvisionTask {
         // create a AWS VM compute resoruce
 
         this.vmState = createAWSVMResource(this.host, outComputeHost.documentSelfLink,
-                outPool.documentSelfLink, this.getClass(), null);
+                outPool.documentSelfLink, this.getClass(),
+                this.currentTestName.getMethodName() + "_vm1",
+                null /* tagLinks */, SINGLE_NIC_SPEC);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
@@ -169,22 +180,27 @@ public class TestAWSProvisionTask {
         provisionTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                 + TimeUnit.MINUTES.toMicros(AWS_VM_REQUEST_TIMEOUT_MINUTES);
 
-        ProvisionComputeTaskService.ProvisionComputeTaskState outTask = TestUtils.doPost(this.host,
+        provisionTask = TestUtils.doPost(this.host,
                 provisionTask,
                 ProvisionComputeTaskState.class,
-                UriUtils.buildUri(this.host,
-                        ProvisionComputeTaskService.FACTORY_LINK));
+                UriUtils.buildUri(this.host, ProvisionComputeTaskService.FACTORY_LINK));
 
-        this.host.waitForFinishedTask(ProvisionComputeTaskState.class, outTask.documentSelfLink);
+        this.host.waitForFinishedTask(ProvisionComputeTaskState.class,
+                provisionTask.documentSelfLink);
 
         // check that the VM has been created
         ProvisioningUtils.queryComputeInstances(this.host, 2);
 
         if (!this.isMock) {
             ComputeState compute = getCompute(this.host, this.vmState.documentSelfLink);
+
             List<Instance> instances = getAwsInstancesByIds(this.client, this.host,
                     Collections.singletonList(compute.id));
-            assertTags(Collections.emptySet(), instances.get(0), this.vmState.name);
+            Instance instance = instances.get(0);
+
+            assertTags(Collections.emptySet(), instance, this.vmState.name);
+
+            assertVmNetworksConfiguration(instance);
         }
 
         this.host.setTimeoutSeconds(600);
@@ -250,11 +266,12 @@ public class TestAWSProvisionTask {
                 .collect(Collectors.toSet());
         this.vmState = TestAWSSetupUtils.createAWSVMResource(this.host,
                 outComputeHost.documentSelfLink,
-                outPool.documentSelfLink, this.getClass(), tagLinks);
+                outPool.documentSelfLink, this.getClass(),
+                this.currentTestName.getMethodName() + "_vm2",
+                tagLinks, MULTI_NIC_SPECS);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
 
-        BaseLineState remoteStateBefore = null;
         if (!this.isMock) {
             ComputeState compute = getCompute(this.host, this.vmState.documentSelfLink);
 
@@ -262,12 +279,10 @@ public class TestAWSProvisionTask {
                     Collections.singletonList(compute.id));
             assertTags(tags, instances.get(0), this.vmState.name);
 
-            assertEquals("VM should have the specified number of NICs assigned",
-                    TestAWSSetupUtils.NUMBER_OF_NICS, instances.get(0).getNetworkInterfaces()
-                            .size());
+            assertVmNetworksConfiguration(instances.get(0));
 
             // reach out to AWS and get the current state
-            remoteStateBefore = TestAWSSetupUtils
+            TestAWSSetupUtils
                     .getBaseLineInstanceCount(this.host, this.client, null);
         }
 
@@ -275,7 +290,7 @@ public class TestAWSProvisionTask {
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host, true);
         if (!this.isMock) {
             try {
-                BaseLineState remoteStateAfter = TestAWSSetupUtils
+                TestAWSSetupUtils
                         .getBaseLineInstanceCount(this.host, this.client, null);
 
             } finally {
@@ -283,6 +298,55 @@ public class TestAWSProvisionTask {
             }
         }
         this.vmState = null;
+    }
+
+    private void assertVmNetworksConfiguration(Instance awsInstance) {
+
+        // This assert is only suitable for real (non-mocking env).
+        if (this.isMock) {
+            return;
+        }
+
+        this.host.log(Level.INFO, "%s: Assert network configuration for [%s] VM",
+                this.currentTestName.getMethodName(), this.vmState.name);
+
+        ComputeState vm = this.host.getServiceState(null,
+                ComputeState.class,
+                UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+
+        if (vm.networkInterfaceLinks.size() == 1) {
+            assertNotNull(
+                    "ComputeState.address should be set to public IP in case of single-NIC VM.",
+                    vm.address);
+        } else {
+            assertNull("ComputeState.address should be set to NULL in case of multi-NIC VM.",
+                    vm.address);
+        }
+
+        assertEquals("ComputeState.address should be set to AWS Instance public IP.",
+                awsInstance.getPublicIpAddress(), vm.address);
+
+        for (String nicLink : vm.networkInterfaceLinks) {
+
+            NetworkInterfaceState nicState = this.host.getServiceState(null,
+                    NetworkInterfaceState.class,
+                    UriUtils.buildUri(this.host, nicLink));
+
+            InstanceNetworkInterface awsNic = null;
+            for (InstanceNetworkInterface nic : awsInstance.getNetworkInterfaces()) {
+                if (nic.getAttachment().getDeviceIndex() == nicState.deviceIndex) {
+                    awsNic = nic;
+                    break;
+                }
+            }
+
+            assertNotNull("Unable to find AWS NIC with device index " + nicState.deviceIndex,
+                    awsNic);
+            assertEquals(
+                    "NetworkInterfaceState[" + nicState.deviceIndex
+                            + "].address should be set to AWS NIC private IP.",
+                    awsNic.getPrivateIpAddress(), nicState.address);
+        }
     }
 
     private void assertTags(Set<TagState> expectedTagStates, Instance instance,

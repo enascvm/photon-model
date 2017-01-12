@@ -22,14 +22,7 @@ public enum AWSInstanceStage {
     CLIENT,
     DELETE,
     CREATE,
-    VM_DISKS,
-    GET_NIC_STATES,
-    GET_NETWORKS,
-    GET_SUBNETS,
-    GET_FIREWALLS,
-    CREATE_PUBLIC_IPS,
-    CREATE_INSTANCE_NICs,
-    DONE,
+    POPULATE_CONTEXT,
     ERROR
 
 }

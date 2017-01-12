@@ -125,13 +125,35 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         return this.nics.isEmpty() ? null : this.nics.get(0);
     }
 
-    public DeferredResult<T> populateContext() {
+    /**
+     * Populate this context. Right now its main focus is to populate NIC related states.
+     *
+     * <p>
+     * Notes:
+     * <ul>
+     * <li>It does NOT call parent
+     * {@link #populateContext(com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage)}</li>
+     * <li>Override {@link #customizeContext(BaseComputeInstanceContext)} if you need to extend
+     * populate logic provided by this method and customize the context. The method follows
+     * Open-Close principle.</li>
+     * </ul>
+     */
+    public final DeferredResult<T> populateContext() {
         return DeferredResult.completed(self())
-                .thenCompose(this::getNicStates)
-                .thenCompose(this::getNicSubnetStates)
-                .thenCompose(this::getNicNetworkStates)
-                .thenCompose(this::getNicNetworkResourceGroupStates)
-                .thenCompose(this::getNicSecurityGroupStates);
+                .thenCompose(this::getNicStates).thenApply(log("getNicStates"))
+                .thenCompose(this::getNicSubnetStates).thenApply(log("getNicSubnetStates"))
+                .thenCompose(this::getNicNetworkStates).thenApply(log("getNicNetworkStates"))
+                .thenCompose(this::getNicNetworkResourceGroupStates).thenApply(log("getNicNetworkResourceGroupStates"))
+                .thenCompose(this::getNicSecurityGroupStates).thenApply(log("getNicSecurityGroupStates"))
+                .thenCompose(this::customizeContext).thenApply(log("customizeContext"));
+    }
+
+    /**
+     * Hook that might be implemented by descendants to extend {@link #populateContext() populate
+     * logic} and customize the context.
+     */
+    protected DeferredResult<T> customizeContext(T context) {
+        return DeferredResult.completed(context);
     }
 
     /**
@@ -162,7 +184,10 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
-                throw new IllegalStateException("Error getting NIC states.", exc);
+                String msg = String.format(
+                        "Error getting NIC states for [%s] VM.",
+                        context.child.name);
+                throw new IllegalStateException(msg, exc);
             }
             return context;
         });
@@ -190,7 +215,10 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
-                throw new IllegalStateException("Error getting NIC Subnet states.", exc);
+                String msg = String.format(
+                        "Error getting NIC Subnet states for [%s] VM.",
+                        context.child.name);
+                throw new IllegalStateException(msg, exc);
             }
             return context;
         });
@@ -201,7 +229,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
      *
      * @see #getNicSubnetStates(BaseComputeInstanceContext)
      */
-    protected DeferredResult<T> getNicNetworkStates(T context) {
+    private DeferredResult<T> getNicNetworkStates(T context) {
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
         }
@@ -220,7 +248,10 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
-                throw new IllegalStateException("Error getting NIC Network states.", exc);
+                String msg = String.format(
+                        "Error getting NIC Network states for [%s] VM.",
+                        context.child.name);
+                throw new IllegalStateException(msg, exc);
             }
             return context;
         });
@@ -229,7 +260,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     /**
      * Get {@link SecurityGroupState}s assigned to NICs.
      */
-    protected DeferredResult<T> getNicSecurityGroupStates(T context) {
+    private DeferredResult<T> getNicSecurityGroupStates(T context) {
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
         }
@@ -242,13 +273,15 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         List<DeferredResult<Void>> getStatesDR = securityGroupLinks.stream()
                 .map(securityGroupLink -> {
-                    Operation op = Operation.createGet(context.service.getHost(), securityGroupLink);
+                    Operation op = Operation.createGet(context.service.getHost(),
+                            securityGroupLink);
                     return context.service
                             .sendWithDeferredResult(op, SecurityGroupState.class)
                             .thenAccept(securityGroupState -> {
                                 // Populate _all_ NICs with _same_ SecurityGroup state.
                                 for (BaseNicContext nicCtx : context.nics) {
-                                    nicCtx.securityGroupStates.put(securityGroupState.name, securityGroupState);
+                                    nicCtx.securityGroupStates.put(securityGroupState.name,
+                                            securityGroupState);
                                 }
                             });
                 })
@@ -256,7 +289,10 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
-                throw new IllegalStateException("Error getting NIC SecurityGroup states.", exc);
+                String msg = String.format(
+                        "Error getting NIC SecurityGroup states for [%s] VM.",
+                        context.child.name);
+                throw new IllegalStateException(msg, exc);
             }
             return context;
         });
@@ -265,7 +301,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     /**
      * Get {@link ResourceGroupState}s of the {@link NetworkState}s the NICs are assigned to.
      */
-    protected DeferredResult<T> getNicNetworkResourceGroupStates(T context) {
+    private DeferredResult<T> getNicNetworkResourceGroupStates(T context) {
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
         }
@@ -294,8 +330,10 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
             if (exc != null) {
-                throw new IllegalStateException(
-                        "Error getting ResourceGroup states of NIC Network states.", exc);
+                String msg = String.format(
+                        "Error getting ResourceGroup states of NIC Network states for [%s] VM.",
+                        context.child.name);
+                throw new IllegalStateException(msg, exc);
             }
             return context;
         });

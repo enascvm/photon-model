@@ -253,9 +253,10 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 context.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 // Allow base context class to enumerate the resources.
                 context.enumerate()
-                        .whenComplete((resourceGroupEnumContext, throwable) -> {
-                            if (throwable != null) {
-                                handleError(context, throwable);
+                        .whenComplete((ignoreCtx, t) -> {
+                            // NOTE: In case of error 'ignoreCtx' is null so use passed context!
+                            if (t != null) {
+                                handleError(context, t);
                                 return;
                             }
                             context.stage = EnumerationStages.FINISHED;

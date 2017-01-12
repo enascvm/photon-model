@@ -280,11 +280,7 @@ public class AWSUtils {
     }
 
     public static List<String> getOrCreateSecurityGroups(AWSInstanceContext aws) {
-        if (aws.nics.size() > 0) {
-            return getOrCreateSecurityGroups(aws.getPrimaryNic(), aws);
-        } else {
-            return getOrCreateSecurityGroups(null, aws);
-        }
+        return getOrCreateSecurityGroups(aws, aws.getPrimaryNic());
     }
 
     /*
@@ -298,8 +294,8 @@ public class AWSUtils {
      * in case that none of the above methods discover a security group, the default one is discovered from AWS
      * in case that none of the above method discover a security group, a new security group is created
      */
-    public static List<String> getOrCreateSecurityGroups(AWSNicContext nicCtx,
-            AWSInstanceContext aws) {
+    public static List<String> getOrCreateSecurityGroups(AWSInstanceContext aws, AWSNicContext nicCtx) {
+
         String groupId;
         SecurityGroup group;
 

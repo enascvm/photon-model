@@ -207,7 +207,7 @@ public class AzureInstanceService extends StatelessService {
 
         // Populate BaseAdapterContext and then continue with this state machine
         ctx.populateContext(startingStage)
-                .whenComplete(handleAllocation(AzureInstanceStage.CLIENT));
+                .whenComplete(thenAllocation(ctx, AzureInstanceStage.CLIENT));
     }
 
     /**
@@ -234,8 +234,9 @@ public class AzureInstanceService extends StatelessService {
      * {@code handleAllocation} version suitable for chaining to
      * {@code DeferredResult.whenComplete}.
      */
-    private BiConsumer<AzureInstanceContext, Throwable> handleAllocation(AzureInstanceStage next) {
-        return (ctx, exc) -> {
+    private BiConsumer<AzureInstanceContext, Throwable> thenAllocation(AzureInstanceContext ctx, AzureInstanceStage next) {
+        return (ignoreCtx, exc) -> {
+            // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             if (exc != null) {
                 handleError(ctx, exc);
                 return;
@@ -298,7 +299,7 @@ public class AzureInstanceService extends StatelessService {
                 break;
             case GET_NIC_STATES:
                 ctx.populateContext()
-                        .whenComplete(handleAllocation(AzureInstanceStage.GET_NETWORKS));
+                        .whenComplete(thenAllocation(ctx, AzureInstanceStage.GET_NETWORKS));
                 break;
             // Try to lookup Azure vNet-subnets that are referred by NIC states
             case GET_NETWORKS:

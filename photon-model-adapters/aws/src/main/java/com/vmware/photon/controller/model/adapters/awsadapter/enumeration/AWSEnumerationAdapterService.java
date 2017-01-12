@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.BiConsumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
@@ -91,17 +90,18 @@ public class AWSEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        BiConsumer<EnumerationContext, Throwable> onFinish = (context, t) -> {
-            if (t != null) {
-                context.error = t;
-                context.stage = AWSEnumerationStages.ERROR;
-            }
-            handleEnumerationRequest(context);
-        };
 
-        new EnumerationContext(this, request, op)
-                .populateContext(BaseAdapterStage.PARENTDESC)
-                .whenComplete(onFinish);
+        EnumerationContext context = new EnumerationContext(this, request, op);
+
+        context.populateContext(BaseAdapterStage.PARENTDESC)
+                .whenComplete((ignoreCtx, t) -> {
+                    // NOTE: In case of error 'ignoreCtx' is null so use passed context!
+                    if (t != null) {
+                        context.error = t;
+                        context.stage = AWSEnumerationStages.ERROR;
+                    }
+                    handleEnumerationRequest(context);
+                });
     }
 
     /**

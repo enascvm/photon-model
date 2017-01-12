@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
+import java.util.function.Function;
 
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.DeferredResult;
@@ -93,12 +94,14 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
         switch (stage) {
         case VMDESC:
             return getVMDescription(self())
+                    .thenApply(log("getVMDescription"))
                     .thenCompose(c -> populateContext(BaseAdapterStage.PARENTDESC));
         case PARENTDESC:
             return getParentDescription(self())
+                    .thenApply(log("getParentDescription"))
                     .thenCompose(c -> populateContext(BaseAdapterStage.PARENTAUTH));
         case PARENTAUTH:
-            return getParentAuth(self());
+            return getParentAuth(self()).thenApply(log("getParentAuth"));
         default:
             return DeferredResult.completed(self());
         }
@@ -110,6 +113,13 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     @SuppressWarnings("unchecked")
     protected T self() {
         return (T) this;
+    }
+
+    protected Function<? super T, ? extends T> log(String stage) {
+        return (ctx) -> {
+            ctx.service.logFine("%s.%s: SUCCESS", this.getClass().getSimpleName(), stage);
+            return ctx;
+        };
     }
 
     /**

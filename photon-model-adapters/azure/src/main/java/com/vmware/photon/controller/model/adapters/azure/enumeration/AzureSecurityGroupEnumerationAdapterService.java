@@ -311,13 +311,14 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 context.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 // Allow base context class to enumerate the resources.
                 context.enumerate()
-                        .whenComplete((c, throwable) -> {
-                            if (throwable != null) {
-                                handleError(c, throwable);
+                        .whenComplete((ignoreCtx, t) -> {
+                            // NOTE: In case of error 'ignoreCtx' is null so use passed context!
+                            if (t != null) {
+                                handleError(context, t);
                                 return;
                             }
                             context.stage = EnumerationStages.FINISHED;
-                            handleEnumeration(c);
+                            handleEnumeration(context);
                         });
                 break;
             case STOP:

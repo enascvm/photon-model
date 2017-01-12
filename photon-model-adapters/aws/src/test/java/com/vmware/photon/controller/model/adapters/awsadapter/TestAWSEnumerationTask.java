@@ -186,7 +186,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName);
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
-                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null);
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
@@ -243,7 +243,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         String vpCId = validateTagAndNetworkAndComputeDescriptionInformation(vmState);
         validateVPCInformation(vpCId);
         // Count should be 1 NICs per discovered VM.
-        int totalNetworkInterfaceStateCount = count6 * TestAWSSetupUtils.NUMBER_OF_NICS;
+        int totalNetworkInterfaceStateCount = count6 * TestAWSSetupUtils.SINGLE_NIC_SPEC.numberOfNics();
         validateNetworkInterfaceCount(totalNetworkInterfaceStateCount);
         // One VPC should be discovered in the test.
         queryDocumentsAndAssertExpectedCount(this.host, count1,
@@ -320,7 +320,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName);
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
-                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null);
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
@@ -557,7 +557,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         assertEquals(taggedComputeState.descriptionLink, computeState.descriptionLink);
         assertTrue(taggedComputeState.networkInterfaceLinks != null);
-        assertEquals(TestAWSSetupUtils.NUMBER_OF_NICS, taggedComputeState.networkInterfaceLinks.size());
+        assertEquals(TestAWSSetupUtils.SINGLE_NIC_SPEC.numberOfNics(), taggedComputeState.networkInterfaceLinks.size());
 
         List<URI> networkLinkURIs = new ArrayList<>();
         for (int i = 0; i < taggedComputeState.networkInterfaceLinks.size(); i++) {

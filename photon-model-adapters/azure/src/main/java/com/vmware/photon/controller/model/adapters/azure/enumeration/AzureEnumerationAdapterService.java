@@ -91,9 +91,11 @@ public class AzureEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        new EnumerationContext(this, request, op)
-                .populateContext(BaseAdapterStage.PARENTDESC)
-                .whenComplete((context, t) -> {
+        EnumerationContext context = new EnumerationContext(this, request, op);
+
+        context.populateContext(BaseAdapterStage.PARENTDESC)
+                .whenComplete((ignoreCtx, t) -> {
+                    // NOTE: In case of error 'ignoreCtx' is null so use passed context!
                     if (t != null) {
                         context.error = t;
                         context.stage = AzureEnumerationStages.ERROR;

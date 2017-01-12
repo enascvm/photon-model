@@ -51,6 +51,7 @@ import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs.NetConfig;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSBlockStorageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService;
@@ -88,7 +89,6 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -113,14 +113,99 @@ public class TestAWSSetupUtils {
     public static final String userData = null;
     public static final String aws = "Amazon Web Services";
 
+    // VPC/subnet details are copy-pasted from AWS, region N.Virginia, Availability Zone: us-east-1a {{
     private static final String AWS_DEFAULT_VPC_ID = "vpc-95a29bf1";
     private static final String AWS_DEFAULT_VPC_CIDR = "172.31.0.0/16";
+
+    // Default Subnet; auto-assign public IP
+    private static final String AWS_DEFAULT_SUBNET_ID = "subnet-ce01b5e4";
     private static final String AWS_DEFAULT_SUBNET_NAME = "default";
-    private static final String AWS_DEFAULT_SUBNET_ID = "subnet-1f82fe22";
-    private static final String AWS_DEFAULT_SUBNET_CIDR = "172.31.32.0/20";
+    private static final String AWS_DEFAULT_SUBNET_CIDR = "172.31.48.0/20";
+
+    // Non-default Subnet; auto-assign public IP = false
+    private static final String AWS_SECONDARY_SUBNET_ID = "subnet-e91b87c4";
+    private static final String AWS_SECONDARY_SUBNET_NAME = "secondary";
+    private static final String AWS_SECONDARY_SUBNET_CIDR = "172.31.64.0/20";
+    // }}
+
+    /**
+     * <p>
+     * For a matrix of maximum supported NICs per Instance type check:
+     * http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-eni.html#AvailableIpPerENI
+     *
+     * @see {@value #instanceType_t2_micro} instance type
+     */
+    public static final AwsNicSpecs MULTI_NIC_SPECS;
+
+    static {
+        NetConfig network = new NetConfig(
+                AWS_DEFAULT_VPC_ID,
+                AWS_DEFAULT_VPC_ID,
+                AWS_DEFAULT_VPC_CIDR);
+
+        // Configure with TWO NICS.
+        List<NetConfig> subnets = new ArrayList<>();
+
+        subnets.add(new NetConfig(AWS_DEFAULT_SUBNET_ID,
+                        AWS_DEFAULT_SUBNET_NAME,
+                        AWS_DEFAULT_SUBNET_CIDR));
+
+        subnets.add(new NetConfig(AWS_SECONDARY_SUBNET_ID,
+                        AWS_SECONDARY_SUBNET_NAME,
+                        AWS_SECONDARY_SUBNET_CIDR));
+
+        MULTI_NIC_SPECS = new AwsNicSpecs(network, subnets);
+    }
+
+    public static final AwsNicSpecs SINGLE_NIC_SPEC;
+
+    static {
+        NetConfig network = new NetConfig(
+                AWS_DEFAULT_VPC_ID,
+                AWS_DEFAULT_VPC_ID,
+                AWS_DEFAULT_VPC_CIDR);
+
+        // Configure with TWO NICS.
+        List<NetConfig> subnets = new ArrayList<>();
+
+        subnets.add(new NetConfig(AWS_DEFAULT_SUBNET_ID,
+                        AWS_DEFAULT_SUBNET_NAME,
+                        AWS_DEFAULT_SUBNET_CIDR));
+
+        SINGLE_NIC_SPEC = new AwsNicSpecs(network, subnets);
+    }
+
+    // Next change: use this also by AzureTestUtil.createDefaultNicStates.
+    public static class AwsNicSpecs {
+
+        public static class NetConfig {
+
+            public final String id;
+            public final String name;
+            public final String cidr;
+
+            public NetConfig(String id, String name, String cidr) {
+                this.id = id;
+                this.name = name;
+                this.cidr = cidr;
+            }
+        }
+
+        public final NetConfig network;
+        public final List<NetConfig> subnets;
+
+        public AwsNicSpecs(NetConfig network, List<NetConfig> subnets) {
+            this.network = network;
+            this.subnets = subnets;
+        }
+
+        public final int numberOfNics() {
+            return this.subnets.size();
+        }
+    }
+
     private static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
     private static final String AWS_DEFAULT_GROUP_ID = "sg-d46efeac";
-    public static final int NUMBER_OF_NICS = 1;
 
     public static final String DEFAULT_AUTH_TYPE = "PublicKey";
     public static final String DEFAULT_ROOT_DISK_NAME = "CoreOS root disk";
@@ -250,11 +335,11 @@ public class TestAWSSetupUtils {
      */
     public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
             String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
-            Set<String> tagLinks)
+            Set<String> tagLinks, AwsNicSpecs nicSpec)
             throws Throwable {
         return createAWSVMResource(host, parentLink, resourcePoolLink, clazz,
                 instanceType_t2_micro,
-                tagLinks);
+                tagLinks, nicSpec);
     }
 
     /**
@@ -263,7 +348,8 @@ public class TestAWSSetupUtils {
     public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
             String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
             String vmName,
-            Set<String> tagLinks)
+            Set<String> tagLinks,
+            AwsNicSpecs nicSpecs)
             throws Throwable {
 
         // Step 1: Create an auth credential to login to the VM
@@ -329,115 +415,12 @@ public class TestAWSSetupUtils {
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
         vmDisks.add(UriUtils.buildUriPath(DiskService.FACTORY_LINK, rootDisk.id));
 
-        // Create network state.
-        NetworkState netState;
-        {
-            netState = new NetworkState();
-            netState.id = AWS_DEFAULT_VPC_ID;
-            netState.name = AWS_DEFAULT_VPC_ID;
-            netState.authCredentialsLink = authCredentialsLink;
-            netState.resourcePoolLink = resourcePoolLink;
-            netState.subnetCIDR = AWS_DEFAULT_VPC_CIDR;
-            netState.regionId = zoneId;
-            netState.instanceAdapterReference = UriUtils.buildUri(host,
-                    AWSUriPaths.AWS_NETWORK_ADAPTER);
-
-            netState = TestUtils.doPost(host, netState, NetworkState.class,
-                    UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
-        }
-
-        // Create subnet state.
-        SubnetState subnetState;
-        {
-            subnetState = new SubnetState();
-            subnetState.id = AWS_DEFAULT_SUBNET_ID;
-            subnetState.name = AWS_DEFAULT_SUBNET_NAME;
-            subnetState.networkLink = netState.documentSelfLink;
-            subnetState.subnetCIDR = AWS_DEFAULT_SUBNET_CIDR;
-
-            subnetState = TestUtils.doPost(host, subnetState, SubnetState.class,
-                    UriUtils.buildUri(host, SubnetService.FACTORY_LINK));
-        }
-
-        // Create network interface descriptions.
-        NetworkInterfaceDescription nicDescription;
-        {
-            nicDescription = new NetworkInterfaceDescription();
-            nicDescription.id = UUID.randomUUID().toString();
-            nicDescription.assignment = IpAssignment.DYNAMIC;
-
-            nicDescription = TestUtils
-                    .doPost(host, nicDescription, NetworkInterfaceDescription.class,
-                            UriUtils.buildUri(host,
-                                    NetworkInterfaceDescriptionService.FACTORY_LINK));
-        }
-
-        // Create security group state
-        SecurityGroupState securityGroupState;
-        {
-            securityGroupState = new SecurityGroupState();
-            securityGroupState.authCredentialsLink = authCredentialsLink;
-            securityGroupState.id = AWS_DEFAULT_GROUP_ID;
-            securityGroupState.documentSelfLink = securityGroupState.id;
-            securityGroupState.name = AWS_DEFAULT_GROUP_NAME;
-            securityGroupState.tenantLinks = new ArrayList<>();
-            securityGroupState.tenantLinks.add("tenant-linkA");
-            ArrayList<Rule> ingressRules = new ArrayList<>();
-
-            Rule ssh = new Rule();
-            ssh.name = "ssh";
-            ssh.protocol = "tcp";
-            ssh.ipRangeCidr = "0.0.0.0/0";
-            ssh.ports = "22";
-            ingressRules.add(ssh);
-            securityGroupState.ingress = ingressRules;
-
-            ArrayList<Rule> egressRules = new ArrayList<>();
-            Rule out = new Rule();
-            out.name = "out";
-            out.protocol = "tcp";
-            out.ipRangeCidr = "0.0.0.0/0";
-            out.ports = "1-65535";
-            egressRules.add(out);
-            securityGroupState.egress = egressRules;
-
-            securityGroupState.regionId = "regionId";
-            securityGroupState.resourcePoolLink = "/link/to/rp";
-            securityGroupState.instanceAdapterReference = new URI(
-                    "http://instanceAdapterReference");
-
-            securityGroupState = TestUtils.doPost(host, securityGroupState,
-                    SecurityGroupState.class, UriUtils.buildUri(host, SecurityGroupService
-                            .FACTORY_LINK));
-        }
-
-        // Create nics
-        List<String> nicLinks = new ArrayList<>();
-        for (int i = 0; i < NUMBER_OF_NICS; i++) {
-            NetworkInterfaceState nicState;
-            {
-                nicState = new NetworkInterfaceState();
-                nicState.id = UUID.randomUUID().toString();
-                nicState.name = awsVMDesc.name + "-nic-" + i;
-
-                nicState.networkLink = subnetState.networkLink;
-                nicState.subnetLink = subnetState.documentSelfLink;
-                nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
-
-                String securityGroupLink = UriUtils.buildUriPath(
-                        SecurityGroupService.FACTORY_LINK,
-                        securityGroupState.id);
-                nicState.deviceIndex = i;
-
-                nicState.firewallLinks = new ArrayList<>();
-                nicState.firewallLinks.add(securityGroupLink);
-
-                nicState = TestUtils.doPost(host, nicState, NetworkInterfaceState.class,
-                        UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
-
-                nicLinks.add(nicState.documentSelfLink);
-            }
-        }
+        // Create NIC States
+        List<String> nicLinks = createAWSNicStates(
+                host, resourcePoolLink, awsVMDesc.authCredentialsLink, awsVMDesc.name, nicSpecs)
+                        .stream()
+                        .map(nic -> nic.documentSelfLink)
+                        .collect(Collectors.toList());
 
         // Create compute state
         ComputeService.ComputeState resource;
@@ -457,6 +440,134 @@ public class TestAWSSetupUtils {
                 ComputeService.ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
         return vmComputeState;
+    }
+
+    /*
+     * NOTE: It is highly recommended to keep this method in sync with its Azure counterpart:
+     * AzureTestUtil.createDefaultNicStates
+     */
+    public static List<NetworkInterfaceState> createAWSNicStates(
+            VerificationHost host,
+            String resourcePoolLink,
+            String authCredentialsLink,
+            String vmName,
+            AwsNicSpecs nicSpecs) throws Throwable {
+
+        // Create network state.
+        NetworkState networkState;
+        {
+            networkState = new NetworkState();
+
+            networkState.id = nicSpecs.network.id;
+            networkState.name = nicSpecs.network.name;
+            networkState.subnetCIDR = nicSpecs.network.cidr;
+
+            networkState.authCredentialsLink = authCredentialsLink;
+            networkState.resourcePoolLink = resourcePoolLink;
+            networkState.regionId = zoneId;
+            networkState.instanceAdapterReference = UriUtils.buildUri(host,
+                    AWSUriPaths.AWS_NETWORK_ADAPTER);
+
+            networkState = TestUtils.doPost(host, networkState,
+                    NetworkState.class,
+                    UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
+        }
+
+        // Create NIC states.
+        List<NetworkInterfaceState> nics = new ArrayList<>();
+
+        for (int i = 0; i < nicSpecs.subnets.size(); i++) {
+
+            // Create subnet state per NIC.
+            SubnetState subnetState;
+            {
+                subnetState = new SubnetState();
+
+                subnetState.id = nicSpecs.subnets.get(i).id;
+                subnetState.name = nicSpecs.subnets.get(i).name;
+                subnetState.subnetCIDR = nicSpecs.subnets.get(i).cidr;
+
+                subnetState.networkLink = networkState.documentSelfLink;
+
+                subnetState = TestUtils.doPost(host, subnetState,
+                        SubnetState.class,
+                        UriUtils.buildUri(host, SubnetService.FACTORY_LINK));
+            }
+
+            // Create NIC description.
+            NetworkInterfaceDescription nicDescription;
+            {
+                nicDescription = new NetworkInterfaceDescription();
+
+                nicDescription.id = "nicDesc" + i;
+                nicDescription.name = "nicDesc" + i;
+                nicDescription.deviceIndex = i;
+                nicDescription.assignment = IpAssignment.DYNAMIC;
+
+                nicDescription = TestUtils.doPost(host, nicDescription,
+                        NetworkInterfaceDescription.class,
+                        UriUtils.buildUri(host, NetworkInterfaceDescriptionService.FACTORY_LINK));
+            }
+
+            // Create security group state
+            SecurityGroupState securityGroupState;
+            {
+                securityGroupState = new SecurityGroupState();
+                securityGroupState.id = AWS_DEFAULT_GROUP_ID;
+                securityGroupState.name = AWS_DEFAULT_GROUP_NAME;
+                securityGroupState.authCredentialsLink = authCredentialsLink;
+                securityGroupState.tenantLinks = new ArrayList<>();
+                securityGroupState.tenantLinks.add("tenant-linkA");
+
+                Rule ssh = new Rule();
+                ssh.name = "ssh";
+                ssh.protocol = "tcp";
+                ssh.ipRangeCidr = "0.0.0.0/0";
+                ssh.ports = "22";
+
+                securityGroupState.ingress = new ArrayList<>();
+                securityGroupState.ingress.add(ssh);
+
+                Rule out = new Rule();
+                out.name = "out";
+                out.protocol = "tcp";
+                out.ipRangeCidr = "0.0.0.0/0";
+                out.ports = "1-65535";
+
+                securityGroupState.egress = new ArrayList<>();
+                securityGroupState.egress.add(out);
+
+                securityGroupState.regionId = "regionId";
+                securityGroupState.resourcePoolLink = "/link/to/rp";
+                securityGroupState.instanceAdapterReference = new URI(
+                        "http://instanceAdapterReference");
+
+                securityGroupState = TestUtils.doPost(host, securityGroupState,
+                        SecurityGroupState.class,
+                        UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK));
+            }
+
+            NetworkInterfaceState nicState = new NetworkInterfaceState();
+
+            nicState.id = UUID.randomUUID().toString();
+            nicState.name = vmName + "-nic-" + i;
+            nicState.deviceIndex = nicDescription.deviceIndex;
+
+            nicState.networkLink = networkState.documentSelfLink;
+            nicState.subnetLink = subnetState.documentSelfLink;
+            nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
+
+            nicState.firewallLinks = new ArrayList<>();
+            nicState.firewallLinks.add(securityGroupState.documentSelfLink);
+
+            nicState = TestUtils.doPost(host, nicState,
+                    NetworkInterfaceState.class,
+                    UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
+
+            nics.add(nicState);
+        }
+
+        return nics;
     }
 
     /**
@@ -579,8 +690,10 @@ public class TestAWSSetupUtils {
     /**
      * Method for deleting a document with the said identifier.
      *
-     * @param host             The verification host
-     * @param documentToDelete The identifier of the document to be deleted.
+     * @param host
+     *            The verification host
+     * @param documentToDelete
+     *            The identifier of the document to be deleted.
      * @throws Throwable
      */
     public static void deleteDocument(VerificationHost host, String documentToDelete)
@@ -777,8 +890,10 @@ public class TestAWSSetupUtils {
      * Method that sets basic information in {@link AWSUtils} for aws-mock. Aws-mock is a
      * open-source tool for testing AWS services in a mock EC2 environment.
      *
-     * @param isAwsClientMock          flag to use aws-mock
-     * @param awsMockEndpointReference ec2 endpoint of aws-mock
+     * @param isAwsClientMock
+     *            flag to use aws-mock
+     * @param awsMockEndpointReference
+     *            ec2 endpoint of aws-mock
      * @see <a href="https://github.com/treelogic-swe/aws-mock">aws-mock</a>
      */
     public static void setAwsClientMockInfo(boolean isAwsClientMock,
@@ -841,7 +956,7 @@ public class TestAWSSetupUtils {
      * provisioned correctly.
      *
      * @return boolean if the required instances have been turned ON on AWS with some acceptable
-     * error rate.
+     *         error rate.
      */
     public static boolean computeInstancesStartedStateWithAcceptedErrorRate(
             AmazonEC2AsyncClient client,
@@ -982,9 +1097,12 @@ public class TestAWSSetupUtils {
     /**
      * Method to perform compute resource enumeration on the AWS endpoint.
      *
-     * @param resourcePoolLink       The link to the AWS resource pool.
-     * @param computeDescriptionLink The link to the compute description for the AWS host.
-     * @param parentComputeLink      The compute state associated with the AWS host.
+     * @param resourcePoolLink
+     *            The link to the AWS resource pool.
+     * @param computeDescriptionLink
+     *            The link to the compute description for the AWS host.
+     * @param parentComputeLink
+     *            The compute state associated with the AWS host.
      * @return
      * @throws Throwable
      */
@@ -1241,10 +1359,7 @@ public class TestAWSSetupUtils {
 
         // Flag to indicate whether you want to check if instance has started or stopped.
         public static enum MODE {
-            CHECK_START,
-            CHECK_TERMINATION,
-            CHECK_STOP,
-            GET_COUNT
+            CHECK_START, CHECK_TERMINATION, CHECK_STOP, GET_COUNT
         }
 
         AWSEnumerationAsyncHandler(VerificationHost host, MODE mode,
