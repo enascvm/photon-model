@@ -21,7 +21,6 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -39,7 +38,6 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
-
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -395,30 +393,38 @@ public class SingleResourceStatsAggregationTaskService extends
             return;
         }
 
-        OperationSequence.create(operations.toArray(new Operation[operations.size()]))
-                .setCompletion((ops, failures) -> {
-                    if (failures != null) {
-                        sendSelfFailurePatch(currentState,
-                                failures.values().iterator().next().getMessage());
-                        return;
-                    }
-                    for (Operation operation : ops.values()) {
-                        QueryTask response = operation.getBody(QueryTask.class);
-                        for (Object obj : response.results.documents.values()) {
-                            ResourceAggregateMetric aggregateMetric = Utils
-                                    .fromJson(obj, ResourceAggregateMetric.class);
-                            lastUpdateMap.replace(
-                                    StatsUtil.getMetricName(aggregateMetric.documentSelfLink),
-                                    aggregateMetric.currentIntervalTimeStampMicrosUtc);
-                        }
-                    }
-                    SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
-                    patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-                    patchBody.taskStage = StatsAggregationStage.INIT_RESOURCE_QUERY;
-                    patchBody.lastRollupTimeForMetric = lastUpdateMap;
-                    sendSelfPatch(patchBody);
-                })
-                .sendWith(this);
+        OperationSequence opSequence = null;
+        for (Operation operation : operations) {
+            if (opSequence == null) {
+                opSequence = OperationSequence.create(operation);
+                continue;
+            }
+            opSequence = opSequence.next(operation);
+        }
+
+        opSequence.setCompletion((ops, failures) -> {
+            if (failures != null) {
+                sendSelfFailurePatch(currentState,
+                        failures.values().iterator().next().getMessage());
+                return;
+            }
+            for (Operation operation : ops.values()) {
+                QueryTask response = operation.getBody(QueryTask.class);
+                for (Object obj : response.results.documents.values()) {
+                    ResourceAggregateMetric aggregateMetric = Utils
+                            .fromJson(obj, ResourceAggregateMetric.class);
+                    lastUpdateMap.replace(
+                            StatsUtil.getMetricName(aggregateMetric.documentSelfLink),
+                            aggregateMetric.currentIntervalTimeStampMicrosUtc);
+                }
+            }
+            SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
+            patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+            patchBody.taskStage = StatsAggregationStage.INIT_RESOURCE_QUERY;
+            patchBody.lastRollupTimeForMetric = lastUpdateMap;
+            sendSelfPatch(patchBody);
+        });
+        opSequence.sendWith(this);
     }
 
     /**
@@ -797,7 +803,7 @@ public class SingleResourceStatsAggregationTaskService extends
                 continue;
             }
             String metricKeyWithRpllupSuffix = rawMetricListEntry.getKey();
-            Collections.sort(rawMetricList, comparator);
+            rawMetricList.sort(comparator);
 
             if (aggregatedTimeBinMap == null) {
                 aggregatedTimeBinMap = new HashMap<>();
@@ -982,24 +988,50 @@ public class SingleResourceStatsAggregationTaskService extends
                 operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
             }
         }
-        Iterator<Operation> createOpIterator = operations.iterator();
-        if (!createOpIterator.hasNext()) {
+
+        if (operations.isEmpty()) {
             // nothing to persist, just finish the task
             sendSelfPatch(currentState, TaskStage.FINISHED, null);
             return;
         }
-        OperationSequence opSequence = OperationSequence.create(createOpIterator.next());
-        // we only need to sequence operations for the same metric; this is a global sequence per resource that
-        // needs to be optimized
-        while (createOpIterator.hasNext()) {
-            opSequence = opSequence.next(createOpIterator.next());
+
+        batchPublishMetrics(currentState, operations, 0);
+    }
+
+    public void batchPublishMetrics(SingleResourceStatsAggregationTaskState currentState,
+            List<Operation> operations, int batchIndex) {
+        OperationSequence opSequence = null;
+        Integer nextBatchIndex = null;
+        for (int i = batchIndex; i < operations.size(); i++) {
+            final Operation operation = operations.get(i);
+            if (opSequence == null) {
+                opSequence = OperationSequence.create(operation);
+                continue;
+            }
+            opSequence = opSequence.next(operation);
+
+            // Batch size of 100
+            int batchSize = 100;
+            int opSequenceSize = i + 1;
+            if ((opSequenceSize % batchSize) == 0) {
+                nextBatchIndex = opSequenceSize;
+                break;
+            }
         }
+
+        Integer finalNextBatchIndex = nextBatchIndex;
         opSequence.setCompletion((ops, exc) -> {
             if (exc != null) {
                 sendSelfFailurePatch(currentState, exc.values().iterator().next().getMessage());
                 return;
             }
-            sendSelfPatch(currentState, TaskStage.FINISHED, null);
+
+            if (finalNextBatchIndex == null || finalNextBatchIndex == operations.size()) {
+                sendSelfPatch(currentState, TaskStage.FINISHED, null);
+                return;
+            }
+
+            batchPublishMetrics(currentState, operations, finalNextBatchIndex);
         });
         opSequence.sendWith(this);
     }

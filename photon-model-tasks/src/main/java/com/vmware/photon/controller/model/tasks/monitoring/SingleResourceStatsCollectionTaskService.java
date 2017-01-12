@@ -16,7 +16,7 @@ package com.vmware.photon.controller.model.tasks.monitoring;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -36,7 +36,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
-
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
@@ -363,8 +362,8 @@ public class SingleResourceStatsCollectionTaskService
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
             for (Entry<String, List<ServiceStat>> entries : stats.statValues.entrySet()) {
                 // sort stats by source time
-                Collections.sort(entries.getValue(),
-                        (o1, o2) -> o1.sourceTimeMicrosUtc.compareTo(o2.sourceTimeMicrosUtc));
+                (entries.getValue()).sort(Comparator.comparing(o -> o.sourceTimeMicrosUtc));
+
                 // Persist every data point
                 for (ServiceStat serviceStat : entries.getValue()) {
                     String computeLink = stats.computeLink;
@@ -400,20 +399,28 @@ public class SingleResourceStatsCollectionTaskService
         }
 
         // Save each data point sequentially to create time based monotonically increasing sequence.
-        OperationSequence.create(operations.toArray(new Operation[operations.size()]))
-                .setCompletion((ops, exc) -> {
-                    if (exc != null) {
-                        logWarning("Failed stats collection: %s",
-                                exc.values().iterator().next().getMessage());
-                        TaskUtils.sendFailurePatch(this,
-                                new SingleResourceStatsCollectionTaskState(), exc.values());
-                        return;
-                    }
-                    SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
-                    nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-                    TaskUtils.sendPatch(this, nextStatePatch);
-                })
-                .sendWith(this);
+        OperationSequence opSequence = null;
+        for (Operation operation : operations) {
+            if (opSequence == null) {
+                opSequence = OperationSequence.create(operation);
+                continue;
+            }
+            opSequence = opSequence.next(operation);
+        }
+
+        opSequence.setCompletion((ops, exc) -> {
+            if (exc != null) {
+                logWarning("Failed stats collection: %s",
+                        exc.values().iterator().next().getMessage());
+                TaskUtils.sendFailurePatch(this,
+                        new SingleResourceStatsCollectionTaskState(), exc.values());
+                return;
+            }
+            SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
+            nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+            TaskUtils.sendPatch(this, nextStatePatch);
+        });
+        opSequence.sendWith(this);
     }
 
     private void updateInMemoryStats(InMemoryResourceMetric inMemoryMetric, String metricKey,
