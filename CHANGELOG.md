@@ -1,7 +1,12 @@
 # CHANGELOG
 
-## 0.5.7-SNAPSHOT
+## 0.5.7
 
+* Updated xenon to 1.3.5.
+* Azure Provisioning uses existing Subnets.
+* Added AzureSecurityGroupEnumerationService to enumerate Azure Security Groups.
+* Tag Azure NetworkStates with link to correct ResourceGroupState.
+* vSphere - Fail fast if datacenter is not configured.
 * FirewallService marked as deprecated. Use SecurityGroupService instead.
 
 ## 0.5.6
