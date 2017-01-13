@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.tasks.monitoring;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -338,7 +337,7 @@ public class SingleResourceStatsCollectionTaskService
         minuteStats.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
         minuteStats.unit = PhotonModelConstants.UNIT_MICROSECONDS;
 
-        Collection<Operation> operations = new ArrayList<>();
+        List<Operation> operations = new ArrayList<>();
         URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.computeLink);
         operations.add(Operation.createPost(inMemoryStatsUri).setBody(minuteStats));
         List<ResourceMetrics> metricsList = new ArrayList<>();
@@ -399,15 +398,30 @@ public class SingleResourceStatsCollectionTaskService
         }
 
         // Save each data point sequentially to create time based monotonically increasing sequence.
+        batchPersistStats(operations, 0);
+    }
+
+    private void batchPersistStats(List<Operation> operations, int batchIndex) {
         OperationSequence opSequence = null;
-        for (Operation operation : operations) {
+        Integer nextBatchIndex = null;
+        for (int i = batchIndex; i < operations.size(); i++) {
+            final Operation operation = operations.get(i);
             if (opSequence == null) {
                 opSequence = OperationSequence.create(operation);
                 continue;
             }
             opSequence = opSequence.next(operation);
+
+            // Batch size of 100
+            int batchSize = 100;
+            int opSequenceSize = i + 1;
+            if ((opSequenceSize % batchSize) == 0) {
+                nextBatchIndex = opSequenceSize;
+                break;
+            }
         }
 
+        Integer finalNextBatchIndex = nextBatchIndex;
         opSequence.setCompletion((ops, exc) -> {
             if (exc != null) {
                 logWarning("Failed stats collection: %s",
@@ -416,9 +430,15 @@ public class SingleResourceStatsCollectionTaskService
                         new SingleResourceStatsCollectionTaskState(), exc.values());
                 return;
             }
-            SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
-            nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-            TaskUtils.sendPatch(this, nextStatePatch);
+
+            if (finalNextBatchIndex == null || finalNextBatchIndex == operations.size()) {
+                SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
+                nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+                TaskUtils.sendPatch(this, nextStatePatch);
+                return;
+            }
+
+            batchPersistStats(operations, finalNextBatchIndex);
         });
         opSequence.sendWith(this);
     }
