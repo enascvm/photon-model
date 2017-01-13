@@ -53,7 +53,7 @@ import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs.NetConfig;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSBlockStorageEnumerationAdapterService;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionCreationAdapterService;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndCreationAdapterService;
@@ -1073,7 +1073,7 @@ public class TestAWSSetupUtils {
         ServiceStats computeDescriptionCreationStats = host.getServiceState(null,
                 ServiceStats.class, UriUtils
                         .buildStatsUri(createServiceURI(host, peerURI,
-                                AWSComputeDescriptionCreationAdapterService.SELF_LINK)));
+                                AWSComputeDescriptionEnumerationAdapterService.SELF_LINK)));
         host.log(Utils.toJsonHtml(computeDescriptionCreationStats));
         ServiceStats computeStateCreationStats = host.getServiceState(null, ServiceStats.class,
                 UriUtils

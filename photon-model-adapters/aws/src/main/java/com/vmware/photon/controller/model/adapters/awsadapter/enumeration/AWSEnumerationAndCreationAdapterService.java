@@ -40,13 +40,13 @@ import com.amazonaws.services.ec2.model.Reservation;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
-
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionCreationAdapterService.AWSComputeDescriptionCreationState;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionEnumerationAdapterService.AWSComputeDescriptionCreationState;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService.AWSComputeStateCreationRequest;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationRequest;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationResponse;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationRequest;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationResponse;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSSecurityGroupEnumerationAdapterService.AWSSecurityGroupEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
@@ -69,6 +69,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
@@ -104,6 +105,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     private static enum AWSEnumerationRefreshSubStage {
         ZONES,
         VCP,
+        SECURITY_GROUP,
         COMPUTE
     }
 
@@ -147,6 +149,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
          * Discovered/Enumerated networks in Amazon.
          */
         public AWSNetworkEnumerationResponse enumeratedNetworks;
+        /**
+         * Discovered/Enumerated security groups in Amazon
+         */
+        public AWSSecurityGroupEnumerationResponse enumeratedSecurityGroups;
         public Map<String, ZoneData> zones;
 
         public EnumerationCreationContext(ComputeEnumerateAdapterRequest request,
@@ -205,37 +211,46 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
      */
     private void startHelperServices(Operation startPost) {
         Operation postAWScomputeDescriptionService = Operation
-                .createPost(this.getHost(), AWSComputeDescriptionCreationAdapterService.SELF_LINK)
+                .createPost(this.getHost(),
+                        AWSComputeDescriptionEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
-        Operation postAWscomputeStateService = Operation
+        Operation postAWScomputeStateService = Operation
                 .createPost(this.getHost(), AWSComputeStateCreationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
-        Operation postAWsNetworkStateService = Operation
-                .createPost(this.getHost(), AWSNetworkStateCreationAdapterService.SELF_LINK)
+        Operation postAWSNetworkStateService = Operation
+                .createPost(this.getHost(), AWSNetworkStateEnumerationAdapterService.SELF_LINK)
+                .setReferer(this.getUri());
+
+        Operation postAWSSecurityGroupStateService = Operation
+                .createPost(this.getHost(), AWSSecurityGroupEnumerationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
 
         this.getHost().startService(postAWScomputeDescriptionService,
-                new AWSComputeDescriptionCreationAdapterService());
-        this.getHost().startService(postAWscomputeStateService,
+                new AWSComputeDescriptionEnumerationAdapterService());
+        this.getHost().startService(postAWScomputeStateService,
                 new AWSComputeStateCreationAdapterService());
-        this.getHost().startService(postAWsNetworkStateService,
-                new AWSNetworkStateCreationAdapterService());
+        this.getHost().startService(postAWSNetworkStateService,
+                new AWSNetworkStateEnumerationAdapterService());
+        this.getHost().startService(postAWSSecurityGroupStateService,
+                new AWSSecurityGroupEnumerationAdapterService());
 
         getHost()
                 .registerForServiceAvailability(
-                        (o, e) -> {
-                            if (e != null) {
-                                String message = "Failed to start up all the services related to the AWS Enumeration Creation Adapter Service";
-                                this.logInfo(message);
-                                throw new IllegalStateException(message);
-                            }
-                            this.logInfo(
-                                    "Successfully started up all the services related to the AWS Enumeration Creation Adapter Service");
-                        }, AWSComputeDescriptionCreationAdapterService.SELF_LINK,
-                        AWSComputeStateCreationAdapterService.SELF_LINK,
-                        AWSNetworkStateCreationAdapterService.SELF_LINK);
+                    (o, e) -> {
+                        if (e != null) {
+                            String message = "Failed to start up all the services related to the AWS Enumeration Creation Adapter Service";
+                            this.logInfo(message);
+                            throw new IllegalStateException(message);
+                        }
+                        this.logInfo("Successfully started up all the services related to the AWS Enumeration Creation Adapter Service");
+                    },
+                    AWSComputeDescriptionEnumerationAdapterService.SELF_LINK,
+                    AWSComputeStateCreationAdapterService.SELF_LINK,
+                    AWSNetworkStateEnumerationAdapterService.SELF_LINK,
+                    AWSSecurityGroupEnumerationAdapterService.SELF_LINK
+            );
     }
 
     /**
@@ -288,7 +303,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             collectAvailabilityZones(aws, AWSEnumerationRefreshSubStage.VCP);
             break;
         case VCP:
-            refreshVPCInformation(aws, AWSEnumerationRefreshSubStage.COMPUTE);
+            refreshVPCInformation(aws, AWSEnumerationRefreshSubStage.SECURITY_GROUP);
+            break;
+        case SECURITY_GROUP:
+            refreshSecurityGroupInformation(aws, AWSEnumerationRefreshSubStage.COMPUTE);
             break;
         case COMPUTE:
             if (aws.pageNo == 1) {
@@ -347,6 +365,29 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         aws.resultHandler = resultHandler;
     }
 
+
+    private void refreshSecurityGroupInformation(EnumerationCreationContext aws,
+            AWSEnumerationRefreshSubStage next) {
+        ComputeEnumerateAdapterRequest sgEnumeration = new ComputeEnumerateAdapterRequest(
+                aws.computeEnumerationRequest,
+                aws.parentAuth,
+                aws.parentCompute
+                );
+        Operation patchSGOperation = Operation
+                .createPatch(this, AWSSecurityGroupEnumerationAdapterService.SELF_LINK)
+                .setBody(sgEnumeration)
+                .setReferer(UriUtils.buildUri(getHost().getPublicUri(), getSelfLink()));
+        this.getHost()
+                .sendWithDeferredResult(patchSGOperation, AWSSecurityGroupEnumerationAdapterService.AWSSecurityGroupEnumerationResponse.class)
+                .thenAccept(securityGroupEnumerationResponse -> {
+                    logInfo("Successfully enumerated Security Group states. Proceeding to next state.");
+                    aws.enumeratedSecurityGroups = securityGroupEnumerationResponse;
+                    aws.refreshSubStage = next;
+                    processRefreshSubStages(aws);
+                    return;
+                });
+    }
+
     private void refreshVPCInformation(EnumerationCreationContext aws,
             AWSEnumerationRefreshSubStage next) {
         AWSNetworkEnumerationRequest networkEnumeration = new AWSNetworkEnumerationRequest();
@@ -355,30 +396,22 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         networkEnumeration.regionId = aws.parentCompute.description.regionId;
         networkEnumeration.enumerationRequest = aws.computeEnumerationRequest;
 
-        sendRequest(Operation
-                .createPatch(this, AWSNetworkStateCreationAdapterService.SELF_LINK)
+        Operation patchNetworkOperation = Operation
+                .createPatch(this, AWSNetworkStateEnumerationAdapterService.SELF_LINK)
                 .setBody(networkEnumeration)
-                .setCompletion(
-                        (o, e) -> {
-                            if (e != null) {
-                                logSevere(
-                                        "Failure creating compute states %s",
-                                        Utils.toString(e));
-                                aws.error = e;
-                                aws.stage = AWSEnumerationCreationStages.ERROR;
-                                handleEnumerationRequest(aws);
-                                return;
-                            } else {
-                                logInfo("Successfully Network-Subnet states. Proceeding to next state.");
-                                aws.enumeratedNetworks = o
-                                        .getBody(
-                                        AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationResponse.class);
+                .setReferer(UriUtils.buildUri(getHost().getPublicUri(), getSelfLink()));
 
-                                aws.refreshSubStage = next;
-                                processRefreshSubStages(aws);
-                                return;
-                            }
-                        }));
+        this.getHost()
+                .sendWithDeferredResult(
+                        patchNetworkOperation,
+                        AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationResponse.class)
+                .thenAccept(networkResponse -> {
+                    logInfo("Successfully enumerated Network-Subnet states. Proceeding to next state.");
+                    aws.enumeratedNetworks = networkResponse;
+                    aws.refreshSubStage = next;
+                    processRefreshSubStages(aws);
+                    return;
+                });
     }
 
     private void collectAvailabilityZones(EnumerationCreationContext aws,
@@ -779,7 +812,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                 return getNICsPerComputeDRs;
                             })
                     .collect(Collectors.toList());
-
             if (getNICsDR.isEmpty()) {
                 this.context.subStage = next;
                 handleReceivedEnumerationData();
@@ -813,7 +845,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
             this.service.sendRequest(Operation
                     .createPatch(this.service,
-                            AWSComputeDescriptionCreationAdapterService.SELF_LINK)
+                            AWSComputeDescriptionEnumerationAdapterService.SELF_LINK)
                     .setBody(cd)
                     .setCompletion((o, e) -> {
                         if (e != null) {
@@ -852,6 +884,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.parentAuth = this.context.parentAuth;
             awsComputeState.regionId = this.context.parentCompute.description.regionId;
             awsComputeState.enumeratedNetworks = this.context.enumeratedNetworks;
+            awsComputeState.enumeratedSecurityGroups = this.context.enumeratedSecurityGroups;
             awsComputeState.zones = this.context.zones;
 
             this.service.sendRequest(Operation

@@ -33,13 +33,15 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import com.amazonaws.services.ec2.model.GroupIdentifier;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.Tag;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkEnumerationResponse;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationResponse;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSSecurityGroupEnumerationAdapterService.AWSSecurityGroupEnumerationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils;
@@ -121,6 +123,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
          * Discovered/Enumerated networks in Amazon.
          */
         public AWSNetworkEnumerationResponse enumeratedNetworks;
+        public AWSSecurityGroupEnumerationResponse enumeratedSecurityGroups;
         public Map<String, ZoneData> zones;
         public String resourcePoolLink;
         public String parentComputeLink;
@@ -380,6 +383,15 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                             nicState.address = awsNic.getPrivateIpAddress();
                             nicState.subnetLink = context.request.enumeratedNetworks.subnets
                                     .get(awsNic.getSubnetId());
+                            nicState.firewallLinks = new ArrayList<>();
+
+                            for (GroupIdentifier awsSG : awsNic.getGroups()) {
+                                // we should have updated the list of SG Ids before this step and
+                                // should have ensured that all the SGs exist locally
+                                nicState.firewallLinks
+                                        .add(context.request.enumeratedSecurityGroups.securityGroupStates
+                                                .get(awsSG.getGroupId()));
+                            }
 
                             nicState.deviceIndex = nicDescription.deviceIndex;
                             nicState.networkInterfaceDescriptionLink = UriUtils
@@ -389,16 +401,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                             // Link is set, because it's referenced by CS before post
                             nicState.documentSelfLink = UUID.randomUUID().toString();
 
-                            Operation postNetworkInterfaceState = createPostOperation(
-                                    this, nicState,
+                            Operation postNetworkInterfaceState = createPostOperation(this, nicState,
                                     NetworkInterfaceService.FACTORY_LINK);
 
                             context.enumerationOperations
                                     .add(postNetworkInterfaceState);
                         }
 
-                        computeStateToBeCreated.networkInterfaceLinks.add(UriUtils
-                                .buildUriPath(
+                        computeStateToBeCreated.networkInterfaceLinks.add(UriUtils.buildUriPath(
                                         NetworkInterfaceService.FACTORY_LINK,
                                         nicState.documentSelfLink));
                     }
@@ -455,7 +465,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     List<NetworkInterfaceState> existingNicStates = context.request.nicStatesToBeUpdated
                             .get(instanceId);
                     if (existingNicStates != null) {
-                        List<Operation> patchNICsOperations = createPatchNICsOperations(instance,
+                        List<Operation> patchNICsOperations = createPatchNICsOperations(context, instance,
                                 existingNicStates);
 
                         context.enumerationOperations.addAll(patchNICsOperations);
@@ -471,7 +481,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     /**
      * For each NetworkInterfaceState, obtain the corresponding AWS NIC, and generate POST operation to update its private address
      */
-    private List<Operation> createPatchNICsOperations(Instance instance, List<NetworkInterfaceState> nicStatesWithDesc) {
+    private List<Operation> createPatchNICsOperations(AWSComputeStateCreationContext context,
+            Instance instance, List<NetworkInterfaceState> nicStatesWithDesc) {
 
         List<Operation> updateNICsOperations = new ArrayList<>();
 
@@ -486,7 +497,15 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 // create a new NetworkInterfaceState for updating the address
                 NetworkInterfaceState updateNicState = new NetworkInterfaceState();
                 updateNicState.address = awsNic.getPrivateIpAddress();
-
+                updateNicState.firewallLinks = new ArrayList<>();
+                if (context.request.enumeratedSecurityGroups != null) {
+                    for (GroupIdentifier awsSG : awsNic.getGroups()) {
+                        // we should have updated the list of SG Ids before this step and should have
+                        // ensured that all the SGs exist locally
+                        updateNicState.firewallLinks.add(context.request.enumeratedSecurityGroups.securityGroupStates
+                                            .get(awsSG.getGroupId()));
+                    }
+                }
                 // create update operation
                 Operation updateNicOperation = createPatchOperation(this, updateNicState,
                         existingNicState.documentSelfLink);

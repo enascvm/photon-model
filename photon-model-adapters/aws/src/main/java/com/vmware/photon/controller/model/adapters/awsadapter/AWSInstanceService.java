@@ -540,6 +540,7 @@ public class AWSInstanceService extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
+            this.service.logInfo("Error deleting instances received from AWS: %s", exception.getMessage());
             AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
                     this.computeReq.taskReference, exception);
         }

@@ -54,7 +54,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateCreationAdapterService.AWSNetworkStateCreationContext.SubnetStateWithParentVpcId;
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateEnumerationAdapterService.AWSNetworkStateCreationContext.SubnetStateWithParentVpcId;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
@@ -79,7 +79,7 @@ import com.vmware.xenon.services.common.QueryTask;
  * mapping the referential integrity relationships for the compute state when it is persisted in the
  * local system.
  */
-public class AWSNetworkStateCreationAdapterService extends StatelessService {
+public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_NETWORK_STATE_CREATION_ADAPTER;
 
@@ -128,7 +128,7 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
         SIGNAL_COMPLETION
     }
 
-    public AWSNetworkStateCreationAdapterService() {
+    public AWSNetworkStateEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
@@ -682,9 +682,9 @@ public class AWSNetworkStateCreationAdapterService extends StatelessService {
     /**
      * A specialization of {@link AWSAsyncHandler} which upon AWS async call completion either
      * transitions to next state in the state machine (as defined by
-     * {@link AWSNetworkStateCreationAdapterService#handleNetworkStateChanges(AWSNetworkStateCreationContext)})
+     * {@link AWSNetworkStateEnumerationAdapterService#handleNetworkStateChanges(AWSNetworkStateCreationContext)})
      * or finishes with failure (as defined by
-     * {@link AWSNetworkStateCreationAdapterService#finishWithFailure(AWSNetworkStateCreationContext, Throwable)}).
+     * {@link AWSNetworkStateEnumerationAdapterService#finishWithFailure(AWSNetworkStateCreationContext, Throwable)}).
      */
     private abstract class TransitionToAsyncHandler<REQ extends AmazonWebServiceRequest, RES>
             extends AWSAsyncHandler<REQ, RES> {

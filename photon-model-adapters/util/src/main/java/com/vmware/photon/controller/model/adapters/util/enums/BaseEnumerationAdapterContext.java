@@ -226,7 +226,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         return QueryUtils.startQueryTask(this.service, q)
                 .thenApply(queryTask -> {
                     this.service
-                            .logFine("Found %d matching resource group states for Azure resources.",
+                            .logFine("Found %d matching resource group states for Cloud resources.",
                                     queryTask.results.documentCount);
 
                     // If there are no matches, there is nothing to update.
@@ -303,7 +303,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * Delete stale local resource states.
      */
     protected DeferredResult<T> deleteLocalStates(T context) {
-        this.service.logInfo("Delete Resource Group States that no longer exists in Azure.");
+        this.service.logInfo("Delete Resource Group States that no longer exists in the Cloud.");
 
         Query query = getDeleteQuery();
 

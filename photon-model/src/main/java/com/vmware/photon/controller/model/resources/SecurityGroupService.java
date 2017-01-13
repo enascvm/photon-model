@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -36,7 +35,38 @@ public class SecurityGroupService extends StatefulService {
 
     public static final String FACTORY_LINK = UriPaths.RESOURCES_SECURITY_GROUPS;
 
-    public static final String[] PROTOCOL = { SecurityGroupService.ANY, "tcp", "udp", "icmp" };
+    public static enum Protocol {
+
+        ANY(SecurityGroupService.ANY, 0), TCP("tcp", 6), UDP("udp", 17), ICMP("icmp", 1);
+
+        private final int protocolNumber;
+        private final String name;
+
+        private Protocol(String name, int protocolNumber) {
+            this.protocolNumber = protocolNumber;
+            this.name = name;
+        }
+
+        public int getProtocolNumber() {
+            return this.protocolNumber;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+        /**
+         * Obtain the enumeration choice that corresponds to the provided String
+         * which either equal the name or the ProtocolNumber of the choice
+         */
+        public static Protocol fromString(String s) {
+            for (Protocol choice : values()) {
+                if (s.equals(choice.getName()) || s.equals(String.format("{0}", choice.getProtocolNumber()))) {
+                    return choice;
+                }
+            }
+            return null;
+        }
+    }
 
     /**
      * ANY can be used when when specifying protocol or IP range in a security group rule.
@@ -104,6 +134,7 @@ public class SecurityGroupService extends StatefulService {
 
             /**
              * port or port range for rule ie. "22", "80", "1-65535"
+             * -1 means all the ports for the particular protocol
              */
             public String ports;
 
@@ -229,7 +260,6 @@ public class SecurityGroupService extends StatefulService {
             throw new IllegalArgumentException(
                     "an allow rule requires a minimum of one port, none supplied");
         }
-
         String[] pp = ports.split("-");
         if (pp.length > 2) {
             // invalid port range
@@ -241,9 +271,9 @@ public class SecurityGroupService extends StatefulService {
             for (String aPp : pp) {
                 try {
                     int iPort = Integer.parseInt(aPp);
-                    if (iPort < 1 || iPort > 65535) {
+                    if (iPort < 0 || iPort > 65535) {
                         throw new IllegalArgumentException(
-                                "allow rule port numbers must be between 1 and 65535");
+                                "allow rule port numbers must be between 0 and 65535");
                     }
                     if (previousPort > 0 && previousPort > iPort) {
                         throw new IllegalArgumentException(
@@ -252,7 +282,7 @@ public class SecurityGroupService extends StatefulService {
                     previousPort = iPort;
                 } catch (NumberFormatException e) {
                     throw new IllegalArgumentException(
-                            "allow rule port numbers must be between 1 and 65535");
+                            "allow rule port numbers must be between 0 and 65535");
                 }
             }
         }
@@ -279,7 +309,7 @@ public class SecurityGroupService extends StatefulService {
 
         String proto = protocol.toLowerCase();
 
-        if (!Arrays.asList(PROTOCOL).contains(proto)) {
+        if (Protocol.fromString(proto) == null) {
             throw new IllegalArgumentException(
                     "only tcp, udp or icmp protocols are supported, provide a supported protocol");
         }

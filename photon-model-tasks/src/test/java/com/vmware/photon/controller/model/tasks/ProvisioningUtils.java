@@ -23,9 +23,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.TimeoutException;
 
 import com.vmware.photon.controller.model.resources.ComputeService;
-import com.vmware.photon.controller.model.resources.NetworkService;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -137,27 +135,28 @@ public class ProvisioningUtils {
                 + desiredCount + "Found " + res.documents.size());
     }
 
-    public static Map<String, NetworkState> getNetworkStates(VerificationHost host)
-            throws Throwable {
-        return getNetworkStates(host, null);
-
+    /**
+     * Query all States for the given Service
+     */
+    public static <K extends ResourceState> Map<String, K> getResourceStates(VerificationHost host, String serviceFactoryLink, Class<K> typeKey)
+           throws Throwable {
+        return getResourceStates(host, null, serviceFactoryLink, typeKey);
     }
 
-    public static Map<String, NetworkState> getNetworkStates(VerificationHost host, URI peerURI)
+    public static <K extends ResourceState> Map<String, K> getResourceStates(VerificationHost host, URI peerURI, String serviceFactoryLink, Class<K> resourceStateClass)
             throws Throwable {
-        Map<String, NetworkState> networkStateMap = new HashMap<String, NetworkState>();
+        Map<String, K> elementStateMap = new HashMap<>();
         ServiceDocumentQueryResult res;
         res = host.getFactoryState(UriUtils
                 .buildExpandLinksQueryUri(createServiceURI(host, peerURI,
-                        NetworkService.FACTORY_LINK)));
+                        serviceFactoryLink)));
         if (res != null && res.documentCount > 0) {
             for (Object s : res.documents.values()) {
-                NetworkState networkState = Utils.fromJson(s,
-                        NetworkState.class);
-                networkStateMap.put(networkState.id, networkState);
+                K elementState = Utils.fromJson(s, resourceStateClass);
+                elementStateMap.put(elementState.id, elementState);
             }
         }
-        return networkStateMap;
+        return elementStateMap;
     }
 
     /**

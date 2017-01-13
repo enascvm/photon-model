@@ -51,7 +51,7 @@ import com.vmware.xenon.services.common.QueryTask;
  * It first represents all the instances in a representative set of compute descriptions. Further checks if these
  * compute descriptions exist in the system. If they don't exist in the system then creates them in the local document store.
  */
-public class AWSComputeDescriptionCreationAdapterService extends StatelessService {
+public class AWSComputeDescriptionEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_COMPUTE_DESCRIPTION_CREATION_ADAPTER;
 
@@ -64,7 +64,7 @@ public class AWSComputeDescriptionCreationAdapterService extends StatelessServic
         SIGNAL_COMPLETION
     }
 
-    public AWSComputeDescriptionCreationAdapterService() {
+    public AWSComputeDescriptionEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 

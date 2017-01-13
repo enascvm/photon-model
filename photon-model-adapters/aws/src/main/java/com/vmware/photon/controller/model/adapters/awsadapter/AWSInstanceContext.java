@@ -137,7 +137,8 @@ public class AWSInstanceContext
                     .withFilters(
                             new Filter(AWS_VPC_ID_FILTER, singletonList(nicCtx.networkState.id)));
 
-            AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> handler = new AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult>() {
+            AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> handler =
+                    new AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult>() {
 
                 @Override
                 protected DeferredResult<DescribeVpcsResult> consumeSuccess(
@@ -195,7 +196,8 @@ public class AWSInstanceContext
                     .withFilters(
                             new Filter(AWS_SUBNET_ID_FILTER, singletonList(nicCtx.subnetState.id)));
 
-            AWSDeferredResultAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult> subnetHandler = new AWSDeferredResultAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult>() {
+            AWSDeferredResultAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult> subnetHandler =
+                    new AWSDeferredResultAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult>() {
 
                 @Override
                 protected DeferredResult<DescribeSubnetsResult> consumeSuccess(

@@ -26,7 +26,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
-
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_LINUX_AMI;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_WINDOWS_AMI;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
@@ -45,7 +44,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
-import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getNetworkStates;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
@@ -55,6 +53,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -80,6 +79,8 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
@@ -248,6 +249,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // One VPC should be discovered in the test.
         queryDocumentsAndAssertExpectedCount(this.host, count1,
                 NetworkService.FACTORY_LINK, false);
+
+        //Verify that the SecurityGroups of the newly created VM has been enumerated and exists locally
+        validateSecurityGroupsInformation(vmState.groupLinks);
 
         // Verify stop flow
         // The first instance of instanceIdsToDeleteFirstTime will be stopped.
@@ -611,7 +615,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Get the network state that maps to this VPCID. Right now the id field of the network
         // state is set to the VPC ID, so querying the network state based on that.
 
-        Map<String, NetworkState> networkStateMap = getNetworkStates(this.host);
+        Map<String, NetworkState> networkStateMap =
+                ProvisioningUtils.<NetworkState>getResourceStates(this.host, NetworkService.FACTORY_LINK, NetworkState.class);
         assertNotNull(networkStateMap);
         NetworkState networkState = networkStateMap.get(vpCId);
         // The network state for the VPC id of the VM should not be null
@@ -625,6 +630,38 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         List<SubnetState> subnetStates = TestUtils.getSubnetStates(this.host, networkState);
         assertFalse(subnetStates.isEmpty());
         subnetStates.stream().forEach(subnetState -> assertNotNull(subnetState.subnetCIDR));
+    }
+
+    private void validateSecurityGroupsInformation(Set<String> securityGroupLinks) throws Throwable {
+        if (this.isAwsClientMock) {
+            return;
+        }
+
+        //Query all the SGs, enumerated in the system
+        Map<String, SecurityGroupState> allSecurityGroupStatesMap =
+                ProvisioningUtils.<SecurityGroupState>getResourceStates(this.host, SecurityGroupService.FACTORY_LINK, SecurityGroupState.class);
+        //Assert that there are SGs enumerated in the system
+        assertNotNull(allSecurityGroupStatesMap);
+
+        if (securityGroupLinks == null) {
+            return;
+        }
+        List<URI> securityGroupURIs = new ArrayList<>();
+        for (String sgLink : securityGroupLinks) {
+            securityGroupURIs.add(UriUtils.buildUri(this.host, sgLink));
+        }
+
+        //Validate that the SecurityGroups for this VM are correctly described in SGStates
+        Map<URI, SecurityGroupState> sgStatesToLinksMap = this.host
+                .getServiceState(null, SecurityGroupState.class, securityGroupURIs);
+        for (URI uri : securityGroupURIs) {
+            //Assert the SG State exist
+            assertNotNull(sgStatesToLinksMap.get(uri));
+            //Assert that the security group rules are correctly added to the SG State
+            //In the test setup there are both ingress and egress rules added
+            assertTrue(sgStatesToLinksMap.get(uri).ingress.size() > 0);
+            assertTrue(sgStatesToLinksMap.get(uri).egress.size() > 0);
+        }
     }
 
     /**
