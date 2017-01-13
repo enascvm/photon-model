@@ -742,6 +742,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     }
                 }
                 queryAndCollectAllNICStatesToBeUpdated(next);
+                return;
             }
             this.context.subStage = next;
             handleReceivedEnumerationData();
