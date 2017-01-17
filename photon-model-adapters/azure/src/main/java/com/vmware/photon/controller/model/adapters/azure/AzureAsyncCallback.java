@@ -17,12 +17,20 @@ import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
 import com.vmware.xenon.common.OperationContext;
+import com.vmware.xenon.common.StatelessService;
 
 /**
  * Operation context aware service callback handler.
  */
 public abstract class AzureAsyncCallback<T> extends ServiceCallback<T> {
     OperationContext opContext;
+    protected StatelessService service;
+
+    public AzureAsyncCallback(StatelessService service) {
+        this();
+
+        this.service = service;
+    }
 
     public AzureAsyncCallback() {
         this.opContext = OperationContext.getOperationContext();
@@ -31,12 +39,12 @@ public abstract class AzureAsyncCallback<T> extends ServiceCallback<T> {
     /**
      * Invoked when a failure happens during service call.
      */
-    public abstract void onError(Throwable e);
+    protected abstract void onError(Throwable e);
 
     /**
      * Invoked when a service call is successful.
      */
-    public abstract void onSuccess(ServiceResponse<T> result);
+    protected abstract void onSuccess(ServiceResponse<T> result);
 
     @Override
     public final void failure(Throwable t) {

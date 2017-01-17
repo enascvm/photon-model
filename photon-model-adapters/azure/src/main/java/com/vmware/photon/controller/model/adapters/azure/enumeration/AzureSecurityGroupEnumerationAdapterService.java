@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static com.vmware.photon.controller.model.ComputeProperties.FIELD_COMPUTE_HOST_LINK;
 import static com.vmware.photon.controller.model.adapters.azure.AzureUriPaths.AZURE_FIREWALL_ADAPTER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_INBOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_NETWORK_SECURITY_GROUP_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
@@ -23,10 +24,13 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 
@@ -36,18 +40,23 @@ import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.model.network.NetworkSecurityGroup;
 import com.vmware.photon.controller.model.adapters.azure.model.network.NetworkSecurityGroupListResult;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -70,9 +79,6 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             BaseEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState,
                     NetworkSecurityGroup> {
 
-        private static final String SECURITY_RULE_ACCESS_ALLOW = "allow";
-        private static final String SECURITY_RULE_DIRECTION_INBOUND = "inbound";
-
         ComputeEnumerateResourceRequest enumRequest;
         AuthCredentialsService.AuthCredentialsServiceState parentAuth;
 
@@ -90,6 +96,9 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
         long enumerationStartTimeInMicros;
 
         List<String> securityGroupIds = new ArrayList<>();
+        // Stores the map of resource groups state ids to document self links.
+        // key -> resource group id; value - link to the local ResourceGroupState object.
+        Map<String, String> securityGroupRGStates = new HashMap<>();
 
         // Used to store an error while transferring to the error stage.
         Throwable error;
@@ -108,6 +117,8 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
 
         @Override
         public DeferredResult<RemoteResourcesPage> getExternalResources(String nextPageLink) {
+            this.securityGroupRGStates.clear();
+
             URI uri;
             if (nextPageLink == null) {
                 // First request to fetch Network Security Groups from Azure.
@@ -151,6 +162,18 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     });
         }
 
+        /**
+         * Load local Security Group states and in addition load all related resource groups.
+         * They will be used when building the updated local Security Group states.
+         */
+        @Override
+        protected DeferredResult<SecurityGroupEnumContext> queryLocalStates(
+                SecurityGroupEnumContext context) {
+
+            return super.queryLocalStates(context).thenCompose(
+                    this::getSecurityGroupRGStates);
+        }
+
         @Override
         protected Query getDeleteQuery() {
             String computeHostProperty = QuerySpecification.buildCompositeFieldName(
@@ -174,7 +197,16 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 NetworkSecurityGroup networkSecurityGroup,
                 SecurityGroupState localSecurityGroupState) {
 
+            String resourceGroupId = AzureUtils.getResourceGroupId(networkSecurityGroup.id);
+            String rgDocumentSelfLink = this.securityGroupRGStates.get(resourceGroupId);
+            if (rgDocumentSelfLink == null) {
+                // Resource group is still not enumerated.
+                // TODO: add log.
+                return SKIP;
+            }
+
             SecurityGroupState resultSecurityGroupState = new SecurityGroupState();
+            resultSecurityGroupState.groupLinks = Collections.singleton(rgDocumentSelfLink);
             if (localSecurityGroupState != null) {
                 resultSecurityGroupState.documentSelfLink = localSecurityGroupState.documentSelfLink;
                 resultSecurityGroupState.authCredentialsLink = localSecurityGroupState.authCredentialsLink;
@@ -192,8 +224,9 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             resultSecurityGroupState.tenantLinks = this.parentCompute.tenantLinks;
 
             // TODO: AzureFirewallService currently doesn't exist.
-            resultSecurityGroupState.instanceAdapterReference = UriUtils.buildUri(this.service.getHost(),
-                    AZURE_FIREWALL_ADAPTER);
+            resultSecurityGroupState.instanceAdapterReference = UriUtils
+                    .buildUri(this.service.getHost(),
+                            AZURE_FIREWALL_ADAPTER);
 
             resultSecurityGroupState.ingress = new ArrayList<>();
             resultSecurityGroupState.egress = new ArrayList<>();
@@ -208,7 +241,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
 
                 Rule rule = new Rule();
                 rule.name = securityRule.name;
-                rule.access = SECURITY_RULE_ACCESS_ALLOW
+                rule.access = AzureConstants.AZURE_SECURITY_GROUP_ACCESS
                         .equalsIgnoreCase(securityRule.properties.access) ?
                         Access.Allow : Access.Deny;
                 rule.protocol = securityRule.properties.protocol;
@@ -216,7 +249,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 List<SecurityGroupState.Rule> rulesList;
                 String ports;
 
-                if (SECURITY_RULE_DIRECTION_INBOUND.equalsIgnoreCase(
+                if (AZURE_SECURITY_GROUP_DIRECTION_INBOUND.equalsIgnoreCase(
                         securityRule.properties.direction)) {
                     // ingress rule.
                     rule.ipRangeCidr = securityRule.properties.sourceAddressPrefix;
@@ -246,6 +279,43 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 }
             });
             return resultSecurityGroupState;
+        }
+
+        /**
+         * For each loaded Security Group load its corresponding resource group state based on
+         * the resource group id.
+         */
+        private DeferredResult<SecurityGroupEnumContext> getSecurityGroupRGStates(
+                SecurityGroupEnumContext context) {
+            if (context.remoteResources == null || context.remoteResources.keySet().isEmpty()) {
+                return DeferredResult.completed(context);
+            }
+
+            List<String> resourceGroupIds = context.remoteResources.keySet().stream()
+                    .map(AzureUtils::getResourceGroupId)
+                    .collect(Collectors.toList());
+
+            Query query = Builder.create()
+                    .addKindFieldClause(ResourceGroupState.class)
+                    .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            ComputeProperties.FIELD_COMPUTE_HOST_LINK,
+                            this.parentCompute.documentSelfLink)
+                    .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            ComputeProperties.RESOURCE_TYPE_KEY,
+                            ResourceGroupStateType.AzureResourceGroup.name())
+                    .addInClause(ResourceGroupState.FIELD_NAME_ID, resourceGroupIds)
+                    .build();
+
+            QueryByPages<ResourceGroupState> queryByPages = new QueryByPages<>(
+                    this.service.getHost(),
+                    query,
+                    ResourceGroupState.class,
+                    null).setMaxPageSize(resourceGroupIds.size());
+
+            return queryByPages
+                    .queryDocuments(rgState ->
+                            this.securityGroupRGStates.put(rgState.id, rgState.documentSelfLink))
+                    .thenApply(ignore -> context);
         }
     }
 

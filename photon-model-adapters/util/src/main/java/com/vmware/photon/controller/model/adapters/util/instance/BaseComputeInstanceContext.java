@@ -15,9 +15,7 @@ package com.vmware.photon.controller.model.adapters.util.instance;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -78,7 +76,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         /**
          * Resolved from {@code NetworkInterfaceStateWithDescription.firewallLinks}.
          */
-        public Map<String, SecurityGroupState> securityGroupStates = new LinkedHashMap<>();
+        public List<SecurityGroupState> securityGroupStates = new ArrayList<>();
     }
 
     /**
@@ -127,7 +125,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
     /**
      * Populate this context. Right now its main focus is to populate NIC related states.
-     *
+     * <p>
      * <p>
      * Notes:
      * <ul>
@@ -143,8 +141,10 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
                 .thenCompose(this::getNicStates).thenApply(log("getNicStates"))
                 .thenCompose(this::getNicSubnetStates).thenApply(log("getNicSubnetStates"))
                 .thenCompose(this::getNicNetworkStates).thenApply(log("getNicNetworkStates"))
-                .thenCompose(this::getNicNetworkResourceGroupStates).thenApply(log("getNicNetworkResourceGroupStates"))
-                .thenCompose(this::getNicSecurityGroupStates).thenApply(log("getNicSecurityGroupStates"))
+                .thenCompose(this::getNicNetworkResourceGroupStates)
+                .thenApply(log("getNicNetworkResourceGroupStates"))
+                .thenCompose(this::getNicSecurityGroupStates)
+                .thenApply(log("getNicSecurityGroupStates"))
                 .thenCompose(this::customizeContext).thenApply(log("customizeContext"));
     }
 
@@ -265,29 +265,27 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
             return DeferredResult.completed(context);
         }
 
-        List<String> securityGroupLinks = context.getPrimaryNic().nicStateWithDesc.firewallLinks;
+        List<DeferredResult<Void>> getSecurityGroupDR = context.nics.stream()
+                .filter(nicContext ->
+                        // Only those that have at least 1 security group.
+                        nicContext.nicStateWithDesc.firewallLinks != null && nicContext
+                                .nicStateWithDesc.firewallLinks.size() > 0)
+                .flatMap(nicContext -> nicContext.nicStateWithDesc
+                        .firewallLinks
+                        .stream()
+                        .map(securityGroupLink -> {
+                            Operation op = Operation.createGet(
+                                    context.service.getHost(),
+                                    securityGroupLink);
 
-        if (securityGroupLinks == null || securityGroupLinks.isEmpty()) {
-            return DeferredResult.completed(context);
-        }
-
-        List<DeferredResult<Void>> getStatesDR = securityGroupLinks.stream()
-                .map(securityGroupLink -> {
-                    Operation op = Operation.createGet(context.service.getHost(),
-                            securityGroupLink);
-                    return context.service
-                            .sendWithDeferredResult(op, SecurityGroupState.class)
-                            .thenAccept(securityGroupState -> {
-                                // Populate _all_ NICs with _same_ SecurityGroup state.
-                                for (BaseNicContext nicCtx : context.nics) {
-                                    nicCtx.securityGroupStates.put(securityGroupState.name,
-                                            securityGroupState);
-                                }
-                            });
-                })
+                            return context.service
+                                    .sendWithDeferredResult(op, SecurityGroupState.class)
+                                    .thenAccept(securityGroupState ->
+                                            nicContext.securityGroupStates.add(securityGroupState));
+                        }))
                 .collect(Collectors.toList());
 
-        return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
+        return DeferredResult.allOf(getSecurityGroupDR).handle((all, exc) -> {
             if (exc != null) {
                 String msg = String.format(
                         "Error getting NIC SecurityGroup states for [%s] VM.",

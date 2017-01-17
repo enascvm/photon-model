@@ -37,6 +37,8 @@ import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
 import com.microsoft.azure.management.network.NetworkManagementClient;
 import com.microsoft.azure.management.network.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.models.AddressSpace;
+import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
+import com.microsoft.azure.management.network.models.SecurityRule;
 import com.microsoft.azure.management.network.models.Subnet;
 import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
@@ -55,11 +57,13 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -208,7 +212,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
     /**
      * Creates Azure instance that uses shared/existing Network via a provision task.
-     *
+     * <p>
      * It duplicates {@link #testProvision()} and just points to an external/shared Network.
      */
     @Test
@@ -234,25 +238,9 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
             this.resourceManagementClient.getResourceGroupsOperations()
                     .createOrUpdate(sharedNetworkRG.getName(), sharedNetworkRG);
 
-            VirtualNetwork vNet = new VirtualNetwork();
-            vNet.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+            createAzureVirtualNetwork(sharedNetworkRG.getName());
 
-            vNet.setAddressSpace(new AddressSpace());
-            vNet.getAddressSpace().setAddressPrefixes(
-                    Collections.singletonList(AzureTestUtil.AZURE_NETWORK_CIDR));
-
-            vNet.setSubnets(new ArrayList<>());
-
-            for (int i = 0; i < AzureTestUtil.NUMBER_OF_NICS; i++) {
-                Subnet subnet = new Subnet();
-                subnet.setName(AzureTestUtil.AZURE_SUBNET_NAME + i);
-                subnet.setAddressPrefix(AzureTestUtil.AZURE_SUBNET_CIDR[i]);
-
-                vNet.getSubnets().add(subnet);
-            }
-
-            this.networkManagementClient.getVirtualNetworksOperations().createOrUpdate(
-                    sharedNetworkRG.getName(), AzureTestUtil.AZURE_NETWORK_NAME, vNet);
+            createAzureNetworkSecurityGroup(sharedNetworkRG.getName());
         }
 
         this.azureVMName += "-sharedNetwork";
@@ -261,7 +249,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 this.host, sharedNetworkRG.getName(), computeHost.documentSelfLink,
                 ResourceGroupStateType.AzureResourceGroup);
 
-        // create a Azure VM compute resoruce
+        // create a Azure VM compute resource
         this.vmState = createDefaultVMResource(this.host, this.azureVMName,
                 computeHost.documentSelfLink,
                 resourcePoolLink, authLink, networkRG.documentSelfLink);
@@ -354,6 +342,8 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 UriUtils.buildUri(this.host, vm.networkInterfaceLinks.get(0)));
 
         assertNotNull("Primary NIC public IP should be set.", primaryNicState.address);
+        assertNotNull("Primary NIC security group should be set.", primaryNicState
+                .firewallLinks != null && primaryNicState.firewallLinks.size() == 1);
 
         assertEquals("VM address should be the same as primary NIC public IP.", vm.address,
                 primaryNicState.address);
@@ -365,6 +355,56 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
             assertNull("Non-primary NIC" + i + " public IP should not be set.",
                     nonPrimaryNicState.address);
+            assertNull("Non-primary NIC" + i + " security group should not be set.",
+                    nonPrimaryNicState.firewallLinks);
         }
+    }
+
+    private void createAzureVirtualNetwork(String resourceGroupName) throws Exception {
+        VirtualNetwork vNet = new VirtualNetwork();
+        vNet.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+        vNet.setAddressSpace(new AddressSpace());
+        vNet.getAddressSpace().setAddressPrefixes(
+                Collections.singletonList(AzureTestUtil.AZURE_NETWORK_CIDR));
+
+        vNet.setSubnets(new ArrayList<>());
+
+        for (int i = 0; i < AzureTestUtil.NUMBER_OF_NICS; i++) {
+            Subnet subnet = new Subnet();
+            subnet.setName(AzureTestUtil.AZURE_SUBNET_NAME + i);
+            subnet.setAddressPrefix(AzureTestUtil.AZURE_SUBNET_CIDR[i]);
+
+            vNet.getSubnets().add(subnet);
+        }
+
+        this.networkManagementClient.getVirtualNetworksOperations().createOrUpdate(
+                resourceGroupName, AzureTestUtil.AZURE_NETWORK_NAME, vNet);
+    }
+
+    private void createAzureNetworkSecurityGroup(String resourceGroupName) throws Exception {
+        final NetworkSecurityGroup sharedNSG = new NetworkSecurityGroup();
+        sharedNSG.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+        SecurityRule sr = new SecurityRule();
+        sr.setPriority(AzureConstants.AZURE_SECURITY_GROUP_PRIORITY);
+        sr.setAccess(Access.Allow.name());
+        sr.setDirection(AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_INBOUND);
+        sr.setSourceAddressPrefix(AzureConstants.AZURE_SECURITY_GROUP_SOURCE_ADDRESS_PREFIX);
+        sr.setDestinationAddressPrefix(
+                AzureConstants.AZURE_SECURITY_GROUP_DESTINATION_ADDRESS_PREFIX);
+
+        sr.setSourcePortRange(AzureConstants.AZURE_SECURITY_GROUP_SOURCE_PORT_RANGE);
+        sr.setDestinationPortRange(
+                AzureConstants.AZURE_LINUX_SECURITY_GROUP_DESTINATION_PORT_RANGE);
+        sr.setName(AzureConstants.AZURE_LINUX_SECURITY_GROUP_NAME);
+        sr.setProtocol(AzureConstants.AZURE_SECURITY_GROUP_PROTOCOL);
+
+        sharedNSG.setSecurityRules(Collections.singletonList(sr));
+
+        this.networkManagementClient
+                .getNetworkSecurityGroupsOperations()
+                .createOrUpdate(resourceGroupName, AzureTestUtil.AZURE_SECURITY_GROUP_NAME,
+                        sharedNSG);
     }
 }

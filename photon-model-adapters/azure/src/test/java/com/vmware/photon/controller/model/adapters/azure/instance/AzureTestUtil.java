@@ -69,6 +69,9 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -101,6 +104,7 @@ public class AzureTestUtil {
 
     public static final int NUMBER_OF_NICS = 2;
     public static final String AZURE_NETWORK_NAME = "vNet";
+    public static final String AZURE_SECURITY_GROUP_NAME = "NSG-name";
     public static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
     public static final String AZURE_SUBNET_NAME = "subnet";
     public static final String[] AZURE_SUBNET_CIDR;
@@ -473,6 +477,45 @@ public class AzureTestUtil {
                         UriUtils.buildUri(host, SubnetService.FACTORY_LINK));
             }
 
+            // Create security group state
+            SecurityGroupState securityGroupState;
+            {
+                securityGroupState = new SecurityGroupState();
+                securityGroupState.authCredentialsLink = authCredentialsLink;
+                securityGroupState.documentSelfLink = securityGroupState.id;
+                securityGroupState.name = AZURE_SECURITY_GROUP_NAME;
+                securityGroupState.tenantLinks = new ArrayList<>();
+                securityGroupState.tenantLinks.add("tenant-linkA");
+                securityGroupState.groupLinks = Collections.singleton(networkRGLink);
+                ArrayList<Rule> ingressRules = new ArrayList<>();
+
+                Rule ssh = new Rule();
+                ssh.name = "ssh-in";
+                ssh.protocol = "tcp";
+                ssh.ipRangeCidr = "0.0.0.0/0";
+                ssh.ports = "22";
+                ingressRules.add(ssh);
+                securityGroupState.ingress = ingressRules;
+
+                ArrayList<Rule> egressRules = new ArrayList<>();
+                Rule out = new Rule();
+                out.name = "out";
+                out.protocol = "tcp";
+                out.ipRangeCidr = "0.0.0.0/0";
+                out.ports = "1-65535";
+                egressRules.add(out);
+                securityGroupState.egress = egressRules;
+
+                securityGroupState.regionId = "regionId";
+                securityGroupState.resourcePoolLink = "/link/to/rp";
+                securityGroupState.instanceAdapterReference = new URI(
+                        "http://instanceAdapterReference");
+
+                securityGroupState = TestUtils.doPost(host, securityGroupState,
+                        SecurityGroupState.class, UriUtils.buildUri(host, SecurityGroupService
+                                .FACTORY_LINK));
+            }
+
             // Create NIC description.
             NetworkInterfaceDescription nicDescription;
             {
@@ -494,12 +537,15 @@ public class AzureTestUtil {
             nicState.name = "nic" + i;
             nicState.deviceIndex = nicDescription.deviceIndex;
 
+            if (i == 0) {
+                // Attach security group only on the primary nic.
+                nicState.firewallLinks =
+                        Collections.singletonList(securityGroupState.documentSelfLink);
+            }
+
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
             nicState.subnetLink = subnetState.documentSelfLink;
             nicState.networkLink = subnetState.networkLink;
-
-            // For now empty for completeness. To be changed in next CL.
-            nicState.firewallLinks = new ArrayList<>();
 
             nicState = TestUtils.doPost(host, nicState,
                     NetworkInterfaceState.class,
@@ -510,6 +556,4 @@ public class AzureTestUtil {
 
         return nics;
     }
-
-
 }

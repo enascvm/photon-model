@@ -33,6 +33,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -251,7 +252,7 @@ public class AWSUtils {
      */
     public static Filter getAWSNonTerminatedInstancesFilter() {
         // Create a filter to only get non terminated instances from the remote instance.
-        List<String> stateValues = new ArrayList<String>(Arrays.asList(INSTANCE_STATE_RUNNING,
+        List<String> stateValues = new ArrayList<>(Arrays.asList(INSTANCE_STATE_RUNNING,
                 INSTANCE_STATE_PENDING, INSTANCE_STATE_STOPPING, INSTANCE_STATE_STOPPED,
                 INSTANCE_STATE_SHUTTING_DOWN));
         Filter runningInstanceFilter = new Filter();
@@ -303,9 +304,11 @@ public class AWSUtils {
 
         if (nicCtx != null) {
             if (nicCtx.securityGroupStates != null && !nicCtx.securityGroupStates.isEmpty()) {
+                List<String> securityGroupNames = nicCtx.securityGroupStates.stream()
+                        .map(securityGroupState -> securityGroupState.name)
+                        .collect(Collectors.toList());
                 List<SecurityGroup> securityGroups = getSecurityGroups(aws.amazonEC2Client,
-                        new ArrayList<>(nicCtx.securityGroupStates.keySet()),
-                        nicCtx.vpc.getVpcId());
+                        new ArrayList<>(securityGroupNames), nicCtx.vpc.getVpcId());
                 for (SecurityGroup securityGroup : securityGroups) {
                     groupIds.add(securityGroup.getGroupId());
                 }
@@ -341,7 +344,7 @@ public class AWSUtils {
         // we will continue and create the group
         groupId = createAWSSecurityGroup(aws);
 
-        return Arrays.asList(groupId);
+        return Collections.singletonList(groupId);
     }
 
     // method create a security group in the VPC from custom properties or the default VPC
@@ -518,17 +521,6 @@ public class AWSUtils {
             if (vpc.isDefault()) {
                 return vpc;
             }
-        }
-        return null;
-    }
-
-    /**
-     * Gets the subnet associated with the default VPC.
-     */
-    public static String getDefaultVPCSubnet(AWSInstanceContext aws) {
-        Vpc defaultVpc = getDefaultVPC(aws);
-        if (defaultVpc != null) {
-            return defaultVpc.getCidrBlock();
         }
         return null;
     }

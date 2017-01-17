@@ -57,7 +57,8 @@ public class AzureConstants {
     // Azure Generic Security Group constants
     public static final int AZURE_SECURITY_GROUP_PRIORITY = 1000;
     public static final String AZURE_SECURITY_GROUP_PROTOCOL = "TCP";
-    public static final String AZURE_SECURITY_GROUP_DIRECTION = "Inbound";
+    public static final String AZURE_SECURITY_GROUP_DIRECTION_INBOUND = "Inbound";
+    public static final String AZURE_SECURITY_GROUP_DIRECTION_OUTBOUND = "Outbound";
     public static final String AZURE_SECURITY_GROUP_ACCESS = "Allow";
     public static final String AZURE_SECURITY_GROUP_SOURCE_ADDRESS_PREFIX = "*";
     public static final String AZURE_SECURITY_GROUP_SOURCE_PORT_RANGE = "*";

@@ -51,6 +51,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             UriPaths.PROPERTY_PREFIX + "Enumeration.QUERY_RESULT_LIMIT";
     public static final int DEFAULT_QUERY_RESULT_LIMIT = 50;
 
+    protected final LOCAL_STATE SKIP = null;
+
     public ComputeStateWithDescription parentCompute;
 
     /**
@@ -271,6 +273,9 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                             remoteResource,
                             existsLocally ? this.localResourceStates.get(id) : null);
 
+                    if (localResourceState == this.SKIP) {
+                        return;
+                    }
                     // Explicitly set the local resource state id to be equal to the remote
                     // resource state id. This is important in the query for local states.
                     localResourceState.id = id;

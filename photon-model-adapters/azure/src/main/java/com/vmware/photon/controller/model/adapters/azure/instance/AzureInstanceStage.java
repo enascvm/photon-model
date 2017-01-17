@@ -69,14 +69,10 @@ public enum AzureInstanceStage {
     INIT_STORAGE,
 
     /**
-     * Stage where network interface states are initialized.
+     * Stage where network interface context is initialized.
+     * This includes retrieving of subnet, security group, etc. objects from Azure.
      */
-    GET_NIC_STATES,
-
-    /**
-     * Stage where networks (vNet-subnet pair) are get.
-     */
-    GET_NETWORKS,
+    POPULATE_NIC_CONTEXT,
 
     /**
      * Stage where networks (vNet-subnet pair) are created.
