@@ -18,8 +18,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.MULTI_NIC_SPECS;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.SINGLE_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
@@ -60,7 +58,6 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.Comput
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -72,7 +69,6 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -172,7 +168,7 @@ public class TestAWSProvisionTask {
         this.vmState = createAWSVMResource(this.host, outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(),
                 this.currentTestName.getMethodName() + "_vm1",
-                null /* tagLinks */, SINGLE_NIC_SPEC);
+                null /* tagLinks */, TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
@@ -273,7 +269,7 @@ public class TestAWSProvisionTask {
                 outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(),
                 this.currentTestName.getMethodName() + "_vm2",
-                tagLinks, MULTI_NIC_SPECS);
+                tagLinks, TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
 
@@ -285,8 +281,6 @@ public class TestAWSProvisionTask {
             assertTags(tags, instances.get(0), this.vmState.name);
 
             assertVmNetworksConfiguration(instances.get(0));
-
-            assertVMSecurityGroupConfiguration(instances.get(0));
 
             // reach out to AWS and get the current state
             TestAWSSetupUtils
@@ -307,7 +301,7 @@ public class TestAWSProvisionTask {
         this.vmState = null;
     }
 
-    private void assertVmNetworksConfiguration(Instance awsInstance) {
+    private void assertVmNetworksConfiguration(Instance awsInstance) throws Throwable {
 
         // This assert is only suitable for real (non-mocking env).
         if (this.isMock) {
@@ -352,47 +346,28 @@ public class TestAWSProvisionTask {
                     "NetworkInterfaceState[" + nicState.deviceIndex
                             + "].address should be set to AWS NIC private IP.",
                     awsNic.getPrivateIpAddress(), nicState.address);
-        }
-    }
 
-    private void assertVMSecurityGroupConfiguration(Instance awsInstance) throws Throwable {
-        // This assert is only suitable for real (non-mocking env).
-        if (this.isMock) {
-            return;
-        }
+            // Assert security groups
+            {
+                assertEquals("Provisioned instance should have the same number of security groups assigned, as its state's links",
+                        awsInstance.getSecurityGroups().size(),
+                        nicState.securityGroupLinks.size());
 
-        this.host.log(Level.INFO, "%s: Assert security groups configuration for [%s] VM",
-                this.currentTestName.getMethodName(), this.vmState.name);
+                Map<String, SecurityGroupState> securityGroupStatesByName = new HashMap<>();
 
-        Map<String, NetworkInterfaceState> nicStates = ProvisioningUtils.getResourceStates(
-                this.host, NetworkInterfaceService.FACTORY_LINK, NetworkInterfaceState.class);
-        for (NetworkInterfaceState nicState : nicStates.values()) {
-            assertNotNull(
-                    "Local instance state should have security groups attached",
-                    nicState.securityGroupLinks.size());
-            assertNotNull(
-                    "Provisioned instance should have security groups attached",
-                    awsInstance.getSecurityGroups());
-            assertEquals(
-                    "Provisioned instance should have the same number of security groups assigned, as its state's links",
-                    awsInstance.getSecurityGroups().size(),
-                    nicState.securityGroupLinks.size());
-
-            Map<String, SecurityGroupState> allSecurityGroupStatesByName = new HashMap<>();
-            for (String sgLink : nicState.securityGroupLinks) {
-                SecurityGroupState sg = this.host.getServiceState(null,
-                        SecurityGroupState.class,
-                        UriUtils.buildUri(this.host, sgLink));
-                if (sg != null) {
-                    allSecurityGroupStatesByName.put(sg.name, sg);
+                for (String sgLink : nicState.securityGroupLinks) {
+                    SecurityGroupState sg = this.host.getServiceState(null,
+                            SecurityGroupState.class,
+                            UriUtils.buildUri(this.host, sgLink));
+                    if (sg != null) {
+                        securityGroupStatesByName.put(sg.name, sg);
+                    }
                 }
-            }
 
-            for (GroupIdentifier securityGroup : awsInstance.getSecurityGroups()) {
-                assertTrue(
-                        "Provisioned vm should have the same security groups as specified in the request",
-                        allSecurityGroupStatesByName.keySet()
-                                .contains(securityGroup.getGroupName()));
+                for (GroupIdentifier awsSecurityGroup : awsInstance.getSecurityGroups()) {
+                    assertTrue("Provisioned vm should have the same security groups as specified in the request",
+                            securityGroupStatesByName.keySet().contains(awsSecurityGroup.getGroupName()));
+                }
             }
         }
     }

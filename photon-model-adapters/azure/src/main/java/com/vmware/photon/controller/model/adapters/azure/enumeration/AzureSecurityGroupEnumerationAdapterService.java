@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
-import static com.vmware.photon.controller.model.ComputeProperties.FIELD_COMPUTE_HOST_LINK;
+import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.AzureUriPaths.AZURE_FIREWALL_ADAPTER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_INBOUND;
@@ -181,7 +181,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
         protected Query getDeleteQuery() {
             String computeHostProperty = QuerySpecification.buildCompositeFieldName(
                     SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                    ComputeProperties.FIELD_COMPUTE_HOST_LINK);
+                    ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME);
 
             return Builder.create()
                     .addKindFieldClause(SecurityGroupState.class)
@@ -217,7 +217,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             } else {
                 resultSecurityGroupState.authCredentialsLink = this.parentAuth.documentSelfLink;
                 resultSecurityGroupState.customProperties = new HashMap<>();
-                resultSecurityGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
+                resultSecurityGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME,
                         this.parentCompute.documentSelfLink);
             }
 
@@ -302,7 +302,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             Query query = Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
                     .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                            ComputeProperties.FIELD_COMPUTE_HOST_LINK,
+                            ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                             this.parentCompute.documentSelfLink)
                     .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.RESOURCE_TYPE_KEY,

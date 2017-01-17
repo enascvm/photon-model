@@ -18,11 +18,12 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 
-import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages.waitToComplete;
+import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
@@ -33,11 +34,13 @@ import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryForReferrers;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
- * Tests for {@link QueryUtils} class.
+ * Tests for {@link QueryByPages} and {@link QueryTop} classes.
  */
 public class QueryUtilsTest extends BaseModelTest {
 
@@ -46,14 +49,6 @@ public class QueryUtilsTest extends BaseModelTest {
         System.setProperty(QueryByPages.PROPERTY_NAME_MAX_PAGE_SIZE, Integer.toString(2));
     }
 
-    /**
-     * Test for {@link QueryForReferrers#collectDocuments(java.util.stream.Collector)} and
-     * {@link QueryForReferrers#collectLinks(java.util.stream.Collector)}.
-     *
-     * <p>
-     * It effectively tests {@link QueryForReferrers#queryDocuments(java.util.function.Consumer)},
-     * {@link QueryForReferrers#queryLinks(java.util.function.Consumer)} and {@link QueryByPages}.
-     */
     @Test
     public void testQueryReferrers() throws Throwable {
 
@@ -66,33 +61,7 @@ public class QueryUtilsTest extends BaseModelTest {
                 ModelUtils.createCompute(this, cd).documentSelfLink,
                 ModelUtils.createCompute(this, cd).documentSelfLink));
 
-        // The class under testing
-        QueryForReferrers<ComputeState> queryReferrers = new QueryForReferrers<>(
-                getHost(),
-                cd.documentSelfLink,
-                ComputeState.class,
-                ComputeState.FIELD_NAME_DESCRIPTION_LINK,
-                Collections.emptyList());
-
-        {
-            // The method under testing
-            DeferredResult<Set<String>> documentLinksDR = queryReferrers.collectDocuments(
-                    Collectors.mapping(cs -> cs.documentSelfLink, Collectors.toSet()));
-            Set<String> actual = waitToComplete(documentLinksDR);
-
-            assertThat(actual, equalTo(expected));
-        }
-
-        {
-            // The method under testing
-            DeferredResult<Set<String>> linkDocumentsDR = queryReferrers
-                    // Configure custom page size
-                    .setMaxPageSize(3)
-                    .collectLinks(Collectors.toSet());
-
-            Set<String> actual = waitToComplete(linkDocumentsDR);
-            assertThat(actual, equalTo(expected));
-        }
+        doTest(cd, expected);
     }
 
     @Test
@@ -102,30 +71,49 @@ public class QueryUtilsTest extends BaseModelTest {
 
         Set<String> expected = Collections.emptySet();
 
-        // The class under testing
-        QueryForReferrers<ComputeState> queryReferrers = new QueryForReferrers<>(
-                getHost(),
+        doTest(cd, expected);
+    }
+
+    private void doTest(ComputeDescription cd, Set<String> expected) {
+
+        Query queryForReferrers = QueryUtils.queryForReferrers(
                 cd.documentSelfLink,
                 ComputeState.class,
-                ComputeState.FIELD_NAME_DESCRIPTION_LINK,
-                Collections.emptyList());
+                ComputeState.FIELD_NAME_DESCRIPTION_LINK);
 
-        {
-            // The method under testing
-            DeferredResult<Set<String>> documentLinksDR = queryReferrers.collectDocuments(
-                    Collectors.mapping(cs -> cs.documentSelfLink, Collectors.toSet()));
+        // The classes under testing
+        List<QueryTemplate<ComputeState>> queryStrategies = Arrays.asList(
+                new QueryByPages<>(
+                        getHost(),
+                        queryForReferrers,
+                        ComputeState.class,
+                        Collections.emptyList()),
+                new QueryTop<>(
+                        getHost(),
+                        queryForReferrers,
+                        ComputeState.class,
+                        Collections.emptyList()));
 
-            Set<String> actual = waitToComplete(documentLinksDR);
+        // Test collectDocuments/queryDocuments/collectLinks/queryLinks per QueryByPages and
+        // QueryTop
+        for (QueryTemplate<ComputeState> queryStrategy : queryStrategies) {
+            {
+                // Test collectDocuments, which internally also tests queryDocuments
+                DeferredResult<Set<String>> documentLinksDR = queryStrategy.collectDocuments(
+                        Collectors.mapping(cs -> cs.documentSelfLink, Collectors.toSet()));
+                Set<String> actual = waitToComplete(documentLinksDR);
 
-            assertThat(actual, equalTo(expected));
-        }
+                assertThat(actual, equalTo(expected));
+            }
 
-        {
-            // The method under testing
-            DeferredResult<Set<String>> documentLinksDR = queryReferrers.collectLinks(Collectors.toSet());
-            Set<String> actual = waitToComplete(documentLinksDR);
+            {
+                // Test collectLinks, which internally also tests queryLinks
+                DeferredResult<Set<String>> documentLinksDR = queryStrategy
+                        .collectLinks(Collectors.toSet());
 
-            assertThat(actual, equalTo(expected));
+                Set<String> actual = waitToComplete(documentLinksDR);
+                assertThat(actual, equalTo(expected));
+            }
         }
     }
 
@@ -136,19 +124,23 @@ public class QueryUtilsTest extends BaseModelTest {
         ModelUtils.createCompute(this, cd);
         ModelUtils.createCompute(this, cd);
 
-        // The class under testing
-        QueryForReferrers<ComputeState> queryReferrers = new QueryForReferrers<>(
-                getHost(),
+        Query queryForReferrers = QueryUtils.queryForReferrers(
                 cd.documentSelfLink,
                 ComputeState.class,
-                ComputeState.FIELD_NAME_DESCRIPTION_LINK,
+                ComputeState.FIELD_NAME_DESCRIPTION_LINK);
+
+        // The class under testing
+        QueryByPages<ComputeState> queryStrategy = new QueryByPages<>(
+                getHost(),
+                queryForReferrers,
+                ComputeState.class,
                 Collections.emptyList());
 
         Set<String> actual = new HashSet<>();
 
         // The method under testing
         waitToComplete(
-                queryReferrers.queryDocuments(cs -> {
+                queryStrategy.queryDocuments(cs -> {
                     if (actual.isEmpty()) {
                         actual.add(cs.documentSelfLink);
                     } else {

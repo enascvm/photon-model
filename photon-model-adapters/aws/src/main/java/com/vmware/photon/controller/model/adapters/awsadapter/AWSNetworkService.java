@@ -56,11 +56,13 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService.ProvisionNetworkTaskState;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryForReferrers;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
  * Adapter for provisioning a network on AWS.
@@ -493,11 +495,15 @@ public class AWSNetworkService extends StatelessService {
      */
     private void deleteSubnetStates(AWSNetworkContext context, AWSNetworkStage next) {
 
-        QueryForReferrers<SubnetState> subnetStates = new QueryForReferrers<>(
-                getHost(),
+        Query queryForReferrers = QueryUtils.queryForReferrers(
                 context.network.documentSelfLink,
                 SubnetState.class,
-                SubnetState.FIELD_NAME_NETWORK_LINK,
+                SubnetState.FIELD_NAME_NETWORK_LINK);
+
+        QueryByPages<SubnetState> subnetStates = new QueryByPages<>(
+                getHost(),
+                queryForReferrers,
+                SubnetState.class,
                 context.networkTaskState.tenantLinks);
 
         DeferredResult<Void> query = subnetStates.queryDocuments(subnetState -> {

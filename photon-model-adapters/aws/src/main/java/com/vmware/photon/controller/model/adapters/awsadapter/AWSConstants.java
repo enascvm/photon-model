@@ -114,6 +114,11 @@ public class AWSConstants {
         EC2, CLOUD_WATCH, S3
     }
 
+    // AWS Error codes {{
+    // http://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html#api-error-codes-table-client
+    public static final String AWS_DEPENDENCY_VIOLATION_ERROR_CODE = "DependencyViolation";
+    // }}
+
     public static void setQueryPageSize(int size) {
         QUERY_PAGE_SIZE = size;
     }

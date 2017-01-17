@@ -154,7 +154,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
         if (state.address != null) {
             if (state.assignment != IpAssignment.STATIC) {
                 throw new IllegalArgumentException(
-                        "IP can be reseved only when assignment is STATIC");
+                        "IP can be reserved only when assignment is STATIC");
             }
             if (!InetAddressValidator.getInstance().isValidInet4Address(
                     state.address)) {

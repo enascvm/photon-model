@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DEPENDENCY_VIOLATION_ERROR_CODE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
@@ -32,6 +34,9 @@ import java.util.stream.Stream;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.AmazonEC2Exception;
+import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
+import com.amazonaws.services.ec2.model.DeleteSubnetResult;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.Instance;
@@ -42,12 +47,14 @@ import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
@@ -58,15 +65,21 @@ import com.vmware.photon.controller.model.resources.ComputeService.LifecycleStat
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 /**
  * Adapter to create an EC2 instance on AWS.
@@ -105,6 +118,7 @@ public class AWSInstanceService extends StatelessService {
 
         AWSInstanceContext ctx = new AWSInstanceContext(this,
                 op.getBody(ComputeInstanceRequest.class));
+
         try {
             final BaseAdapterStage startingStage;
             final AWSInstanceStage nextStage;
@@ -362,7 +376,7 @@ public class AWSInstanceService extends StatelessService {
 
             // consumer to be invoked once a VM is in the running state
             Consumer<Instance> consumer = instance -> {
-                List<Operation> patchOperations = new ArrayList<>();
+                List<Operation> patchOperations = new ArrayList<Operation>();
                 if (instance == null) {
                     AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
                             this.context.computeRequest.taskReference,
@@ -377,7 +391,7 @@ public class AWSInstanceService extends StatelessService {
                 cs.address = instance.getPublicIpAddress();
                 cs.powerState = AWSUtils.mapToPowerState(instance.getState());
                 if (this.context.child.customProperties == null) {
-                    cs.customProperties = new HashMap<>();
+                    cs.customProperties = new HashMap<String, String>();
                 } else {
                     cs.customProperties = this.context.child.customProperties;
                 }
@@ -423,9 +437,10 @@ public class AWSInstanceService extends StatelessService {
 
             List<Operation> patchOperations = new ArrayList<>();
             for (InstanceNetworkInterface instanceNic : instance.getNetworkInterfaces()) {
-                List<NetworkInterfaceState> nicStates = nics.stream()
-                        .map(nicCtx -> nicCtx.nicStateWithDesc)
-                        .collect(Collectors.toList());
+                List<NetworkInterfaceState> nicStates = nics.stream().map(
+                        nicCtx -> {
+                            return nicCtx.nicStateWithDesc;
+                        }).collect(Collectors.toList());
                 NetworkInterfaceState nicStateWithDesc = AWSNetworkUtils
                         .getNICStateByDeviceId(nicStates, instanceNic.getAttachment()
                                 .getDeviceIndex());
@@ -447,9 +462,8 @@ public class AWSInstanceService extends StatelessService {
         private void tagInstanceAndStartStatusChecker(String instanceId, Set<String> tagLinks,
                 Consumer<Instance> consumer) {
 
-            final List<Tag> tagsToCreate = new ArrayList<>();
-            Tag nameTag = new Tag(AWSConstants.AWS_TAG_NAME, this.context.child.name);
-            tagsToCreate.add(nameTag);
+            List<Tag> tagsToCreate = new ArrayList<>();
+            tagsToCreate.add(new Tag().withKey(AWS_TAG_NAME).withValue(this.context.child.name));
 
             Runnable proceed = () -> {
                 AWSUtils.tagResources(this.context.amazonEC2Client, tagsToCreate, instanceId);
@@ -499,10 +513,10 @@ public class AWSInstanceService extends StatelessService {
             return;
         }
 
-        String instanceId = aws.child.id;
+        final String instanceId = aws.child.id;
+
         if (instanceId == null) {
-            aws.error = new IllegalStateException(
-                    "AWS InstanceId not available");
+            aws.error = new IllegalStateException("AWS InstanceId not available");
             aws.stage = AWSInstanceStage.ERROR;
             handleAllocation(aws);
             return;
@@ -516,6 +530,7 @@ public class AWSInstanceService extends StatelessService {
         AsyncHandler<TerminateInstancesRequest, TerminateInstancesResult> terminateHandler = buildTerminationCallbackHandler(
                 service, aws.computeRequest, aws.amazonEC2Client, instanceId,
                 aws.taskExpirationMicros);
+
         aws.amazonEC2Client.terminateInstancesAsync(termRequest,
                 terminateHandler);
     }
@@ -545,7 +560,8 @@ public class AWSInstanceService extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
-            this.service.logInfo("Error deleting instances received from AWS: %s", exception.getMessage());
+            this.service.logInfo("Error deleting instances received from AWS: %s",
+                    exception.getMessage());
             AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
                     this.computeReq.taskReference, exception);
         }
@@ -553,8 +569,11 @@ public class AWSInstanceService extends StatelessService {
         @Override
         public void onSuccess(TerminateInstancesRequest request,
                 TerminateInstancesResult result) {
-            Consumer<Instance> consumer = instance -> {
+
+            Consumer<Instance> postTerminationCallback = (instance) -> {
+
                 OperationContext.restoreOperationContext(AWSTerminateHandler.this.opContext);
+
                 if (instance == null) {
                     AdapterUtils.sendFailurePatchToProvisioningTask(
                             AWSTerminateHandler.this.service,
@@ -562,17 +581,123 @@ public class AWSInstanceService extends StatelessService {
                             new IllegalStateException("Error getting instance"));
                     return;
                 }
-                AdapterUtils.sendPatchToProvisioningTask(AWSTerminateHandler.this.service,
-                        AWSTerminateHandler.this.computeReq.taskReference);
+
+                deleteConstructsReferredByInstance()
+                        .whenComplete((aVoid, exc) -> {
+                            if (exc != null) {
+                                AdapterUtils.sendFailurePatchToProvisioningTask(
+                                        this.service,
+                                        this.computeReq.taskReference,
+                                        new IllegalStateException(
+                                                "Error deleting AWS subnet", exc));
+                            } else {
+                                this.service.logInfo("Deleting Subnets 'created-by' [%s]: SUCCESS",
+                                        this.computeReq.resourceLink());
+
+                                AdapterUtils.sendPatchToProvisioningTask(this.service,
+                                        this.computeReq.taskReference);
+                            }
+                        });
             };
+
             AWSTaskStatusChecker.create(this.amazonEC2Client, this.instanceId,
-                    AWSInstanceService.AWS_TERMINATED_NAME, consumer,
+                    AWSInstanceService.AWS_TERMINATED_NAME, postTerminationCallback,
                     this.computeReq, this.service, this.taskExpirationTimeMicros).start();
+        }
+
+        private DeferredResult<List<ResourceState>> deleteConstructsReferredByInstance() {
+
+            this.service.logInfo("Get all states to delete 'created-by' [%s]",
+                    this.computeReq.resourceLink());
+
+            // Query all states that are usedBy/createdBy the VM state we are deleting
+            Query query = Builder.create()
+                    .addCompositeFieldClause(
+                            ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            ComputeProperties.CREATE_CONTEXT_PROP_NAME,
+                            this.computeReq.resourceLink())
+                    .build();
+
+            QueryTop<ResourceState> statesToDeleteQuery = new QueryTop<>(
+                    getHost(), query, ResourceState.class, null);
+
+            // Once got states to delete process with actual deletion
+            return statesToDeleteQuery.collectDocuments(Collectors.toList())
+                    .thenCompose(this::handleStatesToDelete);
+        }
+
+        private DeferredResult<List<ResourceState>> handleStatesToDelete(
+                List<ResourceState> statesToDelete) {
+
+            List<DeferredResult<ResourceState>> statesToDeleteDR = statesToDelete.stream()
+                    // NOTE: For now only Subnets are handled
+                    .filter(rS -> rS.documentKind.endsWith(SubnetState.class.getSimpleName()))
+                    // First delete AWS subnet, then delete Subnet state
+                    .map(rS -> deleteAWSSubnet(rS).thenCompose(this::deleteSubnetState))
+                    .collect(Collectors.toList());
+
+            return DeferredResult.allOf(statesToDeleteDR);
+        }
+
+        // Do AWS subnet deletion
+        private DeferredResult<ResourceState> deleteAWSSubnet(ResourceState stateToDelete) {
+
+            this.service.logInfo("Deleting AWS Subnet [%s] 'created-by' [%s]", stateToDelete.id,
+                    this.computeReq.resourceLink());
+
+            DeleteSubnetRequest req = new DeleteSubnetRequest().withSubnetId(stateToDelete.id);
+
+            String msg = "Delete AWS subnet + [" + stateToDelete.name + "]";
+
+            AWSDeferredResultAsyncHandler<DeleteSubnetRequest, DeleteSubnetResult>
+                    deleteAWSSubnet = new AWSDeferredResultAsyncHandler<DeleteSubnetRequest,
+                    DeleteSubnetResult>(this.service, msg) {
+
+                        @Override
+                        protected DeferredResult<DeleteSubnetResult> consumeSuccess(
+                                DeleteSubnetRequest request,
+                                DeleteSubnetResult result) {
+                            return DeferredResult.completed(result);
+                        }
+
+                        @Override
+                        protected Exception consumeError(Exception exception) {
+                            if (exception instanceof AmazonEC2Exception) {
+                                AmazonEC2Exception amazonExc = (AmazonEC2Exception) exception;
+                                if (AWS_DEPENDENCY_VIOLATION_ERROR_CODE.equals(amazonExc.getErrorCode())) {
+                                    // AWS subnet is being used by other AWS Instances.
+                                    return RECOVERED;
+                                }
+                            }
+                            return exception;
+                        }
+                    };
+
+            this.amazonEC2Client.deleteSubnetAsync(req, deleteAWSSubnet);
+
+            return deleteAWSSubnet.toDeferredResult().thenApply(ignore -> stateToDelete);
+        }
+
+        // Do Subnet state deletion
+        private DeferredResult<ResourceState> deleteSubnetState(ResourceState stateToDelete) {
+
+            if (stateToDelete == null) {
+                // The AWS subnet deletion has failed. See deleteAWSSubnet method.
+                // Do not delete SubnetState and continue with Instance deletion.
+                return DeferredResult.completed(stateToDelete);
+            }
+
+            this.service.logInfo("Deleting Subnet state [%s] 'created-by' [%s]",
+                    stateToDelete.documentSelfLink, this.computeReq.resourceLink());
+
+            Operation delOp = Operation.createDelete(this.service, stateToDelete.documentSelfLink);
+
+            return this.service.sendWithDeferredResult(delOp).thenApply(ignore -> stateToDelete);
         }
     }
 
     // callback handler to be invoked once a aws terminate calls returns
-    private AsyncHandler<TerminateInstancesRequest, TerminateInstancesResult> buildTerminationCallbackHandler(
+    private AWSTerminateHandler buildTerminationCallbackHandler(
             StatelessService service, ComputeInstanceRequest computeReq,
             AmazonEC2AsyncClient amazonEC2Client, String instanceId,
             long taskExpirationTimeMicros) {

@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
-import static com.vmware.photon.controller.model.ComputeProperties.FIELD_COMPUTE_HOST_LINK;
+import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
@@ -847,7 +847,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     private void getLocalStorageContainerStates(StorageEnumContext context, StorageEnumStages next) {
         String computeHostProperty = QueryTask.QuerySpecification
                 .buildCompositeFieldName(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        FIELD_COMPUTE_HOST_LINK);
+                        COMPUTE_HOST_LINK_PROP_NAME);
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
@@ -1002,7 +1002,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         if (oldResourceGroupState != null) {
             resourceGroupState.documentSelfLink = oldResourceGroupState.documentSelfLink;
         } else {
-            resourceGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
+            resourceGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME,
                     context.parentCompute.documentSelfLink);
             resourceGroupState.tenantLinks = context.parentCompute.tenantLinks;
         }
@@ -1090,7 +1090,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     private void deleteResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
         String computeHostProperty = QueryTask.QuerySpecification
                 .buildCompositeFieldName(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        FIELD_COMPUTE_HOST_LINK);
+                        COMPUTE_HOST_LINK_PROP_NAME);
         String resourceTypeProperty = QueryTask.QuerySpecification.buildCompositeFieldName
                 (ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES, ComputeProperties
                         .RESOURCE_TYPE_KEY);
@@ -1341,7 +1341,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             String containerId = blob.getContainer().getUri().toString();
             String computeHostProperty = QueryTask.QuerySpecification
                     .buildCompositeFieldName(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                            FIELD_COMPUTE_HOST_LINK);
+                            COMPUTE_HOST_LINK_PROP_NAME);
             Query query = Query.Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
                     .addFieldClause(computeHostProperty,

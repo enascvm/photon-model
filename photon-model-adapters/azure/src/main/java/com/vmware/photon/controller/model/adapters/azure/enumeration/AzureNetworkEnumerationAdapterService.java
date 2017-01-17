@@ -503,7 +503,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         ComputeProperties.RESOURCE_TYPE_KEY);
         String computeHostProperty = QuerySpecification.buildCompositeFieldName(
                 ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                ComputeProperties.FIELD_COMPUTE_HOST_LINK);
+                ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME);
 
         Query query = Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)

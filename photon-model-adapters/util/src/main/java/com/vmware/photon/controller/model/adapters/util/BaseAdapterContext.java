@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
 import java.util.function.Function;
+import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.DeferredResult;
@@ -68,19 +69,17 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     public Operation operation;
 
     /**
-     * @param service
-     *            The service that is creating and using this context.
-     * @param resourceReference
-     *            The URI of the resource that is used to start the
-     *            {@link #populateContext(BaseAdapterStage) state machine}.
-     *            <ul>
-     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#VMDESC} then
-     *            this should point to <b>child</b> resource.</li>
-     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTDESC}
-     *            then this should point to <b>parent</b> resource.</li>
-     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTAUTH}
-     *            then this should point to <b>parent auth</b> resource.</li>
-     *            </ul>
+     * @param service           The service that is creating and using this context.
+     * @param resourceReference The URI of the resource that is used to start the
+     *                          {@link #populateContext(BaseAdapterStage) state machine}.
+     *                          <ul>
+     *                          <li>If {@code populateContext} is called with {@code BaseAdapterStage#VMDESC} then
+     *                          this should point to <b>child</b> resource.</li>
+     *                          <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTDESC}
+     *                          then this should point to <b>parent</b> resource.</li>
+     *                          <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTAUTH}
+     *                          then this should point to <b>parent auth</b> resource.</li>
+     *                          </ul>
      */
     public BaseAdapterContext(StatelessService service, URI resourceReference) {
         this.service = service;
@@ -115,9 +114,12 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
         return (T) this;
     }
 
+    /**
+     * Use this to log success after completing async execution stage.
+     */
     protected Function<? super T, ? extends T> log(String stage) {
         return (ctx) -> {
-            ctx.service.logFine("%s.%s: SUCCESS", this.getClass().getSimpleName(), stage);
+            ctx.service.log(Level.FINE, "%s.%s: SUCCESS", this.getClass().getSimpleName(), stage);
             return ctx;
         };
     }
@@ -141,7 +143,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
 
     /**
      * Populate context with parent {@code ComputeStateWithDescription}.
-     *
+     * <p>
      * <p>
      * By default {@code context.child.parentLink} is used as source.
      */
@@ -168,7 +170,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     /**
      * Populate context with parent {@code AuthCredentialsServiceState}.
      *
-     * @see {@link #getParentAuth(BaseAdapterContext)} for any customization
+     * @see #getParentAuthRef(BaseAdapterContext) for any customization.
      */
     protected DeferredResult<T> getParentAuth(T context) {
 
@@ -191,7 +193,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
         return context.parent != null
                 // 'parent' is already resolved so used it
                 ? UriUtils.buildUri(context.service.getHost(),
-                        context.parent.description.authCredentialsLink)
+                context.parent.description.authCredentialsLink)
                 // state machine starts from here so resRef should point to the parentAuth
                 : context.resourceReference;
     }

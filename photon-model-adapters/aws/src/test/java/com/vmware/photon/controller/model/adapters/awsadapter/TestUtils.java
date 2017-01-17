@@ -16,7 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_ALLOWED_NETWORK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_PROTOCOL;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
-import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages.waitToComplete;
+import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -37,7 +37,8 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryForReferrers;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
@@ -45,6 +46,7 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.TenantService;
 
 public class TestUtils {
@@ -222,11 +224,16 @@ public class TestUtils {
             VerificationHost host,
             NetworkState networkState) throws Throwable {
 
-        QueryForReferrers<SubnetState> querySubnetStatesReferrers = new QueryForReferrers<>(
-                host,
+
+        Query queryForReferrers = QueryUtils.queryForReferrers(
                 networkState.documentSelfLink,
                 SubnetState.class,
-                SubnetState.FIELD_NAME_NETWORK_LINK,
+                SubnetState.FIELD_NAME_NETWORK_LINK);
+
+        QueryByPages<SubnetState> querySubnetStatesReferrers = new QueryByPages<>(
+                host,
+                queryForReferrers,
+                SubnetState.class,
                 Collections.emptyList());
 
         DeferredResult<List<SubnetState>> subnetDR =

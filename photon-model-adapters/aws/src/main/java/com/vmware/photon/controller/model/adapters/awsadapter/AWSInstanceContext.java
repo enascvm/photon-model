@@ -14,19 +14,20 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 
+import static com.vmware.photon.controller.model.ComputeProperties.CREATE_CONTEXT_PROP_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GROUP_NAME_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.buildRules;
 
-
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
@@ -36,6 +37,8 @@ import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressResult;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
+import com.amazonaws.services.ec2.model.CreateSubnetRequest;
+import com.amazonaws.services.ec2.model.CreateSubnetResult;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.DescribeSubnetsRequest;
@@ -54,6 +57,7 @@ import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInst
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -109,7 +113,6 @@ public class AWSInstanceContext
      */
     public List<InstanceNetworkInterfaceSpecification> getAWSNicSpecs() {
         return this.nics.stream()
-                .filter(nic -> nic.nicSpec != null)
                 .map(nic -> nic.nicSpec)
                 .collect(Collectors.toList());
     }
@@ -119,8 +122,8 @@ public class AWSInstanceContext
      *
      * @see #getVPCs(AWSInstanceContext)
      * @see #getSubnets(AWSInstanceContext)
-     * @see #getExistingSecurityGroups(AWSInstanceContext)
-     * @see #createMissingSecurityGroups(AWSInstanceContext)
+     * @see #getSecurityGroups(AWSInstanceContext)
+     * @see #createSecurityGroupsIfNotExist(AWSInstanceContext)
      * @see #createNicSpecs(AWSInstanceContext)
      */
     @Override
@@ -131,15 +134,22 @@ public class AWSInstanceContext
                 .thenCompose(this::getDiskStates).thenApply(log("getDiskStates"))
 
                 .thenCompose(this::getVPCs).thenApply(log("getVPCs"))
+
                 .thenCompose(this::getSubnets).thenApply(log("getSubnets"))
-                .thenCompose(this::getExistingSecurityGroups).thenApply(log("getExistingSecurityGroups"))
-                .thenCompose(this::createMissingSecurityGroups).thenApply(log("createMissingSecurityGroups"))
+                .thenCompose(this::createSubnetsIfNotExist)
+                .thenApply(log("createSubnetsIfNotExist"))
+
+                .thenCompose(this::getSecurityGroups).thenApply(log("getSecurityGroups"))
+                .thenCompose(this::createSecurityGroupsIfNotExist)
+                .thenApply(log("createSecurityGroupsIfNotExist"))
+
                 .thenCompose(this::createNicSpecs).thenApply(log("createNicSpecs"));
     }
 
     /**
-     * For every NIC lookup associated AWS VPC as specified by {@code AWSNicContext.networkState.id}
-     * . If any of the VPCs is not found then complete with an exception.
+     * For every NIC lookup associated AWS VPC as specified by
+     * {@code AWSNicContext.networkState.id}. If any of the VPCs is not found then complete with an
+     * exception.
      */
     private DeferredResult<AWSInstanceContext> getVPCs(AWSInstanceContext context) {
         if (context.nics.isEmpty()) {
@@ -161,28 +171,27 @@ public class AWSInstanceContext
                     + context.child.name
                     + "] VM";
 
-            AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> handler = new
-                    AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult>(
-                            this.service, msg) {
+            AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> handler = new AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult>(
+                    this.service, msg) {
 
-                        @Override
-                        protected DeferredResult<DescribeVpcsResult> consumeSuccess(
-                                DescribeVpcsRequest request,
-                                DescribeVpcsResult result) {
+                @Override
+                protected DeferredResult<DescribeVpcsResult> consumeSuccess(
+                        DescribeVpcsRequest request,
+                        DescribeVpcsResult result) {
 
-                            if (result.getVpcs().isEmpty()) {
-                                String msg = String.format(
-                                        "VPC with [%s] id is not found in AWS for [%s] NIC of [%s] VM.",
-                                        nicCtx.networkState.id,
-                                        nicCtx.nicStateWithDesc.name,
-                                        context.child.name);
-                                return DeferredResult.failed(new IllegalStateException(msg));
-                            }
+                    if (result.getVpcs().isEmpty()) {
+                        String msg = String.format(
+                                "VPC with [%s] id is not found in AWS for [%s] NIC of [%s] VM.",
+                                nicCtx.networkState.id,
+                                nicCtx.nicStateWithDesc.name,
+                                context.child.name);
+                        return DeferredResult.failed(new IllegalStateException(msg));
+                    }
 
-                            nicCtx.vpc = result.getVpcs().get(0);
-                            return DeferredResult.completed(result);
-                        }
-                    };
+                    nicCtx.vpc = result.getVpcs().get(0);
+                    return DeferredResult.completed(result);
+                }
+            };
             context.amazonEC2Client.describeVpcsAsync(vpcRequest, handler);
 
             getVpcDRs.add(handler.toDeferredResult());
@@ -228,23 +237,22 @@ public class AWSInstanceContext
                     + context.child.name
                     + "] VM";
 
-            AWSDeferredResultAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult> subnetHandler =
-                    new AWSDeferredResultAsyncHandler<DescribeSubnetsRequest,
-                            DescribeSubnetsResult>(this.service, msg) {
+            AWSDeferredResultAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult> subnetHandler = new AWSDeferredResultAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult>(
+                    this.service, msg) {
 
-                        @Override
-                        protected DeferredResult<DescribeSubnetsResult> consumeSuccess(
-                                DescribeSubnetsRequest request,
-                                DescribeSubnetsResult result) {
+                @Override
+                protected DeferredResult<DescribeSubnetsResult> consumeSuccess(
+                        DescribeSubnetsRequest request,
+                        DescribeSubnetsResult result) {
 
-                            // The subnet specified might not exist. It's OK cause it will be created.
-                            if (!result.getSubnets().isEmpty()) {
-                                nicCtx.subnet = result.getSubnets().get(0);
-                            }
+                    // The subnet specified might not exist. It's OK cause it will be created.
+                    if (!result.getSubnets().isEmpty()) {
+                        nicCtx.subnet = result.getSubnets().get(0);
+                    }
 
-                            return DeferredResult.completed(result);
-                        }
-                    };
+                    return DeferredResult.completed(result);
+                }
+            };
             context.amazonEC2Client.describeSubnetsAsync(subnetRequest, subnetHandler);
 
             getSubnetDRs.add(subnetHandler.toDeferredResult());
@@ -262,52 +270,141 @@ public class AWSInstanceContext
     }
 
     /**
-     * For every NIC creates the {@link InstanceNetworkInterfaceSpecification NIC spec} that should
-     * be created by AWS during provisioning.
+     * For every NIC create AWS Subnet (as specified by {@code AWSNicContext.subnetState}) if it
+     * does not exist.
+     *
+     * @see #getSubnets(AWSInstanceContext)
      */
-    private DeferredResult<AWSInstanceContext> createNicSpecs(AWSInstanceContext context) {
+    private DeferredResult<AWSInstanceContext> createSubnetsIfNotExist(AWSInstanceContext context) {
 
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
         }
 
-        AWSNicContext nicCtx = context.nics.stream()
-                .sorted((n1, n2) -> n1.nicStateWithDesc.deviceIndex
-                        - n2.nicStateWithDesc.deviceIndex)
-                .findFirst().orElse(null);
+        List<DeferredResult<Void>> createSubnetDRs = new ArrayList<>();
 
-        if (nicCtx == null) {
-            return DeferredResult.completed(context);
+        for (AWSNicContext nicCtx : context.nics) {
+
+            if (nicCtx.subnet != null) {
+                // No need to create
+                continue;
+            }
+
+            // Create AWS subnet and set it to nicCtx.subnet {{
+            CreateSubnetRequest subnetRequest = new CreateSubnetRequest()
+                    .withVpcId(nicCtx.vpc.getVpcId())
+                    .withCidrBlock(nicCtx.subnetState.subnetCIDR);
+
+            if (nicCtx.subnetState.zoneId != null) {
+                subnetRequest.withAvailabilityZone(nicCtx.subnetState.zoneId);
+            }
+
+            String msg = "Create AWS subnet + [" + nicCtx.subnetState.name + "]";
+            AWSDeferredResultAsyncHandler<CreateSubnetRequest, CreateSubnetResult> createAWSSubnet = new AWSDeferredResultAsyncHandler<CreateSubnetRequest, CreateSubnetResult>(
+                    this.service, msg) {
+
+                @Override
+                protected DeferredResult<CreateSubnetResult> consumeSuccess(
+                        CreateSubnetRequest request,
+                        CreateSubnetResult result) {
+
+                    nicCtx.subnet = result.getSubnet();
+
+                    AWSUtils.tagResourcesWithName(
+                            context.amazonEC2Client,
+                            nicCtx.subnetState.name,
+                            nicCtx.subnet.getSubnetId());
+
+                    return DeferredResult.completed(result);
+                }
+            };
+            context.amazonEC2Client.createSubnetAsync(subnetRequest, createAWSSubnet);
+            // }}
+
+            // Once AWS subnet creation is done PATCH SubnetState.id {{
+            Function<CreateSubnetResult, DeferredResult<Void>> patchSubnetState = (ignore) -> {
+
+                SubnetState patchSubnet = new SubnetState();
+                patchSubnet.id = nicCtx.subnet.getSubnetId();
+                patchSubnet.documentSelfLink = nicCtx.subnetState.documentSelfLink;
+                patchSubnet.customProperties = singletonMap(CREATE_CONTEXT_PROP_NAME,
+                        context.computeRequest.resourceLink());
+
+                Operation op = Operation.createPatch(
+                        context.service.getHost(),
+                        patchSubnet.documentSelfLink).setBody(patchSubnet);
+
+                return context.service.sendWithDeferredResult(op, SubnetState.class)
+                        // Update NicContext with patched SubnetState
+                        .thenAccept(patchedSubnet -> nicCtx.subnetState = patchedSubnet);
+            };
+            // }}
+
+            // Chain AWS subnet creation with SubnetState patching
+            createSubnetDRs.add(createAWSSubnet.toDeferredResult().thenCompose(patchSubnetState));
         }
 
-        nicCtx.nicSpec = new InstanceNetworkInterfaceSpecification()
-                .withDeviceIndex(nicCtx.nicStateWithDesc.deviceIndex)
-                .withSubnetId(nicCtx.subnet.getSubnetId())
-                .withGroups(nicCtx.securityGroupNamesByIds.keySet())
-                .withAssociatePublicIpAddress(true);
+        return DeferredResult.allOf(createSubnetDRs).handle((all, exc) -> {
+            if (exc != null) {
+                String msg = String.format(
+                        "Error creating Subnets in AWS for [%s] VM.",
+                        context.child.name);
+                throw new IllegalStateException(msg, exc);
+            }
+            return context;
+        });
+    }
+
+    /**
+     * For every NIC creates the {@link InstanceNetworkInterfaceSpecification NIC spec} that should
+     * be created by AWS during provisioning.
+     */
+    private DeferredResult<AWSInstanceContext> createNicSpecs(AWSInstanceContext context) {
+
+        /*
+         * Important AWS note: When you add a second network interface, the AWS can no longer
+         * auto-assign a public IPv4 address. You will not be able to connect to the instance over
+         * IPv4 unless you assign an Elastic IP address to the primary network interface (eth0). You
+         * can assign the Elastic IP address after you complete the Launch wizard.
+         *
+         * http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/MultipleIP.html
+         */
+
+        // For now create InstanceNetworkInterfaceSpecification _ONLY_ for primary NIC.
+        // Other NICs are just _IGNORED_.
+        AWSNicContext primaryNic = getPrimaryNic();
+
+        if (primaryNic != null) {
+            // For now if not specified default to TRUE!
+            if (primaryNic.nicStateWithDesc.description.assignPublicIpAddress == null) {
+                primaryNic.nicStateWithDesc.description.assignPublicIpAddress = Boolean.TRUE;
+            }
+
+            primaryNic.nicSpec = new InstanceNetworkInterfaceSpecification()
+                    .withDeviceIndex(primaryNic.nicStateWithDesc.deviceIndex)
+                    .withSubnetId(primaryNic.subnet.getSubnetId())
+                    .withGroups(primaryNic.securityGroupNamesByIds.keySet())
+                    .withAssociatePublicIpAddress(
+                            primaryNic.nicStateWithDesc.description.assignPublicIpAddress);
+        }
 
         return DeferredResult.completed(context);
     }
 
     /**
      * For every NIC's security group states obtain existing SecurityGroup objects from AWS and
-     * store their IDs and Names in context
+     * store their IDs and Names in context.
      */
-    private DeferredResult<AWSInstanceContext> getExistingSecurityGroups(
-            AWSInstanceContext context) {
+    private DeferredResult<AWSInstanceContext> getSecurityGroups(AWSInstanceContext context) {
+
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
         }
 
         List<DeferredResult<DescribeSecurityGroupsResult>> getSecurityGroupsDRs = new ArrayList<>();
+
         for (AWSNicContext nicCtx : context.nics) {
-            if (nicCtx.securityGroupStates != null) {
-                List<String> securityGroupNames = nicCtx.securityGroupStates.stream()
-                        .map(securityGroupState -> securityGroupState.name)
-                        .collect(Collectors.toList());
-                getSecurityGroupsDRs.add(getSecurityGroupsBySGState(context, nicCtx,
-                        securityGroupNames, nicCtx.vpc.getVpcId()));
-            }
+            getSecurityGroupsDRs.add(getSecurityGroupsPerNIC(context, nicCtx));
         }
 
         return DeferredResult.allOf(getSecurityGroupsDRs).handle((all, exc) -> {
@@ -320,217 +417,218 @@ public class AWSInstanceContext
             return context;
         });
     }
+
     /**
-     * Utility method for obtaining SecurityGroup objects from AWS based on SecurityGroupStates
+     * Utility method for obtaining AWS SecurityGroup objects from AWS based on SecurityGroupStates.
      */
-    private DeferredResult<DescribeSecurityGroupsResult> getSecurityGroupsBySGState(
-            AWSInstanceContext context, AWSNicContext nicCtx,
-            List<String> securityGroupNames, String vpcId) {
+    private DeferredResult<DescribeSecurityGroupsResult> getSecurityGroupsPerNIC(
+            AWSInstanceContext context, AWSNicContext nicCtx) {
 
-        DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest();
-
-        req.withFilters(new Filter(AWS_GROUP_NAME_FILTER, securityGroupNames));
-        if (vpcId != null) {
-            req.withFilters(new Filter(AWS_VPC_ID_FILTER, Collections.singletonList(vpcId)));
+        if (nicCtx.securityGroupStates == null || nicCtx.securityGroupStates.isEmpty()) {
+            return DeferredResult.completed(null);
         }
 
-        AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult> asyncHandler =
-                new AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult>(service, "Describe security groups " + securityGroupNames) {
+        List<String> securityGroupNames = nicCtx.securityGroupStates.stream()
+                .map(securityGroupState -> securityGroupState.name)
+                .collect(Collectors.toList());
 
-                    @Override
-                    protected DeferredResult<DescribeSecurityGroupsResult> consumeSuccess(
-                            DescribeSecurityGroupsRequest request,
-                            DescribeSecurityGroupsResult result) {
-                        if (!result.getSecurityGroups().isEmpty()) {
-                            if (nicCtx != null) {
-                                nicCtx.securityGroupNamesByIds.putAll(result
-                                        .getSecurityGroups()
-                                        .stream()
-                                        .collect(
-                                                Collectors.toMap(sg -> sg.getGroupId(),
-                                                        sg -> sg.getGroupName())));
-                            }
-                        }
-                        return DeferredResult.completed(result);
-                    }
-                };
+        DescribeSecurityGroupsRequest req = new DescribeSecurityGroupsRequest()
+                .withFilters(new Filter(AWS_GROUP_NAME_FILTER, securityGroupNames))
+                .withFilters(new Filter(AWS_VPC_ID_FILTER, singletonList(nicCtx.vpc.getVpcId())));
+
+        String msg = "Getting AWS Security Groups by name ["
+                + securityGroupNames
+                + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
+                + context.child.name
+                + "] VM";
+
+        AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult> asyncHandler = new AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult>(
+                this.service, msg) {
+
+            @Override
+            protected DeferredResult<DescribeSecurityGroupsResult> consumeSuccess(
+                    DescribeSecurityGroupsRequest request,
+                    DescribeSecurityGroupsResult result) {
+
+                nicCtx.securityGroupNamesByIds = result.getSecurityGroups()
+                        .stream()
+                        .collect(Collectors.toMap(sg -> sg.getGroupId(), sg -> sg.getGroupName()));
+
+                return DeferredResult.completed(result);
+            }
+        };
 
         context.amazonEC2Client.describeSecurityGroupsAsync(req, asyncHandler);
+
         return asyncHandler.toDeferredResult();
     }
 
     /**
-     * When there are SecurityGroupStates for the new VM to be provisioned, for which there are
-     * no corresponding existing SecurityGroups in AWS, the missing SecurityGroups are created
+     * When there are SecurityGroupStates for the new VM to be provisioned, for which there are no
+     * corresponding existing SecurityGroups in AWS, the missing SecurityGroups are created
      */
-    private DeferredResult<AWSInstanceContext> createMissingSecurityGroups(
+    private DeferredResult<AWSInstanceContext> createSecurityGroupsIfNotExist(
             AWSInstanceContext context) {
+
         if (context.nics.isEmpty()) {
             return DeferredResult.completed(context);
         }
 
-        List<DeferredResult<CreateSecurityGroupResult>> createSecurityGroupsDRs = new ArrayList<>();
-        List<DeferredResult<AuthorizeSecurityGroupIngressResult>> createMissingIngressRulesDRs = new ArrayList<>();
-        List<DeferredResult<AuthorizeSecurityGroupEgressResult>> createMissingEgressRulesDRs = new ArrayList<>();
+        List<DeferredResult<Void>> createSecurityGroupsDRs = new ArrayList<>();
 
         for (AWSNicContext nicCtx : context.nics) {
-            if (nicCtx.securityGroupStates != null) {
-                Collection<String> fountNames = nicCtx.securityGroupNamesByIds.values();
+            if (nicCtx.securityGroupStates == null) {
+                continue;
+            }
 
-                List<SecurityGroupState> missingSecurityGroupStates = nicCtx.securityGroupStates
-                        .stream()
-                        .filter(securityGroupState -> (securityGroupState.name != null && !fountNames.contains(securityGroupState.name)))
-                        .collect(Collectors.toList());
+            Collection<String> foundNames = nicCtx.securityGroupNamesByIds.values();
 
-                for (SecurityGroupState missingSGState : missingSecurityGroupStates) {
-                    createSecurityGroupsDRs.add(createSecurityGroupFromSGState(context, nicCtx,
-                            missingSGState, nicCtx.vpc.getVpcId()));
-                    // Generate DeferredResults for creating the Ingress rules for this
-                    // SecurityGroup
-                    List<IpPermission> ingressRules = buildRules(missingSGState.ingress);
-                    createMissingIngressRulesDRs.add(createMissingIngressRules(context, nicCtx,
-                            missingSGState.name, ingressRules));
+            List<SecurityGroupState> missingSecurityGroupStates = nicCtx.securityGroupStates
+                    .stream()
+                    .filter(sgState -> sgState.name != null && !foundNames.contains(sgState.name))
+                    .collect(Collectors.toList());
 
-                    // Generate DeferredResults for creating the Egress rules for this SecurityGroup
-                    List<IpPermission> egressRules = buildRules(missingSGState.egress);
-                    createMissingEgressRulesDRs.add(createMissingEgressRules(context, nicCtx,
-                            missingSGState.name, egressRules));
-                }
+            for (SecurityGroupState missingSGState : missingSecurityGroupStates) {
+
+                DeferredResult<CreateSecurityGroupResult> createSGDR = createSecurityGroup(
+                        context, nicCtx, missingSGState);
+
+                DeferredResult<AuthorizeSecurityGroupIngressResult> createIngressRulesDR = createIngressRules(
+                        context, nicCtx, missingSGState);
+
+                DeferredResult<AuthorizeSecurityGroupEgressResult> createEgressRulesDR = createEgressRules(
+                        context, nicCtx, missingSGState);
+
+                DeferredResult<Void> createSGWithRulesDR = createSGDR
+                        .thenCompose(ignore -> createIngressRulesDR)
+                        .thenCompose(ignore -> createEgressRulesDR)
+                        .thenApply(ignore -> (Void) null);
+
+                createSecurityGroupsDRs.add(createSGWithRulesDR);
             }
         }
 
-        return DeferredResult
-                .allOf(createSecurityGroupsDRs)
-                .handle((all, exc) -> {
-                    if (exc != null) {
-                        String msg = String.format(
-                                "Error creating missing SecurityGroups in AWS for [%s] VM.",
-                                context.child.name);
-                        throw new IllegalStateException(msg, exc);
-                    }
-                    return context;
-                })
-                .thenCompose(
-                        ctx -> DeferredResult
-                                .allOf(createMissingIngressRulesDRs)
-                                .handle((all, exc) -> {
-                                    if (exc != null) {
-                                        String msg = String
-                                                .format(
-                                                        "Error creating missing Ingress Rule in AWS for [%s] VM.",
-                                                        context.child.name);
-                                        throw new IllegalStateException(msg, exc);
-                                    }
-                                    return ctx;
-                                })
-                                .thenCompose(
-                                        ctxNext -> DeferredResult
-                                                .allOf(createMissingEgressRulesDRs)
-                                                .handle((all, exc) -> {
-                                                    if (exc != null) {
-                                                        String msg = String
-                                                                .format(
-                                                                        "Error creating missing Egress Rule in AWS for [%s] VM.",
-                                                                        context.child.name);
-                                                        throw new IllegalStateException(msg, exc);
-                                                    }
-                                                    return ctxNext;
-                                                })));
+        return DeferredResult.allOf(createSecurityGroupsDRs).handle((all, exc) -> {
+            if (exc != null) {
+                String msg = String.format(
+                        "Error creating SecurityGroups in AWS for [%s] VM.",
+                        context.child.name);
+                throw new IllegalStateException(msg, exc);
+            }
+            return context;
+        });
     }
 
     /**
-     * For the provided SecurityGroupState, create corresponding SecurityGroup on AWS asynchroneously
+     * For the provided SecurityGroupState, create corresponding SecurityGroup on AWS.
      */
-    private DeferredResult<CreateSecurityGroupResult> createSecurityGroupFromSGState(
-            AWSInstanceContext context, AWSNicContext nicCtx,
-            SecurityGroupState missingSecurityGroupState, String vpcId) {
+    private DeferredResult<CreateSecurityGroupResult> createSecurityGroup(
+            AWSInstanceContext context,
+            AWSNicContext nicCtx,
+            SecurityGroupState missingSecurityGroupState) {
 
         CreateSecurityGroupRequest req = new CreateSecurityGroupRequest()
                 .withDescription(missingSecurityGroupState.name)
                 .withGroupName(missingSecurityGroupState.name)
                 .withVpcId(nicCtx.vpc.getVpcId());
 
-        AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest, CreateSecurityGroupResult> asyncHandler =
-                new AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest, CreateSecurityGroupResult>(service, "Create security groups " + missingSecurityGroupState.name) {
+        String msg = "Create AWS Security Group [" + missingSecurityGroupState.name + "]";
 
-                    @Override
-                    protected DeferredResult<CreateSecurityGroupResult> consumeSuccess(
-                            CreateSecurityGroupRequest request,
-                            CreateSecurityGroupResult result) {
-                        if (result != null) {
-                            if (nicCtx != null) {
-                                nicCtx.securityGroupNamesByIds.put(result.getGroupId(), request.getGroupName());
-                            }
-                        }
-                        return DeferredResult.completed(result);
-                    }
-                };
+        AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest, CreateSecurityGroupResult> asyncHandler = new AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest, CreateSecurityGroupResult>(
+                this.service, msg) {
+
+            @Override
+            protected DeferredResult<CreateSecurityGroupResult> consumeSuccess(
+                    CreateSecurityGroupRequest request,
+                    CreateSecurityGroupResult result) {
+
+                nicCtx.securityGroupNamesByIds.put(result.getGroupId(), request.getGroupName());
+
+                return DeferredResult.completed(result);
+            }
+        };
 
         context.amazonEC2Client.createSecurityGroupAsync(req, asyncHandler);
+
         return asyncHandler.toDeferredResult();
     }
 
-    private DeferredResult<AuthorizeSecurityGroupIngressResult> createMissingIngressRules(
-            AWSInstanceContext context, AWSNicContext nicCtx, String sgName,
-            List<IpPermission> rules) {
+    private DeferredResult<AuthorizeSecurityGroupIngressResult> createIngressRules(
+            AWSInstanceContext context, AWSNicContext nicCtx, SecurityGroupState missingSGState) {
 
         String provisinedGroupId = nicCtx.securityGroupNamesByIds
-                .entrySet().stream().filter(map -> map.getValue().equals(sgName))
-                .map(fount -> fount.getKey()).findFirst().orElse(null);
+                .entrySet().stream()
+                .filter(idToName -> idToName.getValue().equals(missingSGState.name))
+                .map(idToName -> idToName.getKey())
+                .findFirst().orElse(null);
+
         if (provisinedGroupId == null) {
             return DeferredResult.completed(null);
         }
 
-        AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest, AuthorizeSecurityGroupIngressResult> asyncHandler =
-                new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest, AuthorizeSecurityGroupIngressResult>(
-                        service, "Autorize security group with ingress rules " + rules) {
-
-                    @Override
-                    protected DeferredResult<AuthorizeSecurityGroupIngressResult> consumeSuccess(
-                            AuthorizeSecurityGroupIngressRequest request,
-                            AuthorizeSecurityGroupIngressResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+        List<IpPermission> ingressRules = buildRules(missingSGState.ingress);
 
         AuthorizeSecurityGroupIngressRequest req = new AuthorizeSecurityGroupIngressRequest()
                 .withGroupId(provisinedGroupId)
-                .withIpPermissions(rules);
+                .withIpPermissions(ingressRules);
+
+        String msg = "Create AWS Ingress rules for [" + missingSGState.name + "] Security Group";
+
+        AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest, AuthorizeSecurityGroupIngressResult> asyncHandler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest, AuthorizeSecurityGroupIngressResult>(
+                this.service, msg) {
+
+            @Override
+            protected DeferredResult<AuthorizeSecurityGroupIngressResult> consumeSuccess(
+                    AuthorizeSecurityGroupIngressRequest request,
+                    AuthorizeSecurityGroupIngressResult result) {
+
+                return DeferredResult.completed(result);
+            }
+        };
+
         context.amazonEC2Client.authorizeSecurityGroupIngressAsync(req, asyncHandler);
 
         return asyncHandler.toDeferredResult();
     }
 
-    private DeferredResult<AuthorizeSecurityGroupEgressResult> createMissingEgressRules(
-            AWSInstanceContext context, AWSNicContext nicCtx, String sgName,
-            List<IpPermission> rules) {
+    private DeferredResult<AuthorizeSecurityGroupEgressResult> createEgressRules(
+            AWSInstanceContext context, AWSNicContext nicCtx, SecurityGroupState missingSGState) {
 
-        String provisinedGroupId = nicCtx.securityGroupNamesByIds
-                .entrySet().stream().filter(map -> map.getValue().equals(sgName))
-                .map(fount -> fount.getKey()).findFirst().orElse(null);
-        if (provisinedGroupId == null) {
+        String sgId = nicCtx.securityGroupNamesByIds
+                .entrySet().stream()
+                .filter(idToName -> idToName.getValue().equals(missingSGState.name))
+                .map(idToName -> idToName.getKey())
+                .findFirst().orElse(null);
+
+        if (sgId == null) {
             return DeferredResult.completed(null);
         }
 
-        AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest, AuthorizeSecurityGroupEgressResult> asyncHandler =
-                new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest, AuthorizeSecurityGroupEgressResult>(
-                        service, "Autorize security group with egress rules " + rules) {
-
-                    @Override
-                    protected DeferredResult<AuthorizeSecurityGroupEgressResult> consumeSuccess(
-                            AuthorizeSecurityGroupEgressRequest request,
-                            AuthorizeSecurityGroupEgressResult result) {
-                        return DeferredResult.completed(result);
-                    }
-                };
+        List<IpPermission> egressRules = buildRules(missingSGState.egress);
 
         AuthorizeSecurityGroupEgressRequest req = new AuthorizeSecurityGroupEgressRequest()
-                .withGroupId(provisinedGroupId)
-                .withIpPermissions(rules);
+                .withGroupId(sgId)
+                .withIpPermissions(egressRules);
+
+        String msg = "Create AWS Egress rules for [" + missingSGState.name + "] Security Group";
+
+        AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest, AuthorizeSecurityGroupEgressResult> asyncHandler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest, AuthorizeSecurityGroupEgressResult>(
+                this.service, msg) {
+
+            @Override
+            protected DeferredResult<AuthorizeSecurityGroupEgressResult> consumeSuccess(
+                    AuthorizeSecurityGroupEgressRequest request,
+                    AuthorizeSecurityGroupEgressResult result) {
+
+                return DeferredResult.completed(result);
+            }
+        };
+
         context.amazonEC2Client.authorizeSecurityGroupEgressAsync(req, asyncHandler);
 
         return asyncHandler.toDeferredResult();
     }
+
     /**
      * Get Disk states assigned to the compute state we are provisioning.
      */

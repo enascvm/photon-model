@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
-import static com.vmware.photon.controller.model.ComputeProperties.FIELD_COMPUTE_HOST_LINK;
+import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
@@ -421,7 +421,7 @@ public class AzureTestUtil {
         rGroupState.groupLinks.add("testResGroup-" + randomString(4));
 
         rGroupState.customProperties = new HashMap<>();
-        rGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK, parentLink);
+        rGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME, parentLink);
         rGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
         rGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED,
                 randomString(10));

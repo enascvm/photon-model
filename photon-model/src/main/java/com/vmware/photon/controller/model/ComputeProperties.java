@@ -59,7 +59,13 @@ public class ComputeProperties {
     /**
      * A key for the custom properties property which value stores the parent compute host link.
      */
-    public static final String FIELD_COMPUTE_HOST_LINK = "computeHostLink";
+    public static final String COMPUTE_HOST_LINK_PROP_NAME = "computeHostLink";
+
+    /**
+     * A key for the custom properties property which value stores compute that has created the
+     * object.
+     */
+    public static final String CREATE_CONTEXT_PROP_NAME = "__createContext";
 
     public static final String FIELD_VIRTUAL_GATEWAY = "__virtualGateway";
 

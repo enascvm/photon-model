@@ -108,7 +108,8 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryForReferrers;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
@@ -125,6 +126,7 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
  * PRE-REQUISITE: An Azure Resource Manager VM named <b>EnumTestVM-DoNotDelete</b>, with diagnostics
@@ -767,11 +769,15 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             VerificationHost host,
             NetworkState networkState) {
 
-        QueryForReferrers<SubnetState> querySubnetStatesReferrers = new QueryForReferrers<>(
-                host,
+        Query queryForReferrers = QueryUtils.queryForReferrers(
                 networkState.documentSelfLink,
                 SubnetState.class,
-                SubnetState.FIELD_NAME_NETWORK_LINK,
+                SubnetState.FIELD_NAME_NETWORK_LINK);
+
+        QueryByPages<SubnetState> querySubnetStatesReferrers = new QueryByPages<>(
+                host,
+                queryForReferrers,
+                SubnetState.class,
                 Collections.emptyList());
 
         DeferredResult<List<SubnetState>> subnetDR =

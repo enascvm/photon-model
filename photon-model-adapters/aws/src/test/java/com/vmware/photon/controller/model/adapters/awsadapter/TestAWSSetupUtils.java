@@ -22,12 +22,16 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.ge
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getVMCount;
 
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -52,7 +56,7 @@ import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
-import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs.NetConfig;
+import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs.NetSpec;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSBlockStorageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService;
@@ -115,7 +119,8 @@ public class TestAWSSetupUtils {
     public static final String zoneId = "us-east-1";
     public static final String userData = null;
 
-    // VPC/subnet details are copy-pasted from AWS, region N.Virginia, Availability Zone: us-east-1a {{
+    // VPC/subnet details are copy-pasted from AWS, region N.Virginia, Availability Zone: us-east-1a
+    // {{
     private static final String AWS_DEFAULT_VPC_ID = "vpc-95a29bf1";
     private static final String AWS_DEFAULT_VPC_CIDR = "172.31.0.0/16";
 
@@ -131,48 +136,80 @@ public class TestAWSSetupUtils {
     // }}
 
     /**
+     * Return two-NIC spec where first NIC should be assigned to 'secondary' subnet and second NIC
+     * should be assigned to a randomly generated subnet that should be created.
      * <p>
      * For a matrix of maximum supported NICs per Instance type check:
      * http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-eni.html#AvailableIpPerENI
      *
      * @see {@value #instanceType_t2_micro} instance type
      */
-    public static final AwsNicSpecs MULTI_NIC_SPECS;
+    public static AwsNicSpecs multiNicSpecs() throws UnknownHostException {
 
-    static {
-        NetConfig network = new NetConfig(
+        String nextSubnetIp;
+        {
+            // 172.31.1000 0000.0000 0000
+            final String startingSubnetIp = "172.31.128.0";
+
+            Random r = new Random();
+
+            // Convert IP as String -to-> byte[4] -to-> IP as integer
+            int startingIpAsInt = ByteBuffer
+                    .wrap(InetAddress.getByName(startingSubnetIp).getAddress())
+                    .getInt();
+
+            /*
+             * The random subnet generated is between 172.31.1[000 0000.0000] 0000 and 172.31.1[111
+             * 1111.1111] 0000. The last 4 zero bits are for the IPs within the subnet generated.
+             */
+            int nextSubnetIpAsInt = startingIpAsInt | (r.nextInt(1 << 11) << 4);
+
+            // Convert IP as integer -to-> byte[4] -to-> IP as String
+            nextSubnetIp = InetAddress
+                    .getByAddress(ByteBuffer.allocate(4).putInt(nextSubnetIpAsInt).array())
+                    .getHostAddress();
+        }
+
+        NetSpec network = new NetSpec(
                 AWS_DEFAULT_VPC_ID,
                 AWS_DEFAULT_VPC_ID,
                 AWS_DEFAULT_VPC_CIDR);
 
         // Configure with TWO NICS.
-        List<NetConfig> subnets = new ArrayList<>();
+        List<NetSpec> subnets = new ArrayList<>();
 
-        subnets.add(new NetConfig(AWS_DEFAULT_SUBNET_ID,
-                        AWS_DEFAULT_SUBNET_NAME,
-                        AWS_DEFAULT_SUBNET_CIDR));
+        // 'secondary' subnet which is existing
+        subnets.add(new NetSpec(AWS_SECONDARY_SUBNET_ID,
+                AWS_SECONDARY_SUBNET_NAME,
+                AWS_SECONDARY_SUBNET_CIDR,
+                zoneId + "a"));
 
-        subnets.add(new NetConfig(AWS_SECONDARY_SUBNET_ID,
-                        AWS_SECONDARY_SUBNET_NAME,
-                        AWS_SECONDARY_SUBNET_CIDR));
+        // Random generated subnet with /28 mask to be created
+        subnets.add(new NetSpec(null,
+                "third",
+                nextSubnetIp + "/28",
+                zoneId + "a"));
 
-        MULTI_NIC_SPECS = new AwsNicSpecs(network, subnets);
+        return new AwsNicSpecs(network, subnets);
     }
 
+    /**
+     * Single-NIC spec where the NIC should be assigned to 'default' subnet.
+     */
     public static final AwsNicSpecs SINGLE_NIC_SPEC;
 
     static {
-        NetConfig network = new NetConfig(
+        NetSpec network = new NetSpec(
                 AWS_DEFAULT_VPC_ID,
                 AWS_DEFAULT_VPC_ID,
                 AWS_DEFAULT_VPC_CIDR);
 
-        // Configure with TWO NICS.
-        List<NetConfig> subnets = new ArrayList<>();
+        List<NetSpec> subnets = new ArrayList<>();
 
-        subnets.add(new NetConfig(AWS_DEFAULT_SUBNET_ID,
-                        AWS_DEFAULT_SUBNET_NAME,
-                        AWS_DEFAULT_SUBNET_CIDR));
+        subnets.add(new NetSpec(AWS_DEFAULT_SUBNET_ID,
+                AWS_DEFAULT_SUBNET_NAME,
+                AWS_DEFAULT_SUBNET_CIDR,
+                zoneId + "a"));
 
         SINGLE_NIC_SPEC = new AwsNicSpecs(network, subnets);
     }
@@ -180,23 +217,29 @@ public class TestAWSSetupUtils {
     // Next change: use this also by AzureTestUtil.createDefaultNicStates.
     public static class AwsNicSpecs {
 
-        public static class NetConfig {
+        public static class NetSpec {
 
             public final String id;
             public final String name;
             public final String cidr;
+            public final String zoneId;
 
-            public NetConfig(String id, String name, String cidr) {
+            public NetSpec(String id, String name, String cidr, String zoneId) {
                 this.id = id;
                 this.name = name;
                 this.cidr = cidr;
+                this.zoneId = zoneId;
+            }
+
+            public NetSpec(String id, String name, String cidr) {
+                this(id, name, cidr, null);
             }
         }
 
-        public final NetConfig network;
-        public final List<NetConfig> subnets;
+        public final NetSpec network;
+        public final List<NetSpec> subnets;
 
-        public AwsNicSpecs(NetConfig network, List<NetConfig> subnets) {
+        public AwsNicSpecs(NetSpec network, List<NetSpec> subnets) {
             this.network = network;
             this.subnets = subnets;
         }
@@ -493,7 +536,7 @@ public class TestAWSSetupUtils {
                 subnetState.id = nicSpecs.subnets.get(i).id;
                 subnetState.name = nicSpecs.subnets.get(i).name;
                 subnetState.subnetCIDR = nicSpecs.subnets.get(i).cidr;
-
+                subnetState.zoneId = nicSpecs.subnets.get(i).zoneId;
                 subnetState.networkLink = networkState.documentSelfLink;
 
                 subnetState = TestUtils.doPost(host, subnetState,

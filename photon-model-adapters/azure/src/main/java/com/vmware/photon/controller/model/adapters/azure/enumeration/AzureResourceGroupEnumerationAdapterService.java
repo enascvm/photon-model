@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
-import static com.vmware.photon.controller.model.ComputeProperties.FIELD_COMPUTE_HOST_LINK;
+import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_TYPE_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_RESOURCE_GROUPS_URI;
@@ -152,7 +152,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
 
             String computeHostProperty = QuerySpecification.buildCompositeFieldName(
                     ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                    ComputeProperties.FIELD_COMPUTE_HOST_LINK);
+                    ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME);
 
             return Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
@@ -179,7 +179,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 resultResourceGroupState.documentSelfLink = localResourceGroupState.documentSelfLink;
             } else {
                 resultResourceGroupState.customProperties = new HashMap<>();
-                resultResourceGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
+                resultResourceGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME,
                         this.parentCompute.documentSelfLink);
                 resultResourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
                         this.request.endpointLink);

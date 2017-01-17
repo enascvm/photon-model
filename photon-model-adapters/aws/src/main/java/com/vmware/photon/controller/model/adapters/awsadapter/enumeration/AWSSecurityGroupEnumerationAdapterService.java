@@ -92,7 +92,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 .addKindFieldClause(SecurityGroupState.class)
                 .addCompositeFieldClause(
                         SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        ComputeProperties.FIELD_COMPUTE_HOST_LINK,
+                        ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                         context.parentCompute.documentSelfLink)
                 .addInClause(SecurityGroupState.FIELD_NAME_ID, context.securityGroupIds)
                 .build();
@@ -249,7 +249,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     .addKindFieldClause(SecurityGroupState.class)
                     .addCompositeFieldClause(
                             SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                            ComputeProperties.FIELD_COMPUTE_HOST_LINK,
+                            ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                             this.parentCompute.documentSelfLink)
                     .addInClause(SecurityGroupState.FIELD_NAME_ID, this.securityGroupIds, Occurance
                             .MUST_NOT_OCCUR)

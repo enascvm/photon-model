@@ -115,12 +115,16 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
     }
 
     /**
-     * First NIC is considered primary.
+     * The NIC with lowest deviceId is considered primary.
      *
      * @return <code>null</code> if there are no NICs
      */
     public S getPrimaryNic() {
-        return this.nics.isEmpty() ? null : this.nics.get(0);
+        return this.nics.stream()
+                .sorted((n1, n2) -> Integer.compare(
+                        n1.nicStateWithDesc.deviceIndex,
+                        n2.nicStateWithDesc.deviceIndex))
+                .findFirst().orElse(null);
     }
 
     /**
