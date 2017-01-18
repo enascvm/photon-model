@@ -17,9 +17,12 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -48,6 +51,14 @@ public class SubnetService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String networkLink;
+
+        /**
+         * Optional zone identifier of this subnet.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_8)
+        public String zoneId;
 
         /**
          * Subnet CIDR

@@ -16,4 +16,5 @@ package com.vmware.photon.controller.model.constants;
 public class ReleaseConstants {
     public static final int RELEASE_VERSION_0_5_1 = 051;
     public static final int RELEASE_VERSION_0_5_6 = 056;
+    public static final int RELEASE_VERSION_0_5_8 = 58;
 }

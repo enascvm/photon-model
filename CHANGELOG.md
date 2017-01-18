@@ -2,6 +2,8 @@
 
 ## 0.5.8-SNAPSHOT
 
+* Introduced an optional SubnetState.zoneId field.
+
 ## 0.5.7
 
 * Updated xenon to 1.3.5.

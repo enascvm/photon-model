@@ -178,6 +178,7 @@ public class SubnetServiceTest extends Suite {
             patchState.tenantLinks.add("tenant1");
             patchState.groupLinks = new HashSet<String>();
             patchState.groupLinks.add("group1");
+            patchState.zoneId = "my-zone";
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
 
@@ -191,7 +192,7 @@ public class SubnetServiceTest extends Suite {
                     is(patchState.customProperties));
             assertEquals(returnState.tenantLinks.size(), 2);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
-
+            assertEquals(returnState.zoneId, patchState.zoneId);
         }
     }
 
