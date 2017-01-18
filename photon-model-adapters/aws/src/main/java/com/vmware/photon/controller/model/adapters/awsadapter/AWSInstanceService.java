@@ -424,13 +424,16 @@ public class AWSInstanceService extends StatelessService {
                 NetworkInterfaceState nicStateWithDesc = AWSNetworkUtils
                         .getNICStateByDeviceId(nicStates, instanceNic.getAttachment()
                                 .getDeviceIndex());
-                NetworkInterfaceState updateNicState = new NetworkInterfaceState();
-                updateNicState.address = instanceNic.getPrivateIpAddress();
 
-                patchOperations.add(Operation.createPatch(this.service.getHost(),
-                        nicStateWithDesc.documentSelfLink)
-                        .setBody(updateNicState)
-                        .setReferer(this.service.getHost().getUri()));
+                if (nicStateWithDesc != null) {
+                    NetworkInterfaceState updateNicState = new NetworkInterfaceState();
+                    updateNicState.address = instanceNic.getPrivateIpAddress();
+
+                    patchOperations.add(Operation.createPatch(this.service.getHost(),
+                            nicStateWithDesc.documentSelfLink)
+                            .setBody(updateNicState)
+                            .setReferer(this.service.getHost().getUri()));
+                }
             }
 
             return patchOperations;
