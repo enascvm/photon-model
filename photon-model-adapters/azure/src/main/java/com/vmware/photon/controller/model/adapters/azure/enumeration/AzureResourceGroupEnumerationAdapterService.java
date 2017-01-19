@@ -168,7 +168,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
         }
 
         @Override
-        protected ResourceGroupState buildLocalResourceState(
+        protected DeferredResult<ResourceGroupState> buildLocalResourceState(
                 ResourceGroup remoteResourceGroup,
                 ResourceGroupState localResourceGroupState) {
 
@@ -187,7 +187,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
             resultResourceGroupState.name = remoteResourceGroup.name;
             resultResourceGroupState.tenantLinks = this.parentCompute.tenantLinks;
 
-            return resultResourceGroupState;
+            return DeferredResult.completed(resultResourceGroupState);
         }
     }
 

@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.util.enums;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +25,6 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -144,12 +142,12 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * Note: id property should not be set since it is automatically set to the id of the remote
      * resource.
      *
-     * @param remoteResource        remote resource.
+     * @param remoteResource             remote resource.
      * @param existingLocalResourceState existing local resource that matches the remote resource.
-     *                              null is no local resource matches the remote one.
+     *                                   null is no local resource matches the remote one.
      * @return a resource state that describes the remote resource.
      */
-    protected abstract LOCAL_STATE buildLocalResourceState(
+    protected abstract DeferredResult<LOCAL_STATE> buildLocalResourceState(
             REMOTE remoteResource, LOCAL_STATE existingLocalResourceState);
 
     protected abstract Query getDeleteQuery();
@@ -253,52 +251,53 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         this.service.logInfo("Create or update local resource with the actual state from "
                 + "remote system.");
 
-        if (context.remoteResources.size() == 0) {
+        if (context.remoteResources.isEmpty()) {
             this.service.logInfo("No resources available for create/update.");
             return DeferredResult.completed(context);
         }
 
-        CompletionHandler handler = (completedOp, failure) -> {
-            if (failure != null) {
-                this.service.logWarning("Error: %s", failure.getMessage());
-            }
-        };
+        List<DeferredResult<Operation>> drs = context.remoteResources.entrySet().stream()
+                .map(entry -> {
+                    // First delegate to descendant to provide the local resource to create/update
+                    return buildLocalResourceState(entry.getValue(),
+                            this.localResourceStates.get(entry.getKey()))
+                            .thenApply(localState -> {
+                                // Explicitly set the local resource state id to be equal to the remote
+                                // resource state id. This is important in the query for local states.
+                                localState.id = entry.getKey();
+                                return localState;
+                            })
+                            // then update/create state
+                            .thenCompose(this::createUpdateLocalResourceState);
+                }).collect(Collectors.toList());
 
-        List<Operation> operations = new ArrayList<>();
-        context.remoteResources
-                .forEach((id, remoteResource) -> {
-                    boolean existsLocally = this.localResourceStates.containsKey(id);
-
-                    LOCAL_STATE localResourceState = buildLocalResourceState(
-                            remoteResource,
-                            existsLocally ? this.localResourceStates.get(id) : null);
-
-                    if (localResourceState == this.SKIP) {
-                        return;
-                    }
-                    // Explicitly set the local resource state id to be equal to the remote
-                    // resource state id. This is important in the query for local states.
-                    localResourceState.id = id;
-                    Operation op = existsLocally ?
-                            // Update case.
-                            Operation.createPatch(this.service, localResourceState
-                                    .documentSelfLink) :
-                            // Create case.
-                            Operation.createPost(this.service, this.localStateServiceFactoryLink);
-
-                    op.setBody(localResourceState).setCompletion(handler);
-
-                    operations.add(op);
-                });
-
-        List<DeferredResult<Operation>> deferredResults = operations
-                .stream()
-                .map(this.service::sendWithDeferredResult)
-                .collect(Collectors.toList());
-
-        return DeferredResult.allOf(deferredResults)
-                .thenApply(ops -> context);
+        return DeferredResult.allOf(drs).thenApply(ignore -> context);
     }
+
+    private DeferredResult<Operation> createUpdateLocalResourceState(LOCAL_STATE localState) {
+        if (localState == this.SKIP) {
+            return DeferredResult.completed(null);
+        }
+
+        boolean existsLocally = this.localResourceStates
+                .containsKey(localState.id);
+        Operation op = existsLocally
+                // Update case.
+                ? Operation.createPatch(this.service, localState
+                .documentSelfLink)
+                // Create case.
+                : Operation.createPost(this.service,
+                this.localStateServiceFactoryLink);
+
+        op.setBody(localState);
+
+        return this.service.sendWithDeferredResult(op).exceptionally(ex -> {
+            this.service.logWarning("Error: %s", ex.getMessage());
+            return op;
+        });
+    }
+
+    ;
 
     /**
      * Delete stale local resource states.

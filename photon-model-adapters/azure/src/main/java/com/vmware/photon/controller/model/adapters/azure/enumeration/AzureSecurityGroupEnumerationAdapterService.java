@@ -193,7 +193,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
         }
 
         @Override
-        protected SecurityGroupState buildLocalResourceState(
+        protected DeferredResult<SecurityGroupState> buildLocalResourceState(
                 NetworkSecurityGroup networkSecurityGroup,
                 SecurityGroupState localSecurityGroupState) {
 
@@ -202,7 +202,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             if (rgDocumentSelfLink == null) {
                 // Resource group is still not enumerated.
                 // TODO: add log.
-                return SKIP;
+                return DeferredResult.completed(this.SKIP);
             }
 
             SecurityGroupState resultSecurityGroupState = new SecurityGroupState();
@@ -234,7 +234,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             if (networkSecurityGroup.properties == null ||
                     networkSecurityGroup.properties.securityRules == null) {
                 // No rules.
-                return resultSecurityGroupState;
+                return DeferredResult.completed(resultSecurityGroupState);
             }
 
             networkSecurityGroup.properties.securityRules.forEach(securityRule -> {
@@ -278,7 +278,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                             + "range: %s.", rule.ipRangeCidr);
                 }
             });
-            return resultSecurityGroupState;
+            return DeferredResult.completed(resultSecurityGroupState);
         }
 
         /**
