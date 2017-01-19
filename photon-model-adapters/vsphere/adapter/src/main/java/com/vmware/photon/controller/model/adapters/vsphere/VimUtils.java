@@ -244,7 +244,6 @@ public final class VimUtils {
         } catch (DatatypeConfigurationException e) {
             throw new AssertionError(e);
         }
-
     }
 
     public static boolean isComputeResource(ManagedObjectReference obj) {

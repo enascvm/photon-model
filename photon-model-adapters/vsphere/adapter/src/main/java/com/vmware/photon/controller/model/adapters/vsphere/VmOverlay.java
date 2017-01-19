@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -119,6 +122,23 @@ public class VmOverlay extends AbstractOverlay {
 
     public boolean isTemplate() {
         return (boolean) getOrFail(VimPath.vm_config_template);
+    }
+
+    public long getLastReconfigureMillis() {
+        // config.changeVersion should be treated as an opaque string according to documentation
+        // however there is no other timestamp on the VM that can be used to filter out machines
+        // that may currently be provisioning
+        String s = (String) getOrDefault(VimPath.vm_config_changeVersion, null);
+        if (s == null) {
+            return 0;
+        }
+
+        try {
+            ZonedDateTime dt = ZonedDateTime.parse(s, DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+            return dt.toInstant().toEpochMilli();
+        } catch (DateTimeParseException e) {
+            return 0;
+        }
     }
 
     public ManagedObjectReference getHost() {

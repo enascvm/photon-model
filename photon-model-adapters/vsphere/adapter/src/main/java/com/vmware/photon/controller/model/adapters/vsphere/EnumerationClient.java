@@ -224,10 +224,10 @@ public class EnumerationClient extends BaseHelper {
         vmSpec.getPathSet().addAll(Arrays.asList(
                 VimPath.vm_config_name,
                 VimPath.vm_config_instanceUuid,
+                VimPath.vm_config_changeVersion,
                 VimPath.vm_config_hardware_device,
                 VimPath.vm_config_hardware_memoryMB,
                 VimPath.vm_summary_config_numCpu,
-                VimPath.vm_config_extraConfig,
                 VimPath.vm_config_template,
                 VimPath.vm_runtime_host,
                 VimPath.vm_guest_net,

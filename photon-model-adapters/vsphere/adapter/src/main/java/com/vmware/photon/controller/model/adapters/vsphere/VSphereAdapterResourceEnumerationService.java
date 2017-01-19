@@ -103,6 +103,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private static final int MAX_CONCURRENT_ENUM_PROCESSES = 10;
     private static final String FAKE_SUBNET_CIDR = "0.0.0.0/0";
 
+    /* A VM must "ferment" for a few minutes before being eligible for enumeration.
+     * This is the time between a VM is created and its UUID is recorded back in the ComputeState resource.
+     * This way a VM being provisioned by photon-model will not be enumerated mid-flight.
+     */
+    private static final long VM_FERMENTATION_PERIOD_MILLIS = 3 * 60 * 1000;
+
     /**
      * Stores currently running enumeration processes.
      */
@@ -323,6 +329,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         Map<String, ComputeResourceOverlay> nonDrsClusters = new HashMap<>();
 
         // put results in different buckets by type
+        long latestAcceptableModification = System.currentTimeMillis() - VM_FERMENTATION_PERIOD_MILLIS;
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
                 for (ObjectContent cont : page) {
@@ -334,7 +341,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         if (vm.getInstanceUuid() == null) {
                             log(Level.INFO, "Cannot process a VM without instanceUuid: %s",
                                     VimUtils.convertMoRefToString(vm.getId()));
-                        } else {
+                        } else if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
                             vms.add(vm);
                         }
                     } else if (VimUtils.isHost(cont.getObj())) {
