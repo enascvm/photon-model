@@ -23,6 +23,7 @@ import com.vmware.xenon.common.UriUtils;
 public class UriPaths {
     public static final String PROVISIONING = "/provisioning";
     public static final String RESOURCES = "/resources";
+    public static final String CONFIG = "/config";
 
     public static final String RESOURCES_NETWORKS = RESOURCES + "/networks";
     public static final String RESOURCES_NETWORK_INTERFACES = RESOURCES + "/network-interfaces";
@@ -33,6 +34,11 @@ public class UriPaths {
     public static final String MONITORING = "/monitoring";
 
     public static final String PROPERTY_PREFIX = "photon-model.";
+
+    /**
+     * key suffix used to specify the UI aspect of given photon-model adapter
+     */
+    public static final String UI_ADAPTER_SUFFIX = "-ui";
 
     public enum AdapterTypePath {
         INSTANCE_ADAPTER("instance-adapter"),
@@ -48,7 +54,7 @@ public class UriPaths {
         COMPUTE_DESCRIPTION_CREATION_ADAPTER("compute-description-creation-adapter"),
         COMPUTE_STATE_CREATION_ADAPTER("compute-state-creation-adapter");
 
-        private final String path;
+        public final String path;
 
         private AdapterTypePath(String path) {
             this.path = path;
