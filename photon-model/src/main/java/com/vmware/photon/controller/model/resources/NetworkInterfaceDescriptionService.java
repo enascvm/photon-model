@@ -13,13 +13,16 @@
 
 package com.vmware.photon.controller.model.resources;
 
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -70,10 +73,17 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
 
         /**
          * Firewalls with which this compute instance is associated.
+         * @deprecated Use {@link #securityGroupLinks} instead.
          */
         @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
                 PropertyUsageOption.LINKS })
+        @Deprecated
         public List<String> firewallLinks;
+
+        @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+                PropertyUsageOption.LINKS })
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_8)
+        public List<String> securityGroupLinks;
 
         /**
          * Link to the network this nic is connected to.
@@ -151,8 +161,8 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
                 "sub-network");
         template.assignment = IpAssignment.STATIC;
         template.address = "10.1.0.12";
-        template.firewallLinks = Arrays
-                .asList(UriUtils.buildUriPath(SecurityGroupService.FACTORY_LINK,
+        template.securityGroupLinks = Collections
+                .singletonList(UriUtils.buildUriPath(SecurityGroupService.FACTORY_LINK,
                         "security-group-one"));
         template.deviceIndex = 0;
 

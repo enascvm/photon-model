@@ -41,7 +41,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
-    public static enum AWSEnumerationStages {
+    public enum AWSEnumerationStages {
         KICKOFF_ENUMERATION,
         PATCH_COMPLETION,
         ERROR
@@ -53,23 +53,24 @@ public class AWSEnumerationAdapterService extends StatelessService {
      */
     public static class EnumerationContext extends BaseAdapterContext<EnumerationContext> {
 
-        public ComputeEnumerateResourceRequest computeEnumerationRequest;
+        public ComputeEnumerateResourceRequest request;
         public AWSEnumerationStages stage;
+
         public List<Operation> enumerationOperations;
 
         public EnumerationContext(StatelessService service, ComputeEnumerateResourceRequest request,
                 Operation op) {
             super(service, request.resourceReference);
-            this.computeEnumerationRequest = request;
+            this.request = request;
             this.stage = AWSEnumerationStages.KICKOFF_ENUMERATION;
-            this.enumerationOperations = new ArrayList<Operation>();
-            this.adapterOperation = op;
+            this.enumerationOperations = new ArrayList<>();
+            this.operation = op;
         }
     }
 
     @Override
     public void handleStart(Operation startPost) {
-        startHelperServices(startPost);
+        startHelperServices();
         super.handleStart(startPost);
     }
 
@@ -107,7 +108,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
     /**
      * Starts the related services for the Enumeration Service
      */
-    public void startHelperServices(Operation startPost) {
+    public void startHelperServices() {
         Operation patchAWSEnumerationCreationService = Operation
                 .createPatch(this.getHost(), AWSEnumerationAndCreationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
@@ -150,19 +151,19 @@ public class AWSEnumerationAdapterService extends StatelessService {
             kickOffEnumerationWorkFlows(aws, AWSEnumerationStages.PATCH_COMPLETION);
             break;
         case PATCH_COMPLETION:
-            setOperationDurationStat(aws.adapterOperation);
+            setOperationDurationStat(aws.operation);
             AdapterUtils.sendPatchToEnumerationTask(this,
-                    aws.computeEnumerationRequest.taskReference);
+                    aws.request.taskReference);
             break;
         case ERROR:
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.computeEnumerationRequest.taskReference, aws.error);
+                    aws.request.taskReference, aws.error);
             break;
         default:
             logSevere("Unknown AWS enumeration stage %s ", aws.stage.toString());
             aws.error = new Exception("Unknown AWS enumeration stage");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.computeEnumerationRequest.taskReference, aws.error);
+                    aws.request.taskReference, aws.error);
             break;
 
         }
@@ -175,7 +176,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
             AWSEnumerationStages next) {
         ComputeEnumerateAdapterRequest awsEnumerationRequest =
                 new ComputeEnumerateAdapterRequest(
-                        context.computeEnumerationRequest, context.parentAuth,
+                        context.request, context.parentAuth,
                         context.parent);
 
         Operation patchAWSCreationAdapterService = Operation
@@ -212,7 +213,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
                         "Error kicking off the enumeration workflows for AWS. %s",
                         Utils.toString(exc));
                 AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                        context.computeEnumerationRequest.taskReference,
+                        context.request.taskReference,
                         exc.values().iterator().next());
                 return;
             }

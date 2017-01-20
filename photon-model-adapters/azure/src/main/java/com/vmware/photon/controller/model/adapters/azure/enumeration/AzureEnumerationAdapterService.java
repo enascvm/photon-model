@@ -55,16 +55,16 @@ public class AzureEnumerationAdapterService extends StatelessService {
      * The enumeration service context needed trigger adapters for Azure.
      */
     public static class EnumerationContext extends BaseAdapterContext<EnumerationContext> {
-        public ComputeEnumerateResourceRequest computeEnumerationRequest;
+        public ComputeEnumerateResourceRequest request;
         public AzureEnumerationStages stage;
 
         public EnumerationContext(StatelessService service, ComputeEnumerateResourceRequest request,
                 Operation op) {
             super(service, request.resourceReference);
 
-            this.computeEnumerationRequest = request;
+            this.request = request;
             this.stage = TRIGGER_RESOURCE_GROUP_ENUMERATION;
-            this.adapterOperation = op;
+            this.operation = op;
         }
     }
 
@@ -185,19 +185,19 @@ public class AzureEnumerationAdapterService extends StatelessService {
                     AzureEnumerationStages.FINISHED);
             break;
         case FINISHED:
-            setOperationDurationStat(context.adapterOperation);
+            setOperationDurationStat(context.operation);
             AdapterUtils.sendPatchToEnumerationTask(this,
-                    context.computeEnumerationRequest.taskReference);
+                    context.request.taskReference);
             break;
         case ERROR:
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    context.computeEnumerationRequest.taskReference, context.error);
+                    context.request.taskReference, context.error);
             break;
         default:
             logSevere("Unknown Azure enumeration stage %s ", context.stage.toString());
             context.error = new Exception("Unknown Azure enumeration stage");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    context.computeEnumerationRequest.taskReference, context.error);
+                    context.request.taskReference, context.error);
             break;
         }
     }
@@ -214,7 +214,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
                 logSevere(error);
                 context.error = new IllegalStateException(error);
                 AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                        context.computeEnumerationRequest.taskReference,
+                        context.request.taskReference,
                         context.error);
                 return;
             }
@@ -225,7 +225,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
 
         ComputeEnumerateAdapterRequest azureEnumerationRequest =
                 new ComputeEnumerateAdapterRequest(
-                        context.computeEnumerationRequest, context.parentAuth,
+                        context.request, context.parentAuth,
                         context.parent);
 
         Operation patchEnumAdapterService = Operation

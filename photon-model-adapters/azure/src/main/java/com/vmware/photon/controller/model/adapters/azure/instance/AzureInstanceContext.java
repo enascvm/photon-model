@@ -160,8 +160,8 @@ public class AzureInstanceContext extends
         List<DeferredResult<Subnet>> getSubnetDRs = context.nics.stream()
                 .map(nicCtx -> {
                     String msg = "Getting Azure Subnet ["
-                            + nicCtx.networkResourceGroupState.name + "\\"
-                            + nicCtx.networkState.name + "\\"
+                            + nicCtx.networkResourceGroupState.name + "/"
+                            + nicCtx.networkState.name + "/"
                             + nicCtx.subnetState.name
                             + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
                             + context.vmName
@@ -231,8 +231,8 @@ public class AzureInstanceContext extends
                                 nicContext.securityGroupStates.size() > 0)
                         .map(nicCtx -> {
                             String msg = "Getting Azure Security Group["
-                                    + nicCtx.securityGroupResourceGroupState.name + "\\"
-                                    + nicCtx.networkState.name + "\\"
+                                    + nicCtx.securityGroupResourceGroupState.name + "/"
+                                    + nicCtx.networkState.name + "/"
                                     + nicCtx.securityGroupStates.get(0).name
                                     + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
                                     + context.vmName

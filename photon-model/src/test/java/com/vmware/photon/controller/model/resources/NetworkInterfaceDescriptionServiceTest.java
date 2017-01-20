@@ -57,7 +57,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
 
         nd.address = "8.8.8.8";
         nd.assignment = IpAssignment.STATIC;
-        nd.firewallLinks = Collections.singletonList("/resources/firewall/fw8");
+        nd.securityGroupLinks = Collections.singletonList("/resources/firewall/fw8");
         nd.networkLink = "/resources/network/net8";
         nd.subnetLink = "/resources/subnet/subnet8";
 
@@ -126,7 +126,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
 
             assertThat(getState.address, is(startState.address));
             assertThat(getState.assignment, is(startState.assignment));
-            assertThat(getState.firewallLinks, is(startState.firewallLinks));
+            assertThat(getState.securityGroupLinks, is(startState.securityGroupLinks));
             assertThat(getState.networkLink, is(startState.networkLink));
             assertThat(getState.subnetLink, is(startState.subnetLink));
             assertThat(getState.deviceIndex, is(startState.deviceIndex));

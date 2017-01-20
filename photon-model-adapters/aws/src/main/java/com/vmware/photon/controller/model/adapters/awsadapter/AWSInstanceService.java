@@ -111,7 +111,7 @@ public class AWSInstanceService extends StatelessService {
 
             switch (ctx.computeRequest.requestType) {
             case VALIDATE_CREDENTIALS:
-                ctx.adapterOperation = op;
+                ctx.operation = op;
                 startingStage = BaseAdapterStage.PARENTAUTH;
                 nextStage = AWSInstanceStage.CLIENT;
                 break;
@@ -160,7 +160,8 @@ public class AWSInstanceService extends StatelessService {
      * {@code handleAllocation} version suitable for chaining to
      * {@code DeferredResult.whenComplete}.
      */
-    private BiConsumer<AWSInstanceContext, Throwable> thenAllocation(AWSInstanceContext context, AWSInstanceStage next) {
+    private BiConsumer<AWSInstanceContext, Throwable> thenAllocation(AWSInstanceContext context,
+            AWSInstanceStage next) {
         // NOTE: In case of error 'ignoreCtx' is null so use passed context!
         return (ignoreCtx, exc) -> {
             if (exc != null) {
@@ -204,14 +205,16 @@ public class AWSInstanceService extends StatelessService {
                 validateAWSCredentials(context);
                 break;
             default:
-                handleError(context, new IllegalStateException("Unknown AWS provisioning stage: " + context.computeRequest.requestType));
+                handleError(context, new IllegalStateException(
+                        "Unknown AWS provisioning stage: " + context.computeRequest.requestType));
             }
             break;
         case DELETE:
             deleteInstance(context);
             break;
         case POPULATE_CONTEXT:
-            context.populateContext().whenComplete(thenAllocation(context, AWSInstanceStage.CREATE));
+            context.populateContext()
+                    .whenComplete(thenAllocation(context, AWSInstanceStage.CREATE));
             break;
         case CREATE:
             createInstance(context);
@@ -220,7 +223,8 @@ public class AWSInstanceService extends StatelessService {
             finishExceptionally(context);
             break;
         default:
-            handleError(context, new IllegalStateException("Unknown AWS context stage: " + context.stage));
+            handleError(context,
+                    new IllegalStateException("Unknown AWS context stage: " + context.stage));
             break;
         }
     }
@@ -235,8 +239,8 @@ public class AWSInstanceService extends StatelessService {
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     context.computeRequest.taskReference, context.error);
         }
-        if (context.adapterOperation != null) {
-            context.adapterOperation.fail(context.error);
+        if (context.operation != null) {
+            context.operation.fail(context.error);
         }
     }
 
@@ -358,7 +362,7 @@ public class AWSInstanceService extends StatelessService {
 
             // consumer to be invoked once a VM is in the running state
             Consumer<Instance> consumer = instance -> {
-                List<Operation> patchOperations = new ArrayList<Operation>();
+                List<Operation> patchOperations = new ArrayList<>();
                 if (instance == null) {
                     AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
                             this.context.computeRequest.taskReference,
@@ -371,7 +375,7 @@ public class AWSInstanceService extends StatelessService {
                 cs.address = instance.getPublicIpAddress();
                 cs.powerState = AWSUtils.mapToPowerState(instance.getState());
                 if (this.context.child.customProperties == null) {
-                    cs.customProperties = new HashMap<String, String>();
+                    cs.customProperties = new HashMap<>();
                 } else {
                     cs.customProperties = this.context.child.customProperties;
                 }
@@ -417,10 +421,9 @@ public class AWSInstanceService extends StatelessService {
 
             List<Operation> patchOperations = new ArrayList<>();
             for (InstanceNetworkInterface instanceNic : instance.getNetworkInterfaces()) {
-                List<NetworkInterfaceState> nicStates = nics.stream().map(
-                        nicCtx -> {
-                            return nicCtx.nicStateWithDesc;
-                        }).collect(Collectors.toList());
+                List<NetworkInterfaceState> nicStates = nics.stream()
+                        .map(nicCtx -> nicCtx.nicStateWithDesc)
+                        .collect(Collectors.toList());
                 NetworkInterfaceState nicStateWithDesc = AWSNetworkUtils
                         .getNICStateByDeviceId(nicStates, instanceNic.getAttachment()
                                 .getDeviceIndex());
@@ -503,7 +506,7 @@ public class AWSInstanceService extends StatelessService {
             return;
         }
 
-        List<String> instanceIdList = new ArrayList<String>();
+        List<String> instanceIdList = new ArrayList<>();
         instanceIdList.add(instanceId);
         TerminateInstancesRequest termRequest = new TerminateInstancesRequest(
                 instanceIdList);
@@ -548,21 +551,17 @@ public class AWSInstanceService extends StatelessService {
         @Override
         public void onSuccess(TerminateInstancesRequest request,
                 TerminateInstancesResult result) {
-            Consumer<Instance> consumer = new Consumer<Instance>() {
-
-                @Override
-                public void accept(Instance instance) {
-                    OperationContext.restoreOperationContext(AWSTerminateHandler.this.opContext);
-                    if (instance == null) {
-                        AdapterUtils.sendFailurePatchToProvisioningTask(
-                                AWSTerminateHandler.this.service,
-                                AWSTerminateHandler.this.computeReq.taskReference,
-                                new IllegalStateException("Error getting instance"));
-                        return;
-                    }
-                    AdapterUtils.sendPatchToProvisioningTask(AWSTerminateHandler.this.service,
-                            AWSTerminateHandler.this.computeReq.taskReference);
+            Consumer<Instance> consumer = instance -> {
+                OperationContext.restoreOperationContext(AWSTerminateHandler.this.opContext);
+                if (instance == null) {
+                    AdapterUtils.sendFailurePatchToProvisioningTask(
+                            AWSTerminateHandler.this.service,
+                            AWSTerminateHandler.this.computeReq.taskReference,
+                            new IllegalStateException("Error getting instance"));
+                    return;
                 }
+                AdapterUtils.sendPatchToProvisioningTask(AWSTerminateHandler.this.service,
+                        AWSTerminateHandler.this.computeReq.taskReference);
             };
             AWSTaskStatusChecker.create(this.amazonEC2Client, this.instanceId,
                     AWSInstanceService.AWS_TERMINATED_NAME, consumer,
@@ -595,7 +594,7 @@ public class AWSInstanceService extends StatelessService {
 
     private void validateAWSCredentials(final AWSInstanceContext aws) {
         if (aws.computeRequest.isMockRequest || AWSUtils.isAwsClientMock()) {
-            aws.adapterOperation.complete();
+            aws.operation.complete();
             return;
         }
 
@@ -615,18 +614,18 @@ public class AWSInstanceService extends StatelessService {
                                     if (ase.getStatusCode() == STATUS_CODE_UNAUTHORIZED) {
                                         ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
                                         r.statusCode = STATUS_CODE_UNAUTHORIZED;
-                                        aws.adapterOperation.fail(e, r);
+                                        aws.operation.fail(e, r);
                                         return;
                                     }
                                 }
 
-                                aws.adapterOperation.fail(e);
+                                aws.operation.fail(e);
                             }
 
                             @Override
                             public void onSuccess(DescribeAvailabilityZonesRequest request,
                                     DescribeAvailabilityZonesResult describeAvailabilityZonesResult) {
-                                aws.adapterOperation.complete();
+                                aws.operation.complete();
                             }
                         });
     }

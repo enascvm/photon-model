@@ -161,12 +161,6 @@ public class AzureInstanceService extends StatelessService {
     private static final long DEFAULT_EXPIRATION_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
     private static final int RETRY_INTERVAL_SECONDS = 30;
 
-    private static final class WaitProvisioningToSucceed {
-        static final int INTERVAL = 500;
-        static final TimeUnit TIMEUNIT = TimeUnit.MILLISECONDS;
-        static final int MAX_WAITS = 10;
-    }
-
     private ExecutorService executorService;
 
     @Override
@@ -197,7 +191,7 @@ public class AzureInstanceService extends StatelessService {
 
         switch (ctx.computeRequest.requestType) {
         case VALIDATE_CREDENTIALS:
-            ctx.adapterOperation = op;
+            ctx.operation = op;
             startingStage = BaseAdapterStage.PARENTAUTH;
             break;
         default:
@@ -241,15 +235,24 @@ public class AzureInstanceService extends StatelessService {
      * {@code DeferredResult.whenComplete}.
      */
     private BiConsumer<AzureInstanceContext, Throwable> thenAllocation(AzureInstanceContext ctx,
-            AzureInstanceStage next) {
+            AzureInstanceStage next, String namespace) {
         return (ignoreCtx, exc) -> {
             // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             if (exc != null) {
-                handleError(ctx, exc);
+                if (namespace != null) {
+                    handleSubscriptionError(ctx, namespace, exc);
+                } else {
+                    handleError(ctx, exc);
+                }
                 return;
             }
             handleAllocation(ctx, next);
         };
+    }
+
+    private BiConsumer<AzureInstanceContext, Throwable> thenAllocation(AzureInstanceContext ctx,
+            AzureInstanceStage next) {
+        return thenAllocation(ctx, next, null);
     }
 
     /**
@@ -361,7 +364,7 @@ public class AzureInstanceService extends StatelessService {
      */
     private void validateAzureCredentials(final AzureInstanceContext ctx) {
         if (ctx.computeRequest.isMockRequest) {
-            ctx.adapterOperation.complete();
+            ctx.operation.complete();
             return;
         }
 
@@ -377,7 +380,7 @@ public class AzureInstanceService extends StatelessService {
                         ServiceErrorResponse rsp = new ServiceErrorResponse();
                         rsp.message = "Invalid Azure credentials";
                         rsp.statusCode = STATUS_CODE_UNAUTHORIZED;
-                        ctx.adapterOperation.fail(e, rsp);
+                        ctx.operation.fail(e, rsp);
                     }
 
                     @Override
@@ -385,7 +388,7 @@ public class AzureInstanceService extends StatelessService {
                         Subscription subscription = result.getBody();
                         logFine("Got subscription %s with id %s", subscription.getDisplayName(),
                                 subscription.getId());
-                        ctx.adapterOperation.complete();
+                        ctx.operation.complete();
                     }
                 });
     }
@@ -546,25 +549,16 @@ public class AzureInstanceService extends StatelessService {
         StorageAccountsOperations azureClient = getStorageManagementClient(ctx)
                 .getStorageAccountsOperations();
 
-        azureClient.createAsync(
-                ctx.resourceGroup.getName(),
-                ctx.storageAccountName,
-                storageParameters,
-                new ProvisioningCallback<StorageAccount>(ctx, nextStage, msg) {
-
+        AzureProvisioningDeferredResultCallback<StorageAccount> handler =
+                new AzureProvisioningDeferredResultCallback<StorageAccount>(this, msg) {
                     @Override
-                    void handleFailure(Throwable e) {
-                        handleSubscriptionError(this.ctx, STORAGE_NAMESPACE, e);
-                    }
-
-                    @Override
-                    CompletionStage<StorageAccount> handleProvisioningSucceeded(StorageAccount sa) {
-
-                        this.ctx.storage = sa;
+                    public DeferredResult<StorageAccount> consumeProvisioningSuccess(
+                            StorageAccount sa) {
+                        ctx.storage = sa;
 
                         StorageDescription storageDescriptionToCreate = new StorageDescription();
-                        storageDescriptionToCreate.name = this.ctx.storageAccountName;
-                        storageDescriptionToCreate.type = this.ctx.storage.getAccountType().name();
+                        storageDescriptionToCreate.name = ctx.storageAccountName;
+                        storageDescriptionToCreate.type = ctx.storage.getAccountType().name();
 
                         Operation createStorageDescOp = Operation
                                 .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
@@ -573,14 +567,14 @@ public class AzureInstanceService extends StatelessService {
                         Operation patchBootDiskOp = Operation
                                 .createPatch(
                                         UriUtils.buildUri(getHost(),
-                                                this.ctx.bootDisk.documentSelfLink))
-                                .setBody(this.ctx.bootDisk);
+                                                ctx.bootDisk.documentSelfLink))
+                                .setBody(ctx.bootDisk);
 
                         return sendWithDeferredResult(createStorageDescOp, StorageDescription.class)
                                 // Consume created StorageDescription
                                 .thenAccept((storageDescription) -> {
-                                    this.ctx.storageDescription = storageDescription;
-                                    this.ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
+                                    ctx.storageDescription = storageDescription;
+                                    ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
                                     logInfo("Creating StorageDescription [%s]: SUCCESS",
                                             storageDescription.name);
                                 })
@@ -589,15 +583,14 @@ public class AzureInstanceService extends StatelessService {
                                 // Log boot disk patch success
                                 .thenRun(() -> {
                                     logInfo("Updating boot disk [%s]: SUCCESS",
-                                            this.ctx.bootDisk.name);
+                                            ctx.bootDisk.name);
                                 })
                                 // Return original StorageAccount
-                                .thenApply((woid) -> sa)
-                                .toCompletionStage();
+                                .thenApply((woid) -> sa);
                     }
 
                     @Override
-                    String getProvisioningState(StorageAccount sa) {
+                    public String getProvisioningState(StorageAccount sa) {
                         ProvisioningState provisioningState = sa.getProvisioningState();
 
                         // For some reason SA.provisioningState is null, so consider it CREATING.
@@ -609,14 +602,25 @@ public class AzureInstanceService extends StatelessService {
                     }
 
                     @Override
-                    Runnable checkProvisioningStateCall(
+                    public Runnable checkProvisioningStateCall(
                             ServiceCallback<StorageAccount> checkProvisioningStateCallback) {
                         return () -> azureClient.getPropertiesAsync(
-                                this.ctx.resourceGroup.getName(),
-                                this.ctx.storageAccountName,
+                                ctx.resourceGroup.getName(),
+                                ctx.storageAccountName,
                                 checkProvisioningStateCallback);
+
                     }
-                });
+                };
+
+        azureClient.createAsync(
+                ctx.resourceGroup.getName(),
+                ctx.storageAccountName,
+                storageParameters,
+                handler);
+
+        handler.toDeferredResult()
+                .thenApply(ignore -> ctx)
+                .whenComplete(thenAllocation(ctx, nextStage, STORAGE_NAMESPACE));
     }
 
     private void createNetworkIfNotExist(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
@@ -628,7 +632,7 @@ public class AzureInstanceService extends StatelessService {
         // Get NICs with not existing subnets
         List<Subnet> subnetsToCreate = ctx.nics.stream()
                 .filter(nicCtx -> nicCtx.subnet == null)
-                .map(nicCtx -> newAzureSubnet(ctx, nicCtx))
+                .map(nicCtx -> newAzureSubnet(nicCtx))
                 .collect(Collectors.toList());
 
         if (subnetsToCreate.isEmpty()) {
@@ -666,22 +670,14 @@ public class AzureInstanceService extends StatelessService {
                 + "] for ["
                 + ctx.vmName + "] VM";
 
-        azureClient.beginCreateOrUpdateAsync(
-                vNetToCreateRGName,
-                vNetToCreateName,
-                vNetToCreate,
-                new ProvisioningCallback<VirtualNetwork>(ctx, nextStage, msg) {
+        AzureProvisioningDeferredResultCallback<VirtualNetwork> handler =
+                new AzureProvisioningDeferredResultCallback<VirtualNetwork>(this, msg) {
 
                     @Override
-                    void handleFailure(Throwable e) {
-                        handleSubscriptionError(this.ctx, NETWORK_NAMESPACE, e);
-                    }
-
-                    @Override
-                    CompletionStage<VirtualNetwork> handleProvisioningSucceeded(
+                    public DeferredResult<VirtualNetwork> consumeProvisioningSuccess(
                             VirtualNetwork vNet) {
                         // Populate NICs with Azure Subnet
-                        for (AzureNicContext nicCtx : this.ctx.nics) {
+                        for (AzureNicContext nicCtx : ctx.nics) {
                             if (nicCtx.subnet == null) {
                                 nicCtx.subnet = vNet.getSubnets().stream()
                                         .filter(subnet -> subnet.getName()
@@ -689,11 +685,11 @@ public class AzureInstanceService extends StatelessService {
                                         .findFirst().get();
                             }
                         }
-                        return CompletableFuture.completedFuture(vNet);
+                        return DeferredResult.completed(vNet);
                     }
 
                     @Override
-                    String getProvisioningState(VirtualNetwork vNet) {
+                    public String getProvisioningState(VirtualNetwork vNet) {
                         // Return first NOT Succeeded state,
                         // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
                         String subnetPS = vNet.getSubnets().stream()
@@ -714,7 +710,7 @@ public class AzureInstanceService extends StatelessService {
                     }
 
                     @Override
-                    Runnable checkProvisioningStateCall(
+                    public Runnable checkProvisioningStateCall(
                             ServiceCallback<VirtualNetwork> checkProvisioningStateCallback) {
                         return () -> azureClient.getAsync(
                                 vNetToCreateRGName,
@@ -722,7 +718,17 @@ public class AzureInstanceService extends StatelessService {
                                 null /* expand */,
                                 checkProvisioningStateCallback);
                     }
-                });
+                };
+
+        azureClient.beginCreateOrUpdateAsync(
+                vNetToCreateRGName,
+                vNetToCreateName,
+                vNetToCreate,
+                handler);
+
+        handler.toDeferredResult()
+                .thenApply(ignore -> ctx)
+                .whenComplete(thenAllocation(ctx, nextStage, NETWORK_NAMESPACE));
     }
 
     /**
@@ -748,9 +754,7 @@ public class AzureInstanceService extends StatelessService {
     /**
      * Converts Photon model constructs to underlying Azure VirtualNetwork-Subnet model.
      */
-    private Subnet newAzureSubnet(
-            AzureInstanceContext ctx,
-            AzureNicContext nicCtx) {
+    private Subnet newAzureSubnet(AzureNicContext nicCtx) {
 
         Subnet subnet = new Subnet();
         subnet.setName(nicCtx.subnetState.name);
@@ -776,35 +780,41 @@ public class AzureInstanceService extends StatelessService {
 
         String msg = "Creating Azure Public IP [" + publicIPName + "] for [" + ctx.vmName + "] VM";
 
-        azureClient.beginCreateOrUpdateAsync(
-                ctx.resourceGroup.getName(),
-                publicIPName,
-                publicIPAddress,
-                new ProvisioningCallback<PublicIPAddress>(ctx, nextStage, msg) {
-
+        AzureProvisioningDeferredResultCallback<PublicIPAddress> handler =
+                new AzureProvisioningDeferredResultCallback<PublicIPAddress>(this, msg) {
                     @Override
-                    CompletionStage<PublicIPAddress> handleProvisioningSucceeded(
+                    public DeferredResult<PublicIPAddress> consumeProvisioningSuccess(
                             PublicIPAddress publicIP) {
                         nicCtx.publicIP = publicIP;
 
-                        return CompletableFuture.completedFuture(publicIP);
+                        return DeferredResult.completed(publicIP);
                     }
 
                     @Override
-                    Runnable checkProvisioningStateCall(
+                    public String getProvisioningState(PublicIPAddress publicIP) {
+                        return publicIP.getProvisioningState();
+                    }
+
+                    @Override
+                    public Runnable checkProvisioningStateCall(
                             ServiceCallback<PublicIPAddress> checkProvisioningStateCallback) {
                         return () -> azureClient.getAsync(
-                                this.ctx.resourceGroup.getName(),
+                                ctx.resourceGroup.getName(),
                                 publicIPName,
                                 null /* expand */,
                                 checkProvisioningStateCallback);
                     }
+                };
 
-                    @Override
-                    String getProvisioningState(PublicIPAddress publicIP) {
-                        return publicIP.getProvisioningState();
-                    }
-                });
+        azureClient.beginCreateOrUpdateAsync(
+                ctx.resourceGroup.getName(),
+                publicIPName,
+                publicIPAddress,
+                handler);
+
+        handler.toDeferredResult()
+                .thenApply(ignore -> ctx)
+                .whenComplete(thenAllocation(ctx, nextStage, NETWORK_NAMESPACE));
     }
 
     /**
@@ -916,8 +926,8 @@ public class AzureInstanceService extends StatelessService {
         String nsgName = nicCtx.securityGroupStates.get(0).name;
 
         String msg = "Create Azure Security Group["
-                + nicCtx.networkResourceGroupState.name + "\\"
-                + nsgName + "\\"
+                + nicCtx.networkResourceGroupState.name + "/"
+                + nsgName + "/"
                 + nicCtx.securityGroupStates.get(0).name
                 + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
                 + ctx.vmName
@@ -1537,7 +1547,6 @@ public class AzureInstanceService extends StatelessService {
                         @Override
                         public void onError(Throwable e) {
                             handleError(ctx, new IllegalStateException(e.getLocalizedMessage()));
-                            return;
                         }
 
                         @Override
@@ -1576,7 +1585,6 @@ public class AzureInstanceService extends StatelessService {
                     @Override
                     public void onError(Throwable e) {
                         handleError(ctx, new IllegalStateException(e.getLocalizedMessage()));
-                        return;
                     }
 
                     @Override
@@ -1683,7 +1691,7 @@ public class AzureInstanceService extends StatelessService {
     /**
      * The class represents the context of async calls(either single or batch) to Azure cloud.
      *
-     * @see {@link TransitionToCallback}
+     * @see TransitionToCallback
      */
     static class AzureCallContext {
 
@@ -1849,121 +1857,6 @@ public class AzureInstanceService extends StatelessService {
             if (this.callCtx.numberOfCalls.decrementAndGet() == 0) {
                 // Check whether all calls have succeeded and proceed to next stage.
                 AzureInstanceService.this.handleAllocation(this.ctx, this.nextStage);
-            }
-        }
-    }
-
-    /**
-     * Use this Azure callback in case of Azure provisioning call (such as create vNet, NIC, etc.).
-     * <p>
-     * The provisioning state of resources returned by Azure 'create' call is 'Updating'. This
-     * callback is responsible to wait for resource provisioning state to change to 'Succeeded'.
-     */
-    private abstract class ProvisioningCallback<T> extends TransitionToCallback<T> {
-
-        private static final String WAIT_PROVISIONING_TO_SUCCEED_MSG = "WAIT provisioning to succeed";
-
-        private int numberOfWaits = 0;
-        private CompletableFuture<T> waitProvisioningToSucceed = new CompletableFuture<>();
-
-        ProvisioningCallback(AzureInstanceContext ctx, AzureInstanceStage nextStage, String msg) {
-            super(ctx, nextStage, msg);
-        }
-
-        /**
-         * Provides 'wait-for-provisioning-to-succeed' logic prior forwarding to actual resource
-         * create {@link #handleProvisioningSucceeded(Object) callback}.
-         */
-        @Override
-        final CompletionStage<T> handleSuccess(T body) {
-
-            return waitProvisioningToSucceed(body).thenCompose(this::handleProvisioningSucceeded);
-        }
-
-        /**
-         * Hook to be implemented by descendants to handle 'Succeeded' Azure resource provisioning.
-         * Since implementations might decide to trigger/initiate sync operation they are required
-         * to return {@link CompletionStage} to track its completion.
-         * <p>
-         * This call is introduced by analogy with {@link #handleSuccess(Object)}.
-         */
-        abstract CompletionStage<T> handleProvisioningSucceeded(T body);
-
-        /**
-         * By design Azure resources do not have generic 'provisioningState' getter, so we enforce
-         * descendants to provide us with its value.
-         * <p>
-         * NOTE: Might be done through reflection. For now keep it simple.
-         */
-        abstract String getProvisioningState(T body);
-
-        /**
-         * This Runnable abstracts/models the Azure 'get resource' call used to get/check resource
-         * provisioning state.
-         *
-         * @param checkProvisioningStateCallback The special callback that should be used while
-         *                                       creating the Azure 'get resource' call.
-         */
-        abstract Runnable checkProvisioningStateCall(
-                ServiceCallback<T> checkProvisioningStateCallback);
-
-        /**
-         * The core logic that waits for provisioning to succeed. It polls periodically for resource
-         * provisioning state.
-         */
-        private CompletionStage<T> waitProvisioningToSucceed(T body) {
-
-            String provisioningState = getProvisioningState(body);
-
-            logInfo(this.msg + ": provisioningState = " + provisioningState);
-
-            if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(provisioningState)) {
-
-                // Resource 'provisioningState' has changed finally to 'Succeeded'
-                // Completes 'waitProvisioningToSucceed' task with success
-                this.waitProvisioningToSucceed.complete(body);
-
-            } else if (this.numberOfWaits > WaitProvisioningToSucceed.MAX_WAITS) {
-
-                // Max number of re-tries has reached.
-                // Completes 'waitProvisioningToSucceed' task with exception.
-                this.waitProvisioningToSucceed.completeExceptionally(new IllegalStateException(
-                        WAIT_PROVISIONING_TO_SUCCEED_MSG + ": max waits exceeded"));
-
-            } else {
-
-                // Retry one more time
-
-                this.numberOfWaits++;
-
-                logInfo("%s: [%s] %s", this.msg, this.numberOfWaits,
-                        WAIT_PROVISIONING_TO_SUCCEED_MSG);
-
-                getHost().schedule(
-                        checkProvisioningStateCall(new CheckProvisioningStateCallback()),
-                        WaitProvisioningToSucceed.INTERVAL,
-                        WaitProvisioningToSucceed.TIMEUNIT);
-            }
-
-            return this.waitProvisioningToSucceed;
-        }
-
-        /**
-         * Specialization of Azure callback used by {@link ProvisioningCallback} to handle
-         * 'get/check resource state' call.
-         */
-        private class CheckProvisioningStateCallback extends AzureAsyncCallback<T> {
-
-            @Override
-            public void onError(Throwable e) {
-                e = new IllegalStateException(WAIT_PROVISIONING_TO_SUCCEED_MSG + ": FAILED", e);
-
-                ProvisioningCallback.this.waitProvisioningToSucceed.completeExceptionally(e);
-            }
-
-            @Override
-            public void onSuccess(ServiceResponse<T> result) {
-                ProvisioningCallback.this.waitProvisioningToSucceed(result.getBody());
             }
         }
     }

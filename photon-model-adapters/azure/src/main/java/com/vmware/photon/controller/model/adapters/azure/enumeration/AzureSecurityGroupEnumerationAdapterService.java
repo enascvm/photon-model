@@ -79,14 +79,15 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             BaseEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState,
                     NetworkSecurityGroup> {
 
-        ComputeEnumerateResourceRequest enumRequest;
+        ComputeEnumerateResourceRequest request;
+
         AuthCredentialsService.AuthCredentialsServiceState parentAuth;
 
         EnumerationStages stage;
 
         // Stored operation to signal completion to the Azure security group enumeration once all
         // the stages are successfully completed.
-        Operation azureSecurityGroupAdapterOperation;
+        Operation operation;
 
         // Azure credentials.
         ApplicationTokenCredentials credentials;
@@ -108,11 +109,11 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             super(service, SecurityGroupState.class, SecurityGroupService.FACTORY_LINK, request
                     .parentCompute);
 
-            this.enumRequest = request.computeEnumerateResourceRequest;
+            this.request = request.computeEnumerateResourceRequest;
             this.parentAuth = request.parentAuth;
 
             this.stage = EnumerationStages.CLIENT;
-            this.azureSecurityGroupAdapterOperation = op;
+            this.operation = op;
         }
 
         @Override
@@ -220,8 +221,8 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
 
             resultSecurityGroupState.name = networkSecurityGroup.name;
             resultSecurityGroupState.regionId = networkSecurityGroup.location;
-            resultSecurityGroupState.resourcePoolLink = this.enumRequest.resourcePoolLink;
-            resultSecurityGroupState.endpointLink = this.enumRequest.endpointLink;
+            resultSecurityGroupState.resourcePoolLink = this.request.resourcePoolLink;
+            resultSecurityGroupState.endpointLink = this.request.endpointLink;
             resultSecurityGroupState.tenantLinks = this.parentCompute.tenantLinks;
 
             // TODO: AzureFirewallService currently doesn't exist.
@@ -334,8 +335,8 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
         }
         SecurityGroupEnumContext ctx = new SecurityGroupEnumContext(op.getBody
                 (ComputeEnumerateAdapterRequest.class), op, this);
-        AdapterUtils.validateEnumRequest(ctx.enumRequest);
-        if (ctx.enumRequest.isMockRequest) {
+        AdapterUtils.validateEnumRequest(ctx.request);
+        if (ctx.request.isMockRequest) {
             op.complete();
             return;
         }
@@ -366,7 +367,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             break;
         case ENUMERATE:
             String enumKey = getEnumKey(context);
-            switch (context.enumRequest.enumerationAction) {
+            switch (context.request.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
                     logInfo("Enumeration service has already been started for %s", enumKey);
@@ -375,7 +376,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     return;
                 }
                 logInfo("Launching enumeration service for %s", enumKey);
-                context.enumRequest.enumerationAction = EnumerationAction.REFRESH;
+                context.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumeration(context);
                 break;
             case REFRESH:
@@ -404,17 +405,17 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 break;
             default:
                 handleError(context, new RuntimeException(
-                        "Unknown enumeration action" + context.enumRequest.enumerationAction));
+                        "Unknown enumeration action" + context.request.enumerationAction));
                 break;
             }
             break;
         case FINISHED:
-            context.azureSecurityGroupAdapterOperation.complete();
+            context.operation.complete();
             logInfo("Enumeration finished for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
-            context.azureSecurityGroupAdapterOperation.fail(context.error);
+            context.operation.fail(context.error);
             logWarning("Enumeration error for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
@@ -431,7 +432,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
      * Return a key to uniquely identify enumeration for compute host instance.
      */
     private String getEnumKey(SecurityGroupEnumContext ctx) {
-        return "hostLink:" + ctx.enumRequest.resourceLink() +
+        return "hostLink:" + ctx.request.resourceLink() +
                 "-enumerationAdapterReference:" +
                 ctx.parentCompute.description.enumerationAdapterReference;
     }

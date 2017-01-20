@@ -74,22 +74,21 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  * - Performs a list call to the EBS list volumes API and reconciles the local state with the state on the remote system.
  * - It lists the volumes on the remote system. Compares those with the local system and creates or updates
  * the volumes that are missing in the local system. In the local system each EBS volume is mapped to a disk state.
- *
  */
 public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_STORAGE_ENUMERATION_ADAPTER_SERVICE;
     public static final int GB_TO_MB_MULTIPLIER = 1000;
     private AWSClientManager clientManager;
 
-    public static enum AWSStorageEnumerationStages {
+    public enum AWSStorageEnumerationStages {
         CLIENT, ENUMERATE, ERROR
     }
 
-    private static enum AWSStorageEnumerationRefreshSubStage {
+    private enum AWSStorageEnumerationRefreshSubStage {
         EBS_VOLUMES, S3_BUCKETS
     }
 
-    public static enum EBSVolumesEnumerationSubStage {
+    public enum EBSVolumesEnumerationSubStage {
         QUERY_LOCAL_RESOURCES, COMPARE, CREATE_UPDATE_DISK_STATES, GET_NEXT_PAGE, DELETE_DISKS, ENUMERATION_STOP
     }
 
@@ -105,7 +104,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
      */
     public static class BlockStorageEnumerationContext {
         public AmazonEC2AsyncClient amazonEC2Client;
-        public ComputeEnumerateResourceRequest computeEnumerationRequest;
+        public ComputeEnumerateResourceRequest request;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public ComputeStateWithDescription parentCompute;
         public AWSStorageEnumerationStages stage;
@@ -131,7 +130,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         // The link used to navigate through the list of records that are to be deleted from the
         // local system.
         public String deletionNextPageLink;
-        public Operation awsAdapterOperation;
+        public Operation operation;
         // The list of operations that have to created/updated as part of the storage enumeration.
         public List<Operation> enumerationOperations;
         // The time stamp at which the enumeration started.
@@ -139,15 +138,15 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
 
         public BlockStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
-            this.awsAdapterOperation = op;
-            this.computeEnumerationRequest = request.computeEnumerateResourceRequest;
+            this.operation = op;
+            this.request = request.computeEnumerateResourceRequest;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
             this.localDiskStateMap = new ConcurrentSkipListMap<>();
             this.disksToBeUpdated = new ArrayList<>();
             this.remoteAWSVolumes = new ConcurrentSkipListMap<>();
             this.volumesToBeCreated = new ArrayList<>();
-            this.enumerationOperations = new ArrayList<Operation>();
+            this.enumerationOperations = new ArrayList<>();
             this.remoteAWSVolumeIds = new HashSet<>();
             this.stage = AWSStorageEnumerationStages.CLIENT;
             this.refreshSubStage = AWSStorageEnumerationRefreshSubStage.EBS_VOLUMES;
@@ -177,10 +176,10 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         }
         BlockStorageEnumerationContext awsEnumerationContext = new BlockStorageEnumerationContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
-        if (awsEnumerationContext.computeEnumerationRequest.isMockRequest) {
+        if (awsEnumerationContext.request.isMockRequest) {
             // patch status to parent task
             AdapterUtils.sendPatchToEnumerationTask(this,
-                    awsEnumerationContext.computeEnumerationRequest.taskReference);
+                    awsEnumerationContext.request.taskReference);
             return;
         }
         handleEnumerationRequest(awsEnumerationContext);
@@ -189,7 +188,6 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
     /**
      * Handles the different steps required to hit the AWS endpoint and get the set of resources
      * available and proceed to update the state in the local system based on the received data.
-     *
      */
     private void handleEnumerationRequest(BlockStorageEnumerationContext aws) {
         switch (aws.stage) {
@@ -197,12 +195,12 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             getAWSAsyncClient(aws, AWSStorageEnumerationStages.ENUMERATE);
             break;
         case ENUMERATE:
-            switch (aws.computeEnumerationRequest.enumerationAction) {
+            switch (aws.request.enumerationAction) {
             case START:
                 logInfo("Started storage enumeration for %s",
-                        aws.computeEnumerationRequest.resourceReference);
+                        aws.request.resourceReference);
                 aws.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
-                aws.computeEnumerationRequest.enumerationAction = EnumerationAction.REFRESH;
+                aws.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequest(aws);
                 break;
             case REFRESH:
@@ -210,9 +208,9 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 break;
             case STOP:
                 logInfo("Stopping storage enumeration for %s",
-                        aws.computeEnumerationRequest.resourceReference);
-                setOperationDurationStat(aws.awsAdapterOperation);
-                aws.awsAdapterOperation.complete();
+                        aws.request.resourceReference);
+                setOperationDurationStat(aws.operation);
+                aws.operation.complete();
                 break;
             default:
                 break;
@@ -220,7 +218,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             break;
         case ERROR:
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.computeEnumerationRequest.taskReference, aws.error);
+                    aws.request.taskReference, aws.error);
             break;
         default:
             logSevere("Unknown AWS enumeration stage %s ", aws.stage.toString());
@@ -239,7 +237,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         case EBS_VOLUMES:
             if (aws.pageNo == 1) {
                 logInfo("Running enumeration service for creation in refresh mode for %s",
-                        aws.computeEnumerationRequest.resourceReference);
+                        aws.request.resourceReference);
             }
             logFine("Processing page %d ", aws.pageNo);
             aws.pageNo++;
@@ -256,21 +254,19 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             logSevere("Unknown AWS enumeration stage %s ", aws.refreshSubStage.toString());
             aws.error = new Exception("Unknown AWS enumeration stage %s");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.computeEnumerationRequest.taskReference, aws.error);
+                    aws.request.taskReference, aws.error);
             break;
         }
     }
 
     /**
      * Method to instantiate the AWS Async client for future use
-     *
-     * @param aws
      */
     private void getAWSAsyncClient(BlockStorageEnumerationContext aws,
             AWSStorageEnumerationStages next) {
         aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
                 aws.parentCompute.description.regionId, this,
-                aws.computeEnumerationRequest.taskReference, true);
+                aws.request.taskReference, true);
         aws.stage = next;
         handleEnumerationRequest(aws);
     }
@@ -280,8 +276,6 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
      * volumes. Also saves an instance to the async handler that will be used to handle the
      * responses received from AWS. It sets the nextToken value in the request object sent to AWS
      * for getting the next page of results from AWS.
-     *
-     * @param aws
      */
     private void creatAWSRequestAndAsyncHandler(BlockStorageEnumerationContext aws) {
         DescribeVolumesRequest request = new DescribeVolumesRequest();
@@ -315,7 +309,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.context.computeEnumerationRequest.taskReference,
+                    this.context.request.taskReference,
                     exception);
 
         }
@@ -402,7 +396,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
-                            this.context.computeEnumerationRequest.resourcePoolLink)
+                            this.context.request.resourcePoolLink)
                     .build();
 
             Query volumeIdFilterParentQuery = Query.Builder.create().build();
@@ -454,7 +448,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         private void compareLocalStateWithEnumerationData(
                 EBSVolumesEnumerationSubStage next) {
             // No remote disks
-            if (this.context.remoteAWSVolumes == null || this.context.remoteAWSVolumes.size() == 0) {
+            if (this.context.remoteAWSVolumes == null
+                    || this.context.remoteAWSVolumes.size() == 0) {
                 this.service.logFine(
                         "No disks discovered on the remote system. Nothing to be created locally");
                 // no local disks
@@ -480,36 +475,34 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         /**
          * Creates the disk states that represent the volumes received from AWS during
          * enumeration.
-         *
-         * @param next
          */
         private void createOrUpdateDiskStates(EBSVolumesEnumerationSubStage next) {
             // For all the disks to be created..map them and create operations.
             // kick off the operation using a JOIN
-            List<DiskState> diskStatesToBeCreated = new ArrayList<DiskState>();
+            List<DiskState> diskStatesToBeCreated = new ArrayList<>();
             this.context.volumesToBeCreated.forEach(volume -> {
                 diskStatesToBeCreated.add(mapVolumeToDiskState(volume,
-                        this.context.computeEnumerationRequest.resourcePoolLink,
+                        this.context.request.resourcePoolLink,
                         this.context.parentAuth.documentSelfLink,
-                        this.context.computeEnumerationRequest.endpointLink,
+                        this.context.request.endpointLink,
                         this.context.parentCompute.tenantLinks));
 
             });
-            diskStatesToBeCreated.forEach(diskState -> {
-                this.context.enumerationOperations.add(
-                        createPostOperation(this.service, diskState, DiskService.FACTORY_LINK));
-            });
+            diskStatesToBeCreated.forEach(diskState ->
+                    this.context.enumerationOperations.add(
+                            createPostOperation(this.service, diskState,
+                                    DiskService.FACTORY_LINK)));
             this.service.logFine("Creating %d disks", this.context.volumesToBeCreated.size());
             // For all the disks to be updated, map the updated state from the received
             // volumes and issue patch requests against the existing disk state representations
             // in the system
 
-            List<DiskState> diskStatesToBeUpdated = new ArrayList<DiskState>();
+            List<DiskState> diskStatesToBeUpdated = new ArrayList<>();
             this.context.disksToBeUpdated.forEach(volume -> {
                 diskStatesToBeUpdated.add(mapVolumeToDiskState(volume,
-                        this.context.computeEnumerationRequest.resourcePoolLink,
+                        this.context.request.resourcePoolLink,
                         this.context.parentAuth.documentSelfLink,
-                        this.context.computeEnumerationRequest.endpointLink,
+                        this.context.request.endpointLink,
                         this.context.parentCompute.tenantLinks));
 
             });
@@ -570,7 +563,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * encrypted etc.
          */
         private void mapCustomProperties(DiskState diskState, Volume volume) {
-            diskState.customProperties = new HashMap<String, String>();
+            diskState.customProperties = new HashMap<>();
             if (volume.getSnapshotId() != null) {
                 diskState.customProperties.put(SNAPSHOT_ID, volume.getSnapshotId());
             }
@@ -605,9 +598,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * - gp2 = general purpose SSD
          * - io1 = provisioned SSD
          * - standard = Magnetic Disk
-         *
+         * <p>
          * These are mapped to SSD or HDD in the local system.
-         *
          */
         private void mapDiskType(DiskState diskState, Volume volume) {
             String volumeType = volume.getVolumeType();
@@ -621,25 +613,26 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
 
         /**
          * Deletes undiscovered resources.
-         *
+         * <p>
          * The logic works by recording a timestamp when enumeration starts. This timestamp is used to
          * lookup resources which haven't been touched as part of current enumeration cycle.
-         *
-         *  Finally, delete on a resource is invoked only if it meets two criteria:
+         * <p>
+         * Finally, delete on a resource is invoked only if it meets two criteria:
          * - Timestamp older than current enumeration cycle.
          * - EBS block not present on AWS.
-         *
+         * <p>
          * The method paginates through list of resources for deletion.
          */
         private void deleteDiskStates(EBSVolumesEnumerationSubStage next) {
             Query query = Builder.create()
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
-                            this.context.computeEnumerationRequest.resourcePoolLink)
+                            this.context.request.resourcePoolLink)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
                     .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
-                            NumericRange.createLessThanRange(this.context.enumerationStartTimeInMicros))
+                            NumericRange
+                                    .createLessThanRange(this.context.enumerationStartTimeInMicros))
                     .addCompositeFieldClause(
                             ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                             SOURCE_TASK_LINK, ResourceEnumerationTaskService.FACTORY_LINK,
@@ -685,48 +678,53 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             this.service.logFine("Querying page [%s] for resources to be deleted",
                     this.context.deletionNextPageLink);
             this.service
-                    .sendRequest(Operation.createGet(this.service, this.context.deletionNextPageLink)
-                            .setCompletion((o, e) -> {
-                                if (e != null) {
-                                    signalErrorToEnumerationAdapter(e);
-                                    return;
-                                }
-                                QueryTask queryTask = o.getBody(QueryTask.class);
+                    .sendRequest(
+                            Operation.createGet(this.service, this.context.deletionNextPageLink)
+                                    .setCompletion((o, e) -> {
+                                        if (e != null) {
+                                            signalErrorToEnumerationAdapter(e);
+                                            return;
+                                        }
+                                        QueryTask queryTask = o.getBody(QueryTask.class);
 
-                                this.context.deletionNextPageLink = queryTask.results.nextPageLink;
-                                List<Operation> deleteOperations = new ArrayList<>();
-                                for (Object s : queryTask.results.documents.values()) {
-                                    DiskState diskState = Utils
-                                            .fromJson(s, DiskState.class);
-                                    // If the global list of ids does not contain this entity and it
-                                    // was not updated then delete it. This check is necessary as
-                                    // the document update timestamp/version does not change if
-                                    // there are no changes to the attributes of the entity during
-                                    // update.
-                                    if (!this.context.remoteAWSVolumeIds.contains(diskState.id)) {
-                                        deleteOperations.add(Operation.createDelete(this.service,
-                                                diskState.documentSelfLink));
-                                    }
-                                }
-                                this.service.logFine("Deleting %d disks", deleteOperations.size());
-                                if (deleteOperations.size() == 0) {
-                                    this.service.logFine("No disk states to be deleted");
-                                    processDeletionRequest(next);
-                                    return;
-                                }
-                                OperationJoin.create(deleteOperations)
-                                        .setCompletion((ops, exs) -> {
-                                            if (exs != null) {
-                                                // We don't want to fail the whole data collection
-                                                // if some of the operation fails.
-                                                exs.values().forEach(
-                                                        ex -> this.service.logWarning("Error: %s",
-                                                                ex.getMessage()));
+                                        this.context.deletionNextPageLink = queryTask.results.nextPageLink;
+                                        List<Operation> deleteOperations = new ArrayList<>();
+                                        for (Object s : queryTask.results.documents.values()) {
+                                            DiskState diskState = Utils
+                                                    .fromJson(s, DiskState.class);
+                                            // If the global list of ids does not contain this entity and it
+                                            // was not updated then delete it. This check is necessary as
+                                            // the document update timestamp/version does not change if
+                                            // there are no changes to the attributes of the entity during
+                                            // update.
+                                            if (!this.context.remoteAWSVolumeIds
+                                                    .contains(diskState.id)) {
+                                                deleteOperations
+                                                        .add(Operation.createDelete(this.service,
+                                                                diskState.documentSelfLink));
                                             }
+                                        }
+                                        this.service.logFine("Deleting %d disks",
+                                                deleteOperations.size());
+                                        if (deleteOperations.size() == 0) {
+                                            this.service.logFine("No disk states to be deleted");
                                             processDeletionRequest(next);
-                                        })
-                                        .sendWith(this.service);
-                            }));
+                                            return;
+                                        }
+                                        OperationJoin.create(deleteOperations)
+                                                .setCompletion((ops, exs) -> {
+                                                    if (exs != null) {
+                                                        // We don't want to fail the whole data collection
+                                                        // if some of the operation fails.
+                                                        exs.values().forEach(
+                                                                ex -> this.service
+                                                                        .logWarning("Error: %s",
+                                                                                ex.getMessage()));
+                                                    }
+                                                    processDeletionRequest(next);
+                                                })
+                                                .sendWith(this.service);
+                                    }));
 
         }
 
@@ -735,7 +733,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * in turn patch the parent task to indicate completion.
          */
         private void signalStopToEnumerationAdapter() {
-            this.context.computeEnumerationRequest.enumerationAction = EnumerationAction.STOP;
+            this.context.request.enumerationAction = EnumerationAction.STOP;
             this.service.handleEnumerationRequest(this.context);
         }
 
@@ -751,8 +749,6 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
 
         /**
          * Calls the AWS enumeration adapter to get the next page from AWSs
-         *
-         * @param next
          */
         private void getNextPageFromEnumerationAdapter(EBSVolumesEnumerationSubStage next) {
             // Reset all the results from the last page that was processed.

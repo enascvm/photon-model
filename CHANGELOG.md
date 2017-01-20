@@ -3,6 +3,8 @@
 ## 0.5.8-SNAPSHOT
 
 * Introduced an optional SubnetState.zoneId field.
+* firewallLinks in NetworkInterfaceState and NetworkInterfaceDescription are
+marked as deprecated. Use securityGroupLinks instead.
 
 ## 0.5.7
 

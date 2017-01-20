@@ -34,6 +34,9 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
      */
     private final DeferredResult<RES> deferredResult = new DeferredResult<>();
 
+    /**
+     * Informational message that describes the Service to Azure interaction.
+     */
     protected final String message;
 
     /**

@@ -368,7 +368,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
         assertNotNull("Primary NIC public IP should be set.", primaryNicState.address);
         assertNotNull("Primary NIC security group should be set.", primaryNicState
-                .firewallLinks != null && primaryNicState.firewallLinks.size() == 1);
+                .securityGroupLinks != null && primaryNicState.securityGroupLinks.size() == 1);
 
         assertEquals("VM address should be the same as primary NIC public IP.", vm.address,
                 primaryNicState.address);
@@ -381,7 +381,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
             assertNull("Non-primary NIC" + i + " public IP should not be set.",
                     nonPrimaryNicState.address);
             assertNull("Non-primary NIC" + i + " security group should not be set.",
-                    nonPrimaryNicState.firewallLinks);
+                    nonPrimaryNicState.securityGroupLinks);
         }
     }
 

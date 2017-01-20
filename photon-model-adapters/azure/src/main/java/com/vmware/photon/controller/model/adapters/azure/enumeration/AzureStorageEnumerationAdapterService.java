@@ -164,7 +164,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      * data received from Azure.
      */
     public static class StorageEnumContext {
-        ComputeEnumerateResourceRequest enumRequest;
+        ComputeEnumerateResourceRequest request;
         ComputeStateWithDescription parentCompute;
         long enumerationStartTimeInMicros;
         EnumerationStages stage;
@@ -195,7 +195,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         public StorageEnumStages subStage;
         // Stored operation to signal completion to the Azure storage enumeration once all
         // the stages are successfully completed.
-        public Operation azureStorageAdapterOperation;
+        public Operation operation;
         // Azure clients
         StorageManagementClient storageClient;
 
@@ -206,12 +206,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         public StorageEnumContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
-            this.enumRequest = request.computeEnumerateResourceRequest;
+            this.request = request.computeEnumerateResourceRequest;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
 
             this.stage = EnumerationStages.CLIENT;
-            this.azureStorageAdapterOperation = op;
+            this.operation = op;
         }
     }
 
@@ -225,8 +225,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
         StorageEnumContext context = new StorageEnumContext(op.getBody
                 (ComputeEnumerateAdapterRequest.class), op);
-        AdapterUtils.validateEnumRequest(context.enumRequest);
-        if (context.enumRequest.isMockRequest) {
+        AdapterUtils.validateEnumRequest(context.request);
+        if (context.request.isMockRequest) {
             op.complete();
             return;
         }
@@ -271,7 +271,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             break;
         case ENUMERATE:
             String enumKey = getEnumKey(context);
-            switch (context.enumRequest.enumerationAction) {
+            switch (context.request.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
                     logInfo("Enumeration service has already been started for %s", enumKey);
@@ -280,7 +280,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 }
                 logInfo("Launching enumeration service for %s", enumKey);
                 context.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
-                context.enumRequest.enumerationAction = EnumerationAction.REFRESH;
+                context.request.enumerationAction = EnumerationAction.REFRESH;
                 handleStorageEnumeration(context);
                 break;
             case REFRESH:
@@ -298,20 +298,20 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 handleStorageEnumeration(context);
                 break;
             default:
-                logSevere("Unknown enumeration action %s", context.enumRequest.enumerationAction);
+                logSevere("Unknown enumeration action %s", context.request.enumerationAction);
                 context.stage = EnumerationStages.ERROR;
                 handleStorageEnumeration(context);
                 break;
             }
             break;
         case FINISHED:
-            context.azureStorageAdapterOperation.complete();
+            context.operation.complete();
             cleanUpHttpClient(this, context.httpClient);
             logInfo("Enumeration finished for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
-            context.azureStorageAdapterOperation.fail(context.error);
+            context.operation.fail(context.error);
             cleanUpHttpClient(this, context.httpClient);
             logWarning("Enumeration error for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
@@ -401,7 +401,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private String getEnumKey(StorageEnumContext context) {
         StringBuilder sb = new StringBuilder();
-        sb.append("hostLink:").append(context.enumRequest.resourceLink());
+        sb.append("hostLink:").append(context.request.resourceLink());
         sb.append("-enumerationAdapterReference:")
                 .append(context.parentCompute.description.enumerationAdapterReference);
         return sb.toString();
@@ -641,7 +641,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, keys.getBody().getKey2());
             storageAuth.tenantLinks = context.parentCompute.tenantLinks;
             storageAuth.customProperties.put(StorageDescription.FIELD_NAME_ENDPOINT_LINK,
-                    context.enumRequest.endpointLink);
+                    context.request.endpointLink);
 
             Operation storageAuthOp = Operation
                     .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
@@ -659,9 +659,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageDescription.regionId = storageAccount.location;
             storageDescription.name = storageAccount.name;
             storageDescription.authCredentialsLink = storageAuthLink;
-            storageDescription.resourcePoolLink = context.enumRequest.resourcePoolLink;
+            storageDescription.resourcePoolLink = context.request.resourcePoolLink;
             storageDescription.documentSelfLink = UUID.randomUUID().toString();
-            storageDescription.endpointLink = context.enumRequest.endpointLink;
+            storageDescription.endpointLink = context.request.endpointLink;
             storageDescription.computeHostLink = context.parentCompute.documentSelfLink;
             storageDescription.customProperties = new HashMap<>();
             storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
@@ -991,7 +991,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
         resourceGroupState.customProperties = new HashMap<>();
         resourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
-                context.enumRequest.endpointLink);
+                context.request.endpointLink);
         resourceGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
         resourceGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED,
                 container.getProperties().getLastModified().toString());
@@ -1005,6 +1005,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         if (oldResourceGroupState != null) {
             resourceGroupState.documentSelfLink = oldResourceGroupState.documentSelfLink;
         } else {
+            resourceGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
+                    context.parentCompute.documentSelfLink);
             resourceGroupState.tenantLinks = context.parentCompute.tenantLinks;
         }
         return resourceGroupState;
@@ -1458,9 +1460,9 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         if (containerLink != null) {
             diskState.storageDescriptionLink = containerLink;
         }
-        diskState.resourcePoolLink = context.enumRequest.resourcePoolLink;
+        diskState.resourcePoolLink = context.request.resourcePoolLink;
         diskState.computeHostLink = context.parentCompute.documentSelfLink;
-        diskState.endpointLink = context.enumRequest.endpointLink;
+        diskState.endpointLink = context.request.endpointLink;
         diskState.tenantLinks = context.parentCompute.tenantLinks;
         long bLength = 0;
         if (blob instanceof CloudBlob) {

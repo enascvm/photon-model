@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter.util;
 import com.amazonaws.AmazonWebServiceRequest;
 
 import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.StatelessService;
 
 /**
  * {@link AWSAsyncHandler} that bridges to {@link DeferredResult}. The benefit is that async
@@ -57,6 +58,19 @@ public abstract class AWSDeferredResultAsyncHandler<REQ extends AmazonWebService
         return exception;
     }
 
+    protected final String message;
+
+    /**
+     * Constructs {@link AWSDeferredResultAsyncHandler}.
+     *
+     * @param service The service that is talking with AWS.
+     * @param message Informational message that describes the Service to AWS interaction.
+     */
+    public AWSDeferredResultAsyncHandler(StatelessService service, String message) {
+        super(service);
+        this.message = message;
+    }
+
     @Override
     protected final void handleError(Exception exc) {
         final Throwable consumedError;
@@ -64,6 +78,9 @@ public abstract class AWSDeferredResultAsyncHandler<REQ extends AmazonWebService
             // First delegate to descendants to process exc
             consumedError = consumeError(exc);
         } catch (Throwable t) {
+            if (this.service != null) {
+                this.service.logWarning(this.message + ": FAILED. Details: " + t.getMessage());
+            }
             toDeferredResult().fail(t);
             return;
         }
@@ -71,8 +88,16 @@ public abstract class AWSDeferredResultAsyncHandler<REQ extends AmazonWebService
         // Then propagate through the DeferredResult
         if (consumedError == RECOVERED) {
             // The code has recovered from exception
+            if (this.service != null) {
+                this.service.logFine("%s: SUCCESS with error. Details: %s",
+                        this.message, exc.getMessage());
+            }
             toDeferredResult().complete(null);
         } else {
+            if (this.service != null) {
+                this.service.logWarning(
+                        this.message + ": FAILED. Details: " + consumedError.getMessage());
+            }
             toDeferredResult().fail(consumedError);
         }
     }
@@ -80,6 +105,9 @@ public abstract class AWSDeferredResultAsyncHandler<REQ extends AmazonWebService
     @Override
     protected final void handleSuccess(REQ request, RES result) {
         final DeferredResult<RES> consumeSuccess;
+        if (this.service != null) {
+            this.service.logInfo(this.message + ": SUCCESS");
+        }
         try {
             // First delegate to descendants to process result
             consumeSuccess = consumeSuccess(request, result);

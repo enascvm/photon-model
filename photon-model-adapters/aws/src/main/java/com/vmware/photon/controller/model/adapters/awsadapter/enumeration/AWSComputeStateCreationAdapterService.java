@@ -149,15 +149,15 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public Map<InstanceDescKey, String> computeDescriptionMap;
         // Cached operation to signal completion to the AWS instance adapter once all the compute
         // states are successfully created.
-        public Operation awsAdapterOperation;
+        public Operation operation;
 
         public AWSComputeStateCreationContext(AWSComputeStateCreationRequest request,
                 Operation op) {
             this.request = request;
-            this.enumerationOperations = new ArrayList<Operation>();
+            this.enumerationOperations = new ArrayList<>();
             this.computeDescriptionMap = new HashMap<>();
             this.creationStage = AWSComputeStateCreationStage.GET_RELATED_COMPUTE_DESCRIPTIONS;
-            this.awsAdapterOperation = op;
+            this.operation = op;
         }
     }
 
@@ -213,8 +213,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             kickOffComputeStateCreation(context, AWSComputeStateCreationStage.SIGNAL_COMPLETION);
             break;
         case SIGNAL_COMPLETION:
-            setOperationDurationStat(context.awsAdapterOperation);
-            context.awsAdapterOperation.complete();
+            setOperationDurationStat(context.operation);
+            context.operation.complete();
             break;
         default:
             Throwable t = new IllegalArgumentException(
@@ -386,12 +386,12 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                             nicState.address = awsNic.getPrivateIpAddress();
                             nicState.subnetLink = context.request.enumeratedNetworks.subnets
                                     .get(awsNic.getSubnetId());
-                            nicState.firewallLinks = new ArrayList<>();
+                            nicState.securityGroupLinks = new ArrayList<>();
 
                             for (GroupIdentifier awsSG : awsNic.getGroups()) {
                                 // we should have updated the list of SG Ids before this step and
                                 // should have ensured that all the SGs exist locally
-                                nicState.firewallLinks
+                                nicState.securityGroupLinks
                                         .add(context.request.enumeratedSecurityGroups.securityGroupStates
                                                 .get(awsSG.getGroupId()));
                             }
@@ -501,12 +501,12 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 // create a new NetworkInterfaceState for updating the address
                 NetworkInterfaceState updateNicState = new NetworkInterfaceState();
                 updateNicState.address = awsNic.getPrivateIpAddress();
-                updateNicState.firewallLinks = new ArrayList<>();
+                updateNicState.securityGroupLinks = new ArrayList<>();
                 if (context.request.enumeratedSecurityGroups != null) {
                     for (GroupIdentifier awsSG : awsNic.getGroups()) {
                         // we should have updated the list of SG Ids before this step and should have
                         // ensured that all the SGs exist locally
-                        updateNicState.firewallLinks.add(context.request.enumeratedSecurityGroups.securityGroupStates
+                        updateNicState.securityGroupLinks.add(context.request.enumeratedSecurityGroups.securityGroupStates
                                             .get(awsSG.getGroupId()));
                     }
                 }
@@ -552,7 +552,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     private void finishWithFailure(AWSComputeStateCreationContext context, Throwable exc) {
-        context.awsAdapterOperation.fail(exc);
+        context.operation.fail(exc);
         AdapterUtils.sendFailurePatchToEnumerationTask(this, context.request.parentTaskLink,
                 exc);
     }

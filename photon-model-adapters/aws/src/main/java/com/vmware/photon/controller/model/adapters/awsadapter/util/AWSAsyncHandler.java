@@ -17,6 +17,7 @@ import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.handlers.AsyncHandler;
 
 import com.vmware.xenon.common.OperationContext;
+import com.vmware.xenon.common.StatelessService;
 
 /**
  * Operation context aware {@link AsyncHandler}.
@@ -25,6 +26,13 @@ public abstract class AWSAsyncHandler<REQ extends AmazonWebServiceRequest, RES>
         implements AsyncHandler<REQ, RES> {
 
     protected OperationContext opContext;
+    protected StatelessService service;
+
+    protected AWSAsyncHandler(StatelessService service) {
+        this();
+
+        this.service = service;
+    }
 
     protected AWSAsyncHandler() {
         this.opContext = OperationContext.getOperationContext();

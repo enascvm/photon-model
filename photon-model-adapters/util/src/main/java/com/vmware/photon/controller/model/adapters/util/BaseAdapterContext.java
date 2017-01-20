@@ -44,7 +44,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
         }
     }
 
-    public static enum BaseAdapterStage {
+    public enum BaseAdapterStage {
         VMDESC, PARENTDESC, PARENTAUTH
     }
 
@@ -65,7 +65,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     /**
      * Used to store the calling operation.
      */
-    public Operation adapterOperation;
+    public Operation operation;
 
     /**
      * @param service
@@ -168,7 +168,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     /**
      * Populate context with parent {@code AuthCredentialsServiceState}.
      *
-     * @see {@link #getParentAuthLink(BaseAdapterContext)} for any customization
+     * @see {@link #getParentAuth(BaseAdapterContext)} for any customization
      */
     protected DeferredResult<T> getParentAuth(T context) {
 

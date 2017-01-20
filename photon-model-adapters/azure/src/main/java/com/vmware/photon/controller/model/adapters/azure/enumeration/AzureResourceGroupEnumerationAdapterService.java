@@ -67,14 +67,14 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
             BaseEnumerationAdapterContext<ResourceGroupEnumContext, ResourceGroupState,
                     ResourceGroup> {
 
-        ComputeEnumerateResourceRequest enumRequest;
+        ComputeEnumerateResourceRequest request;
         AuthCredentialsService.AuthCredentialsServiceState parentAuth;
 
         EnumerationStages stage;
 
         // Stored operation to signal completion to the Azure resource group enumeration once all]
         // the stages are successfully completed.
-        Operation azureResourceGroupAdapterOperation;
+        Operation operation;
 
         // Azure credentials.
         ApplicationTokenCredentials credentials;
@@ -93,11 +93,11 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
             super(service, ResourceGroupState.class, ResourceGroupService.FACTORY_LINK, request
                     .parentCompute);
 
-            this.enumRequest = request.computeEnumerateResourceRequest;
+            this.request = request.computeEnumerateResourceRequest;
             this.parentAuth = request.parentAuth;
 
             this.stage = EnumerationStages.CLIENT;
-            this.azureResourceGroupAdapterOperation = op;
+            this.operation = op;
         }
 
         @Override
@@ -182,7 +182,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 resultResourceGroupState.customProperties.put(FIELD_COMPUTE_HOST_LINK,
                         this.parentCompute.documentSelfLink);
                 resultResourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
-                        this.enumRequest.endpointLink);
+                        this.request.endpointLink);
                 resultResourceGroupState.customProperties.put(RESOURCE_TYPE_KEY,
                         ResourceGroupStateType.AzureResourceGroup.name());
             }
@@ -208,8 +208,8 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
         }
         ResourceGroupEnumContext ctx = new ResourceGroupEnumContext(op.getBody
                 (ComputeEnumerateAdapterRequest.class), op, this);
-        AdapterUtils.validateEnumRequest(ctx.enumRequest);
-        if (ctx.enumRequest.isMockRequest) {
+        AdapterUtils.validateEnumRequest(ctx.request);
+        if (ctx.request.isMockRequest) {
             op.complete();
             return;
         }
@@ -240,7 +240,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
             break;
         case ENUMERATE:
             String enumKey = getEnumKey(context);
-            switch (context.enumRequest.enumerationAction) {
+            switch (context.request.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
                     logInfo("Enumeration service has already been started for %s", enumKey);
@@ -249,7 +249,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                     return;
                 }
                 logInfo("Launching enumeration service for %s", enumKey);
-                context.enumRequest.enumerationAction = EnumerationAction.REFRESH;
+                context.request.enumerationAction = EnumerationAction.REFRESH;
                 handleResourceGroupEnumeration(context);
                 break;
             case REFRESH:
@@ -278,17 +278,17 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 break;
             default:
                 handleError(context, new RuntimeException(
-                        "Unknown enumeration action" + context.enumRequest.enumerationAction));
+                        "Unknown enumeration action" + context.request.enumerationAction));
                 break;
             }
             break;
         case FINISHED:
-            context.azureResourceGroupAdapterOperation.complete();
+            context.operation.complete();
             logInfo("Enumeration finished for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
-            context.azureResourceGroupAdapterOperation.fail(context.error);
+            context.operation.fail(context.error);
             logWarning("Enumeration error for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
@@ -305,7 +305,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
      * Return a key to uniquely identify enumeration for compute host instance.
      */
     private String getEnumKey(ResourceGroupEnumContext ctx) {
-        return "hostLink:" + ctx.enumRequest.resourceLink() +
+        return "hostLink:" + ctx.request.resourceLink() +
                 "-enumerationAdapterReference:" +
                 ctx.parentCompute.description.enumerationAdapterReference;
     }

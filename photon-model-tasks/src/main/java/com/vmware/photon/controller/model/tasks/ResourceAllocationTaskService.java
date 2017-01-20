@@ -772,7 +772,7 @@ public class ResourceAllocationTaskService
                                 nic.id = UUID.randomUUID().toString();
                                 nic.documentSelfLink = nic.id;
                                 nic.customProperties = nid.customProperties;
-                                nic.firewallLinks = nid.firewallLinks;
+                                nic.securityGroupLinks = nid.securityGroupLinks;
                                 nic.groupLinks = nid.groupLinks;
                                 nic.name = nid.name;
                                 nic.networkInterfaceDescriptionLink = nid.documentSelfLink;

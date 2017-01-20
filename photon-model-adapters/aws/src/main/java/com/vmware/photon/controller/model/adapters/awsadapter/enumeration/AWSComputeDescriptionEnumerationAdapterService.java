@@ -96,7 +96,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         public AWSComputeDescriptionCreationState cdState;
         // Cached operation to signal completion to the AWS instance adapter once all the compute
         // descriptions are successfully created.
-        public Operation awsAdapterOperation;
+        public Operation operation;
 
         public AWSComputeDescriptionCreationServiceContext(AWSComputeDescriptionCreationState cdState,
                 Operation op) {
@@ -106,7 +106,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             this.computeDescriptionsToBeCreatedList = new ArrayList<>();
             this.createOperations = new ArrayList<Operation>();
             this.creationStage = AWSComputeDescCreationStage.GET_REPRESENTATIVE_LIST;
-            this.awsAdapterOperation = op;
+            this.operation = op;
         }
     }
 
@@ -160,8 +160,8 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             createComputeDescriptions(context, AWSComputeDescCreationStage.SIGNAL_COMPLETION);
             break;
         case SIGNAL_COMPLETION:
-            setOperationDurationStat(context.awsAdapterOperation);
-            context.awsAdapterOperation.complete();
+            setOperationDurationStat(context.operation);
+            context.operation.complete();
             break;
         default:
             Throwable t = new IllegalArgumentException(
@@ -364,7 +364,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
     }
 
     private void finishWithFailure(AWSComputeDescriptionCreationServiceContext context, Throwable exc) {
-        context.awsAdapterOperation.fail(exc);
+        context.operation.fail(exc);
         AdapterUtils.sendFailurePatchToEnumerationTask(this, context.cdState.parentTaskLink, exc);
     }
 }

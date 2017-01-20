@@ -66,7 +66,8 @@ public class NetworkInterfaceServiceTest extends Suite {
         networkInterfaceState.id = UUID.randomUUID().toString();
         networkInterfaceState.name = NetworkInterfaceServiceTest.class.getSimpleName();
         networkInterfaceState.address = "9.9.9.9";
-        networkInterfaceState.firewallLinks = Collections.singletonList("/resources/firewall/fw9");
+        networkInterfaceState.securityGroupLinks = Collections.singletonList
+                ("/resources/firewall/fw9");
         networkInterfaceState.networkInterfaceDescriptionLink = "/resources/nicDesc/nicDesc9";
         networkInterfaceState.subnetLink = "/resources/subnet/subnet9";
 
@@ -82,7 +83,7 @@ public class NetworkInterfaceServiceTest extends Suite {
         niStateWithDesc.name = NetworkInterfaceServiceTest.class.getSimpleName();
         niStateWithDesc.networkLink = "/resources/network/net9";
         niStateWithDesc.subnetLink = "/resources/subnet/subnet9";
-        niStateWithDesc.firewallLinks = Collections.singletonList("/resources/firewall/fw9");
+        niStateWithDesc.securityGroupLinks = Collections.singletonList("/resources/firewall/fw9");
         niStateWithDesc.networkInterfaceDescriptionLink = nd.documentSelfLink;
 
         niStateWithDesc.description = nd;
@@ -241,7 +242,7 @@ public class NetworkInterfaceServiceTest extends Suite {
 
             assertThat(getState.networkLink, is(this.startState.networkLink));
             assertThat(getState.subnetLink, is(this.startState.subnetLink));
-            assertThat(getState.firewallLinks, is(this.startState.firewallLinks));
+            assertThat(getState.securityGroupLinks, is(this.startState.securityGroupLinks));
             assertThat(getState.networkInterfaceDescriptionLink,
                     is(this.startState.networkInterfaceDescriptionLink));
         }
@@ -260,7 +261,7 @@ public class NetworkInterfaceServiceTest extends Suite {
             assertThat(getState.address, is(this.startState.address));
             assertThat(getState.networkLink, is(this.startState.networkLink));
             assertThat(getState.subnetLink, is(this.startState.subnetLink));
-            assertThat(getState.firewallLinks, is(this.startState.firewallLinks));
+            assertThat(getState.securityGroupLinks, is(this.startState.securityGroupLinks));
             assertThat(getState.networkInterfaceDescriptionLink,
                     is(this.startState.networkInterfaceDescriptionLink));
 
@@ -287,7 +288,7 @@ public class NetworkInterfaceServiceTest extends Suite {
             patchState.networkLink = "10.0.0.4";
             patchState.tenantLinks = new ArrayList<>();
             patchState.tenantLinks.add("tenant-linkA");
-            patchState.groupLinks = new HashSet<String>();
+            patchState.groupLinks = new HashSet<>();
             patchState.groupLinks.add("group1");
             patchServiceSynchronously(returnState.documentSelfLink, patchState);
 

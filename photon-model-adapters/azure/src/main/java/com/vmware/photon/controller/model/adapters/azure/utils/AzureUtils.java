@@ -108,9 +108,9 @@ public class AzureUtils {
      * <p>
      * Example of Azure virtual network resource id:
      *  "/subscriptions/[Id]/resourceGroups/TestRG/providers/Microsoft.Network/virtualNetworks/vNet"
-     *  <p>
-     *  The id of the resource group that will be returned is:
-     *  "/subscriptions/[Id]/resourceGroups/TestRG"
+     * <p>
+     * The id of the resource group that will be returned is:
+     * "/subscriptions/[Id]/resourceGroups/TestRG"
      * @param azureResourceId Azure resource id.
      * @return the resource group id where the resource belong to.
      */

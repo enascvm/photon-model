@@ -24,6 +24,7 @@ import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getVMCo
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -557,8 +558,8 @@ public class TestAWSSetupUtils {
             nicState.subnetLink = subnetState.documentSelfLink;
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
 
-            nicState.firewallLinks = new ArrayList<>();
-            nicState.firewallLinks.add(securityGroupState.documentSelfLink);
+            nicState.securityGroupLinks =
+                    Collections.singletonList(securityGroupState.documentSelfLink);
 
             nicState = TestUtils.doPost(host, nicState,
                     NetworkInterfaceState.class,

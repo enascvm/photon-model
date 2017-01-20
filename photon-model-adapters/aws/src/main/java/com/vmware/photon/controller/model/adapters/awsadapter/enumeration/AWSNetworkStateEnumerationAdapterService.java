@@ -86,10 +86,10 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     /**
      * Request accepted by this service to trigger enumeration of Network entities in Amazon.
      *
-     * @see {@link AWSNetworkEnumerationResponse}
+     * @see AWSNetworkEnumerationResponse
      */
     public static class AWSNetworkEnumerationRequest {
-        public ComputeEnumerateResourceRequest enumerationRequest;
+        public ComputeEnumerateResourceRequest request;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public String regionId;
         public List<String> tenantLinks;
@@ -98,7 +98,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     /**
      * Response returned by this service as a result of enumerating Network entities in Amazon.
      *
-     * @see {@link AWSNetworkEnumerationRequest}
+     * @see AWSNetworkEnumerationRequest
      */
     public static class AWSNetworkEnumerationResponse {
         /**
@@ -151,7 +151,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         }
 
         public AmazonEC2AsyncClient amazonEC2Client;
-        public AWSNetworkEnumerationRequest networkRequest;
+        public AWSNetworkEnumerationRequest request;
         public AWSNetworkStateCreationStage networkCreationStage;
 
         // Map AWS VPC id to network state for discovered VPCs
@@ -166,13 +166,13 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         // Cached operation to signal completion to the AWS instance adapter once all the compute
         // states are successfully created.
-        public final Operation awsAdapterOperation;
+        public final Operation operation;
 
-        public AWSNetworkStateCreationContext(AWSNetworkEnumerationRequest networkRequest,
+        public AWSNetworkStateCreationContext(AWSNetworkEnumerationRequest request,
                 Operation op) {
-            this.networkRequest = networkRequest;
+            this.request = request;
             this.networkCreationStage = AWSNetworkStateCreationStage.CLIENT;
-            this.awsAdapterOperation = op;
+            this.operation = op;
         }
     }
 
@@ -192,7 +192,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         }
         AWSNetworkEnumerationRequest cs = op.getBody(AWSNetworkEnumerationRequest.class);
         AWSNetworkStateCreationContext context = new AWSNetworkStateCreationContext(cs, op);
-        if (cs.enumerationRequest.isMockRequest) {
+        if (cs.request.isMockRequest) {
             op.complete();
         }
         handleNetworkStateChanges(context);
@@ -234,9 +234,9 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             createSubnetStateOperations(context, AWSNetworkStateCreationStage.SIGNAL_COMPLETION);
             break;
         case SIGNAL_COMPLETION:
-            setOperationDurationStat(context.awsAdapterOperation);
-            context.awsAdapterOperation.setBody(createResponse(context));
-            context.awsAdapterOperation.complete();
+            setOperationDurationStat(context.operation);
+            context.operation.setBody(createResponse(context));
+            context.operation.complete();
             break;
         default:
             Throwable t = new IllegalArgumentException(
@@ -281,8 +281,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getAWSAsyncClient(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
-                context.networkRequest.parentAuth, context.networkRequest.regionId,
-                this, context.networkRequest.enumerationRequest.taskReference, true);
+                context.request.parentAuth, context.request.regionId,
+                this, context.request.request.taskReference, true);
 
         handleNetworkStateChanges(context, next);
     }
@@ -294,7 +294,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getLocalNetworkStates(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         QueryTask queryTask = createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
-                context.vpcs.keySet(), context.networkRequest.tenantLinks);
+                context.vpcs.keySet(), context.request.tenantLinks);
 
         // create the query to find resources
         QueryUtils.startQueryTask(this, queryTask)
@@ -327,7 +327,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getSubnetInformation(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         DescribeSubnetsRequest subnetRequest = new DescribeSubnetsRequest();
-        List<String> vpcList = new ArrayList<String>(context.vpcs.keySet());
+        List<String> vpcList = new ArrayList<>(context.vpcs.keySet());
         Filter filter = new Filter(AWS_VPC_ID_FILTER, vpcList);
         subnetRequest.getFilters().add(filter);
         AWSSubnetAsyncHandler asyncHandler = new AWSSubnetAsyncHandler(next, context);
@@ -341,7 +341,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getLocalSubnetStates(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         QueryTask q = createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
-                context.subnets.keySet(), context.networkRequest.tenantLinks);
+                context.subnets.keySet(), context.request.tenantLinks);
 
         // create the query to find resources
         QueryUtils.startQueryTask(this, q)
@@ -372,7 +372,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getInternetGatewayInformation(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         DescribeInternetGatewaysRequest internetGatewayRequest = new DescribeInternetGatewaysRequest();
-        List<String> vpcList = new ArrayList<String>(context.vpcs.keySet());
+        List<String> vpcList = new ArrayList<>(context.vpcs.keySet());
         Filter filter = new Filter(AWS_ATTACHMENT_VPC_FILTER, vpcList);
         internetGatewayRequest.getFilters().add(filter);
         AWSInternetGatewayAsyncHandler asyncHandler = new AWSInternetGatewayAsyncHandler(next,
@@ -399,11 +399,11 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                     AWSUriPaths.AWS_NETWORK_ADAPTER);
             for (Vpc resultVPC : result.getVpcs()) {
                 NetworkState networkState = mapVPCToNetworkState(resultVPC,
-                        this.context.networkRequest.regionId,
-                        this.context.networkRequest.enumerationRequest.resourcePoolLink,
-                        this.context.networkRequest.enumerationRequest.endpointLink,
-                        this.context.networkRequest.parentAuth.documentSelfLink,
-                        this.context.networkRequest.tenantLinks,
+                        this.context.request.regionId,
+                        this.context.request.request.resourcePoolLink,
+                        this.context.request.request.endpointLink,
+                        this.context.request.parentAuth.documentSelfLink,
+                        this.context.request.tenantLinks,
                         adapterUri);
                 if (networkState.subnetCIDR == null) {
                     logWarning("AWS did not return CIDR information for VPC %s",
@@ -478,8 +478,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 }
 
                 SubnetState subnetState = mapSubnetToSubnetState(subnet,
-                        this.context.networkRequest.tenantLinks,
-                        this.context.networkRequest.enumerationRequest.endpointLink);
+                        this.context.request.tenantLinks,
+                        this.context.request.request.endpointLink);
 
                 if (subnetState.subnetCIDR == null) {
                     logWarning("AWS did not return CIDR information for Subnet %s",
@@ -501,7 +501,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getMainRouteTableInformation(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         DescribeRouteTablesRequest routeTablesRequest = new DescribeRouteTablesRequest();
-        List<String> vpcList = new ArrayList<String>(context.vpcs.keySet());
+        List<String> vpcList = new ArrayList<>(context.vpcs.keySet());
 
         // build filter list
         List<Filter> filters = new ArrayList<>();
@@ -675,10 +675,10 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      */
     private void finishWithFailure(AWSNetworkStateCreationContext context, Throwable exc) {
 
-        context.awsAdapterOperation.fail(exc);
+        context.operation.fail(exc);
 
         AdapterUtils.sendFailurePatchToEnumerationTask(
-                this, context.networkRequest.enumerationRequest.taskReference, exc);
+                this, context.request.request.taskReference, exc);
     }
 
     /**

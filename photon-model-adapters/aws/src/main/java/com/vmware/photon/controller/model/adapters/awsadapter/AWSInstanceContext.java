@@ -102,10 +102,10 @@ public class AWSInstanceContext
     /**
      * Populate context with VPC, Subnet and Security Group objects from AWS.
      *
-     * @see {@link #getVPCs(AWSInstanceContext)}
-     * @see {@link #getSubnets(AWSInstanceContext)}
-     * @see {@link #getOrCreateSecurityGroups(AWSInstanceContext)}
-     * @see {@link #createNicSpecs(AWSInstanceContext)}
+     * @see #getVPCs(AWSInstanceContext)
+     * @see #getSubnets(AWSInstanceContext)
+     * @see #getOrCreateSecurityGroups(AWSInstanceContext)
+     * @see #createNicSpecs(AWSInstanceContext)
      */
     @Override
     protected DeferredResult<AWSInstanceContext> customizeContext(AWSInstanceContext context) {
@@ -138,27 +138,35 @@ public class AWSInstanceContext
                     .withFilters(
                             new Filter(AWS_VPC_ID_FILTER, singletonList(nicCtx.networkState.id)));
 
-            AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> handler =
-                    new AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult>() {
+            String msg = "Getting AWS VPC ["
+                    + nicCtx.networkState.id + "/"
+                    + nicCtx.networkState.name + "/"
+                    + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
+                    + context.child.name
+                    + "] VM";
 
-                @Override
-                protected DeferredResult<DescribeVpcsResult> consumeSuccess(
-                        DescribeVpcsRequest request,
-                        DescribeVpcsResult result) {
+            AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> handler = new
+                    AWSDeferredResultAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult>(
+                            this.service, msg) {
 
-                    if (result.getVpcs().isEmpty()) {
-                        String msg = String.format(
-                                "VPC with [%s] id is not found in AWS for [%s] NIC of [%s] VM.",
-                                nicCtx.networkState.id,
-                                nicCtx.nicStateWithDesc.name,
-                                context.child.name);
-                        return DeferredResult.failed(new IllegalStateException(msg));
-                    }
+                        @Override
+                        protected DeferredResult<DescribeVpcsResult> consumeSuccess(
+                                DescribeVpcsRequest request,
+                                DescribeVpcsResult result) {
 
-                    nicCtx.vpc = result.getVpcs().get(0);
-                    return DeferredResult.completed(result);
-                }
-            };
+                            if (result.getVpcs().isEmpty()) {
+                                String msg = String.format(
+                                        "VPC with [%s] id is not found in AWS for [%s] NIC of [%s] VM.",
+                                        nicCtx.networkState.id,
+                                        nicCtx.nicStateWithDesc.name,
+                                        context.child.name);
+                                return DeferredResult.failed(new IllegalStateException(msg));
+                            }
+
+                            nicCtx.vpc = result.getVpcs().get(0);
+                            return DeferredResult.completed(result);
+                        }
+                    };
             context.amazonEC2Client.describeVpcsAsync(vpcRequest, handler);
 
             getVpcDRs.add(handler.toDeferredResult());
@@ -197,22 +205,30 @@ public class AWSInstanceContext
                     .withFilters(
                             new Filter(AWS_SUBNET_ID_FILTER, singletonList(nicCtx.subnetState.id)));
 
+            String msg = "Getting AWS Subnet ["
+                    + nicCtx.networkState.id + "/"
+                    + nicCtx.subnetState.id
+                    + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
+                    + context.child.name
+                    + "] VM";
+
             AWSDeferredResultAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult> subnetHandler =
-                    new AWSDeferredResultAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult>() {
+                    new AWSDeferredResultAsyncHandler<DescribeSubnetsRequest,
+                            DescribeSubnetsResult>(this.service, msg) {
 
-                @Override
-                protected DeferredResult<DescribeSubnetsResult> consumeSuccess(
-                        DescribeSubnetsRequest request,
-                        DescribeSubnetsResult result) {
+                        @Override
+                        protected DeferredResult<DescribeSubnetsResult> consumeSuccess(
+                                DescribeSubnetsRequest request,
+                                DescribeSubnetsResult result) {
 
-                    // The subnet specified might not exist. It's OK cause it will be created.
-                    if (!result.getSubnets().isEmpty()) {
-                        nicCtx.subnet = result.getSubnets().get(0);
-                    }
+                            // The subnet specified might not exist. It's OK cause it will be created.
+                            if (!result.getSubnets().isEmpty()) {
+                                nicCtx.subnet = result.getSubnets().get(0);
+                            }
 
-                    return DeferredResult.completed(result);
-                }
-            };
+                            return DeferredResult.completed(result);
+                        }
+                    };
             context.amazonEC2Client.describeSubnetsAsync(subnetRequest, subnetHandler);
 
             getSubnetDRs.add(subnetHandler.toDeferredResult());
@@ -230,7 +246,7 @@ public class AWSInstanceContext
     }
 
     /**
-     * For every NIC {@link AWSUtils#getOrCreateSecurityGroups(AWSNicContext, AWSInstanceContext)
+     * For every NIC {@link AWSUtils#getOrCreateSecurityGroups(AWSInstanceContext)
      * get or create security groups}.
      */
     private DeferredResult<AWSInstanceContext> getOrCreateSecurityGroups(

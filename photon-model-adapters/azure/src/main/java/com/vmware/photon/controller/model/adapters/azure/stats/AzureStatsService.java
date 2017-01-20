@@ -122,7 +122,7 @@ public class AzureStatsService extends StatelessService {
                 .setCompletion((ops, exs) -> {
                     if (exs != null) {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
-                        sendFailurePatch(statsData, exs.get(0L));
+                        sendFailurePatch(statsData, exs.values().iterator().next());
                         return;
                     }
                     SingleResourceStatsCollectionTaskState statsResponse =

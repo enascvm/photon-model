@@ -540,7 +540,7 @@ public class AzureTestUtil {
 
             if (i == 0) {
                 // Attach security group only on the primary nic.
-                nicState.firewallLinks =
+                nicState.securityGroupLinks =
                         Collections.singletonList(securityGroupState.documentSelfLink);
             }
 

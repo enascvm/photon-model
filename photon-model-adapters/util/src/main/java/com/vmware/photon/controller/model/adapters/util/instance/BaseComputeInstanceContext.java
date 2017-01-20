@@ -268,11 +268,9 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         List<DeferredResult<Void>> getSecurityGroupDR = context.nics.stream()
                 .filter(nicContext ->
                         // Only those that have at least 1 security group.
-                        nicContext.nicStateWithDesc.firewallLinks != null && nicContext
-                                .nicStateWithDesc.firewallLinks.size() > 0)
-                .flatMap(nicContext -> nicContext.nicStateWithDesc
-                        .firewallLinks
-                        .stream()
+                        nicContext.nicStateWithDesc.securityGroupLinks != null
+                                && !nicContext.nicStateWithDesc.securityGroupLinks.isEmpty())
+                .flatMap(nicContext -> nicContext.nicStateWithDesc.securityGroupLinks.stream()
                         .map(securityGroupLink -> {
                             Operation op = Operation.createGet(
                                     context.service.getHost(),

@@ -109,7 +109,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             }
         }
 
-        ComputeEnumerateResourceRequest enumRequest;
+        ComputeEnumerateResourceRequest request;
         ComputeStateWithDescription parentCompute;
 
         EnumerationStages stage;
@@ -140,7 +140,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         // Stored operation to signal completion to the Azure network enumeration once all the
         // stages are successfully completed.
-        Operation azureNetworkAdapterOperation;
+        Operation operation;
 
         // The time when enumeration starts. This field is used also to identify stale resources
         // that should be deleted during deletion stage.
@@ -160,12 +160,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         ApplicationTokenCredentials credentials;
 
         NetworkEnumContext(ComputeEnumerateAdapterRequest request, Operation op) {
-            this.enumRequest = request.computeEnumerateResourceRequest;
+            this.request = request.computeEnumerateResourceRequest;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
 
             this.stage = EnumerationStages.CLIENT;
-            this.azureNetworkAdapterOperation = op;
+            this.operation = op;
         }
 
         // Clear results from previous page of resources.
@@ -218,8 +218,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         }
         NetworkEnumContext ctx = new NetworkEnumContext(op.getBody
                 (ComputeEnumerateAdapterRequest.class), op);
-        AdapterUtils.validateEnumRequest(ctx.enumRequest);
-        if (ctx.enumRequest.isMockRequest) {
+        AdapterUtils.validateEnumRequest(ctx.request);
+        if (ctx.request.isMockRequest) {
             op.complete();
             return;
         }
@@ -253,7 +253,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             break;
         case ENUMERATE:
             String enumKey = getEnumKey(context);
-            switch (context.enumRequest.enumerationAction) {
+            switch (context.request.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
                     logInfo("Enumeration service has already been started for %s", enumKey);
@@ -261,7 +261,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     return;
                 }
                 logInfo("Launching enumeration service for %s", enumKey);
-                context.enumRequest.enumerationAction = EnumerationAction.REFRESH;
+                context.request.enumerationAction = EnumerationAction.REFRESH;
                 handleNetworkEnumeration(context);
                 break;
             case REFRESH:
@@ -280,19 +280,19 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 handleNetworkEnumeration(context);
                 break;
             default:
-                logSevere("Unknown enumeration action %s", context.enumRequest.enumerationAction);
+                logSevere("Unknown enumeration action %s", context.request.enumerationAction);
                 context.stage = EnumerationStages.ERROR;
                 handleNetworkEnumeration(context);
                 break;
             }
             break;
         case FINISHED:
-            context.azureNetworkAdapterOperation.complete();
+            context.operation.complete();
             logInfo("Enumeration finished for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
-            context.azureNetworkAdapterOperation.fail(context.error);
+            context.operation.fail(context.error);
             logWarning("Enumeration error for %s", getEnumKey(context));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
@@ -371,7 +371,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * Return a key to uniquely identify enumeration for compute host instance.
      */
     private String getEnumKey(NetworkEnumContext ctx) {
-        return "hostLink:" + ctx.enumRequest.resourceLink() +
+        return "hostLink:" + ctx.request.resourceLink() +
                 "-enumerationAdapterReference:" +
                 ctx.parentCompute.description.enumerationAdapterReference;
     }
@@ -708,7 +708,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     // NetworkState.documentSelfLink
                     subnetState.networkLink = context.networkStates.get
                             (subnetStateWithParentVNetId.parentVNetId).documentSelfLink;
-                    subnetState.endpointLink = context.enumRequest.endpointLink;
 
                     return context.subnetStates.containsKey(subnetId) ?
                             // Update case
@@ -767,8 +766,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         resultNetworkState.name = azureVirtualNetwork.name;
         resultNetworkState.regionId = azureVirtualNetwork.location;
-        resultNetworkState.resourcePoolLink = context.enumRequest.resourcePoolLink;
-        resultNetworkState.endpointLink = context.enumRequest.endpointLink;
+        resultNetworkState.resourcePoolLink = context.request.resourcePoolLink;
+        resultNetworkState.endpointLink = context.request.endpointLink;
 
         AddressSpace addressSpace = azureVirtualNetwork.properties.addressSpace;
         if (addressSpace != null

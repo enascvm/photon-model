@@ -67,10 +67,16 @@ public class NetworkInterfaceService extends StatefulService {
 
         /**
          * Firewalls with which this network interface is associated.
+         * @deprecated Use {@link #securityGroupLinks} instead.
          */
         @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
                 PropertyUsageOption.LINKS })
+        @Deprecated
         public List<String> firewallLinks;
+
+        @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+                PropertyUsageOption.LINKS })
+        public List<String> securityGroupLinks;
 
         /**
          * Holds the device index of this network interface.
@@ -120,7 +126,7 @@ public class NetworkInterfaceService extends StatefulService {
             stateWithDesc.address = state.address;
             stateWithDesc.networkLink = state.networkLink;
             stateWithDesc.subnetLink = state.subnetLink;
-            stateWithDesc.firewallLinks = state.firewallLinks;
+            stateWithDesc.securityGroupLinks = state.securityGroupLinks;
             stateWithDesc.deviceIndex = state.deviceIndex;
 
             // Then extend with 'description' data

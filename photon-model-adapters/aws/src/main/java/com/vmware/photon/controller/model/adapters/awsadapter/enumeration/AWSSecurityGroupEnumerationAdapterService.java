@@ -85,7 +85,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
     /**
      * Having the enumerated SecurityGroup Ids, query the States and provide them in the response
      */
-    private DeferredResult<AWSSecurityGroupEnumerationResponse> createResponse(SecurityGroupEnumContext context) {
+    private DeferredResult<AWSSecurityGroupEnumerationResponse> createResponse(
+            SecurityGroupEnumContext context) {
         Query findSecurityGroupStates = Builder.create()
                 .addKindFieldClause(SecurityGroupState.class)
                 .addCompositeFieldClause(
@@ -103,9 +104,9 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        DeferredResult<QueryTask> responceDefRes = QueryUtils.startQueryTask(this, q);
+        DeferredResult<QueryTask> responseDR = QueryUtils.startQueryTask(this, q);
 
-        DeferredResult<AWSSecurityGroupEnumerationResponse> resultDR = responceDefRes
+        DeferredResult<AWSSecurityGroupEnumerationResponse> resultDR = responseDR
                 .thenApply(queryTask -> {
                     AWSSecurityGroupEnumerationResponse response = new AWSSecurityGroupEnumerationResponse();
                     if (queryTask.results != null) {
@@ -134,7 +135,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
     private static class SecurityGroupEnumContext extends
             BaseEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState, SecurityGroup> {
 
-        ComputeEnumerateResourceRequest enumRequest;
+        ComputeEnumerateResourceRequest request;
         AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         String regionId;
         List<String> tenantLinks;
@@ -143,7 +144,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
 
         // Stored operation to signal completion to the AWS security group enumeration once all
         // the stages are successfully completed.
-        Operation awsSecurityGroupAdapterOperation;
+        Operation operation;
 
         // The time when enumeration starts. This field is used also to identify stale resources
         // that should be deleted during deletion stage.
@@ -160,12 +161,12 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 StatelessService service) {
             super(service, SecurityGroupState.class, SecurityGroupService.FACTORY_LINK,
                     request.parentCompute);
-            this.enumRequest = request.computeEnumerateResourceRequest;
+            this.request = request.computeEnumerateResourceRequest;
             this.regionId = request.parentCompute.description.regionId;
             this.tenantLinks = request.parentCompute.tenantLinks;
             this.parentAuth = request.parentAuth;
             this.stage = EnumerationStages.CLIENT;
-            this.awsSecurityGroupAdapterOperation = op;
+            this.operation = op;
         }
 
         @Override
@@ -174,15 +175,20 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             this.service.logInfo("Get SecurityGroups from AWS");
             DescribeSecurityGroupsRequest securityGroupsRequest = new DescribeSecurityGroupsRequest();
 
-            AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult> asyncHandler = new AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest, DescribeSecurityGroupsResult>() {
+            String msg = "Getting AWS Security Groups [" + this.request.resourceReference + "]";
 
-                @Override
-                protected DeferredResult<DescribeSecurityGroupsResult> consumeSuccess(
-                        DescribeSecurityGroupsRequest request,
-                        DescribeSecurityGroupsResult result) {
-                    return DeferredResult.completed(result);
-                }
-            };
+            AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest,
+                    DescribeSecurityGroupsResult> asyncHandler = new
+                    AWSDeferredResultAsyncHandler<DescribeSecurityGroupsRequest,
+                            DescribeSecurityGroupsResult>(this.service, msg) {
+
+                        @Override
+                        protected DeferredResult<DescribeSecurityGroupsResult> consumeSuccess(
+                                DescribeSecurityGroupsRequest request,
+                                DescribeSecurityGroupsResult result) {
+                            return DeferredResult.completed(result);
+                        }
+                    };
             this.amazonEC2Client.describeSecurityGroupsAsync(securityGroupsRequest, asyncHandler);
 
             return asyncHandler.toDeferredResult().thenCompose((securityGroupsResult) -> {
@@ -201,7 +207,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         }
 
         @Override
-        protected DeferredResult<SecurityGroupState> buildLocalResourceState(SecurityGroup remoteResource,
+        protected DeferredResult<SecurityGroupState> buildLocalResourceState(
+                SecurityGroup remoteResource,
                 SecurityGroupState existingLocalResourceState) {
 
             SecurityGroupState resultSecurityGroupState = new SecurityGroupState();
@@ -210,9 +217,10 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 resultSecurityGroupState.authCredentialsLink = this.parentAuth.documentSelfLink;
                 resultSecurityGroupState.tenantLinks = this.tenantLinks;
                 resultSecurityGroupState.regionId = this.regionId;
-                resultSecurityGroupState.resourcePoolLink = this.enumRequest.resourcePoolLink;
-                resultSecurityGroupState.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.service.getHost(),
-                        AWS_FIREWALL_ADAPTER);
+                resultSecurityGroupState.resourcePoolLink = this.request.resourcePoolLink;
+                resultSecurityGroupState.instanceAdapterReference = AdapterUriUtil
+                        .buildAdapterUri(this.service.getHost(),
+                                AWS_FIREWALL_ADAPTER);
             }
             resultSecurityGroupState.id = remoteResource.getGroupId();
             resultSecurityGroupState.name = remoteResource.getGroupName();
@@ -264,21 +272,27 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             } else {
                 rule.protocol = enumProtocol.getName();
             }
-            if (protocolName.equals("-1")) { //when the protocol is -1, the ports are not specified in AWS
+            if (protocolName
+                    .equals("-1")) { //when the protocol is -1, the ports are not specified in AWS
                 rule.ports = "1-65535"; //this means that all the ports are included
             } else {
-                if (ipPermission.getFromPort() != null) { //A value of -1 indicates all ICMP/ICMPv6 types.
+                if (ipPermission.getFromPort()
+                        != null) { //A value of -1 indicates all ICMP/ICMPv6 types.
                     rule.ports = ipPermission.getFromPort().toString();
                     if (ipPermission.getToPort() != null) { //both from and to ports are provided
-                        if (ipPermission.getFromPort() != ipPermission.getToPort()) { //the ports are not the same
+                        if (ipPermission.getFromPort() != ipPermission
+                                .getToPort()) { //the ports are not the same
                             rule.ports += "-" + ipPermission.getToPort();
                         }
                     }
-                } else if (ipPermission.getToPort() != null) { //A value of -1 indicates all ICMP/ICMPv6 types.
+                } else if (ipPermission.getToPort()
+                        != null) { //A value of -1 indicates all ICMP/ICMPv6 types.
                     rule.ports = ipPermission.getToPort().toString();
                 }
             }
-            rule.ipRangeCidr = ipPermission.getIpRanges().size() > 0 ? ipPermission.getIpRanges().get(0) : SecurityGroupService.ANY;
+            rule.ipRangeCidr = ipPermission.getIpRanges().size() > 0 ?
+                    ipPermission.getIpRanges().get(0) :
+                    SecurityGroupService.ANY;
             return rule;
         }
 
@@ -292,7 +306,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         if (context.amazonEC2Client == null) {
             context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
                     context.parentAuth, context.regionId,
-                    this, context.enumRequest.taskReference, true);
+                    this, context.request.taskReference, true);
             context.stage = next;
         }
         handleEnumeration(context);
@@ -306,8 +320,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         }
         SecurityGroupEnumContext ctx = new SecurityGroupEnumContext(op.getBody
                 (ComputeEnumerateAdapterRequest.class), op, this);
-        AdapterUtils.validateEnumRequest(ctx.enumRequest);
-        if (ctx.enumRequest.isMockRequest) {
+        AdapterUtils.validateEnumRequest(ctx.request);
+        if (ctx.request.isMockRequest) {
             op.complete();
             return;
         }
@@ -318,9 +332,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
      * Creates the firewall states in the local document store based on the network security groups
      * received from the remote endpoint.
      *
-     * @param context
-     *            The local service context that has all the information needed to create the
-     *            additional description states in the local system.
+     * @param context The local service context that has all the information needed to create the
+     *                additional description states in the local system.
      */
     private void handleEnumeration(SecurityGroupEnumContext context) {
         switch (context.stage) {
@@ -329,9 +342,9 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             getAWSAsyncClient(context, EnumerationStages.ENUMERATE);
             break;
         case ENUMERATE:
-            switch (context.enumRequest.enumerationAction) {
+            switch (context.request.enumerationAction) {
             case START:
-                context.enumRequest.enumerationAction = EnumerationAction.REFRESH;
+                context.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumeration(context);
                 break;
             case REFRESH:
@@ -353,7 +366,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 break;
             default:
                 handleError(context, new RuntimeException(
-                        "Unknown enumeration action" + context.enumRequest.enumerationAction));
+                        "Unknown enumeration action" + context.request.enumerationAction));
                 break;
             }
             break;
@@ -366,12 +379,12 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                             handleError(context, ex);
                             return;
                         }
-                        context.awsSecurityGroupAdapterOperation.setBody(resp);
-                        context.awsSecurityGroupAdapterOperation.complete();
+                        context.operation.setBody(resp);
+                        context.operation.complete();
                     });
             break;
         case ERROR:
-            context.awsSecurityGroupAdapterOperation.fail(context.error);
+            context.operation.fail(context.error);
             break;
         default:
             String msg = String
