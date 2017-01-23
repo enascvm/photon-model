@@ -345,20 +345,23 @@ public class SingleResourceStatsCollectionTaskService
                 getLastCollectionMetricKeyForAdapterLink(statsLink, false),
                 minuteStats, currentState.computeLink, expirationTime);
 
-        // TODO: Support case when stats list has data for multiple resources
-        // https://jira-hzn.eng.vmware.com/browse/VSYM-3121
-        String computeId = UriUtils.getLastPathSegment(currentState.computeLink);
-
-        InMemoryResourceMetric hourlyMemoryState = new InMemoryResourceMetric();
-        hourlyMemoryState.timeSeriesStats = new HashMap<>();
-        hourlyMemoryState.documentSelfLink = computeId.concat(StatsConstants.HOUR_SUFFIX);
-
-        InMemoryResourceMetric dailyMemoryState = new InMemoryResourceMetric();
-        dailyMemoryState.timeSeriesStats = new HashMap<>();
-        dailyMemoryState.documentSelfLink = computeId.concat(StatsConstants.DAILY_SUFFIX);
-
+        List<InMemoryResourceMetric> inMemoryMetricsList = new ArrayList<>();
         for (ComputeStats stats : currentState.statsList) {
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
+
+            String computeId = UriUtils.getLastPathSegment(stats.computeLink);
+
+            InMemoryResourceMetric hourlyMemoryState = new InMemoryResourceMetric();
+            hourlyMemoryState.timeSeriesStats = new HashMap<>();
+            hourlyMemoryState.documentSelfLink = computeId.concat(StatsConstants.HOUR_SUFFIX);
+
+            InMemoryResourceMetric dailyMemoryState = new InMemoryResourceMetric();
+            dailyMemoryState.timeSeriesStats = new HashMap<>();
+            dailyMemoryState.documentSelfLink = computeId.concat(StatsConstants.DAILY_SUFFIX);
+
+            inMemoryMetricsList.add(hourlyMemoryState);
+            inMemoryMetricsList.add(dailyMemoryState);
+
             for (Entry<String, List<ServiceStat>> entries : stats.statValues.entrySet()) {
                 // sort stats by source time
                 (entries.getValue()).sort(Comparator.comparing(o -> o.sourceTimeMicrosUtc));
@@ -384,10 +387,10 @@ public class SingleResourceStatsCollectionTaskService
             operations.add(Operation.createPost(getHost(), ResourceMetricsService.FACTORY_LINK)
                     .setBodyNoCloning(metrics));
         }
-        operations.add(Operation.createPost(getHost(), InMemoryResourceMetricService.FACTORY_LINK)
-                .setBodyNoCloning(hourlyMemoryState));
-        operations.add(Operation.createPost(getHost(), InMemoryResourceMetricService.FACTORY_LINK)
-                .setBodyNoCloning(dailyMemoryState));
+        for (InMemoryResourceMetric metric : inMemoryMetricsList) {
+            operations.add(Operation.createPost(getHost(), InMemoryResourceMetricService.FACTORY_LINK)
+                    .setBodyNoCloning(metric));
+        }
 
         // If there are no stats reported, just finish the task.
         if (operations.size() == 0) {

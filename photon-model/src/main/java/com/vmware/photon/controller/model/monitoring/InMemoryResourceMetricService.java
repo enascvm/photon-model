@@ -60,11 +60,11 @@ public class InMemoryResourceMetricService extends StatefulService {
         InMemoryResourceMetric updatedState = getBody(put);
         // merge the state
         for (Entry<String, TimeSeriesStats> tsStats : updatedState.timeSeriesStats.entrySet()) {
-            for (Entry<Long, TimeBin> bin : tsStats.getValue().bins.entrySet()) {
-                if (currentState.timeSeriesStats.get(tsStats.getKey()) == null) {
-                    currentState.timeSeriesStats.put(tsStats.getKey(), tsStats.getValue());
-                } else {
-                    TimeSeriesStats currentStats = currentState.timeSeriesStats.get(tsStats.getKey());
+            TimeSeriesStats currentStats = currentState.timeSeriesStats.get(tsStats.getKey());
+            if (currentStats == null) {
+                currentState.timeSeriesStats.put(tsStats.getKey(), tsStats.getValue());
+            } else {
+                for (Entry<Long, TimeBin> bin : tsStats.getValue().bins.entrySet()) {
                     for (int i = 0; i < bin.getValue().count; i++) {
                         currentStats.add(TimeUnit.MILLISECONDS.toMicros(bin.getKey()), bin.getValue().avg, bin.getValue().avg);
                     }

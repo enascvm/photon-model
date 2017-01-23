@@ -47,6 +47,9 @@ public class PhotonModelConstants {
     public static final String MEMORY_USED_PERCENT = "MemoryUsedPercent";
     public static final String STORAGE_USED_BYTES = "StorageUsedBytes";
 
+    public static final String SERVICE_RESOURCE_COST = "Service.%s.ResourceCost";
+    public static final String SERVICE_OTHER_COST = "Service.%s.OtherCost";
+
     // Photon-Model Metric Unit related constants
     public static final String UNIT_COUNT = "Count";
     public static final String UNIT_BYTES = "Bytes";

@@ -218,6 +218,7 @@ public class AWSCostStatsService extends StatelessService {
                 logWarning(
                         "Account ID is not set for compute state '%s'. Not collecting cost stats.",
                         statsData.computeDesc.documentSelfLink);
+                postAllResourcesCostStats(statsData);
                 return;
             }
             Consumer<List<ComputeState>> queryResultConsumer = (accountComputeStates) -> {
@@ -231,6 +232,8 @@ public class AWSCostStatsService extends StatelessService {
                 } else {
                     logFine("Compute state '%s' is not primary for account '%s'. Not collecting cost stats.",
                             statsData.computeDesc.documentSelfLink, accountId);
+                    postAllResourcesCostStats(statsData);
+                    return;
                 }
             };
             sendRequest(createQueryForComputeStatesByAccount(statsData, accountId,
@@ -324,6 +327,7 @@ public class AWSCostStatsService extends StatelessService {
         if (accountId == null) {
             logWarning("Account ID is not set for account '%s'. Not collecting cost stats.",
                     statsData.computeDesc.documentSelfLink);
+            postAllResourcesCostStats(statsData);
             return;
         }
 
@@ -336,6 +340,7 @@ public class AWSCostStatsService extends StatelessService {
                 logWarning(
                         "Bills Bucket name is not configured for account '%s'. Not collecting cost stats.",
                         statsData.computeDesc.documentSelfLink);
+                postAllResourcesCostStats(statsData);
                 return;
             } else {
                 setBillsBucketNameInAccount(statsData, billsBucketName);
