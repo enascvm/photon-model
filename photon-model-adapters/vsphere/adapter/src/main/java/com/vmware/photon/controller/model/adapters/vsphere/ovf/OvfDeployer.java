@@ -155,7 +155,7 @@ public class OvfDeployer extends BaseHelper {
 
             String ip = this.connection.getURI().getHost();
 
-            String basePath = extractParentPath(ovfUri);
+            String basePath = extractBasePath(ovfUri);
 
             for (HttpNfcLeaseDeviceUrl deviceUrl : deviceUrls) {
                 String deviceKey = deviceUrl.getImportKey();
@@ -163,7 +163,7 @@ public class OvfDeployer extends BaseHelper {
                 for (OvfFileItem ovfFileItem : importSpecResult.getFileItem()) {
                     if (deviceKey.equals(ovfFileItem.getDeviceId())) {
                         logger.debug("Importing device id: {}", deviceKey);
-                        String sourceUri = basePath + ovfFileItem.getPath();
+                        String sourceUri = computeDiskSourceUri(basePath, ovfFileItem);
                         String uploadUri = makUploadUri(ip, deviceUrl);
                         uploadVmdkFile(ovfFileItem, sourceUri, uploadUri, leaseUpdater, this.ovfRetriever.getClient());
                         logger.info("Completed uploading VMDK file {}", sourceUri);
@@ -198,11 +198,22 @@ public class OvfDeployer extends BaseHelper {
         return entity;
     }
 
+    protected String computeDiskSourceUri(String basePath, OvfFileItem ovfFileItem) {
+        String s = ovfFileItem.getPath();
+        if (s.startsWith("https://") ||
+                s.startsWith("http://") ||
+                s.startsWith("file://")) {
+            return s;
+        }
+
+        return basePath + s;
+    }
+
     private String makUploadUri(String ip, HttpNfcLeaseDeviceUrl deviceUrl) {
         return deviceUrl.getUrl().replace("*", ip);
     }
 
-    private String extractParentPath(URI ovfUri) {
+    private String extractBasePath(URI ovfUri) {
         return ovfUri.toString()
                 .substring(0, ovfUri.toString().lastIndexOf("/") + 1);
     }
