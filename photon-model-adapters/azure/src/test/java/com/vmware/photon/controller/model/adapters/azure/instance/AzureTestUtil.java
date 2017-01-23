@@ -167,7 +167,8 @@ public class AzureTestUtil {
                 .setBody(deletionState)
                 .setCompletion(host.getCompletion()));
         host.testWait();
-        ProvisioningUtils.queryComputeInstances(host, numberOfRemainingVMs);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(host, numberOfRemainingVMs,
+                ComputeService.FACTORY_LINK, true);
     }
 
     public static AuthCredentialsServiceState createDefaultAuthCredentials(VerificationHost host,

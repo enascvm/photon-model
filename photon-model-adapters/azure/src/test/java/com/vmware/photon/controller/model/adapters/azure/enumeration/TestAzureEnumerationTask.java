@@ -77,6 +77,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -99,6 +100,7 @@ import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
+
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -249,6 +251,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         ResourcePoolState outPool = createDefaultResourcePool(this.host);
         this.resourcePoolLink = outPool.documentSelfLink;
 
+        // Create auth credential service state
         AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(this.host,
                 this.clientID, this.clientKey, this.subscriptionId, this.tenantId);
 
@@ -287,7 +290,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         // Check resources have been created
         // expected VM count = 2 (1 compute host instance + 1 vm compute state)
-        ProvisioningUtils.queryComputeInstances(this.host, 2);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 2,
+                ComputeService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 1,
                 StorageDescriptionService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 1,
@@ -302,7 +306,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             runEnumeration();
             deleteVMs(this.host, this.vmState.documentSelfLink, this.isMock, 1);
             this.vmState = null;
-            ProvisioningUtils.queryComputeInstances(this.host, 1);
+            ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 1,
+                    ComputeService.FACTORY_LINK, true);
 
             deleteServiceDocument(this.host, this.storageDescription.documentSelfLink);
             this.storageDescription = null;
@@ -334,7 +339,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // such for us.
 
         // stale resources + 1 compute host instance + 1 vm compute state
-        ProvisioningUtils.queryComputeInstances(this.host, STALE_VM_RESOURCES_COUNT + 2);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_VM_RESOURCES_COUNT + 2,
+                ComputeService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_STORAGE_ACCOUNTS_COUNT + 1, StorageDescriptionService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
@@ -384,8 +390,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         // VM count + 1 compute host instance
         this.vmCount = this.vmCount + 1;
-        ServiceDocumentQueryResult result = ProvisioningUtils.queryComputeInstances(this.host,
-                this.vmCount);
+        ServiceDocumentQueryResult result = ProvisioningUtils.queryDocumentsAndAssertExpectedCount(
+                this.host, this.vmCount, ComputeService.FACTORY_LINK, true);
 
         // validate type field for enumerated VMs
         result.documents.entrySet().stream()
@@ -443,7 +449,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         // after data collection the deleted vm should go away
         this.vmCount = this.vmCount - this.numberOfVMsToDelete;
-        ProvisioningUtils.queryComputeInstances(this.host, this.vmCount);
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.vmCount,
+                ComputeService.FACTORY_LINK, true);
 
         // clean up
         this.vmState = null;
