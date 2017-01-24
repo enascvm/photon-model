@@ -94,6 +94,7 @@ public class AWSInstanceContext
      */
     public List<InstanceNetworkInterfaceSpecification> getAWSNicSpecs() {
         return this.nics.stream()
+                .filter(nic -> nic.nicSpec != null)
                 .map(nic -> nic.nicSpec)
                 .collect(Collectors.toList());
     }
@@ -115,14 +116,14 @@ public class AWSInstanceContext
 
                 .thenCompose(this::getVPCs).thenApply(log("getVPCs"))
                 .thenCompose(this::getSubnets).thenApply(log("getSubnets"))
-                .thenCompose(this::getOrCreateSecurityGroups).thenApply(log("getOrCreateSecurityGroups"))
+                .thenCompose(this::getOrCreateSecurityGroups)
+                .thenApply(log("getOrCreateSecurityGroups"))
                 .thenCompose(this::createNicSpecs).thenApply(log("createNicSpecs"));
     }
 
     /**
-     * For every NIC lookup associated AWS VPC as specified by
-     * {@code AWSNicContext.networkState.id}. If any of the VPCs is not found then complete with an
-     * exception.
+     * For every NIC lookup associated AWS VPC as specified by {@code AWSNicContext.networkState.id}
+     * . If any of the VPCs is not found then complete with an exception.
      */
     private DeferredResult<AWSInstanceContext> getVPCs(AWSInstanceContext context) {
         if (context.nics.isEmpty()) {
@@ -253,29 +254,23 @@ public class AWSInstanceContext
             return DeferredResult.completed(context);
         }
 
-        for (AWSNicContext nicCtx : context.nics) {
-            nicCtx.nicSpec = new InstanceNetworkInterfaceSpecification()
-                    .withDeviceIndex(nicCtx.nicStateWithDesc.deviceIndex)
-                    .withSubnetId(nicCtx.subnet.getSubnetId())
-                    .withGroups(nicCtx.securityGroupIds);
+        AWSNicContext nicCtx = context.nics.stream()
+                .sorted((n1, n2) -> n1.nicStateWithDesc.deviceIndex
+                        - n2.nicStateWithDesc.deviceIndex)
+                .findFirst().orElse(null);
+
+        if (nicCtx == null) {
+            return DeferredResult.completed(context);
         }
 
-        /*
-         * Important: When you add a second network interface, the system can no longer
-         * auto-assign a public IPv4 address. You will not be able to connect to the instance
-         * over IPv4 unless you assign an Elastic IP address to the primary network interface
-         * (eth0). You can assign the Elastic IP address after you complete the Launch wizard.
-         *
-         * http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/MultipleIP.html
-         */
-        // For now assign public IP (to primary NIC) only for SIGLE-NIC VMs!
-        if (context.nics.size() == 1) {
-            context.getPrimaryNic().nicSpec.withAssociatePublicIpAddress(true);
-        }
+        nicCtx.nicSpec = new InstanceNetworkInterfaceSpecification()
+                .withDeviceIndex(nicCtx.nicStateWithDesc.deviceIndex)
+                .withSubnetId(nicCtx.subnet.getSubnetId())
+                .withGroups(nicCtx.securityGroupIds)
+                .withAssociatePublicIpAddress(true);
 
         return DeferredResult.completed(context);
     }
-
 
     /**
      * Get Disk states assigned to the compute state we are provisioning.
@@ -295,7 +290,8 @@ public class AWSInstanceContext
 
                     return context.service
                             .sendWithDeferredResult(op, DiskState.class)
-                            .thenAccept(diskState -> context.childDisks.put(diskState.type, diskState));
+                            .thenAccept(
+                                    diskState -> context.childDisks.put(diskState.type, diskState));
                 })
                 .collect(Collectors.toList());
 

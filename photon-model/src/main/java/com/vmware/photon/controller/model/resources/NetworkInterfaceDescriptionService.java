@@ -130,7 +130,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
         if (state.address != null) {
             if (state.assignment != IpAssignment.STATIC) {
                 throw new IllegalArgumentException(
-                        "IP can be reseved can be assign only when assignment is STATIC");
+                        "IP can be reseved only when assignment is STATIC");
             }
             if (!InetAddressValidator.getInstance().isValidInet4Address(
                     state.address)) {

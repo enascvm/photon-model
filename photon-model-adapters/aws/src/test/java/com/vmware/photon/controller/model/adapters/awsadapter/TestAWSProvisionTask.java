@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
@@ -314,14 +313,9 @@ public class TestAWSProvisionTask {
                 ComputeState.class,
                 UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
-        if (vm.networkInterfaceLinks.size() == 1) {
-            assertNotNull(
-                    "ComputeState.address should be set to public IP in case of single-NIC VM.",
-                    vm.address);
-        } else {
-            assertNull("ComputeState.address should be set to NULL in case of multi-NIC VM.",
-                    vm.address);
-        }
+        assertNotNull(
+                "ComputeState.address should be set to public IP.",
+                vm.address);
 
         assertEquals("ComputeState.address should be set to AWS Instance public IP.",
                 awsInstance.getPublicIpAddress(), vm.address);
@@ -331,6 +325,10 @@ public class TestAWSProvisionTask {
             NetworkInterfaceState nicState = this.host.getServiceState(null,
                     NetworkInterfaceState.class,
                     UriUtils.buildUri(this.host, nicLink));
+            // for now validate only the 0 NIC as we are creating single NIC VM
+            if (nicState.deviceIndex != 0) {
+                continue;
+            }
 
             InstanceNetworkInterface awsNic = null;
             for (InstanceNetworkInterface nic : awsInstance.getNetworkInterfaces()) {
