@@ -32,7 +32,6 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
@@ -83,6 +82,8 @@ public class AWSNetworkUtils {
         subnetState.id = subnet.getSubnetId();
         subnetState.name = subnet.getSubnetId();
         subnetState.subnetCIDR = subnet.getCidrBlock();
+        subnetState.supportPublicIpAddress = subnet.isMapPublicIpOnLaunch();
+        subnetState.defaultForZone = subnet.isDefaultForAz();
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
 

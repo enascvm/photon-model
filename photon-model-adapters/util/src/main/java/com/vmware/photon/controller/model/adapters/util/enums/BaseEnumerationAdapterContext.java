@@ -32,21 +32,22 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
- * Base class for context used by enumeration adapters.
- * It loads resources from the remote system. Create/updates local resource states and deletes
- * stale resource states.
+ * Base class for context used by enumeration adapters. It loads resources from the remote system.
+ * Create/updates local resource states and deletes stale resource states.
  * <p>
  * To use the class override its abstract methods and call {@link #enumerate()} method.
  *
- * @param <T>           The derived context class.
- * @param <LOCAL_STATE> The class representing the local resource states.
- * @param <REMOTE>      The class representing the remote resource.
+ * @param <T>
+ *            The derived context class.
+ * @param <LOCAL_STATE>
+ *            The class representing the local resource states.
+ * @param <REMOTE>
+ *            The class representing the remote resource.
  */
-public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAdapterContext<T,
-        LOCAL_STATE, REMOTE>, LOCAL_STATE extends ResourceState, REMOTE> {
+public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAdapterContext<T, LOCAL_STATE, REMOTE>, LOCAL_STATE extends ResourceState, REMOTE> {
 
-    public static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT =
-            UriPaths.PROPERTY_PREFIX + "Enumeration.QUERY_RESULT_LIMIT";
+    public static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
+            + "Enumeration.QUERY_RESULT_LIMIT";
     public static final int DEFAULT_QUERY_RESULT_LIMIT = 50;
 
     protected final LOCAL_STATE SKIP = null;
@@ -54,14 +55,14 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     public ComputeStateWithDescription parentCompute;
 
     /**
-     * Page of remote resources as fetched from the remote endpoint.
-     * key -> id; value -> Remote object.
+     * Page of remote resources as fetched from the remote endpoint. key -> id; value -> Remote
+     * object.
      */
     public Map<String, REMOTE> remoteResources = new ConcurrentHashMap<>();
 
     /**
-     * States stored in local document store.
-     * key -> Local state id (matching remote id); value -> Local resource state.
+     * States stored in local document store. key -> Local state id (matching remote id); value ->
+     * Local resource state.
      */
     public Map<String, LOCAL_STATE> localResourceStates = new ConcurrentHashMap<>();
 
@@ -104,13 +105,16 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     /**
      * Constructs the {@link BaseEnumerationAdapterContext}.
      *
-     * @param service         The service that is creating and using this context.
-     * @param localStateClass The class representing the local resource states.
-     * @param parentCompute   Parent compute with description.
+     * @param service
+     *            The service that is creating and using this context.
+     * @param localStateClass
+     *            The class representing the local resource states.
+     * @param parentCompute
+     *            Parent compute with description.
      */
-    public BaseEnumerationAdapterContext(StatelessService service, Class<LOCAL_STATE>
-            localStateClass, String localStateServiceFactoryLink, ComputeStateWithDescription
-            parentCompute) {
+    public BaseEnumerationAdapterContext(StatelessService service,
+            Class<LOCAL_STATE> localStateClass, String localStateServiceFactoryLink,
+            ComputeStateWithDescription parentCompute) {
         this.service = service;
         this.localStateClass = localStateClass;
         this.localStateServiceFactoryLink = localStateServiceFactoryLink;
@@ -119,7 +123,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
     /**
      * @return Starts the enumeration process and returns a {@link DeferredResult} to signal
-     * completion.
+     *         completion.
      */
     public DeferredResult<T> enumerate() {
         return enumerate(BaseEnumerationAdapterStage.GET_REMOTE_RESOURCES);
@@ -130,11 +134,11 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * <p>
      * {@see RemoteResourcesPage} for information about the format of the returned data.
      *
-     * @param nextPageLink Information about the next page (null if this is the call for the
-     *                     first page).
+     * @param nextPageLink
+     *            Information about the next page (null if this is the call for the first page).
      */
-    protected abstract DeferredResult<RemoteResourcesPage> getExternalResources(String
-            nextPageLink);
+    protected abstract DeferredResult<RemoteResourcesPage> getExternalResources(
+            String nextPageLink);
 
     /**
      * Creates/updates a new resource base on the remote resource.
@@ -142,9 +146,11 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * Note: id property should not be set since it is automatically set to the id of the remote
      * resource.
      *
-     * @param remoteResource             remote resource.
-     * @param existingLocalResourceState existing local resource that matches the remote resource.
-     *                                   null is no local resource matches the remote one.
+     * @param remoteResource
+     *            remote resource.
+     * @param existingLocalResourceState
+     *            existing local resource that matches the remote resource. null is no local
+     *            resource matches the remote one.
      * @return a resource state that describes the remote resource.
      */
     protected abstract DeferredResult<LOCAL_STATE> buildLocalResourceState(
@@ -172,8 +178,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
             return getExternalResources(this.enumNextPageLink)
                     .thenCompose(resourcesPage -> {
-                        this.enumNextPageLink = resourcesPage != null ?
-                                resourcesPage.nextPageLink : null;
+                        this.enumNextPageLink = resourcesPage != null ? resourcesPage.nextPageLink
+                                : null;
 
                         if ((resourcesPage != null) && (resourcesPage.resourcesPage != null)) {
                             // Store locally.
@@ -184,8 +190,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                     });
         case QUERY_LOCAL_STATES:
             return queryLocalStates(self())
-                    .thenCompose(c -> enumerate(BaseEnumerationAdapterStage
-                            .CREATE_UPDATE_LOCAL_STATES));
+                    .thenCompose(
+                            c -> enumerate(BaseEnumerationAdapterStage.CREATE_UPDATE_LOCAL_STATES));
         case CREATE_UPDATE_LOCAL_STATES:
             return createUpdateLocalResourceStates(self())
                     .thenCompose(c -> {
@@ -248,8 +254,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     }
 
     /**
-     * Create new local resource states or update matching resource states with the
-     * actual state in the remote system.
+     * Create new local resource states or update matching resource states with the actual state in
+     * the remote system.
      */
     protected DeferredResult<T> createUpdateLocalResourceStates(T context) {
         this.service.logInfo("Create or update local resource with the actual state from "
@@ -265,14 +271,19 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                     // First delegate to descendant to provide the local resource to create/update
                     return buildLocalResourceState(entry.getValue(),
                             this.localResourceStates.get(entry.getKey()))
-                            .thenApply(localState -> {
-                                // Explicitly set the local resource state id to be equal to the remote
-                                // resource state id. This is important in the query for local states.
-                                localState.id = entry.getKey();
-                                return localState;
-                            })
-                            // then update/create state
-                            .thenCompose(this::createUpdateLocalResourceState);
+                                    .thenApply(localState -> {
+                                        if (localState == this.SKIP) {
+                                            return localState;
+                                        }
+                                        // Explicitly set the local resource state id to be equal to
+                                        // the remote
+                                        // resource state id. This is important in the query for
+                                        // local states.
+                                        localState.id = entry.getKey();
+                                        return localState;
+                                    })
+                                    // then update/create state
+                                    .thenCompose(this::createUpdateLocalResourceState);
                 }).collect(Collectors.toList());
 
         return DeferredResult.allOf(drs).thenApply(ignore -> context);
@@ -287,11 +298,10 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                 .containsKey(localState.id);
         Operation op = existsLocally
                 // Update case.
-                ? Operation.createPatch(this.service, localState
-                .documentSelfLink)
+                ? Operation.createPatch(this.service, localState.documentSelfLink)
                 // Create case.
                 : Operation.createPost(this.service,
-                this.localStateServiceFactoryLink);
+                        this.localStateServiceFactoryLink);
 
         op.setBody(localState);
 
@@ -338,28 +348,26 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         return deletetionCompletion;
     }
 
-    private void handleDeleteQueryTaskResult(T context, DeferredResult<T>
-            deletionCompletion) {
+    private void handleDeleteQueryTaskResult(T context, DeferredResult<T> deletionCompletion) {
 
         if (context.deletionNextPageLink == null) {
             this.service.logInfo("Finished deletion stage .");
             deletionCompletion.complete(context);
         }
 
-        this.service.logFine("Querying page [%s] for resources to be deleted", context
-                .deletionNextPageLink);
+        this.service.logFine("Querying page [%s] for resources to be deleted",
+                context.deletionNextPageLink);
 
         // Delete stale resources but don't wait the deletion to complete, nor fail if
         // individual deletion has failed.
-        this.service.sendWithDeferredResult(Operation.createGet(this.service, context
-                .deletionNextPageLink))
+        this.service.sendWithDeferredResult(
+                Operation.createGet(this.service, context.deletionNextPageLink))
                 .thenAccept(completedOp -> {
                     QueryTask queryTask = completedOp.getBody(QueryTask.class);
 
                     if (queryTask.results.documentCount > 0) {
                         // Delete all matching states.
-                        List<DeferredResult<Operation>> deferredResults = queryTask.results
-                                .documentLinks
+                        List<DeferredResult<Operation>> deferredResults = queryTask.results.documentLinks
                                 .stream()
                                 .map(link -> Operation.createDelete(this.service, link))
                                 .map(this.service::sendWithDeferredResult)

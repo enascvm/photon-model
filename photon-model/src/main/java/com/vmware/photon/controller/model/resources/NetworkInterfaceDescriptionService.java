@@ -73,6 +73,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
 
         /**
          * Firewalls with which this compute instance is associated.
+         *
          * @deprecated Use {@link #securityGroupLinks} instead.
          */
         @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
@@ -100,6 +101,13 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_8)
         public String endpointLink;
+
+        /**
+         * Indicates whether this NIC should be attached to a network with public IpAddress.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_9)
+        @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL })
+        public Boolean assignPublicIpAddress;
 
     }
 
@@ -171,6 +179,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
                 .singletonList(UriUtils.buildUriPath(SecurityGroupService.FACTORY_LINK,
                         "security-group-one"));
         template.deviceIndex = 0;
+        template.assignPublicIpAddress = Boolean.TRUE;
 
         return template;
     }

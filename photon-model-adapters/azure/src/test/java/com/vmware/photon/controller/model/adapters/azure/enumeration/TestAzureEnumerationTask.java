@@ -61,6 +61,7 @@ import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
 import com.microsoft.azure.management.resources.models.ResourceGroup;
+import com.microsoft.azure.management.storage.StorageAccountsOperations;
 import com.microsoft.azure.management.storage.StorageManagementClient;
 import com.microsoft.azure.management.storage.StorageManagementClientImpl;
 import com.microsoft.azure.management.storage.models.StorageAccount;
@@ -113,7 +114,6 @@ import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
-
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -647,17 +647,18 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         return resourceGroups.size();
     }
 
+    @SuppressWarnings("unused")
     private void getAzureStorageResourcesCount() throws Exception {
-        ServiceResponse<List<StorageAccount>> response = this.storageManagementClient
-                .getStorageAccountsOperations().list();
+        StorageAccountsOperations storageAccountsOperations = this.storageManagementClient
+                .getStorageAccountsOperations();
+        ServiceResponse<List<StorageAccount>> response = storageAccountsOperations.list();
         List<StorageAccount> storageAccounts = response.getBody();
         this.storageAcctCount = storageAccounts.size();
         this.host.log("Storage account count in Azure: %d", this.storageAcctCount);
 
         for (StorageAccount storageAcct : storageAccounts) {
             String resourceGroupName = getResourceGroupName(storageAcct.getId());
-            ServiceResponse<StorageAccountKeys> keys = getStorageManagementClient()
-                    .getStorageAccountsOperations()
+            ServiceResponse<StorageAccountKeys> keys = storageAccountsOperations
                     .listKeys(resourceGroupName, storageAcct.getName());
 
             String connectionString = String.format(STORAGE_CONNECTION_STRING,

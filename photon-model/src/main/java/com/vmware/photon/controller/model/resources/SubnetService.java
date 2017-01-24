@@ -92,6 +92,20 @@ public class SubnetService extends StatefulService {
         public Set<String> dnsSearchDomains;
 
         /**
+         * Indicates whether the sub-network supports public IP assignment.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_9)
+        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Boolean supportPublicIpAddress;
+
+        /**
+         * Indicates whether this is the default subnet for the zone.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_9)
+        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Boolean defaultForZone;
+
+        /**
          * Link to the cloud account endpoint the sub-network belongs to.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
@@ -156,6 +170,8 @@ public class SubnetService extends StatefulService {
         template.dnsServerAddresses = new HashSet<>();
         template.dnsServerAddresses.add("10.12.14.12");
         template.gatewayAddress = "10.1.0.1";
+        template.supportPublicIpAddress = Boolean.TRUE;
+        template.defaultForZone = Boolean.TRUE;
 
         return template;
     }

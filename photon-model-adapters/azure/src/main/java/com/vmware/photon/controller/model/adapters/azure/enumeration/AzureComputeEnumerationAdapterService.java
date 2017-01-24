@@ -61,6 +61,7 @@ import com.microsoft.azure.management.network.models.PublicIPAddress;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
@@ -115,12 +116,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
 
-    private static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT =
-            UriPaths.PROPERTY_PREFIX + "AzureEnumerationAdapterService.QUERY_RESULT_LIMIT";
+    private static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
+            + "AzureComputeEnumerationAdapterService.QUERY_RESULT_LIMIT";
     private static final int QUERY_RESULT_LIMIT = Integer
             .getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, 50);
 
-    public static final List<String> AZURE_VM_TERMINATION_STATES = Arrays.asList("Deleting", "Deleted");
+    public static final List<String> AZURE_VM_TERMINATION_STATES = Arrays.asList("Deleting",
+            "Deleted");
 
     private static final String EXPAND_INSTANCE_VIEW_PARAM = "instanceView";
 
@@ -183,7 +185,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Map<String, ComputeState> computeStatesForPatching = new ConcurrentHashMap<>();
         List<String> vmIds = new ArrayList<>();
 
-        // Stored operation to signal completion to the Azure storage enumeration once all the stages
+        // Stored operation to signal completion to the Azure storage enumeration once all the
+        // stages
         // are successfully completed.
         public Operation operation;
         // Azure specific fields
@@ -240,7 +243,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             if (ctx.httpClient == null) {
                 try {
                     // Creating a shared singleton Http client instance
-                    // Reference https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
+                    // Reference
+                    // https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
                     // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
                     ctx.httpClient = new OkHttpClient();
                     ctx.clientBuilder = ctx.httpClient.newBuilder();
@@ -373,9 +377,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * lookup resources which haven't been touched as part of current enumeration cycle. The other
      * data point this method uses is the virtual machines discovered as part of list vm call.
      *
-     * Finally, delete on a resource is invoked only if it meets two criteria:
-     * - Timestamp older than current enumeration cycle.
-     * - VM not present on Azure.
+     * Finally, delete on a resource is invoked only if it meets two criteria: - Timestamp older
+     * than current enumeration cycle. - VM not present on Azure.
      *
      * The method paginates through list of resources for deletion.
      */
@@ -511,7 +514,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         Operation operation = Operation.createGet(uri);
         operation.addRequestHeader(Operation.ACCEPT_HEADER, Operation.MEDIA_TYPE_APPLICATION_JSON);
-        operation.addRequestHeader(Operation.CONTENT_TYPE_HEADER, Operation.MEDIA_TYPE_APPLICATION_JSON);
+        operation.addRequestHeader(Operation.CONTENT_TYPE_HEADER,
+                Operation.MEDIA_TYPE_APPLICATION_JSON);
         try {
             operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
                     AUTH_HEADER_BEARER_PREFIX + ctx.credentials.getToken());
@@ -544,7 +548,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             for (VirtualMachine virtualMachine : virtualMachines) {
                 // We don't want to process VMs that are being terminated.
-                if (AZURE_VM_TERMINATION_STATES.contains(virtualMachine.properties.provisioningState)) {
+                if (AZURE_VM_TERMINATION_STATES
+                        .contains(virtualMachine.properties.provisioningState)) {
                     logFine("Not processing %d", virtualMachine.id);
                     continue;
                 }
@@ -761,11 +766,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Query.Builder storageDescUriFilterParentQuery = Query.Builder
                 .create(Query.Occurance.MUST_OCCUR);
 
-        ctx.virtualMachines.keySet().stream().filter(instanceId ->
-                ctx.virtualMachines.get(instanceId).properties.diagnosticsProfile != null)
+        ctx.virtualMachines.keySet().stream().filter(instanceId -> ctx.virtualMachines
+                .get(instanceId).properties.diagnosticsProfile != null)
                 .forEach(instanceId -> {
-                    String diagnosticStorageAccountUri = ctx.virtualMachines.get(instanceId)
-                            .properties.diagnosticsProfile.getBootDiagnostics().getStorageUri();
+                    String diagnosticStorageAccountUri = ctx.virtualMachines
+                            .get(instanceId).properties.diagnosticsProfile.getBootDiagnostics()
+                                    .getStorageUri();
 
                     String storageAccountProperty = QuerySpecification
                             .buildCompositeFieldName(
@@ -778,7 +784,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
                     storageDescUriFilterParentQuery.addClause(storageAccountUriFilter);
                 });
-        query.addBooleanClause(storageDescUriFilterParentQuery.build());
+
+        Query sdq = storageDescUriFilterParentQuery.build();
+        if (sdq.booleanClauses == null || sdq.booleanClauses.isEmpty()) {
+            ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
+            handleSubStage(ctx);
+            return;
+        }
+        query.addBooleanClause(sdq);
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
@@ -872,10 +885,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.documentSelfLink = computeDescription.id;
             computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
             computeDescription.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
-            computeDescription.instanceAdapterReference = ctx.parentCompute.description
-                    .instanceAdapterReference;
-            computeDescription.statsAdapterReference = ctx.parentCompute
-                    .description.statsAdapterReference;
+            computeDescription.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
+            computeDescription.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
             computeDescription.customProperties = new HashMap<>();
 
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1268
@@ -918,7 +929,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri());
 
             DiskState diskToUpdate = ctx.diskStates.get(diskUri);
-            ImageReference imageReference = virtualMachine.properties.storageProfile.getImageReference();
+            ImageReference imageReference = virtualMachine.properties.storageProfile
+                    .getImageReference();
             diskToUpdate.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
             diskToUpdate.bootOrder = 1;
             if (diskToUpdate.customProperties == null) {
@@ -964,7 +976,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 networkState.documentSelfLink = UUID.randomUUID().toString();
                 networkState.id = networkInterfaceReference.getId();
                 networkState.endpointLink = ctx.request.endpointLink;
-                // Setting to the same ID since there is nothing obtained during enumeration other than the ID
+                // Setting to the same ID since there is nothing obtained during enumeration other
+                // than the ID
                 networkState.networkLink = networkInterfaceReference.getId();
                 networkState.tenantLinks = ctx.parentCompute.tenantLinks;
                 Operation networkOp = Operation
@@ -973,7 +986,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 opCollection.add(networkOp);
 
                 ctx.networkInterfaceIds.put(
-                        virtualMachine.properties.networkProfile.getNetworkInterfaces().get(0).getId(),
+                        virtualMachine.properties.networkProfile.getNetworkInterfaces().get(0)
+                                .getId(),
                         UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK,
                                 networkState.documentSelfLink));
             }
@@ -1007,12 +1021,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             List<String> vmDisks = new ArrayList<>();
             if (ctx.diskStates != null && ctx.diskStates.size() > 0) {
                 vmDisks.add(ctx.diskStates.get(
-                        httpsToHttp(virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri())).documentSelfLink);
+                        httpsToHttp(virtualMachine.properties.storageProfile.getOsDisk().getVhd()
+                                .getUri())).documentSelfLink);
             }
 
             List<String> networkLinks = new ArrayList<>();
             networkLinks.add(ctx.networkInterfaceIds.get(
-                    virtualMachine.properties.networkProfile.getNetworkInterfaces().get(0).getId()));
+                    virtualMachine.properties.networkProfile.getNetworkInterfaces().get(0)
+                            .getId()));
 
             // Create compute state
             ComputeState computeState = new ComputeState();
@@ -1139,8 +1155,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * Gets the network links from the compute state.
-     * Obtains the Network state information from Azure.
+     * Gets the network links from the compute state. Obtains the Network state information from
+     * Azure.
      */
     private void patchVMNetworkDetails(EnumerationContext ctx, ComputeState computeState,
             String resourceGroupName, String vmName, AtomicInteger numOfPatches) {
@@ -1176,7 +1192,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                 if (networkInterface.getIpConfigurations() != null
                                         && !networkInterface.getIpConfigurations().isEmpty()
                                         && networkInterface.getIpConfigurations().get(0)
-                                        .getPublicIPAddress() != null) {
+                                                .getPublicIPAddress() != null) {
                                     String publicIPAddressId = networkInterface
                                             .getIpConfigurations()
                                             .get(0).getPublicIPAddress().getId();
