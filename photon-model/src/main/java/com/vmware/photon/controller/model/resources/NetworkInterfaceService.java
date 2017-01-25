@@ -76,6 +76,7 @@ public class NetworkInterfaceService extends StatefulService {
 
         @PropertyOptions(usage = { PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
                 PropertyUsageOption.LINKS })
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_8)
         public List<String> securityGroupLinks;
 
         /**

@@ -553,6 +553,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             computeState.adapterManagementReference = this.context.parentCompute.adapterManagementReference;
             computeState.parentLink = this.context.parentCompute.documentSelfLink;
             computeState.resourcePoolLink = this.context.request.resourcePoolLink;
+            computeState.endpointLink = this.context.request.endpointLink;
             computeState.descriptionLink = cd.documentSelfLink;
             computeState.type = ComputeType.VM_HOST;
 
@@ -576,6 +577,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.id = z.getZoneName();
             cd.zoneId = z.getZoneName();
             cd.name = z.getZoneName();
+            cd.endpointLink = this.context.request.endpointLink;
             // Book keeping information about the creation of the compute description in the system.
             if (cd.customProperties == null) {
                 cd.customProperties = new HashMap<>();
@@ -836,6 +838,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.authCredentiaslLink = this.context.parentAuth.documentSelfLink;
             cd.tenantLinks = this.context.parentCompute.tenantLinks;
             cd.parentDescription = this.context.parentCompute.description;
+            cd.endpointLink = this.context.request.endpointLink;
             cd.regionId = this.context.parentCompute.description.regionId;
             cd.zones = this.context.zones;
 
@@ -871,6 +874,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.computeStatesToBeUpdated = this.context.computeStatesToBeUpdated;
             awsComputeState.parentComputeLink = this.context.parentCompute.documentSelfLink;
             awsComputeState.resourcePoolLink = this.context.request.resourcePoolLink;
+            awsComputeState.endpointLink = this.context.request.endpointLink;
             awsComputeState.parentTaskLink = this.context.request.taskReference;
             awsComputeState.tenantLinks = this.context.parentCompute.tenantLinks;
             awsComputeState.parentAuth = this.context.parentAuth;

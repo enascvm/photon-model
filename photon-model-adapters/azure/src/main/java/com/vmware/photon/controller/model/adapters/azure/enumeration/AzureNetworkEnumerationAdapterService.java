@@ -708,6 +708,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     // NetworkState.documentSelfLink
                     subnetState.networkLink = context.networkStates.get
                             (subnetStateWithParentVNetId.parentVNetId).documentSelfLink;
+                    subnetState.endpointLink = context.request.endpointLink;
 
                     return context.subnetStates.containsKey(subnetId) ?
                             // Update case

@@ -28,6 +28,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
 import java.net.URI;
@@ -849,6 +850,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             auth.privateKey = virtualMachine.properties.osProfile.getAdminPassword();
             auth.documentSelfLink = UUID.randomUUID().toString();
             auth.tenantLinks = ctx.parentCompute.tenantLinks;
+            auth.customProperties = new HashMap<>();
+            auth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+                    ctx.request.endpointLink);
 
             String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
                     auth.documentSelfLink);
@@ -864,6 +868,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeDescription.name = virtualMachine.name;
             computeDescription.regionId = virtualMachine.location;
             computeDescription.authCredentialsLink = authLink;
+            computeDescription.endpointLink = ctx.request.endpointLink;
             computeDescription.documentSelfLink = computeDescription.id;
             computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
             computeDescription.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
@@ -958,6 +963,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 NetworkInterfaceState networkState = new NetworkInterfaceState();
                 networkState.documentSelfLink = UUID.randomUUID().toString();
                 networkState.id = networkInterfaceReference.getId();
+                networkState.endpointLink = ctx.request.endpointLink;
                 // Setting to the same ID since there is nothing obtained during enumeration other than the ID
                 networkState.networkLink = networkInterfaceReference.getId();
                 networkState.tenantLinks = ctx.parentCompute.tenantLinks;
