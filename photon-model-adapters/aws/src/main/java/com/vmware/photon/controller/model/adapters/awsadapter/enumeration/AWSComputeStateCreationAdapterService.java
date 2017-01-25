@@ -369,6 +369,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                             nicDescription.deviceIndex = awsNic.getAttachment().getDeviceIndex();
                             // Link is set, because it's referenced by NICState before post
                             nicDescription.documentSelfLink = UUID.randomUUID().toString();
+                            nicDescription.tenantLinks = context.request.tenantLinks;
+                            nicDescription.endpointLink = context.request.endpointLink;
 
                             Operation postNetworkInterfaceDescription = createPostOperation(
                                     this, nicDescription,
@@ -387,6 +389,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                             nicState.subnetLink = context.request.enumeratedNetworks.subnets
                                     .get(awsNic.getSubnetId());
                             nicState.securityGroupLinks = new ArrayList<>();
+                            nicState.tenantLinks = context.request.tenantLinks;
+                            nicState.endpointLink = context.request.endpointLink;
 
                             for (GroupIdentifier awsSG : awsNic.getGroups()) {
                                 // we should have updated the list of SG Ids before this step and

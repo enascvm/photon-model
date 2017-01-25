@@ -291,6 +291,7 @@ public class AWSNetworkService extends StatelessService {
         subnetState.name = subnet.getSubnetId();
         subnetState.subnetCIDR = subnet.getCidrBlock();
         subnetState.networkLink = context.network.documentSelfLink;
+        subnetState.tenantLinks = context.network.tenantLinks;
 
         sendRequest(
                 Operation.createPost(this.getHost(), SubnetService.FACTORY_LINK)

@@ -780,6 +780,7 @@ public class ResourceAllocationTaskService
                                 nic.subnetLink = nid.subnetLink;
                                 nic.tagLinks = nid.tagLinks;
                                 nic.tenantLinks = currentState.tenantLinks;
+                                nic.endpointLink = nid.endpointLink;
                                 // create a new network based off the template
                                 // but use a unique ID
                                 sendRequest(Operation

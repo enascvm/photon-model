@@ -95,6 +95,12 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
          */
         public String subnetLink;
 
+        /**
+         * Link to the endpoint the network interface belongs to.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_8)
+        public String endpointLink;
+
     }
 
     public NetworkInterfaceDescriptionService() {

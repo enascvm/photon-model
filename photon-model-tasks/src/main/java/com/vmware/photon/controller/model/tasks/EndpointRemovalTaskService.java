@@ -75,7 +75,7 @@ public class EndpointRemovalTaskService
             .toMicros(10);
     private static final String PROPERTY_NAME_QUERY_RESULT_LIMIT =
             UriPaths.PROPERTY_PREFIX + "EndpointRemovalTaskService.QUERY_RESULT_LIMIT";
-    private static final int QUERY_RESULT_LIMIT = 50;
+    private static final int QUERY_RESULT_LIMIT = 100;
 
     public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
     public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";

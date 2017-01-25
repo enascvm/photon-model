@@ -506,7 +506,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                         .values()
                                         .stream()
                                         .map(o -> o.getBody(ComputeDescription.class))
-                                        .map(this::createComputeInstace)
+                                        .map(this::createComputeInstance)
                                         .map(c -> Operation
                                                 .createPost(this.service,
                                                         ComputeService.FACTORY_LINK)
@@ -546,7 +546,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .sendWith(this.service);
         }
 
-        private ComputeState createComputeInstace(ComputeDescription cd) {
+        private ComputeState createComputeInstance(ComputeDescription cd) {
             ComputeService.ComputeState computeState = new ComputeService.ComputeState();
             computeState.name = cd.name;
             computeState.id = cd.id;

@@ -454,8 +454,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             if (virtualNetwork.properties.subnets != null) {
                 virtualNetwork.properties.subnets.forEach(subnet -> {
 
-                    SubnetState subnetState = buildSubnetState(subnet, context.parentCompute
-                            .tenantLinks);
+                    SubnetState subnetState = buildSubnetState(subnet,
+                            context.parentCompute.tenantLinks, context.request.endpointLink);
                     SubnetStateWithParentVNetId subnetStateWithParentVNetId = new
                             SubnetStateWithParentVNetId(virtualNetwork.id, subnetState);
 
@@ -470,7 +470,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     /**
      * Map Azure subnet to {@link SubnetState}.
      */
-    private SubnetState buildSubnetState(Subnet subnet, List<String> tenantLinks) {
+    private SubnetState buildSubnetState(Subnet subnet, List<String> tenantLinks,
+            String endpointLink) {
         if (subnet == null) {
             throw new IllegalArgumentException("Cannot map Subnet to subnet state for null "
                     + "instance.");
@@ -484,6 +485,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         }
 
         subnetState.tenantLinks = tenantLinks;
+        subnetState.endpointLink = endpointLink;
 
         return subnetState;
     }

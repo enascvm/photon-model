@@ -640,7 +640,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, keys.getBody().getKey1());
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, keys.getBody().getKey2());
             storageAuth.tenantLinks = context.parentCompute.tenantLinks;
-            storageAuth.customProperties.put(StorageDescription.FIELD_NAME_ENDPOINT_LINK,
+            storageAuth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
                     context.request.endpointLink);
 
             Operation storageAuthOp = Operation
