@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.5.9-SNAPSHOT
+
 ## 0.5.8
 
 * Introduced an optional SubnetState.zoneId field.
