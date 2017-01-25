@@ -1,10 +1,18 @@
 # CHANGELOG
 
-## 0.5.8-SNAPSHOT
+## 0.5.8
 
 * Introduced an optional SubnetState.zoneId field.
 * firewallLinks in NetworkInterfaceState and NetworkInterfaceDescription are
 marked as deprecated. Use securityGroupLinks instead.
+* Removing resources when deleting Azure or AWS endpoints.
+* [vsphere] Support absolute URIs to disks in OVF
+* [AWS] Enumerate Security Groups
+* [AWS] During VM provisioning lookup VPC-Subnet per NIC
+* Added batching while persisting raw metrics
+* Add missing field name constant in ComputeState
+* Map NetworkInterfaceStates to AWS NICs by DeviceIndex
+* Add validation for subnetLink for NetworkInterfaceState
 
 ## 0.5.7
 
