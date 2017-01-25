@@ -183,10 +183,10 @@ public class VmOverlay extends AbstractOverlay {
     }
 
     public int getNumCpu() {
-        return (int) getOrFail(VimPath.vm_summary_config_numCpu);
+        return (int) getOrDefault(VimPath.vm_summary_config_numCpu, 0);
     }
 
     public long getMemoryBytes() {
-        return ((int) getOrFail(VimPath.vm_config_hardware_memoryMB)) * MB_to_bytes;
+        return ((int) getOrDefault(VimPath.vm_config_hardware_memoryMB, 0)) * MB_to_bytes;
     }
 }
