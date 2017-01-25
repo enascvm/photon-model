@@ -708,8 +708,14 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
                     // Update networkLink with "latest" (either created or updated)
                     // NetworkState.documentSelfLink
-                    subnetState.networkLink = context.networkStates.get
-                            (subnetStateWithParentVNetId.parentVNetId).documentSelfLink;
+                    NetworkState networkState = context.networkStates.get
+                            (subnetStateWithParentVNetId.parentVNetId);
+                    if (networkState != null) {
+                        subnetState.networkLink = networkState.documentSelfLink;
+                    } else {
+                        logWarning("Network state corresponding to subnet with name [" +
+                                subnetState.name + "] was not found. Network Link is left empty.");
+                    }
                     subnetState.endpointLink = context.request.endpointLink;
 
                     return context.subnetStates.containsKey(subnetId) ?
@@ -780,7 +786,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 && addressSpace.addressPrefixes.size() > 0) {
 
             // TODO: Get the first address prefix for now.
-            resultNetworkState.subnetCIDR = addressSpace.addressPrefixes.get(0);
+            // Trim any whitespaces that might be presented (VSYM-4132).
+            resultNetworkState.subnetCIDR = addressSpace.addressPrefixes.get(0).trim();
         }
 
         // Add gateway as custom property in case gateway is defined
