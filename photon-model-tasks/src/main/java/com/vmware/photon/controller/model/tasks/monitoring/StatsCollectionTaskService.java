@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.tasks.monitoring;
 
 import java.net.URI;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,6 +25,7 @@ import com.vmware.photon.controller.model.tasks.ServiceTaskCallback;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.xenon.common.FactoryService;
@@ -34,6 +36,7 @@ import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskFactoryService;
 import com.vmware.xenon.services.common.TaskService;
@@ -88,6 +91,17 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
          */
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         public String nextPageLink;
+
+        /**
+         * Queries which can customize default resource pool Query.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public List<Query> customizationClauses;
+
+        /**
+         * Task options.
+         */
+        public EnumSet<TaskOption> options;
     }
 
     public StatsCollectionTaskService() {
@@ -140,8 +154,13 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                 }
             }
             logInfo("Finished stats collection task for: " + currentState.resourcePoolLink);
-            sendRequest(Operation
+
+            if (currentState.options != null
+                    && currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
+                sendRequest(Operation
                         .createDelete(getUri()));
+            }
+
             break;
         default:
             break;
@@ -206,16 +225,26 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
 
         int resultLimit = DEFAULT_QUERY_RESULT_LIMIT;
         try {
-            resultLimit = (QUERY_RESULT_LIMIT != null) ?
-                Integer.valueOf(QUERY_RESULT_LIMIT) : DEFAULT_QUERY_RESULT_LIMIT;
+            resultLimit = (QUERY_RESULT_LIMIT != null) ? Integer.valueOf(QUERY_RESULT_LIMIT)
+                    : DEFAULT_QUERY_RESULT_LIMIT;
         } catch (NumberFormatException e) {
             // use the default;
             logWarning(STATS_QUERY_RESULT_LIMIT +
                     " is not a number; Using a default value of " + DEFAULT_QUERY_RESULT_LIMIT);
         }
 
+        Query resourcePoolStateQuery = resourcePoolState.query;
+
+        // Customize default resource pool Query.
+        if (currentState.customizationClauses != null
+                && !currentState.customizationClauses.isEmpty()) {
+            currentState.customizationClauses.stream().forEach(q -> {
+                resourcePoolStateQuery.addBooleanClause(q);
+            });
+        }
+
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
-                .setQuery(resourcePoolState.query)
+                .setQuery(resourcePoolStateQuery)
                 .setResultLimit(resultLimit);
 
         sendRequest(Operation

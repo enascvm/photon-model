@@ -40,6 +40,7 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
@@ -48,6 +49,7 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
@@ -60,11 +62,13 @@ import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
@@ -126,6 +130,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         // create a stats collection scheduler task
         StatsCollectionTaskState statCollectionState = new StatsCollectionTaskState();
         statCollectionState.resourcePoolLink = rpReturnState.documentSelfLink;
+        statCollectionState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
         ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
@@ -178,9 +183,6 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         host.log(Level.INFO,
                 "Successfully verified that the required resource metrics are persisted in the resource metrics table");
 
-        // delete the scheduled task to get to a steady state
-        deleteServiceSynchronously(statsCollectionTaskState.documentSelfLink);
-
         // Verify sorted order of the metrics versions by timestamp
         for (String computeLink : computeLinks) {
             // get all versions
@@ -225,6 +227,116 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
             }
             return false;
         });
+    }
+
+    @Test
+    public void testStatsQueryCustomization() throws Throwable {
+
+        // Before start clear Computes (if any)
+        ServiceDocumentQueryResult computes = this.host
+                .getFactoryState(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(this.host,
+                        ComputeService.FACTORY_LINK)));
+
+        for (Map.Entry<String, Object> t : computes.documents.entrySet()) {
+            deleteServiceSynchronously(t.getKey());
+        }
+
+        // create a compute description for all the computes
+        ComputeDescription cDesc = new ComputeDescription();
+        cDesc.name = UUID.randomUUID().toString();
+        cDesc.statsAdapterReference = UriUtils.buildUri(this.host, MockStatsAdapter.SELF_LINK);
+        ComputeDescription descReturnState = postServiceSynchronously(
+                ComputeDescriptionService.FACTORY_LINK, cDesc,
+                ComputeDescription.class);
+
+        // create multiple computes
+        ComputeState computeState = new ComputeState();
+        computeState.name = UUID.randomUUID().toString();
+        computeState.descriptionLink = descReturnState.documentSelfLink;
+        List<String> computeLinks = new ArrayList<>();
+
+        // Create 20 Computes of different type.
+        for (int i = 0; i < 20; i++) {
+            // Set even computes to be VM_HOST, the odd one -> VM_GUEST
+            if (i % 2 == 0) {
+                computeState.type = ComputeType.VM_HOST;
+            } else {
+                computeState.type = ComputeType.VM_GUEST;
+            }
+
+            ComputeState res = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK, computeState,
+                    ComputeState.class);
+            computeLinks.add(res.documentSelfLink);
+        }
+
+        // create a resource pool including all the created computes. It will be customized during
+        // StatsCollection task
+        ResourcePoolState rpState = new ResourcePoolState();
+        rpState.name = UUID.randomUUID().toString();
+        rpState.properties = EnumSet.of(ResourcePoolProperty.ELASTIC);
+        rpState.query = Query.Builder.create().addKindFieldClause(ComputeState.class)
+                .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, computeLinks).build();
+        ResourcePoolState rpReturnState = postServiceSynchronously(
+                ResourcePoolService.FACTORY_LINK, rpState,
+                ResourcePoolState.class);
+
+        // Create additional Query clause
+        List<Query> queries = new ArrayList<>();
+        Query typeQuery = new Query();
+        typeQuery.setOccurance(Occurance.MUST_OCCUR);
+        typeQuery.setTermPropertyName(ComputeState.FIELD_NAME_TYPE);
+        typeQuery.setTermMatchValue(ComputeType.VM_HOST.name());
+        queries.add(typeQuery);
+
+        // create a stats collection task
+        StatsCollectionTaskState statCollectionState = new StatsCollectionTaskState();
+        statCollectionState.resourcePoolLink = rpReturnState.documentSelfLink;
+        statCollectionState.customizationClauses = queries;
+        //statCollectionState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
+
+        StatsCollectionTaskState finalStatCollectionState = postServiceSynchronously(
+                StatsCollectionTaskService.FACTORY_LINK, statCollectionState,
+                StatsCollectionTaskState.class);
+
+        // give 1 minute max time for StatsCollection task to finish.
+        host.setTimeoutSeconds(60);
+        host.waitFor(String.format("Timeout waiting for StatsCollectionTask: [%s] to complete.",
+                finalStatCollectionState.documentSelfLink), () -> {
+                    StatsCollectionTaskState stats = getServiceSynchronously(
+                            finalStatCollectionState.documentSelfLink,
+                            StatsCollectionTaskState.class);
+                    return stats.taskInfo != null && stats.taskInfo.stage == TaskStage.FINISHED;
+                });
+
+        ServiceDocumentQueryResult res = this.host
+                .getFactoryState(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(this.host,
+                        ComputeService.FACTORY_LINK)));
+        assertEquals(20, res.documents.size());
+
+        int vmHosts = 0;
+        int vmGuests = 0;
+
+        // Traverse through [computeLink/stats] URL and find statistics. Only Computes of type
+        // VM_HOST should provide statistics.
+        for (Map.Entry<String, Object> map : res.documents.entrySet()) {
+            String uri = String.format("%s/stats", map.getKey());
+            ServiceStats stats = getServiceSynchronously(uri, ServiceStats.class);
+            ComputeState state = Utils.fromJson(map.getValue(), ComputeState.class);
+            if (state.type == ComputeType.VM_HOST) {
+                assertTrue(!stats.entries.isEmpty());
+                vmHosts++;
+            } else {
+                assertTrue(stats.entries.isEmpty());
+                vmGuests++;
+            }
+        }
+
+        assertEquals(10, vmHosts);
+        assertEquals(10, vmGuests);
+
+        //clean up
+        deleteServiceSynchronously(finalStatCollectionState.documentSelfLink);
     }
 
     /**
@@ -292,6 +404,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         statCollectionState.resourcePoolLink = rpReturnState.documentSelfLink;
         statCollectionState.statsAdapterReference = UriUtils.buildUri(this.host,
                 CustomStatsAdapter.SELF_LINK);
+        statCollectionState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
         ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
@@ -364,6 +477,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         statCollectionState.resourcePoolLink = rpReturnState.documentSelfLink;
         statCollectionState.statsAdapterReference = UriUtils.buildUri(this.host,
                 CustomStatsAdapter.SELF_LINK);
+        statCollectionState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
         ScheduledTaskState statsCollectionTaskState = new ScheduledTaskState();
         statsCollectionTaskState.factoryLink = StatsCollectionTaskService.FACTORY_LINK;
         statsCollectionTaskState.initialStateJson = Utils.toJson(statCollectionState);
