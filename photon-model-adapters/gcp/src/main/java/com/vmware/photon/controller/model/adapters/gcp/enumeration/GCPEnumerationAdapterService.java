@@ -64,6 +64,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -71,6 +72,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -501,6 +503,8 @@ public class GCPEnumerationAdapterService extends StatelessService {
         // Create compute state
         ComputeState resource = new ComputeState();
         resource.id = virtualMachine.id.toString();
+        resource.type = ComputeType.VM_GUEST;
+        resource.environmentName = ComputeDescription.ENVIRONMENT_NAME_GCP;
         resource.name = virtualMachine.name;
         resource.parentLink = ctx.enumRequest.resourceLink();
         resource.descriptionLink = UriUtils.buildUriPath(

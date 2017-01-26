@@ -142,6 +142,7 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
         assertNotNull(cs);
         assertNotNull(cs.adapterManagementReference);
         assertEquals(ComputeType.VM_HOST, cs.type);
+        assertEquals(ComputeDescription.ENVIRONMENT_NAME_AWS, cs.environmentName);
         assertEquals(PowerState.ON, cs.powerState);
     }
 

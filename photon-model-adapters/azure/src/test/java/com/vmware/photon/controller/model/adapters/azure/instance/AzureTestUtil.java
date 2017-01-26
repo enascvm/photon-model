@@ -29,7 +29,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_SERVICE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
-import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
 import java.io.IOException;
 import java.net.URI;
@@ -90,6 +89,7 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
@@ -223,6 +223,7 @@ public class AzureTestUtil {
         ComputeDescription azureHostDescription = new ComputeDescription();
         azureHostDescription.id = UUID.randomUUID().toString();
         azureHostDescription.name = azureHostDescription.id;
+        azureHostDescription.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureHostDescription.documentSelfLink = azureHostDescription.id;
         azureHostDescription.supportedChildren = new ArrayList<>();
         azureHostDescription.supportedChildren.add(ComputeType.VM_GUEST.name());
@@ -239,6 +240,8 @@ public class AzureTestUtil {
 
         ComputeState azureComputeHost = new ComputeState();
         azureComputeHost.id = UUID.randomUUID().toString();
+        azureComputeHost.type = ComputeType.VM_HOST;
+        azureComputeHost.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureComputeHost.name = azureHostDescription.name;
         azureComputeHost.documentSelfLink = azureComputeHost.id;
         azureComputeHost.descriptionLink = UriUtils.buildUriPath(
@@ -307,7 +310,7 @@ public class AzureTestUtil {
         azureVMDesc.authCredentialsLink = authLink;
         azureVMDesc.documentSelfLink = azureVMDesc.id;
         azureVMDesc.instanceType = AZURE_VM_SIZE;
-        azureVMDesc.environmentName = ENVIRONMENT_NAME_AZURE;
+        azureVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureVMDesc.customProperties = new HashMap<>();
 
         // set the create service to the azure instance service
@@ -346,24 +349,25 @@ public class AzureTestUtil {
                 .collect(Collectors.toList());
 
         // Finally create the compute resource state to provision using all constructs above.
-        ComputeState resource = new ComputeState();
-        resource.id = UUID.randomUUID().toString();
-        resource.name = azureVMName;
-        resource.parentLink = parentLink;
-        resource.type = ComputeType.VM_GUEST;
-        resource.descriptionLink = vmComputeDesc.documentSelfLink;
-        resource.resourcePoolLink = resourcePoolLink;
-        resource.diskLinks = vmDisks;
-        resource.networkInterfaceLinks = nicLinks;
-        resource.customProperties = new HashMap<>();
-        resource.customProperties.put(RESOURCE_GROUP_NAME, azureVMName);
-        resource.groupLinks = new HashSet<>();
-        resource.groupLinks.add(resourceGroupLink);
+        ComputeState computeState = new ComputeState();
+        computeState.id = UUID.randomUUID().toString();
+        computeState.name = azureVMName;
+        computeState.parentLink = parentLink;
+        computeState.type = ComputeType.VM_GUEST;
+        computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
+        computeState.descriptionLink = vmComputeDesc.documentSelfLink;
+        computeState.resourcePoolLink = resourcePoolLink;
+        computeState.diskLinks = vmDisks;
+        computeState.networkInterfaceLinks = nicLinks;
+        computeState.customProperties = new HashMap<>();
+        computeState.customProperties.put(RESOURCE_GROUP_NAME, azureVMName);
+        computeState.groupLinks = new HashSet<>();
+        computeState.groupLinks.add(resourceGroupLink);
 
-        resource = TestUtils.doPost(host, resource, ComputeState.class,
+        computeState = TestUtils.doPost(host, computeState, ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
 
-        return resource;
+        return computeState;
     }
 
     public static void deleteServiceDocument(VerificationHost host, String documentSelfLink)

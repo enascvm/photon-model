@@ -51,6 +51,8 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -72,8 +74,6 @@ import com.vmware.xenon.common.Utils;
 public class AWSInstanceService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_INSTANCE_ADAPTER;
-
-    public static final String AWS_ENVIRONMENT_NAME = "AWS_EC2";
 
     private AWSClientManager clientManager;
 
@@ -372,6 +372,8 @@ public class AWSInstanceService extends StatelessService {
 
                 ComputeState cs = new ComputeState();
                 cs.id = instance.getInstanceId();
+                cs.type = ComputeType.VM_GUEST;
+                cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
                 cs.address = instance.getPublicIpAddress();
                 cs.powerState = AWSUtils.mapToPowerState(instance.getState());
                 if (this.context.child.customProperties == null) {

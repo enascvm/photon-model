@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
 import com.amazonaws.services.ec2.model.Instance;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSCostStatsService;
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
@@ -40,6 +39,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -313,7 +313,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                     .collect(Collectors.toSet());
         }
 
-        computeDescription.environmentName = AWSInstanceService.AWS_ENVIRONMENT_NAME;
+        computeDescription.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
         computeDescription.zoneId = cd.zoneId;
         computeDescription.regionId = cd.regionId;
         computeDescription.id = cd.instanceType;

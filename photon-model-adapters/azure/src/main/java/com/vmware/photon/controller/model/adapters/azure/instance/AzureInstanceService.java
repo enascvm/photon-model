@@ -116,6 +116,8 @@ import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioning
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -1126,6 +1128,8 @@ public class AzureInstanceService extends StatelessService {
                         // Azure for some case changes the case of the vm id.
                         ctx.vmId = vm.getId().toLowerCase();
                         cs.id = ctx.vmId;
+                        cs.type = ComputeType.VM_GUEST;
+                        cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
                         cs.lifecycleState = LifecycleState.READY;
                         if (ctx.child.customProperties == null) {
                             cs.customProperties = new HashMap<>();

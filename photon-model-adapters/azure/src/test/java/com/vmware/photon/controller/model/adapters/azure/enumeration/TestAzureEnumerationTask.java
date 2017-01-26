@@ -87,6 +87,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -419,6 +420,11 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
                 .filter(c -> !c.documentSelfLink.equals(this.computeHost.documentSelfLink))
                 .forEach(c -> assertEquals(ComputeType.VM_GUEST, c.type));
+
+        // validate environment name field for enumerated VMs
+        result.documents.entrySet().stream()
+                .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
+                .forEach(c -> assertEquals(ComputeDescription.ENVIRONMENT_NAME_AZURE, c.environmentName));
 
         for (Entry<String, Object> key : result.documents.entrySet()) {
             ComputeState document = Utils.fromJson(key.getValue(), ComputeState.class);

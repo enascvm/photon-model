@@ -38,7 +38,6 @@ import com.amazonaws.services.ec2.model.Tag;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceService;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -46,6 +45,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -118,7 +118,7 @@ public class AWSEnumerationUtils {
         Query query = Query.Builder.create()
                 .addKindFieldClause(ComputeDescription.class)
                 .addFieldClause(ComputeDescription.FIELD_NAME_ENVIRONMENT_NAME,
-                        AWSInstanceService.AWS_ENVIRONMENT_NAME)
+                        ComputeDescription.ENVIRONMENT_NAME_AWS)
                 .addFieldClause(ComputeDescription.FIELD_NAME_REGION_ID, regionId)
                 .addFieldClause(sourceTaskName, ResourceEnumerationTaskService.FACTORY_LINK)
                 .build();
@@ -170,6 +170,7 @@ public class AWSEnumerationUtils {
         computeState.name = instance.getInstanceId();
         computeState.parentLink = parentComputeLink;
         computeState.type = ComputeType.VM_GUEST;
+        computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
 
         computeState.resourcePoolLink = resourcePoolLink;
         computeState.endpointLink = endpointLink;

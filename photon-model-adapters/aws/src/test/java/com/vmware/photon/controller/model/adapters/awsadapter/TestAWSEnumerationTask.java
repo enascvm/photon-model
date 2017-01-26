@@ -69,6 +69,7 @@ import org.junit.rules.TestName;
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -418,6 +419,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         ComputeState linuxCompute = getComputeByAWSId(this.host, linuxVMId);
         assertNotNull(linuxCompute);
         assertEquals(ComputeType.VM_GUEST, linuxCompute.type);
+        assertEquals(ComputeDescription.ENVIRONMENT_NAME_AWS, linuxCompute.environmentName);
         assertNotNull(linuxCompute.customProperties);
         String linuxOSType = linuxCompute.customProperties.get(CUSTOM_OS_TYPE);
         assertNotNull(linuxOSType);
@@ -426,6 +428,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         ComputeState winCompute = getComputeByAWSId(this.host, windowsVMId);
         assertNotNull(winCompute);
         assertEquals(ComputeType.VM_GUEST, winCompute.type);
+        assertEquals(ComputeDescription.ENVIRONMENT_NAME_AWS, winCompute.environmentName);
         assertNotNull(winCompute.customProperties);
         String winOSType = winCompute.customProperties.get(CUSTOM_OS_TYPE);
         assertNotNull(winOSType);

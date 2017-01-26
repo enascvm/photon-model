@@ -40,6 +40,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
@@ -78,6 +79,7 @@ public class ComputeServiceTest extends Suite {
         cs.address = "10.0.0.1";
         cs.name = "testVM";
         cs.type = ComputeType.VM_GUEST;
+        cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         cs.primaryMAC = "01:23:45:67:89:ab";
         cs.powerState = ComputeService.PowerState.ON;
         cs.adapterManagementReference = URI
@@ -487,6 +489,24 @@ public class ComputeServiceTest extends Suite {
             assertNotNull(returnState);
 
             returnState.type = ComputeType.DOCKER_CONTAINER;
+
+            putServiceSynchronously(returnState.documentSelfLink,
+                    returnState);
+        }
+
+        @Test(expected = IllegalArgumentException.class)
+        public void testPutFailOnEnvronmentNameChange() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .createComputeDescription(this);
+            ComputeService.ComputeState startState = buildValidStartState(cd);
+            startState.creationTimeMicros = Long.MIN_VALUE;
+
+            ComputeService.ComputeState returnState = postServiceSynchronously(
+                    ComputeService.FACTORY_LINK,
+                    startState, ComputeService.ComputeState.class);
+            assertNotNull(returnState);
+
+            returnState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
             putServiceSynchronously(returnState.documentSelfLink,
                     returnState);

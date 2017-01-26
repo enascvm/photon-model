@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
+
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
@@ -26,6 +28,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -128,6 +131,13 @@ public class ComputeService extends StatefulService {
         public ComputeType type;
 
         /**
+         * Environment/ Platform name this compute is provisioned on.
+         */
+        @UsageOption(option = PropertyUsageOption.SINGLE_ASSIGNMENT)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_5_9)
+        public String environmentName;
+
+        /**
          * MAC address of this compute instance.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
@@ -206,6 +216,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.powerState = currentState.powerState;
             chsWithDesc.primaryMAC = currentState.primaryMAC;
             chsWithDesc.type = currentState.type;
+            chsWithDesc.environmentName = currentState.environmentName;
             chsWithDesc.resourcePoolLink = currentState.resourcePoolLink;
             chsWithDesc.adapterManagementReference = currentState.adapterManagementReference;
             chsWithDesc.networkInterfaceLinks = currentState.networkInterfaceLinks;
@@ -299,6 +310,10 @@ public class ComputeService extends StatefulService {
         if (state.type != null && currentState.type != null && state.type != currentState.type) {
             throw new IllegalArgumentException("Compute type can not be changed");
         }
+        if (state.environmentName != null && currentState.environmentName != null
+                && state.environmentName != currentState.environmentName) {
+            throw new IllegalArgumentException("Environment name can not be changed");
+        }
         Utils.validateState(getStateDescription(), state);
         return state;
     }
@@ -316,6 +331,15 @@ public class ComputeService extends StatefulService {
                     hasStateChanged = true;
                 } else if (patchBody.type != currentState.type) {
                     throw new IllegalArgumentException("Compute type can not be changed");
+                }
+            }
+
+            if (patchBody.environmentName != null) {
+                if (currentState.environmentName == null) {
+                    currentState.environmentName = patchBody.environmentName;
+                    hasStateChanged = true;
+                } else if (!patchBody.environmentName.equals(currentState.environmentName)) {
+                    throw new IllegalArgumentException("Environment name can not be changed");
                 }
             }
 
@@ -380,6 +404,7 @@ public class ComputeService extends StatefulService {
                 "on-prem-one-cpu-vm-guest");
         template.resourcePoolLink = null;
         template.type = ComputeType.VM_GUEST;
+        template.environmentName = ENVIRONMENT_NAME_ON_PREMISE;
         template.adapterManagementReference = URI
                 .create("https://esxhost-01:443/sdk");
 

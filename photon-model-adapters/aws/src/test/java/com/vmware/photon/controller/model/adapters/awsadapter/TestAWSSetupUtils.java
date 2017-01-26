@@ -60,6 +60,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnu
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndDeletionAdapterService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -112,7 +113,6 @@ public class TestAWSSetupUtils {
     public static final String instanceType_t2_micro = "t2.micro";
     public static final String zoneId = "us-east-1";
     public static final String userData = null;
-    public static final String aws = "Amazon Web Services";
 
     // VPC/subnet details are copy-pasted from AWS, region N.Virginia, Availability Zone: us-east-1a {{
     private static final String AWS_DEFAULT_VPC_ID = "vpc-95a29bf1";
@@ -275,8 +275,8 @@ public class TestAWSSetupUtils {
         ComputeDescriptionService.ComputeDescription awshostDescription = new ComputeDescriptionService.ComputeDescription();
 
         awshostDescription.id = UUID.randomUUID().toString();
-        awshostDescription.name = aws;
-        awshostDescription.environmentName = aws;
+        awshostDescription.name = ComputeDescription.ENVIRONMENT_NAME_AWS;
+        awshostDescription.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
         awshostDescription.documentSelfLink = awshostDescription.id;
         awshostDescription.supportedChildren = new ArrayList<String>();
         awshostDescription.supportedChildren.add(ComputeType.VM_GUEST.name());
@@ -298,6 +298,8 @@ public class TestAWSSetupUtils {
 
         awsComputeHost.id = UUID.randomUUID().toString();
         awsComputeHost.name = awshostDescription.name;
+        awsComputeHost.type = ComputeType.VM_HOST;
+        awsComputeHost.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
         awsComputeHost.documentSelfLink = awsComputeHost.id;
         awsComputeHost.descriptionLink = UriUtils.buildUriPath(
                 ComputeDescriptionService.FACTORY_LINK, awshostDescription.id);
@@ -370,6 +372,7 @@ public class TestAWSSetupUtils {
 
         awsVMDesc.id = instanceType_t2_micro;
         awsVMDesc.name = vmName;
+        awsVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
         awsVMDesc.instanceType = instanceType_t2_micro;
 
         awsVMDesc.supportedChildren = new ArrayList<>();
@@ -378,7 +381,6 @@ public class TestAWSSetupUtils {
         awsVMDesc.customProperties = new HashMap<>();
         awsVMDesc.customProperties
                 .put(AWSConstants.AWS_SECURITY_GROUP, securityGroup);
-        awsVMDesc.environmentName = AWSInstanceService.AWS_ENVIRONMENT_NAME;
 
         // set zone to east
         awsVMDesc.zoneId = zoneId;
@@ -429,6 +431,8 @@ public class TestAWSSetupUtils {
             resource = new ComputeService.ComputeState();
             resource.id = UUID.randomUUID().toString();
             resource.name = awsVMDesc.name;
+            resource.type = ComputeType.VM_GUEST;
+            resource.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
             resource.parentLink = parentLink;
             resource.descriptionLink = vmComputeDesc.documentSelfLink;
             resource.resourcePoolLink = resourcePoolLink;

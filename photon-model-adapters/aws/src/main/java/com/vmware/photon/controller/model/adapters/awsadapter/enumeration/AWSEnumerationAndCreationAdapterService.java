@@ -556,6 +556,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             computeState.endpointLink = this.context.request.endpointLink;
             computeState.descriptionLink = cd.documentSelfLink;
             computeState.type = ComputeType.VM_HOST;
+            computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
 
             computeState.powerState = PowerState.ON;
 

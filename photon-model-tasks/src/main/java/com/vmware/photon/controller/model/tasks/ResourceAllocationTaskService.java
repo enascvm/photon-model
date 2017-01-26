@@ -628,22 +628,23 @@ public class ResourceAllocationTaskService
     private void createComputeHost(ResourceAllocationTaskState currentState,
             String parentLink, String computeResourceId, String name,
             List<String> diskLinks, List<String> networkLinks) {
-        ComputeService.ComputeState resource = new ComputeService.ComputeState();
-        resource.id = computeResourceId;
-        resource.name = name;
-        resource.parentLink = parentLink;
-        resource.type = ComputeType.VM_GUEST;
-        resource.descriptionLink = currentState.computeDescriptionLink;
-        resource.resourcePoolLink = currentState.resourcePoolLink;
-        resource.diskLinks = diskLinks;
-        resource.networkInterfaceLinks = networkLinks;
-        resource.customProperties = currentState.customProperties;
-        resource.tenantLinks = currentState.tenantLinks;
-        resource.documentSelfLink = resource.id;
+        ComputeService.ComputeState computeState = new ComputeService.ComputeState();
+        computeState.id = computeResourceId;
+        computeState.name = name;
+        computeState.parentLink = parentLink;
+        computeState.type = ComputeType.VM_GUEST;
+        computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
+        computeState.descriptionLink = currentState.computeDescriptionLink;
+        computeState.resourcePoolLink = currentState.resourcePoolLink;
+        computeState.diskLinks = diskLinks;
+        computeState.networkInterfaceLinks = networkLinks;
+        computeState.customProperties = currentState.customProperties;
+        computeState.tenantLinks = currentState.tenantLinks;
+        computeState.documentSelfLink = computeState.id;
 
         sendRequest(Operation
                 .createPost(this, ComputeService.FACTORY_LINK)
-                .setBody(resource)
+                .setBody(computeState)
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {

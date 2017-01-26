@@ -60,6 +60,8 @@ import com.google.api.services.compute.model.ServiceAccount;
 import com.vmware.photon.controller.model.adapters.gcp.constants.GCPConstants;
 import com.vmware.photon.controller.model.adapters.gcp.enumeration.GCPEnumerationAdapterService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -191,6 +193,8 @@ public class GCPTestUtil {
 
         ComputeService.ComputeState gcpComputeHost = new ComputeService.ComputeState();
         gcpComputeHost.id = UUID.randomUUID().toString();
+        gcpComputeHost.type = ComputeType.VM_HOST;
+        gcpComputeHost.environmentName = ComputeDescription.ENVIRONMENT_NAME_GCP;
         gcpComputeHost.name = gcpHostDescription.name;
         gcpComputeHost.documentSelfLink = gcpComputeHost.id;
         gcpComputeHost.descriptionLink = UriUtils.buildUriPath(
@@ -267,6 +271,8 @@ public class GCPTestUtil {
 
         ComputeService.ComputeState resource = new ComputeService.ComputeState();
         resource.id = String.valueOf(new Random().nextLong());
+        resource.type = ComputeType.VM_GUEST;
+        resource.environmentName = ComputeDescription.ENVIRONMENT_NAME_GCP;
         resource.name = gcpVMName;
         resource.documentUpdateTimeMicros = Utils.getNowMicrosUtc();
         resource.parentLink = parentLink;

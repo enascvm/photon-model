@@ -1037,6 +1037,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeState.id = virtualMachine.id.toLowerCase();
             computeState.name = virtualMachine.name;
             computeState.type = ComputeType.VM_GUEST;
+            computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
             computeState.parentLink = ctx.request.resourceLink();
             computeState.descriptionLink = UriUtils
                     .buildUriPath(ComputeDescriptionService.FACTORY_LINK,
@@ -1149,6 +1150,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             }
                         }
                         computeState.type = ComputeType.VM_GUEST;
+                        computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
                         patchComputeResource(ctx, computeState, numOfPatches);
                     }
                 });

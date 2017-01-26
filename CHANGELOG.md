@@ -2,6 +2,9 @@
 
 ## 0.5.9-SNAPSHOT
 
+* Introduce a field environment name in ComputeState. This field is used to
+  represent cloud providers e.g. AWS , Azure etc.
+
 ## 0.5.8
 
 * Introduced an optional SubnetState.zoneId field.

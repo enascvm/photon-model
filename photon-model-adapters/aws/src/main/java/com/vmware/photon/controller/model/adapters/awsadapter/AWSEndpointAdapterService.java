@@ -162,6 +162,7 @@ public class AWSEndpointAdapterService extends StatelessService {
             b.append(".amazonaws.com");
 
             c.type = ComputeType.VM_HOST;
+            c.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
             c.adapterManagementReference = UriUtils.buildUri(b.toString());
             String billsBucketName = r.get(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY).orElse(null);
             if (billsBucketName != null) {
