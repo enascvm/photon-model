@@ -59,7 +59,6 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService;
@@ -386,14 +385,14 @@ public class EndpointRemovalTaskService
         endpointFilter.addBooleanClause(endpointLinkFilter);
 
         // query for document that have the endpointLink field as a custom property
-        String computeHostCompositeField = QueryTask.QuerySpecification
+        String endpointLinkCompositeField = QueryTask.QuerySpecification
                 .buildCompositeFieldName(FIELD_NAME_CUSTOM_PROPERTIES,
                         ComputeProperties.ENDPOINT_LINK_PROP_NAME);
-        endpointLinkFilter = new QueryTask.Query()
-                .setTermPropertyName(computeHostCompositeField)
+        Query customEndpointLinkFilter = new QueryTask.Query()
+                .setTermPropertyName(endpointLinkCompositeField)
                 .setTermMatchValue(state.endpoint.documentSelfLink);
-        endpointLinkFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
-        endpointFilter.addBooleanClause(endpointLinkFilter);
+        customEndpointLinkFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
+        endpointFilter.addBooleanClause(customEndpointLinkFilter);
 
         resourceQuery.addBooleanClause(endpointFilter);
         return resourceQuery;
@@ -406,8 +405,7 @@ public class EndpointRemovalTaskService
         QuerySpecification qSpec = new QuerySpecification();
         qSpec.query = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, state.endpoint.computeLink,
-                        Occurance.SHOULD_OCCUR)
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, state.endpoint.computeLink)
                 .build();
         ResourceRemovalTaskState removalServiceState = new ResourceRemovalTaskState();
         removalServiceState.documentSelfLink = UUID.randomUUID().toString();
@@ -495,7 +493,7 @@ public class EndpointRemovalTaskService
 
         if (currentStage.ordinal() == body.taskInfo.stage.ordinal()
                 && (body.taskSubStage == null || currentSubStage.ordinal() > body.taskSubStage
-                        .ordinal())) {
+                .ordinal())) {
             patch.fail(new IllegalArgumentException(
                     "subStage can not move backwards:" + body.taskSubStage));
             return true;
