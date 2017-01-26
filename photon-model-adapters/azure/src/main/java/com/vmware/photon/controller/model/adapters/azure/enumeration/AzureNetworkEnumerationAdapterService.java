@@ -522,6 +522,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .setResultLimit(resourceGroupIds.size())
                 .setQuery(query)
                 .build();
+        qt.tenantLinks = context.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, qt)
                 .whenComplete((queryTask, e) -> {

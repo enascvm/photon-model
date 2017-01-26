@@ -977,6 +977,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(remoteIds.size())
                 .build();
+        queryTask.tenantLinks = context.parentCompute.tenantLinks;
 
         service.logInfo("Created query for resources: " + remoteIds);
         QueryUtils.startQueryTask(service, queryTask)
