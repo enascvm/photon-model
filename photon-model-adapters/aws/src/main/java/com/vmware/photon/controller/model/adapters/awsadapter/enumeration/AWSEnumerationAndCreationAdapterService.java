@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryPageSize;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 
@@ -64,6 +65,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -976,7 +978,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 .setQuery(query)
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(remoteIds.size())
+                .setResultLimit(getQueryResultLimit())
                 .build();
         queryTask.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -989,7 +991,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                         signalErrorToEnumerationAdapter(e, context, service);
                         return;
                     }
-
                     service.logInfo(
                             "Got result of the query to get local resources. There are %d instances known to the system.",
                             qrt.results.documentCount);

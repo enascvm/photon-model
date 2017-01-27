@@ -20,6 +20,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_NETWORK_SECURITY_GROUP_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 
 import java.net.URI;
@@ -57,6 +58,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Securit
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
+
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -312,7 +314,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     this.service.getHost(),
                     query,
                     ResourceGroupState.class,
-                    null).setMaxPageSize(resourceGroupIds.size());
+                    null).setMaxPageSize(getQueryResultLimit());
 
             return queryByPages
                     .queryDocuments(rgState ->

@@ -24,6 +24,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.VM_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.WINDOWS_OPERATING_SYSTEM;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
@@ -65,7 +66,6 @@ import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
-import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
@@ -90,6 +90,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -115,11 +116,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     public AzureComputeEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
-
-    private static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
-            + "AzureComputeEnumerationAdapterService.QUERY_RESULT_LIMIT";
-    private static final int QUERY_RESULT_LIMIT = Integer
-            .getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, 50);
 
     public static final List<String> AZURE_VM_TERMINATION_STATES = Arrays.asList("Deleting",
             "Deleted");
@@ -394,7 +390,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
-                .setResultLimit(QUERY_RESULT_LIMIT)
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = ctx.parentCompute.tenantLinks;
 
@@ -593,7 +589,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .setQuery(query)
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(ctx.virtualMachines.size())
+                .setResultLimit(getQueryResultLimit())
                 .build();
         queryTask.tenantLinks = ctx.parentCompute.tenantLinks;
 
@@ -721,7 +717,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(ctx.virtualMachines.size())
+                .setResultLimit(getQueryResultLimit())
                 .setQuery(query)
                 .build();
         q.tenantLinks = ctx.parentCompute.tenantLinks;
@@ -796,7 +792,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(ctx.virtualMachines.size())
+                .setResultLimit(getQueryResultLimit())
                 .setQuery(query)
                 .build();
         q.tenantLinks = ctx.parentCompute.tenantLinks;

@@ -23,6 +23,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -46,9 +47,11 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  */
 public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAdapterContext<T, LOCAL_STATE, REMOTE>, LOCAL_STATE extends ResourceState, REMOTE> {
 
-    public static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
-            + "Enumeration.QUERY_RESULT_LIMIT";
-    public static final int DEFAULT_QUERY_RESULT_LIMIT = 50;
+    public static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT =
+            UriPaths.PROPERTY_PREFIX + "Enumeration.QUERY_RESULT_LIMIT";
+    private static int DEFAULT_QUERY_RESULT_LIMIT = Integer.getInteger(
+            PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT,
+            100);
 
     protected final LOCAL_STATE SKIP = null;
 
@@ -228,7 +231,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(context.remoteResources.size())
+                .setResultLimit(DEFAULT_QUERY_RESULT_LIMIT)
                 .setQuery(query)
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
@@ -318,15 +321,10 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      */
     protected DeferredResult<T> deleteLocalStates(T context) {
         this.service.logInfo("Delete Resource Group States that no longer exists in the Cloud.");
-
         Query query = getDeleteQuery();
-
-        int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT,
-                DEFAULT_QUERY_RESULT_LIMIT);
-
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .setQuery(query)
-                .setResultLimit(resultLimit)
+                .setResultLimit(DEFAULT_QUERY_RESULT_LIMIT)
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 

@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths.AWS_FIREWALL_ADAPTER;
 
 import java.util.ArrayList;
@@ -99,7 +100,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(context.securityGroupIds.size())
+                .setResultLimit(getQueryResultLimit())
                 .setQuery(findSecurityGroupStates)
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;

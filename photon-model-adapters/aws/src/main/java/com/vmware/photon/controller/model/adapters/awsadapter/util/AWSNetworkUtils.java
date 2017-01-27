@@ -25,6 +25,7 @@ import java.util.Set;
 import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Vpc;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -32,6 +33,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
@@ -45,6 +47,13 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  * states and NICs etc.
  */
 public class AWSNetworkUtils {
+
+    // Resource Limit Constants
+    public static final String PROPERTY_NAME_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
+            + AWSNetworkUtils.class.getSimpleName() + ".QUERY_RESULT_LIMIT";
+    private static int AWS_NETWORK_QUERY_RESULT_LIMIT = Integer.getInteger(
+            PROPERTY_NAME_QUERY_RESULT_LIMIT,
+            1000);
 
     public static NetworkState mapVPCToNetworkState(Vpc vpc, String regionId,
             String resourcePoolLink, String endpointLink, String authCredentialsLink,
@@ -140,7 +149,7 @@ public class AWSNetworkUtils {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(query)
-                .setResultLimit(stateIds.size())
+                .setResultLimit(AWS_NETWORK_QUERY_RESULT_LIMIT)
                 .build();
         queryTask.tenantLinks = tenantLinks;
 

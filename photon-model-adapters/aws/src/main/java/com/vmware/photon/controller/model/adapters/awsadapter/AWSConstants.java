@@ -54,7 +54,7 @@ public class AWSConstants {
     public static final String PROPERTY_NAME_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
             + AWSConstants.class.getSimpleName() + ".QUERY_RESULT_LIMIT";
     private static int QUERY_RESULT_LIMIT = Integer.getInteger(PROPERTY_NAME_QUERY_RESULT_LIMIT,
-            50);
+            100);
     public static final String PROPERTY_NAME_CLIENT_CACHE_MAX_SIZE = UriPaths.PROPERTY_PREFIX
             + AWSConstants.class.getSimpleName() + ".CLIENT_CACHE_MAX_SIZE";
     public static int CLIENT_CACHE_MAX_SIZE = Integer.getInteger(

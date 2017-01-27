@@ -72,9 +72,6 @@ public class EndpointRemovalTaskService
 
     public static final long DEFAULT_TIMEOUT_MICROS = TimeUnit.MINUTES
             .toMicros(10);
-    private static final String PROPERTY_NAME_QUERY_RESULT_LIMIT =
-            UriPaths.PROPERTY_PREFIX + "EndpointRemovalTaskService.QUERY_RESULT_LIMIT";
-    private static final int QUERY_RESULT_LIMIT = 100;
 
     public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
     public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
@@ -289,11 +286,9 @@ public class EndpointRemovalTaskService
      */
     private void deleteAssociatedDocuments(EndpointRemovalTaskState state, SubStage next) {
         Query resourceQuery = getAssociatedDocumentsQuery(state);
-        int resultLimit = Integer
-                .getInteger(PROPERTY_NAME_QUERY_RESULT_LIMIT, QUERY_RESULT_LIMIT);
         QueryTask resourceQueryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(resourceQuery)
-                .setResultLimit(resultLimit)
+                .setResultLimit(QueryUtils.DEFAULT_RESULT_LIMIT)
                 .build();
         resourceQueryTask.tenantLinks = state.tenantLinks;
 

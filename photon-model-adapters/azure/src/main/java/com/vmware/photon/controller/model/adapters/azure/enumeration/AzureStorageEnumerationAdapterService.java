@@ -32,6 +32,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
@@ -74,10 +75,10 @@ import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties;
-import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -97,6 +98,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService.Resourc
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -115,10 +117,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_STORAGE_ENUMERATION_ADAPTER;
     private static final String VHD_EXTENSION = ".vhd";
     public static final int B_TO_MB_FACTOR = 1024 * 1024;
-
-    private static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT =
-            UriPaths.PROPERTY_PREFIX + "AzureStorageEnumerationAdapterService.QUERY_RESULT_LIMIT";
-    private static final int QUERY_RESULT_LIMIT = 50;
 
     public AzureStorageEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -500,7 +498,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(query)
-                .setResultLimit(context.storageAccountsToUpdateCreate.size())
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -713,7 +711,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      * - Storage account is not present on Azure.
      */
     private void deleteStorageDescription(StorageEnumContext context, StorageEnumStages next) {
-        int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, 50);
         Query query = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
@@ -726,7 +723,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
-                .setResultLimit(resultLimit)
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -875,7 +872,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(query)
-                .setResultLimit(context.storageContainers.size())
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -942,7 +939,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(query)
-                .setResultLimit(1)
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -1091,7 +1088,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      * - Storage container is not present on Azure.
      */
     private void deleteResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
-        int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, 50);
         String computeHostProperty = QueryTask.QuerySpecification
                 .buildCompositeFieldName(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                         FIELD_COMPUTE_HOST_LINK);
@@ -1112,7 +1108,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
-                .setResultLimit(resultLimit)
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -1216,7 +1212,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 do {
                     ResultSegment<CloudBlobContainer> contSegment =
                             blobClient.listContainersSegmented(null, ContainerListingDetails.NONE,
-                                    QUERY_RESULT_LIMIT, nextContainerResults, null, null);
+                                    getQueryResultLimit(), nextContainerResults, null, null);
 
                     nextContainerResults = contSegment.getContinuationToken();
                     for (CloudBlobContainer container : contSegment.getResults()) {
@@ -1224,7 +1220,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         do {
                             ResultSegment<ListBlobItem> blobsSegment = container.listBlobsSegmented(
                                     null, false, EnumSet.noneOf(BlobListingDetails.class),
-                                    QUERY_RESULT_LIMIT, nextBlobResults, null, null);
+                                    getQueryResultLimit(), nextBlobResults, null, null);
                             nextBlobResults = blobsSegment.getContinuationToken();
                             for (ListBlobItem blobItem : blobsSegment.getResults()) {
                                 String id = blobItem.getUri().toString();
@@ -1284,7 +1280,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(query)
-                .setResultLimit(context.storageBlobs.size())
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -1357,7 +1353,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .addOption(QueryOption.TOP_RESULTS)
                     .setQuery(query)
-                    .setResultLimit(1)
+                    .setResultLimit(getQueryResultLimit())
                     .build();
             q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -1548,12 +1544,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         query.addBooleanClause(typeFilterQuery.build());
 
-        int resultLimit = Integer
-                .getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, QUERY_RESULT_LIMIT);
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
-                .setResultLimit(resultLimit)
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 

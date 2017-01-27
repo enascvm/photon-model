@@ -57,6 +57,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -414,7 +415,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .setQuery(query)
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .addOption(QueryOption.TOP_RESULTS)
-                    .setResultLimit(this.context.remoteAWSVolumes.size())
+                    .setResultLimit(getQueryResultLimit())
                     .build();
             queryTask.tenantLinks = this.context.parentCompute.tenantLinks;
 

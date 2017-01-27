@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VIRTUAL_NETWORKS_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 
 import java.net.URI;
@@ -36,7 +37,6 @@ import java.util.stream.Stream;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 
 import com.vmware.photon.controller.model.ComputeProperties;
-import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -58,6 +58,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService.Resourc
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -91,9 +92,6 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  */
 public class AzureNetworkEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_NETWORK_ENUMERATION_ADAPTER;
-    private static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT =
-            UriPaths.PROPERTY_PREFIX + "AzureNetworkEnumerationAdapterService.QUERY_RESULT_LIMIT";
-    private static final int DEFAULT_QUERY_RESULT_LIMIT = 50;
 
     /**
      * The local service context that is used to identify and create/update a representative
@@ -519,7 +517,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         QueryTask qt = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(resourceGroupIds.size())
+                .setResultLimit(getQueryResultLimit())
                 .setQuery(query)
                 .build();
         qt.tenantLinks = context.parentCompute.tenantLinks;
@@ -557,7 +555,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(context.virtualNetworks.size())
+                .setResultLimit(getQueryResultLimit())
                 .setQuery(query)
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
@@ -599,7 +597,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(context.subnets.size())
+                .setResultLimit(getQueryResultLimit())
                 .setQuery(query).build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -835,12 +833,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                                 .createLessThanRange(context.enumerationStartTimeInMicros))
                 .build();
 
-        int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT,
-                DEFAULT_QUERY_RESULT_LIMIT);
-
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .setQuery(query)
-                .setResultLimit(resultLimit)
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -867,13 +862,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros))
                 .build();
-
-        int resultLimit = Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT,
-                DEFAULT_QUERY_RESULT_LIMIT);
-
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .setQuery(query)
-                .setResultLimit(resultLimit)
+                .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 

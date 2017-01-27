@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.constants;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.DiskService;
 
 /**
@@ -168,7 +169,20 @@ public class AzureConstants {
      * {@see com.vmware.photon.controller.model.ComputeProperties#RESOURCE_TYPE_KEY}
      */
     public enum ResourceGroupStateType {
-        AzureResourceGroup,
-        AzureStorageContainer
+        AzureResourceGroup, AzureStorageContainer
+    }
+
+    // Resource Limit Constants
+    public static final String PROPERTY_NAME_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
+            + AzureConstants.class.getSimpleName() + ".QUERY_RESULT_LIMIT";
+    private static int QUERY_RESULT_LIMIT = Integer.getInteger(PROPERTY_NAME_QUERY_RESULT_LIMIT,
+            100);
+
+    public static void setQueryResultLimit(int resultLimit) {
+        QUERY_RESULT_LIMIT = resultLimit;
+    }
+
+    public static int getQueryResultLimit() {
+        return QUERY_RESULT_LIMIT;
     }
 }

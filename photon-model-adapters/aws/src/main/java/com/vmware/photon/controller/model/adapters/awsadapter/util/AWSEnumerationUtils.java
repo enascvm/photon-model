@@ -17,6 +17,7 @@ import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYP
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.WINDOWS_PLATFORM;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.xenon.common.UriUtils.URI_PATH_CHAR;
 
@@ -149,7 +150,7 @@ public class AWSEnumerationUtils {
                 .setQuery(query)
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(descriptionsSet.size())
+                .setResultLimit(getQueryResultLimit())
                 .build();
 
         queryTask.documentSelfLink = UUID.randomUUID().toString();

@@ -24,6 +24,7 @@ import java.util.stream.Collector;
 import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.UriPaths;
+
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -45,6 +46,11 @@ public class QueryUtils {
     public static final int DEFAULT_MAX_RESULT_LIMIT = 10000;
     private static final int MAX_RESULT_LIMIT = Integer
             .getInteger(MAX_RESULT_LIMIT_PROPERTY, DEFAULT_MAX_RESULT_LIMIT);
+
+    public static final String DEFAULT_RESULT_LIMIT_PROPERTY = UriPaths.PROPERTY_PREFIX
+            + "query.defaultResultLimit";
+    public static final int DEFAULT_RESULT_LIMIT = Integer
+            .getInteger(DEFAULT_RESULT_LIMIT_PROPERTY, 100);
 
     /**
      * Executes the given query task.

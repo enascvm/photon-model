@@ -100,7 +100,8 @@ public class GCPEnumerationAdapterService extends StatelessService {
     private static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
             + "GCPEnumerationAdapterService.QUERY_RESULT_LIMIT";
     private static final int QUERY_RESULT_LIMIT =
-            Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, 50);
+            Integer.getInteger(PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT, 100);
+
     private static final String PROPERTY_NAME_ENUM_VM_PAGE_SIZE = UriPaths.PROPERTY_PREFIX
             + "GCPEnumerationAdapterService.VM_PAGE_SIZE";
     // The vm page size cannot be larger than 500. And it must be a string.
