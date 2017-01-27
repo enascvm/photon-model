@@ -1,9 +1,13 @@
 # CHANGELOG
 
-## 0.5.9-SNAPSHOT
+## 0.5.9
 
 * Introduce a field environment name in ComputeState. This field is used to
   represent cloud providers e.g. AWS , Azure etc.
+* Modifying result limit for Photon Model queries.
+* Mark Subnet as supporting public IP and introduce NIC requirement for public IP.
+* Add missing tenant links to query tasks.
+* Fixing Endpoint removal.
 
 ## 0.5.8
 
