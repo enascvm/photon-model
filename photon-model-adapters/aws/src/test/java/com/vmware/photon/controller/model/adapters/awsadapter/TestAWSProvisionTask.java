@@ -31,8 +31,10 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.g
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -40,6 +42,7 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.GroupIdentifier;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.Tag;
@@ -57,8 +60,10 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.Comput
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -67,6 +72,7 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.Prov
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -280,6 +286,8 @@ public class TestAWSProvisionTask {
 
             assertVmNetworksConfiguration(instances.get(0));
 
+            assertVMSecurityGroupConfiguration(instances.get(0));
+
             // reach out to AWS and get the current state
             TestAWSSetupUtils
                     .getBaseLineInstanceCount(this.host, this.client, null);
@@ -344,6 +352,48 @@ public class TestAWSProvisionTask {
                     "NetworkInterfaceState[" + nicState.deviceIndex
                             + "].address should be set to AWS NIC private IP.",
                     awsNic.getPrivateIpAddress(), nicState.address);
+        }
+    }
+
+    private void assertVMSecurityGroupConfiguration(Instance awsInstance) throws Throwable {
+        // This assert is only suitable for real (non-mocking env).
+        if (this.isMock) {
+            return;
+        }
+
+        this.host.log(Level.INFO, "%s: Assert security groups configuration for [%s] VM",
+                this.currentTestName.getMethodName(), this.vmState.name);
+
+        Map<String, NetworkInterfaceState> nicStates = ProvisioningUtils.getResourceStates(
+                this.host, NetworkInterfaceService.FACTORY_LINK, NetworkInterfaceState.class);
+        for (NetworkInterfaceState nicState : nicStates.values()) {
+            assertNotNull(
+                    "Local instance state should have security groups attached",
+                    nicState.securityGroupLinks.size());
+            assertNotNull(
+                    "Provisioned instance should have security groups attached",
+                    awsInstance.getSecurityGroups());
+            assertEquals(
+                    "Provisioned instance should have the same number of security groups assigned, as its state's links",
+                    awsInstance.getSecurityGroups().size(),
+                    nicState.securityGroupLinks.size());
+
+            Map<String, SecurityGroupState> allSecurityGroupStatesByName = new HashMap<>();
+            for (String sgLink : nicState.securityGroupLinks) {
+                SecurityGroupState sg = this.host.getServiceState(null,
+                        SecurityGroupState.class,
+                        UriUtils.buildUri(this.host, sgLink));
+                if (sg != null) {
+                    allSecurityGroupStatesByName.put(sg.name, sg);
+                }
+            }
+
+            for (GroupIdentifier securityGroup : awsInstance.getSecurityGroups()) {
+                assertTrue(
+                        "Provisioned vm should have the same security groups as specified in the request",
+                        allSecurityGroupStatesByName.keySet()
+                                .contains(securityGroup.getGroupName()));
+            }
         }
     }
 

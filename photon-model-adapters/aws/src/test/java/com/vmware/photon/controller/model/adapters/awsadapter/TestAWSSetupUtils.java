@@ -24,7 +24,6 @@ import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getVMCo
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,6 +38,7 @@ import java.util.stream.Collectors;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.AmazonEC2Client;
+import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.Filter;
@@ -91,6 +91,7 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -207,6 +208,7 @@ public class TestAWSSetupUtils {
 
     private static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
     private static final String AWS_DEFAULT_GROUP_ID = "sg-d46efeac";
+    public static final String AWS_NEW_GROUP_NAME = "new-security-group";
 
     public static final String DEFAULT_AUTH_TYPE = "PublicKey";
     public static final String DEFAULT_ROOT_DISK_NAME = "CoreOS root disk";
@@ -514,43 +516,9 @@ public class TestAWSSetupUtils {
                         UriUtils.buildUri(host, NetworkInterfaceDescriptionService.FACTORY_LINK));
             }
 
-            // Create security group state
-            SecurityGroupState securityGroupState;
-            {
-                securityGroupState = new SecurityGroupState();
-                securityGroupState.id = AWS_DEFAULT_GROUP_ID;
-                securityGroupState.name = AWS_DEFAULT_GROUP_NAME;
-                securityGroupState.authCredentialsLink = authCredentialsLink;
-                securityGroupState.tenantLinks = new ArrayList<>();
-                securityGroupState.tenantLinks.add("tenant-linkA");
-
-                Rule ssh = new Rule();
-                ssh.name = "ssh";
-                ssh.protocol = "tcp";
-                ssh.ipRangeCidr = "0.0.0.0/0";
-                ssh.ports = "22";
-
-                securityGroupState.ingress = new ArrayList<>();
-                securityGroupState.ingress.add(ssh);
-
-                Rule out = new Rule();
-                out.name = "out";
-                out.protocol = "tcp";
-                out.ipRangeCidr = "0.0.0.0/0";
-                out.ports = "1-65535";
-
-                securityGroupState.egress = new ArrayList<>();
-                securityGroupState.egress.add(out);
-
-                securityGroupState.regionId = "regionId";
-                securityGroupState.resourcePoolLink = "/link/to/rp";
-                securityGroupState.instanceAdapterReference = new URI(
-                        "http://instanceAdapterReference");
-
-                securityGroupState = TestUtils.doPost(host, securityGroupState,
-                        SecurityGroupState.class,
-                        UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK));
-            }
+            // Create security group state for an existing security group
+            SecurityGroupState existingSecurityGroupState = createSecurityGroupState(host,
+                    authCredentialsLink, true);
 
             NetworkInterfaceState nicState = new NetworkInterfaceState();
 
@@ -562,8 +530,8 @@ public class TestAWSSetupUtils {
             nicState.subnetLink = subnetState.documentSelfLink;
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
 
-            nicState.securityGroupLinks =
-                    Collections.singletonList(securityGroupState.documentSelfLink);
+            nicState.securityGroupLinks = new ArrayList<>();
+            nicState.securityGroupLinks.add(existingSecurityGroupState.documentSelfLink);
 
             nicState = TestUtils.doPost(host, nicState,
                     NetworkInterfaceState.class,
@@ -573,6 +541,52 @@ public class TestAWSSetupUtils {
         }
 
         return nics;
+    }
+
+    private static SecurityGroupState createSecurityGroupState(VerificationHost host,
+            String authCredentialsLink, boolean existing) throws Throwable {
+        SecurityGroupState securityGroupState;
+        {
+            securityGroupState = new SecurityGroupState();
+            if (existing) {
+                securityGroupState.id = AWS_DEFAULT_GROUP_ID;
+                securityGroupState.name = AWS_DEFAULT_GROUP_NAME;
+            } else {
+                securityGroupState.id = "sg-" + UUID.randomUUID().toString().substring(0, 8);
+                securityGroupState.name = AWS_NEW_GROUP_NAME;
+            }
+            securityGroupState.authCredentialsLink = authCredentialsLink;
+            securityGroupState.tenantLinks = new ArrayList<>();
+            securityGroupState.tenantLinks.add("tenant-linkA");
+
+            Rule ssh = new Rule();
+            ssh.name = "ssh";
+            ssh.protocol = "tcp";
+            ssh.ipRangeCidr = "0.0.0.0/0";
+            ssh.ports = "22";
+
+            securityGroupState.ingress = new ArrayList<>();
+            securityGroupState.ingress.add(ssh);
+
+            Rule out = new Rule();
+            out.name = "out";
+            out.protocol = "tcp";
+            out.ipRangeCidr = "0.0.0.0/0";
+            out.ports = "1-65535";
+
+            securityGroupState.egress = new ArrayList<>();
+            securityGroupState.egress.add(out);
+
+            securityGroupState.regionId = "regionId";
+            securityGroupState.resourcePoolLink = "/link/to/rp";
+            securityGroupState.instanceAdapterReference = new URI(
+                    "http://instanceAdapterReference");
+
+            securityGroupState = TestUtils.doPost(host, securityGroupState,
+                    SecurityGroupState.class,
+                    UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK));
+        }
+        return securityGroupState;
     }
 
     /**
@@ -1490,4 +1504,10 @@ public class TestAWSSetupUtils {
         return Utils.fromJson(result.documents.values().iterator().next(), ComputeState.class);
     }
 
+    public static void deleteSecurityGroupsUsingEC2Client(AmazonEC2AsyncClient client,
+            VerificationHost host, String awsGroupName) {
+        DeleteSecurityGroupRequest deleteSecurityGroupRequest = new DeleteSecurityGroupRequest()
+                .withGroupName(awsGroupName);
+        client.deleteSecurityGroup(deleteSecurityGroupRequest);
+    }
 }
