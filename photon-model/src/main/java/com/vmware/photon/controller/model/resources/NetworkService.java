@@ -41,6 +41,7 @@ public class NetworkService extends StatefulService {
         public static final String FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE = "adapterManagementReference";
         public static final String FIELD_NAME_REGION_ID = "regionId";
         public static final String FIELD_NAME_AUTH_CREDENTIALS_LINK = "authCredentialsLink";
+        public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
 
         /**
          * Subnet CIDR

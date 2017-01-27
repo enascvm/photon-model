@@ -44,6 +44,7 @@ public class SubnetService extends StatefulService {
     public static class SubnetState extends ResourceState {
 
         public static final String FIELD_NAME_NETWORK_LINK = "networkLink";
+        public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
 
         /**
          * Link to the network this subnet is part of.

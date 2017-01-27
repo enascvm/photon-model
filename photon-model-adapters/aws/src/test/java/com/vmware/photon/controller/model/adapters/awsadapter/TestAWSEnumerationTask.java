@@ -729,7 +729,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         } catch (Throwable deleteEx) {
             // just log and move on
-            this.host.log(Level.WARNING, "Exception deleting VMs - %s", deleteEx.getMessage());
+            this.host.log(Level.WARNING, "Exception deleting VMs - %s, instance ids - %s",
+                    deleteEx.getMessage(), this.instancesToCleanUp);
         }
     }
 

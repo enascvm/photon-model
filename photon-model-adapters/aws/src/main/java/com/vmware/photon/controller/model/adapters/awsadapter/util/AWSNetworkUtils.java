@@ -33,7 +33,6 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
@@ -119,31 +118,43 @@ public class AWSNetworkUtils {
      * Creates the query to retrieve existing network states filtered by the discovered VPCs.
      */
     public static QueryTask createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
-            Set<String> vpcIds, List<String> tenantLinks) {
+            Set<String> vpcIds, String endpointLink, List<String> tenantLinks) {
 
         return createQueryToGetExistingStatesFilteredByDiscoveredIds(
-                NetworkService.NetworkState.class, vpcIds, tenantLinks);
+                NetworkService.NetworkState.class, vpcIds, endpointLink, tenantLinks);
     }
 
     /**
      * Creates the query to retrieve existing subnet states filtered by the discovered Subnets.
      */
     public static QueryTask createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
-            Set<String> subnetIds, List<String> tenantLinks) {
+            Set<String> subnetIds, String endpointLink, List<String> tenantLinks) {
 
         return createQueryToGetExistingStatesFilteredByDiscoveredIds(
-                SubnetService.SubnetState.class, subnetIds, tenantLinks);
+                SubnetService.SubnetState.class, subnetIds, endpointLink, tenantLinks);
     }
 
     private static QueryTask createQueryToGetExistingStatesFilteredByDiscoveredIds(
             Class<? extends ResourceState> stateClass,
             Set<String> stateIds,
+            String endpointLink,
             List<String> tenantLinks) {
-
         Query query = Query.Builder.create()
                 .addKindFieldClause(stateClass)
                 .addInClause(ResourceState.FIELD_NAME_ID, stateIds)
                 .build();
+
+        if (endpointLink != null && !endpointLink.isEmpty()) {
+            query.addBooleanClause(Query.Builder.create()
+                    .addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK, endpointLink)
+                    .build());
+        }
+
+        if (tenantLinks != null && !tenantLinks.isEmpty()) {
+            query.addBooleanClause(Query.Builder.create()
+                    .addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, tenantLinks)
+                    .build());
+        }
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)

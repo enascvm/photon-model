@@ -1157,13 +1157,23 @@ public class TestAWSSetupUtils {
 
     public static void waitForInstancesToBeTerminated(AmazonEC2AsyncClient client,
             VerificationHost host, List<String> instanceIdsToDelete) throws Throwable {
-        ArrayList<Boolean> deletionFlags = new ArrayList<Boolean>(instanceIdsToDelete.size());
+        if (instanceIdsToDelete.size() == 0) {
+            return;
+        }
+        ArrayList<Boolean> deletionFlags = new ArrayList<>(instanceIdsToDelete.size());
         for (int i = 0; i < instanceIdsToDelete.size(); i++) {
             deletionFlags.add(i, Boolean.FALSE);
         }
         host.waitFor("Error waiting for EC2 client delete instances in test ", () -> {
-            return computeInstancesTerminationState(client,
+            boolean isDeleted = computeInstancesTerminationState(client,
                     host, instanceIdsToDelete, deletionFlags);
+            if (isDeleted) {
+                return true;
+            }
+
+            host.log(Level.INFO, "Waiting for EC2 instance deletion");
+            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
+            return false;
         });
 
     }

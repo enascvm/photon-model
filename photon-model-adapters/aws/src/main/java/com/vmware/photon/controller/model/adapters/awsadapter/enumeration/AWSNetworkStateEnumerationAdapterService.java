@@ -195,7 +195,11 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         if (cs.request.isMockRequest) {
             op.complete();
         }
-        handleNetworkStateChanges(context);
+        try {
+            handleNetworkStateChanges(context);
+        } catch (Exception e) {
+            op.fail(e);
+        }
     }
 
     /**
@@ -253,8 +257,12 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void handleNetworkStateChanges(
             AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
-        context.networkCreationStage = next;
-        handleNetworkStateChanges(context);
+        try {
+            context.networkCreationStage = next;
+            handleNetworkStateChanges(context);
+        } catch (Exception e) {
+            context.operation.fail(e);
+        }
     }
 
     private Object createResponse(AWSNetworkStateCreationContext context) {
@@ -294,7 +302,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getLocalNetworkStates(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         QueryTask queryTask = createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
-                context.vpcs.keySet(), context.request.tenantLinks);
+                context.vpcs.keySet(), context.request.request.endpointLink,
+                context.request.tenantLinks);
 
         // create the query to find resources
         QueryUtils.startQueryTask(this, queryTask)
@@ -341,7 +350,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     private void getLocalSubnetStates(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         QueryTask q = createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
-                context.subnets.keySet(), context.request.tenantLinks);
+                context.subnets.keySet(), context.request.request.endpointLink,
+                context.request.tenantLinks);
 
         // create the query to find resources
         QueryUtils.startQueryTask(this, q)

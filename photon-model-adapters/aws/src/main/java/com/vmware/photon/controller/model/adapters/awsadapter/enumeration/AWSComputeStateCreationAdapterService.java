@@ -388,16 +388,23 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                             nicState.address = awsNic.getPrivateIpAddress();
                             nicState.subnetLink = context.request.enumeratedNetworks.subnets
                                     .get(awsNic.getSubnetId());
-                            nicState.securityGroupLinks = new ArrayList<>();
                             nicState.tenantLinks = context.request.tenantLinks;
                             nicState.endpointLink = context.request.endpointLink;
 
-                            for (GroupIdentifier awsSG : awsNic.getGroups()) {
-                                // we should have updated the list of SG Ids before this step and
-                                // should have ensured that all the SGs exist locally
-                                nicState.securityGroupLinks
-                                        .add(context.request.enumeratedSecurityGroups.securityGroupStates
-                                                .get(awsSG.getGroupId()));
+                            if (context.request.enumeratedSecurityGroups != null) {
+                                for (GroupIdentifier awsSG : awsNic.getGroups()) {
+                                    // we should have updated the list of SG Ids before this step and
+                                    // should have ensured that all the SGs exist locally
+                                    String securityGroupLink = context.request.enumeratedSecurityGroups
+                                            .securityGroupStates.get(awsSG.getGroupId());
+                                    if (securityGroupLink == null || securityGroupLink.isEmpty()) {
+                                        continue;
+                                    }
+                                    if (nicState.securityGroupLinks == null) {
+                                        nicState.securityGroupLinks = new ArrayList<>();
+                                    }
+                                    nicState.securityGroupLinks.add(securityGroupLink);
+                                }
                             }
 
                             nicState.deviceIndex = nicDescription.deviceIndex;
@@ -505,13 +512,19 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 // create a new NetworkInterfaceState for updating the address
                 NetworkInterfaceState updateNicState = new NetworkInterfaceState();
                 updateNicState.address = awsNic.getPrivateIpAddress();
-                updateNicState.securityGroupLinks = new ArrayList<>();
                 if (context.request.enumeratedSecurityGroups != null) {
                     for (GroupIdentifier awsSG : awsNic.getGroups()) {
                         // we should have updated the list of SG Ids before this step and should have
                         // ensured that all the SGs exist locally
-                        updateNicState.securityGroupLinks.add(context.request.enumeratedSecurityGroups.securityGroupStates
-                                            .get(awsSG.getGroupId()));
+                        String securityGroupLink = context.request.enumeratedSecurityGroups
+                                .securityGroupStates.get(awsSG.getGroupId());
+                        if (securityGroupLink == null || securityGroupLink.isEmpty()) {
+                            continue;
+                        }
+                        if (updateNicState.securityGroupLinks == null) {
+                            updateNicState.securityGroupLinks = new ArrayList<>();
+                        }
+                        updateNicState.securityGroupLinks.add(securityGroupLink);
                     }
                 }
                 // create update operation
