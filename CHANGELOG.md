@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.0-SNAPSHOT
+
 ## 0.5.9
 
 * Introduce a field environment name in ComputeState. This field is used to
