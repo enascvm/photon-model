@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_GATEWAY_SUBNET_NAME;
@@ -47,6 +48,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -84,7 +86,6 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -361,8 +362,9 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // such for us.
 
         // stale resources + 1 compute host instance + 1 vm compute state
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_VM_RESOURCES_COUNT + 2,
-                ComputeService.FACTORY_LINK, true);
+        ProvisioningUtils
+                .queryDocumentsAndAssertExpectedCount(this.host, STALE_VM_RESOURCES_COUNT + 2,
+                        ComputeService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_STORAGE_ACCOUNTS_COUNT + 1, StorageDescriptionService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
@@ -424,7 +426,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // validate environment name field for enumerated VMs
         result.documents.entrySet().stream()
                 .map(e -> Utils.fromJson(e.getValue(), ComputeState.class))
-                .forEach(c -> assertEquals(ComputeDescription.ENVIRONMENT_NAME_AZURE, c.environmentName));
+                .forEach(c -> assertEquals(ComputeDescription.ENVIRONMENT_NAME_AZURE,
+                        c.environmentName));
 
         for (Entry<String, Object> key : result.documents.entrySet()) {
             ComputeState document = Utils.fromJson(key.getValue(), ComputeState.class);
@@ -713,8 +716,6 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     /**
      * Validates that the Gateway information discovered from Azure has been propagated to the
      * NetworkState custom properties.
-     *
-     * @throws Throwable
      */
     private void validateVirtualNetworkGateways() throws Throwable {
         if (this.isMock) {
@@ -723,25 +724,35 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         //Query all network states in the system
         Map<String, NetworkState> networkStatesMap =
-                ProvisioningUtils.<NetworkState>getResourceStates(this.host, NetworkService
+                ProvisioningUtils.getResourceStates(this.host, NetworkService
                         .FACTORY_LINK, NetworkState.class);
 
-        networkStatesMap.values().stream().forEach(networkState -> {
-            List<SubnetState> subnetStates = getSubnetStates(this.host, networkState);
-            assertFalse(subnetStates.isEmpty());
+        AtomicBoolean isGatewayFound = new AtomicBoolean(false);
 
+        networkStatesMap.values().forEach(networkState -> {
             if (networkState.name.contains(AZURE_NETWORK_NAME)) {
-                Map<String, SubnetState> subnetStatesMap =
-                        subnetStates.stream().collect(Collectors.toMap(subnetState -> subnetState
-                                .name, subnetState -> subnetState));
 
-                if (subnetStatesMap.containsKey(AZURE_GATEWAY_SUBNET_NAME)) {
-                    assertNotNull(
-                            networkState.customProperties.get(ComputeProperties
-                                    .FIELD_VIRTUAL_GATEWAY));
-                }
+                List<SubnetState> subnetStates = getSubnetStates(this.host, networkState);
+                assertFalse(subnetStates.isEmpty());
+
+                subnetStates.stream()
+                        .filter(subnetState -> AZURE_GATEWAY_SUBNET_NAME.equalsIgnoreCase
+                                (subnetState.name))
+                        .forEach(subnetState -> {
+
+                            this.host.log(Level.INFO, "Validating gateway for network" +
+                                    "(name %s, id: %s)", networkState.name, networkState.id);
+                            assertNotNull("Custom properties are null.",
+                                    networkState.customProperties);
+                            assertNotNull("Virtual gateway property not found.",
+                                    networkState.customProperties.get(ComputeProperties
+                                            .FIELD_VIRTUAL_GATEWAY));
+                            isGatewayFound.set(true);
+                        });
             }
         });
+
+        assertTrue("Gateway custom property was not found at all.", isGatewayFound.get());
     }
 
     /**
@@ -764,14 +775,5 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 querySubnetStatesReferrers.collectDocuments(Collectors.toList());
 
         return waitToComplete(subnetDR);
-    }
-
-    private StorageManagementClient getStorageManagementClient() {
-        ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(this.clientID,
-                this.tenantId, this.clientKey, AzureEnvironment.AZURE);
-        this.storageManagementClient = new StorageManagementClientImpl(AzureConstants.BASE_URI,
-                credentials);
-        this.storageManagementClient.setSubscriptionId(this.subscriptionId);
-        return this.storageManagementClient;
     }
 }
