@@ -162,7 +162,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                                 adjustStat(INVOCATION_COUNT, 1);
                                 // if a task instance is already running, just log the fact
                                 if (o.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED) {
-                                    logInfo("service instance already running.");
+                                    logFine("service instance already running.");
                                 } else if (e != null) {
                                     logWarning("Scheduled task invocation failed: %s",
                                             e.getMessage());

@@ -179,7 +179,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     if (e != null) {
                         String msg = String.format("Cannot establish connection to %s",
                                 parent.adapterManagementReference);
-                        logInfo(msg);
+                        logWarning(msg);
                         mgr.patchTaskToFailure(msg, e);
                     } else {
                         if (request.enumerationAction == EnumerationAction.REFRESH) {
@@ -201,7 +201,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .remove(parent.documentSelfLink);
 
         if (old == null) {
-            logInfo("No running enumeration process for %s was found", parent.documentSelfLink);
+            logFine("No running enumeration process for %s was found", parent.documentSelfLink);
         }
 
         mgr.patchTask(TaskStage.FINISHED);
@@ -216,7 +216,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .putIfAbsent(parent.documentSelfLink, request);
 
         if (old != null) {
-            logInfo("Enumeration process for %s already started, not starting a new one",
+            logFine("Enumeration process for %s already started, not starting a new one",
                     parent.documentSelfLink);
             return;
         }
@@ -229,7 +229,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     .format("Error connecting to %s while starting enumeration process for %s",
                             parent.adapterManagementReference,
                             parent.documentSelfLink);
-            logInfo(msg);
+            logWarning(msg);
             mgr.patchTaskToFailure(msg, e);
             return;
         }
@@ -249,9 +249,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             });
         } catch (RejectedExecutionException e) {
             String msg = String
-                    .format("Max number of resource enumeration processes reached: will not start one for %s",
-                            parent.documentSelfLink);
-            logInfo(msg);
+                    .format("Max number of resource enumeration processes reached: will not start "
+                                    + "one for %s", parent.documentSelfLink);
+            logWarning(msg);
             mgr.patchTaskToFailure(msg, e);
         }
     }
@@ -315,7 +315,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         try {
             vapiConnection.login();
         } catch (IOException | RpcException e) {
-            logInfo("Cannot login into vAPI endpoint");
+            logWarning("Cannot login into vAPI endpoint");
         }
 
         EnumerationContext enumerationContext = new EnumerationContext(request, parent,
@@ -340,7 +340,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     } else if (VimUtils.isVirtualMachine(cont.getObj())) {
                         VmOverlay vm = new VmOverlay(cont);
                         if (vm.getInstanceUuid() == null) {
-                            log(Level.INFO, "Cannot process a VM without instanceUuid: %s",
+                            logWarning("Cannot process a VM without instanceUuid: %s",
                                     VimUtils.convertMoRefToString(vm.getId()));
                         } else if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
                             vms.add(vm);
@@ -541,7 +541,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             state.tenantLinks = tenantLinks;
         }
 
-        logInfo("Syncing Network %s", net.getName());
+        logFine("Syncing Network %s", net.getName());
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion(trackNetwork(enumerationContext, net))
@@ -557,7 +557,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion(trackNetwork(enumerationContext, net))
                 .sendWith(this);
 
-        logInfo("Found new Network %s", net.getName());
+        logFine("Found new Network %s", net.getName());
     }
 
     private String getSelfLinkFromOperation(Operation o) {
@@ -705,7 +705,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             desc.tenantLinks = tenantLinks;
         }
 
-        logInfo("Syncing Storage %s", ds.getName());
+        logFine("Syncing Storage %s", ds.getName());
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .setCompletion(trackDatastore(enumerationContext, ds))
@@ -718,7 +718,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         String regionId = enumerationContext.getRegionId();
         StorageDescription desc = makeStorageFromResults(request, ds, regionId);
         desc.tenantLinks = tenantLinks;
-        logInfo("Found new Datastore %s", ds.getName());
+        logFine("Found new Datastore %s", ds.getName());
 
         Operation.createPost(this, StorageDescriptionService.FACTORY_LINK)
                 .setBody(desc)
@@ -793,7 +793,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
         populateTags(cr, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logInfo("Syncing ComputeResource %s", oldDocument.documentSelfLink);
+        logFine("Syncing ComputeResource %s", oldDocument.documentSelfLink);
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .sendWith(this);
@@ -842,7 +842,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.descriptionLink = desc.documentSelfLink;
         populateTags(cr, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logInfo("Found new ComputeResource %s", cr.getId().getValue());
+        logFine("Found new ComputeResource %s", cr.getId().getValue());
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .setCompletion(trackComputeResource(enumerationContext, cr))
@@ -996,7 +996,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
         populateTags(hs, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logInfo("Syncing HostSystem %s", oldDocument.documentSelfLink);
+        logFine("Syncing HostSystem %s", oldDocument.documentSelfLink);
         Operation.createPatch(UriUtils.buildUri(getHost(), state.documentSelfLink))
                 .setBody(state)
                 .setCompletion(trackHostSystem(enumerationContext, hs))
@@ -1022,7 +1022,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.tenantLinks = tenantLinks;
         populateTags(hs, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logInfo("Found new HostSystem %s", hs.getName());
+        logFine("Found new HostSystem %s", hs.getName());
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .setCompletion(trackHostSystem(enumerationContext, hs))
@@ -1102,7 +1102,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
         populateTags(vm, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logInfo("Syncing VM %s", state.documentSelfLink);
+        logFine("Syncing VM %s", state.documentSelfLink);
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion(trackVm(enumerationContext, vm))
@@ -1142,11 +1142,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 state.networkInterfaceLinks.add(iface.documentSelfLink);
             } else {
                 //TODO add support for DVS
-                logInfo("Will not add nic of type %s", backing.getClass().getName());
+                logFine("Will not add nic of type %s", backing.getClass().getName());
             }
         }
 
-        logInfo("Found new VM %s", vm.getInstanceUuid());
+        logFine("Found new VM %s", vm.getInstanceUuid());
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .setCompletion(trackVm(enumerationContext, vm))

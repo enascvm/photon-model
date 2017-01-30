@@ -301,7 +301,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             break;
         case COMPUTE:
             if (aws.pageNo == 1) {
-                logFine("Running enumeration service for creation in refresh mode for %s",
+                logFine("Running creation enumeration in refresh mode for %s",
                         aws.parentCompute.description.environmentName);
             }
             logFine("Processing page %d ", aws.pageNo);
@@ -365,7 +365,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 .sendWithDeferredResult(patchSGOperation,
                         AWSSecurityGroupEnumerationAdapterService.AWSSecurityGroupEnumerationResponse.class)
                 .thenAccept(securityGroupEnumerationResponse -> {
-                    logFine("Successfully enumerated Security Group states. Proceeding to next state.");
+                    logFine("Successfully enumerated security group states");
                     aws.enumeratedSecurityGroups = securityGroupEnumerationResponse;
                     aws.refreshSubStage = next;
                     processRefreshSubStages(aws);
@@ -390,7 +390,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                         patchNetworkOperation,
                         AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationResponse.class)
                 .thenAccept(networkResponse -> {
-                    logFine("Successfully enumerated Network-Subnet states. Proceeding to next state.");
+                    logFine("Successfully enumerated subnet states");
                     aws.enumeratedNetworks = networkResponse;
                     aws.refreshSubStage = next;
                     processRefreshSubStages(aws);
@@ -430,9 +430,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
             List<AvailabilityZone> zones = result.getAvailabilityZones();
             if (zones == null || zones.isEmpty()) {
-                this.service
-                        .logFine(
-                                "No AvailabilityZones discovered on the remote system. Nothing to be created locally");
+                this.service.logFine("No AvailabilityZones found. Nothing to be created locally");
                 this.context.refreshSubStage = this.next;
                 this.service.processRefreshSubStages(this.context);
                 return;
@@ -444,8 +442,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                             .collect(Collectors.toList()),
                     cm -> createMissingLocalInstances(zones, cm),
                     cm -> {
-                        this.service.logFine(
-                                "No AvailabilityZones discovered on the remote system. Nothing to be created locally");
+                        this.service.logFine("No AvailabilityZones found. Nothing to be created"
+                                + " locally");
                         this.context.refreshSubStage = this.next;
                         this.service.processRefreshSubStages(this.context);
                     });
@@ -485,8 +483,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                             (ops, exs) -> {
                                 if (exs != null) {
                                     this.service
-                                            .logSevere(
-                                                    "Error creating a compute descriptions for discovered AvailabilityZone: %s",
+                                            .logSevere("Error creating a compute descriptions for "
+                                                            + "discovered AvailabilityZone: %s",
                                                     Utils.toString(exs));
                                     AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
                                             this.context.request.taskReference,
@@ -518,8 +516,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             OperationJoin.create(computeOps)
                     .setCompletion((ops, exs) -> {
                         if (exs != null) {
-                            this.service.logSevere(
-                                    "Error creating a compute states for discovered AvailabilityZone: %s",
+                            this.service.logSevere("Error creating a compute states for discovered"
+                                            + " AvailabilityZone: %s",
                                     Utils.toString(exs));
                             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
                                     this.context.request.taskReference,
@@ -613,7 +611,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
                     this.context.request.taskReference,
                     exception);
-
         }
 
         @Override
@@ -630,7 +627,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     this.context.remoteAWSInstances.put(i.getInstanceId(), i);
                 }
             }
-            this.service.logInfo("Successfully enumerated %d instances on the AWS host",
+            this.service.logFine("Successfully enumerated %d instances on the AWS host",
                     totalNumberOfInstances);
             // Save the reference to the next token that will be used to retrieve the next page of
             // results from AWS.
@@ -715,13 +712,14 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     },
                     lcsm -> {
                         if (this.context.nextToken == null) {
-                            this.service.logFine(
-                                    "No remote resources to query, all pages enumerated, enumeration is completed");
-                            this.context.subStage = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
+                            this.service.logFine("Completed enumeration");
+                            this.context.subStage = AWSComputeEnumerationCreationSubStage
+                                    .ENUMERATION_STOP;
                         } else {
-                            this.service.logFine(
-                                    "No remote resources to query, proceeding to next page");
-                            this.context.subStage = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
+                            this.service.logFine("No remote resources found, proceeding to next"
+                                    + " page");
+                            this.context.subStage = AWSComputeEnumerationCreationSubStage
+                                    .GET_NEXT_PAGE;
                         }
                         handleReceivedEnumerationData();
                     });
@@ -738,8 +736,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             // No remote instances
             if (this.context.remoteAWSInstances == null
                     || this.context.remoteAWSInstances.size() == 0) {
-                this.service.logInfo(
-                        "No resources discovered on the remote system. Nothing to be created locally");
+                this.service.logFine("No remote resources found. Nothing to be created locally");
                 // no local instances
             } else if (this.context.localAWSInstanceMap == null
                     || this.context.localAWSInstanceMap.size() == 0) {
@@ -807,11 +804,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             } else {
                 DeferredResult.allOf(getNICsDR).whenComplete((o, e) -> {
                     if (e != null) {
-                        this.service.logSevere(
-                                "Failure quering NetworkInterfaceStates for update %s",
-                                Utils.toString(e));
+                        this.service.logSevere("Failure querying NetworkInterfaceStates for update"
+                                        + " %s",Utils.toString(e));
                     }
-                    this.service.logFine("Populated nics to be updated: %s",
+                    this.service.logFine("Populated NICs to be updated: %s",
                             this.context.nicStatesToBeUpdated);
                     this.context.subStage = next;
                     handleReceivedEnumerationData();
@@ -840,13 +836,11 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .setBody(cd)
                     .setCompletion((o, e) -> {
                         if (e != null) {
-                            this.service.logSevere(
-                                    "Failure creating compute descriptions %s",
+                            this.service.logSevere("Failure creating compute descriptions %s",
                                     Utils.toString(e));
                             signalErrorToEnumerationAdapter(e);
                         } else {
-                            this.service.logFine(
-                                    "Successfully created compute descriptions. Proceeding to next state.");
+                            this.service.logFine("Successfully created compute descriptions.");
                             this.context.subStage = next;
                             handleReceivedEnumerationData();
                         }
@@ -880,13 +874,11 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .setBody(awsComputeState)
                     .setCompletion((o, e) -> {
                         if (e != null) {
-                            this.service.logSevere(
-                                    "Failure creating compute states %s",
+                            this.service.logSevere("Failure creating compute states %s",
                                     Utils.toString(e));
                             signalErrorToEnumerationAdapter(e);
                         } else {
-                            this.service.logFine(
-                                    "Successfully created compute states. Proceeding to next state.");
+                            this.service.logFine("Successfully created compute states.");
                             this.context.subStage = next;
                             handleReceivedEnumerationData();
                         }
@@ -980,9 +972,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                         signalErrorToEnumerationAdapter(e, context, service);
                         return;
                     }
-                    service.logFine(
-                            "Got result of the query to get local resources. There are %d instances known to the system.",
-                            qrt.results.documentCount);
+                    service.logFine("%d compute states found", qrt.results.documentCount);
 
                     Map<String, ComputeState> localInstances = new HashMap<>();
                     for (Object s : qrt.results.documents.values()) {

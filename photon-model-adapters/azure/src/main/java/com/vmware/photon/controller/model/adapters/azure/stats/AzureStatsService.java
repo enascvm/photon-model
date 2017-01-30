@@ -151,7 +151,7 @@ public class AzureStatsService extends StatelessService {
                     this.sendRequest(
                             Operation.createPatch(statsData.statsRequest.taskReference)
                                     .setBody(statsResponse));
-                    logInfo("Finished collection of compute host stats");
+                    logFine("Finished collection of compute host stats");
                 })
                 .sendWith(this);
     }

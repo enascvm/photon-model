@@ -227,12 +227,11 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                                     getKeyForComputeDescriptionFromCD(localComputeDescription),
                                     localComputeDescription.documentSelfLink);
                         }
-                        logFine(
-                                "%d compute descriptions already exist in the system that match the supplied criteria. ",
+                        logFine("%d compute descriptions found",
                                 context.localComputeDescriptionMap.size());
 
                     } else {
-                        logFine("No matching compute descriptions exist in the system.");
+                        logFine("No compute descriptions found");
                     }
                     context.creationStage = next;
                     handleComputeDescriptionCreation(context);
@@ -251,10 +250,10 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             AWSComputeDescCreationStage next) {
         if (context.representativeComputeDescriptionSet == null
                 || context.representativeComputeDescriptionSet.size() == 0) {
-            logFine("No new compute descriptions discovered on the remote system");
+            logFine("No new computes discovered on the remote system");
         } else if (context.localComputeDescriptionMap == null
                 || context.localComputeDescriptionMap.size() == 0) {
-            logFine("No compute descriptions found in the local system. Need to create all of them");
+            logFine("No local compute descriptions found");
 
             context.representativeComputeDescriptionSet
                     .forEach(cd -> context.computeDescriptionsToBeCreatedList.add(cd));
@@ -263,7 +262,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                     .filter(d -> !context.localComputeDescriptionMap.containsKey(d))
                     .forEach(d -> context.computeDescriptionsToBeCreatedList.add(d));
 
-            logFine("%d additional compute descriptions are required to be created in the system.",
+            logFine("%d additional compute descriptions need to be created",
                     context.computeDescriptionsToBeCreatedList.size());
         }
         context.creationStage = next;
@@ -277,12 +276,12 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             AWSComputeDescCreationStage next) {
         if (context.computeDescriptionsToBeCreatedList == null
                 || context.computeDescriptionsToBeCreatedList.isEmpty()) {
-            logFine("No compute descriptions needed to be created in the local system");
+            logFine("No local compute descriptions need to be created");
             context.creationStage = AWSComputeDescCreationStage.SIGNAL_COMPLETION;
             handleComputeDescriptionCreation(context);
             return;
         }
-        logFine("Need to create %d compute descriptions in the local system",
+        logFine("Need to create %d local compute descriptions",
                 context.computeDescriptionsToBeCreatedList.size());
         context.computeDescriptionsToBeCreatedList.stream()
                 .map(dk -> createComputeDescriptionOperation(dk, context.cdState))
@@ -341,7 +340,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
     private void createComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {
         if (context.createOperations == null || context.createOperations.size() == 0) {
-            logFine("There are no compute descriptions to be created");
+            logFine("No compute descriptions to be created");
             context.creationStage = next;
             handleComputeDescriptionCreation(context);
             return;
@@ -349,12 +348,11 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
             if (exc != null) {
-                logSevere("Failure creating compute descriptions. Exception is %s",
-                        Utils.toString(exc));
+                logSevere("Failure creating compute descriptions: %s", Utils.toString(exc));
                 finishWithFailure(context, exc.values().iterator().next());
                 return;
             }
-            logFine("Successfully created all the compute descriptions");
+            logFine("Successfully created compute descriptions");
             context.creationStage = next;
             handleComputeDescriptionCreation(context);
         };

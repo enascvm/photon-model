@@ -452,11 +452,11 @@ public class EndpointAllocationTaskService
         loadedState.endpointProperties = currentState.endpointState.endpointProperties;
 
         String id = UriUtils.getLastPathSegment(loadedState.documentSelfLink);
-        logInfo("Stopping any scheduled task for endpoint %s", loadedState.documentSelfLink);
+        logFine("Stopping any scheduled task for endpoint %s", loadedState.documentSelfLink);
         Operation.createDelete(this, UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logInfo("Unable to delete ScheduleTaskState for endpoint %s : %s",
+                        logWarning("Unable to delete ScheduleTaskState for endpoint %s : %s",
                                 loadedState.documentSelfLink, e.getMessage());
                     }
 
@@ -684,7 +684,7 @@ public class EndpointAllocationTaskService
         currentState.taskInfo.stage = body.taskInfo.stage;
         currentState.taskSubStage = body.taskSubStage;
 
-        logInfo("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
+        logFine("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
                 body.taskSubStage, body.taskInfo.stage);
 
         return false;

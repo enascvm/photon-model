@@ -92,7 +92,7 @@ public class VSphereEndpointAdapterService extends StatelessService {
             } catch (ConnectionException e) {
                 String msg = String.format("Cannot establish connection to %s",
                         adapterManagementUri);
-                logInfo(msg);
+                logWarning(msg);
                 callback.accept(null, e);
             } finally {
                 closeQuietly(connection);

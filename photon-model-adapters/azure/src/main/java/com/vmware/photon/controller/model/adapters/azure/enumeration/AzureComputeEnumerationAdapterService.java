@@ -273,7 +273,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 if (this.ongoingEnumerations.remove(enumKey)) {
                     logInfo("Enumeration service will be stopped for %s", enumKey);
                 } else {
-                    logInfo("Enumeration service is not running or has already been stopped for %s",
+                    logInfo("Enumeration service is not running or was already stopped for %s",
                             enumKey);
                 }
                 ctx.stage = EnumerationStages.FINISHED;
@@ -419,8 +419,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void deleteOrRetireHelper(EnumerationContext ctx) {
         if (ctx.deletionNextPageLink == null) {
-            logFine("Finished %s of compute states for Azure",
-                    ctx.request.preserveMissing ? "retiring" : "deletion");
+            logFine("Finished %s of compute states for Azure", ctx.request.preserveMissing ?
+                    "retiring" : "deletion");
             ctx.subStage = ComputeEnumerationSubStages.FINISHED;
             handleSubStage(ctx);
             return;
@@ -467,8 +467,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             }
 
             if (operations.size() == 0) {
-                logFine("No compute/disk states to %s",
-                        ctx.request.preserveMissing ? "retire" : "delete");
+                logFine("No compute/disk states to %s", ctx.request.preserveMissing ? "retire" :
+                        "delete");
                 deleteOrRetireHelper(ctx);
                 return;
             }
@@ -625,7 +625,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void updateResources(EnumerationContext ctx) {
         if (ctx.computeStates.size() == 0) {
-            logFine("No compute states available for update");
+            logFine("No compute states found to be updated.");
             ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
             handleSubStage(ctx);
             return;
@@ -651,7 +651,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     computeState.id);
 
             if (ctx.computeStates.size() == 0) {
-                logFine("Finished updating compute states");
+                logFine("Finished updating compute states.");
                 ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
                 handleSubStage(ctx);
             }
@@ -677,7 +677,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     }
 
                     if (numOfUpdates.decrementAndGet() == 0) {
-                        logFine("Finished updating compute states");
+                        logFine("Finished updating compute states.");
                         ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
                         handleSubStage(ctx);
                     }
@@ -838,7 +838,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            logFine("No virtual machine available for creation");
+            logFine("No virtual machine found for creation.");
             ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
             handleSubStage(ctx);
             return;
@@ -905,7 +905,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
                     }
 
-                    logFine("Continue on to updating disks");
+                    logFine("Continue on to updating disks.");
                     ctx.subStage = ComputeEnumerationSubStages.UPDATE_DISK_STATES;
                     handleSubStage(ctx);
                 }).sendWith(this);
@@ -950,7 +950,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
                     }
 
-                    logFine("Continue on to create network interface");
+                    logFine("Continue on to create network interface.");
                     ctx.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
                     handleSubStage(ctx);
 
@@ -999,7 +999,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
                     }
 
-                    logFine("Continue to create network interface");
+                    logFine("Continue to create network interfaces.");
                     ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_STATES;
                     handleSubStage(ctx);
 
@@ -1081,7 +1081,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         return;
                     }
 
-                    logFine("Finished creating compute states");
+                    logFine("Finished creating compute states.");
                     ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
                     handleSubStage(ctx);
 
@@ -1090,7 +1090,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     private void patchAdditionalFields(EnumerationContext ctx) {
         if (ctx.computeStatesForPatching.size() == 0) {
-            logFine("No compute states available to patch additional fields");
+            logFine("No compute states need to be patched.");
             ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
             handleSubStage(ctx);
             return;
@@ -1252,7 +1252,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         sendRequest(computePatchOp);
 
         if (numOfPatches.decrementAndGet() == 0) {
-            logFine("Finished patching compute states");
+            logFine("Finished patching compute states.");
             ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
             handleSubStage(ctx);
         }

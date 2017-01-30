@@ -247,11 +247,11 @@ public class EndpointRemovalTaskService
 
     private void stopEnumeration(EndpointRemovalTaskState currentState, SubStage next) {
         String id = UriUtils.getLastPathSegment(currentState.endpointLink);
-        logInfo("Stopping any scheduled task for endpoint %s", currentState.endpointLink);
+        logFine("Stopping any scheduled task for endpoint %s", currentState.endpointLink);
         Operation.createDelete(this, UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logInfo("Unable to delete ScheduleTaskState for endpoint %s : %s",
+                        logWarning("Unable to delete ScheduleTaskState for endpoint %s : %s",
                                 currentState.endpointLink, e.getMessage());
                     }
 
@@ -338,7 +338,7 @@ public class EndpointRemovalTaskService
             OperationJoin joinOp = OperationJoin.create(deleteOps);
             JoinedCompletionHandler joinHandler = (ops, exc) -> {
                 if (exc != null) {
-                    logFine("Failed delete some of the associated resources, reason %s",
+                    logWarning("Failed delete some of the associated resources, reason %s",
                             Utils.toString(exc));
                 }
 
@@ -475,29 +475,28 @@ public class EndpointRemovalTaskService
                 patch.complete();
                 return true;
             }
-            patch.fail(new IllegalArgumentException(
-                    "taskInfo and stage are required"));
+            patch.fail(new IllegalArgumentException("taskInfo and stage are required"));
             return true;
         }
 
         if (currentStage.ordinal() > body.taskInfo.stage.ordinal()) {
-            patch.fail(new IllegalArgumentException(
-                    "stage can not move backwards:" + body.taskInfo.stage));
+            patch.fail(new IllegalArgumentException("stage can not move backwards:"
+                    + body.taskInfo.stage));
             return true;
         }
 
         if (currentStage.ordinal() == body.taskInfo.stage.ordinal()
                 && (body.taskSubStage == null || currentSubStage.ordinal() > body.taskSubStage
                 .ordinal())) {
-            patch.fail(new IllegalArgumentException(
-                    "subStage can not move backwards:" + body.taskSubStage));
+            patch.fail(new IllegalArgumentException("subStage can not move backwards:"
+                    + body.taskSubStage));
             return true;
         }
 
         currentState.taskInfo.stage = body.taskInfo.stage;
         currentState.taskSubStage = body.taskSubStage;
 
-        logInfo("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
+        logFine("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
                 body.taskSubStage, currentState.taskInfo.stage);
 
         return false;

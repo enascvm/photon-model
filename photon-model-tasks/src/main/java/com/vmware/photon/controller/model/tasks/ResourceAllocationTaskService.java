@@ -404,7 +404,7 @@ public class ResourceAllocationTaskService
         }
 
         if (!TaskState.isFinished(rsp.taskInfo)) {
-            logInfo("Query not complete yet, retrying");
+            logFine("Query not complete yet, retrying");
             getHost().schedule(
                     () -> {
                         getQueryResults(currentState, desc, queryLink,
@@ -489,7 +489,7 @@ public class ResourceAllocationTaskService
         // resource
         Iterator<String> parentIterator = null;
 
-        logInfo("Creating %d provision tasks, reporting through sub task %s",
+        logFine("Creating %d provision tasks, reporting through sub task %s",
                 currentState.resourceCount, subTaskLink);
         String name;
         if (currentState.customProperties != null
@@ -554,9 +554,7 @@ public class ResourceAllocationTaskService
                             // task will patch us when done
                             return;
                         }
-                        logSevere(
-                                "Failure creating provisioning task: %s",
-                                Utils.toString(e));
+                        logSevere("Failure creating provisioning task: %s", Utils.toString(e));
                         // we fail on first task failure, we could
                         // in theory keep going ...
                         sendFailureSelfPatch(e);
@@ -648,8 +646,7 @@ public class ResourceAllocationTaskService
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
-                                logSevere(
-                                        "Failure creating compute resource: %s",
+                                logSevere("Failure creating compute resource: %s",
                                         Utils.toString(e));
                                 sendFailureSelfPatch(e);
                                 return;
@@ -701,9 +698,8 @@ public class ResourceAllocationTaskService
             sendRequest(Operation.createGet(this, diskLink).setCompletion(
                     (o, e) -> {
                         if (e != null) {
-                            logWarning(
-                                    "Failure getting disk description %s: %s",
-                                    diskLink, e.toString());
+                            logWarning("Failure getting disk description %s: %s", diskLink,
+                                    e.toString());
                             this.sendFailureSelfPatch(e);
                             return;
                         }
@@ -729,8 +725,7 @@ public class ResourceAllocationTaskService
         List<String> networkLinks = new ArrayList<>();
         CompletionHandler networkInterfaceCreateCompletion = (o, e) -> {
             if (e != null) {
-                logWarning("Failure creating network interfaces: %s",
-                        e.toString());
+                logWarning("Failure creating network interfaces: %s", e.toString());
                 this.sendFailureSelfPatch(e);
                 return;
             }
@@ -760,8 +755,7 @@ public class ResourceAllocationTaskService
                     .setCompletion(
                             (o, e) -> {
                                 if (e != null) {
-                                    logWarning(
-                                            "Failure getting network description %s: %s",
+                                    logWarning("Failure getting network description %s: %s",
                                             networkDescLink, e.toString());
                                     this.sendFailureSelfPatch(e);
                                     return;
@@ -812,8 +806,7 @@ public class ResourceAllocationTaskService
         case VM_HOST:
             return SubStage.PROVISIONING_PHYSICAL;
         default:
-            logSevere("Invalid host type %s, it can not be provisioned",
-                    resourceType);
+            logSevere("Invalid host type %s, it can not be provisioned", resourceType);
             // this should never happen, due to upstream logic
             return SubStage.FAILED;
         }
@@ -864,8 +857,8 @@ public class ResourceAllocationTaskService
         }
 
         if (body.taskInfo.failure != null) {
-            logWarning("Referer %s is patching us to failure: %s",
-                    patch.getReferer(), Utils.toJsonHtml(body.taskInfo.failure));
+            logWarning("Referer %s is patching us to failure: %s", patch.getReferer(),
+                    Utils.toJsonHtml(body.taskInfo.failure));
             currentState.taskInfo.failure = body.taskInfo.failure;
             currentState.taskInfo.stage = body.taskInfo.stage;
             currentState.taskSubStage = SubStage.FAILED;
@@ -887,8 +880,8 @@ public class ResourceAllocationTaskService
         currentState.taskInfo.stage = body.taskInfo.stage;
         currentState.taskSubStage = body.taskSubStage;
 
-        logInfo("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
-                body.taskSubStage, body.taskInfo.stage);
+        logFine("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage, body.taskSubStage,
+                body.taskInfo.stage);
 
         return false;
     }
@@ -923,8 +916,7 @@ public class ResourceAllocationTaskService
         }
 
         if (state.computeDescriptionLink == null) {
-            throw new IllegalArgumentException(
-                    "computeDescriptionLink is required");
+            throw new IllegalArgumentException("computeDescriptionLink is required");
         }
 
         if (state.resourceCount <= 0) {
@@ -932,8 +924,7 @@ public class ResourceAllocationTaskService
         }
 
         if (state.errorThreshold > 1.0 || state.errorThreshold < 0) {
-            throw new IllegalArgumentException(
-                    "errorThreshold can only be between 0 and 1.0");
+            throw new IllegalArgumentException("errorThreshold can only be between 0 and 1.0");
         }
 
         if (state.taskSubStage == null) {

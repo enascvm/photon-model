@@ -204,8 +204,7 @@ public class ResourceRemovalTaskService
         switch (currentState.taskSubStage) {
         case WAITING_FOR_QUERY_COMPLETION:
             if (TaskState.isFailed(queryTask.taskInfo)) {
-                logWarning("query task failed: %s",
-                        Utils.toJsonHtml(queryTask.taskInfo.failure));
+                logWarning("query task failed: %s", Utils.toJsonHtml(queryTask.taskInfo.failure));
                 currentState.taskInfo.stage = TaskState.TaskStage.FAILED;
                 currentState.taskInfo.failure = queryTask.taskInfo.failure;
                 sendSelfPatch(currentState);
@@ -229,7 +228,7 @@ public class ResourceRemovalTaskService
                 return;
             }
 
-            logInfo("Resource query not complete yet, retrying");
+            logFine("Resource query not complete yet, retrying");
             getHost().schedule(() -> {
                 getQueryResults(currentState);
             }, 1, TimeUnit.SECONDS);
@@ -290,7 +289,7 @@ public class ResourceRemovalTaskService
             return;
         }
 
-        logInfo("Starting delete of %d compute resources using sub task %s",
+        logFine("Starting delete of %d compute resources using sub task %s",
                 resourceCount, subTaskLink);
         // for each compute resource link in the results, expand it with the
         // description, and issue
@@ -377,8 +376,7 @@ public class ResourceRemovalTaskService
                     .setCompletion(
                             (deleteOp, e) -> {
                                 if (e != null) {
-                                    logWarning(
-                                            "PATCH to instance service %s, failed: %s",
+                                    logWarning("PATCH to instance service %s, failed: %s",
                                             deleteOp.getUri(), e.toString());
                                     ResourceOperationResponse fail = ResourceOperationResponse
                                             .fail(resourceLink, e);
@@ -387,9 +385,8 @@ public class ResourceRemovalTaskService
                                 }
                             }));
         } else {
-            logWarning(
-                    "Compute instance %s doesn't not have configured instanceAdapter. Only local "
-                            + "resource will be deleted.",
+            logWarning("Compute instance %s doesn't not have configured instanceAdapter. Only "
+                            + "local resource will be deleted.",
                     resourceLink);
             ResourceOperationResponse subTaskPatchBody = ResourceOperationResponse
                     .finish(resourceLink);
@@ -404,8 +401,7 @@ public class ResourceRemovalTaskService
                     if (e != null) {
                         // the task might have expired, with no results every
                         // becoming available
-                        logWarning("Failure retrieving query results: %s",
-                                e.toString());
+                        logWarning("Failure retrieving query results: %s", e.toString());
                         sendFailureSelfPatch(e);
                         return;
                     }
@@ -444,7 +440,7 @@ public class ResourceRemovalTaskService
         currentState.taskInfo.stage = body.taskInfo.stage;
         currentState.taskSubStage = body.taskSubStage;
 
-        logInfo("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
+        logFine("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
                 body.taskSubStage, currentState.taskInfo.stage);
 
         return false;
@@ -474,8 +470,7 @@ public class ResourceRemovalTaskService
                 .setCompletion(
                         (o, ex) -> {
                             if (ex != null) {
-                                logWarning("Self patch failed: %s",
-                                        Utils.toString(ex));
+                                logWarning("Self patch failed: %s", Utils.toString(ex));
                             }
                         });
         sendRequest(patch);

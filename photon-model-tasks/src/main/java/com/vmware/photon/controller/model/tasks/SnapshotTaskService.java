@@ -196,7 +196,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
             createSubTaskForSnapshotCallback(updatedState);
             return;
         }
-        logInfo("Starting to create snapshot using sub task %s", subTaskLink);
+        logFine("Starting to create snapshot using sub task %s", subTaskLink);
 
         SnapshotRequest sr = new SnapshotRequest();
         sr.resourceReference = UriUtils.buildUri(getHost(),

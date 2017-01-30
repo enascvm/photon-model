@@ -290,8 +290,8 @@ public class AzureInstanceService extends StatelessService {
                     handleAllocation(ctx, AzureInstanceStage.DELETE);
                     break;
                 default:
-                    throw new IllegalStateException(
-                            "Unknown compute request type: " + ctx.computeRequest.requestType);
+                    throw new IllegalStateException("Unknown compute request type: " +
+                            ctx.computeRequest.requestType);
                 }
                 break;
             case CHILDAUTH:
@@ -427,7 +427,6 @@ public class AzureInstanceService extends StatelessService {
      * {@link #handleError(AzureInstanceContext, Throwable)}.
      */
     private void errorHandler(AzureInstanceContext ctx) {
-
         logSevere(ctx.error);
 
         if (ctx.computeRequest.isMockRequest) {
@@ -470,7 +469,7 @@ public class AzureInstanceService extends StatelessService {
 
                     @Override
                     public void onSuccess(ServiceResponse<Void> result) {
-                        logInfo(msg, "SUCCESS");
+                        logFine(msg, "SUCCESS");
 
                         finishWithFailure(ctx);
                     }
@@ -577,14 +576,14 @@ public class AzureInstanceService extends StatelessService {
                                 .thenAccept((storageDescription) -> {
                                     ctx.storageDescription = storageDescription;
                                     ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
-                                    logInfo("Creating StorageDescription [%s]: SUCCESS",
+                                    logFine("Creating StorageDescription [%s]: SUCCESS",
                                             storageDescription.name);
                                 })
                                 // Start next op, patch boot disk, in the sequence
                                 .thenCompose((woid) -> sendWithDeferredResult(patchBootDiskOp))
                                 // Log boot disk patch success
                                 .thenRun(() -> {
-                                    logInfo("Updating boot disk [%s]: SUCCESS",
+                                    logFine("Updating boot disk [%s]: SUCCESS",
                                             ctx.bootDisk.name);
                                 })
                                 // Return original StorageAccount
@@ -1107,9 +1106,8 @@ public class AzureInstanceService extends StatelessService {
             networkProfile.getNetworkInterfaces().add(nicRef);
         }
         request.setNetworkProfile(networkProfile);
-        // }}
 
-        logInfo("Creating virtual machine with name [%s]", vmName);
+        logFine("Creating virtual machine with name [%s]", vmName);
 
         getComputeManagementClient(ctx).getVirtualMachinesOperations().createOrUpdateAsync(
                 ctx.resourceGroup.getName(), vmName, request,
@@ -1122,7 +1120,7 @@ public class AzureInstanceService extends StatelessService {
                     @Override
                     public void onSuccess(ServiceResponse<VirtualMachine> result) {
                         VirtualMachine vm = result.getBody();
-                        logInfo("Successfully created vm [%s]", vm.getName());
+                        logFine("Successfully created vm [%s]", vm.getName());
 
                         ComputeState cs = new ComputeState();
                         // Azure for some case changes the case of the vm id.
@@ -1199,7 +1197,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setBody(computeState)
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
-                                        logInfo("Patching compute state with VM Public IP address ["
+                                        logFine("Patching compute state with VM Public IP address ["
                                                 + computeState.address + "]: SUCCESS");
                                     }
                                 });
@@ -1219,7 +1217,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setBody(primaryNicState)
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
-                                        logInfo("Patching primary NIC state with VM Public IP address ["
+                                        logFine("Patching primary NIC state with VM Public IP address ["
                                                 + primaryNicState.address + "]: SUCCESS");
                                     }
                                 });
@@ -1243,7 +1241,7 @@ public class AzureInstanceService extends StatelessService {
 
                     @Override
                     public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
-                        logInfo("Retrieved the storage account keys for storage account [%s] successfully.",
+                        logFine("Retrieved the storage account keys for storage account [%s].",
                                 ctx.storageAccountName);
                         StorageAccountKeys keys = result.getBody();
                         String key1 = keys.getKey1();
@@ -1272,7 +1270,7 @@ public class AzureInstanceService extends StatelessService {
                                                     handleError(ctx, failure);
                                                     return;
                                                 }
-                                                logFine("Patched the storage description successfully.");
+                                                logFine("Patched storage description.");
                                                 handleAllocation(ctx, nextStage);
                                             }));
                                     sendRequest(patch);
@@ -1289,8 +1287,8 @@ public class AzureInstanceService extends StatelessService {
     private ImageReference getImageReference(String imageId) {
         String[] imageIdParts = imageId.split(":");
         if (imageIdParts.length != 4) {
-            throw new IllegalArgumentException(
-                    "Azure image id should be of the format <publisher>:<offer>:<sku>:<version>");
+            throw new IllegalArgumentException("Azure image ID should be of the format "
+                    + "<publisher>:<offer>:<sku>:<version>");
         }
 
         ImageReference imageReference = new ImageReference();
@@ -1343,7 +1341,7 @@ public class AzureInstanceService extends StatelessService {
                             getSubscriptionState(ctx, namespace, retryExpiration);
                             return;
                         }
-                        logInfo("Successfully registered namespace [%s]", provider.getNamespace());
+                        logFine("Successfully registered namespace [%s]", provider.getNamespace());
                         handleAllocation(ctx);
                     }
                 });
@@ -1352,9 +1350,8 @@ public class AzureInstanceService extends StatelessService {
     private void getSubscriptionState(AzureInstanceContext ctx,
             String namespace, long retryExpiration) {
         if (Utils.getNowMicrosUtc() > retryExpiration) {
-            String msg = String
-                    .format("Subscription for %s namespace did not reach %s state", namespace,
-                            PROVIDER_REGISTRED_STATE);
+            String msg = String.format("Subscription for %s namespace did not reach %s state",
+                    namespace, PROVIDER_REGISTRED_STATE);
             handleError(ctx, new RuntimeException(msg));
             return;
         }
@@ -1379,7 +1376,7 @@ public class AzureInstanceService extends StatelessService {
                                     getSubscriptionState(ctx, namespace, retryExpiration);
                                     return;
                                 }
-                                logInfo("Successfully registered namespace [%s]",
+                                logFine("Successfully registered namespace [%s]",
                                         provider.getNamespace());
                                 handleAllocation(ctx);
                             }
@@ -1653,14 +1650,14 @@ public class AzureInstanceService extends StatelessService {
                 return;
             }
 
-            logInfo("Enabling monitoring on the VM [%s]", vmName);
+            logFine("Enabling monitoring on the VM [%s]", vmName);
             operation.setCompletion((op, er) -> {
                 if (er != null) {
                     handleError(ctx, er);
                     return;
                 }
 
-                logInfo("Successfully enabled monitoring on the VM [%s]", vmName);
+                logFine("Successfully enabled monitoring on the VM [%s]", vmName);
                 handleAllocation(ctx, nextStage);
             });
             sendRequest(operation);
@@ -1803,8 +1800,8 @@ public class AzureInstanceService extends StatelessService {
                     AzureInstanceService.this.logSevere(e);
                 }
             } else {
-                AzureInstanceService.this.logFine("%s: SUCCESS with error. Details: %s",
-                        this.msg, e.getMessage());
+                AzureInstanceService.this.logFine("%s: SUCCESS with error. Details: %s", this.msg,
+                        e.getMessage());
 
                 transition();
             }
@@ -1824,12 +1821,12 @@ public class AzureInstanceService extends StatelessService {
         public final void onSuccess(ServiceResponse<T> result) {
 
             if (this.callCtx.hasAnyFailed.get()) {
-                AzureInstanceService.this.logInfo(
-                        this.msg + ": SUCCESS. Still batch calls have failed so SKIP this result.");
+                AzureInstanceService.this.logInfo(this.msg + ": SUCCESS. Still batch calls have "
+                        + "failed so SKIP this result.");
                 return;
             }
 
-            AzureInstanceService.this.logInfo(this.msg + ": SUCCESS");
+            AzureInstanceService.this.logFine(this.msg + ": SUCCESS");
 
             // First delegate to descendants to process result body
             CompletionStage<T> handleSuccess = handleSuccess(result.getBody());

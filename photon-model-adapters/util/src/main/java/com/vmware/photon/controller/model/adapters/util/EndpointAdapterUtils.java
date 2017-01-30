@@ -121,7 +121,7 @@ public class EndpointAdapterUtils {
                         exc.values().iterator().next());
                 return;
             }
-            service.logInfo("Successfully completed %s endpoint configuration tasks.",
+            service.logFine("Successfully completed %s endpoint configuration tasks.",
                     endpoint.endpointType);
             AdapterUtils.sendPatchToProvisioningTask(service, body.taskReference);
         });

@@ -206,7 +206,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
                         context.error);
                 return;
             }
-            logInfo("Successfully completed Azure enumeration adapter %s", adapterSelfLink);
+            logFine("Completed Azure enumeration adapter %s", adapterSelfLink);
             context.stage = next;
             handleEnumerationRequest(context);
         };

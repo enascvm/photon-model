@@ -310,8 +310,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         QueryUtils.startQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
-                        logSevere("Failure retrieving query results: %s",
-                                e.toString());
+                        logSevere("Failure retrieving query results: %s", e.toString());
                         finishWithFailure(context, e);
                         return;
                     }
@@ -324,8 +323,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         }
                     }
 
-                    logFine("Result of query to get local networks. There are %d network states known to the system.",
-                            qrt.results.documentCount);
+                    logFine("%d network states found.", qrt.results.documentCount);
                     handleNetworkStateChanges(context, next);
                 });
     }
@@ -358,7 +356,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
-                        logSevere("Failure retrieving query results: %s", e.toString());
+                        logSevere("Failed retrieving query results: %s", e.toString());
                         finishWithFailure(context, e);
                         return;
                     }
@@ -369,8 +367,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                                     subnetState.documentSelfLink);
                         }
                     }
-                    logFine("Result of query to get local subnets. There are %d subnet states known to the system.",
-                            queryTask.results.documentCount);
+                    logFine("%d subnet states found.", queryTask.results.documentCount);
 
                     handleNetworkStateChanges(context, next);
                 });
@@ -567,8 +564,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
 
         if (context.vpcs.isEmpty()) {
-            logFine("No new VPCs have been discovered. Nothing to do.");
-
+            logFine("No new VPCs have been discovered.");
             handleNetworkStateChanges(context, next);
             return;
         }
@@ -602,7 +598,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 finishWithFailure(context, exc);
                 return;
             }
-            logFine("Successfully created/updated all the network states.");
+            logFine("Created/updated all network states.");
             ops.values().stream()
                     .filter(op -> op.getStatusCode() != Operation.STATUS_CODE_NOT_MODIFIED)
                     .forEach(op -> {
@@ -625,7 +621,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
 
         if (context.subnets.isEmpty()) {
-            logFine("No new Subnets have been discovered. Nothing to do.");
+            logFine("No new subnets found.");
             handleNetworkStateChanges(context, next);
             return;
         }
@@ -665,7 +661,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 finishWithFailure(context, exc);
                 return;
             }
-            logFine("Successfully created/updated all the subnet states.");
+            logFine("Successfully created/updated all subnet states.");
             ops.values().stream()
                     .filter(op -> op.getStatusCode() != Operation.STATUS_CODE_NOT_MODIFIED)
                     .forEach(op -> {

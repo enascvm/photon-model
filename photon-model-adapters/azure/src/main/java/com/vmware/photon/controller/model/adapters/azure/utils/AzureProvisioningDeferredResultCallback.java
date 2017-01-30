@@ -92,7 +92,7 @@ public abstract class AzureProvisioningDeferredResultCallback<RES> extends
 
         String provisioningState = getProvisioningState(body);
 
-        this.service.logInfo(this.message + ": provisioningState = " + provisioningState);
+        this.service.logFine(this.message + ": provisioningState = " + provisioningState);
 
         if (PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(provisioningState)) {
 
@@ -111,9 +111,6 @@ public abstract class AzureProvisioningDeferredResultCallback<RES> extends
 
             // Retry one more time
             this.numberOfWaits++;
-
-            //logInfo("%s: [%s] %s", this.msg, this.numberOfWaits,
-            //        WAIT_PROVISIONING_TO_SUCCEED_MSG);
 
             this.service.getHost().schedule(
                     checkProvisioningStateCall(new CheckProvisioningStateCallback()),

@@ -210,7 +210,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                         .get(AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK), onSuccess,
                 ((throwable) -> {
                     if (throwable instanceof ServiceNotFoundException) {
-                        logInfo("Skipping stats collection because storage account not found for [%s]",
+                        logInfo("Skipping stats collection - storage account not found for [%s]",
                                 statsData.computeDesc.name);
                         patchEmptyResponse(statsData);
                         return;

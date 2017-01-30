@@ -135,7 +135,7 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             return;
         }
 
-        logInfo("Moving from %s to %s", currentState.taskInfo.stage.toString(),
+        logFine("Moving from %s to %s", currentState.taskInfo.stage.toString(),
                 body.taskInfo.stage.toString());
 
         currentState.taskInfo = body.taskInfo;

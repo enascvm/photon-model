@@ -219,8 +219,8 @@ public class AWSInstanceService extends StatelessService {
                 validateAWSCredentials(context);
                 break;
             default:
-                handleError(context, new IllegalStateException(
-                        "Unknown AWS provisioning stage: " + context.computeRequest.requestType));
+                handleError(context, new IllegalStateException("Unknown AWS provisioning stage: "
+                        + context.computeRequest.requestType));
             }
             break;
         case DELETE:
@@ -319,8 +319,7 @@ public class AWSInstanceService extends StatelessService {
             instanceType = aws.child.description.name;
         }
         if (instanceType == null) {
-            aws.error = new IllegalStateException(
-                    "AWS Instance type not specified");
+            aws.error = new IllegalStateException("AWS Instance type not specified");
             aws.stage = AWSInstanceStage.ERROR;
             handleAllocation(aws);
             return;
@@ -342,8 +341,7 @@ public class AWSInstanceService extends StatelessService {
                 runInstancesRequest.setUserData(Base64.getEncoder()
                         .encodeToString(cloudConfig.getBytes(Utils.CHARSET)));
             } catch (UnsupportedEncodingException e) {
-                handleError(aws, new IllegalStateException(
-                        "Error encoding user data"));
+                handleError(aws, new IllegalStateException("Error encoding user data"));
                 return;
             }
         }
@@ -527,9 +525,9 @@ public class AWSInstanceService extends StatelessService {
         TerminateInstancesRequest termRequest = new TerminateInstancesRequest(
                 instanceIdList);
         StatelessService service = this;
-        AsyncHandler<TerminateInstancesRequest, TerminateInstancesResult> terminateHandler = buildTerminationCallbackHandler(
-                service, aws.computeRequest, aws.amazonEC2Client, instanceId,
-                aws.taskExpirationMicros);
+        AsyncHandler<TerminateInstancesRequest, TerminateInstancesResult> terminateHandler =
+                buildTerminationCallbackHandler(service, aws.computeRequest, aws.amazonEC2Client,
+                        instanceId, aws.taskExpirationMicros);
 
         aws.amazonEC2Client.terminateInstancesAsync(termRequest,
                 terminateHandler);
@@ -560,7 +558,7 @@ public class AWSInstanceService extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
-            this.service.logInfo("Error deleting instances received from AWS: %s",
+            this.service.logWarning("Error deleting instances received from AWS: %s",
                     exception.getMessage());
             AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
                     this.computeReq.taskReference, exception);

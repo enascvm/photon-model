@@ -649,7 +649,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         logFine("Create or update Network States with the actual state in Azure.");
 
         if (context.virtualNetworks.size() == 0) {
-            logFine("No virtual networks available for create/update.");
+            logFine("No virtual networks found to create/update.");
             handleSubStage(context, next);
             return;
         }
@@ -697,7 +697,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             // any potential operation failures. They are already logged at individual operation
             // level.
 
-            logFine("Finished updating network states");
+            logFine("Finished updating network states.");
 
             handleSubStage(context, next);
         }).sendWith(this);
@@ -709,7 +709,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      */
     private void createUpdateSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
         if (context.subnets.size() == 0) {
-            logFine("No subnet states available for update.");
+            logFine("No network states available for update.");
             handleSubStage(context, next);
             return;
         }
@@ -761,12 +761,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     });
 
             if (context.enumNextPageLink != null) {
-                logFine("Fetch the next page Virtual Networks from Azure.");
+                logFine("Fetch next page of Virtual Networks from Azure.");
                 handleSubStage(context, NetworkEnumStages.GET_VNETS);
                 return;
             }
 
-            logFine("Finished updating subnet states");
+            logFine("Finished updating network states");
 
             handleSubStage(context, next);
         }).sendWith(this);

@@ -194,7 +194,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
         context.enumerationOperations.add(patchAWSStorageAdapterService);
 
         if (context.enumerationOperations == null || context.enumerationOperations.size() == 0) {
-            logInfo("There are no enumeration tasks to run.");
+            logFine("No enumeration tasks to run");
             context.stage = next;
             handleEnumerationRequest(context);
             return;
@@ -202,22 +202,20 @@ public class AWSEnumerationAdapterService extends StatelessService {
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
             if (exc != null) {
-                logSevere(
-                        "Error kicking off the enumeration workflows for AWS. %s",
+                logSevere("Error starting the enumeration workflows for AWS: %s",
                         Utils.toString(exc));
                 AdapterUtils.sendFailurePatchToEnumerationTask(this,
                         context.request.taskReference,
                         exc.values().iterator().next());
                 return;
             }
-            logInfo("Successfully completed the enumeration workflows for creation, deletion of compute states and storage.");
+            logFine("Completed creation and deletion enumeration for compute and storage states");
             context.stage = next;
             handleEnumerationRequest(context);
         };
         OperationJoin joinOp = OperationJoin.create(context.enumerationOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(getHost());
-        logInfo("Kicked off enumeration creation,deletion and storage workflows for AWS");
-
+        logFine("Started creation and deletion enumeration for AWS computes and storage");
     }
 }

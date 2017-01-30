@@ -198,8 +198,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         case ENUMERATE:
             switch (aws.request.enumerationAction) {
             case START:
-                logInfo("Started storage enumeration for %s",
-                        aws.request.resourceReference);
+                logInfo("Started storage enumeration for %s", aws.request.resourceReference);
                 aws.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 aws.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequest(aws);
@@ -208,8 +207,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 processRefreshSubStages(aws);
                 break;
             case STOP:
-                logInfo("Stopping storage enumeration for %s",
-                        aws.request.resourceReference);
+                logInfo("Stopping storage enumeration for %s", aws.request.resourceReference);
                 setOperationDurationStat(aws.operation);
                 aws.operation.complete();
                 break;
@@ -237,7 +235,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         switch (aws.refreshSubStage) {
         case EBS_VOLUMES:
             if (aws.pageNo == 1) {
-                logInfo("Running enumeration service for creation in refresh mode for %s",
+                logInfo("Running creation enumeration in refresh mode for %s",
                         aws.request.resourceReference);
             }
             logFine("Processing page %d ", aws.pageNo);
@@ -312,7 +310,6 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
                     this.context.request.taskReference,
                     exception);
-
         }
 
         @Override
@@ -434,9 +431,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                                     localDisk.documentSelfLink);
 
                         });
-                        this.service.logFine(
-                                "Query result : There are %d disks known to the system.",
-                                qrt.results.documentCount);
+                        this.service.logFine("%d disk states found.", qrt.results.documentCount);
                         this.context.subStage = next;
                         handleReceivedEnumerationData();
                     });
@@ -451,8 +446,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             // No remote disks
             if (this.context.remoteAWSVolumes == null
                     || this.context.remoteAWSVolumes.size() == 0) {
-                this.service.logFine(
-                        "No disks discovered on the remote system. Nothing to be created locally");
+                this.service.logFine("No disks discovered on the remote system.");
                 // no local disks
             } else if (this.context.localDiskStateMap == null
                     || this.context.localDiskStateMap.size() == 0) {

@@ -172,7 +172,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(
                 String nextPageLink) {
-            this.service.logFine("Get SecurityGroups from AWS");
+            this.service.logFine("Getting SecurityGroups from AWS");
             DescribeSecurityGroupsRequest securityGroupsRequest = new DescribeSecurityGroupsRequest();
 
             String msg = "Getting AWS Security Groups [" + this.request.resourceReference + "]";
@@ -460,8 +460,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             createResponse(context).whenComplete(
                     (resp, ex) -> {
                         if (ex != null) {
-                            this.logWarning("Exception thrown while generating response: %s",
-                                    ex.getMessage());
+                            this.logWarning("Exception creating response: %s", ex.getMessage());
                             handleError(context, ex);
                             return;
                         }
@@ -473,8 +472,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             context.operation.fail(context.error);
             break;
         default:
-            String msg = String
-                    .format("Unknown AWS enumeration stage %s ", context.stage.toString());
+            String msg = String.format("Unknown AWS enumeration stage %s ",
+                    context.stage.toString());
             logSevere(msg);
             context.error = new IllegalStateException(msg);
         }

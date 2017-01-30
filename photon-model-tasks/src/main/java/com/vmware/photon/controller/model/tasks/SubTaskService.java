@@ -109,7 +109,7 @@ public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskServic
         } else if (patchBody.taskInfo.stage == TaskStage.STARTED) {
             // don't decrement completions remaining.
         } else {
-            logInfo("ignoring patch from %s", patch.getReferer());
+            logFine("ignoring patch from %s", patch.getReferer());
             // ignore status updates from boot/power services
             patch.complete();
             return;

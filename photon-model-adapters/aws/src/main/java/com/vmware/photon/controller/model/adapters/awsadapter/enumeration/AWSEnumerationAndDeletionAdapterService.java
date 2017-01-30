@@ -161,24 +161,22 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         case ENUMERATE:
             switch (aws.request.enumerationAction) {
             case START:
-                logInfo("Started deletion enumeration for %s",
-                        aws.request.resourceReference);
+                logInfo("Started deletion enumeration for %s", aws.request.resourceReference);
                 aws.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequestForDeletion(aws);
                 break;
             case REFRESH:
-                logInfo("Running enumeration service for deletion in refresh mode for %s",
+                logInfo("Running deletion enumeration in refresh mode for %s",
                         aws.parentCompute.description.environmentName);
                 deleteResourcesInLocalSystem(aws);
                 break;
             case STOP:
-                logInfo("Stopping deletion enumeration service for %s",
-                        aws.request.resourceReference);
+                logInfo("Stopping deletion enumeration for %s", aws.request.resourceReference);
                 setOperationDurationStat(aws.operation);
                 aws.operation.complete();
                 break;
             default:
-                logSevere("Unknown AWS enumeration action %s ",
+                logSevere("Unknown AWS enumeration action %s",
                         aws.request.enumerationAction.toString());
                 Throwable t = new Exception("Unknown AWS enumeration action");
                 signalErrorToEnumerationAdapter(aws, t);
@@ -190,7 +188,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                     aws.request.taskReference, aws.error);
             break;
         default:
-            logSevere("Unknown AWS enumeration stage %s ", aws.stage.toString());
+            logSevere("Unknown AWS enumeration stage %s", aws.stage.toString());
             Throwable t = new Exception("Unknown AWS enumeration stage");
             signalErrorToEnumerationAdapter(aws, t);
             break;
@@ -228,7 +226,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             }
 
             if (aws.instancesToBeDeleted == null || aws.instancesToBeDeleted.size() == 0) {
-                logFine("There are no compute states to be processed in the system");
+                logFine("No local compute states found.");
                 deleteResourcesInLocalSystem(aws);
                 return;
             } else {
@@ -259,7 +257,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     public void getLocalResources(EnumerationDeletionContext context,
             AWSEnumerationDeletionSubStage next) {
         // query all ComputeState resources known to the local system.
-        logFine("Getting local resources for which state has to be re-conciled with the remote system.");
+        logFine("Getting local resources that need to be reconciled with the AWS endpoint.");
         Query query = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
@@ -279,15 +277,13 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         QueryUtils.startQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
-                        logSevere("Failure retrieving query results: %s",
-                                e.toString());
+                        logSevere("Failure retrieving query results: %s", e.toString());
                         signalErrorToEnumerationAdapter(context, e);
                         return;
                     }
 
                     populateLocalInstanceInformationFromQueryResults(context, qrt);
-                    logFine("Got result of the query to get local resources for page No. %d "
-                                    + "There are %d instances known to the system.",
+                    logFine("Got page No. %d of local resources. %d instances found.",
                             context.pageNo, qrt.results.documentCount);
                     context.subStage = next;
                     deleteResourcesInLocalSystem(context);
@@ -308,7 +304,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         }
         context.pageNo++;
         context.nextPageLink = queryTask.results.nextPageLink;
-        logFine("Next page link is %s", context.nextPageLink);
+        logFine("Next page link %s", context.nextPageLink);
         return queryTask;
     }
 
@@ -318,7 +314,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     public void getRemoteInstances(EnumerationDeletionContext aws,
             AWSEnumerationDeletionSubStage next) {
         if (aws.localInstanceIds == null || aws.localInstanceIds.size() == 0) {
-            logFine("There are no local records found for which state needs to be fetched from the remote system.");
+            logFine("No local records found. No states need to be fetched from the AWS endpoint.");
             aws.subStage = next;
             deleteResourcesInLocalSystem(aws);
             return;
@@ -328,11 +324,11 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         request.getFilters().add(runningInstanceFilter);
         // Get only the instances from the remote system for which a compute state exists in the
         // local system.
-        logFine("Fetching instance details for %d instances on the AWS endpoint",
+        logFine("Fetching instance details for %d instances on the AWS endpoint.",
                 aws.localInstanceIds.keySet().size());
         request.getInstanceIds().addAll(new ArrayList<String>(aws.localInstanceIds.keySet()));
-        AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> resultHandler = new AWSEnumerationAsyncHandler(
-                this, aws, next);
+        AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> resultHandler =
+                new AWSEnumerationAsyncHandler(this, aws, next);
         aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
                 aws.parentCompute.description.regionId, this,
                 aws.request.taskReference, true);
@@ -384,7 +380,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                     this.aws.remoteInstanceIds.add(i.getInstanceId());
                 }
             }
-            this.service.logFine("Successfully enumerated %d instances on the AWS host",
+            this.service.logFine("Successfully enumerated %d instances on the AWS host.",
                     totalNumberOfInstances);
             this.aws.subStage = this.next;
             ((AWSEnumerationAndDeletionAdapterService) this.service)
@@ -405,7 +401,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             logFine("No local resources found. Nothing to delete.");
             // No remote instances
         } else if (aws.remoteInstanceIds == null || aws.remoteInstanceIds.size() == 0) {
-            logFine("No resources discovered on the remote system. Everything (if existing) on the local system should be deleted.");
+            logFine("No resources discovered on the remote system. Delete stale local resources.");
             aws.instancesToBeDeleted.addAll(aws.localInstanceIds.values());
             logFine("====Deleting compute state for instance Ids %s ====",
                     aws.localInstanceIds.keySet().toString());
@@ -417,7 +413,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                     logFine("====Deleting compute state for instance Id %s ====", key);
                 }
             }
-            logFine("%d instances need to be deleted from the local system as they have been terminated on the remote endpoint.",
+            logFine("%d local instances to be deleted as they were terminated on the AWS endpoint.",
                     aws.instancesToBeDeleted.size());
         }
         aws.subStage = next;
@@ -464,20 +460,19 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         }
         // Kick off deletion operations with a join handler.
         if (deleteOperations == null || deleteOperations.size() == 0) {
-            logFine("There are no compute states to be deleted from the system.");
+            logFine("No compute states to be deleted.");
             deleteResourcesInLocalSystem(context);
             return;
         }
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
             if (exc != null) {
-                logSevere("Failure deleting compute states from the local system",
-                        Utils.toString(exc));
+                logSevere("Failure deleting local compute states.", Utils.toString(exc));
                 signalErrorToEnumerationAdapter(context, exc.values().iterator().next());
                 return;
 
             }
-            logFine("Successfully deleted compute states and networks from the local system. Proceeding to next state.");
+            logFine("Deleted local compute states and networks.");
             deleteResourcesInLocalSystem(context);
             return;
         };
@@ -508,20 +503,19 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         }
         // Kick off patch operations with a join handler.
         if (operations == null || operations.size() == 0) {
-            logFine("There are no compute states to be deleted from the system.");
+            logFine("No local compute states to be deleted.");
             deleteResourcesInLocalSystem(context);
             return;
         }
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
             if (exc != null) {
-                logSevere("Failure retiring compute states in the local system",
-                        Utils.toString(exc));
+                logSevere("Failure retiring local compute states: %s ", Utils.toString(exc));
                 signalErrorToEnumerationAdapter(context, exc.values().iterator().next());
                 return;
 
             }
-            logFine("Successfully retire compute states in the local system. Proceeding to next state.");
+            logFine("Successfully retired local compute states.");
             deleteResourcesInLocalSystem(context);
             return;
         };
@@ -570,9 +564,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                     }
                     QueryTask responseTask = populateLocalInstanceInformationFromQueryResults(context,
                             o.getBody(QueryTask.class));
-                    logFine("Got page No. %d of local resources. "
-                            + "There are %d instances in this page.", context.pageNo,
-                            responseTask.results.documentCount);
+                    logFine("Got page No. %d of local resources. %d instances in this page.",
+                            context.pageNo, responseTask.results.documentCount);
                     context.subStage = next;
                     deleteResourcesInLocalSystem(context);
                 }));

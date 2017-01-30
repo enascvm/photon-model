@@ -104,7 +104,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     protected void onSuccess(ServiceResponse<RES> result) {
         DeferredResult<RES> consumeSuccess;
         if (this.service != null) {
-            this.service.logInfo(this.message + ": SUCCESS");
+            this.service.logFine(this.message + ": SUCCESS");
         }
         try {
             // First delegate to descendants to process result

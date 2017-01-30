@@ -106,7 +106,7 @@ public abstract class AWSDeferredResultAsyncHandler<REQ extends AmazonWebService
     protected final void handleSuccess(REQ request, RES result) {
         final DeferredResult<RES> consumeSuccess;
         if (this.service != null) {
-            this.service.logInfo(this.message + ": SUCCESS");
+            this.service.logFine(this.message + ": SUCCESS");
         }
         try {
             // First delegate to descendants to process result

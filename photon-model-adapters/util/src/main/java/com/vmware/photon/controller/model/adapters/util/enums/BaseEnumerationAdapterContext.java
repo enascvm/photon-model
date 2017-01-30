@@ -217,7 +217,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * Load local resource states that match the page of remote resources that is being processed.
      */
     protected DeferredResult<T> queryLocalStates(T context) {
-        this.service.logFine("Query local document store.");
+        this.service.logFine("Query local Resource Group States.");
 
         if (context.remoteResources == null || context.remoteResources.isEmpty()) {
             return DeferredResult.completed(context);
@@ -270,8 +270,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * the remote system.
      */
     protected DeferredResult<T> createUpdateLocalResourceStates(T context) {
-        this.service.logFine("Create or update local resource with the actual state from "
-                + "remote system.");
+        this.service.logFine("Create or update local resource to match remote states.");
 
         if (context.remoteResources.isEmpty()) {
             this.service.logFine("No resources available for create/update.");
@@ -359,11 +358,11 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     private void handleDeleteQueryTaskResult(T context, DeferredResult<T> deletionCompletion) {
 
         if (context.deletionNextPageLink == null) {
-            this.service.logFine("Finished deletion stage .");
+            this.service.logFine("Finished deletion stage.");
             deletionCompletion.complete(context);
         }
 
-        this.service.logFine("Querying page [%s] for resources to be deleted",
+        this.service.logFine("Querying page [%s] for resources to be deleted.",
                 context.deletionNextPageLink);
 
         // Delete stale resources but don't wait the deletion to complete, nor fail if
