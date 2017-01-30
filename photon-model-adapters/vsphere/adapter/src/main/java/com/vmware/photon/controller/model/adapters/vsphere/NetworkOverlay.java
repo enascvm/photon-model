@@ -14,6 +14,8 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
+import com.vmware.vim25.NetworkSummary;
 import com.vmware.vim25.ObjectContent;
 
 public class NetworkOverlay extends AbstractOverlay {
@@ -21,11 +23,16 @@ public class NetworkOverlay extends AbstractOverlay {
         super(cont);
         String type = getId().getType();
         if (!type.equals(VimNames.TYPE_NETWORK) &&
+                !type.equals(VimNames.TYPE_OPAQUE_NETWORK) &&
                 !type.equals(VimNames.TYPE_PORTGROUP)) {
             String msg = String.format("Cannot overlay type '%s' on top of %s", type, VimUtils
                     .convertMoRefToString(getId()));
             throw new IllegalArgumentException(msg);
         }
+    }
+
+    public NetworkSummary getSummary() {
+        return (NetworkSummary) getOrDefault(VimPath.net_summary, null);
     }
 
     public String getName() {

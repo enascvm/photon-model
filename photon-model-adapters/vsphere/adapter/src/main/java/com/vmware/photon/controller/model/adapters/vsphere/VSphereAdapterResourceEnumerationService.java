@@ -69,6 +69,7 @@ import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.OpaqueNetworkSummary;
 import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.UpdateSet;
 import com.vmware.vim25.VirtualDeviceBackingInfo;
@@ -643,10 +644,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.instanceAdapterReference = parent.description.instanceAdapterReference;
         state.authCredentialsLink = parent.description.authCredentialsLink;
         state.adapterManagementReference = request.adapterManagementReference;
-        CustomProperties.of(state)
+        CustomProperties custProp = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
+
+        if (net.getSummary() instanceof OpaqueNetworkSummary) {
+            OpaqueNetworkSummary ons = (OpaqueNetworkSummary) net.getSummary();
+            custProp.put(CustomProperties.OPAQUE_NET_ID, ons.getOpaqueNetworkId());
+            custProp.put(CustomProperties.OPAQUE_NET_TYPE, ons.getOpaqueNetworkType());
+        }
 
         return state;
     }

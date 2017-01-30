@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -1682,5 +1682,32 @@ public class VimPath {
 
     /** PropertyType: <code>long</code> */
     public static final String ds_summary_capacity = "summary.capacity";
+
+    /** PropertyType: <code>NetworkSummary</code> */
+    public static final String net_summary = "summary";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String net_summary_accessible = "summary.accessible";
+
+    /** PropertyType: <code>int</code> */
+    public static final String net_summary_ipPoolId = "summary.ipPoolId";
+
+    /** PropertyType: <code>string</code> */
+    public static final String net_summary_name = "summary.name";
+
+    /** PropertyType: <code>string</code> */
+    public static final String net_summary_ipPoolName = "summary.ipPoolName";
+
+    /** PropertyType: <code>ManagedObjectReference</code> */
+    public static final String net_summary_network = "summary.network";
+
+    /** PropertyType: <code>OpaqueNetworkSummary</code> */
+    public static final String opaque_net_summary = "summary";
+
+    /** PropertyType: <code>string</code> */
+    public static final String opaque_net_summary_opaqueNetworkId = "summary.opaqueNetworkId";
+
+    /** PropertyType: <code>string</code> */
+    public static final String opaque_net_summary_opaqueNetworkType = "summary.opaqueNetworkType";
 
 }

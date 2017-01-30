@@ -32,4 +32,5 @@ public class VimNames {
     public static final String TYPE_PERFORMANCE_MANAGER = "PerformanceManager";
     public static final String TYPE_NETWORK = "Network";
     public static final String TYPE_PORTGROUP = "DistributedVirtualPortgroup";
+    public static final String TYPE_OPAQUE_NETWORK = "OpaqueNetwork";
 }

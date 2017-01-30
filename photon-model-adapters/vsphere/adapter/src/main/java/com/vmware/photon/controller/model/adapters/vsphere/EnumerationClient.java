@@ -280,7 +280,8 @@ public class EnumerationClient extends BaseHelper {
         PropertySpec netSpec = new PropertySpec();
         netSpec.setType(VimNames.TYPE_NETWORK);
         netSpec.getPathSet().addAll(Arrays.asList(
-                VimNames.PROPERTY_NAME
+                VimNames.PROPERTY_NAME,
+                VimPath.net_summary
         ));
 
         PropertySpec pgSpec = new PropertySpec();
@@ -361,8 +362,7 @@ public class EnumerationClient extends BaseHelper {
             if (this.result == null) {
                 try {
                     this.result = getVimPort()
-                            .retrievePropertiesEx(this.pc, Collections.singletonList(this.spec),
-                                    this.opts);
+                            .retrievePropertiesEx(this.pc, Collections.singletonList(this.spec), this.opts);
                 } catch (RuntimeException e) {
                     destroyCollectorQuietly(this.pc);
                     throw e;

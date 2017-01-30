@@ -50,6 +50,11 @@ public class CustomProperties {
      */
     public static final String TYPE = "__computeType";
 
+
+    public static final String OPAQUE_NET_ID = "__opaqueNetworkId";
+
+    public static final String OPAQUE_NET_TYPE = "__opaqueNetworkType";
+
     /**
      * During enumeration, this custom property is set to point to the enumeration Task.
      */

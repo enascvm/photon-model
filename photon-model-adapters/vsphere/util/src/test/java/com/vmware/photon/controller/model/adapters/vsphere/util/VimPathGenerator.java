@@ -126,6 +126,8 @@ public final class VimPathGenerator {
         this.roots.put("res:datastore", "ArrayOfManagedObjectReference");
 
         this.roots.put("ds:summary", "DatastoreSummary");
+        this.roots.put("net:summary", "NetworkSummary");
+        this.roots.put("opaque_net:summary", "OpaqueNetworkSummary");
     }
 
     private static class FieldType {
