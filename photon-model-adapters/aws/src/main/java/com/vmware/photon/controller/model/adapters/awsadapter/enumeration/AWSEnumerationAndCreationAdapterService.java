@@ -65,7 +65,6 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -180,8 +179,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
     @Override
     public void handleStart(Operation startPost) {
-        startHelperServices();
-        super.handleStart(startPost);
+        startHelperServices(startPost);
     }
 
     @Override
@@ -212,7 +210,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     /**
      * Starts the related services for the Enumeration Service
      */
-    private void startHelperServices() {
+    private void startHelperServices(Operation startPost) {
         Operation postAWScomputeDescriptionService = Operation
                 .createPost(this.getHost(),
                         AWSComputeDescriptionEnumerationAdapterService.SELF_LINK)
@@ -239,21 +237,12 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         this.getHost().startService(postAWSSecurityGroupStateService,
                 new AWSSecurityGroupEnumerationAdapterService());
 
-        getHost().registerForServiceAvailability(
-                (o, e) -> {
-                    if (e != null) {
-                        String message = "Failed to start up all the services related to the AWS Enumeration Creation Adapter Service";
-                        this.logInfo(message);
-                        throw new IllegalStateException(message);
-                    }
-                    this.logInfo(
-                            "Successfully started up all the services related to the AWS Enumeration Creation Adapter Service");
-                },
+        AdapterUtils.registerForServiceAvailability(getHost(),
+                operation -> startPost.complete(), startPost::fail,
                 AWSComputeDescriptionEnumerationAdapterService.SELF_LINK,
                 AWSComputeStateCreationAdapterService.SELF_LINK,
                 AWSNetworkStateEnumerationAdapterService.SELF_LINK,
-                AWSSecurityGroupEnumerationAdapterService.SELF_LINK
-        );
+                AWSSecurityGroupEnumerationAdapterService.SELF_LINK);
     }
 
     /**

@@ -14,7 +14,10 @@
 package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -232,5 +235,43 @@ public class AdapterUtils {
         if (enumRequest.enumerationAction == null) {
             enumRequest.enumerationAction = EnumerationAction.START;
         }
+    }
+
+    /**
+     * See {@link #registerForServiceAvailability(ServiceHost, Consumer, Consumer, String...)}.
+     */
+    public static void registerForServiceAvailability(ServiceHost host, String... servicePaths) {
+        registerForServiceAvailability(host, null, null, servicePaths);
+    }
+
+    /**
+     * See {@link ServiceHost#registerForServiceAvailability} for more details. This method differs
+     * by giving a single callback for multiple servicePaths.
+     */
+    public static void registerForServiceAvailability(ServiceHost host,
+            Consumer<Operation> onSuccess, Consumer<Throwable> onFailure, String... servicePaths) {
+        AtomicInteger completionCount = new AtomicInteger(0);
+        host.registerForServiceAvailability(
+                (o, e) -> {
+                    if (e != null) {
+                        if (onFailure != null) {
+                            onFailure.accept(e);
+                            return;
+                        }
+
+                        String message = String
+                                .format("Failed waiting for service availability: %s",
+                                        e.getMessage());
+                        host.log(Level.WARNING, message);
+                        throw new IllegalStateException(message);
+                    }
+                    if (completionCount.incrementAndGet() == servicePaths.length) {
+                        host.log(Level.FINE, "Services available: %s",
+                                Arrays.toString(servicePaths));
+                        if (onSuccess != null) {
+                            onSuccess.accept(o);
+                        }
+                    }
+                }, true, servicePaths);
     }
 }

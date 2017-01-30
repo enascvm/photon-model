@@ -70,8 +70,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
 
     @Override
     public void handleStart(Operation startPost) {
-        startHelperServices();
-        super.handleStart(startPost);
+        startHelperServices(startPost);
     }
 
     @Override
@@ -108,7 +107,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
     /**
      * Starts the related services for the Enumeration Service
      */
-    public void startHelperServices() {
+    public void startHelperServices(Operation startPost) {
         Operation patchAWSEnumerationCreationService = Operation
                 .createPatch(this.getHost(), AWSEnumerationAndCreationAdapterService.SELF_LINK)
                 .setReferer(this.getUri());
@@ -128,15 +127,9 @@ public class AWSEnumerationAdapterService extends StatelessService {
         this.getHost().startService(patchAWSStorageEnumerationService,
                 new AWSBlockStorageEnumerationAdapterService());
 
-        getHost().registerForServiceAvailability((o, e) -> {
-            if (e != null) {
-                String message = "Failed to start up all the services related to the AWS Enumeration Adapter Service";
-                this.logInfo(message);
-                throw new IllegalStateException(message);
-            }
-            this.logInfo(
-                    "Successfully started up all the services related to the AWS Enumeration Adapter Service");
-        }, AWSEnumerationAndCreationAdapterService.SELF_LINK,
+        AdapterUtils.registerForServiceAvailability(getHost(),
+                operation -> startPost.complete(), startPost::fail,
+                AWSEnumerationAndCreationAdapterService.SELF_LINK,
                 AWSEnumerationAndDeletionAdapterService.SELF_LINK,
                 AWSBlockStorageEnumerationAdapterService.SELF_LINK);
     }

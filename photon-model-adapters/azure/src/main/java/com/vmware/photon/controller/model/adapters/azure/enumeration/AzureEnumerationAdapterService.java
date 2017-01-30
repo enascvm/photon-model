@@ -16,8 +16,6 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService.AzureEnumerationStages.TRIGGER_RESOURCE_GROUP_ENUMERATION;
 import static com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService.AzureEnumerationStages.TRIGGER_STORAGE_ENUMERATION;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -35,7 +33,6 @@ import com.vmware.xenon.common.StatelessService;
  */
 public class AzureEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_ENUMERATION_ADAPTER;
-    public static final Integer SERVICES_TO_REGISTER = 5;
 
     public AzureEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -70,8 +67,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
 
     @Override
     public void handleStart(Operation startPost) {
-        startHelperServices();
-        super.handleStart(startPost);
+        startHelperServices(startPost);
     }
 
     @Override
@@ -107,7 +103,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
     /**
      * Starts the related services for the Enumeration Service
      */
-    public void startHelperServices() {
+    public void startHelperServices(Operation startPost) {
 
         Operation postComputeEnumAdapterService = Operation
                 .createPost(this, AzureComputeEnumerationAdapterService.SELF_LINK)
@@ -140,17 +136,9 @@ public class AzureEnumerationAdapterService extends StatelessService {
         this.getHost().startService(postResourceGroupEnumAdapterService,
                 new AzureResourceGroupEnumerationAdapterService());
 
-        AtomicInteger completionCount = new AtomicInteger(0);
-        getHost().registerForServiceAvailability((o, e) -> {
-            if (e != null) {
-                String message = "Failed to start up all the services related to the Azure Enumeration Adapter Service";
-                this.logInfo(message);
-                throw new IllegalStateException(message);
-            }
-            if (completionCount.incrementAndGet() == SERVICES_TO_REGISTER) {
-                this.logFine("Successfully started up all Azure Enumeration Adapter Services");
-            }
-        }, AzureComputeEnumerationAdapterService.SELF_LINK,
+        AdapterUtils.registerForServiceAvailability(getHost(),
+                operation -> startPost.complete(), startPost::fail,
+                AzureComputeEnumerationAdapterService.SELF_LINK,
                 AzureStorageEnumerationAdapterService.SELF_LINK,
                 AzureSecurityGroupEnumerationAdapterService.SELF_LINK,
                 AzureNetworkEnumerationAdapterService.SELF_LINK,
