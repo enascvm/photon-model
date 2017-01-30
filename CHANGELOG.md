@@ -2,6 +2,11 @@
 
 ## 0.6.0-SNAPSHOT
 
+* Adding endpointLink to network and subnet lookup query.
+* [vsphere] Enumerate opaque networks.
+* [AWS] Use existing SecurityGroups or create them in case they dont exist.
+* [vsphere] Attach nics to opaque networks.
+
 ## 0.5.9
 
 * Introduce a field environment name in ComputeState. This field is used to
