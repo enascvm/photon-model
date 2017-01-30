@@ -26,7 +26,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -67,10 +66,9 @@ public class PhotonModelAdaptersRegistryServiceTest extends BasicReusableHostTes
                 "testRegisterAdapter",
                 "Test Register Adapter",
                 "testRegisterAdapter.png",
-                AdapterTypePath.ENUMERATION_ADAPTER.path,
-                AdapterTypePath.INSTANCE_ADAPTER.path,
-                AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.path,
-                AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.path + UriPaths.UI_ADAPTER_SUFFIX);
+                AdapterTypePath.ENUMERATION_ADAPTER.key,
+                AdapterTypePath.INSTANCE_ADAPTER.key,
+                AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
 
         Operation registerOp = Operation.createPost(
                 super.host,
@@ -91,8 +89,8 @@ public class PhotonModelAdaptersRegistryServiceTest extends BasicReusableHostTes
                 config.customProperties.get(ICON),
                 registered.customProperties.get(ICON));
         Assert.assertEquals(
-                config.adapterEndpoints.get(AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.path),
-                registered.adapterEndpoints.get(AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.path));
+                config.adapterEndpoints.get(AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key),
+                registered.adapterEndpoints.get(AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key));
     }
 
     @Test

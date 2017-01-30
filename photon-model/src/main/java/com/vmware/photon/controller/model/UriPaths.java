@@ -16,8 +16,6 @@ package com.vmware.photon.controller.model;
 import com.vmware.xenon.common.UriUtils;
 
 /**
- * ServiceUriPaths
- *
  * Service paths used by the photon model.
  */
 public class UriPaths {
@@ -35,33 +33,37 @@ public class UriPaths {
 
     public static final String PROPERTY_PREFIX = "photon-model.";
 
-    /**
-     * key suffix used to specify the UI aspect of given photon-model adapter
-     */
-    public static final String UI_ADAPTER_SUFFIX = "-ui";
-
     public enum AdapterTypePath {
-        INSTANCE_ADAPTER("instance-adapter"),
-        NETWORK_ADAPTER("network-adapter"),
-        FIREWALL_ADAPTER("firewall-adapter"),
-        STATS_ADAPTER("stats-adapter"),
-        BOOT_ADAPTER("boot-adapter"),
-        POWER_ADAPTER("power-adapter"),
-        ENDPOINT_CONFIG_ADAPTER("endpoint-config-adapter"),
-        ENUMERATION_ADAPTER("enumeration-adapter"),
-        ENUMERATION_CREATION_ADAPTER("enumeration-creation-adapter"),
-        ENUMERATION_DELETION_ADAPTER("enumeration-deletion-adapter"),
-        COMPUTE_DESCRIPTION_CREATION_ADAPTER("compute-description-creation-adapter"),
-        COMPUTE_STATE_CREATION_ADAPTER("compute-state-creation-adapter");
+        INSTANCE_ADAPTER("instanceAdapter", "instance-adapter"),
+        NETWORK_ADAPTER("networkAdapter", "network-adapter"),
+        FIREWALL_ADAPTER("firewallAdapter", "firewall-adapter"),
+        STATS_ADAPTER("statsAdapter", "stats-adapter"),
+        BOOT_ADAPTER("bootAdapter", "boot-adapter"),
+        POWER_ADAPTER("powerAdapter", "power-adapter"),
+        ENDPOINT_CONFIG_ADAPTER("endpointConfigAdapter", "endpoint-config-adapter"),
+        ENUMERATION_ADAPTER("enumerationAdapter", "enumeration-adapter"),
+        ENUMERATION_CREATION_ADAPTER("enumerationCreationAdapter", "enumeration-creation-adapter"),
+        ENUMERATION_DELETION_ADAPTER("enumerationDeletionAdapter", "enumeration-deletion-adapter"),
+        COMPUTE_DESCRIPTION_CREATION_ADAPTER("computeDescriptionCreationAdapter", "compute-description-creation-adapter"),
+        COMPUTE_STATE_CREATION_ADAPTER("computeStateCreationAdapter", "compute-state-creation-adapter"),
+        STATIC_CONTENT_ADAPTER("staticContent", "static-content");
 
-        public final String path;
+        /**
+         * endpoint type agnostic key used for transport purposes to identify concrete
+         * AdapterTypePath's
+         */
+        public final String key;
 
-        private AdapterTypePath(String path) {
+        private final String path;
+
+        private AdapterTypePath(String key, String path) {
+            this.key = key;
             this.path = path;
         }
 
         public String adapterLink(String endpointType) {
             return UriUtils.buildUriPath(PROVISIONING, endpointType, this.path);
         }
+
     }
 }
