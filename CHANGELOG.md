@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.1-SNAPSHOT
+
 ## 0.6.0-SNAPSHOT
 
 * Adding endpointLink to network and subnet lookup query.
