@@ -37,8 +37,11 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.TestContext;
@@ -243,13 +246,16 @@ public class ScheduledTaskServiceTest extends Suite {
             this.host.waitFor(
                     "Timeout waiting for enum task execution",
                     () -> {
-                        ScheduledTaskState outputState = this.getServiceSynchronously(UriUtils
+                        ServiceStats taskStats = this.getServiceSynchronously(UriUtils
                                 .buildUriPath(
                                         ScheduledTaskService.FACTORY_LINK,
-                                        periodicTaskState.documentSelfLink),
-                                ScheduledTaskState.class);
-                        if (outputState.documentVersion == expectedInvocations) {
-                            return true;
+                                        periodicTaskState.documentSelfLink,
+                                        ServiceHost.SERVICE_URI_SUFFIX_STATS),
+                                        ServiceStats.class);
+                        if (taskStats.entries.containsKey((ScheduledTaskService.INVOCATION_COUNT))) {
+                            if (taskStats.entries.get(ScheduledTaskService.INVOCATION_COUNT).latestValue >= expectedInvocations) {
+                                return true;
+                            }
                         }
                         return false;
                     });

@@ -35,6 +35,7 @@ import com.vmware.xenon.services.common.TaskService;
  */
 public class ScheduledTaskService extends TaskService<ScheduledTaskService.ScheduledTaskState> {
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/scheduled-tasks";
+    public static final String INVOCATION_COUNT = "invocationCount";
 
     public static class ScheduledTaskState
             extends com.vmware.xenon.services.common.TaskService.TaskServiceState {
@@ -95,6 +96,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                 ScheduledTaskState state = getBody(start);
                 this.setMaintenanceIntervalMicros(state.intervalMicros);
             }
+            setStat(INVOCATION_COUNT, 0);
             start.complete();
             return;
         }
@@ -115,16 +117,11 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
             }
             state.delayMicros = state.delayMicros != null ? state.delayMicros
                     : new Random().longs(1, 0, state.intervalMicros).findFirst().getAsLong();
-            invokeTask(state, false);
+            invokeTask(state);
             start.complete();
         } catch (Throwable e) {
             start.fail(e);
         }
-    }
-
-    @Override
-    public void handlePatch(Operation patch) {
-        patch.complete();
     }
 
     @Override
@@ -140,12 +137,12 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                         return;
                     }
                     ScheduledTaskState state = getOp.getBody(ScheduledTaskState.class);
-                    invokeTask(state, true);
+                    invokeTask(state);
                     maintenanceOp.complete();
                 }));
     }
 
-    private void invokeTask(ScheduledTaskState state, boolean patchToSelf) {
+    private void invokeTask(ScheduledTaskState state) {
         getHost().schedule(() -> {
             Operation op = Operation.createPost(this, state.factoryLink);
             if (getHost().isAuthorizationEnabled() && state.userLink != null) {
@@ -162,6 +159,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                     .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE)
                     .setCompletion(
                             (o, e) -> {
+                                adjustStat(INVOCATION_COUNT, 1);
                                 // if a task instance is already running, just log the fact
                                 if (o.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED) {
                                     logInfo("service instance already running.");
@@ -169,13 +167,6 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                                     logWarning("Scheduled task invocation failed: %s",
                                             e.getMessage());
                                     return;
-                                }
-                                // patch self to update the version; this tells us
-                                // the number of invocations
-                                if (patchToSelf) {
-                                    ScheduledTaskState patchState = new ScheduledTaskState();
-                                    sendRequest(Operation.createPatch(getUri())
-                                            .setBody(patchState));
                                 }
                             }));
         }, state.delayMicros, TimeUnit.MICROSECONDS);
