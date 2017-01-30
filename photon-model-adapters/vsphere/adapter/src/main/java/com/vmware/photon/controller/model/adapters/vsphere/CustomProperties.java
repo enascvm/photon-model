@@ -46,10 +46,9 @@ public class CustomProperties {
     public static final String TEMPLATE_FLAG = "__isTemplate";
 
     /**
-     * Track the compute type as seen from vsphere. Can be vm, cluster or host.
+     * Stores the VIM type of the vSphere entity.
      */
     public static final String TYPE = "__computeType";
-
 
     public static final String OPAQUE_NET_ID = "__opaqueNetworkId";
 
