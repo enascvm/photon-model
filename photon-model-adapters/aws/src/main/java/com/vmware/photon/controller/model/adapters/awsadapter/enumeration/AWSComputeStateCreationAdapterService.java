@@ -192,8 +192,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      *            additional compute states in the local system.
      */
     private void handleComputeStateCreateOrUpdate(AWSComputeStateCreationContext context) {
-
-        this.logInfo("Transition to: %s", context.creationStage);
+        this.logFine("Transition to: %s", context.creationStage);
         switch (context.creationStage) {
         case GET_RELATED_COMPUTE_DESCRIPTIONS:
             getRelatedComputeDescriptions(context,
@@ -309,11 +308,11 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                                     getKeyForComputeDescriptionFromCD(localComputeDescription),
                                     localComputeDescription.documentSelfLink);
                         }
-                        logInfo(
+                        logFine(
                                 "%d compute descriptions already exist in the system that match the supplied criteria. ",
                                 context.computeDescriptionMap.size());
                     } else {
-                        logInfo("No matching compute descriptions exist in the system.");
+                        logFine("No matching compute descriptions exist in the system.");
                     }
                     context.creationStage = next;
                     handleComputeStateCreateOrUpdate(context);
@@ -327,11 +326,11 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             AWSComputeStateCreationStage next) {
         if (context.request.instancesToBeCreated == null
                 || context.request.instancesToBeCreated.size() == 0) {
-            logInfo("No instances need to be created in the local system");
+            logFine("No instances need to be created in the local system");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
         } else {
-            logInfo("Need to CREATE %d compute states in the local system",
+            logFine("Need to CREATE %d compute states in the local system",
                     context.request.instancesToBeCreated.size());
 
             for (int i = 0; i < context.request.instancesToBeCreated.size(); i++) {
@@ -443,11 +442,11 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             AWSComputeStateCreationStage next) {
         if (context.request.instancesToBeUpdated == null
                 || context.request.instancesToBeUpdated.size() == 0) {
-            logInfo("No instances need to be updated in the local system");
+            logFine("No instances need to be updated in the local system");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
         } else {
-            logInfo("Need to UPDATE %d compute states in the local system",
+            logFine("Need to UPDATE %d compute states in the local system",
                     context.request.instancesToBeUpdated.size());
 
             for (String instanceId : context.request.instancesToBeUpdated.keySet()) {
@@ -545,7 +544,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             AWSComputeStateCreationStage next) {
         if (context.enumerationOperations == null
                 || context.enumerationOperations.size() == 0) {
-            logInfo("There are no compute states or networks to be created");
+            logFine("There are no compute states or networks to be created");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
             return;
@@ -559,7 +558,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 finishWithFailure(context, exc.values().iterator().next());
                 return;
             }
-            logInfo("Successfully created all the networks and compute states.");
+            logFine("Successfully created all the networks and compute states.");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
         };

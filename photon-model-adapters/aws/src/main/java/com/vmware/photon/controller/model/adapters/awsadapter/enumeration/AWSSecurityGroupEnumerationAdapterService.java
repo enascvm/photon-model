@@ -173,7 +173,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(
                 String nextPageLink) {
-            this.service.logInfo("Get SecurityGroups from AWS");
+            this.service.logFine("Get SecurityGroups from AWS");
             DescribeSecurityGroupsRequest securityGroupsRequest = new DescribeSecurityGroupsRequest();
 
             String msg = "Getting AWS Security Groups [" + this.request.resourceReference + "]";
@@ -244,7 +244,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
 
         @Override
         protected Query getDeleteQuery() {
-            this.service.logInfo("Get delete query for deleting SecurityGroupStates");
+            this.service.logFine("Get delete query for deleting SecurityGroupStates");
             return Builder.create()
                     .addKindFieldClause(SecurityGroupState.class)
                     .addCompositeFieldClause(

@@ -65,6 +65,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
@@ -323,7 +324,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         }
                     }
 
-                    logInfo("Result of query to get local networks. There are %d network states known to the system.",
+                    logFine("Result of query to get local networks. There are %d network states known to the system.",
                             qrt.results.documentCount);
                     handleNetworkStateChanges(context, next);
                 });
@@ -368,7 +369,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                                     subnetState.documentSelfLink);
                         }
                     }
-                    logInfo("Result of query to get local subnets. There are %d subnet states known to the system.",
+                    logFine("Result of query to get local subnets. There are %d subnet states known to the system.",
                             queryTask.results.documentCount);
 
                     handleNetworkStateChanges(context, next);
@@ -566,7 +567,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
 
         if (context.vpcs.isEmpty()) {
-            logInfo("No new VPCs have been discovered. Nothing to do.");
+            logFine("No new VPCs have been discovered. Nothing to do.");
 
             handleNetworkStateChanges(context, next);
             return;
@@ -601,7 +602,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 finishWithFailure(context, exc);
                 return;
             }
-            logInfo("Successfully created/updated all the network states.");
+            logFine("Successfully created/updated all the network states.");
             ops.values().stream()
                     .filter(op -> op.getStatusCode() != Operation.STATUS_CODE_NOT_MODIFIED)
                     .forEach(op -> {
@@ -624,7 +625,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
 
         if (context.subnets.isEmpty()) {
-            logInfo("No new Subnets have been discovered. Nothing to do.");
+            logFine("No new Subnets have been discovered. Nothing to do.");
             handleNetworkStateChanges(context, next);
             return;
         }
@@ -664,7 +665,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 finishWithFailure(context, exc);
                 return;
             }
-            logInfo("Successfully created/updated all the subnet states.");
+            logFine("Successfully created/updated all the subnet states.");
             ops.values().stream()
                     .filter(op -> op.getStatusCode() != Operation.STATUS_CODE_NOT_MODIFIED)
                     .forEach(op -> {

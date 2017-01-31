@@ -227,12 +227,12 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                                     getKeyForComputeDescriptionFromCD(localComputeDescription),
                                     localComputeDescription.documentSelfLink);
                         }
-                        logInfo(
+                        logFine(
                                 "%d compute descriptions already exist in the system that match the supplied criteria. ",
                                 context.localComputeDescriptionMap.size());
 
                     } else {
-                        logInfo("No matching compute descriptions exist in the system.");
+                        logFine("No matching compute descriptions exist in the system.");
                     }
                     context.creationStage = next;
                     handleComputeDescriptionCreation(context);
@@ -251,10 +251,10 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             AWSComputeDescCreationStage next) {
         if (context.representativeComputeDescriptionSet == null
                 || context.representativeComputeDescriptionSet.size() == 0) {
-            logInfo("No new compute descriptions discovered on the remote system");
+            logFine("No new compute descriptions discovered on the remote system");
         } else if (context.localComputeDescriptionMap == null
                 || context.localComputeDescriptionMap.size() == 0) {
-            logInfo("No compute descriptions found in the local system. Need to create all of them");
+            logFine("No compute descriptions found in the local system. Need to create all of them");
 
             context.representativeComputeDescriptionSet
                     .forEach(cd -> context.computeDescriptionsToBeCreatedList.add(cd));
@@ -263,7 +263,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                     .filter(d -> !context.localComputeDescriptionMap.containsKey(d))
                     .forEach(d -> context.computeDescriptionsToBeCreatedList.add(d));
 
-            logInfo("%d additional compute descriptions are required to be created in the system.",
+            logFine("%d additional compute descriptions are required to be created in the system.",
                     context.computeDescriptionsToBeCreatedList.size());
         }
         context.creationStage = next;
@@ -277,12 +277,12 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             AWSComputeDescCreationStage next) {
         if (context.computeDescriptionsToBeCreatedList == null
                 || context.computeDescriptionsToBeCreatedList.isEmpty()) {
-            logInfo("No compute descriptions needed to be created in the local system");
+            logFine("No compute descriptions needed to be created in the local system");
             context.creationStage = AWSComputeDescCreationStage.SIGNAL_COMPLETION;
             handleComputeDescriptionCreation(context);
             return;
         }
-        logInfo("Need to create %d compute descriptions in the local system",
+        logFine("Need to create %d compute descriptions in the local system",
                 context.computeDescriptionsToBeCreatedList.size());
         context.computeDescriptionsToBeCreatedList.stream()
                 .map(dk -> createComputeDescriptionOperation(dk, context.cdState))
@@ -341,7 +341,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
     private void createComputeDescriptions(AWSComputeDescriptionCreationServiceContext context,
             AWSComputeDescCreationStage next) {
         if (context.createOperations == null || context.createOperations.size() == 0) {
-            logInfo("There are no compute descriptions to be created");
+            logFine("There are no compute descriptions to be created");
             context.creationStage = next;
             handleComputeDescriptionCreation(context);
             return;
@@ -354,7 +354,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
                 finishWithFailure(context, exc.values().iterator().next());
                 return;
             }
-            logInfo("Successfully created all the compute descriptions");
+            logFine("Successfully created all the compute descriptions");
             context.creationStage = next;
             handleComputeDescriptionCreation(context);
         };
