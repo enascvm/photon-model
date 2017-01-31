@@ -177,15 +177,18 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
 
             if (localResourceGroupState != null) {
                 resultResourceGroupState.documentSelfLink = localResourceGroupState.documentSelfLink;
-            } else {
-                resultResourceGroupState.customProperties = new HashMap<>();
-                resultResourceGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME,
-                        this.parentCompute.documentSelfLink);
+            }
+
+            resultResourceGroupState.customProperties = new HashMap<>();
+            resultResourceGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME,
+                    this.parentCompute.documentSelfLink);
+
+            if (this.request.endpointLink != null) {
                 resultResourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
                         this.request.endpointLink);
-                resultResourceGroupState.customProperties.put(RESOURCE_TYPE_KEY,
-                        ResourceGroupStateType.AzureResourceGroup.name());
             }
+            resultResourceGroupState.customProperties.put(RESOURCE_TYPE_KEY,
+                    ResourceGroupStateType.AzureResourceGroup.name());
 
             resultResourceGroupState.name = remoteResourceGroup.name;
             resultResourceGroupState.tenantLinks = this.parentCompute.tenantLinks;

@@ -698,7 +698,9 @@ public class EndpointAllocationTaskService
             authState.customProperties.putAll(state.customProperties);
         }
         authState.customProperties.put(CUSTOM_PROP_ENPOINT_TYPE, state.endpointType);
-        authState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK, state.documentSelfLink);
+        if (state.documentSelfLink != null) {
+            authState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK, state.documentSelfLink);
+        }
 
         return authState;
     }

@@ -638,8 +638,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, keys.getBody().getKey1());
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, keys.getBody().getKey2());
             storageAuth.tenantLinks = context.parentCompute.tenantLinks;
-            storageAuth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
-                    context.request.endpointLink);
+            if (context.request.endpointLink != null) {
+                storageAuth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+                        context.request.endpointLink);
+            }
 
             Operation storageAuthOp = Operation
                     .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
@@ -987,8 +989,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             resourceGroupState.groupLinks.add(storageLink);
         }
         resourceGroupState.customProperties = new HashMap<>();
-        resourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
-                context.request.endpointLink);
+        if (context.request.endpointLink != null) {
+            resourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+                    context.request.endpointLink);
+        }
         resourceGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
         resourceGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED,
                 container.getProperties().getLastModified().toString());
@@ -998,14 +1002,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 container.getProperties().getLeaseStatus().toString());
         resourceGroupState.customProperties.put(ComputeProperties.RESOURCE_TYPE_KEY,
                 ResourceGroupStateType.AzureStorageContainer.name());
+        resourceGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME,
+                context.parentCompute.documentSelfLink);
+        resourceGroupState.tenantLinks = context.parentCompute.tenantLinks;
 
         if (oldResourceGroupState != null) {
             resourceGroupState.documentSelfLink = oldResourceGroupState.documentSelfLink;
-        } else {
-            resourceGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME,
-                    context.parentCompute.documentSelfLink);
-            resourceGroupState.tenantLinks = context.parentCompute.tenantLinks;
         }
+
         return resourceGroupState;
     }
 

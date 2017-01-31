@@ -860,8 +860,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             auth.documentSelfLink = UUID.randomUUID().toString();
             auth.tenantLinks = ctx.parentCompute.tenantLinks;
             auth.customProperties = new HashMap<>();
-            auth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
-                    ctx.request.endpointLink);
+            if (ctx.request.endpointLink != null) {
+                auth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK, ctx.request.endpointLink);
+            }
 
             String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
                     auth.documentSelfLink);
