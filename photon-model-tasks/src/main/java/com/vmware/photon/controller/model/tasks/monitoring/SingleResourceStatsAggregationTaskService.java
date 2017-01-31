@@ -329,7 +329,7 @@ public class SingleResourceStatsAggregationTaskService extends
         sendRequest(Operation.createGet(statsUri)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logInfo("Could not get stats for resource: %s, error: %s",
+                        logWarning("Could not get stats for resource: %s, error: %s",
                                 currentState.resourceLink, e.getMessage());
                         // get the value based on a query.
                         getLastRollupTimeFromQuery(currentState, lastUpdateMap);

@@ -586,6 +586,9 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                         for (String key : resp.statsList.get(0).statValues.keySet()) {
                             List<ServiceStat> stats = resp.statsList.get(0).statValues.get(key);
                             for (ServiceStat stat : stats) {
+                                if (stat == null) {
+                                    continue;
+                                }
                                 resourceMetric.entries.put(key, stat.latestValue);
                             }
                         }

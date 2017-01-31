@@ -37,7 +37,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
-import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 
 import java.io.IOException;
 import java.net.URI;
@@ -272,7 +272,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             switch (context.request.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
-                    logInfo("Enumeration service has already been started for %s", enumKey);
+                    logWarning("Enumeration service has already been started for %s", enumKey);
 
                     return;
                 }
@@ -540,7 +540,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private void updateStorageDescriptions(StorageEnumContext context, StorageEnumStages next) {
         if (context.storageDescriptions.size() == 0) {
-            logInfo("No storage descriptions available for update");
+            logFine("No storage descriptions available for update");
             context.subStage = next;
             handleSubStage(context);
             return;
@@ -579,7 +579,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         }
 
                         if (numOfUpdates.decrementAndGet() == 0) {
-                            logInfo("Finished updating storage descriptions");
+                            logFine("Finished updating storage descriptions");
                             context.subStage = StorageEnumStages.CREATE_STORAGE_DESCRIPTIONS;
                             handleSubStage(context);
                         }
@@ -600,7 +600,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 handleSubStage(context);
                 return;
             }
-            logInfo("No storage account found for creation");
+            logFine("No storage account found for creation");
             context.subStage = next;
             handleSubStage(context);
             return;
@@ -639,7 +639,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, keys.getBody().getKey2());
             storageAuth.tenantLinks = context.parentCompute.tenantLinks;
             if (context.request.endpointLink != null) {
-                storageAuth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+                storageAuth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
                         context.request.endpointLink);
             }
 
@@ -685,7 +685,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         }
 
                         if (size.decrementAndGet() == 0) {
-                            logInfo("Finished creating storage descriptions");
+                            logFine("Finished creating storage descriptions");
                             context.subStage = StorageEnumStages.DELETE_STORAGE_DESCRIPTIONS;
                             handleSubStage(context);
                         }
@@ -737,7 +737,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         return;
                     }
                     if (queryTask.results.nextPageLink == null) {
-                        logInfo("No storage accounts found for deletion");
+                        logFine("No storage accounts found for deletion");
                         context.subStage = next;
                         handleSubStage(context);
                         return;
@@ -750,7 +750,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private void deleteStorageDescriptionHelper(StorageEnumContext context) {
         if (context.deletionNextPageLink == null) {
-            logInfo("Finished deletion of storage descriptions for Azure");
+            logFine("Finished deletion of storage descriptions for Azure");
             context.subStage = StorageEnumStages.GET_STORAGE_CONTAINERS;
             handleSubStage(context);
             return;
@@ -809,7 +809,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     public void getStorageContainers(StorageEnumContext context, StorageEnumStages next) {
         if (context.allStorageAccounts.size() == 0) {
-            logInfo("No storage description available - clean up all resources");
+            logFine("No storage description available - clean up all resources");
             context.subStage = StorageEnumStages.DELETE_RESOURCE_GROUP_STATES;
             handleSubStage(context);
             return;
@@ -908,7 +908,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private void updateResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
         if (context.resourceGroupStates.size() == 0) {
-            logInfo("No resource group states available for update");
+            logFine("No resource group states available for update");
             context.subStage = next;
             handleSubStage(context);
             return;
@@ -990,7 +990,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
         resourceGroupState.customProperties = new HashMap<>();
         if (context.request.endpointLink != null) {
-            resourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+            resourceGroupState.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
                     context.request.endpointLink);
         }
         resourceGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
@@ -1027,7 +1027,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     }
 
                     if (size.decrementAndGet() == 0) {
-                        logInfo("Finished updating resource group states");
+                        logFine("Finished updating resource group states");
                         context.subStage = StorageEnumStages.CREATE_RESOURCE_GROUP_STATES;
                         handleSubStage(context);
                     }
@@ -1042,7 +1042,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private void createResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
         if (context.storageContainers.size() == 0) {
-            logInfo("No storage container found for creation");
+            logFine("No storage container found for creation");
             context.subStage = next;
             handleSubStage(context);
             return;
@@ -1073,7 +1073,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     }
 
                     if (size.decrementAndGet() == 0) {
-                        logInfo("Finished creating resource group states");
+                        logFine("Finished creating resource group states");
                         context.subStage = StorageEnumStages.DELETE_RESOURCE_GROUP_STATES;
                         handleSubStage(context);
                     }
@@ -1124,7 +1124,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         return;
                     }
                     if (queryTask.results.nextPageLink == null) {
-                        logInfo("No storage containers found for deletion");
+                        logFine("No storage containers found for deletion");
                         context.subStage = next;
                         handleSubStage(context);
                         return;
@@ -1137,7 +1137,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private void deleteResourceGroupHelper(StorageEnumContext context) {
         if (context.deletionNextPageLink == null) {
-            logInfo("Finished deletion of resource group states for Azure");
+            logFine("Finished deletion of resource group states for Azure");
             context.subStage = StorageEnumStages.GET_BLOBS;
             handleSubStage(context);
             return;
@@ -1195,7 +1195,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         // If no storage accounts exist in Azure, no disks exist either
         // Move on to disk deletion stage
         if (context.storageAccountIds.size() == 0) {
-            logInfo("No storage description available - clean up all local disks");
+            logFine("No storage description available - clean up all local disks");
             context.subStage = StorageEnumStages.DELETE_DISK_STATES;
             handleSubStage(context);
             return;
@@ -1320,7 +1320,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private void updateDiskStates(StorageEnumContext context, StorageEnumStages next) {
         if (context.diskStates.size() == 0) {
-            logInfo("No disk states found for update");
+            logFine("No disk states found for update");
             context.subStage = next;
             handleSubStage(context);
             return;
@@ -1416,7 +1416,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     }
 
                     if (size.decrementAndGet() == 0) {
-                        logInfo("Finished updating disk states");
+                        logFine("Finished updating disk states");
                         context.subStage = StorageEnumStages.CREATE_DISK_STATES;
                         handleSubStage(context);
                     }
@@ -1433,7 +1433,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private void createDiskStates(StorageEnumContext context, StorageEnumStages next) {
         if (context.storageBlobs.size() == 0) {
-            logInfo("No disk states found for creation");
+            logFine("No disk states found for creation");
             context.subStage = next;
             handleSubStage(context);
             return;
@@ -1502,7 +1502,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     }
 
                     if (size.decrementAndGet() == 0) {
-                        logInfo("Finished creating disk states");
+                        logFine("Finished creating disk states");
                         context.subStage = StorageEnumStages.DELETE_DISK_STATES;
                         handleSubStage(context);
                     }
@@ -1563,7 +1563,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         return;
                     }
                     if (queryTask.results.nextPageLink == null) {
-                        logInfo("No disk states found for deletion");
+                        logFine("No disk states found for deletion");
                         context.subStage = next;
                         handleSubStage(context);
                         return;
@@ -1576,7 +1576,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private void deleteDisksHelper(StorageEnumContext context) {
         if (context.deletionNextPageLink == null) {
-            logInfo("Finished deletion of disk states for Azure");
+            logFine("Finished deletion of disk states for Azure");
             context.subStage = StorageEnumStages.FINISHED;
             handleSubStage(context);
             return;

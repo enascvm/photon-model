@@ -98,7 +98,7 @@ public class QueryUtils {
         protected final Class<T> documentClass;
         protected final List<String> tenantLinks;
 
-        protected Level level = Level.INFO;
+        protected Level level = Level.FINE;
         protected String msg;
 
         /**

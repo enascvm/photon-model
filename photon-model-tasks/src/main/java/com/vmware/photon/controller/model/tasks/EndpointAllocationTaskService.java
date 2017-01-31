@@ -14,7 +14,7 @@
 package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.ComputeProperties.ENDPOINT_LINK_PROP_NAME;
-import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.getAdapterUri;
 import static com.vmware.photon.controller.model.tasks.TaskUtils.sendFailurePatch;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
@@ -699,7 +699,7 @@ public class EndpointAllocationTaskService
         }
         authState.customProperties.put(CUSTOM_PROP_ENPOINT_TYPE, state.endpointType);
         if (state.documentSelfLink != null) {
-            authState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK, state.documentSelfLink);
+            authState.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK, state.documentSelfLink);
         }
 
         return authState;

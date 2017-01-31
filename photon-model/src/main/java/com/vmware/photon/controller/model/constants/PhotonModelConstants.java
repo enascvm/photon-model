@@ -109,5 +109,5 @@ public class PhotonModelConstants {
         vsphere;
     }
 
-    public static final String CUSTOM_PROP_ENPOINT_LINK = "__endpointLink";
+    public static final String CUSTOM_PROP_ENDPOINT_LINK = "__endpointLink";
 }

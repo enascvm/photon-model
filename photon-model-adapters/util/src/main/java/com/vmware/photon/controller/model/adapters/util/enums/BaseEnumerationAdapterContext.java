@@ -199,7 +199,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             return createUpdateLocalResourceStates(self())
                     .thenCompose(c -> {
                         if (c.enumNextPageLink != null) {
-                            this.service.logInfo("Fetch the next page remote resources.");
+                            this.service.logFine("Fetch the next page remote resources.");
                             return enumerate(BaseEnumerationAdapterStage.GET_REMOTE_RESOURCES);
                         } else {
                             return enumerate(BaseEnumerationAdapterStage.DELETE_LOCAL_STATES);
@@ -217,7 +217,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * Load local resource states that match the page of remote resources that is being processed.
      */
     protected DeferredResult<T> queryLocalStates(T context) {
-        this.service.logInfo("Query Resource Group States from local document store.");
+        this.service.logFine("Query local document store.");
 
         if (context.remoteResources == null || context.remoteResources.isEmpty()) {
             return DeferredResult.completed(context);
@@ -227,6 +227,15 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                 .addKindFieldClause(this.localStateClass)
                 .addInClause(ResourceState.FIELD_NAME_ID, context.remoteResources.keySet())
                 .build();
+
+        if (context.parentCompute.tenantLinks != null && !context.parentCompute.tenantLinks
+                .isEmpty()) {
+            query.addBooleanClause(Query.Builder.create()
+                    .addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS,
+                            context.parentCompute.tenantLinks)
+                    .build()
+            );
+        }
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
@@ -261,11 +270,11 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * the remote system.
      */
     protected DeferredResult<T> createUpdateLocalResourceStates(T context) {
-        this.service.logInfo("Create or update local resource with the actual state from "
+        this.service.logFine("Create or update local resource with the actual state from "
                 + "remote system.");
 
         if (context.remoteResources.isEmpty()) {
-            this.service.logInfo("No resources available for create/update.");
+            this.service.logFine("No resources available for create/update.");
             return DeferredResult.completed(context);
         }
 
@@ -320,9 +329,10 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * Delete stale local resource states.
      */
     protected DeferredResult<T> deleteLocalStates(T context) {
-        this.service.logInfo("Delete Resource Group States that no longer exists in the Cloud.");
+        this.service.logFine("Delete Resource Group States that no longer exists in the Cloud.");
         Query query = getDeleteQuery();
         QueryTask q = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
                 .setResultLimit(DEFAULT_QUERY_RESULT_LIMIT)
                 .build();
@@ -349,7 +359,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     private void handleDeleteQueryTaskResult(T context, DeferredResult<T> deletionCompletion) {
 
         if (context.deletionNextPageLink == null) {
-            this.service.logInfo("Finished deletion stage .");
+            this.service.logFine("Finished deletion stage .");
             deletionCompletion.complete(context);
         }
 
@@ -367,6 +377,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                         // Delete all matching states.
                         List<DeferredResult<Operation>> deferredResults = queryTask.results.documentLinks
                                 .stream()
+                                .filter(link -> shouldDelete(queryTask, link))
                                 .map(link -> Operation.createDelete(this.service, link))
                                 .map(this.service::sendWithDeferredResult)
                                 .collect(Collectors.toList());
@@ -388,5 +399,12 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                     handleDeleteQueryTaskResult(context, deletionCompletion);
 
                 });
+    }
+
+    /**
+     * Checks whether the link should be deleted.
+     */
+    protected boolean shouldDelete(QueryTask queryTask, String link) {
+        return true;
     }
 }

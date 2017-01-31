@@ -114,7 +114,7 @@ public class AzureTestUtil {
 
     // If you change the number of NICs, please do so with the CIDRs!
     public static final int NUMBER_OF_NICS = 2;
-    public static final String AZURE_NETWORK_NAME = "vNet";
+    public static final String AZURE_NETWORK_NAME = generateName("vNet-");
     public static final String AZURE_SECURITY_GROUP_NAME = "NSG-name";
     public static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
     public static final String AZURE_SUBNET_NAME = "subnet";

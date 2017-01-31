@@ -19,8 +19,9 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_RESOURCE_GROUPS_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_REST_API_VERSION;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
-import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -45,6 +46,8 @@ import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAda
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -54,8 +57,8 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
-import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * Enumeration adapter for data collection of Azure resource groups.
@@ -145,27 +148,111 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
 
         @Override
         protected Query getDeleteQuery() {
-            String rgTypeProperty = QuerySpecification
-                    .buildCompositeFieldName(
-                            ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                            ComputeProperties.RESOURCE_TYPE_KEY);
+            String rgTypeProperty = QuerySpecification.buildCompositeFieldName(
+                    ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                    ComputeProperties.RESOURCE_TYPE_KEY);
 
             String computeHostProperty = QuerySpecification.buildCompositeFieldName(
                     ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME);
 
-            return Builder.create()
+            Query query = Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
-                    .addFieldClause(computeHostProperty,
-                            this.parentCompute.documentSelfLink)
+                    .addFieldClause(computeHostProperty, this.parentCompute.documentSelfLink)
                     .addFieldClause(rgTypeProperty,
                             ResourceGroupStateType.AzureResourceGroup.name())
-                    .addInClause(ResourceGroupState.FIELD_NAME_ID, this.resourceGroupIds, Occurance
-                            .MUST_NOT_OCCUR)
                     .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
                             QueryTask.NumericRange
                                     .createLessThanRange(this.enumerationStartTimeInMicros))
                     .build();
+
+            if (this.request.endpointLink != null && !this.request.endpointLink.isEmpty()) {
+                query.addBooleanClause(Query.Builder.create()
+                        .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                CUSTOM_PROP_ENDPOINT_LINK, this.request.endpointLink)
+                        .build());
+            }
+
+            if (this.parentCompute.tenantLinks != null
+                    && !this.parentCompute.tenantLinks.isEmpty()) {
+                query.addBooleanClause(Query.Builder.create()
+                        .addInCollectionItemClause(ResourceGroupState.FIELD_NAME_TENANT_LINKS,
+                                this.parentCompute.tenantLinks)
+                        .build());
+            }
+
+            return query;
+        }
+
+        @Override
+        protected boolean shouldDelete(QueryTask queryTask, String link) {
+            ResourceGroupState rg = Utils
+                    .fromJson(queryTask.results.documents.get(link), ResourceGroupState.class);
+            if (this.resourceGroupIds.contains(rg.id)) {
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        protected DeferredResult<ResourceGroupEnumContext> queryLocalStates(
+                ResourceGroupEnumContext context) {
+            if (context.remoteResources == null || context.remoteResources.isEmpty()) {
+                return DeferredResult.completed(context);
+            }
+
+            Query query = Query.Builder.create()
+                    .addKindFieldClause(ResourceGroupState.class)
+                    .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+                            this.parentCompute.documentSelfLink)
+                    .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            ComputeProperties.RESOURCE_TYPE_KEY,
+                            ResourceGroupStateType.AzureResourceGroup.name())
+                    .addInClause(ResourceGroupState.FIELD_NAME_ID, context.remoteResources.keySet())
+                    .build();
+
+            if (this.request.endpointLink != null && !this.request.endpointLink.isEmpty()) {
+                query.addBooleanClause(Query.Builder.create()
+                        .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                CUSTOM_PROP_ENDPOINT_LINK, this.request.endpointLink)
+                        .build());
+            }
+
+            if (context.parentCompute.tenantLinks != null && !context.parentCompute.tenantLinks
+                    .isEmpty()) {
+                query.addBooleanClause(Query.Builder.create()
+                        .addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS,
+                                context.parentCompute.tenantLinks)
+                        .build());
+            }
+
+            QueryTask q = QueryTask.Builder.createDirectTask()
+                    .addOption(QueryOption.EXPAND_CONTENT)
+                    .addOption(QueryOption.TOP_RESULTS)
+                    .setResultLimit(getQueryResultLimit())
+                    .setQuery(query)
+                    .build();
+            q.tenantLinks = context.parentCompute.tenantLinks;
+
+            return QueryUtils.startQueryTask(this.service, q)
+                    .thenApply(queryTask -> {
+                        this.service
+                                .logFine("Found %d matching resource group states for Cloud resources.",
+                                        queryTask.results.documentCount);
+
+                        // If there are no matches, there is nothing to update.
+                        if (queryTask.results != null && queryTask.results.documentCount > 0) {
+                            queryTask.results.documents.values().forEach(localResourceState -> {
+                                ResourceGroupState localState = Utils.fromJson(localResourceState,
+                                        ResourceGroupState.class);
+                                context.localResourceStates.put(localState.id,
+                                        localState);
+                            });
+                        }
+
+                        return context;
+                    });
         }
 
         @Override
@@ -184,7 +271,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                     this.parentCompute.documentSelfLink);
 
             if (this.request.endpointLink != null) {
-                resultResourceGroupState.customProperties.put(CUSTOM_PROP_ENPOINT_LINK,
+                resultResourceGroupState.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
                         this.request.endpointLink);
             }
             resultResourceGroupState.customProperties.put(RESOURCE_TYPE_KEY,

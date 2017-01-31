@@ -21,7 +21,7 @@ import static org.junit.Assert.assertNotNull;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
-import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 
 import java.util.Collections;
 import java.util.EnumSet;
@@ -315,7 +315,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         auth.privateKey = "pass";
         auth.customProperties = new HashMap<>();
         auth.tenantLinks = tenantLinks;
-        auth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK, endpointLink);
+        auth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK, endpointLink);
         AuthCredentialsServiceState authCreds = test
                 .postServiceSynchronously(AuthCredentialsService.FACTORY_LINK, auth,
                         AuthCredentialsServiceState.class);
@@ -335,7 +335,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
 
         // query for document that have the endpointLink field as a custom property
         String computeHostCompositeField = QueryTask.QuerySpecification
-                .buildCompositeFieldName(CUSTOM_PROP_ENPOINT_LINK,
+                .buildCompositeFieldName(CUSTOM_PROP_ENDPOINT_LINK,
                         ComputeProperties.ENDPOINT_LINK_PROP_NAME);
         endpointLinkFilter = new QueryTask.Query()
                 .setTermPropertyName(computeHostCompositeField)

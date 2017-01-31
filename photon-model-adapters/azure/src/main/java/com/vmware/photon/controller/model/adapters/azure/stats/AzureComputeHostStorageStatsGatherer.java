@@ -319,7 +319,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                         }
 
                         public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
-                            logInfo("Retrieved the storage account keys for storage account [%s].",
+                            logFine("Retrieved the storage account keys for storage account [%s].",
                                     account.getValue().name);
                             accountsCount.decrementAndGet();
                             StorageAccountKeys keys = result.getBody();

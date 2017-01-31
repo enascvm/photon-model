@@ -83,6 +83,9 @@ public class SecurityGroupService extends StatefulService {
      * Security Group State document.
      */
     public static class SecurityGroupState extends ResourceState {
+        public static final String FIELD_NAME_AUTH_CREDENTIAL_LINK = "authCredentialsLink";
+        public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
+
         /**
          * Region identifier of this security group service instance.
          */

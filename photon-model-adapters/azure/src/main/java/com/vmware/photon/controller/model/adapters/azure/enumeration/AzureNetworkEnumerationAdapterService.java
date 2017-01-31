@@ -58,7 +58,6 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService.Resourc
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -69,7 +68,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
-import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
@@ -125,9 +123,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Network States stored in local document store.
         // key -> Network State id (matching Azure Virtual Network id); value -> Network State
         Map<String, NetworkState> networkStates = new ConcurrentHashMap<>();
-        // Stores the link to NetworkStates that created/updated/deleted in the current enumeration
+        // Stores the link to NetworkStates that were deleted in the current enumeration
         // in the local document store. This list is used during SubnetStates deletion.
-        List<String> modifiedNetworksLinks = new ArrayList<>();
+        List<String> deletedNetworkLinks = new ArrayList<>();
         // Stores the map of resource groups state ids to document self links.
         // key -> resource group id; value - link to the local ResourceGroupState object.
         Map<String, String> resourceGroupStates = new ConcurrentHashMap<>();
@@ -255,7 +253,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             switch (context.request.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
-                    logInfo("Enumeration service has already been started for %s", enumKey);
+                    logWarning("Enumeration service has already been started for %s", enumKey);
                     handleSubStage(context, NetworkEnumStages.FINISHED);
                     return;
                 }
@@ -380,7 +378,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * description.
      */
     private void getVirtualNetworks(NetworkEnumContext context, NetworkEnumStages next) {
-        logInfo("Enumerating Virtual Networks from Azure.");
+        logFine("Enumerating Virtual Networks from Azure.");
 
         URI uri;
         if (context.enumNextPageLink == null) {
@@ -446,7 +444,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * structures holding Azure Subnets data.
      */
     private void getSubnets(NetworkEnumContext context, NetworkEnumStages next) {
-        logInfo("Enumerating Subnets from Azure.");
+        logFine("Enumerating Subnets from Azure.");
 
         context.virtualNetworks.values().forEach(virtualNetwork -> {
             if (virtualNetwork.properties.subnets != null) {
@@ -507,10 +505,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         Query query = Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
-                .addFieldClause(computeHostProperty,
-                        context.parentCompute.documentSelfLink)
-                .addFieldClause(rgTypeProperty,
-                        ResourceGroupStateType.AzureResourceGroup.name())
+                .addFieldClause(computeHostProperty, context.parentCompute.documentSelfLink)
+                .addFieldClause(rgTypeProperty, ResourceGroupStateType.AzureResourceGroup.name())
                 .addInClause(ResourceGroupState.FIELD_NAME_ID, resourceGroupIds)
                 .build();
 
@@ -545,7 +541,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * virtual networks.
      */
     private void queryNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logInfo("Query Network States from local document store.");
+        logFine("Query Network States from local document store.");
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
@@ -587,12 +583,32 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * subnets.
      */
     private void querySubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logInfo("Query Subnet States from local document store.");
+        if (context.subnets == null || context.subnets.isEmpty()) {
+            handleSubStage(context, next);
+            return;
+        }
 
+        logFine("Query Subnet States from local document store.");
         Query query = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
-                .addInClause(NetworkState.FIELD_NAME_ID, context.subnets.keySet())
+                .addInClause(SubnetState.FIELD_NAME_ID, context.subnets.keySet())
                 .build();
+
+        if (context.request.endpointLink != null && !context.request.endpointLink.isEmpty()) {
+            query.addBooleanClause(Query.Builder.create()
+                    .addFieldClause(SubnetState.FIELD_NAME_ENDPOINT_LINK,
+                            context.request.endpointLink)
+                    .build());
+        }
+
+        if (context.parentCompute.tenantLinks != null
+                && !context.parentCompute.tenantLinks.isEmpty()) {
+            // Add tenant links to reduce the result set size
+            query.addBooleanClause(Query.Builder.create()
+                    .addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
+                            context.parentCompute.tenantLinks)
+                    .build());
+        }
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
@@ -630,10 +646,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * Azure.
      */
     private void createUpdateNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logInfo("Create or update Network States with the actual state in Azure.");
+        logFine("Create or update Network States with the actual state in Azure.");
 
         if (context.virtualNetworks.size() == 0) {
-            logInfo("No virtual networks available for create/update.");
+            logFine("No virtual networks available for create/update.");
             handleSubStage(context, next);
             return;
         }
@@ -663,7 +679,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         }
 
                         context.networkStates.put(result.id, result);
-                        context.modifiedNetworksLinks.add(result.documentSelfLink);
                     };
 
                     return existingNetworkState != null ?
@@ -682,7 +697,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             // any potential operation failures. They are already logged at individual operation
             // level.
 
-            logInfo("Finished updating network states");
+            logFine("Finished updating network states");
 
             handleSubStage(context, next);
         }).sendWith(this);
@@ -694,7 +709,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      */
     private void createUpdateSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
         if (context.subnets.size() == 0) {
-            logInfo("No network states available for update.");
+            logFine("No subnet states available for update.");
             handleSubStage(context, next);
             return;
         }
@@ -746,16 +761,15 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     });
 
             if (context.enumNextPageLink != null) {
-                logInfo("Fetch the next page Virtual Networks from Azure.");
+                logFine("Fetch the next page Virtual Networks from Azure.");
                 handleSubStage(context, NetworkEnumStages.GET_VNETS);
                 return;
             }
 
-            logInfo("Finished updating network states");
+            logFine("Finished updating subnet states");
 
             handleSubStage(context, next);
-        })
-                .sendWith(this);
+        }).sendWith(this);
     }
 
     /**
@@ -793,10 +807,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Add gateway as custom property in case gateway is defined
         String gatewayId = AzureUtils.getVirtualNetworkGatewayId(azureVirtualNetwork);
         if (gatewayId != null) {
-            resultNetworkState.customProperties = Collections.singletonMap(ComputeProperties
-                            .FIELD_VIRTUAL_GATEWAY,
-                    gatewayId);
-            logInfo("Added Gateway %s for Network State %s.", gatewayId, resultNetworkState.name);
+            resultNetworkState.customProperties = Collections.singletonMap(
+                    ComputeProperties.FIELD_VIRTUAL_GATEWAY, gatewayId);
+            logFine("Added Gateway %s for Network State %s.", gatewayId, resultNetworkState.name);
         }
 
         // TODO: There is no Azure Network Adapter Service. Add a default reference since this is
@@ -827,20 +840,34 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * lookup resources which haven't been touched as part of current enumeration cycle.
      */
     private void deleteNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logInfo("Delete Network States that no longer exists in Azure.");
+        logFine("Delete Network States that no longer exists in Azure.");
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
                 .addFieldClause(NetworkState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                         context.parentCompute.description.authCredentialsLink)
-                .addInClause(ResourceGroupState.FIELD_NAME_ID, context.virtualNetworkIds, Occurance
-                        .MUST_NOT_OCCUR)
                 .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros))
                 .build();
 
+        if (context.request.endpointLink != null && !context.request.endpointLink.isEmpty()) {
+            query.addBooleanClause(Query.Builder.create()
+                    .addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK,
+                            context.request.endpointLink)
+                    .build());
+        }
+
+        if (context.parentCompute.tenantLinks != null
+                && !context.parentCompute.tenantLinks.isEmpty()) {
+            query.addBooleanClause(Query.Builder.create()
+                    .addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
+                            context.parentCompute.tenantLinks)
+                    .build());
+        }
+
         QueryTask q = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
                 .setResultLimit(getQueryResultLimit())
                 .build();
@@ -848,8 +875,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         logFine("Querying Network States for deletion.");
 
-        // Add deleted NetworkStates to the modified networks list.
-        sendDeleteQueryTask(q, context, next, context.modifiedNetworksLinks::add);
+        // Add deleted NetworkStates to the list.
+        sendDeleteQueryTask(q, context, next, context.deletedNetworkLinks::add);
     }
 
     /**
@@ -862,14 +889,28 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void deleteSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
         Query query = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
-                .addInClause(SubnetState.FIELD_NAME_NETWORK_LINK, context.modifiedNetworksLinks)
-                .addInClause(ResourceGroupState.FIELD_NAME_ID, context.virtualNetworkIds, Occurance
-                        .MUST_NOT_OCCUR)
-                .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
+                .addRangeClause(SubnetState.FIELD_NAME_UPDATE_TIME_MICROS,
                         QueryTask.NumericRange
                                 .createLessThanRange(context.enumerationStartTimeInMicros))
                 .build();
+
+        if (context.request.endpointLink != null && !context.request.endpointLink.isEmpty()) {
+            query.addBooleanClause(Query.Builder.create()
+                    .addFieldClause(SubnetState.FIELD_NAME_ENDPOINT_LINK,
+                            context.request.endpointLink)
+                    .build());
+        }
+
+        if (context.parentCompute.tenantLinks != null
+                && !context.parentCompute.tenantLinks.isEmpty()) {
+            query.addBooleanClause(Query.Builder.create()
+                    .addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
+                            context.parentCompute.tenantLinks)
+                    .build());
+        }
+
         QueryTask q = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query)
                 .setResultLimit(getQueryResultLimit())
                 .build();
@@ -905,7 +946,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             NetworkEnumStages next, Consumer<String> preDeleteProcessor) {
 
         if (context.deletionNextPageLink == null) {
-            logInfo("Finished deletion stage .");
+            logFine("Finished deletion stage.");
             handleSubStage(context, next);
             return;
         }
@@ -922,23 +963,30 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
                     if (queryTask.results.documentCount > 0) {
                         // Delete all matching states.
-                        Stream<Operation> operations = queryTask.results.documentLinks.stream()
+                        List<Operation> operations = queryTask.results.documentLinks.stream()
+                                .filter(link -> shouldDelete(context, queryTask, link))
                                 .map(link -> {
                                     if (preDeleteProcessor != null) {
                                         preDeleteProcessor.accept(link);
                                     }
                                     return link;
                                 })
-                                .map(link -> Operation.createDelete(this, link));
+                                .map(link -> Operation.createDelete(this, link))
+                                .collect(Collectors.toList());
 
-                        OperationJoin.create(operations).setCompletion((ops, failures) -> {
-                            if (failures != null) {
-                                // We don't want to fail the whole data collection if some of the
-                                // operation fails.
-                                failures.values()
-                                        .forEach(e -> logWarning("Error: %s", e.getMessage()));
-                            }
-                        }).sendWith(this);
+                        if (!operations.isEmpty()) {
+                            OperationJoin.create(operations)
+                                    .setCompletion((ops, failures) -> {
+                                        if (failures != null) {
+                                            // We don't want to fail the whole data collection if some of the
+                                            // operation fails.
+                                            failures.values()
+                                                    .forEach(e -> logWarning("Error: %s",
+                                                            e.getMessage()));
+                                        }
+                                    })
+                                    .sendWith(this);
+                        }
                     }
 
                     // Store the next page in the context
@@ -947,5 +995,26 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     // Handle next page of results.
                     handleDeleteQueryTaskResult(context, next, preDeleteProcessor);
                 }));
+    }
+
+    /**
+     * Checks whether an entity should be delete.
+     */
+    private boolean shouldDelete(NetworkEnumContext context, QueryTask queryTask, String link) {
+        if (link.startsWith(NetworkService.FACTORY_LINK)) {
+            NetworkState networkState = Utils
+                    .fromJson(queryTask.results.documents.get(link), NetworkState.class);
+            if (context.virtualNetworkIds.contains(networkState.id)) {
+                return false;
+            }
+        } else if (link.startsWith(SubnetService.FACTORY_LINK)) {
+            SubnetState subnetState = Utils
+                    .fromJson(queryTask.results.documents.get(link), SubnetState.class);
+            if (context.subnetIds.contains(subnetState.id)
+                    || !context.deletedNetworkLinks.contains(subnetState.networkLink)) {
+                return false;
+            }
+        }
+        return true;
     }
 }

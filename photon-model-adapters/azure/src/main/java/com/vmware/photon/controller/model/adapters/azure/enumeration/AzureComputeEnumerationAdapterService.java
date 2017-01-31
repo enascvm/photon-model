@@ -29,7 +29,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
-import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
 import java.net.URI;
@@ -257,7 +257,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             switch (ctx.request.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
-                    logInfo("Enumeration service has already been started for %s", enumKey);
+                    logWarning("Enumeration service has already been started for %s", enumKey);
                     return;
                 }
                 logInfo("Launching enumeration service for %s", enumKey);
@@ -403,7 +403,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     }
 
                     if (queryTask.results.nextPageLink == null) {
-                        logInfo("No compute states match for deletion");
+                        logFine("No compute states match for deletion");
                         ctx.subStage = ComputeEnumerationSubStages.FINISHED;
                         handleSubStage(ctx);
                         return;
@@ -419,7 +419,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void deleteOrRetireHelper(EnumerationContext ctx) {
         if (ctx.deletionNextPageLink == null) {
-            logInfo("Finished %s of compute states for Azure",
+            logFine("Finished %s of compute states for Azure",
                     ctx.request.preserveMissing ? "retiring" : "deletion");
             ctx.subStage = ComputeEnumerationSubStages.FINISHED;
             handleSubStage(ctx);
@@ -496,7 +496,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Enumerate VMs from Azure.
      */
     private void getVmList(EnumerationContext ctx) {
-        logInfo("Enumerating VMs from Azure");
+        logFine("Enumerating VMs from Azure");
         String uriStr = ctx.enumNextPageLink;
         URI uri;
 
@@ -625,7 +625,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void updateResources(EnumerationContext ctx) {
         if (ctx.computeStates.size() == 0) {
-            logInfo("No compute states available for update");
+            logFine("No compute states available for update");
             ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
             handleSubStage(ctx);
             return;
@@ -651,7 +651,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     computeState.id);
 
             if (ctx.computeStates.size() == 0) {
-                logInfo("Finished updating compute states");
+                logFine("Finished updating compute states");
                 ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
                 handleSubStage(ctx);
             }
@@ -677,7 +677,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     }
 
                     if (numOfUpdates.decrementAndGet() == 0) {
-                        logInfo("Finished updating compute states");
+                        logFine("Finished updating compute states");
                         ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
                         handleSubStage(ctx);
                     }
@@ -690,7 +690,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void queryForDiskStates(EnumerationContext ctx) {
         if (ctx.virtualMachines.size() == 0) {
-            logInfo("No virtual machines found to be associated with local disks");
+            logFine("No virtual machines found to be associated with local disks");
             ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
             handleSubStage(ctx);
             return;
@@ -838,7 +838,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            logInfo("No virtual machine available for creation");
+            logFine("No virtual machine available for creation");
             ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
             handleSubStage(ctx);
             return;
@@ -861,7 +861,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             auth.tenantLinks = ctx.parentCompute.tenantLinks;
             auth.customProperties = new HashMap<>();
             if (ctx.request.endpointLink != null) {
-                auth.customProperties.put(CUSTOM_PROP_ENPOINT_LINK, ctx.request.endpointLink);
+                auth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK, ctx.request.endpointLink);
             }
 
             String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
@@ -905,7 +905,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
                     }
 
-                    logInfo("Continue on to updating disks");
+                    logFine("Continue on to updating disks");
                     ctx.subStage = ComputeEnumerationSubStages.UPDATE_DISK_STATES;
                     handleSubStage(ctx);
                 }).sendWith(this);
@@ -926,6 +926,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri());
 
             DiskState diskToUpdate = ctx.diskStates.get(diskUri);
+            if (diskToUpdate == null) {
+                logFine("Disk not found: %s", diskUri);
+                continue;
+            }
             ImageReference imageReference = virtualMachine.properties.storageProfile
                     .getImageReference();
             diskToUpdate.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
@@ -946,7 +950,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
                     }
 
-                    logInfo("Continue on to create network interface");
+                    logFine("Continue on to create network interface");
                     ctx.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
                     handleSubStage(ctx);
 
@@ -995,7 +999,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
                     }
 
-                    logInfo("Continue to create network interface");
+                    logFine("Continue to create network interface");
                     ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_STATES;
                     handleSubStage(ctx);
 
@@ -1077,7 +1081,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         return;
                     }
 
-                    logInfo("Finished creating compute states");
+                    logFine("Finished creating compute states");
                     ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
                     handleSubStage(ctx);
 
@@ -1086,7 +1090,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     private void patchAdditionalFields(EnumerationContext ctx) {
         if (ctx.computeStatesForPatching.size() == 0) {
-            logInfo("No compute states available to patch additional fields");
+            logFine("No compute states available to patch additional fields");
             ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
             handleSubStage(ctx);
             return;
@@ -1202,7 +1206,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                             publicIPAddressName, numOfPatches);
                                 } else {
                                     // No public IP address found. Log and move on.
-                                    logInfo("No public IP found for [%s]", vmName);
+                                    logFine("No public IP found for [%s]", vmName);
                                     numOfPatches.decrementAndGet();
                                 }
                             }
@@ -1210,7 +1214,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             }).sendWith(this);
         } else {
             // There was no network for this compute. Log and move on.
-            logInfo("No network links found for [%s]", vmName);
+            logFine("No network links found for [%s]", vmName);
             numOfPatches.decrementAndGet();
         }
     }
@@ -1248,7 +1252,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         sendRequest(computePatchOp);
 
         if (numOfPatches.decrementAndGet() == 0) {
-            logInfo("Finished patching compute states");
+            logFine("Finished patching compute states");
             ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
             handleSubStage(ctx);
         }
