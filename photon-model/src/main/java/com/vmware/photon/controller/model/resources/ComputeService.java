@@ -28,7 +28,6 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -311,7 +310,7 @@ public class ComputeService extends StatefulService {
             throw new IllegalArgumentException("Compute type can not be changed");
         }
         if (state.environmentName != null && currentState.environmentName != null
-                && state.environmentName != currentState.environmentName) {
+                && !state.environmentName.equals(currentState.environmentName)) {
             throw new IllegalArgumentException("Environment name can not be changed");
         }
         Utils.validateState(getStateDescription(), state);
