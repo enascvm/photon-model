@@ -187,6 +187,12 @@ public class ComputeService extends StatefulService {
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
         public String endpointLink;
+
+        /**
+         * Host name associated with this compute instance.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_1)
+        public String hostName;
     }
 
     /**
@@ -220,9 +226,9 @@ public class ComputeService extends StatefulService {
             chsWithDesc.adapterManagementReference = currentState.adapterManagementReference;
             chsWithDesc.networkInterfaceLinks = currentState.networkInterfaceLinks;
             chsWithDesc.creationTimeMicros = currentState.creationTimeMicros;
-
             chsWithDesc.description = desc;
             chsWithDesc.descriptionLink = desc.documentSelfLink;
+            chsWithDesc.hostName = currentState.hostName;
 
             return chsWithDesc;
         }

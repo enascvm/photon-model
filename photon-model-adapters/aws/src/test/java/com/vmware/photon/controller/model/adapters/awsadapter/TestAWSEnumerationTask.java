@@ -457,6 +457,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         validateComputeName(linuxVMId, VM_NAME);
 
+        // Validate this instance's host name
+        validateHostName(linuxVMId);
+
         // Update the tag on the VM already known to the system
         tagResourcesWithName(this.client, VM_UPDATED_NAME, linuxVMId);
 
@@ -465,6 +468,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 TEST_CASE_PURE_UPDATE);
 
         validateComputeName(linuxVMId, VM_UPDATED_NAME);
+
+        // Validate this instance's host name after update
+        validateHostName(linuxVMId);
 
     }
 
@@ -732,6 +738,23 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             this.host.log(Level.WARNING, "Exception deleting VMs - %s, instance ids - %s",
                     deleteEx.getMessage(), this.instancesToCleanUp);
         }
+    }
+
+    /**
+     * Validates the hostname on a compute state is present and not null.
+     */
+    private ComputeState validateHostName(String awsId)
+            throws Throwable {
+        if (this.isAwsClientMock) {
+            return null;
+        }
+
+        ComputeState computeState = getComputeByAWSId(this.host, awsId);
+
+        String hostName = computeState.hostName;
+        assertNotNull("'hostname' property should be present", hostName);
+
+        return computeState;
     }
 
 }

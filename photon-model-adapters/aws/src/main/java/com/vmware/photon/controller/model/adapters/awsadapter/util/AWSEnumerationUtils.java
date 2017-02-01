@@ -177,6 +177,7 @@ public class AWSEnumerationUtils {
         computeState.endpointLink = endpointLink;
         // Compute descriptions are looked up by the instanceType in the local list of CDs.
         computeState.descriptionLink = computeDescriptionLink;
+        computeState.hostName = instance.getPublicDnsName();
 
         // TODO VSYM-375 for adding disk information
 
