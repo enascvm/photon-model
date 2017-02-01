@@ -23,7 +23,8 @@ public class AwsAccountDetailDto {
     public Double cost = 0d;
     public Integer deletedVmCount = 0;
     public Map<String, AwsServiceDetailDto> serviceDetailsMap = new HashMap<>();
-    public Double signUpCharge = 0d;
+    //This will contain all one time costs charges for this account.
+    public Double otherCharges = 0d;
     // Will contain the usageStartTime of the row in the bill that was successfully persisted in
     // the last collection cycle. The bill records (rows) will be processed beginning from
     // the next record in the bill being processed in the current collection cycle. In case

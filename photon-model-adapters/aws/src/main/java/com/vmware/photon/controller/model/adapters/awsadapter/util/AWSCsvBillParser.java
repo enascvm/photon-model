@@ -60,7 +60,6 @@ public class AWSCsvBillParser {
     public static final String AWS_BILL_ZIP_FILE_NAME_SUFFIX = ".zip";
     public static final String AWS_SKIP_COMMENTS = "Don't see your tags in the report";
     public static final String RUN_INSTANCES = "RunInstances";
-    public static final String SIGN_UP_CHARGE = "Sign up charge";
     public static final String TAG_KEY_DELIMITTER = ":";
     public static final String DETAILED_CSV_DATE_FORMAT_YYYY_MM_DD_HH_MM_SS = "yyyy-MM-dd HH:mm:ss";
     public static final String INVOICE_TOTAL = "InvoiceTotal";
@@ -121,11 +120,12 @@ public class AWSCsvBillParser {
             while ((rowMap = mapReader.read(header, cellProcessorArray)) != null) {
                 readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge);
             }
-            // Subtract the sign up charge from the account cost
+            // Subtract the one-time subscription charges from the account cost
+            // since the one-time subscription charges is divided among the total cost of all months
             for (AwsAccountDetailDto awsAccountDetail : monthlyBill.values()) {
-                Double signUpCharge = awsAccountDetail.signUpCharge;
-                if (signUpCharge != 0) {
-                    awsAccountDetail.cost = awsAccountDetail.cost - signUpCharge;
+                Double otherCharges = awsAccountDetail.otherCharges;
+                if (otherCharges != 0) {
+                    awsAccountDetail.cost = awsAccountDetail.cost - otherCharges;
                 }
             }
 
@@ -420,6 +420,7 @@ public class AWSCsvBillParser {
         } else {
             awsAccountDetail = accountDetails.get(linkedAccountId);
         }
+        String invoiceId = getStringFieldValue(rowMap, DetailedCsvHeaders.INVOICE_ID);
         if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE, DetailedCsvHeaders.LINE_ITEM)) {
             // If the RecordType is LineItem then it is either sign up charge or
             // recurring charges for reserved purchase
@@ -430,26 +431,20 @@ public class AWSCsvBillParser {
                         createOrGetAccountDetailObject(accountDetails, linkedAccountId),
                         productName);
                 serviceDetail.addToReservedRecurringCost(getResourceCost(rowMap));
-            } else if (getStringFieldValue(rowMap, DetailedCsvHeaders.ITEM_DESCRIPTION)
-                    .startsWith(SIGN_UP_CHARGE)) {
-                // Subtract the one-time subscription charge from the account
-                // cost since the one-time subscription charge is divided among
-                // the total cost of all months
-                awsAccountDetail.signUpCharge = getResourceCost(rowMap);
-                ignorableInvoiceCharge
-                        .add(getStringFieldValue(rowMap, DetailedCsvHeaders.INVOICE_ID));
+            } else if (invoiceId.matches("[0-9]+")) {
+                awsAccountDetail.otherCharges += getResourceCost(rowMap);
+                ignorableInvoiceCharge.add(invoiceId);
             }
         } else if (matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE,
                 INVOICE_TOTAL)
                 || matchFieldValue(rowMap, DetailedCsvHeaders.RECORD_TYPE,
-                        ACCOUNT_TOTAL)) {
+                ACCOUNT_TOTAL)) {
             // If the RecordType is InvoiceTotal, this is the account monthly
             // cost for non-consolidated bills, ie, for primary accounts with no
             // linked accounts
             // If the RecordType is AccountTotal, this is the account monthly
             // cost for consolidated bills
-            if (!ignorableInvoiceCharge
-                    .contains(getStringFieldValue(rowMap, DetailedCsvHeaders.INVOICE_ID))) {
+            if (!ignorableInvoiceCharge.contains(invoiceId)) {
                 awsAccountDetail.cost = getResourceCost(rowMap);
             }
         }
