@@ -621,19 +621,19 @@ public class ResourceAllocationTaskService
             return;
         }
 
-        createComputeHost(currentState, parentLink, computeResourceId, name,
-                diskLinks, networkLinks);
+        createComputeState(currentState, parentLink, computeResourceId, name,
+                diskLinks, networkLinks, cd);
     }
 
-    private void createComputeHost(ResourceAllocationTaskState currentState,
+    private void createComputeState(ResourceAllocationTaskState currentState,
             String parentLink, String computeResourceId, String name,
-            List<String> diskLinks, List<String> networkLinks) {
+            List<String> diskLinks, List<String> networkLinks, ComputeDescription cd) {
         ComputeService.ComputeState computeState = new ComputeService.ComputeState();
         computeState.id = computeResourceId;
         computeState.name = name;
         computeState.parentLink = parentLink;
         computeState.type = ComputeType.VM_GUEST;
-        computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
+        computeState.environmentName = cd.environmentName;
         computeState.descriptionLink = currentState.computeDescriptionLink;
         computeState.resourcePoolLink = currentState.resourcePoolLink;
         computeState.diskLinks = diskLinks;
