@@ -46,11 +46,13 @@ import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
+import com.vmware.photon.controller.model.tasks.MockAdapter.MockFailNPEEndpointAdapter;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
+import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 
 /**
@@ -179,6 +181,33 @@ public class EndpointAllocationTaskServiceTest extends Suite {
             assertNotNull(poolState.customProperties);
             assertEquals(completeState.endpointState.documentSelfLink,
                     poolState.customProperties.get(ComputeProperties.ENDPOINT_LINK_PROP_NAME));
+        }
+
+        @Test
+        public void testHandleNPE() throws Throwable {
+            EndpointState endpoint = new EndpointState();
+            endpoint.endpointType = "endpointType";
+
+            EndpointAllocationTaskState startState = new EndpointAllocationTaskState();
+            startState.endpointState = endpoint;
+
+            startState.adapterReference = UriUtils.buildUri(getHost(),
+                    MockFailNPEEndpointAdapter.SELF_LINK);
+
+            EndpointAllocationTaskState returnState = this
+                    .postServiceSynchronously(
+                            EndpointAllocationTaskService.FACTORY_LINK,
+                            startState, EndpointAllocationTaskState.class);
+
+            EndpointAllocationTaskState completeState = this
+                    .waitForServiceState(
+                            EndpointAllocationTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                    .ordinal());
+
+            assertThat(completeState.taskInfo.stage,
+                    is(TaskStage.FAILED));
         }
 
         @Test

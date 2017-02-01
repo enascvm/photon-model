@@ -479,7 +479,7 @@ public class EndpointAllocationTaskService
                 .setBody(req)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logWarning(e.getMessage());
+                        logWarning("%s", e.getMessage());
                         sendFailurePatch(this, currentState, e);
                         return;
                     }

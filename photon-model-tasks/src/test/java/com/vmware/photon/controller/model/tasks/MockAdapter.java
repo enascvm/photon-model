@@ -59,6 +59,7 @@ public class MockAdapter {
         host.startService(new MockFirewallInstanceSuccessAdapter());
         host.startService(new MockFirewallInstanceFailureAdapter());
         host.startService(new MockSuccessEndpointAdapter(test));
+        host.startService(new MockFailNPEEndpointAdapter());
     }
 
     public static TaskState createFailedTaskInfo() {
@@ -489,6 +490,17 @@ public class MockAdapter {
         }
     }
 
+    /**
+     * Mock endpoint adapter that always fails with NPE.
+     */
+    public static class MockFailNPEEndpointAdapter extends StatelessService {
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_fail_npe_endpoint_adapter";
+
+        public void handleRequest(Operation op) {
+            op.fail(new NullPointerException());
+        }
+    }
     /**
      * Mock endpoint adapter that always succeeds.
      */
