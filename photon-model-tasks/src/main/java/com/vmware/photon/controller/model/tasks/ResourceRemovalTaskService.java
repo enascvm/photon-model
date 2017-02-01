@@ -135,7 +135,7 @@ public class ResourceRemovalTaskService
             q.tenantLinks = state.tenantLinks;
             // create the query to find resources
             sendRequest(Operation
-                    .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                    .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                     .setBody(q)
                     .setCompletion((o, e) -> {
                         if (e != null) {
@@ -154,7 +154,7 @@ public class ResourceRemovalTaskService
             // for that in our state
             // machine
             state.resourceQueryLink = UriUtils.buildUriPath(
-                    ServiceUriPaths.CORE_QUERY_TASKS, q.documentSelfLink);
+                    ServiceUriPaths.CORE_LOCAL_QUERY_TASKS, q.documentSelfLink);
             start.complete();
 
             sendSelfPatch(TaskState.TaskStage.STARTED, state.taskSubStage, null);

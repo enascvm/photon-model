@@ -363,7 +363,7 @@ public class SingleResourceStatsAggregationTaskService extends
                                 StatsUtil.getMetricKeyPrefix(currentState.resourceLink, rollupKey)),
                         MatchType.PREFIX);
 
-                Operation op = Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+                Operation op = Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                         .setBody(Builder.createDirectTask()
                                 .addOption(QueryOption.SORT)
                                 .addOption(QueryOption.TOP_RESULTS)
@@ -437,7 +437,7 @@ public class SingleResourceStatsAggregationTaskService extends
                 .setResultLimit(resultLimit)
                 .build();
 
-        sendRequest(Operation.createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+        sendRequest(Operation.createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(queryTask)
                 .setConnectionSharing(true)
                 .setCompletion((queryOp, queryEx) -> {
@@ -724,7 +724,7 @@ public class SingleResourceStatsAggregationTaskService extends
                 .setResultLimit(RAW_METRICS_LIMIT)
                 .setQuery(overallQueryBuilder.build()).build();
         sendRequest(Operation
-                .createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(task)
                 .setConnectionSharing(true)
                 .setCompletion((queryOp, queryEx) -> {

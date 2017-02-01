@@ -235,7 +235,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
                 .build();
 
         Operation op = Operation
-                .createPost(this.host, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(task);
 
         Operation result = this.host.waitForResponse(op);

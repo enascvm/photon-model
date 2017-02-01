@@ -141,7 +141,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
                 .build();
 
         Operation op = Operation
-                .createPost(this.host, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(task);
 
         Operation result = this.host.waitForResponse(op);
@@ -169,7 +169,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         QueryTask qt = QueryTask.create(qs).setDirect(true);
 
         Operation op = Operation
-                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
+                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(qt);
 
         QueryTask result = this.host.sendWithFuture(op).thenApply(o -> o.getBody(QueryTask.class))

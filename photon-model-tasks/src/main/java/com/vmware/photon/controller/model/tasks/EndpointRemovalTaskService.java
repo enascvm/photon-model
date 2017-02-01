@@ -292,7 +292,7 @@ public class EndpointRemovalTaskService
                 .build();
         resourceQueryTask.tenantLinks = state.tenantLinks;
 
-        Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_QUERY_TASKS))
+        Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(resourceQueryTask)
                 .setCompletion(
                         (queryOp, throwable) -> {

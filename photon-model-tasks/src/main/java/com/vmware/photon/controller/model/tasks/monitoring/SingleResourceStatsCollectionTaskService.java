@@ -557,7 +557,7 @@ public class SingleResourceStatsCollectionTaskService
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(builder.build()).build();
         task.tenantLinks = tenantLinks;
-        Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+        Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(task)
                 .setConnectionSharing(true)
                 .setCompletion((o, e) -> {

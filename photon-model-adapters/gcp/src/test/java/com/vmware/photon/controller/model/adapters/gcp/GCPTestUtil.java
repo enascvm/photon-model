@@ -701,7 +701,7 @@ public class GCPTestUtil {
                 .build();
 
         host.sendRequest(Operation
-                .createPost(host, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(q)
                 .setReferer(host.getUri())
                 .setCompletion((o, e) -> {

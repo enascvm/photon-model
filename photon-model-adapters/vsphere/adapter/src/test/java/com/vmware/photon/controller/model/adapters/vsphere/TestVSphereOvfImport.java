@@ -74,7 +74,7 @@ public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
                 .setQuery(q)
                 .build();
 
-        op = Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
+        op = Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(task);
 
         task = this.host.waitForResponse(op).getBody(QueryTask.class);

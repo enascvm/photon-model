@@ -327,7 +327,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
     }
 
     public QueryTask querySynchronously(QueryTask queryTask) throws Throwable {
-        return postServiceSynchronously(ServiceUriPaths.CORE_QUERY_TASKS,
+        return postServiceSynchronously(ServiceUriPaths.CORE_LOCAL_QUERY_TASKS,
                 queryTask, QueryTask.class);
     }
 

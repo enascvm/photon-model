@@ -380,7 +380,7 @@ public class ResourceAllocationTaskService
         };
 
         Operation postQuery = Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS).setBody(q)
+                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS).setBody(q)
                 .setCompletion(c);
 
         sendRequest(postQuery);

@@ -368,7 +368,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 .setQuery(query)
                 .build();
 
-        Operation.createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+        Operation.createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(qt)
                 .setCompletion((o, e) -> {
                     if (e != null) {

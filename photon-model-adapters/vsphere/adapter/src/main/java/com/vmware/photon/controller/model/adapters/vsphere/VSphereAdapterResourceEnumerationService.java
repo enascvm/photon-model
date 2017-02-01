@@ -1216,7 +1216,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      */
     private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
         task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT);
-        Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_QUERY_TASKS))
+        Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(task)
                 .setCompletion((o, e) -> {
                     if (e != null) {

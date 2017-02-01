@@ -317,7 +317,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
 
         logFine("Querying compute resources for deletion");
         sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setConnectionSharing(true)
                 .setBody(q)
                 .setCompletion(completionHandler));
@@ -677,7 +677,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
         q.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
         sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setConnectionSharing(true)
                 .setBody(q)
                 .setCompletion((o, e) -> {

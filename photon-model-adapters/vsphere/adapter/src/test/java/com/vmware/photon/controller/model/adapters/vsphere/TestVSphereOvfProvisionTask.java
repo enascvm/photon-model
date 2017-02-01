@@ -130,7 +130,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
                 .setQuery(q)
                 .build();
 
-        Operation op = Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
+        Operation op = Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(qt);
 
         QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);

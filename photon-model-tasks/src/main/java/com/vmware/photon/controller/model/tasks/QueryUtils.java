@@ -71,7 +71,7 @@ public class QueryUtils {
         }
 
         return service.sendWithDeferredResult(
-                Operation.createPost(service, ServiceUriPaths.CORE_QUERY_TASKS).setBody(queryTask)
+                Operation.createPost(service, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS).setBody(queryTask)
                         .setConnectionSharing(true),
                 QueryTask.class);
     }
@@ -225,7 +225,7 @@ public class QueryUtils {
         private DeferredResult<Void> queryImpl(QueryTask queryTask, Consumer resultConsumer) {
 
             Operation createQueryTaskOp = Operation
-                    .createPost(this.host, ServiceUriPaths.CORE_QUERY_TASKS)
+                    .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                     .setReferer(getClass().getSimpleName())
                     .setBody(queryTask);
 

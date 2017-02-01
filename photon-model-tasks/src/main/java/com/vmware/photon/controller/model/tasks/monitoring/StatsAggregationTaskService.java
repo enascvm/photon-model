@@ -175,7 +175,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
                 .setQuery(currentState.query).setResultLimit(resultLimit);
         sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(queryTaskBuilder.build())
                 .setConnectionSharing(true)
                 .setCompletion((queryOp, queryEx) -> {

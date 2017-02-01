@@ -207,7 +207,7 @@ public class ProvisionContext {
                     .addLinkTerm(NetworkInterfaceState.FIELD_NAME_DESCRIPTION_LINK)
                     .build();
 
-            Operation.createPost(service, ServiceUriPaths.CORE_QUERY_TASKS)
+            Operation.createPost(service, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                     .setBody(qt)
                     .setCompletion((o, e) -> {
                         if (e != null) {

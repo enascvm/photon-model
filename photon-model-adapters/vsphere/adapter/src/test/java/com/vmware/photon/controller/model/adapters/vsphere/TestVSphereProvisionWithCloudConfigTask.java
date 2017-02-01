@@ -111,7 +111,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
                 .build();
 
         Operation op = Operation
-                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
+                .createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(task);
 
         QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);

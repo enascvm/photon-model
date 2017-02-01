@@ -283,7 +283,7 @@ public class AWSCostStatsService extends StatelessService {
                 .addOption(QueryOption.EXPAND_CONTENT).setQuery(awsAccountsQuery).build();
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeDesc.tenantLinks;
-        return Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+        return Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(queryTask)
                 .setConnectionSharing(true).setCompletion((o, e) -> {
                     if (e != null) {
@@ -423,7 +423,7 @@ public class AWSCostStatsService extends StatelessService {
         queryTask.tenantLinks = statsData.computeDesc.tenantLinks;
         queryTask.documentSelfLink = UUID.randomUUID().toString();
         sendRequest(
-                Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS).setBody(queryTask)
+                Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS).setBody(queryTask)
                         .setConnectionSharing(true).setCompletion((o, e) -> {
                             if (e != null) {
                                 logSevere(e);
@@ -1006,7 +1006,7 @@ public class AWSCostStatsService extends StatelessService {
                 QueryTask.NumericRange
                         .createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
 
-        return Operation.createPost(getHost(), ServiceUriPaths.CORE_QUERY_TASKS)
+        return Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(QueryTask.Builder.createDirectTask()
                         .addOption(QueryOption.SORT)
                         .addOption(QueryOption.TOP_RESULTS)

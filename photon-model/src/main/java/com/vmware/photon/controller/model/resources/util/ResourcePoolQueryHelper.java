@@ -171,7 +171,7 @@ public class ResourcePoolQueryHelper {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .build();
 
-        this.host.sendRequest(Operation.createPost(this.host, ServiceUriPaths.CORE_QUERY_TASKS)
+        this.host.sendRequest(Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(queryTask)
                 .setReferer(this.host.getUri())
                 .setCompletion((o, e) -> {
@@ -227,7 +227,7 @@ public class ResourcePoolQueryHelper {
             }
 
             Operation queryOperation =
-                    Operation.createPost(this.host, ServiceUriPaths.CORE_QUERY_TASKS)
+                    Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                     .setBody(queryTaskBuilder.build())
                     .setReferer(this.host.getUri());
             rpLinkByOperationId.put(queryOperation.getId(), rpLink);
@@ -288,7 +288,7 @@ public class ResourcePoolQueryHelper {
                 .build();
 
         this.host.sendRequest(Operation
-                .createPost(this.host, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(queryTask)
                 .setReferer(this.host.getUri())
                 .setCompletion((o, e) -> {
@@ -324,7 +324,7 @@ public class ResourcePoolQueryHelper {
                 .build();
 
         this.host.sendRequest(Operation
-                .createPost(this.host, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(queryTask)
                 .setReferer(this.host.getUri())
                 .setCompletion((o, e) -> {

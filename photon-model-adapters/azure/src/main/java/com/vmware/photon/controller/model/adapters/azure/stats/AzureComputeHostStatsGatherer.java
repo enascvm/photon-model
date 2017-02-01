@@ -246,7 +246,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
         queryTask.tenantLinks = statsData.computeHost.tenantLinks;
 
         Operation queryOp = Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(queryTask);
         return queryOp;
     }

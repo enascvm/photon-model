@@ -248,7 +248,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                 .setResultLimit(resultLimit);
 
         sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_QUERY_TASKS)
+                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setBody(queryTaskBuilder.build())
                 .setCompletion((queryOp, queryEx) -> {
                     if (queryEx != null) {

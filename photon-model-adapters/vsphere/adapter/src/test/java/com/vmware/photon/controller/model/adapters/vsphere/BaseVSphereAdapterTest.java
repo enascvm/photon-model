@@ -381,7 +381,7 @@ public class BaseVSphereAdapterTest {
                 .build();
 
         Operation result = this.host.waitForResponse(
-                Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_QUERY_TASKS))
+                Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                         .setBody(qt));
 
         QueryResultsProcessor rp = QueryResultsProcessor.create(result);
