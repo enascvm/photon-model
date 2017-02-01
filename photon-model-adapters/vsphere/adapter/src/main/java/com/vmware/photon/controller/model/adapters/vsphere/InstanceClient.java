@@ -131,6 +131,8 @@ public class InstanceClient extends BaseHelper {
     private ManagedObjectReference resourcePool;
     private ManagedObjectReference host;
 
+    private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
+
     public InstanceClient(Connection connection,
             ComputeStateWithDescription resource,
             ComputeStateWithDescription parent,
@@ -171,7 +173,12 @@ public class InstanceClient extends BaseHelper {
         // even though this is a clone, hw config from the compute resource
         // is takes precedence
         spec.setNumCPUs((int) this.state.description.cpuCount);
-        spec.setGuestId(VirtualMachineGuestOsIdentifier.OTHER_GUEST_64.value());
+
+        String gt = CustomProperties.of(this.state).getString(CustomProperties.GUEST_ID, null);
+        if (gt != null) {
+            spec.setGuestId(gt);
+        }
+
         spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
 
         // set ovf environment
@@ -760,6 +767,7 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_config_hardware_device,
                 VimPath.vm_runtime_powerState,
                 VimPath.vm_runtime_host,
+                VimPath.vm_config_guestId,
                 VimPath.vm_guest_net,
                 VimPath.vm_summary_guest_ipAddress,
                 VimPath.vm_summary_guest_hostName);
@@ -795,6 +803,18 @@ public class InstanceClient extends BaseHelper {
 
         String datastoreName = this.get.entityProp(datastore, "name");
         VirtualMachineConfigSpec spec = buildVirtualMachineConfigSpec(datastoreName);
+
+        String gt = CustomProperties.of(this.state).getString(CustomProperties.GUEST_ID, null);
+        if (gt != null) {
+            try {
+                gt = VirtualMachineGuestOsIdentifier.valueOf(gt).value();
+            } catch (IllegalArgumentException e) {
+                // silently default to generic 64 bit guest.
+                gt = DEFAULT_GUEST_ID.value();
+            }
+
+            spec.setGuestId(gt);
+        }
 
         populateCloudConfig(spec, null);
         ManagedObjectReference vmTask = getVimPort().createVMTask(folder, spec, resourcePool, host);
@@ -1021,7 +1041,6 @@ public class InstanceClient extends BaseHelper {
             backing.setDeviceName(network.name);
             nic.setBacking(backing);
         }
-
 
         return nic;
     }

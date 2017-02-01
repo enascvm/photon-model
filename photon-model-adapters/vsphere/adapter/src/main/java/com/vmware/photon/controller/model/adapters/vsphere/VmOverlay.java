@@ -189,4 +189,8 @@ public class VmOverlay extends AbstractOverlay {
     public long getMemoryBytes() {
         return ((int) getOrDefault(VimPath.vm_config_hardware_memoryMB, 0)) * MB_to_bytes;
     }
+
+    public String getGuestId() {
+        return (String) getOrDefault(VimPath.vm_config_guestId, null);
+    }
 }

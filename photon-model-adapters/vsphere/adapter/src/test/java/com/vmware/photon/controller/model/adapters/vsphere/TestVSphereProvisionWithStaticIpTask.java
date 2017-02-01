@@ -54,6 +54,7 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
@@ -224,7 +225,8 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
                 .put(ComputeProperties.PLACEMENT_LINK, findFirstMatching(q, ComputeState.class).documentSelfLink)
-                .put(CustomProperties.TEMPLATE_LINK, templateComputeLink);
+                .put(CustomProperties.TEMPLATE_LINK, templateComputeLink)
+                .put(CustomProperties.GUEST_ID, VirtualMachineGuestOsIdentifier.UBUNTU_64_GUEST.value());
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

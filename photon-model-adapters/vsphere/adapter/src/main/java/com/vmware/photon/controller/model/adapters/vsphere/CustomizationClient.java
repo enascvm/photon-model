@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.apache.commons.net.util.SubnetUtils;
 
@@ -34,20 +35,22 @@ import com.vmware.vim25.CustomizationLinuxPrep;
 import com.vmware.vim25.CustomizationSpec;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
-import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * Builds and applies CustomizationSpec to apply a static IP address on a VM.
  */
 public class CustomizationClient extends BaseHelper {
     private final ComputeStateWithDescription state;
-    private final VirtualMachineGuestOsIdentifier guestOs;
+    private final String guestId;
+
+    private static final Pattern HOSTNAME_CHARS = Pattern.compile("[^a-zA-Z0-9-]+");
 
     public CustomizationClient(Connection connection, ComputeStateWithDescription stateWithDescription,
-            VirtualMachineGuestOsIdentifier guestOs) {
+            String guestId) {
         super(connection);
         this.state = stateWithDescription;
-        this.guestOs = guestOs;
+        this.guestId = guestId;
     }
 
     public ManagedObjectReference customizeGuest(ManagedObjectReference vm, CustomizationSpec spec)
@@ -79,11 +82,15 @@ public class CustomizationClient extends BaseHelper {
             identity.setDomain(subnetState.domain);
 
             CustomizationFixedName name = new CustomizationFixedName();
-            name.setName(this.state.name);
+            name.setName(makeHostName(UriUtils.getLastPathSegment(this.state.documentSelfLink)));
             identity.setHostName(name);
 
             template.setOptions(new CustomizationLinuxOptions());
         }
+    }
+
+    private String makeHostName(String link) {
+        return HOSTNAME_CHARS.matcher(link).replaceAll("-");
     }
 
     private String cidr2mask(String subnetCIDR) {
@@ -100,12 +107,10 @@ public class CustomizationClient extends BaseHelper {
     }
 
     private boolean isLinux() {
-        if (this.guestOs == VirtualMachineGuestOsIdentifier.OTHER_GUEST_64) {
-            // assume non-specified guest is linux
+        if (this.guestId == null) {
             return true;
         }
-
-        String s = this.guestOs.value().toLowerCase();
+        String s = this.guestId.toLowerCase();
         return !s.contains("win") && !s.contains("darwin");
     }
 }

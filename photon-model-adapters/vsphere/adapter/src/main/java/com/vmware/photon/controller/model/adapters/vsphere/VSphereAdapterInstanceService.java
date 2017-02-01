@@ -48,7 +48,6 @@ import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
-import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
@@ -163,8 +162,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             NetworkInterfaceDescription desc = nic.description;
                             SubnetState subnet = nic.subnet;
                             if (subnet != null && desc != null && desc.assignment == IpAssignment.STATIC) {
-                                CustomizationClient cc = new CustomizationClient(connection, ctx.child,
-                                        VirtualMachineGuestOsIdentifier.OTHER_GUEST_64);
+                                CustomizationClient cc = new CustomizationClient(connection, ctx.child, vmOverlay.getGuestId());
                                 CustomizationSpec template = new CustomizationSpec();
                                 cc.customizeNic(vmOverlay.getPrimaryMac(), desc, subnet, template);
                                 cc.customizeDns(subnet.dnsServerAddresses, subnet.dnsSearchDomains,
