@@ -2,6 +2,8 @@
 
 ## 0.6.1-SNAPSHOT
 
+* Upgrading xenon to 1.3.6. Introducing xenon-utils in root pom.
+
 ## 0.6.0-SNAPSHOT
 
 * Adding endpointLink to network and subnet lookup query.
