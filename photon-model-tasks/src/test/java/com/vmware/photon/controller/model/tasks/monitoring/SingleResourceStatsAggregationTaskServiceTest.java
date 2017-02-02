@@ -135,7 +135,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
         SingleResourceStatsAggregationTaskState aggregationTaskState = new SingleResourceStatsAggregationTaskState();
         aggregationTaskState.resourceLink = computeStateArray[0].documentSelfLink;
         aggregationTaskState.metricNames = new HashSet<>(
-                Arrays.asList(MockStatsAdapter.KEY_1, MockStatsAdapter.KEY_2));
+                Arrays.asList(MockStatsAdapter.KEY_1, MockStatsAdapter.KEY_2, MockStatsAdapter.KEY_3));
         postServiceSynchronously(SingleResourceStatsAggregationTaskService.FACTORY_LINK,
                 aggregationTaskState,
                 SingleResourceStatsAggregationTaskState.class);
@@ -194,7 +194,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
         aggregationTaskState = new SingleResourceStatsAggregationTaskState();
         aggregationTaskState.resourceLink = rpReturnState.documentSelfLink;
         aggregationTaskState.metricNames = new HashSet<>(
-                Arrays.asList(MockStatsAdapter.KEY_1, MockStatsAdapter.KEY_2));
+                Arrays.asList(MockStatsAdapter.KEY_1, MockStatsAdapter.KEY_2, MockStatsAdapter.KEY_3));
         aggregationTaskState.query =
                 Query.Builder.create()
                         .addKindFieldClause(ComputeState.class)

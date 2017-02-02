@@ -36,6 +36,7 @@ public class MockStatsAdapter extends StatelessService {
     public static final String SELF_LINK = "/mock-stats-adapter";
     public static final String KEY_1 = "key1";
     public static final String KEY_2 = "key2";
+    public static final String KEY_3 = "key3";
     public static final String UNIT_1 = "unit1";
     public static final String UNIT_2 = "unit2";
 

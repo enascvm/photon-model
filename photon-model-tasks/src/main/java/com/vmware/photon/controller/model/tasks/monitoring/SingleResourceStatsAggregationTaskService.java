@@ -376,7 +376,7 @@ public class SingleResourceStatsAggregationTaskService extends
                                 .setResultLimit(1)
                                 .setQuery(builder.build()).build())
                         .setConnectionSharing(true);
-                logFine("Invoking a query to obtain last rollup time for %s ",
+                logInfo("Invoking a query to obtain last rollup time for %s ",
                         StatsUtil.getMetricKeyPrefix(currentState.resourceLink, rollupKey));
                 operations.add(op);
             }
@@ -561,6 +561,8 @@ public class SingleResourceStatsAggregationTaskService extends
 
             TimeSeriesStats timeSeriesStats = metric.timeSeriesStats.get(rawMetricKey);
 
+            // if there is no in-memory metric for this key then we don't have any
+            // raw metrics; move on to the next metric
             if (timeSeriesStats == null) {
                 continue;
             }
@@ -692,7 +694,7 @@ public class SingleResourceStatsAggregationTaskService extends
                 builder.addRangeClause(QuerySpecification
                         .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, metricKey),
                         NumericRange.createDoubleRange(0.0, Double.MAX_VALUE, true, true));
-                if (range != null) {
+                if (range != null && range != 0) {
                     builder.addRangeClause(ResourceMetrics.FIELD_NAME_TIMESTAMP,
                             NumericRange.createGreaterThanOrEqualRange(
                                     StatsUtil.computeIntervalBeginMicros(range - 1, binSize)));
@@ -708,7 +710,7 @@ public class SingleResourceStatsAggregationTaskService extends
                 .entrySet()) {
             RollupMetricHolder metric = new RollupMetricHolder();
             metric.rollupKey = metricEntry.getKey();
-            if (metricEntry.getValue() != null) {
+            if (metricEntry.getValue() != null && metricEntry.getValue() != 0) {
                 metric.beginTimestampMicros = StatsUtil.computeIntervalBeginMicros(
                         metricEntry.getValue() - 1,
                         lookupBinSize(metricEntry.getKey()));
@@ -962,6 +964,7 @@ public class SingleResourceStatsAggregationTaskService extends
             return;
         }
         List<Operation> operations = new ArrayList<>();
+        Set<String> publishedKeys = new HashSet<>();
         for (Entry<String, Map<Long, TimeBin>> aggregateEntries : currentState.aggregatedTimeBinMap
                 .entrySet()) {
             Map<Long, TimeBin> aggrValue = aggregateEntries.getValue();
@@ -969,6 +972,7 @@ public class SingleResourceStatsAggregationTaskService extends
             keys.addAll(aggrValue.keySet());
             // create list of operations sorted by the timebin
             Collections.sort(keys);
+            Long latestTimeKey = null;
             for (Long timeKey : keys) {
                 ResourceAggregateMetric aggrMetric = new ResourceAggregateMetric();
                 aggrMetric.timeBin = aggrValue.get(timeKey);
@@ -979,14 +983,29 @@ public class SingleResourceStatsAggregationTaskService extends
                 operations.add(Operation
                         .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
                         .setBody(aggrMetric));
-
-                // update the last update time as a stat
-                ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
-                lastUpdateStat.name = aggregateEntries.getKey();
-                lastUpdateStat.latestValue = timeKey;
-                URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.resourceLink);
-                operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
+                publishedKeys.add(aggregateEntries.getKey());
+                latestTimeKey = timeKey;
             }
+            // update the last update time as a stat
+            ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
+            lastUpdateStat.name = aggregateEntries.getKey();
+            lastUpdateStat.latestValue = latestTimeKey;
+            URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.resourceLink);
+            operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
+        }
+        // for all those metrics with no aggregate value was computed and the existing rollup time
+        // does not exist, publish a value of 0 so that the next invocation of this task
+        // does not have to invoke a query to obtain the last rollup time
+        for (Entry<String, Long> rollupTime : currentState.lastRollupTimeForMetric.entrySet()) {
+            if (publishedKeys.contains(rollupTime.getKey())
+                    || (rollupTime.getValue() != null && rollupTime.getValue() > 0)) {
+                continue;
+            }
+            ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
+            lastUpdateStat.name = rollupTime.getKey();
+            lastUpdateStat.latestValue = 0;
+            URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.resourceLink);
+            operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
         }
 
         if (operations.isEmpty()) {
