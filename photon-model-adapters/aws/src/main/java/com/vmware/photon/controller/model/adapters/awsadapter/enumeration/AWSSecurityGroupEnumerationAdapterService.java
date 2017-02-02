@@ -213,36 +213,32 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 return DeferredResult.completed(context);
             }
 
-            Query query = Query.Builder.create()
+            Builder builder = Query.Builder.create()
                     .addKindFieldClause(SecurityGroupState.class)
                     .addFieldClause(SecurityGroupState.FIELD_NAME_AUTH_CREDENTIAL_LINK,
                             this.parentAuth.documentSelfLink)
                     .addCompositeFieldClause(SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                             this.parentCompute.documentSelfLink)
-                    .addInClause(SecurityGroupState.FIELD_NAME_ID, context.remoteResources.keySet())
-                    .build();
+                    .addInClause(SecurityGroupState.FIELD_NAME_ID, context.remoteResources.keySet());
 
             if (this.request.endpointLink != null && !this.request.endpointLink.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addFieldClause(SecurityGroupState.FIELD_NAME_ENDPOINT_LINK,
-                                this.request.endpointLink)
-                        .build());
+                builder.addFieldClause(
+                        SecurityGroupState.FIELD_NAME_ENDPOINT_LINK, this.request.endpointLink);
             }
 
             if (context.parentCompute.tenantLinks != null
                     && !context.parentCompute.tenantLinks.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addInCollectionItemClause(SecurityGroupState.FIELD_NAME_TENANT_LINKS,
-                                context.parentCompute.tenantLinks)
-                        .build());
+                builder.addInCollectionItemClause(
+                        SecurityGroupState.FIELD_NAME_TENANT_LINKS,
+                        context.parentCompute.tenantLinks);
             }
 
             QueryTask q = QueryTask.Builder.createDirectTask()
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .addOption(QueryOption.TOP_RESULTS)
                     .setResultLimit(getQueryResultLimit())
-                    .setQuery(query)
+                    .setQuery(builder.build())
                     .build();
             q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -303,7 +299,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         @Override
         protected Query getDeleteQuery() {
             this.service.logFine("Get delete query for deleting SecurityGroupStates");
-            Query query = Builder.create()
+            Builder builder = Builder.create()
                     .addKindFieldClause(SecurityGroupState.class)
                     .addFieldClause(SecurityGroupState.FIELD_NAME_AUTH_CREDENTIAL_LINK,
                             this.parentAuth.documentSelfLink)
@@ -311,26 +307,21 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                             ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                             this.parentCompute.documentSelfLink)
                     .addRangeClause(NetworkState.FIELD_NAME_UPDATE_TIME_MICROS,
-                            NumericRange.createLessThanRange(this.enumerationStartTimeInMicros))
-                    .build();
+                            NumericRange.createLessThanRange(this.enumerationStartTimeInMicros));
 
             if (this.request.endpointLink != null && !this.request.endpointLink.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK,
-                                this.request.endpointLink)
-                        .build());
+                builder.addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK,
+                                this.request.endpointLink);
             }
 
 
             if (this.parentCompute.tenantLinks != null
                     && !this.parentCompute.tenantLinks.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addInCollectionItemClause(NetworkState.FIELD_NAME_TENANT_LINKS,
-                                this.parentCompute.tenantLinks)
-                        .build());
+                builder.addInCollectionItemClause(NetworkState.FIELD_NAME_TENANT_LINKS,
+                                this.parentCompute.tenantLinks);
             }
 
-            return query;
+            return builder.build();
         }
 
         @Override

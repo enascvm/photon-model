@@ -30,6 +30,7 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
@@ -223,25 +224,21 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             return DeferredResult.completed(context);
         }
 
-        Query query = Query.Builder.create()
+        Builder builder = Query.Builder.create()
                 .addKindFieldClause(this.localStateClass)
-                .addInClause(ResourceState.FIELD_NAME_ID, context.remoteResources.keySet())
-                .build();
+                .addInClause(ResourceState.FIELD_NAME_ID, context.remoteResources.keySet());
 
         if (context.parentCompute.tenantLinks != null && !context.parentCompute.tenantLinks
                 .isEmpty()) {
-            query.addBooleanClause(Query.Builder.create()
-                    .addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS,
-                            context.parentCompute.tenantLinks)
-                    .build()
-            );
+            builder.addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS,
+                            context.parentCompute.tenantLinks);
         }
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(DEFAULT_QUERY_RESULT_LIMIT)
-                .setQuery(query)
+                .setQuery(builder.build())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 

@@ -589,32 +589,28 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         }
 
         logFine("Query Subnet States from local document store.");
-        Query query = Query.Builder.create()
+        Builder builder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
-                .addInClause(SubnetState.FIELD_NAME_ID, context.subnets.keySet())
-                .build();
+                .addInClause(SubnetState.FIELD_NAME_ID, context.subnets.keySet());
 
         if (context.request.endpointLink != null && !context.request.endpointLink.isEmpty()) {
-            query.addBooleanClause(Query.Builder.create()
-                    .addFieldClause(SubnetState.FIELD_NAME_ENDPOINT_LINK,
-                            context.request.endpointLink)
-                    .build());
+            builder.addFieldClause(SubnetState.FIELD_NAME_ENDPOINT_LINK,
+                            context.request.endpointLink);
         }
 
         if (context.parentCompute.tenantLinks != null
                 && !context.parentCompute.tenantLinks.isEmpty()) {
             // Add tenant links to reduce the result set size
-            query.addBooleanClause(Query.Builder.create()
-                    .addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
-                            context.parentCompute.tenantLinks)
-                    .build());
+            builder.addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
+                            context.parentCompute.tenantLinks);
         }
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
-                .setQuery(query).build();
+                .setQuery(builder.build())
+                .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
         QueryUtils.startQueryTask(this, q)
@@ -842,33 +838,28 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void deleteNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
         logFine("Delete Network States that no longer exists in Azure.");
 
-        Query query = Query.Builder.create()
+        Builder builder = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
                 .addFieldClause(NetworkState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                         context.parentCompute.description.authCredentialsLink)
                 .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
                         QueryTask.NumericRange
-                                .createLessThanRange(context.enumerationStartTimeInMicros))
-                .build();
+                                .createLessThanRange(context.enumerationStartTimeInMicros));
 
         if (context.request.endpointLink != null && !context.request.endpointLink.isEmpty()) {
-            query.addBooleanClause(Query.Builder.create()
-                    .addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK,
-                            context.request.endpointLink)
-                    .build());
+            builder.addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK,
+                            context.request.endpointLink);
         }
 
         if (context.parentCompute.tenantLinks != null
                 && !context.parentCompute.tenantLinks.isEmpty()) {
-            query.addBooleanClause(Query.Builder.create()
-                    .addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
-                            context.parentCompute.tenantLinks)
-                    .build());
+            builder.addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
+                            context.parentCompute.tenantLinks);
         }
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(query)
+                .setQuery(builder.build())
                 .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
@@ -887,31 +878,26 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * belong to networks touched by this enumeration cycle (either created/updated/deleted).
      */
     private void deleteSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
-        Query query = Query.Builder.create()
+        Builder builder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
                 .addRangeClause(SubnetState.FIELD_NAME_UPDATE_TIME_MICROS,
                         QueryTask.NumericRange
-                                .createLessThanRange(context.enumerationStartTimeInMicros))
-                .build();
+                                .createLessThanRange(context.enumerationStartTimeInMicros));
 
         if (context.request.endpointLink != null && !context.request.endpointLink.isEmpty()) {
-            query.addBooleanClause(Query.Builder.create()
-                    .addFieldClause(SubnetState.FIELD_NAME_ENDPOINT_LINK,
-                            context.request.endpointLink)
-                    .build());
+            builder.addFieldClause(SubnetState.FIELD_NAME_ENDPOINT_LINK,
+                            context.request.endpointLink);
         }
 
         if (context.parentCompute.tenantLinks != null
                 && !context.parentCompute.tenantLinks.isEmpty()) {
-            query.addBooleanClause(Query.Builder.create()
-                    .addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
-                            context.parentCompute.tenantLinks)
-                    .build());
+            builder.addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
+                            context.parentCompute.tenantLinks);
         }
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(query)
+                .setQuery(builder.build())
                 .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;

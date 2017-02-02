@@ -156,32 +156,27 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                     ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME);
 
-            Query query = Builder.create()
+            Builder builder = Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
                     .addFieldClause(computeHostProperty, this.parentCompute.documentSelfLink)
                     .addFieldClause(rgTypeProperty,
                             ResourceGroupStateType.AzureResourceGroup.name())
                     .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
                             QueryTask.NumericRange
-                                    .createLessThanRange(this.enumerationStartTimeInMicros))
-                    .build();
+                                    .createLessThanRange(this.enumerationStartTimeInMicros));
 
             if (this.request.endpointLink != null && !this.request.endpointLink.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                                CUSTOM_PROP_ENDPOINT_LINK, this.request.endpointLink)
-                        .build());
+                builder.addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                CUSTOM_PROP_ENDPOINT_LINK, this.request.endpointLink);
             }
 
             if (this.parentCompute.tenantLinks != null
                     && !this.parentCompute.tenantLinks.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addInCollectionItemClause(ResourceGroupState.FIELD_NAME_TENANT_LINKS,
-                                this.parentCompute.tenantLinks)
-                        .build());
+                builder.addInCollectionItemClause(ResourceGroupState.FIELD_NAME_TENANT_LINKS,
+                                this.parentCompute.tenantLinks);
             }
 
-            return query;
+            return builder.build();
         }
 
         @Override
@@ -201,7 +196,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 return DeferredResult.completed(context);
             }
 
-            Query query = Query.Builder.create()
+            Builder builder = Query.Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
                     .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
@@ -209,29 +204,25 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                     .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.RESOURCE_TYPE_KEY,
                             ResourceGroupStateType.AzureResourceGroup.name())
-                    .addInClause(ResourceGroupState.FIELD_NAME_ID, context.remoteResources.keySet())
-                    .build();
+                    .addInClause(ResourceGroupState.FIELD_NAME_ID,
+                            context.remoteResources.keySet());
 
             if (this.request.endpointLink != null && !this.request.endpointLink.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                                CUSTOM_PROP_ENDPOINT_LINK, this.request.endpointLink)
-                        .build());
+                builder.addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                CUSTOM_PROP_ENDPOINT_LINK, this.request.endpointLink);
             }
 
             if (context.parentCompute.tenantLinks != null && !context.parentCompute.tenantLinks
                     .isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS,
-                                context.parentCompute.tenantLinks)
-                        .build());
+                builder.addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS,
+                                context.parentCompute.tenantLinks);
             }
 
             QueryTask q = QueryTask.Builder.createDirectTask()
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .addOption(QueryOption.TOP_RESULTS)
                     .setResultLimit(getQueryResultLimit())
-                    .setQuery(query)
+                    .setQuery(builder.build())
                     .build();
             q.tenantLinks = context.parentCompute.tenantLinks;
 

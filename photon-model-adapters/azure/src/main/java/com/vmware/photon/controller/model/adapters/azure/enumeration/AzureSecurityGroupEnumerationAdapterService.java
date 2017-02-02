@@ -184,36 +184,32 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 return DeferredResult.completed(context);
             }
 
-            Query query = Query.Builder.create()
+            Builder builder = Query.Builder.create()
                     .addKindFieldClause(SecurityGroupState.class)
                     .addFieldClause(SecurityGroupState.FIELD_NAME_AUTH_CREDENTIAL_LINK,
                             this.parentAuth.documentSelfLink)
                     .addCompositeFieldClause(SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                             this.parentCompute.documentSelfLink)
-                    .addInClause(SecurityGroupState.FIELD_NAME_ID, context.remoteResources.keySet())
-                    .build();
+                    .addInClause(SecurityGroupState.FIELD_NAME_ID,
+                            context.remoteResources.keySet());
 
             if (this.request.endpointLink != null && !this.request.endpointLink.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addFieldClause(SecurityGroupState.FIELD_NAME_ENDPOINT_LINK,
-                                this.request.endpointLink)
-                        .build());
+                builder.addFieldClause(SecurityGroupState.FIELD_NAME_ENDPOINT_LINK,
+                                this.request.endpointLink);
             }
 
             if (context.parentCompute.tenantLinks != null
                     && !context.parentCompute.tenantLinks.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addInCollectionItemClause(SecurityGroupState.FIELD_NAME_TENANT_LINKS,
-                                context.parentCompute.tenantLinks)
-                        .build());
+                builder.addInCollectionItemClause(SecurityGroupState.FIELD_NAME_TENANT_LINKS,
+                                context.parentCompute.tenantLinks);
             }
 
             QueryTask q = QueryTask.Builder.createDirectTask()
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .addOption(QueryOption.TOP_RESULTS)
                     .setResultLimit(getQueryResultLimit())
-                    .setQuery(query)
+                    .setQuery(builder.build())
                     .build();
             q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -242,32 +238,27 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     SecurityGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME);
 
-            Query query = Builder.create()
+            Builder builder = Builder.create()
                     .addKindFieldClause(SecurityGroupState.class)
                     .addFieldClause(SecurityGroupState.FIELD_NAME_AUTH_CREDENTIAL_LINK,
                             this.parentAuth.documentSelfLink)
                     .addFieldClause(computeHostProperty, this.parentCompute.documentSelfLink)
                     .addRangeClause(NetworkState.FIELD_NAME_UPDATE_TIME_MICROS,
-                            NumericRange.createLessThanRange(this.enumerationStartTimeInMicros))
-                    .build();
+                            NumericRange.createLessThanRange(this.enumerationStartTimeInMicros));
 
 
             if (this.request.endpointLink != null && !this.request.endpointLink.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK,
-                                this.request.endpointLink)
-                        .build());
+                builder.addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK,
+                                this.request.endpointLink);
             }
 
             if (this.parentCompute.tenantLinks != null
                     && !this.parentCompute.tenantLinks.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addInCollectionItemClause(NetworkState.FIELD_NAME_TENANT_LINKS,
-                                this.parentCompute.tenantLinks)
-                        .build());
+                builder.addInCollectionItemClause(NetworkState.FIELD_NAME_TENANT_LINKS,
+                                this.parentCompute.tenantLinks);
             }
 
-            return query;
+            return builder.build();
         }
 
         @Override
@@ -384,7 +375,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     .map(AzureUtils::getResourceGroupId)
                     .collect(Collectors.toList());
 
-            Query query = Builder.create()
+            Builder builder = Builder.create()
                     .addKindFieldClause(ResourceGroupState.class)
                     .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
@@ -392,27 +383,22 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.RESOURCE_TYPE_KEY,
                             ResourceGroupStateType.AzureResourceGroup.name())
-                    .addInClause(ResourceGroupState.FIELD_NAME_ID, resourceGroupIds)
-                    .build();
+                    .addInClause(ResourceGroupState.FIELD_NAME_ID, resourceGroupIds);
 
             if (this.request.endpointLink != null && !this.request.endpointLink.isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                                CUSTOM_PROP_ENDPOINT_LINK, this.request.endpointLink)
-                        .build());
+                builder.addCompositeFieldClause(ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
+                                CUSTOM_PROP_ENDPOINT_LINK, this.request.endpointLink);
             }
 
             if (context.parentCompute.tenantLinks != null && !context.parentCompute.tenantLinks
                     .isEmpty()) {
-                query.addBooleanClause(Query.Builder.create()
-                        .addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS,
-                                context.parentCompute.tenantLinks)
-                        .build());
+                builder.addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS,
+                                context.parentCompute.tenantLinks);
             }
 
             QueryByPages<ResourceGroupState> queryByPages = new QueryByPages<>(
                     this.service.getHost(),
-                    query,
+                    builder.build(),
                     ResourceGroupState.class,
                     context.parentCompute.tenantLinks)
                     .setMaxPageSize(getQueryResultLimit());
