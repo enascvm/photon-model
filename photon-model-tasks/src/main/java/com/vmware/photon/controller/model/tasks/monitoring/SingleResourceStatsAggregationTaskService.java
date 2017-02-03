@@ -449,7 +449,8 @@ public class SingleResourceStatsAggregationTaskService extends
                     QueryTask rsp = queryOp.getBody(QueryTask.class);
                     SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
                     if (rsp.results.nextPageLink == null) {
-                        patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+                        patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+                        patchBody.taskStage = StatsAggregationStage.PUBLISH_METRICS;
                     } else {
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
                         patchBody.taskStage = StatsAggregationStage.PROCESS_RESOURCES;
@@ -954,50 +955,13 @@ public class SingleResourceStatsAggregationTaskService extends
         return result;
     }
 
-    /**
-     * Publish aggregate metric values
-     */
-    private void publishMetrics(SingleResourceStatsAggregationTaskState currentState) {
-        long expirationTime = Utils.getNowMicrosUtc() + TimeUnit.DAYS.toMicros(EXPIRATION_INTERVAL);
-        if (currentState.aggregatedTimeBinMap == null) {
-            sendSelfPatch(currentState, TaskStage.FINISHED, null);
-            return;
-        }
-        List<Operation> operations = new ArrayList<>();
-        Set<String> publishedKeys = new HashSet<>();
-        for (Entry<String, Map<Long, TimeBin>> aggregateEntries : currentState.aggregatedTimeBinMap
-                .entrySet()) {
-            Map<Long, TimeBin> aggrValue = aggregateEntries.getValue();
-            List<Long> keys = new ArrayList<>();
-            keys.addAll(aggrValue.keySet());
-            // create list of operations sorted by the timebin
-            Collections.sort(keys);
-            Long latestTimeKey = null;
-            for (Long timeKey : keys) {
-                ResourceAggregateMetric aggrMetric = new ResourceAggregateMetric();
-                aggrMetric.timeBin = aggrValue.get(timeKey);
-                aggrMetric.currentIntervalTimeStampMicrosUtc = timeKey;
-                aggrMetric.documentSelfLink = StatsUtil.getMetricKey(currentState.resourceLink,
-                        aggregateEntries.getKey(), Utils.getNowMicrosUtc());
-                aggrMetric.documentExpirationTimeMicros = expirationTime;
-                operations.add(Operation
-                        .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
-                        .setBody(aggrMetric));
-                publishedKeys.add(aggregateEntries.getKey());
-                latestTimeKey = timeKey;
-            }
-            // update the last update time as a stat
-            ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
-            lastUpdateStat.name = aggregateEntries.getKey();
-            lastUpdateStat.latestValue = latestTimeKey;
-            URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.resourceLink);
-            operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
-        }
+    private void addLastRollupTimeForMissingKeys(SingleResourceStatsAggregationTaskState currentState,
+            Set<String> publishedKeys, List<Operation> operations) {
         // for all those metrics with no aggregate value was computed and the existing rollup time
         // does not exist, publish a value of 0 so that the next invocation of this task
         // does not have to invoke a query to obtain the last rollup time
         for (Entry<String, Long> rollupTime : currentState.lastRollupTimeForMetric.entrySet()) {
-            if (publishedKeys.contains(rollupTime.getKey())
+            if (publishedKeys != null && publishedKeys.contains(rollupTime.getKey())
                     || (rollupTime.getValue() != null && rollupTime.getValue() > 0)) {
                 continue;
             }
@@ -1006,6 +970,49 @@ public class SingleResourceStatsAggregationTaskService extends
             lastUpdateStat.latestValue = 0;
             URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.resourceLink);
             operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
+        }
+    }
+
+    /**
+     * Publish aggregate metric values
+     */
+    private void publishMetrics(SingleResourceStatsAggregationTaskState currentState) {
+        long expirationTime = Utils.getNowMicrosUtc() + TimeUnit.DAYS.toMicros(EXPIRATION_INTERVAL);
+        List<Operation> operations = new ArrayList<>();
+        Set<String> publishedKeys = new HashSet<>();
+
+        if (currentState.aggregatedTimeBinMap == null) {
+            addLastRollupTimeForMissingKeys(currentState, publishedKeys, operations);
+        } else {
+            for (Entry<String, Map<Long, TimeBin>> aggregateEntries : currentState.aggregatedTimeBinMap
+                    .entrySet()) {
+                Map<Long, TimeBin> aggrValue = aggregateEntries.getValue();
+                List<Long> keys = new ArrayList<>();
+                keys.addAll(aggrValue.keySet());
+                // create list of operations sorted by the timebin
+                Collections.sort(keys);
+                Long latestTimeKey = null;
+                for (Long timeKey : keys) {
+                    ResourceAggregateMetric aggrMetric = new ResourceAggregateMetric();
+                    aggrMetric.timeBin = aggrValue.get(timeKey);
+                    aggrMetric.currentIntervalTimeStampMicrosUtc = timeKey;
+                    aggrMetric.documentSelfLink = StatsUtil.getMetricKey(currentState.resourceLink,
+                            aggregateEntries.getKey(), Utils.getNowMicrosUtc());
+                    aggrMetric.documentExpirationTimeMicros = expirationTime;
+                    operations.add(Operation
+                            .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
+                            .setBody(aggrMetric));
+                    publishedKeys.add(aggregateEntries.getKey());
+                    latestTimeKey = timeKey;
+                }
+                // update the last update time as a stat
+                ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
+                lastUpdateStat.name = aggregateEntries.getKey();
+                lastUpdateStat.latestValue = latestTimeKey;
+                URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.resourceLink);
+                operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
+            }
+            addLastRollupTimeForMissingKeys(currentState, publishedKeys, operations);
         }
 
         if (operations.isEmpty()) {
