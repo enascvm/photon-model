@@ -62,7 +62,6 @@ import com.microsoft.azure.management.network.models.PublicIPAddress;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
-
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
@@ -74,7 +73,6 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachine;
 import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachineListResult;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -88,9 +86,9 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -195,7 +193,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         ComputeManagementClient computeClient;
 
         EnumerationContext(ComputeEnumerateAdapterRequest request, Operation op) {
-            this.request = request.computeEnumerateResourceRequest;
+            this.request = request.original;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
 
@@ -214,15 +212,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         }
         EnumerationContext ctx = new EnumerationContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
-        AdapterUtils.validateEnumRequest(ctx.request);
+
         if (ctx.request.isMockRequest) {
             op.complete();
             return;
         }
-        handleEnumerationRequest(ctx);
+        handleEnumeration(ctx);
     }
 
-    private void handleEnumerationRequest(EnumerationContext ctx) {
+    private void handleEnumeration(EnumerationContext ctx) {
         switch (ctx.stage) {
         case CLIENT:
             if (ctx.credentials == null) {
@@ -232,7 +230,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     logSevere(e);
                     ctx.error = e;
                     ctx.stage = EnumerationStages.ERROR;
-                    handleEnumerationRequest(ctx);
+                    handleEnumeration(ctx);
                     return;
                 }
             }
@@ -250,7 +248,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 }
             }
             ctx.stage = EnumerationStages.ENUMERATE;
-            handleEnumerationRequest(ctx);
+            handleEnumeration(ctx);
             break;
         case ENUMERATE:
             String enumKey = getEnumKey(ctx);
@@ -263,7 +261,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 logInfo("Launching enumeration service for %s", enumKey);
                 ctx.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 ctx.request.enumerationAction = EnumerationAction.REFRESH;
-                handleEnumerationRequest(ctx);
+                handleEnumeration(ctx);
                 break;
             case REFRESH:
                 ctx.subStage = ComputeEnumerationSubStages.LISTVMS;
@@ -277,12 +275,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             enumKey);
                 }
                 ctx.stage = EnumerationStages.FINISHED;
-                handleEnumerationRequest(ctx);
+                handleEnumeration(ctx);
                 break;
             default:
                 logSevere("Unknown enumeration action %s", ctx.request.enumerationAction);
                 ctx.stage = EnumerationStages.ERROR;
-                handleEnumerationRequest(ctx);
+                handleEnumeration(ctx);
                 break;
             }
             break;
@@ -314,7 +312,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void handleSubStage(EnumerationContext ctx) {
         if (!this.ongoingEnumerations.contains(getEnumKey(ctx))) {
             ctx.stage = EnumerationStages.FINISHED;
-            handleEnumerationRequest(ctx);
+            handleEnumeration(ctx);
             return;
         }
 
@@ -354,14 +352,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             break;
         case FINISHED:
             ctx.stage = EnumerationStages.FINISHED;
-            handleEnumerationRequest(ctx);
+            handleEnumeration(ctx);
             break;
         default:
             String msg = String
                     .format("Unknown Azure enumeration sub-stage %s ", ctx.subStage.toString());
             ctx.error = new IllegalStateException(msg);
             ctx.stage = EnumerationStages.ERROR;
-            handleEnumerationRequest(ctx);
+            handleEnumeration(ctx);
             break;
         }
     }
@@ -379,17 +377,18 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * The method paginates through list of resources for deletion.
      */
     private void deleteComputeStates(EnumerationContext ctx) {
-        Query query = Builder.create()
+        Query.Builder qBuilder = Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
                         ctx.request.resourceLink())
                 .addRangeClause(ComputeState.FIELD_NAME_UPDATE_TIME_MICROS,
-                        NumericRange.createLessThanRange(ctx.enumerationStartTimeInMicros))
-                .build();
+                        NumericRange.createLessThanRange(ctx.enumerationStartTimeInMicros));
+
+        addScopeCriteria(qBuilder, ComputeState.class, ctx);
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(query)
+                .setQuery(qBuilder.build())
                 .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = ctx.parentCompute.tenantLinks;
@@ -569,10 +568,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Query all compute states for the cluster filtered by the received set of instance Ids.
      */
     private void queryForComputeStates(EnumerationContext ctx) {
-        Query query = Query.Builder.create()
+        Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, ctx.request.resourceLink())
-                .build();
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, ctx.request.resourceLink());
+
+        addScopeCriteria(qBuilder, ComputeState.class, ctx);
 
         Query.Builder instanceIdFilterParentQuery = Query.Builder.create(Occurance.MUST_OCCUR);
 
@@ -583,10 +583,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             instanceIdFilterParentQuery.addClause(instanceIdFilter);
         }
 
-        query.addBooleanClause(instanceIdFilterParentQuery.build());
+        qBuilder.addClause(instanceIdFilterParentQuery.build());
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(query)
+                .setQuery(qBuilder.build())
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
@@ -695,11 +695,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             handleSubStage(ctx);
             return;
         }
-        Query query = Query.Builder.create()
+        Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(DiskState.class)
                 .addFieldClause(DiskState.FIELD_NAME_COMPUTE_HOST_LINK,
-                        ctx.parentCompute.documentSelfLink)
-                .build();
+                        ctx.parentCompute.documentSelfLink);
+
+        addScopeCriteria(qBuilder, DiskState.class, ctx);
 
         Query.Builder diskUriFilterParentQuery = Query.Builder.create();
         for (String instanceId : ctx.virtualMachines.keySet()) {
@@ -712,13 +713,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             diskUriFilterParentQuery.addClause(diskUriFilter);
         }
-        query.addBooleanClause(diskUriFilterParentQuery.build());
+        qBuilder.addClause(diskUriFilterParentQuery.build());
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
-                .setQuery(query)
+                .setQuery(qBuilder.build())
                 .build();
         q.tenantLinks = ctx.parentCompute.tenantLinks;
 
@@ -753,11 +754,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Get all storage descriptions responsible for diagnostics of given VMs.
      */
     private void queryForDiagnosticStorageDescriptions(EnumerationContext ctx) {
-        Query query = Query.Builder.create()
+        Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(StorageDescription.class)
                 .addFieldClause(StorageDescription.FIELD_NAME_COMPUTE_HOST_LINK,
-                        ctx.parentCompute.documentSelfLink)
-                .build();
+                        ctx.parentCompute.documentSelfLink);
+
+        addScopeCriteria(qBuilder, StorageDescription.class, ctx);
 
         Query.Builder storageDescUriFilterParentQuery = Query.Builder
                 .create(Query.Occurance.MUST_OCCUR);
@@ -787,13 +789,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             handleSubStage(ctx);
             return;
         }
-        query.addBooleanClause(sdq);
+        qBuilder.addClause(sdq);
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
-                .setQuery(query)
+                .setQuery(qBuilder.build())
                 .build();
         q.tenantLinks = ctx.parentCompute.tenantLinks;
 
@@ -1263,7 +1265,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 Utils.toString(e));
         ctx.error = e;
         ctx.stage = EnumerationStages.ERROR;
-        handleEnumerationRequest(ctx);
+        handleEnumeration(ctx);
     }
 
     /**
@@ -1336,5 +1338,19 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private String httpsToHttp(String uri) {
         return (uri.startsWith("https")) ? uri.replace("https", "http") : uri;
+    }
+
+    /**
+     * Constrain every query with endpointLink and tenantLinks, if presented.
+     */
+    private void addScopeCriteria(Query.Builder qBuilder, Class<? extends ResourceState> stateClass, EnumerationContext ctx) {
+        // Add TENANT_LINKS criteria
+        if (ctx.parentCompute.tenantLinks != null && !ctx.parentCompute.tenantLinks.isEmpty()) {
+            qBuilder.addInCollectionItemClause(
+                    ResourceState.FIELD_NAME_TENANT_LINKS,
+                    ctx.parentCompute.tenantLinks);
+        }
+        // Add ENDPOINT_LINK criteria
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
     }
 }

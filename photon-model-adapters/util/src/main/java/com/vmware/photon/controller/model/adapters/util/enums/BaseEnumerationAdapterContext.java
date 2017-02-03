@@ -13,25 +13,27 @@
 
 package com.vmware.photon.controller.model.adapters.util.enums;
 
+import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
+
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.tasks.QueryStrategy;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
-
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.Query.Builder;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * Base class for context used by enumeration adapters. It loads resources from the remote system.
@@ -48,51 +50,68 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  */
 public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAdapterContext<T, LOCAL_STATE, REMOTE>, LOCAL_STATE extends ResourceState, REMOTE> {
 
-    public static final String PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT =
-            UriPaths.PROPERTY_PREFIX + "Enumeration.QUERY_RESULT_LIMIT";
-    private static int DEFAULT_QUERY_RESULT_LIMIT = Integer.getInteger(
-            PROPERTY_NAME_ENUM_QUERY_RESULT_LIMIT,
-            100);
-
     protected final LOCAL_STATE SKIP = null;
 
-    public ComputeStateWithDescription parentCompute;
+    /**
+     * The service that is creating and using this context.
+     */
+    public final StatelessService service;
+
+    /**
+     * The {@link ComputeEnumerateAdapterRequest request} that is being processed.
+     */
+    public final ComputeEnumerateAdapterRequest request;
+
+    /**
+     * The operation that triggered this enumeration. Used to signal the completion of the
+     * enumeration once all the stages are successfully completed.
+     */
+    public final Operation operation;
+
+    protected final Class<LOCAL_STATE> localStateClass;
+    protected final String localStateServiceFactoryLink;
 
     /**
      * Page of remote resources as fetched from the remote endpoint. key -> id; value -> Remote
      * object.
      */
-    public Map<String, REMOTE> remoteResources = new ConcurrentHashMap<>();
+    public final Map<String, REMOTE> remoteResources = new ConcurrentHashMap<>();
 
     /**
      * States stored in local document store. key -> Local state id (matching remote id); value ->
      * Local resource state.
      */
-    public Map<String, LOCAL_STATE> localResourceStates = new ConcurrentHashMap<>();
+    public final Map<String, LOCAL_STATE> localResourceStates = new ConcurrentHashMap<>();
 
     /**
-     * The service that is creating and using this context.
+     * Used to store an error while transferring to the error stage.
      */
-    protected final StatelessService service;
+    public Throwable error;
 
-    protected String enumNextPageLink;
-    protected String deletionNextPageLink;
+    protected String enumExternalResourcesNextPageLink;
 
-    protected Class<LOCAL_STATE> localStateClass;
-    protected String localStateServiceFactoryLink;
+    /**
+     * In-memory store of all remote resource ids being enumerated.
+     */
+    public final Set<String> enumExternalResourcesIds = new HashSet<>();
+
+    /**
+     * The time when this enumeration started. It is used to identify stale resources that should be
+     * deleted during deletion stage.
+     */
+    public long enumStartTimeInMicros;
+
+    public EnumerationStages stage = EnumerationStages.CLIENT;
 
     protected enum BaseEnumerationAdapterStage {
-        GET_REMOTE_RESOURCES,
-        QUERY_LOCAL_STATES,
-        CREATE_UPDATE_LOCAL_STATES,
-        DELETE_LOCAL_STATES,
-        FINISHED
+        GET_REMOTE_RESOURCES, QUERY_LOCAL_STATES, CREATE_UPDATE_LOCAL_STATES, DELETE_LOCAL_STATES, FINISHED
     }
 
     /**
      * Represents a single page of remote resource.
      */
     public class RemoteResourcesPage {
+
         /**
          * A link to the next page. Null if next page is not available.
          * <p>
@@ -100,6 +119,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
          * {@link #getExternalResources(String)} method to fetch the next page.
          */
         public String nextPageLink;
+
         /**
          * The loaded page of remote resources.
          */
@@ -111,23 +131,30 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      *
      * @param service
      *            The service that is creating and using this context.
+     * @param request
+     *            The request that triggered this enumeration.
+     * @param operation
+     *            The operation that triggered this enumeration.
      * @param localStateClass
      *            The class representing the local resource states.
-     * @param parentCompute
-     *            Parent compute with description.
+     * @param localStateServiceFactoryLink
+     *            The factory link of the service handling the local resource states.
      */
     public BaseEnumerationAdapterContext(StatelessService service,
-            Class<LOCAL_STATE> localStateClass, String localStateServiceFactoryLink,
-            ComputeStateWithDescription parentCompute) {
+            ComputeEnumerateAdapterRequest request,
+            Operation operation,
+            Class<LOCAL_STATE> localStateClass,
+            String localStateServiceFactoryLink) {
+
         this.service = service;
+        this.request = request;
+        this.operation = operation;
         this.localStateClass = localStateClass;
         this.localStateServiceFactoryLink = localStateServiceFactoryLink;
-        this.parentCompute = parentCompute;
     }
 
     /**
-     * @return Starts the enumeration process and returns a {@link DeferredResult} to signal
-     *         completion.
+     * Starts the enumeration process and returns a {@link DeferredResult} to signal completion.
      */
     public DeferredResult<T> enumerate() {
         return enumerate(BaseEnumerationAdapterStage.GET_REMOTE_RESOURCES);
@@ -139,7 +166,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * {@see RemoteResourcesPage} for information about the format of the returned data.
      *
      * @param nextPageLink
-     *            Information about the next page (null if this is the call for the first page).
+     *            Link to the the next page. null if this is the call for the first page).
      */
     protected abstract DeferredResult<RemoteResourcesPage> getExternalResources(
             String nextPageLink);
@@ -151,16 +178,29 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * resource.
      *
      * @param remoteResource
-     *            remote resource.
+     *            The remote resource that should be represented in Photon model as a result of
+     *            current enumeration.
      * @param existingLocalResourceState
-     *            existing local resource that matches the remote resource. null is no local
-     *            resource matches the remote one.
-     * @return a resource state that describes the remote resource.
+     *            The existing local resource state that matches the remote resource. null means
+     *            there is no local resource state representing the remote resource.
+     * @return The resource state (either existing or new) that describes the remote resource.
      */
     protected abstract DeferredResult<LOCAL_STATE> buildLocalResourceState(
             REMOTE remoteResource, LOCAL_STATE existingLocalResourceState);
 
-    protected abstract Query getDeleteQuery();
+    /**
+     * Descendants should override this method to specify the criteria to locate the local resources
+     * managed by this enumeration.
+     *
+     * @param qBuilder
+     *            The builder used to express the query criteria.
+     *
+     * @see #queryLocalStates(BaseEnumerationAdapterContext) for details about the GET criteria
+     *      being pre-set/used by this enumeration logic.
+     * @see #deleteLocalStates(BaseEnumerationAdapterContext) for details about the DELETE criteria
+     *      being pre-set/used by this enumeration logic.
+     */
+    protected abstract void customizeLocalStatesQuery(Query.Builder qBuilder);
 
     /**
      * Isolate all cases when this instance should be cast to T. For internal use only.
@@ -180,86 +220,94 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             this.remoteResources.clear();
             this.localResourceStates.clear();
 
-            return getExternalResources(this.enumNextPageLink)
+            return getExternalResources(this.enumExternalResourcesNextPageLink)
                     .thenCompose(resourcesPage -> {
-                        this.enumNextPageLink = resourcesPage != null ? resourcesPage.nextPageLink
+                        this.enumExternalResourcesNextPageLink = resourcesPage != null
+                                ? resourcesPage.nextPageLink
                                 : null;
 
-                        if ((resourcesPage != null) && (resourcesPage.resourcesPage != null)) {
+                        if (resourcesPage != null && resourcesPage.resourcesPage != null) {
                             // Store locally.
                             this.remoteResources.putAll(resourcesPage.resourcesPage);
+
+                            // Store ALL enum'd resource ids
+                            this.enumExternalResourcesIds.addAll(
+                                    resourcesPage.resourcesPage.keySet());
                         }
 
                         return enumerate(BaseEnumerationAdapterStage.QUERY_LOCAL_STATES);
                     });
+
         case QUERY_LOCAL_STATES:
             return queryLocalStates(self())
                     .thenCompose(
                             c -> enumerate(BaseEnumerationAdapterStage.CREATE_UPDATE_LOCAL_STATES));
+
         case CREATE_UPDATE_LOCAL_STATES:
             return createUpdateLocalResourceStates(self())
                     .thenCompose(c -> {
-                        if (c.enumNextPageLink != null) {
-                            this.service.logFine("Fetch the next page remote resources.");
+                        if (c.enumExternalResourcesNextPageLink != null) {
+                            c.service.logFine("Fetch the next page of remote resources.");
                             return enumerate(BaseEnumerationAdapterStage.GET_REMOTE_RESOURCES);
-                        } else {
-                            return enumerate(BaseEnumerationAdapterStage.DELETE_LOCAL_STATES);
                         }
+                        return enumerate(BaseEnumerationAdapterStage.DELETE_LOCAL_STATES);
                     });
+
         case DELETE_LOCAL_STATES:
             return deleteLocalStates(self());
+
         default:
             return DeferredResult.completed(self());
-
         }
     }
 
     /**
-     * Load local resource states that match the page of remote resources that is being processed.
+     * Load local resource states that match the {@link #getExternalResources(String) page} of
+     * remote resources that are being processed.
+     * <p>
+     * Here is the list of criteria used to locate the local resources states:
+     * <ul>
+     * <li>Add local documents' kind:
+     * {@code qBuilder.addKindFieldClause(context.localStateClass)}</li>
+     * <li>Add remote resources ids:
+     * {@code qBuilder.addInClause(ResourceState.FIELD_NAME_ID, remoteResourceIds)}</li>
+     * <li>Add {@code tenantLinks} criteria as defined by {@code QueryTemplate}</li>
+     * <li>Add {@code endpointLink} criteria as defined by
+     * {@link QueryUtils#addEndpointLink(com.vmware.xenon.services.common.QueryTask.Query.Builder, Class, String)}</li>
+     * <li>Add descendant specific criteria as defined by
+     * {@link customizeLocalStatesQuery(qBuilder)}</li>
+     * </ul>
      */
     protected DeferredResult<T> queryLocalStates(T context) {
-        this.service.logFine("Query local Resource Group States.");
 
-        if (context.remoteResources == null || context.remoteResources.isEmpty()) {
+        if (context.remoteResources.isEmpty()) {
             return DeferredResult.completed(context);
         }
 
-        Builder builder = Query.Builder.create()
-                .addKindFieldClause(this.localStateClass)
-                .addInClause(ResourceState.FIELD_NAME_ID, context.remoteResources.keySet());
+        Set<String> remoteResourceIds = context.remoteResources.keySet();
 
-        if (context.parentCompute.tenantLinks != null && !context.parentCompute.tenantLinks
-                .isEmpty()) {
-            builder.addInCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS,
-                            context.parentCompute.tenantLinks);
-        }
+        Query.Builder qBuilder = Query.Builder.create()
+                // Add documents' class
+                .addKindFieldClause(context.localStateClass)
+                // Add remote resources IDs
+                .addInClause(ResourceState.FIELD_NAME_ID, remoteResourceIds);
 
-        QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(DEFAULT_QUERY_RESULT_LIMIT)
-                .setQuery(builder.build())
-                .build();
-        q.tenantLinks = context.parentCompute.tenantLinks;
+        QueryUtils.addEndpointLink(qBuilder, context.localStateClass,
+                context.request.original.endpointLink);
 
-        return QueryUtils.startQueryTask(this.service, q)
-                .thenApply(queryTask -> {
-                    this.service
-                            .logFine("Found %d matching resource group states for Cloud resources.",
-                                    queryTask.results.documentCount);
+        // Delegate to descendants to any doc specific criteria
+        customizeLocalStatesQuery(qBuilder);
 
-                    // If there are no matches, there is nothing to update.
-                    if (queryTask.results != null && queryTask.results.documentCount > 0) {
-                        queryTask.results.documents.values().forEach(localResourceState -> {
-                            LOCAL_STATE localState = Utils.fromJson(localResourceState,
-                                    this.localStateClass);
-                            context.localResourceStates.put(localState.id,
-                                    localState);
-                        });
-                    }
+        QueryStrategy<LOCAL_STATE> queryLocalStates = new QueryTop<>(
+                context.service.getHost(),
+                qBuilder.build(),
+                context.localStateClass,
+                context.request.parentCompute.tenantLinks)
+                        .setMaxResultsLimit(remoteResourceIds.size());
 
-                    return context;
-                });
+        return queryLocalStates
+                .queryDocuments(doc -> context.localResourceStates.put(doc.id, doc))
+                .thenApply(ignore -> context);
     }
 
     /**
@@ -267,10 +315,12 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * the remote system.
      */
     protected DeferredResult<T> createUpdateLocalResourceStates(T context) {
-        this.service.logFine("Create or update local resource to match remote states.");
+
+        context.service.logFine("Create/Update local %ss to match remote resources.",
+                context.localStateClass.getSimpleName());
 
         if (context.remoteResources.isEmpty()) {
-            this.service.logFine("No resources available for create/update.");
+            context.service.logFine("No resources available for create/update.");
             return DeferredResult.completed(context);
         }
 
@@ -278,15 +328,16 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                 .map(entry -> {
                     // First delegate to descendant to provide the local resource to create/update
                     return buildLocalResourceState(entry.getValue(),
-                            this.localResourceStates.get(entry.getKey()))
+                            context.localResourceStates.get(entry.getKey()))
                                     .thenApply(localState -> {
-                                        if (localState == this.SKIP) {
+                                        if (localState == context.SKIP) {
                                             return localState;
                                         }
-                                        // Explicitly set the local resource state id to be equal to
-                                        // the remote
-                                        // resource state id. This is important in the query for
-                                        // local states.
+                                        /*
+                                         * Explicitly set the local resource state id to be equal to
+                                         * the remote resource state id. This is important in the
+                                         * query for local states.
+                                         */
                                         localState.id = entry.getKey();
                                         return localState;
                                     })
@@ -302,105 +353,87 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             return DeferredResult.completed(null);
         }
 
-        boolean existsLocally = this.localResourceStates
-                .containsKey(localState.id);
+        boolean existsLocally = this.localResourceStates.containsKey(localState.id);
+
         Operation op = existsLocally
                 // Update case.
                 ? Operation.createPatch(this.service, localState.documentSelfLink)
                 // Create case.
-                : Operation.createPost(this.service,
-                        this.localStateServiceFactoryLink);
+                : Operation.createPost(this.service, this.localStateServiceFactoryLink);
 
         op.setBody(localState);
 
-        return this.service.sendWithDeferredResult(op).exceptionally(ex -> {
-            this.service.logWarning("Error: %s", ex.getMessage());
-            return op;
-        });
+        return this.service.sendWithDeferredResult(op)
+                .exceptionally(ex -> {
+                    this.service.logWarning("%s local %s to match remote resources: ERROR - %s",
+                            op.getAction(), op.getUri().getPath(), ex.getMessage());
+                    return op;
+                });
     }
 
-    ;
-
     /**
-     * Delete stale local resource states.
+     * Delete stale local resource states. The logic works by recording a timestamp when enumeration
+     * starts. This timestamp is used to lookup resources which have not been touched as part of
+     * current enumeration cycle.
+     * <p>
+     * Here is the list of criteria used to locate the stale local resources states:
+     * <ul>
+     * <li>Add local documents' kind:
+     * {@code qBuilder.addKindFieldClause(context.localStateClass)}</li>
+     * <li>Add time stamp older than current enumeration cycle:
+     * {@code qBuilder.addRangeClause(ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS, createLessThanRange(context.enumStartTimeInMicros))}</li>
+     * <li>Add {@code tenantLinks} criteria as defined by {@code QueryTemplate}</li>
+     * <li>Add {@code endpointLink} criteria as defined by
+     * {@link QueryUtils#addEndpointLink(com.vmware.xenon.services.common.QueryTask.Query.Builder, Class, String)}</li>
+     * <li>Add descendant specific criteria as defined by
+     * {@link customizeLocalStatesQuery(qBuilder)}</li>
+     * </ul>
      */
     protected DeferredResult<T> deleteLocalStates(T context) {
-        this.service.logFine("Delete Resource Group States that no longer exists in the Cloud.");
-        Query query = getDeleteQuery();
-        QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(query)
-                .setResultLimit(DEFAULT_QUERY_RESULT_LIMIT)
-                .build();
-        q.tenantLinks = context.parentCompute.tenantLinks;
 
-        this.service.logFine("Querying %s for deletion.", this.localStateClass.getSimpleName());
+        context.service.logFine("Delete %ss that no longer exist in the Endpoint.",
+                context.localStateClass.getSimpleName());
 
-        return sendDeleteQueryTask(q, context);
-    }
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(context.localStateClass)
+                .addRangeClause(
+                        ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
+                        createLessThanRange(context.enumStartTimeInMicros));
 
-    private DeferredResult<T> sendDeleteQueryTask(QueryTask q, T context) {
+        QueryUtils.addEndpointLink(qBuilder, context.localStateClass,
+                context.request.original.endpointLink);
 
-        DeferredResult<T> deletetionCompletion = new DeferredResult<>();
+        // Delegate to descendants to any doc specific criteria
+        customizeLocalStatesQuery(qBuilder);
 
-        QueryUtils.startQueryTask(this.service, q)
-                .thenAccept(queryTask -> {
-                    context.deletionNextPageLink = queryTask.results.nextPageLink;
+        QueryStrategy<LOCAL_STATE> queryLocalStates = new QueryByPages<>(
+                context.service.getHost(),
+                qBuilder.build(),
+                context.localStateClass,
+                context.request.parentCompute.tenantLinks);
 
-                    handleDeleteQueryTaskResult(context, deletetionCompletion);
-                });
-        return deletetionCompletion;
-    }
+        // Delete stale resources but do NOT wait the deletion to complete
+        // nor fail if individual deletion has failed.
+        return queryLocalStates.queryDocuments(ls -> {
+            if (shouldDelete(ls)) {
+                Operation dOp = Operation.createDelete(context.service, ls.documentSelfLink);
 
-    private void handleDeleteQueryTaskResult(T context, DeferredResult<T> deletionCompletion) {
-
-        if (context.deletionNextPageLink == null) {
-            this.service.logFine("Finished deletion stage.");
-            deletionCompletion.complete(context);
-        }
-
-        this.service.logFine("Querying page [%s] for resources to be deleted.",
-                context.deletionNextPageLink);
-
-        // Delete stale resources but don't wait the deletion to complete, nor fail if
-        // individual deletion has failed.
-        this.service.sendWithDeferredResult(
-                Operation.createGet(this.service, context.deletionNextPageLink))
-                .thenAccept(completedOp -> {
-                    QueryTask queryTask = completedOp.getBody(QueryTask.class);
-
-                    if (queryTask.results.documentCount > 0) {
-                        // Delete all matching states.
-                        List<DeferredResult<Operation>> deferredResults = queryTask.results.documentLinks
-                                .stream()
-                                .filter(link -> shouldDelete(queryTask, link))
-                                .map(link -> Operation.createDelete(this.service, link))
-                                .map(this.service::sendWithDeferredResult)
-                                .collect(Collectors.toList());
-
-                        DeferredResult.allOf(deferredResults).whenComplete((operations,
-                                throwable) -> {
-
-                            if (throwable != null) {
-                                this.service.logWarning("Error: %s", throwable
-                                        .getMessage());
-                            }
-                        });
+                context.service.sendWithDeferredResult(dOp).whenComplete((o, e) -> {
+                    if (e != null) {
+                        context.service.logWarning(
+                                "Delete %s that no longer exist in the Endpoint: ERROR - %s",
+                                ls.documentSelfLink,
+                                e.getMessage());
                     }
-
-                    // Store the next page in the context
-                    context.deletionNextPageLink = queryTask.results.nextPageLink;
-
-                    // Handle next page of results.
-                    handleDeleteQueryTaskResult(context, deletionCompletion);
-
                 });
+            }
+        }).thenApply(ignore -> context);
     }
 
     /**
-     * Checks whether the link should be deleted.
+     * Checks whether the local state should be deleted.
      */
-    protected boolean shouldDelete(QueryTask queryTask, String link) {
+    protected boolean shouldDelete(LOCAL_STATE localState) {
         return true;
     }
 }

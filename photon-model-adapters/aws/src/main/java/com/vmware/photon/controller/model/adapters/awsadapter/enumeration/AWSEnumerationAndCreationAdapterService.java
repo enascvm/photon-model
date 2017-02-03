@@ -160,7 +160,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         public EnumerationCreationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
             this.operation = op;
-            this.request = request.computeEnumerateResourceRequest;
+            this.request = request.original;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
             this.localAWSInstanceMap = new ConcurrentSkipListMap<>();

@@ -114,7 +114,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
 
         public EnumerationDeletionContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
-            this.request = request.computeEnumerateResourceRequest;
+            this.request = request.original;
             this.operation = op;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;

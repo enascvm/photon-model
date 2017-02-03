@@ -140,7 +140,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         public BlockStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
             this.operation = op;
-            this.request = request.computeEnumerateResourceRequest;
+            this.request = request.original;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
             this.localDiskStateMap = new ConcurrentSkipListMap<>();

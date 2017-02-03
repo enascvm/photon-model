@@ -55,20 +55,22 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
@@ -157,7 +159,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         ApplicationTokenCredentials credentials;
 
         NetworkEnumContext(ComputeEnumerateAdapterRequest request, Operation op) {
-            this.request = request.computeEnumerateResourceRequest;
+            this.request = request.original;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
 
@@ -220,7 +222,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             op.complete();
             return;
         }
-        handleNetworkEnumeration(ctx);
+        handleEnumeration(ctx);
     }
 
     /**
@@ -230,7 +232,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * @param context The local service context that has all the information needed to create the
      *                additional description states in the local system.
      */
-    private void handleNetworkEnumeration(NetworkEnumContext context) {
+    private void handleEnumeration(NetworkEnumContext context) {
         switch (context.stage) {
 
         case CLIENT:
@@ -241,12 +243,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     logSevere(e);
                     context.error = e;
                     context.stage = EnumerationStages.ERROR;
-                    handleNetworkEnumeration(context);
+                    handleEnumeration(context);
                     return;
                 }
             }
             context.stage = EnumerationStages.ENUMERATE;
-            handleNetworkEnumeration(context);
+            handleEnumeration(context);
             break;
         case ENUMERATE:
             String enumKey = getEnumKey(context);
@@ -259,7 +261,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 }
                 logInfo("Launching enumeration service for %s", enumKey);
                 context.request.enumerationAction = EnumerationAction.REFRESH;
-                handleNetworkEnumeration(context);
+                handleEnumeration(context);
                 break;
             case REFRESH:
                 context.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
@@ -274,12 +276,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                             enumKey);
                 }
                 context.stage = EnumerationStages.FINISHED;
-                handleNetworkEnumeration(context);
+                handleEnumeration(context);
                 break;
             default:
                 logSevere("Unknown enumeration action %s", context.request.enumerationAction);
                 context.stage = EnumerationStages.ERROR;
-                handleNetworkEnumeration(context);
+                handleEnumeration(context);
                 break;
             }
             break;
@@ -305,7 +307,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void handleSubStage(NetworkEnumContext context) {
         if (!this.ongoingEnumerations.contains(getEnumKey(context))) {
             context.stage = EnumerationStages.FINISHED;
-            handleNetworkEnumeration(context);
+            handleEnumeration(context);
             return;
         }
 
@@ -340,7 +342,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             break;
         case FINISHED:
             context.stage = EnumerationStages.FINISHED;
-            handleNetworkEnumeration(context);
+            handleEnumeration(context);
             break;
         default:
             break;
@@ -361,7 +363,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         logSevere("Failed at stage %s with exception: %s", ctx.stage, Utils.toString(e));
         ctx.error = e;
         ctx.stage = EnumerationStages.ERROR;
-        handleNetworkEnumeration(ctx);
+        handleEnumeration(ctx);
     }
 
     /**
@@ -495,26 +497,25 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .map(vNet -> AzureUtils.getResourceGroupId(vNet.id))
                 .collect(Collectors.toList());
 
-        String rgTypeProperty = QuerySpecification
-                .buildCompositeFieldName(
-                        ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        ComputeProperties.RESOURCE_TYPE_KEY);
-        String computeHostProperty = QuerySpecification.buildCompositeFieldName(
-                ResourceGroupState.FIELD_NAME_CUSTOM_PROPERTIES,
-                ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME);
-
-        Query query = Builder.create()
+        Query.Builder qBuilder = Builder.create()
                 .addKindFieldClause(ResourceGroupState.class)
-                .addFieldClause(computeHostProperty, context.parentCompute.documentSelfLink)
-                .addFieldClause(rgTypeProperty, ResourceGroupStateType.AzureResourceGroup.name())
-                .addInClause(ResourceGroupState.FIELD_NAME_ID, resourceGroupIds)
-                .build();
+                .addInClause(ResourceState.FIELD_NAME_ID, resourceGroupIds)
+                .addCompositeFieldClause(
+                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+                        context.parentCompute.documentSelfLink)
+                .addCompositeFieldClause(
+                        ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        ComputeProperties.RESOURCE_TYPE_KEY,
+                        ResourceGroupStateType.AzureResourceGroup.name());
+
+        addScopeCriteria(qBuilder, ResourceGroupState.class, context);
 
         QueryTask qt = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
-                .setQuery(query)
+                .setQuery(qBuilder.build())
                 .build();
         qt.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -543,20 +544,21 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void queryNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
         logFine("Query Network States from local document store.");
 
-        Query query = Query.Builder.create()
+        Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
-                .addInClause(NetworkState.FIELD_NAME_ID, context.virtualNetworks.keySet())
-                .build();
+                .addInClause(NetworkState.FIELD_NAME_ID, context.virtualNetworks.keySet());
 
-        QueryTask q = QueryTask.Builder.createDirectTask()
+        addScopeCriteria(qBuilder, NetworkState.class, context);
+
+        QueryTask qt = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
-                .setQuery(query)
+                .setQuery(qBuilder.build())
                 .build();
-        q.tenantLinks = context.parentCompute.tenantLinks;
+        qt.tenantLinks = context.parentCompute.tenantLinks;
 
-        QueryUtils.startQueryTask(this, q)
+        QueryUtils.startQueryTask(this, qt)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
                         handleError(context, e);
@@ -589,27 +591,17 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         }
 
         logFine("Query Subnet States from local document store.");
-        Builder builder = Query.Builder.create()
+        Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
                 .addInClause(SubnetState.FIELD_NAME_ID, context.subnets.keySet());
 
-        if (context.request.endpointLink != null && !context.request.endpointLink.isEmpty()) {
-            builder.addFieldClause(SubnetState.FIELD_NAME_ENDPOINT_LINK,
-                            context.request.endpointLink);
-        }
-
-        if (context.parentCompute.tenantLinks != null
-                && !context.parentCompute.tenantLinks.isEmpty()) {
-            // Add tenant links to reduce the result set size
-            builder.addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
-                            context.parentCompute.tenantLinks);
-        }
+        addScopeCriteria(qBuilder, SubnetState.class, context);
 
         QueryTask q = QueryTask.Builder.createDirectTask()
-                .addOption(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
-                .setQuery(builder.build())
+                .setQuery(qBuilder.build())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
@@ -838,28 +830,18 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void deleteNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
         logFine("Delete Network States that no longer exists in Azure.");
 
-        Builder builder = Query.Builder.create()
+        Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
                 .addFieldClause(NetworkState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                         context.parentCompute.description.authCredentialsLink)
-                .addRangeClause(ResourceGroupState.FIELD_NAME_UPDATE_TIME_MICROS,
-                        QueryTask.NumericRange
-                                .createLessThanRange(context.enumerationStartTimeInMicros));
+                .addRangeClause(NetworkState.FIELD_NAME_UPDATE_TIME_MICROS,
+                        NumericRange.createLessThanRange(context.enumerationStartTimeInMicros));
 
-        if (context.request.endpointLink != null && !context.request.endpointLink.isEmpty()) {
-            builder.addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK,
-                            context.request.endpointLink);
-        }
-
-        if (context.parentCompute.tenantLinks != null
-                && !context.parentCompute.tenantLinks.isEmpty()) {
-            builder.addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
-                            context.parentCompute.tenantLinks);
-        }
+        addScopeCriteria(qBuilder, NetworkState.class, context);
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(builder.build())
+                .setQuery(qBuilder.build())
                 .setResultLimit(getQueryResultLimit())
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
@@ -881,19 +863,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         Builder builder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
                 .addRangeClause(SubnetState.FIELD_NAME_UPDATE_TIME_MICROS,
-                        QueryTask.NumericRange
-                                .createLessThanRange(context.enumerationStartTimeInMicros));
+                        NumericRange.createLessThanRange(context.enumerationStartTimeInMicros));
 
-        if (context.request.endpointLink != null && !context.request.endpointLink.isEmpty()) {
-            builder.addFieldClause(SubnetState.FIELD_NAME_ENDPOINT_LINK,
-                            context.request.endpointLink);
-        }
-
-        if (context.parentCompute.tenantLinks != null
-                && !context.parentCompute.tenantLinks.isEmpty()) {
-            builder.addInCollectionItemClause(SubnetState.FIELD_NAME_TENANT_LINKS,
-                            context.parentCompute.tenantLinks);
-        }
+        addScopeCriteria(builder, SubnetState.class, context);
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
@@ -1003,4 +975,19 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         }
         return true;
     }
+
+    /**
+     * Constrain every query with endpointLink and tenantLinks, if presented.
+     */
+    private void addScopeCriteria(Query.Builder qBuilder, Class<? extends ServiceDocument> stateClass, NetworkEnumContext ctx) {
+        // Add TENANT_LINKS criteria
+        if (ctx.parentCompute.tenantLinks != null && !ctx.parentCompute.tenantLinks.isEmpty()) {
+            qBuilder.addInCollectionItemClause(
+                    ResourceState.FIELD_NAME_TENANT_LINKS,
+                    ctx.parentCompute.tenantLinks);
+        }
+        // Add ENDPOINT_LINK criteria
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
+    }
+
 }

@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.util;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.services.common.AuthCredentialsService;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
  * Holds the compute resource request and other data that is required by the helper flows to
@@ -27,14 +28,18 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
  */
 public class ComputeEnumerateAdapterRequest {
 
-    public ComputeEnumerateResourceRequest computeEnumerateResourceRequest;
-    public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
+    /**
+     * The original enumerate-compute request send to the adapter.
+     */
+    public ComputeEnumerateResourceRequest original;
+
+    public AuthCredentialsServiceState parentAuth;
     public ComputeStateWithDescription parentCompute;
 
     public ComputeEnumerateAdapterRequest(ComputeEnumerateResourceRequest request,
             AuthCredentialsService.AuthCredentialsServiceState parentAuth,
             ComputeStateWithDescription parentCompute) {
-        this.computeEnumerateResourceRequest = request;
+        this.original = request;
         this.parentAuth = parentAuth;
         this.parentCompute = parentCompute;
     }
