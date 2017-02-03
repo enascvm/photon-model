@@ -41,6 +41,7 @@ import com.vmware.xenon.common.Utils;
 public class AdapterUtils {
     /**
      * Checks if the given resource is a compute host or a VM.
+     *
      * @param computeDesc ComputeDescription of the resource.
      * @return If the resource is a compute host or not.
      */
@@ -101,9 +102,10 @@ public class AdapterUtils {
 
     /**
      * Sends failure patch to the enumeration task.
-     * @param service The service from which the patch is originating.
+     *
+     * @param service  The service from which the patch is originating.
      * @param taskLink The enumeration task service to which the patch is to be sent
-     * @param t The exception that was encountered.
+     * @param t        The exception that was encountered.
      */
     public static void sendFailurePatchToEnumerationTask(StatelessService service,
             URI taskLink, Throwable t) {
@@ -113,7 +115,8 @@ public class AdapterUtils {
 
     /**
      * Sends patch to the enumeration task.
-     * @param service The service from which the patch is originating.
+     *
+     * @param service  The service from which the patch is originating.
      * @param taskLink The enumeration task service to which the patch is to be sent
      */
     public static void sendPatchToEnumerationTask(StatelessService service, URI taskLink) {
@@ -122,9 +125,10 @@ public class AdapterUtils {
 
     /**
      * Sends patch to the enumeration task.
-     * @param service The service from which the patch is originating.
+     *
+     * @param service  The service from which the patch is originating.
      * @param taskLink The enumeration task service to which the patch is to be sent
-     * @param t The exception that was encountered.
+     * @param t        The exception that was encountered.
      */
     private static void sendPatchToEnumerationTask(StatelessService service, URI taskLink,
             Throwable t) {
@@ -208,7 +212,7 @@ public class AdapterUtils {
      * Creates a PUT operation for updating an existing state.
      */
     public static Operation createPutOperation(StatelessService service,
-                                                 ResourceState state, String existingStateLink) {
+            ResourceState state, String existingStateLink) {
         URI existingStateURI = UriUtils.buildUri(service.getHost(),
                 existingStateLink);
         return Operation
@@ -234,8 +238,9 @@ public class AdapterUtils {
      * Method to validate that the passed in Enumeration Request State is valid.
      * Validating that the parent compute link, the adapter links and the resource
      * reference are populated in the request.
-     *
+     * <p>
      * Also defaulting the enumeration action to START.
+     *
      * @param enumRequest The enumeration request.
      */
     public static void validateEnumRequest(ComputeEnumerateResourceRequest enumRequest) {

@@ -45,14 +45,22 @@ import com.microsoft.azure.CloudException;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.models.VirtualMachine;
 import com.microsoft.azure.management.network.NetworkManagementClient;
+import com.microsoft.azure.management.network.models.AddressSpace;
+import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
 import com.microsoft.azure.management.network.models.PublicIPAddress;
+import com.microsoft.azure.management.network.models.SecurityRule;
 import com.microsoft.azure.management.network.models.SubResource;
 import com.microsoft.azure.management.network.models.Subnet;
+import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.network.models.VirtualNetworkGateway;
 import com.microsoft.azure.management.network.models.VirtualNetworkGatewayIPConfiguration;
 import com.microsoft.azure.management.network.models.VirtualNetworkGatewaySku;
+import com.microsoft.azure.management.resources.ResourceManagementClient;
+import com.microsoft.azure.management.resources.models.ResourceGroup;
 import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
+
+import org.junit.Assume;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -81,6 +89,7 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -89,7 +98,6 @@ import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
@@ -112,9 +120,11 @@ public class AzureTestUtil {
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "storage";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_RAGRS";
 
+    public static final String AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME = "test-sharedNetworkRG";
+
     // If you change the number of NICs, please do so with the CIDRs!
     public static final int NUMBER_OF_NICS = 2;
-    public static final String AZURE_NETWORK_NAME = generateName("vNet-");
+    public static final String AZURE_NETWORK_NAME = "vNet";
     public static final String AZURE_SECURITY_GROUP_NAME = "NSG-name";
     public static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
     public static final String AZURE_SUBNET_NAME = "subnet";
@@ -589,10 +599,96 @@ public class AzureTestUtil {
     }
 
     /**
+     * Create SHARED vNet-Subnets-Gateway in a separate RG.
+     * <p>
+     * NOTE1: The names of the vNet and Subnets MUST be equal to the ones set by
+     * AzureTestUtil.createDefaultNicStates.
+     * <p>
+     * NOTE2: Since this is SHARED vNet it's not deleted after the test.
+     */
+    public static ResourceGroup createResourceGroupWithSharedNetwork(ResourceManagementClient
+            resourceManagementClient,
+            NetworkManagementClient networkManagementClient) throws Throwable {
+
+        ResourceGroup sharedNetworkRGParams = new ResourceGroup();
+        sharedNetworkRGParams.setName(AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME);
+        sharedNetworkRGParams.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+        ResourceGroup sharedNetworkRG = resourceManagementClient.getResourceGroupsOperations()
+                .createOrUpdate(sharedNetworkRGParams.getName(), sharedNetworkRGParams).getBody();
+
+        createAzureVirtualNetwork(sharedNetworkRG.getName(), networkManagementClient);
+
+        addAzureGatewayToVirtualNetwork(sharedNetworkRG.getName(), AZURE_NETWORK_NAME,
+                networkManagementClient);
+
+        createAzureNetworkSecurityGroup(sharedNetworkRG.getName(), networkManagementClient);
+
+        return sharedNetworkRG;
+    }
+
+    private static void createAzureVirtualNetwork(String resourceGroupName, NetworkManagementClient
+            networkManagementClient) throws Exception {
+
+        // Surround in try-catch as CloudException is thrown if the vNet already exists
+        // and we are trying to do an update, because there are objects (GatewaySubnet)
+        // attached to it
+        try {
+            VirtualNetwork vNet = new VirtualNetwork();
+            vNet.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+            vNet.setAddressSpace(new AddressSpace());
+            vNet.getAddressSpace().setAddressPrefixes(
+                    Collections.singletonList(AzureTestUtil.AZURE_NETWORK_CIDR));
+
+            vNet.setSubnets(new ArrayList<>());
+
+            for (int i = 0; i < AzureTestUtil.NUMBER_OF_NICS; i++) {
+                Subnet subnet = new Subnet();
+                subnet.setName(AzureTestUtil.AZURE_SUBNET_NAME + i);
+                subnet.setAddressPrefix(AzureTestUtil.AZURE_SUBNET_CIDR[i]);
+
+                vNet.getSubnets().add(subnet);
+            }
+
+            networkManagementClient.getVirtualNetworksOperations().createOrUpdate(
+                    resourceGroupName, AZURE_NETWORK_NAME, vNet);
+        } catch (CloudException ex) {
+            Assume.assumeTrue(ex.getBody().getCode().equals("InUseSubnetCannotBeDeleted"));
+        }
+    }
+
+    private static void createAzureNetworkSecurityGroup(String resourceGroupName,
+            NetworkManagementClient networkManagementClient) throws Exception {
+        final NetworkSecurityGroup sharedNSG = new NetworkSecurityGroup();
+        sharedNSG.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+        SecurityRule sr = new SecurityRule();
+        sr.setPriority(AzureConstants.AZURE_SECURITY_GROUP_PRIORITY);
+        sr.setAccess(Access.Allow.name());
+        sr.setDirection(AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_INBOUND);
+        sr.setSourceAddressPrefix(AzureConstants.AZURE_SECURITY_GROUP_SOURCE_ADDRESS_PREFIX);
+        sr.setDestinationAddressPrefix(
+                AzureConstants.AZURE_SECURITY_GROUP_DESTINATION_ADDRESS_PREFIX);
+
+        sr.setSourcePortRange(AzureConstants.AZURE_SECURITY_GROUP_SOURCE_PORT_RANGE);
+        sr.setDestinationPortRange(
+                AzureConstants.AZURE_LINUX_SECURITY_GROUP_DESTINATION_PORT_RANGE);
+        sr.setName(AzureConstants.AZURE_LINUX_SECURITY_GROUP_NAME);
+        sr.setProtocol(AzureConstants.AZURE_SECURITY_GROUP_PROTOCOL);
+
+        sharedNSG.setSecurityRules(Collections.singletonList(sr));
+
+        networkManagementClient.getNetworkSecurityGroupsOperations()
+                .createOrUpdate(resourceGroupName, AzureTestUtil.AZURE_SECURITY_GROUP_NAME,
+                        sharedNSG);
+    }
+
+    /**
      * Adds Gateway to Virtual Network in Azure
      */
-    public static void addAzureGatewayToVirtualNetwork(NetworkManagementClient
-            networkManagementClient, String resourceGroupName, String azureNetworkName)
+    private static void addAzureGatewayToVirtualNetwork(String resourceGroupName, String
+            azureNetworkName, NetworkManagementClient networkManagementClient)
             throws CloudException, IOException, InterruptedException {
 
         // create Gateway Subnet
