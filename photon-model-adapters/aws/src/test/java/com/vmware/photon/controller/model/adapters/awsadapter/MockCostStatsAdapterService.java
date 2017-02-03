@@ -16,20 +16,21 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.net.URI;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.Utils;
 
 public class MockCostStatsAdapterService extends AWSCostStatsService {
@@ -37,7 +38,9 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     public static final String SELF_LINK = AWSUriPaths.PROVISIONING_AWS
             + "/mock-costs-stats-adapter";
 
-    public static final Long billProcessedTimeMillis = 1475276399000L;
+    public static final Long billProcessedTimeMillis =
+            com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getDateTimeToday()
+                    .withDayOfMonth(1).toDateTime(DateTimeZone.UTC).withTimeAtStartOfDay().getMillis();
 
     @Override
     protected void getAccountDescription(AWSCostStatsCreationContext statsData,
@@ -72,12 +75,11 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         validatePastMonthsBillsAreScheduledForDownload(statsData);
 
         AWSCsvBillParser parser = new AWSCsvBillParser();
-        //sample bill used is for September month of 2016.
-        LocalDate monthDate = new LocalDate(2016, 9, 1);
+        LocalDate monthDate = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getDateTimeToday().toLocalDate();
         Path csvBillZipFilePath;
         try {
             csvBillZipFilePath = TestUtils.getTestResourcePath(TestAWSCostAdapterService.class,
-                    TestAWSSetupUtils.SAMPLE_AWS_BILL);
+                    TestAWSSetupUtils.getCurrentMonthsSampleBillFilePath().toString());
 
             statsData.accountsHistoricalDetailsMap.put(monthDate, parser
                     .parseDetailedCsvBill(statsData.ignorableInvoiceCharge, csvBillZipFilePath
@@ -111,7 +113,7 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         }
 
         assertEquals("Bill collection starting month is incorrect. Expected: %s Got: %s",
-                LocalDate.now().getMonthOfYear(), statsData.billMonthToDownload
+                LocalDate.now(DateTimeZone.UTC).getMonthOfYear(), statsData.billMonthToDownload
                         .plusMonths(numberOfMonthsToDownloadBill).getMonthOfYear());
         statsData.accountIdToBillProcessedTime = accountIdToBillProcessedTimeBackup;
     }
@@ -164,8 +166,11 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     }
 
     @Override
-    protected void setBillProcessedTime(AWSCostStatsCreationContext statsData,
-            ComputeStatsResponse.ComputeStats accountStats, URI accountUri) {
+    protected ServiceStats.ServiceStat createBillProcessedTimeStat(
+            AWSCostStatsCreationContext statsData, ComputeState accountComputeState) {
+        ServiceStats.ServiceStat billProcessedTimeStat = new ServiceStats.ServiceStat();
+        billProcessedTimeStat.name = AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS;
+        billProcessedTimeStat.unit = PhotonModelConstants.UNIT_MILLISECONDS;
 
         assertTrue("Last bill processed time is not correct. " +
                         "Expected: " + billProcessedTimeMillis.toString() + " Got: "
@@ -173,5 +178,7 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
                         .iterator().next().billProcessedTimeMillis,
                 statsData.accountsHistoricalDetailsMap.values().iterator().next().values()
                         .iterator().next().billProcessedTimeMillis == billProcessedTimeMillis);
+
+        return billProcessedTimeStat;
     }
 }

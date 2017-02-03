@@ -13,7 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import java.util.concurrent.TimeUnit;
+
 import com.vmware.photon.controller.model.UriPaths;
+
 
 public class AWSConstants {
     public static final String AWS_INSTANCE_ID_PREFIX = "i-";
@@ -105,6 +108,8 @@ public class AWSConstants {
     public static final String UNIT_COST = "USD";
 
     public static final String WINDOWS_PLATFORM = "windows";
+
+    public static final long AGGREGATION_WINDOW_ALIGNMENT_TIME = TimeUnit.SECONDS.toMillis(1);
 
     /**
      * Number of operations to send in a batch when using OperationJoin

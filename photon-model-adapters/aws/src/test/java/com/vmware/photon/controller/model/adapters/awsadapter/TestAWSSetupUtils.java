@@ -27,6 +27,8 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -68,6 +70,8 @@ import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesResult;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
+
+import org.joda.time.LocalDateTime;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs.NetSpec;
@@ -1730,4 +1734,12 @@ public class TestAWSSetupUtils {
             }
         }
     }
+
+    public static Path getCurrentMonthsSampleBillFilePath() {
+        LocalDateTime dateToday = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getDateTimeToday();
+        String newDate = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getDateForBillName(dateToday);
+        return  Paths.get("123456789-aws-billing-detailed-line-items-with-resources-and-tags-" + newDate + ".csv.zip");
+
+    }
+
 }
