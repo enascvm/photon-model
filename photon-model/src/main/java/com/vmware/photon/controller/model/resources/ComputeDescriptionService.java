@@ -17,11 +17,13 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
+import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -158,6 +160,16 @@ public class ComputeDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String currencyUnit;
+
+        /**
+         * Constraints of this compute resource to other resources. Different services can specify
+         * their specific constraints by using different keys in the map, so that multiple
+         * constraints are supported for different purposes - e.g. placement constraints,
+         * grouping constraints, etc.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_1)
+        public Map<String, Constraint> constraints;
 
         /**
          * URI reference to the adapter used to create an instance of this host.

@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNotNull;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -36,12 +37,16 @@ import org.junit.runners.Suite.SuiteClasses;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
+import com.vmware.photon.controller.model.Constraint;
+import com.vmware.photon.controller.model.Constraint.Condition;
+import com.vmware.photon.controller.model.Constraint.Condition.Enforcement;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.TenantService;
 
 /**
@@ -233,6 +238,13 @@ public class ComputeDescriptionServiceTest extends Suite {
             patchState.tenantLinks.add("tenant1");
             patchState.groupLinks = new HashSet<>();
             patchState.groupLinks.add("group1");
+
+            Constraint constraint = new Constraint();
+            constraint.conditions = Arrays.asList(
+                    Condition.forTag("pci_compliance", null, Enforcement.HARD, Occurance.MUST_OCCUR),
+                    Condition.forTag("location", "us", Enforcement.SOFT, Occurance.MUST_NOT_OCCUR));
+            patchState.constraints = new HashMap<>();
+            patchState.constraints.put("placement", constraint);
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
 
@@ -242,7 +254,7 @@ public class ComputeDescriptionServiceTest extends Suite {
 
             assertEquals(returnState.tenantLinks, patchState.tenantLinks);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
-
+            assertEquals(2, returnState.constraints.get("placement").conditions.size());
         }
 
         @Test
