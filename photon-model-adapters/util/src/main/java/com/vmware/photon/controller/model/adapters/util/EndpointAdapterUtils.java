@@ -89,7 +89,7 @@ public class EndpointAdapterUtils {
                         Pair.of(cd, endpoint.computeDescriptionLink),
                         Pair.of(cs, endpoint.computeLink))
                         .map((p) -> {
-                            return Operation.createPatch(body.buildUri(p.right)).setBody(p.leff)
+                            return Operation.createPatch(body.buildUri(p.right)).setBody(p.left)
                                     .setReferer(service.getUri());
                         });
 
@@ -151,20 +151,6 @@ public class EndpointAdapterUtils {
             validator.accept(credentials, callback);
         } catch (Throwable e) {
             op.fail(e);
-        }
-    }
-
-    private static class Pair<L, R> {
-        final L leff;
-        final R right;
-
-        private Pair(L leff, R right) {
-            this.leff = leff;
-            this.right = right;
-        }
-
-        static <L, R> Pair<L, R> of(L left, R right) {
-            return new Pair<L, R>(left, right);
         }
     }
 
