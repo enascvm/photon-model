@@ -121,11 +121,11 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         //inserting all mock data required
         ComputeState instance1 = new ComputeState();
         instance1.documentSelfLink = "instanceSelfLink1";
-        statsData.awsInstancesById.put("i-2320dc97", instance1);
+        statsData.awsInstancesById.put("i-2320dc97", Collections.singletonList(instance1));
 
         ComputeState instance2 = new ComputeState();
         instance2.documentSelfLink = "instanceSelfLink2";
-        statsData.awsInstancesById.put("i-69d52add", instance2);
+        statsData.awsInstancesById.put("i-69d52add", Collections.singletonList(instance2));
 
         statsData.computeDesc = new ComputeStateWithDescription();
         statsData.computeDesc.documentSelfLink = "accountSelfLink";
@@ -143,6 +143,7 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
 
         ComputeState account1ComputeState = new ComputeState();
         account1ComputeState.documentSelfLink = TestAWSCostAdapterService.account1SelfLink;
+        account1ComputeState.endpointLink = "endpoint1";
         account1ComputeState.creationTimeMicros = Utils.getNowMicrosUtc();
         account1ComputeState.customProperties = new HashMap<>();
         account1ComputeState.customProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, "account1Id");
@@ -151,6 +152,7 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
 
         ComputeState account2ComputeState = new ComputeState();
         account2ComputeState.documentSelfLink = TestAWSCostAdapterService.account2SelfLink;
+        account2ComputeState.endpointLink = "endpoint2";
         account2ComputeState.creationTimeMicros = Utils.getNowMicrosUtc();
         account2ComputeState.customProperties = new HashMap<>();
         account2ComputeState.customProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, "account2Id");
