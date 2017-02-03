@@ -134,7 +134,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
      * Notes:
      * <ul>
      * <li>It does NOT call parent
-     * {@link #populateContext(com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage)}</li>
+     * {@link #populateBaseContext(com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage)}</li>
      * <li>Override {@link #customizeContext(BaseComputeInstanceContext)} if you need to extend
      * populate logic provided by this method and customize the context. The method follows
      * Open-Close principle.</li>

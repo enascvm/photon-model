@@ -57,7 +57,7 @@ public class AWSPowerService extends StatelessService {
             updateComputeState(pr);
         } else {
             new DefaultAdapterContext(this, pr.resourceReference)
-                    .populateContext(BaseAdapterStage.VMDESC)
+                    .populateBaseContext(BaseAdapterStage.VMDESC)
                     .whenComplete((c, e) -> {
                         AmazonEC2AsyncClient client = this.clientManager.getOrCreateEC2Client(
                                 c.parentAuth, c.child.description.regionId, this, pr.taskReference,

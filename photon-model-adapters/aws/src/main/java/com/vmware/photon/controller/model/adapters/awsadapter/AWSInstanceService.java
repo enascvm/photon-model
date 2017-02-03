@@ -143,7 +143,7 @@ public class AWSInstanceService extends StatelessService {
             }
 
             // Populate BaseAdapterContext and then continue with this state machine
-            ctx.populateContext(startingStage).whenComplete(thenAllocation(ctx, nextStage));
+            ctx.populateBaseContext(startingStage).whenComplete(thenAllocation(ctx, nextStage));
 
         } catch (Throwable t) {
             finishExceptionally(ctx, t);

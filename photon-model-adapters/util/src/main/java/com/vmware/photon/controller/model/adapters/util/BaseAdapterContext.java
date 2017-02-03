@@ -25,7 +25,7 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
- * Base class for contexts used by adapters. It {@link #populateContext(BaseAdapterStage) loads}:
+ * Base class for contexts used by adapters. It {@link #populateBaseContext(BaseAdapterStage) loads}:
  * <ul>
  * <li>{@link ComputeStateWithDescription child}</li>
  * <li>{@link ComputeStateWithDescription parent}</li>
@@ -46,7 +46,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     }
 
     public enum BaseAdapterStage {
-        VMDESC, PARENTDESC, PARENTAUTH
+        VMDESC, PARENTDESC, PARENTAUTH, CUSTOMIZE
     }
 
     public final StatelessService service;
@@ -71,7 +71,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     /**
      * @param service           The service that is creating and using this context.
      * @param resourceReference The URI of the resource that is used to start the
-     *                          {@link #populateContext(BaseAdapterStage) state machine}.
+     *                          {@link #populateBaseContext(BaseAdapterStage) state machine}.
      *                          <ul>
      *                          <li>If {@code populateContext} is called with {@code BaseAdapterStage#VMDESC} then
      *                          this should point to <b>child</b> resource.</li>
@@ -86,7 +86,7 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
         this.resourceReference = resourceReference;
     }
 
-    public DeferredResult<T> populateContext(BaseAdapterStage stage) {
+    public final DeferredResult<T> populateBaseContext(BaseAdapterStage stage) {
         if (stage == null) {
             stage = BaseAdapterStage.VMDESC;
         }
@@ -94,13 +94,17 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
         case VMDESC:
             return getVMDescription(self())
                     .thenApply(log("getVMDescription"))
-                    .thenCompose(c -> populateContext(BaseAdapterStage.PARENTDESC));
+                    .thenCompose(c -> populateBaseContext(BaseAdapterStage.PARENTDESC));
         case PARENTDESC:
             return getParentDescription(self())
                     .thenApply(log("getParentDescription"))
-                    .thenCompose(c -> populateContext(BaseAdapterStage.PARENTAUTH));
+                    .thenCompose(c -> populateBaseContext(BaseAdapterStage.PARENTAUTH));
         case PARENTAUTH:
-            return getParentAuth(self()).thenApply(log("getParentAuth"));
+            return getParentAuth(self())
+                    .thenApply(log("getParentAuth"))
+                    .thenCompose(c -> populateBaseContext(BaseAdapterStage.CUSTOMIZE));
+        case CUSTOMIZE:
+            return customizeBaseContext(self()).thenApply(log("customizeBaseContext"));
         default:
             return DeferredResult.completed(self());
         }
@@ -196,6 +200,14 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
                 context.parent.description.authCredentialsLink)
                 // state machine starts from here so resRef should point to the parentAuth
                 : context.resourceReference;
+    }
+
+    /**
+     * Hook that might be implemented by descendants to extend
+     * {@link #populateBaseContext(BaseAdapterStage)}  populate logic} and customize the context.
+     */
+    protected DeferredResult<T> customizeBaseContext(T context) {
+        return DeferredResult.completed(context);
     }
 
 }

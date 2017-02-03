@@ -101,7 +101,6 @@ import com.microsoft.azure.management.storage.models.StorageAccountCreateParamet
 import com.microsoft.azure.management.storage.models.StorageAccountKeys;
 import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
-
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
@@ -208,7 +207,7 @@ public class AzureInstanceService extends StatelessService {
         }
 
         // Populate BaseAdapterContext and then continue with this state machine
-        ctx.populateContext(startingStage)
+        ctx.populateBaseContext(startingStage)
                 .whenComplete(thenAllocation(ctx, AzureInstanceStage.CLIENT));
     }
 

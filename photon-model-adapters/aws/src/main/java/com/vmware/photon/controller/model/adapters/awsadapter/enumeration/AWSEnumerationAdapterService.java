@@ -93,7 +93,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
 
         EnumerationContext context = new EnumerationContext(this, request, op);
 
-        context.populateContext(BaseAdapterStage.PARENTDESC)
+        context.populateBaseContext(BaseAdapterStage.PARENTDESC)
                 .whenComplete((ignoreCtx, t) -> {
                     // NOTE: In case of error 'ignoreCtx' is null so use passed context!
                     if (t != null) {
