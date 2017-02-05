@@ -231,6 +231,7 @@ public class ComputeService extends StatefulService {
             chsWithDesc.description = desc;
             chsWithDesc.descriptionLink = desc.documentSelfLink;
             chsWithDesc.hostName = currentState.hostName;
+            chsWithDesc.endpointLink = currentState.endpointLink;
 
             return chsWithDesc;
         }

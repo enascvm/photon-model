@@ -221,6 +221,9 @@ public class AWSCostStatsService extends StatelessService {
                 return;
             }
             Consumer<List<ComputeState>> queryResultConsumer = (accountComputeStates) -> {
+                accountComputeStates = accountComputeStates.stream()
+                        .filter(c -> c.endpointLink.equals(statsData.computeDesc.endpointLink))
+                        .collect(Collectors.toList());
                 statsData.awsAccountIdToComputeStates.put(accountId, accountComputeStates);
                 ComputeState primaryComputeState = findPrimaryComputeState(accountComputeStates);
                 if (statsData.computeDesc.documentSelfLink
