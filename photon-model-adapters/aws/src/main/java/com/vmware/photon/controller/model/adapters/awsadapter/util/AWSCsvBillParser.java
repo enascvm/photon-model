@@ -536,12 +536,20 @@ public class AWSCsvBillParser {
 
     public enum AwsServices {
         ec2("Amazon Elastic Compute Cloud", PublicCloudServiceType.COMPUTE),
-
         rds("Amazon RDS Service", PublicCloudServiceType.DATABASE),
-
         sns("Amazon Simple Notification Service", PublicCloudServiceType.OTHERS),
-
-        s3("Amazon Simple Storage Service", PublicCloudServiceType.STORAGE);
+        s3("Amazon Simple Storage Service", PublicCloudServiceType.STORAGE),
+        kms("AWS Key Management Service",PublicCloudServiceType.MANAGEMENT),
+        ses("Amazon Simple Email Service",PublicCloudServiceType.OTHERS),
+        sqs("Amazon Simple Queue Service",PublicCloudServiceType.OTHERS),
+        vpc("Amazon Virtual Private Cloud",PublicCloudServiceType.NETWORKING),
+        route53("Amazon Route 53",PublicCloudServiceType.NETWORKING),
+        simpleDB("Amazon SimpleDB",PublicCloudServiceType.DATABASE),
+        dynamoDB("Amazon DynamoDB",PublicCloudServiceType.DATABASE),
+        cloudtrail("AWS CloudTrail",PublicCloudServiceType.OTHERS),
+        cloudwatch("Amazon CloudWatch",PublicCloudServiceType.MANAGEMENT),
+        cloudfront("Amazon CloudFront",PublicCloudServiceType.OTHERS),
+        elasticache("Amazon ElastiCache",PublicCloudServiceType.DATABASE);
 
         private final String name;
         private final PublicCloudServiceType type;
@@ -580,7 +588,7 @@ public class AWSCsvBillParser {
     }
 
     private enum PublicCloudServiceType {
-        COMPUTE, STORAGE, DATABASE, OTHERS;
+        COMPUTE, STORAGE, DATABASE, NETWORKING, MANAGEMENT, OTHERS;
 
         public String toString() {
             return name();
