@@ -46,41 +46,6 @@ public abstract class BasePowerContext<CONTEXT extends BasePowerContext<CONTEXT>
     }
 
     /**
-     * Applies the power state in the request.
-     * <p>
-     * Calls the appropriate abstract method depending on the power state specified in the request
-     *
-     * @return a {@link DeferredResult} to signal completion.
-     */
-    private DeferredResult<CONTEXT> applyPowerOperation(CONTEXT context) {
-        switch (context.request.powerState) {
-        case OFF:
-            return powerOff(context);
-        case ON:
-            return powerOn(context);
-        case SUSPEND:
-            return suspend(context);
-        case UNKNOWN:
-        default:
-            return DeferredResult.failed(new IllegalArgumentException(
-                    "Unsupported power state transition requested. State: "
-                            + context.request.powerState));
-        }
-    }
-
-    /**
-     * Applies the power state in the request.
-     *
-     * @return a {@link DeferredResult} to signal completion.
-     */
-    public DeferredResult<CONTEXT> applyPowerOperation() {
-        return populateBaseContext(BaseAdapterStage.VMDESC)
-                .thenCompose(this::applyPowerOperation)
-                .thenCompose(this::updateComputeState);
-
-    }
-
-    /**
      * Adapter specific logic to suspend a VM
      *
      * @return a {@link DeferredResult} to signal completion.
@@ -100,6 +65,52 @@ public abstract class BasePowerContext<CONTEXT extends BasePowerContext<CONTEXT>
      * @return a {@link DeferredResult} to signal completion.
      */
     protected abstract DeferredResult<CONTEXT> powerOff(CONTEXT context);
+
+    /**
+     * Extend this method for custom handling of mock request.
+     * After this method's completion stage the compute state will be updated automatically
+     */
+    protected DeferredResult<CONTEXT> handleMockRequest(CONTEXT context) {
+        return DeferredResult.completed(context);
+    }
+
+    /**
+     * Applies the power state in the request.
+     *
+     * @return a {@link DeferredResult} to signal completion.
+     */
+    public final DeferredResult<CONTEXT> applyPowerOperation() {
+        return populateBaseContext(BaseAdapterStage.VMDESC)
+                .thenCompose(this::applyPowerOperation)
+                .thenCompose(this::updateComputeState);
+
+    }
+
+    /**
+     * Applies the power state in the request.
+     * <p>
+     * Calls the appropriate abstract method depending on the power state specified in the request
+     *
+     * @return a {@link DeferredResult} to signal completion.
+     */
+    private DeferredResult<CONTEXT> applyPowerOperation(CONTEXT context) {
+        if (context.request.isMockRequest) {
+            return handleMockRequest(context);
+        }
+        switch (context.request.powerState) {
+        case OFF:
+            return powerOff(context);
+        case ON:
+            return powerOn(context);
+        case SUSPEND:
+            return suspend(context);
+        case UNKNOWN:
+        default:
+            return DeferredResult.failed(new IllegalArgumentException(
+                    "Unsupported power state transition requested. State: "
+                            + context.request.powerState));
+        }
+    }
 
     /**
      * Updates the compute state with the new power state
