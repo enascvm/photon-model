@@ -28,14 +28,19 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.ta
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_LINUX_AMI;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_WINDOWS_AMI;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.addNICDirectlyWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createNICDirectlyWithEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteNICDirectlyWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsOnThisEndpoint;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsUsingEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.detachNICDirectlyWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResourcesPreserveMissing;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getNICByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionMachine;
@@ -114,6 +119,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
     private static final String TEST_CASE_INITIAL = "Initial Run ";
     private static final String TEST_CASE_ADDITIONAL_VM = "Additional VM ";
+    private static final String TEST_CASE_ADDITIONAL_NIC = "Additional NIC";
+    private static final String TEST_CASE_REMOVED_NIC = "Removed NIC";
     private static final String TEST_CASE_PURE_UPDATE = "Only Update to existing VM.";
     private static final String TEST_CASE_STOP_VM = "Stop VM ";
     private static final String TEST_CASE_DELETE_VM = "Delete VM ";
@@ -130,6 +137,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private ComputeService.ComputeState outComputeHost;
 
     private List<String> instancesToCleanUp = new ArrayList<>();
+    private String nicToCleanUp = null;
     private AmazonEC2AsyncClient client;
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
@@ -188,7 +196,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName);
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
-                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null,
+                TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
@@ -245,13 +254,15 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         String vpCId = validateTagAndNetworkAndComputeDescriptionInformation(vmState);
         validateVPCInformation(vpCId);
         // Count should be 1 NICs per discovered VM.
-        int totalNetworkInterfaceStateCount = count6 * TestAWSSetupUtils.SINGLE_NIC_SPEC.numberOfNics();
+        int totalNetworkInterfaceStateCount = count6
+                * TestAWSSetupUtils.SINGLE_NIC_SPEC.numberOfNics();
         validateNetworkInterfaceCount(totalNetworkInterfaceStateCount);
         // One VPC should be discovered in the test.
         queryDocumentsAndAssertExpectedCount(this.host, count1,
                 NetworkService.FACTORY_LINK, false);
 
-        //Verify that the SecurityGroups of the newly created VM has been enumerated and exists locally
+        // Verify that the SecurityGroups of the newly created VM has been enumerated and exists
+        // locally
         validateSecurityGroupsInformation(vmState.groupLinks);
 
         // Verify stop flow
@@ -319,18 +330,86 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 count2, DiskService.FACTORY_LINK, false);
     }
 
+    // Runs the enumeration task after a new nic has been added to a CS and then after it has been
+    // removed
+    @Test
+    public void testEnumerationUpdateNICs() throws Throwable {
+        if (this.isMock) {
+            return;
+        }
+
+        this.host.log("Running test: " + this.currentTestName);
+
+        ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null,
+                TestAWSSetupUtils.SINGLE_NIC_SPEC);
+
+        this.host.setTimeoutSeconds(this.timeoutSeconds);
+        // Overriding the page size to test the pagination logic with limited instances on AWS.
+        // This is a functional test
+        // so the latency numbers maybe higher from this test due to low page size.
+        setQueryPageSize(DEFAULT_TEST_PAGE_SIZE);
+        setQueryResultLimit(DEFAULT_TEST_PAGE_SIZE);
+
+        // Provision a single VM . Check initial state.
+        vmState = provisionMachine(this.host, vmState, this.isMock, this.instancesToCleanUp);
+
+        // Run enumeration to discover the new VM
+        enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
+                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                TEST_CASE_INITIAL);
+
+        int numberOfNICsBeforeAdding = vmState.networkInterfaceLinks.size();
+
+        String newNICId = createNICDirectlyWithEC2Client(this.client, this.host);
+        this.nicToCleanUp = newNICId;
+        String newAWSNicAttachmentId = addNICDirectlyWithEC2Client(vmState, this.client, this.host, newNICId);
+
+        // Run enumeration to discover the changes in the NICs in the new VM
+        enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
+                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                TEST_CASE_ADDITIONAL_NIC);
+
+        // validate NICs
+        ComputeState updatedComputeState = getComputeByAWSId(this.host, vmState.id);
+        //New NIC State link should have been added to the CS
+        assertEquals(numberOfNICsBeforeAdding + 1, updatedComputeState.networkInterfaceLinks.size());
+
+        NetworkInterfaceState addedNetworkInterfaceState = getNICByAWSId(this.host, newNICId);
+        //NIC State with the new ID should have been created
+        assertNotNull(addedNetworkInterfaceState);
+
+        detachNICDirectlyWithEC2Client(vmState.id, newAWSNicAttachmentId, newNICId, this.client, this.host);
+
+        // Run again enumeration to discover the changes in the NICs in the new VM
+        enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
+                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                TEST_CASE_REMOVED_NIC);
+
+        // validate NICs
+        ComputeState updatedAgainComputeState = getComputeByAWSId(this.host, vmState.id);
+        //The link to the removed NIC State should have been removed
+        assertEquals(numberOfNICsBeforeAdding, updatedAgainComputeState.networkInterfaceLinks.size());
+
+        NetworkInterfaceState removedNetworkInterfaceState = getNICByAWSId(this.host, newNICId);
+        //NIC State with this ID should have been removed
+        assertEquals(null, removedNetworkInterfaceState);
+    }
+
     @Test
     public void testEnumerationPreserveLocalStates() throws Throwable {
 
         this.host.log("Running test: " + this.currentTestName);
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
-                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null,
+                TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
             // the parent with completion.
-            enumerateResourcesPreserveMissing(this.host, this.isMock, this.outPool.documentSelfLink,
+            enumerateResourcesPreserveMissing(this.host, this.isMock,
+                    this.outPool.documentSelfLink,
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                     TEST_CASE_MOCK_MODE);
             return;
@@ -570,12 +649,13 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         assertEquals(taggedComputeState.descriptionLink, computeState.descriptionLink);
         assertTrue(taggedComputeState.networkInterfaceLinks != null);
-        assertEquals(TestAWSSetupUtils.SINGLE_NIC_SPEC.numberOfNics(), taggedComputeState.networkInterfaceLinks.size());
+        assertEquals(TestAWSSetupUtils.SINGLE_NIC_SPEC.numberOfNics(),
+                taggedComputeState.networkInterfaceLinks.size());
 
         List<URI> networkLinkURIs = new ArrayList<>();
         for (int i = 0; i < taggedComputeState.networkInterfaceLinks.size(); i++) {
             networkLinkURIs.add(UriUtils.buildUri(this.host,
-                        taggedComputeState.networkInterfaceLinks.get(i)));
+                    taggedComputeState.networkInterfaceLinks.get(i)));
         }
 
         // Assert that both the public and private IP addresses have been mapped to separated NICs
@@ -625,7 +705,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // state is set to the VPC ID, so querying the network state based on that.
 
         Map<String, NetworkState> networkStateMap =
-                ProvisioningUtils.<NetworkState>getResourceStates(this.host, NetworkService.FACTORY_LINK, NetworkState.class);
+                ProvisioningUtils.<NetworkState> getResourceStates(this.host,
+                        NetworkService.FACTORY_LINK, NetworkState.class);
         assertNotNull(networkStateMap);
         NetworkState networkState = networkStateMap.get(vpCId);
         // The network state for the VPC id of the VM should not be null
@@ -646,10 +727,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
 
-        //Query all the SGs, enumerated in the system
+        // Query all the SGs, enumerated in the system
         Map<String, SecurityGroupState> allSecurityGroupStatesMap =
-                ProvisioningUtils.<SecurityGroupState>getResourceStates(this.host, SecurityGroupService.FACTORY_LINK, SecurityGroupState.class);
-        //Assert that there are SGs enumerated in the system
+                ProvisioningUtils.<SecurityGroupState> getResourceStates(this.host,
+                        SecurityGroupService.FACTORY_LINK, SecurityGroupState.class);
+        // Assert that there are SGs enumerated in the system
         assertNotNull(allSecurityGroupStatesMap);
 
         if (securityGroupLinks == null) {
@@ -660,14 +742,14 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             securityGroupURIs.add(UriUtils.buildUri(this.host, sgLink));
         }
 
-        //Validate that the SecurityGroups for this VM are correctly described in SGStates
+        // Validate that the SecurityGroups for this VM are correctly described in SGStates
         Map<URI, SecurityGroupState> sgStatesToLinksMap = this.host
                 .getServiceState(null, SecurityGroupState.class, securityGroupURIs);
         for (URI uri : securityGroupURIs) {
-            //Assert the SG State exist
+            // Assert the SG State exist
             assertNotNull(sgStatesToLinksMap.get(uri));
-            //Assert that the security group rules are correctly added to the SG State
-            //In the test setup there are both ingress and egress rules added
+            // Assert that the security group rules are correctly added to the SG State
+            // In the test setup there are both ingress and egress rules added
             assertTrue(sgStatesToLinksMap.get(uri).ingress.size() > 0);
             assertTrue(sgStatesToLinksMap.get(uri).egress.size() > 0);
         }
@@ -732,7 +814,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 waitForInstancesToBeTerminated(this.client, this.host, this.instancesToCleanUp);
                 this.instancesToCleanUp.clear();
             }
-
+            //Delete newly created NIC
+            if (this.nicToCleanUp != null) {
+                deleteNICDirectlyWithEC2Client(this.nicToCleanUp, this.client, this.host);
+            }
         } catch (Throwable deleteEx) {
             // just log and move on
             this.host.log(Level.WARNING, "Exception deleting VMs - %s, instance ids - %s",

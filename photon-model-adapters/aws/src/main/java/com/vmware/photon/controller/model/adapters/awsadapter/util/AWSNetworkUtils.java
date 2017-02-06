@@ -27,7 +27,6 @@ import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -96,22 +95,6 @@ public class AWSNetworkUtils {
         subnetState.endpointLink = endpointLink;
 
         return subnetState;
-    }
-
-    /**
-     * Returns the NetworkInterfaceState object, which corresponds to a particular
-     * deviceIndex. In case that there is only one Nic for this ComputeState, and the deviceIndex is 0,
-     * even if the Nic State Description was not mapped to an index, the algorithm returns this only state.
-     */
-    public static NetworkInterfaceState getNICStateByDeviceId(
-            List<NetworkInterfaceState> nicStates,
-            int deviceIndex) {
-        return nicStates
-                .stream()
-                .filter(nicState -> nicState != null)
-                .filter(nicState -> nicState.deviceIndex == deviceIndex)
-                .findFirst()
-                .orElse(null);
     }
 
     /**
@@ -186,7 +169,7 @@ public class AWSNetworkUtils {
         // create a PATCH to remove one ComputeState's networkLink
         Map<String, Collection<Object>> collectionsMap = new HashMap<>();
         Collection<Object> networkLinksToBeRemoved = new ArrayList<>(Arrays.asList(networkLink));
-        collectionsMap.put(ComputeState.FIELD_NAME_NETWORK_LINKS, networkLinksToBeRemoved);
+        collectionsMap.put(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS, networkLinksToBeRemoved);
         ServiceStateCollectionUpdateRequest collectionRemovalBody = ServiceStateCollectionUpdateRequest
                 .create(null, collectionsMap);
 

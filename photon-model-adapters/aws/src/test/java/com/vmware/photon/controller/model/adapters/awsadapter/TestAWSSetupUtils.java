@@ -27,6 +27,7 @@ import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,11 +43,20 @@ import java.util.stream.Collectors;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.AmazonEC2Client;
+import com.amazonaws.services.ec2.model.AttachNetworkInterfaceRequest;
+import com.amazonaws.services.ec2.model.AttachNetworkInterfaceResult;
+import com.amazonaws.services.ec2.model.CreateNetworkInterfaceRequest;
+import com.amazonaws.services.ec2.model.CreateNetworkInterfaceResult;
+import com.amazonaws.services.ec2.model.DeleteNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
+import com.amazonaws.services.ec2.model.DetachNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
+import com.amazonaws.services.ec2.model.ModifyNetworkInterfaceAttributeRequest;
+import com.amazonaws.services.ec2.model.NetworkInterfaceAttachmentChanges;
 import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
@@ -95,7 +105,6 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -125,7 +134,7 @@ public class TestAWSSetupUtils {
     private static final String AWS_DEFAULT_VPC_CIDR = "172.31.0.0/16";
 
     // Default Subnet; auto-assign public IP
-    private static final String AWS_DEFAULT_SUBNET_ID = "subnet-ce01b5e4";
+    public static final String AWS_DEFAULT_SUBNET_ID = "subnet-ce01b5e4";
     private static final String AWS_DEFAULT_SUBNET_NAME = "default";
     private static final String AWS_DEFAULT_SUBNET_CIDR = "172.31.48.0/20";
 
@@ -249,8 +258,8 @@ public class TestAWSSetupUtils {
         }
     }
 
-    private static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
-    private static final String AWS_DEFAULT_GROUP_ID = "sg-d46efeac";
+    public static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
+    public static final String AWS_DEFAULT_GROUP_ID = "sg-d46efeac";
     public static final String AWS_NEW_GROUP_NAME = "new-security-group";
 
     public static final String DEFAULT_AUTH_TYPE = "PublicKey";
@@ -263,7 +272,6 @@ public class TestAWSSetupUtils {
     public static final String SAMPLE_AWS_BILL = "123456789-aws-billing-detailed-line-items-with-resources-and-tags-2016-09.csv.zip";
 
     public static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
-    public static final String DEFAULT_SECURITY_GROUP_NAME = "cell-manager-security-group";
     public static final String BASELINE_INSTANCE_COUNT = "Baseline Instance Count ";
     public static final String BASELINE_COMPUTE_DESCRIPTION_COUNT = " Baseline Compute Description Count ";
     private static final float HUNDERED = 100.0f;
@@ -586,7 +594,7 @@ public class TestAWSSetupUtils {
         return nics;
     }
 
-    private static SecurityGroupState createSecurityGroupState(VerificationHost host,
+    public static SecurityGroupState createSecurityGroupState(VerificationHost host,
             String authCredentialsLink, boolean existing) throws Throwable {
         SecurityGroupState securityGroupState;
         {
@@ -864,7 +872,7 @@ public class TestAWSSetupUtils {
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
                 .withImageId(EC2_LINUX_AMI).withInstanceType(instanceType)
                 .withMinCount(numberOfInstance).withMaxCount(numberOfInstance)
-                .withSecurityGroupIds(DEFAULT_SECURITY_GROUP_NAME);
+                .withSecurityGroupIds(AWS_DEFAULT_GROUP_NAME);
 
         // handler invoked once the EC2 runInstancesAsync commands completes
         AWSRunInstancesAsyncHandler creationHandler = new AWSRunInstancesAsyncHandler(
@@ -876,6 +884,93 @@ public class TestAWSSetupUtils {
         });
 
         return creationHandler.instanceIds;
+    }
+
+    /**
+     * Create a new AWS NIC in the default subnet
+     */
+    public static String createNICDirectlyWithEC2Client (AmazonEC2Client client,
+            VerificationHost host) {
+        // create the new AWS NIC
+        CreateNetworkInterfaceRequest createNewNic = new CreateNetworkInterfaceRequest()
+                .withSubnetId(AWS_DEFAULT_SUBNET_ID);
+        CreateNetworkInterfaceResult createNewNicResult = client
+                .createNetworkInterface(createNewNic);
+
+        return createNewNicResult.getNetworkInterface().getNetworkInterfaceId();
+    }
+
+    /**
+     * Attach a provided AWS NIC to a given AWS VM with deviceIndex = number of NICs + 1
+     * returns the attachment ID of the newly created and attached NIC. This is necessary for
+     * removing it later for the goals of the test. The NIC is as well configured to be deleted on
+     * instance termination for sanity purposes.
+     */
+    public static String addNICDirectlyWithEC2Client(ComputeState vm, AmazonEC2Client client,
+            VerificationHost host, String newNicId) {
+
+        // attach the new AWS NIC to the AWS VM
+        AttachNetworkInterfaceRequest attachNewNic = new AttachNetworkInterfaceRequest()
+                .withInstanceId(vm.id)
+                .withDeviceIndex(vm.networkInterfaceLinks.size())
+                .withNetworkInterfaceId(newNicId);
+
+        AttachNetworkInterfaceResult attachmetnResult = client.attachNetworkInterface(attachNewNic);
+        String attachmentId = attachmetnResult.getAttachmentId();
+
+        // ensure the new NIC is deleted when the VM is terminated
+        NetworkInterfaceAttachmentChanges attachTerm = new NetworkInterfaceAttachmentChanges()
+                .withAttachmentId(attachmentId)
+                .withDeleteOnTermination(true);
+        ModifyNetworkInterfaceAttributeRequest setDeleteOnTerm = new ModifyNetworkInterfaceAttributeRequest()
+                .withAttachment(attachTerm)
+                .withNetworkInterfaceId(newNicId);
+        client.modifyNetworkInterfaceAttribute(setDeleteOnTerm);
+        host.log("Created new NIC with id: %s to vm id: %s with attachment id: %s", newNicId,
+                vm.id, attachmentId);
+        return attachmentId;
+    }
+
+    /**
+     * Removes a specified AWS NIC from the VM it is currently attached to
+     */
+    public static void detachNICDirectlyWithEC2Client(String instanceId, String nicAttachmentId, String nicId,
+            AmazonEC2Client client, VerificationHost host) {
+
+        // detach the new AWS NIC to the AWS VM
+        DetachNetworkInterfaceRequest detachNic = new DetachNetworkInterfaceRequest();
+        detachNic.withAttachmentId(nicAttachmentId);
+
+        host.log("Detaching NIC with id: %s and attachment id: %s", nicId, nicAttachmentId);
+        client.detachNetworkInterface(detachNic);
+
+        host.waitFor("Timeout waiting for AWS to detach a NIC from " + instanceId
+                + " with attachment id: " + nicAttachmentId, () -> {
+                    DescribeInstancesRequest describeInstancesRequest = new DescribeInstancesRequest()
+                            .withFilters(new Filter("instance-id", Collections.singletonList(instanceId)));
+                    DescribeInstancesResult result = client.describeInstances(describeInstancesRequest);
+
+                    Instance currentInstance = result.getReservations().get(0).getInstances().get(0);
+                    for (InstanceNetworkInterface awsNic : currentInstance.getNetworkInterfaces()) {
+                        if (awsNic.getNetworkInterfaceId().equals(nicId)) {
+                            //Requested NIC was not detached from the instance
+                            return false;
+                        }
+                    }
+                    host.log("Detached NIC with attachment id: %s", nicAttachmentId);
+                    return true;
+                });
+    }
+
+    /**
+     * Delete an AWS Nic by id
+     */
+    public static void deleteNICDirectlyWithEC2Client(String nicId, AmazonEC2Client client,
+            VerificationHost host) {
+        DeleteNetworkInterfaceRequest deleteNicRequest = new DeleteNetworkInterfaceRequest()
+                .withNetworkInterfaceId(nicId);
+        host.log("Clean-up NIC with id: %s", nicId);
+        client.deleteNetworkInterface(deleteNicRequest);
     }
 
     /**
@@ -906,7 +1001,7 @@ public class TestAWSSetupUtils {
                 .withImageId(ami)
                 .withInstanceType(instanceType_t2_micro)
                 .withMinCount(1).withMaxCount(1)
-                .withSecurityGroupIds(DEFAULT_SECURITY_GROUP_NAME);
+                .withSecurityGroupIds(AWS_DEFAULT_GROUP_NAME);
 
         // handler invoked once the EC2 runInstancesAsync commands completes
         RunInstancesResult result = null;
@@ -1545,6 +1640,27 @@ public class TestAWSSetupUtils {
         assertEquals(1, result.documents.size());
 
         return Utils.fromJson(result.documents.values().iterator().next(), ComputeState.class);
+    }
+
+    /**
+     * Lookup a NIC State by aws Id
+     */
+    public static NetworkInterfaceState getNICByAWSId(VerificationHost host, String awsId)
+            throws Throwable {
+
+        URI networkInterfacesURI = UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK);
+        networkInterfacesURI = UriUtils.buildExpandLinksQueryUri(networkInterfacesURI);
+        networkInterfacesURI = UriUtils.appendQueryParam(networkInterfacesURI, "$filter",
+                String.format("id eq %s", awsId));
+
+        Operation op = host.waitForResponse(Operation.createGet(networkInterfacesURI));
+        ServiceDocumentQueryResult result = op.getBody(ServiceDocumentQueryResult.class);
+        assertNotNull(result);
+        assertNotNull(result.documents);
+        if (result.documents.size() == 0) {
+            return null;
+        }
+        return Utils.fromJson(result.documents.values().iterator().next(), NetworkInterfaceState.class);
     }
 
     public static void deleteSecurityGroupsUsingEC2Client(AmazonEC2AsyncClient client,

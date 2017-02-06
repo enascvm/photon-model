@@ -218,6 +218,19 @@ public class AdapterUtils {
     }
 
     /**
+     * Creates a PATCH operation for updating an existing state.
+     */
+    public static Operation createDeleteOperation(StatelessService service,
+            ResourceState state) {
+        URI existingStateURI = UriUtils.buildUri(service.getHost(),
+                state.documentSelfLink);
+        return Operation
+                .createDelete(existingStateURI)
+                .setBody(state)
+                .setReferer(service.getUri());
+    }
+
+    /**
      * Method to validate that the passed in Enumeration Request State is valid.
      * Validating that the parent compute link, the adapter links and the resource
      * reference are populated in the request.

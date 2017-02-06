@@ -94,7 +94,7 @@ public class ComputeService extends StatefulService {
         public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
         public static final String FIELD_NAME_PARENT_LINK = "parentLink";
         public static final String FIELD_NAME_LIFECYCLE_STATE = "lifecycleState";
-        public static final String FIELD_NAME_NETWORK_LINKS = "networkInterfaceLinks";
+        public static final String FIELD_NAME_NETWORK_INTERFACE_LINKS = "networkInterfaceLinks";
         public static final String FIELD_NAME_DISK_LINKS = "diskLinks";
         public static final String FIELD_NAME_TYPE = "type";
         public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;

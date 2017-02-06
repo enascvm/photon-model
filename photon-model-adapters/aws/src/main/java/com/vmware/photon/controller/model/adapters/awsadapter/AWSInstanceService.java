@@ -54,7 +54,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandl
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
-import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -439,9 +438,11 @@ public class AWSInstanceService extends StatelessService {
                         nicCtx -> {
                             return nicCtx.nicStateWithDesc;
                         }).collect(Collectors.toList());
-                NetworkInterfaceState nicStateWithDesc = AWSNetworkUtils
-                        .getNICStateByDeviceId(nicStates, instanceNic.getAttachment()
-                                .getDeviceIndex());
+                NetworkInterfaceState nicStateWithDesc = nicStates.stream()
+                        .filter(nicState -> nicState != null)
+                        .filter(nicState -> nicState.deviceIndex == instanceNic.getAttachment().getDeviceIndex())
+                        .findFirst()
+                        .orElse(null);
 
                 if (nicStateWithDesc != null) {
                     NetworkInterfaceState updateNicState = new NetworkInterfaceState();

@@ -460,7 +460,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         // fetch compute resources with their links
         QueryTask task = QueryTask.Builder.createDirectTask()
-                .addLinkTerm(ComputeState.FIELD_NAME_NETWORK_LINKS)
+                .addLinkTerm(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS)
                 .addLinkTerm(ComputeState.FIELD_NAME_DISK_LINKS)
                 .addOption(QueryOption.SELECT_LINKS)
                 .setQuery(q)
