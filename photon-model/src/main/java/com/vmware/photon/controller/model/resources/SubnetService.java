@@ -22,6 +22,7 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -44,7 +45,7 @@ public class SubnetService extends StatefulService {
     public static class SubnetState extends ResourceState {
 
         public static final String FIELD_NAME_NETWORK_LINK = "networkLink";
-        public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
+        public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
 
         /**
          * Link to the network this subnet is part of.

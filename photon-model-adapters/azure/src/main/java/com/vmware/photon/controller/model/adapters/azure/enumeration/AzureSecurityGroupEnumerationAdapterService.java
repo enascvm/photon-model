@@ -20,7 +20,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
-import static com.vmware.photon.controller.model.tasks.QueryUtils.addEndpointLink;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -187,8 +186,6 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
 
                 securityGroupState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
                 securityGroupState.resourcePoolLink = this.request.original.resourcePoolLink;
-                securityGroupState.endpointLink = this.request.original.endpointLink;
-                securityGroupState.tenantLinks = this.request.parentCompute.tenantLinks;
 
                 // TODO: AzureFirewallService currently doesn't exist.
                 securityGroupState.instanceAdapterReference = UriUtils
@@ -283,14 +280,12 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                             ComputeProperties.RESOURCE_TYPE_KEY,
                             ResourceGroupStateType.AzureResourceGroup.name());
 
-            addEndpointLink(qBuilder, ResourceGroupState.class,
-                    context.request.original.endpointLink);
-
             QueryStrategy<ResourceGroupState> queryByPages = new QueryTop<>(
                     this.service.getHost(),
                     qBuilder.build(),
                     ResourceGroupState.class,
-                    context.request.parentCompute.tenantLinks)
+                    context.request.parentCompute.tenantLinks,
+                    context.request.original.endpointLink)
                             .setMaxResultsLimit(resourceGroupIds.size());
 
             return queryByPages.queryDocuments(

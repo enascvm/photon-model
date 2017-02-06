@@ -22,6 +22,7 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.Operation;
@@ -84,7 +85,7 @@ public class SecurityGroupService extends StatefulService {
      */
     public static class SecurityGroupState extends ResourceState {
         public static final String FIELD_NAME_AUTH_CREDENTIAL_LINK = "authCredentialsLink";
-        public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
+        public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
 
         /**
          * Region identifier of this security group service instance.

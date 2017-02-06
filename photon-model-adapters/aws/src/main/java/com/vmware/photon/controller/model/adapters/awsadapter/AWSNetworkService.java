@@ -504,7 +504,8 @@ public class AWSNetworkService extends StatelessService {
                 getHost(),
                 queryForReferrers,
                 SubnetState.class,
-                context.networkTaskState.tenantLinks);
+                context.network.tenantLinks,
+                context.network.endpointLink);
 
         DeferredResult<Void> query = subnetStates.queryDocuments(subnetState -> {
             // First delete Subnet in AWS

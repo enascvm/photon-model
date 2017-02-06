@@ -202,8 +202,6 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
 
             if (existingLocalResourceState == null) {
                 resultSecurityGroupState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
-                resultSecurityGroupState.tenantLinks = this.request.parentCompute.tenantLinks;
-                resultSecurityGroupState.endpointLink = this.request.original.endpointLink;
                 resultSecurityGroupState.regionId = this.regionId;
                 resultSecurityGroupState.resourcePoolLink = this.request.parentCompute.resourcePoolLink;
                 resultSecurityGroupState.instanceAdapterReference = AdapterUriUtil

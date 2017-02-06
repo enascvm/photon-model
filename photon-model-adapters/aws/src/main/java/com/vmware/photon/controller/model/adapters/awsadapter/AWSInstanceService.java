@@ -33,7 +33,6 @@ import java.util.stream.Stream;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.handlers.AsyncHandler;
-import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.AmazonEC2Exception;
 import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
 import com.amazonaws.services.ec2.model.DeleteSubnetResult;
@@ -522,12 +521,9 @@ public class AWSInstanceService extends StatelessService {
 
         List<String> instanceIdList = new ArrayList<>();
         instanceIdList.add(instanceId);
-        TerminateInstancesRequest termRequest = new TerminateInstancesRequest(
-                instanceIdList);
-        StatelessService service = this;
-        AsyncHandler<TerminateInstancesRequest, TerminateInstancesResult> terminateHandler =
-                buildTerminationCallbackHandler(service, aws.computeRequest, aws.amazonEC2Client,
-                        instanceId, aws.taskExpirationMicros);
+
+        TerminateInstancesRequest termRequest = new TerminateInstancesRequest(instanceIdList);
+        AWSTerminateHandler terminateHandler = new AWSTerminateHandler(aws, instanceId);
 
         aws.amazonEC2Client.terminateInstancesAsync(termRequest,
                 terminateHandler);
@@ -536,32 +532,25 @@ public class AWSInstanceService extends StatelessService {
     private class AWSTerminateHandler implements
             AsyncHandler<TerminateInstancesRequest, TerminateInstancesResult> {
 
-        private StatelessService service;
-        private ComputeInstanceRequest computeReq;
-        private AmazonEC2AsyncClient amazonEC2Client;
-        private OperationContext opContext;
-        private String instanceId;
-        private long taskExpirationTimeMicros;
+        private final AWSInstanceContext context;
+        private final OperationContext opContext;
+        private final String instanceId;
 
-        private AWSTerminateHandler(StatelessService service,
-                ComputeInstanceRequest computeReq,
-                AmazonEC2AsyncClient amazonEC2Client, String instanceId,
-                long taskExpirationTimeMicros) {
-            this.service = service;
-            this.computeReq = computeReq;
-            this.amazonEC2Client = amazonEC2Client;
+        private AWSTerminateHandler(AWSInstanceContext context, String instanceId) {
             this.opContext = OperationContext.getOperationContext();
+            this.context = context;
             this.instanceId = instanceId;
-            this.taskExpirationTimeMicros = taskExpirationTimeMicros;
         }
 
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
-            this.service.logWarning("Error deleting instances received from AWS: %s",
+
+            AWSInstanceService.this.logWarning("Error deleting instances received from AWS: %s",
                     exception.getMessage());
-            AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                    this.computeReq.taskReference, exception);
+
+            AdapterUtils.sendFailurePatchToProvisioningTask(AWSInstanceService.this,
+                    this.context.computeRequest.taskReference, exception);
         }
 
         @Override
@@ -574,8 +563,8 @@ public class AWSInstanceService extends StatelessService {
 
                 if (instance == null) {
                     AdapterUtils.sendFailurePatchToProvisioningTask(
-                            AWSTerminateHandler.this.service,
-                            AWSTerminateHandler.this.computeReq.taskReference,
+                            AWSInstanceService.this,
+                            this.context.computeRequest.taskReference,
                             new IllegalStateException("Error getting instance"));
                     return;
                 }
@@ -584,40 +573,40 @@ public class AWSInstanceService extends StatelessService {
                         .whenComplete((aVoid, exc) -> {
                             if (exc != null) {
                                 AdapterUtils.sendFailurePatchToProvisioningTask(
-                                        this.service,
-                                        this.computeReq.taskReference,
+                                        AWSInstanceService.this,
+                                        this.context.computeRequest.taskReference,
                                         new IllegalStateException(
                                                 "Error deleting AWS subnet", exc));
                             } else {
-                                this.service.logInfo("Deleting Subnets 'created-by' [%s]: SUCCESS",
-                                        this.computeReq.resourceLink());
+                                AWSInstanceService.this.logInfo("Deleting Subnets 'created-by' [%s]: SUCCESS",
+                                        this.context.computeRequest.resourceLink());
 
-                                AdapterUtils.sendPatchToProvisioningTask(this.service,
-                                        this.computeReq.taskReference);
+                                AdapterUtils.sendPatchToProvisioningTask(AWSInstanceService.this,
+                                        this.context.computeRequest.taskReference);
                             }
                         });
             };
 
-            AWSTaskStatusChecker.create(this.amazonEC2Client, this.instanceId,
+            AWSTaskStatusChecker.create(this.context.amazonEC2Client, this.instanceId,
                     AWSInstanceService.AWS_TERMINATED_NAME, postTerminationCallback,
-                    this.computeReq, this.service, this.taskExpirationTimeMicros).start();
+                    this.context.computeRequest, AWSInstanceService.this, this.context.taskExpirationMicros).start();
         }
 
         private DeferredResult<List<ResourceState>> deleteConstructsReferredByInstance() {
 
-            this.service.logInfo("Get all states to delete 'created-by' [%s]",
-                    this.computeReq.resourceLink());
+            AWSInstanceService.this.logInfo("Get all states to delete 'created-by' [%s]",
+                    this.context.computeRequest.resourceLink());
 
             // Query all states that are usedBy/createdBy the VM state we are deleting
             Query query = Builder.create()
                     .addCompositeFieldClause(
                             ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                             ComputeProperties.CREATE_CONTEXT_PROP_NAME,
-                            this.computeReq.resourceLink())
+                            this.context.computeRequest.resourceLink())
                     .build();
 
             QueryTop<ResourceState> statesToDeleteQuery = new QueryTop<>(
-                    getHost(), query, ResourceState.class, null);
+                    getHost(), query, ResourceState.class, this.context.parent.tenantLinks, null /*endpointLink*/);
 
             // Once got states to delete process with actual deletion
             return statesToDeleteQuery.collectDocuments(Collectors.toList())
@@ -640,8 +629,8 @@ public class AWSInstanceService extends StatelessService {
         // Do AWS subnet deletion
         private DeferredResult<ResourceState> deleteAWSSubnet(ResourceState stateToDelete) {
 
-            this.service.logInfo("Deleting AWS Subnet [%s] 'created-by' [%s]", stateToDelete.id,
-                    this.computeReq.resourceLink());
+            AWSInstanceService.this.logInfo("Deleting AWS Subnet [%s] 'created-by' [%s]", stateToDelete.id,
+                    this.context.computeRequest.resourceLink());
 
             DeleteSubnetRequest req = new DeleteSubnetRequest().withSubnetId(stateToDelete.id);
 
@@ -649,7 +638,7 @@ public class AWSInstanceService extends StatelessService {
 
             AWSDeferredResultAsyncHandler<DeleteSubnetRequest, DeleteSubnetResult>
                     deleteAWSSubnet = new AWSDeferredResultAsyncHandler<DeleteSubnetRequest,
-                    DeleteSubnetResult>(this.service, msg) {
+                    DeleteSubnetResult>(AWSInstanceService.this, msg) {
 
                         @Override
                         protected DeferredResult<DeleteSubnetResult> consumeSuccess(
@@ -671,7 +660,7 @@ public class AWSInstanceService extends StatelessService {
                         }
                     };
 
-            this.amazonEC2Client.deleteSubnetAsync(req, deleteAWSSubnet);
+            this.context.amazonEC2Client.deleteSubnetAsync(req, deleteAWSSubnet);
 
             return deleteAWSSubnet.toDeferredResult().thenApply(ignore -> stateToDelete);
         }
@@ -685,22 +674,13 @@ public class AWSInstanceService extends StatelessService {
                 return DeferredResult.completed(stateToDelete);
             }
 
-            this.service.logInfo("Deleting Subnet state [%s] 'created-by' [%s]",
-                    stateToDelete.documentSelfLink, this.computeReq.resourceLink());
+            AWSInstanceService.this.logInfo("Deleting Subnet state [%s] 'created-by' [%s]",
+                    stateToDelete.documentSelfLink, this.context.computeRequest.resourceLink());
 
-            Operation delOp = Operation.createDelete(this.service, stateToDelete.documentSelfLink);
+            Operation delOp = Operation.createDelete(AWSInstanceService.this, stateToDelete.documentSelfLink);
 
-            return this.service.sendWithDeferredResult(delOp).thenApply(ignore -> stateToDelete);
+            return AWSInstanceService.this.sendWithDeferredResult(delOp).thenApply(ignore -> stateToDelete);
         }
-    }
-
-    // callback handler to be invoked once a aws terminate calls returns
-    private AWSTerminateHandler buildTerminationCallbackHandler(
-            StatelessService service, ComputeInstanceRequest computeReq,
-            AmazonEC2AsyncClient amazonEC2Client, String instanceId,
-            long taskExpirationTimeMicros) {
-        return new AWSTerminateHandler(service, computeReq, amazonEC2Client, instanceId,
-                taskExpirationTimeMicros);
     }
 
     /*

@@ -18,6 +18,7 @@ import java.net.URI;
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -44,7 +45,7 @@ public class StorageDescriptionService extends StatefulService {
         public static final String FIELD_NAME_ADAPTER_REFERENCE = "adapterManagementReference";
         public static final String FIELD_NAME_REGION_ID = "regionId";
         public static final String FIELD_NAME_COMPUTE_HOST_LINK = "computeHostLink";
-        public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
+        public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
 
         /**
          * Region or the Location the storage belongs to.

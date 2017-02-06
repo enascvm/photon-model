@@ -13,10 +13,103 @@
 
 package com.vmware.photon.controller.model.resources.util;
 
+import static java.util.Collections.singletonMap;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ReflectionUtils;
+import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.StatefulService;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 public class PhotonModelUtils {
+
+    /**
+     * The set of ResourceStates which support {@code endpointLink} property through
+     * <b>explicit</b>field.
+     */
+    public static final Set<Class<? extends ResourceState>> ENDPOINT_LINK_EXPLICIT_SUPPORT;
+
+    static {
+        Set<Class<? extends ResourceState>> set = new HashSet<>();
+        set.add(ComputeDescription.class);
+        set.add(ComputeState.class);
+        set.add(ComputeStateWithDescription.class);
+        set.add(DiskState.class);
+        set.add(NetworkInterfaceDescription.class);
+        set.add(NetworkInterfaceState.class);
+        set.add(NetworkInterfaceStateWithDescription.class);
+        set.add(NetworkState.class);
+        set.add(SecurityGroupState.class);
+        set.add(StorageDescription.class);
+        set.add(SubnetState.class);
+
+        ENDPOINT_LINK_EXPLICIT_SUPPORT = Collections.unmodifiableSet(set);
+    }
+
+    /**
+     * The set of ServiceDocuments which support {@code endpointLink} property through <b>custom
+     * property</b>.
+     */
+    public static final Set<Class<? extends ServiceDocument>> ENDPOINT_LINK_CUSTOM_PROP_SUPPORT;
+
+    static {
+        Set<Class<? extends ServiceDocument>> set = new HashSet<>();
+        set.add(AuthCredentialsServiceState.class);
+        set.add(ResourceGroupState.class);
+
+        ENDPOINT_LINK_CUSTOM_PROP_SUPPORT = Collections.unmodifiableSet(set);
+    }
+
+    public static <T extends ServiceDocument> T setEndpointLink(T state, String endpointLink) {
+
+        if (state == null) {
+            return state;
+        }
+
+        if (ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(state.getClass())) {
+
+            ServiceDocumentDescription sdDesc = ServiceDocumentDescription.Builder.create()
+                    .buildDescription(state.getClass());
+
+            ReflectionUtils.setPropertyValue(
+                    sdDesc.propertyDescriptions.get(PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK),
+                    state,
+                    endpointLink);
+
+        } else if (ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(state.getClass())) {
+
+            ServiceDocumentDescription sdDesc = ServiceDocumentDescription.Builder.create()
+                    .buildDescription(state.getClass());
+
+            if (endpointLink != null && !endpointLink.isEmpty()) {
+                ReflectionUtils.setOrUpdatePropertyValue(
+                        sdDesc.propertyDescriptions.get(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES),
+                        state,
+                        singletonMap(PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK, endpointLink));
+            }
+        }
+
+        return state;
+    }
 
     public static void handleIdempotentPut(StatefulService s, Operation put) {
 

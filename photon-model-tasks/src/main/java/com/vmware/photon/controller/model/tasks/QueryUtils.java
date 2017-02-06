@@ -17,10 +17,7 @@ import static java.util.stream.Collector.Characteristics.IDENTITY_FINISH;
 
 import static com.vmware.photon.controller.model.resources.ResourceState.FIELD_NAME_TENANT_LINKS;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -30,26 +27,14 @@ import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.DiskService.DiskState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
-import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
-import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
-import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
@@ -97,42 +82,6 @@ public class QueryUtils {
     }
 
     /**
-     * The set of ResourceStates which support {@code endpointLink} property through explicit field.
-     */
-    public static final Set<Class<? extends ResourceState>> ENDPOINT_LINK_EXPLICIT_SUPPORT;
-
-    static {
-        Set<Class<? extends ResourceState>> set = new HashSet<>();
-        set.add(ComputeDescription.class);
-        set.add(ComputeState.class);
-        set.add(ComputeStateWithDescription.class);
-        set.add(DiskState.class);
-        set.add(NetworkInterfaceDescription.class);
-        set.add(NetworkInterfaceState.class);
-        set.add(NetworkInterfaceStateWithDescription.class);
-        set.add(NetworkState.class);
-        set.add(SecurityGroupState.class);
-        set.add(StorageDescription.class);
-        set.add(SubnetState.class);
-
-        ENDPOINT_LINK_EXPLICIT_SUPPORT = Collections.unmodifiableSet(set);
-    }
-
-    /**
-     * The set of ServiceDocuments which support {@code endpointLink} property through custom
-     * property.
-     */
-    public static final Set<Class<? extends ServiceDocument>> ENDPOINT_LINK_CUSTOM_PROP_SUPPORT;
-
-    static {
-        Set<Class<? extends ServiceDocument>> set = new HashSet<>();
-        set.add(AuthCredentialsServiceState.class);
-        set.add(ResourceGroupState.class);
-
-        ENDPOINT_LINK_CUSTOM_PROP_SUPPORT = Collections.unmodifiableSet(set);
-    }
-
-    /**
      * Add {@code endpointLink} constraint to passed query builder depending on document class.
      */
     public static Query.Builder addEndpointLink(
@@ -144,11 +93,13 @@ public class QueryUtils {
             return qBuilder;
         }
 
-        if (ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(stateClass)) {
-            return qBuilder.addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK, endpointLink);
+        if (PhotonModelUtils.ENDPOINT_LINK_EXPLICIT_SUPPORT.contains(stateClass)) {
+            return qBuilder.addFieldClause(
+                    PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK,
+                    endpointLink);
         }
 
-        if (ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(stateClass)) {
+        if (PhotonModelUtils.ENDPOINT_LINK_CUSTOM_PROP_SUPPORT.contains(stateClass)) {
             return qBuilder.addCompositeFieldClause(
                     ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                     PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK,
@@ -188,7 +139,7 @@ public class QueryUtils {
          * Default constructor.
          *
          * <p>
-         * Note: The client is off-loaded from setting the tenant links to the query.
+         * Note: The client is off-loaded from setting the {@code tenantLinks} to the query.
          *
          * @param host
          *            The host initiating the query.
@@ -204,19 +155,50 @@ public class QueryUtils {
                 Class<T> documentClass,
                 List<String> tenantLinks) {
 
+            this(host, query, documentClass, tenantLinks, null /* endpointLink */);
+        }
+
+        /**
+         * Default constructor.
+         *
+         * <p>
+         * Note: The client is off-loaded from setting the {@code tenantLinks} and
+         * {@code ednpointLink} to the query.
+         *
+         * @param host
+         *            The host initiating the query.
+         * @param query
+         *            The query criteria.
+         * @param documentClass
+         *            The class of documents to query for.
+         * @param tenantLinks
+         *            The scope of the query.
+         * @param endpointLink
+         *            The scope of the query.
+         */
+        public QueryTemplate(ServiceHost host,
+                Query query,
+                Class<T> documentClass,
+                List<String> tenantLinks,
+                String endpointLink) {
+
             this.host = host;
             this.documentClass = documentClass;
             this.tenantLinks = tenantLinks;
 
-            if (this.tenantLinks == null || this.tenantLinks.isEmpty()) {
-                this.query = query;
-            } else {
-                this.query = Query.Builder.create()
-                        // wrap original query
-                        .addClause(query)
-                        // and extend with TENANT_LINKS
-                        .addInCollectionItemClause(FIELD_NAME_TENANT_LINKS, this.tenantLinks)
-                        .build();
+            {
+                // Wrap original query...
+                Query.Builder qBuilder = Query.Builder.create().addClause(query);
+
+                if (this.tenantLinks != null && !this.tenantLinks.isEmpty()) {
+                    // ...and extend with TENANT_LINKS
+                    qBuilder.addInCollectionItemClause(FIELD_NAME_TENANT_LINKS, this.tenantLinks);
+                }
+
+                // ...and extend with ENDPOINT_LINK
+                QueryUtils.addEndpointLink(qBuilder, this.documentClass, endpointLink);
+
+                this.query = qBuilder.build();
             }
 
             this.msg = this.getClass().getSimpleName() + " for " + documentClass.getSimpleName()
@@ -381,6 +363,14 @@ public class QueryUtils {
             super(host, query, documentClass, tenantLinks);
         }
 
+        public QueryTop(ServiceHost host,
+                Query query,
+                Class<T> documentClass,
+                List<String> tenantLinks,
+                String endpointLink) {
+            super(host, query, documentClass, tenantLinks, endpointLink);
+        }
+
         /**
          * Configure the number of top results.
          * <p>
@@ -396,9 +386,7 @@ public class QueryUtils {
          */
         @Override
         protected int getResultLimit() {
-            // TEMP workaround!
-            return Math.max(this.maxResultsLimit, DEFAULT_RESULT_LIMIT);
-            // return this.maxResultsLimit;
+            return this.maxResultsLimit;
         }
 
         /**
@@ -454,9 +442,17 @@ public class QueryUtils {
             super(host, query, documentClass, tenantLinks);
         }
 
+        public QueryByPages(ServiceHost host,
+                Query query,
+                Class<T> documentClass,
+                List<String> tenantLinks,
+                String endpointLink) {
+
+            super(host, query, documentClass, tenantLinks, endpointLink);
+        }
+
         /**
          * Configure the number of max documents per page.
-         * <p>
          * <p>
          * If not explicitly specified use the system default as returned by
          * {@link #getDefaultMaxPageSize()}.

@@ -25,8 +25,8 @@ import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.QueryStrategy;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
@@ -172,10 +172,17 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             String nextPageLink);
 
     /**
-     * Creates/updates a new resource base on the remote resource.
+     * Creates/updates a resource base on the remote resource.
      * <p>
-     * Note: id property should not be set since it is automatically set to the id of the remote
-     * resource.
+     * <b>Note</b>: Descendants are off-loaded from setting the following properties:
+     * <ul>
+     * <li>{@code id} property should not be set since it is automatically set to the id of the
+     * remote resource.</li>
+     * <li>{@code tenantLinks} property should not be set since it is automatically set to
+     * {@code request.parentCompute.tenantLinks}.</li>
+     * <li>{@code endpointLink} property should not be set since it is automatically set to
+     * {@code request.original.endpointLink}.</li>
+     * </ul>
      *
      * @param remoteResource
      *            The remote resource that should be represented in Photon model as a result of
@@ -271,9 +278,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * {@code qBuilder.addKindFieldClause(context.localStateClass)}</li>
      * <li>Add remote resources ids:
      * {@code qBuilder.addInClause(ResourceState.FIELD_NAME_ID, remoteResourceIds)}</li>
-     * <li>Add {@code tenantLinks} criteria as defined by {@code QueryTemplate}</li>
-     * <li>Add {@code endpointLink} criteria as defined by
-     * {@link QueryUtils#addEndpointLink(com.vmware.xenon.services.common.QueryTask.Query.Builder, Class, String)}</li>
+     * <li>Add {@code tenantLinks} and {@code endpointLink} criteria as defined by
+     * {@code QueryTemplate}</li>
      * <li>Add descendant specific criteria as defined by
      * {@link customizeLocalStatesQuery(qBuilder)}</li>
      * </ul>
@@ -292,9 +298,6 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                 // Add remote resources IDs
                 .addInClause(ResourceState.FIELD_NAME_ID, remoteResourceIds);
 
-        QueryUtils.addEndpointLink(qBuilder, context.localStateClass,
-                context.request.original.endpointLink);
-
         // Delegate to descendants to any doc specific criteria
         customizeLocalStatesQuery(qBuilder);
 
@@ -302,7 +305,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                 context.service.getHost(),
                 qBuilder.build(),
                 context.localStateClass,
-                context.request.parentCompute.tenantLinks)
+                context.request.parentCompute.tenantLinks,
+                context.request.original.endpointLink)
                         .setMaxResultsLimit(remoteResourceIds.size());
 
         return queryLocalStates
@@ -355,11 +359,22 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
         boolean existsLocally = this.localResourceStates.containsKey(localState.id);
 
-        Operation op = existsLocally
-                // Update case.
-                ? Operation.createPatch(this.service, localState.documentSelfLink)
-                // Create case.
-                : Operation.createPost(this.service, this.localStateServiceFactoryLink);
+        final Operation op;
+
+        if (existsLocally) {
+            // Update case.
+            op = Operation.createPatch(this.service, localState.documentSelfLink);
+        } else {
+            // Create case.
+
+            // By default populate TENANT_LINKS
+            localState.tenantLinks = this.request.parentCompute.tenantLinks;
+
+            // By default populate ENDPOINT_ILNK
+            PhotonModelUtils.setEndpointLink(localState, this.request.original.endpointLink);
+
+            op = Operation.createPost(this.service, this.localStateServiceFactoryLink);
+        }
 
         op.setBody(localState);
 
@@ -382,9 +397,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * {@code qBuilder.addKindFieldClause(context.localStateClass)}</li>
      * <li>Add time stamp older than current enumeration cycle:
      * {@code qBuilder.addRangeClause(ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS, createLessThanRange(context.enumStartTimeInMicros))}</li>
-     * <li>Add {@code tenantLinks} criteria as defined by {@code QueryTemplate}</li>
-     * <li>Add {@code endpointLink} criteria as defined by
-     * {@link QueryUtils#addEndpointLink(com.vmware.xenon.services.common.QueryTask.Query.Builder, Class, String)}</li>
+     * <li>Add {@code tenantLinks} and {@code endpointLink} criteria as defined by
+     * {@code QueryTemplate}</li>
      * <li>Add descendant specific criteria as defined by
      * {@link customizeLocalStatesQuery(qBuilder)}</li>
      * </ul>
@@ -400,9 +414,6 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                         ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
                         createLessThanRange(context.enumStartTimeInMicros));
 
-        QueryUtils.addEndpointLink(qBuilder, context.localStateClass,
-                context.request.original.endpointLink);
-
         // Delegate to descendants to any doc specific criteria
         customizeLocalStatesQuery(qBuilder);
 
@@ -410,7 +421,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                 context.service.getHost(),
                 qBuilder.build(),
                 context.localStateClass,
-                context.request.parentCompute.tenantLinks);
+                context.request.parentCompute.tenantLinks,
+                context.request.original.endpointLink);
 
         // Delete stale resources but do NOT wait the deletion to complete
         // nor fail if individual deletion has failed.

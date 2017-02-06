@@ -34,7 +34,6 @@ import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -82,21 +81,23 @@ public class QueryUtilsTest extends BaseModelTest {
                 ComputeState.FIELD_NAME_DESCRIPTION_LINK);
 
         // The classes under testing
-        List<QueryTemplate<ComputeState>> queryStrategies = Arrays.asList(
+        List<QueryStrategy<ComputeState>> queryStrategies = Arrays.asList(
                 new QueryByPages<>(
                         getHost(),
                         queryForReferrers,
                         ComputeState.class,
-                        Collections.emptyList()),
+                        Collections.singletonList("http://tenant"),
+                        null /*endpointLink*/),
                 new QueryTop<>(
                         getHost(),
                         queryForReferrers,
                         ComputeState.class,
-                        Collections.emptyList()));
+                        Collections.singletonList("http://tenant"),
+                        null /*endpointLink*/));
 
         // Test collectDocuments/queryDocuments/collectLinks/queryLinks per QueryByPages and
         // QueryTop
-        for (QueryTemplate<ComputeState> queryStrategy : queryStrategies) {
+        for (QueryStrategy<ComputeState> queryStrategy : queryStrategies) {
             {
                 // Test collectDocuments, which internally also tests queryDocuments
                 DeferredResult<Set<String>> documentLinksDR = queryStrategy.collectDocuments(
@@ -130,11 +131,12 @@ public class QueryUtilsTest extends BaseModelTest {
                 ComputeState.FIELD_NAME_DESCRIPTION_LINK);
 
         // The class under testing
-        QueryByPages<ComputeState> queryStrategy = new QueryByPages<>(
+        QueryStrategy<ComputeState> queryStrategy = new QueryByPages<>(
                 getHost(),
                 queryForReferrers,
                 ComputeState.class,
-                Collections.emptyList());
+                Collections.emptyList(),
+                null /*endpointLink*/);
 
         Set<String> actual = new HashSet<>();
 

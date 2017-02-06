@@ -20,7 +20,6 @@ import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -234,7 +233,8 @@ public class TestUtils {
                 host,
                 queryForReferrers,
                 SubnetState.class,
-                Collections.emptyList());
+                networkState.tenantLinks,
+                networkState.endpointLink);
 
         DeferredResult<List<SubnetState>> subnetDR =
                 querySubnetStatesReferrers.collectDocuments(Collectors.toList());

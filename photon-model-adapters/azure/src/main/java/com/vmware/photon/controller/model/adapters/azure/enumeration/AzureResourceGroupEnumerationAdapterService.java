@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
-import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 
 import java.net.URI;
 import java.util.HashMap;
@@ -147,15 +146,6 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                 resourceGroupState.customProperties.put(
                         ComputeProperties.RESOURCE_TYPE_KEY,
                         ResourceGroupStateType.AzureResourceGroup.name());
-
-                if (this.request.original.endpointLink != null
-                        && !this.request.original.endpointLink.isEmpty()) {
-                    resourceGroupState.customProperties.put(
-                            CUSTOM_PROP_ENDPOINT_LINK,
-                            this.request.original.endpointLink);
-                }
-
-                resourceGroupState.tenantLinks = this.request.parentCompute.tenantLinks;
             }
 
             // Fields explicitly affected by Azure

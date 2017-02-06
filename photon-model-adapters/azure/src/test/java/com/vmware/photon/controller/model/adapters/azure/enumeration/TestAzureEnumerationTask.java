@@ -36,10 +36,9 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.photon.controller.model.tasks.ModelUtils.createSecurityGroup;
-import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages.waitToComplete;
+import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.net.URI;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -781,7 +780,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 host,
                 queryForReferrers,
                 SubnetState.class,
-                Collections.emptyList());
+                networkState.tenantLinks,
+                networkState.endpointLink);
 
         DeferredResult<List<SubnetState>> subnetDR =
                 querySubnetStatesReferrers.collectDocuments(Collectors.toList());
