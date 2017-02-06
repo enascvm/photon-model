@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.2-SNAPSHOT
+
+
 ## 0.6.1
 
 * Upgrading xenon to 1.3.6. Introducing xenon-utils in root pom.
