@@ -1,10 +1,18 @@
 # CHANGELOG
 
-## 0.6.1-SNAPSHOT
+## 0.6.1
 
 * Upgrading xenon to 1.3.6. Introducing xenon-utils in root pom.
+* Fix the environmentName validation on PUT in ComputeState.
+* [Azure] Disable gateway enumeration.
+* [AWS] Create AWS Subnets (if not exist) during VM provisioning.
+* Query fixes.
+* [vsphere] Option to set the guestId.
+* [AWS] Use SecurityGroup IDs instead of Names during provisioning.
+* Last rollup time lookup optimzation.
+* [Azure] Fix tenantLinks usage.
 
-## 0.6.0-SNAPSHOT
+## 0.6.0
 
 * Adding endpointLink to network and subnet lookup query.
 * [vsphere] Enumerate opaque networks.
