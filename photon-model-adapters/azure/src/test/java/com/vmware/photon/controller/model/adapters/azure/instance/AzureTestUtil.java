@@ -60,7 +60,7 @@ import com.microsoft.azure.management.resources.models.ResourceGroup;
 import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
-import org.junit.Assume;
+import org.junit.Assert;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -120,15 +120,27 @@ public class AzureTestUtil {
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "storage";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_RAGRS";
 
-    public static final String AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME = "test-sharedNetworkRG";
-
     // If you change the number of NICs, please do so with the CIDRs!
     public static final int NUMBER_OF_NICS = 2;
-    public static final String AZURE_NETWORK_NAME = "vNet";
-    public static final String AZURE_SECURITY_GROUP_NAME = "NSG-name";
-    public static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
-    public static final String AZURE_SUBNET_NAME = "subnet";
 
+    /*
+     * VERY IMPORTANT: Do NOT change the vNet-subnet name to something random/unique per test run.
+     * There's no need since for every VM deployment we are creating new Resource Group and the
+     * names of the entities within (vNets inclusive) need to be unique just in the scope of the RG,
+     * and not across the subscription.
+     *
+     * Otherwise this will break TestAzureProvisionTask.testProvisionVMUsingSharedNetwork and will
+     * result in orphan vNets under 'test-sharedNetworkRG' RG.
+     */
+
+    // NOTE: change to "temp" instead of "test" to prevent collision with existing.
+    // Once IN will revert back to test.
+    public static final String AZURE_NETWORK_NAME = "temp-vNet";
+    public static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
+    public static final String AZURE_SUBNET_NAME = "temp-subnet";
+    public static final String AZURE_SECURITY_GROUP_NAME = "temp-NSG";
+
+    public static final String AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME = "temp-sharedNetworkRG";
     // As prerequisite Azure Gateway requires subnet named "GatewaySubnet".
     public static final String AZURE_GATEWAY_SUBNET_NAME = "GatewaySubnet";
 
@@ -190,20 +202,23 @@ public class AzureTestUtil {
     public static void deleteVMs(VerificationHost host, String documentSelfLink, boolean isMock,
             int numberOfRemainingVMs)
             throws Throwable {
-        host.testStart(1);
-        ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
+
+        // query VM doc to delete
         QuerySpecification resourceQuerySpec = new QuerySpecification();
-        // query all documents
         resourceQuerySpec.query
                 .setTermPropertyName(ServiceDocument.FIELD_NAME_SELF_LINK)
                 .setTermMatchValue(documentSelfLink);
+
+        ResourceRemovalTaskState deletionState = new ResourceRemovalTaskState();
         deletionState.resourceQuerySpec = resourceQuerySpec;
         deletionState.isMockRequest = isMock;
-        host.send(Operation
-                .createPost(UriUtils.buildUri(host, ResourceRemovalTaskService.FACTORY_LINK))
-                .setBody(deletionState)
-                .setCompletion(host.getCompletion()));
-        host.testWait();
+
+        // Post/Start the ResourceRemovalTaskState...
+        deletionState = TestUtils.doPost(host, deletionState, ResourceRemovalTaskState.class,
+                UriUtils.buildUri(host, ResourceRemovalTaskService.FACTORY_LINK));
+        // ...and wait for the task to complete
+        host.waitForFinishedTask(ResourceRemovalTaskState.class, deletionState.documentSelfLink);
+
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(host, numberOfRemainingVMs,
                 ComputeService.FACTORY_LINK, false);
     }
@@ -354,9 +369,9 @@ public class AzureTestUtil {
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
                 host, resourcePoolLink, computeHostAuthLink, networkRGLink)
-                .stream()
-                .map(nic -> nic.documentSelfLink)
-                .collect(Collectors.toList());
+                        .stream()
+                        .map(nic -> nic.documentSelfLink)
+                        .collect(Collectors.toList());
 
         // Finally create the compute resource state to provision using all constructs above.
         ComputeState computeState = new ComputeState();
@@ -553,8 +568,8 @@ public class AzureTestUtil {
                         "http://instanceAdapterReference");
 
                 securityGroupState = TestUtils.doPost(host, securityGroupState,
-                        SecurityGroupState.class, UriUtils.buildUri(host, SecurityGroupService
-                                .FACTORY_LINK));
+                        SecurityGroupState.class,
+                        UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK));
             }
 
             // Create NIC description.
@@ -580,8 +595,8 @@ public class AzureTestUtil {
 
             if (i == 0) {
                 // Attach security group only on the primary nic.
-                nicState.securityGroupLinks =
-                        Collections.singletonList(securityGroupState.documentSelfLink);
+                nicState.securityGroupLinks = Collections
+                        .singletonList(securityGroupState.documentSelfLink);
             }
 
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
@@ -606,10 +621,11 @@ public class AzureTestUtil {
      * <p>
      * NOTE2: Since this is SHARED vNet it's not deleted after the test.
      */
-    public static ResourceGroup createResourceGroupWithSharedNetwork(ResourceManagementClient
-            resourceManagementClient,
+    public static ResourceGroup createResourceGroupWithSharedNetwork(
+            ResourceManagementClient resourceManagementClient,
             NetworkManagementClient networkManagementClient) throws Throwable {
 
+        // Create the shared RG itself
         ResourceGroup sharedNetworkRGParams = new ResourceGroup();
         sharedNetworkRGParams.setName(AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME);
         sharedNetworkRGParams.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
@@ -617,22 +633,21 @@ public class AzureTestUtil {
         ResourceGroup sharedNetworkRG = resourceManagementClient.getResourceGroupsOperations()
                 .createOrUpdate(sharedNetworkRGParams.getName(), sharedNetworkRGParams).getBody();
 
+        // Create shared vNet-Subnet-Gateway under shared RG
         createAzureVirtualNetwork(sharedNetworkRG.getName(), networkManagementClient);
 
-        addAzureGatewayToVirtualNetwork(sharedNetworkRG.getName(), AZURE_NETWORK_NAME,
-                networkManagementClient);
-
+        // Create shared NSG under shared RG
         createAzureNetworkSecurityGroup(sharedNetworkRG.getName(), networkManagementClient);
 
         return sharedNetworkRG;
     }
 
-    private static void createAzureVirtualNetwork(String resourceGroupName, NetworkManagementClient
-            networkManagementClient) throws Exception {
+    /**
+     * @return VirtualNetwork name.
+     */
+    private static void createAzureVirtualNetwork(String resourceGroupName,
+            NetworkManagementClient networkManagementClient) throws Exception {
 
-        // Surround in try-catch as CloudException is thrown if the vNet already exists
-        // and we are trying to do an update, because there are objects (GatewaySubnet)
-        // attached to it
         try {
             VirtualNetwork vNet = new VirtualNetwork();
             vNet.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
@@ -653,13 +668,22 @@ public class AzureTestUtil {
 
             networkManagementClient.getVirtualNetworksOperations().createOrUpdate(
                     resourceGroupName, AZURE_NETWORK_NAME, vNet);
+
+            addAzureGatewayToVirtualNetwork(resourceGroupName, AZURE_NETWORK_NAME,
+                    networkManagementClient);
+
         } catch (CloudException ex) {
-            Assume.assumeTrue(ex.getBody().getCode().equals("InUseSubnetCannotBeDeleted"));
+            /*
+             * CloudException is thrown if the vNet already exists and we are trying to do an
+             * update, because there are objects (GatewaySubnet) attached to it
+             */
+            Assert.assertTrue(ex.getBody().getCode().equals("InUseSubnetCannotBeDeleted"));
         }
     }
 
     private static void createAzureNetworkSecurityGroup(String resourceGroupName,
             NetworkManagementClient networkManagementClient) throws Exception {
+
         final NetworkSecurityGroup sharedNSG = new NetworkSecurityGroup();
         sharedNSG.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
 
@@ -687,8 +711,8 @@ public class AzureTestUtil {
     /**
      * Adds Gateway to Virtual Network in Azure
      */
-    private static void addAzureGatewayToVirtualNetwork(String resourceGroupName, String
-            azureNetworkName, NetworkManagementClient networkManagementClient)
+    private static void addAzureGatewayToVirtualNetwork(String resourceGroupName,
+            String azureNetworkName, NetworkManagementClient networkManagementClient)
             throws CloudException, IOException, InterruptedException {
 
         // create Gateway Subnet
@@ -699,7 +723,8 @@ public class AzureTestUtil {
                 .getSubnetsOperations()
                 .createOrUpdate(resourceGroupName, azureNetworkName,
                         AZURE_GATEWAY_SUBNET_NAME,
-                        gatewaySubnetParams).getBody();
+                        gatewaySubnetParams)
+                .getBody();
 
         // create Public IP
         PublicIPAddress publicIPAddressParams = new PublicIPAddress();
@@ -709,14 +734,14 @@ public class AzureTestUtil {
         PublicIPAddress publicIPAddress = networkManagementClient
                 .getPublicIPAddressesOperations()
                 .createOrUpdate(resourceGroupName, AZURE_GATEWAY_PUBLIC_IP_NAME,
-                        publicIPAddressParams).getBody();
+                        publicIPAddressParams)
+                .getBody();
 
         SubResource publicIPSubResource = new SubResource();
         publicIPSubResource.setId(publicIPAddress.getId());
 
         // create IP Configuration
-        VirtualNetworkGatewayIPConfiguration ipConfiguration = new
-                VirtualNetworkGatewayIPConfiguration();
+        VirtualNetworkGatewayIPConfiguration ipConfiguration = new VirtualNetworkGatewayIPConfiguration();
         ipConfiguration.setName(AZURE_GATEWAY_IP_CONFIGURATION_NAME);
         ipConfiguration.setSubnet(gatewaySubnet);
         ipConfiguration.setPrivateIPAllocationMethod(AZURE_GATEWAY_IP_ALLOCATION_METHOD);
@@ -741,19 +766,19 @@ public class AzureTestUtil {
         // Call the async variant because the virtual network gateway provisioning depends on
         // the public IP address assignment which is time-consuming operation
         networkManagementClient.getVirtualNetworkGatewaysOperations().createOrUpdateAsync(
-                resourceGroupName, AZURE_GATEWAY_NAME, virtualNetworkGateway, new
-                        ServiceCallback<VirtualNetworkGateway>() {
-                            @Override
-                            public void failure(Throwable throwable) {
-                                throw new RuntimeException(
-                                        "Error creating Azure Virtual Network Gateway.");
-                            }
+                resourceGroupName, AZURE_GATEWAY_NAME, virtualNetworkGateway,
+                new ServiceCallback<VirtualNetworkGateway>() {
+                    @Override
+                    public void failure(Throwable throwable) {
+                        throw new RuntimeException(
+                                "Error creating Azure Virtual Network Gateway.");
+                    }
 
-                            @Override
-                            public void success(
-                                    ServiceResponse<VirtualNetworkGateway> serviceResponse) {
+                    @Override
+                    public void success(
+                            ServiceResponse<VirtualNetworkGateway> serviceResponse) {
 
-                            }
-                        });
+                    }
+                });
     }
 }

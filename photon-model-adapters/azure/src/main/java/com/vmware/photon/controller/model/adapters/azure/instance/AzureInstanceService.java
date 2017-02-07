@@ -84,6 +84,7 @@ import com.microsoft.azure.management.network.models.PublicIPAddress;
 import com.microsoft.azure.management.network.models.SecurityRule;
 import com.microsoft.azure.management.network.models.Subnet;
 import com.microsoft.azure.management.network.models.VirtualNetwork;
+import com.microsoft.azure.management.resources.ResourceGroupsOperations;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
 import com.microsoft.azure.management.resources.SubscriptionClient;
@@ -101,6 +102,7 @@ import com.microsoft.azure.management.storage.models.StorageAccountCreateParamet
 import com.microsoft.azure.management.storage.models.StorageAccountKeys;
 import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
+
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
@@ -111,7 +113,8 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext.AzureNicContext;
 import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.AzureDiagnosticSettings;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningDeferredResultCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDecommissionCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -400,23 +403,36 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        String resourceGroupName = getResourceGroupName(ctx);
+        String rgName = getResourceGroupName(ctx);
 
-        if (resourceGroupName == null || resourceGroupName.isEmpty()) {
+        if (rgName == null || rgName.isEmpty()) {
             throw new IllegalArgumentException("Resource group name is required");
         }
 
-        String msg = "Deleting resource group [" + resourceGroupName + "] for [" + ctx.vmName +
-                "] VM";
+        ResourceGroupsOperations azureClient = getResourceManagementClient(ctx)
+                .getResourceGroupsOperations();
 
-        getResourceManagementClient(ctx).getResourceGroupsOperations().beginDeleteAsync(
-                resourceGroupName,
-                new TransitionToCallback<Void>(ctx, AzureInstanceStage.FINISHED, msg) {
-                    @Override
-                    CompletionStage<Void> handleSuccess(Void resultBody) {
-                        return CompletableFuture.completedFuture((Void) null);
-                    }
-                });
+        String msg = "Deleting resource group [" + rgName + "] for [" + ctx.vmName + "] VM";
+
+        AzureDecommissionCallback callback = new AzureDecommissionCallback(
+                this, msg) {
+
+            @Override
+            protected DeferredResult<Void> consumeDecommissionSuccess(Void body) {
+                return DeferredResult.completed(body);
+            }
+
+            @Override
+            protected Runnable checkExistenceCall(ServiceCallback<Boolean> checkExistenceCallback) {
+                return () -> azureClient.checkExistenceAsync(rgName, checkExistenceCallback);
+            }
+        };
+
+        azureClient.beginDeleteAsync(rgName, callback);
+
+        callback.toDeferredResult()
+                .thenApply(ignore -> ctx)
+                .whenComplete(thenAllocation(ctx, AzureInstanceStage.FINISHED));
     }
 
     /**
@@ -445,34 +461,41 @@ public class AzureInstanceService extends StatelessService {
 
         // CREATE request has resulted in RG creation -> clear RG and its content.
 
-        String resourceGroupName = ctx.resourceGroup.getName();
+        String rgName = ctx.resourceGroup.getName();
 
         String msg = "Rollback provisioning for [" + ctx.vmName + "] Azure VM: %s";
 
-        logInfo(msg, "STARTED");
+        ResourceGroupsOperations azureClient = getResourceManagementClient(ctx)
+                .getResourceGroupsOperations();
 
-        ResourceManagementClient client = getResourceManagementClient(ctx);
+        AzureDecommissionCallback callback = new AzureDecommissionCallback(
+                this, msg) {
 
-        client.getResourceGroupsOperations().beginDeleteAsync(resourceGroupName,
-                new AzureAsyncCallback<Void>() {
-                    @Override
-                    public void onError(Throwable e) {
-                        String rollbackError = String.format(msg + ". Details: %s", "FAILED",
-                                e.getMessage());
+            @Override
+            protected DeferredResult<Void> consumeDecommissionSuccess(Void body) {
+                return DeferredResult.completed(body);
+            }
 
-                        // Wrap original ctx.error with rollback error details.
-                        ctx.error = new IllegalStateException(rollbackError, ctx.error);
+            @Override
+            protected Throwable consumeError(Throwable e) {
+                String rollbackError = String.format(msg + ". Details: %s", "FAILED",
+                        e.getMessage());
 
-                        finishWithFailure(ctx);
-                    }
+                // Wrap original ctx.error with rollback error details.
+                ctx.error = new IllegalStateException(rollbackError, ctx.error);
 
-                    @Override
-                    public void onSuccess(ServiceResponse<Void> result) {
-                        logFine(msg, "SUCCESS");
+                return RECOVERED;
+            }
 
-                        finishWithFailure(ctx);
-                    }
-                });
+            @Override
+            protected Runnable checkExistenceCall(ServiceCallback<Boolean> checkExistenceCallback) {
+                return () -> azureClient.checkExistenceAsync(rgName, checkExistenceCallback);
+            }
+        };
+
+        azureClient.beginDeleteAsync(rgName, callback);
+
+        callback.toDeferredResult().whenComplete((o, e) -> finishWithFailure(ctx));
     }
 
     private void finishWithFailure(AzureInstanceContext ctx) {
@@ -549,68 +572,68 @@ public class AzureInstanceService extends StatelessService {
         StorageAccountsOperations azureClient = getStorageManagementClient(ctx)
                 .getStorageAccountsOperations();
 
-        AzureProvisioningDeferredResultCallback<StorageAccount> handler =
-                new AzureProvisioningDeferredResultCallback<StorageAccount>(this, msg) {
-                    @Override
-                    public DeferredResult<StorageAccount> consumeProvisioningSuccess(
-                            StorageAccount sa) {
-                        ctx.storage = sa;
+        AzureProvisioningCallback<StorageAccount> handler = new AzureProvisioningCallback<StorageAccount>(
+                this, msg) {
+            @Override
+            protected DeferredResult<StorageAccount> consumeProvisioningSuccess(
+                    StorageAccount sa) {
+                ctx.storage = sa;
 
-                        StorageDescription storageDescriptionToCreate = new StorageDescription();
-                        storageDescriptionToCreate.name = ctx.storageAccountName;
-                        storageDescriptionToCreate.type = ctx.storage.getAccountType().name();
+                StorageDescription storageDescriptionToCreate = new StorageDescription();
+                storageDescriptionToCreate.name = ctx.storageAccountName;
+                storageDescriptionToCreate.type = ctx.storage.getAccountType().name();
 
-                        Operation createStorageDescOp = Operation
-                                .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
-                                .setBody(storageDescriptionToCreate);
+                Operation createStorageDescOp = Operation
+                        .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
+                        .setBody(storageDescriptionToCreate);
 
-                        Operation patchBootDiskOp = Operation
-                                .createPatch(
-                                        UriUtils.buildUri(getHost(),
-                                                ctx.bootDisk.documentSelfLink))
-                                .setBody(ctx.bootDisk);
+                Operation patchBootDiskOp = Operation
+                        .createPatch(
+                                UriUtils.buildUri(getHost(),
+                                        ctx.bootDisk.documentSelfLink))
+                        .setBody(ctx.bootDisk);
 
-                        return sendWithDeferredResult(createStorageDescOp, StorageDescription.class)
-                                // Consume created StorageDescription
-                                .thenAccept((storageDescription) -> {
-                                    ctx.storageDescription = storageDescription;
-                                    ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
-                                    logFine(() -> String.format("Creating StorageDescription [%s]:"
-                                                    + " SUCCESS", storageDescription.name));
-                                })
-                                // Start next op, patch boot disk, in the sequence
-                                .thenCompose((woid) -> sendWithDeferredResult(patchBootDiskOp))
-                                // Log boot disk patch success
-                                .thenRun(() -> {
-                                    logFine(() -> String.format("Updating boot disk [%s]: SUCCESS",
-                                            ctx.bootDisk.name));
-                                })
-                                // Return original StorageAccount
-                                .thenApply((woid) -> sa);
-                    }
+                return sendWithDeferredResult(createStorageDescOp, StorageDescription.class)
+                        // Consume created StorageDescription
+                        .thenAccept((storageDescription) -> {
+                            ctx.storageDescription = storageDescription;
+                            ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
+                            logFine(() -> String.format("Creating StorageDescription [%s]: SUCCESS",
+                                    storageDescription.name));
+                        })
+                        // Start next op, patch boot disk, in the sequence
+                        .thenCompose((woid) -> sendWithDeferredResult(patchBootDiskOp))
+                        // Log boot disk patch success
+                        .thenRun(() -> {
+                            logFine(() -> String.format("Updating boot disk [%s]: SUCCESS",
+                                    ctx.bootDisk.name));
+                        })
+                        // Return original StorageAccount
+                        .thenApply((woid) -> sa);
+            }
 
-                    @Override
-                    public String getProvisioningState(StorageAccount sa) {
-                        ProvisioningState provisioningState = sa.getProvisioningState();
+            @Override
+            protected String getProvisioningState(StorageAccount sa) {
+                ProvisioningState provisioningState = sa.getProvisioningState();
 
-                        // For some reason SA.provisioningState is null, so consider it CREATING.
-                        if (provisioningState == null) {
-                            provisioningState = ProvisioningState.CREATING;
-                        }
+                // For some reason SA.provisioningState is null, so consider it CREATING.
+                if (provisioningState == null) {
+                    provisioningState = ProvisioningState.CREATING;
+                }
 
-                        return provisioningState.name();
-                    }
+                return provisioningState.name();
+            }
 
-                    @Override
-                    public Runnable checkProvisioningStateCall(
-                            ServiceCallback<StorageAccount> checkProvisioningStateCallback) {
-                        return () -> azureClient.getPropertiesAsync(
-                                ctx.resourceGroup.getName(),
-                                ctx.storageAccountName,
-                                checkProvisioningStateCallback);
+            @Override
+            protected Runnable checkProvisioningStateCall(
+                    ServiceCallback<StorageAccount> checkProvisioningStateCallback) {
+                return () -> azureClient.getPropertiesAsync(
+                        ctx.resourceGroup.getName(),
+                        ctx.storageAccountName,
+                        checkProvisioningStateCallback);
 
-                    }
-                };
+            }
+        };
 
         azureClient.createAsync(
                 ctx.resourceGroup.getName(),
@@ -648,7 +671,8 @@ public class AzureInstanceService extends StatelessService {
             AzureInstanceStage nextStage,
             List<Subnet> subnetsToCreate) {
 
-        // All subnets MUST be at the same vNet, so we select the Primary vNet.
+        // All NICs MUST be at the same vNet (no cross vNet VMs),
+        // so we select the Primary vNet.
         final AzureNicContext primaryNic = ctx.getPrimaryNic();
 
         final VirtualNetwork vNetToCreate = newAzureVirtualNetwork(
@@ -670,55 +694,55 @@ public class AzureInstanceService extends StatelessService {
                 + "] for ["
                 + ctx.vmName + "] VM";
 
-        AzureProvisioningDeferredResultCallback<VirtualNetwork> handler =
-                new AzureProvisioningDeferredResultCallback<VirtualNetwork>(this, msg) {
+        AzureProvisioningCallback<VirtualNetwork> handler = new AzureProvisioningCallback<VirtualNetwork>(
+                this, msg) {
 
-                    @Override
-                    public DeferredResult<VirtualNetwork> consumeProvisioningSuccess(
-                            VirtualNetwork vNet) {
-                        // Populate NICs with Azure Subnet
-                        for (AzureNicContext nicCtx : ctx.nics) {
-                            if (nicCtx.subnet == null) {
-                                nicCtx.subnet = vNet.getSubnets().stream()
-                                        .filter(subnet -> subnet.getName()
-                                                .equals(nicCtx.subnetState.name))
-                                        .findFirst().get();
-                            }
-                        }
-                        return DeferredResult.completed(vNet);
+            @Override
+            protected DeferredResult<VirtualNetwork> consumeProvisioningSuccess(
+                    VirtualNetwork vNet) {
+                // Populate NICs with Azure Subnet
+                for (AzureNicContext nicCtx : ctx.nics) {
+                    if (nicCtx.subnet == null) {
+                        nicCtx.subnet = vNet.getSubnets().stream()
+                                .filter(subnet -> subnet.getName()
+                                        .equals(nicCtx.subnetState.name))
+                                .findFirst().get();
                     }
+                }
+                return DeferredResult.completed(vNet);
+            }
 
-                    @Override
-                    public String getProvisioningState(VirtualNetwork vNet) {
-                        // Return first NOT Succeeded state,
-                        // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
-                        String subnetPS = vNet.getSubnets().stream()
-                                .map(Subnet::getProvisioningState)
-                                // Get if any is NOT Succeeded...
-                                .filter(ps -> !PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(ps))
-                                // ...and return it.
-                                .findFirst()
-                                // Otherwise consider all are Succeeded
-                                .orElse(PROVISIONING_STATE_SUCCEEDED);
+            @Override
+            protected String getProvisioningState(VirtualNetwork vNet) {
+                // Return first NOT Succeeded state,
+                // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
+                String subnetPS = vNet.getSubnets().stream()
+                        .map(Subnet::getProvisioningState)
+                        // Get if any is NOT Succeeded...
+                        .filter(ps -> !PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(ps))
+                        // ...and return it.
+                        .findFirst()
+                        // Otherwise consider all are Succeeded
+                        .orElse(PROVISIONING_STATE_SUCCEEDED);
 
-                        if (PROVISIONING_STATE_SUCCEEDED.equals(vNet.getProvisioningState())
-                                && PROVISIONING_STATE_SUCCEEDED.equals(subnetPS)) {
+                if (PROVISIONING_STATE_SUCCEEDED.equals(vNet.getProvisioningState())
+                        && PROVISIONING_STATE_SUCCEEDED.equals(subnetPS)) {
 
-                            return PROVISIONING_STATE_SUCCEEDED;
-                        }
-                        return vNet.getProvisioningState() + ":" + subnetPS;
-                    }
+                    return PROVISIONING_STATE_SUCCEEDED;
+                }
+                return vNet.getProvisioningState() + ":" + subnetPS;
+            }
 
-                    @Override
-                    public Runnable checkProvisioningStateCall(
-                            ServiceCallback<VirtualNetwork> checkProvisioningStateCallback) {
-                        return () -> azureClient.getAsync(
-                                vNetToCreateRGName,
-                                vNetToCreateName,
-                                null /* expand */,
-                                checkProvisioningStateCallback);
-                    }
-                };
+            @Override
+            protected Runnable checkProvisioningStateCall(
+                    ServiceCallback<VirtualNetwork> checkProvisioningStateCallback) {
+                return () -> azureClient.getAsync(
+                        vNetToCreateRGName,
+                        vNetToCreateName,
+                        null /* expand */,
+                        checkProvisioningStateCallback);
+            }
+        };
 
         azureClient.beginCreateOrUpdateAsync(
                 vNetToCreateRGName,
@@ -780,31 +804,31 @@ public class AzureInstanceService extends StatelessService {
 
         String msg = "Creating Azure Public IP [" + publicIPName + "] for [" + ctx.vmName + "] VM";
 
-        AzureProvisioningDeferredResultCallback<PublicIPAddress> handler =
-                new AzureProvisioningDeferredResultCallback<PublicIPAddress>(this, msg) {
-                    @Override
-                    public DeferredResult<PublicIPAddress> consumeProvisioningSuccess(
-                            PublicIPAddress publicIP) {
-                        nicCtx.publicIP = publicIP;
+        AzureProvisioningCallback<PublicIPAddress> handler = new AzureProvisioningCallback<PublicIPAddress>(
+                this, msg) {
+            @Override
+            protected DeferredResult<PublicIPAddress> consumeProvisioningSuccess(
+                    PublicIPAddress publicIP) {
+                nicCtx.publicIP = publicIP;
 
-                        return DeferredResult.completed(publicIP);
-                    }
+                return DeferredResult.completed(publicIP);
+            }
 
-                    @Override
-                    public String getProvisioningState(PublicIPAddress publicIP) {
-                        return publicIP.getProvisioningState();
-                    }
+            @Override
+            protected String getProvisioningState(PublicIPAddress publicIP) {
+                return publicIP.getProvisioningState();
+            }
 
-                    @Override
-                    public Runnable checkProvisioningStateCall(
-                            ServiceCallback<PublicIPAddress> checkProvisioningStateCallback) {
-                        return () -> azureClient.getAsync(
-                                ctx.resourceGroup.getName(),
-                                publicIPName,
-                                null /* expand */,
-                                checkProvisioningStateCallback);
-                    }
-                };
+            @Override
+            protected Runnable checkProvisioningStateCall(
+                    ServiceCallback<PublicIPAddress> checkProvisioningStateCallback) {
+                return () -> azureClient.getAsync(
+                        ctx.resourceGroup.getName(),
+                        publicIPName,
+                        null /* expand */,
+                        checkProvisioningStateCallback);
+            }
+        };
 
         azureClient.beginCreateOrUpdateAsync(
                 ctx.resourceGroup.getName(),
@@ -832,8 +856,8 @@ public class AzureInstanceService extends StatelessService {
         return publicIPAddress;
     }
 
-    private void createSecurityGroupsIfNotExist(AzureInstanceContext ctx, AzureInstanceStage
-            nextStage) {
+    private void createSecurityGroupsIfNotExist(AzureInstanceContext ctx,
+            AzureInstanceStage nextStage) {
 
         if (ctx.nics.isEmpty()) {
             handleAllocation(ctx, nextStage);
@@ -842,9 +866,9 @@ public class AzureInstanceService extends StatelessService {
 
         List<DeferredResult<NetworkSecurityGroup>> createSGDR = ctx.nics.stream()
                 .filter(nicCtx -> (
-                        // Security Group is requested but no existing security group is mapped.
-                        nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
-                                && nicCtx.securityGroup == null))
+                // Security Group is requested but no existing security group is mapped.
+                nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
+                        && nicCtx.securityGroup == null))
                 .map(nicCtx -> {
                     SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
                     NetworkSecurityGroup nsg = newAzureSecurityGroup(ctx, sgState);
@@ -862,8 +886,8 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
-    private NetworkSecurityGroup newAzureSecurityGroup(AzureInstanceContext ctx, SecurityGroupState
-            sg) {
+    private NetworkSecurityGroup newAzureSecurityGroup(AzureInstanceContext ctx,
+            SecurityGroupState sg) {
 
         if (sg == null) {
             throw new IllegalStateException("SecurityGroup state should not be null.");
@@ -872,16 +896,14 @@ public class AzureInstanceService extends StatelessService {
         List<SecurityRule> securityRules = new ArrayList<>();
         final AtomicInteger priority = new AtomicInteger(1000);
         if (sg.ingress != null) {
-            sg.ingress.forEach(rule ->
-                    securityRules.add(newAzureSecurityRule(rule,
-                            AZURE_SECURITY_GROUP_DIRECTION_INBOUND, priority.getAndIncrement())));
+            sg.ingress.forEach(rule -> securityRules.add(newAzureSecurityRule(rule,
+                    AZURE_SECURITY_GROUP_DIRECTION_INBOUND, priority.getAndIncrement())));
         }
 
         priority.set(1000);
         if (sg.egress != null) {
-            sg.egress.forEach(rule ->
-                    securityRules.add(newAzureSecurityRule(rule,
-                            AZURE_SECURITY_GROUP_DIRECTION_OUTBOUND, priority.getAndIncrement())));
+            sg.egress.forEach(rule -> securityRules.add(newAzureSecurityRule(rule,
+                    AZURE_SECURITY_GROUP_DIRECTION_OUTBOUND, priority.getAndIncrement())));
         }
 
         NetworkSecurityGroup nsg = new NetworkSecurityGroup();
@@ -932,32 +954,32 @@ public class AzureInstanceService extends StatelessService {
                 + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
                 + ctx.vmName
                 + "] VM";
-        AzureProvisioningDeferredResultCallback<NetworkSecurityGroup> handler =
-                new AzureProvisioningDeferredResultCallback<NetworkSecurityGroup>(this, msg) {
-                    @Override
-                    public DeferredResult<NetworkSecurityGroup> consumeProvisioningSuccess(
-                            NetworkSecurityGroup securityGroup) {
+        AzureProvisioningCallback<NetworkSecurityGroup> handler = new AzureProvisioningCallback<NetworkSecurityGroup>(
+                this, msg) {
+            @Override
+            protected DeferredResult<NetworkSecurityGroup> consumeProvisioningSuccess(
+                    NetworkSecurityGroup securityGroup) {
 
-                        nicCtx.securityGroup = securityGroup;
+                nicCtx.securityGroup = securityGroup;
 
-                        return DeferredResult.completed(securityGroup);
-                    }
+                return DeferredResult.completed(securityGroup);
+            }
 
-                    @Override
-                    public Runnable checkProvisioningStateCall(
-                            ServiceCallback<NetworkSecurityGroup> checkProvisioningStateCallback) {
-                        return () -> azureClient.getAsync(
-                                ctx.resourceGroup.getName(),
-                                nsgName,
-                                null /* expand */,
-                                checkProvisioningStateCallback);
-                    }
+            @Override
+            protected Runnable checkProvisioningStateCall(
+                    ServiceCallback<NetworkSecurityGroup> checkProvisioningStateCallback) {
+                return () -> azureClient.getAsync(
+                        ctx.resourceGroup.getName(),
+                        nsgName,
+                        null /* expand */,
+                        checkProvisioningStateCallback);
+            }
 
-                    @Override
-                    public String getProvisioningState(NetworkSecurityGroup body) {
-                        return body.getProvisioningState();
-                    }
-                };
+            @Override
+            protected String getProvisioningState(NetworkSecurityGroup body) {
+                return body.getProvisioningState();
+            }
+        };
 
         azureClient.beginCreateOrUpdateAsync(
                 ctx.resourceGroup.getName(),
@@ -1785,7 +1807,7 @@ public class AzureInstanceService extends StatelessService {
             this.callCtx = azureCallContext;
             this.msg = message;
 
-            AzureInstanceService.this.logInfo(this.msg + ": STARTED");
+            AzureInstanceService.this.logFine(this.msg + ": STARTED");
         }
 
         @Override
@@ -1826,7 +1848,7 @@ public class AzureInstanceService extends StatelessService {
         public final void onSuccess(ServiceResponse<T> result) {
 
             if (this.callCtx.hasAnyFailed.get()) {
-                AzureInstanceService.this.logInfo(this.msg + ": SUCCESS. Still batch calls have "
+                AzureInstanceService.this.logFine(this.msg + ": SUCCESS. Still batch calls have "
                         + "failed so SKIP this result.");
                 return;
             }

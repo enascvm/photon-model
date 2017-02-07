@@ -35,12 +35,90 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  * Utility methods.
  */
 public class AzureUtils {
+
     private static final int EXECUTOR_SHUTDOWN_INTERVAL_MINUTES = 5;
     private static final Pattern RESOURCE_GROUP_NAME_PATTERN =
             Pattern.compile(".*/resourcegroups/([^/]*)", Pattern.CASE_INSENSITIVE);
     private static final Pattern VIRTUAL_NETWORK_GATEWAY_PATTERN =
             Pattern.compile("/subscriptions/.*/virtualNetworkGateways/([^/]*)", Pattern
                     .CASE_INSENSITIVE);
+
+    /**
+     * Strategy to control period between retry attempts.
+     */
+    public abstract static class RetryStrategy {
+
+        /**
+         * Indicates the max number of re-tries has reached.
+         */
+        public static final long EXHAUSTED = -1;
+
+        /**
+         * The maximum period to wait. Defaults to 10 minutes.
+         */
+        public long maxWaitMillis = TimeUnit.MINUTES.toMillis(10);
+
+        /**
+         * The initial delay. Defaults to 250 millis.
+         */
+        public long delayMillis = TimeUnit.MILLISECONDS.toMillis(250);
+
+        // The accumulated wait time so far.
+        private long currentWaitMillis = 0;
+
+        public final long nextDelayMillis() {
+            if (this.currentWaitMillis > this.maxWaitMillis) {
+                // Indicate maxWaitMillis was exceeded!
+                return EXHAUSTED;
+            }
+
+            // Delegate to descendants to calculate next delay
+            long nextDelayMillis = calculateNextDelayMillis();
+
+            // Update wait time so far
+            this.currentWaitMillis += nextDelayMillis;
+
+            return nextDelayMillis;
+        }
+
+        protected abstract long calculateNextDelayMillis();
+    }
+
+    /**
+     * {@link RetryStrategy} implementation that returns a fixed period of time before next retry.
+     */
+    public static class FixedRetryStrategy extends RetryStrategy {
+
+        @Override
+        protected long calculateNextDelayMillis() {
+            return this.delayMillis;
+        }
+    }
+
+    /**
+     * {@link RetryStrategy} implementation that increases the period for each retry attempt
+     * using the exponential function.
+     */
+    public static class ExponentialRetryStrategy extends RetryStrategy {
+
+        /**
+         * The max delay. Defaults to 10 seconds.
+         *
+         * <p>
+         * Once we exceed this value no more exponential delays are calculated.
+         */
+        public long maxDelayMillis = TimeUnit.SECONDS.toMillis(10);
+
+        @Override
+        protected long calculateNextDelayMillis() {
+            long next = this.delayMillis;
+            if (next > this.maxDelayMillis) {
+                return this.maxDelayMillis;
+            }
+            this.delayMillis *= 2;
+            return next;
+        }
+    }
 
     /**
      * Waits for termination of given executor service.

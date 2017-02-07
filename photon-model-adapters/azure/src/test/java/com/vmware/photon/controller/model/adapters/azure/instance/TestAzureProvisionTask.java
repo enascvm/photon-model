@@ -41,6 +41,7 @@ import com.microsoft.azure.management.resources.models.ResourceGroup;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -71,6 +72,8 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
     private static ComputeState computeHost;
     private static String resourcePoolLink;
     private static String authLink;
+    // Every test in addition might change it.
+    private static String azureVMName = generateName("testProv-");
     // }}
 
     public String clientID = "clientID";
@@ -78,9 +81,6 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
     public String subscriptionId = "subscriptionId";
     public String tenantId = "tenantId";
 
-    public String azureVMNamePrefix = "test-";
-
-    public String azureVMName;
     public boolean isMock = true;
     public boolean skipStats = true;
 
@@ -145,7 +145,6 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 this.networkManagementClient.setSubscriptionId(this.subscriptionId);
             }
 
-            this.azureVMName = generateName(this.azureVMNamePrefix);
 
         } catch (Throwable e) {
             throw new Exception(e);
@@ -164,6 +163,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
                 deleteVMs(this.host, this.vmState.documentSelfLink, this.isMock,
                         computeStatesToRemain);
+
             } catch (Throwable deleteExc) {
                 // just log and move on
                 this.host.log(Level.WARNING, "%s: Deleting [%s] VM: FAILED. Details: %s",
@@ -180,7 +180,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
     public void testProvision() throws Throwable {
 
         // create a Azure VM compute resoruce
-        this.vmState = createDefaultVMResource(this.host, this.azureVMName,
+        this.vmState = createDefaultVMResource(this.host, azureVMName,
                 computeHost.documentSelfLink,
                 resourcePoolLink, authLink);
 
@@ -200,13 +200,6 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 return true;
             });
         }
-
-        if (!this.isMock) {
-            // Cleaning up the Resources that were created.
-            this.vmState = null;
-            this.resourceManagementClient.getResourceGroupsOperations()
-                    .beginDelete(this.azureVMName);
-        }
     }
 
     /**
@@ -215,48 +208,48 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
      * It duplicates {@link #testProvision()} and just points to an external/shared Network.
      */
     @Test
+    @Ignore("Since azure build timeouts due to the time consuming provision-decomission VM executed"
+            + "by the tests. So far we sacrifice this test.")
     public void testProvisionVMUsingSharedNetwork() throws Throwable {
 
         // The test is only suitable for real (non-mocking env).
         Assume.assumeFalse(this.isMock);
 
-        /* The idea here is that we are provisioning a VM and linking it to an already
-         * existing subnet/network. That's why the network is with a fixed name.
-                *
-         * If 2 provision tests run in parallel the following condition can occur:
-         * Test A -> create/update shared RG + network.
-                * Test B -> create/update shared RG + network.
-                * Test A -> provision a VM linked to the shared network.
-                * Test A -> finish and delete shared VM + network.
-                * Test B -> try to provision a VM linked to the shared network.
-                *
-         * The network is deleted however. Boom!
-                */
-
+        /*
+         * Create SHARED vNet-Subnets in a separate RG.
+         *
+         * VERY IMPORTANT NOTE1: The names of the vNet and Subnets MUST be equal to the ones set by
+         * AzureTestUtil.createDefaultNicStates.
+         *
+         * NOTE2: Since this is SHARED vNet it's not deleted after the test.
+         *
+         * The idea here is that we are provisioning a VM and linking it to an already existing
+         * subnet/network. That's why the network is with a !!!FIXED!!! name, and that SAME name is
+         * being used by standard provisioning!
+         */
         final ResourceGroup sharedNetworkRG = AzureTestUtil.createResourceGroupWithSharedNetwork
                 (this.resourceManagementClient, this.networkManagementClient);
 
-        String sharedAzureVMName = this.azureVMName + "-sharedNetwork";
-
-        ResourceGroupState networkRG = createDefaultResourceGroupState(
+        // Create corresponding ResourceGroupState
+        ResourceGroupState sharedNetworkRGState = createDefaultResourceGroupState(
                 this.host, sharedNetworkRG.getName(), computeHost.documentSelfLink,
                 ResourceGroupStateType.AzureResourceGroup);
 
+        // END of prepare phase.
+
+        // In this scenario mark the VM name (and its corresponding RG) with "-withSharedNW"
+        String vmName = azureVMName + "-withSharedNW";
+
         // create a Azure VM compute resource
-        this.vmState = createDefaultVMResource(this.host, sharedAzureVMName,
+        this.vmState = createDefaultVMResource(this.host, vmName,
                 computeHost.documentSelfLink,
-                resourcePoolLink, authLink, networkRG.documentSelfLink);
+                resourcePoolLink, authLink,
+                // In addition to standard provisioning pass the RG of the shared network
+                sharedNetworkRGState.documentSelfLink);
 
         kickOffProvisionTask();
 
         assertVmNetworksConfiguration();
-
-        if (!this.isMock) {
-            // Cleaning up the Resources that were created.
-            this.vmState = null;
-            this.resourceManagementClient.getResourceGroupsOperations()
-                    .beginDelete(sharedAzureVMName);
-        }
     }
 
     // kick off a provision task to do the actual VM creation
@@ -342,8 +335,9 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 UriUtils.buildUri(this.host, vm.networkInterfaceLinks.get(0)));
 
         assertNotNull("Primary NIC public IP should be set.", primaryNicState.address);
-        assertNotNull("Primary NIC security group should be set.", primaryNicState
-                .securityGroupLinks != null && primaryNicState.securityGroupLinks.size() == 1);
+        assertNotNull("Primary NIC security group should be set.",
+                primaryNicState.securityGroupLinks != null
+                        && primaryNicState.securityGroupLinks.size() == 1);
 
         assertEquals("VM address should be the same as primary NIC public IP.", vm.address,
                 primaryNicState.address);

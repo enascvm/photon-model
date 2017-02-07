@@ -23,6 +23,7 @@ import com.vmware.xenon.common.StatelessService;
  * Azure {@link com.microsoft.rest.ServiceCallback} that bridges to a {@link DeferredResult}.
  */
 public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsyncCallback<RES> {
+
     /**
      * Return this instance by {@link #consumeError(Throwable)} to indicate that the descendant has
      * recovered from exception.
@@ -42,8 +43,10 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     /**
      * Constructs {@link AzureDeferredResultServiceCallback}.
      *
-     * @param service The service that is talking with Azure.
-     * @param message Informational message that describes the Service to Azure interaction.
+     * @param service
+     *            The service that is talking with Azure.
+     * @param message
+     *            Informational message that describes the Service to Azure interaction.
      */
     public AzureDeferredResultServiceCallback(StatelessService service, String message) {
         super(service);
@@ -70,10 +73,12 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     }
 
     @Override
-    protected void onError(final Throwable exc) {
+    protected final void onError(final Throwable exc) {
         final Throwable consumedError;
+
+        // First delegate to descendants to process exc
+
         try {
-            // First delegate to descendants to process exc
             consumedError = consumeError(exc);
         } catch (Throwable t) {
             if (this.service != null) {
@@ -84,6 +89,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
         }
 
         // Then propagate through the DeferredResult
+
         if (consumedError == RECOVERED) {
             // The code has recovered from exception
             if (this.service != null) {
@@ -101,7 +107,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     }
 
     @Override
-    protected void onSuccess(ServiceResponse<RES> result) {
+    protected final void onSuccess(ServiceResponse<RES> result) {
         DeferredResult<RES> consumeSuccess;
         if (this.service != null) {
             this.service.logFine(this.message + ": SUCCESS");

@@ -552,7 +552,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 // We don't want to process VMs that are being terminated.
                 if (AZURE_VM_TERMINATION_STATES
                         .contains(virtualMachine.properties.provisioningState)) {
-                    logFine(() -> String.format("Not processing %d", virtualMachine.id));
+                    logFine(() -> String.format("Not processing %s", virtualMachine.id));
                     continue;
                 }
 
