@@ -201,7 +201,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .remove(parent.documentSelfLink);
 
         if (old == null) {
-            logFine("No running enumeration process for %s was found", parent.documentSelfLink);
+            logFine(() -> String.format("No running enumeration process for %s was found",
+                    parent.documentSelfLink));
         }
 
         mgr.patchTask(TaskStage.FINISHED);
@@ -216,8 +217,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .putIfAbsent(parent.documentSelfLink, request);
 
         if (old != null) {
-            logFine("Enumeration process for %s already started, not starting a new one",
-                    parent.documentSelfLink);
+            logFine(() -> String.format("Enumeration process for %s already started, not starting a"
+                            + " new one", parent.documentSelfLink));
             return;
         }
 
@@ -315,7 +316,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         try {
             vapiConnection.login();
         } catch (IOException | RpcException e) {
-            logWarning("Cannot login into vAPI endpoint");
+            logWarning(() -> "Cannot login into vAPI endpoint");
         }
 
         EnumerationContext enumerationContext = new EnumerationContext(request, parent,
@@ -340,8 +341,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     } else if (VimUtils.isVirtualMachine(cont.getObj())) {
                         VmOverlay vm = new VmOverlay(cont);
                         if (vm.getInstanceUuid() == null) {
-                            logWarning("Cannot process a VM without instanceUuid: %s",
-                                    VimUtils.convertMoRefToString(vm.getId()));
+                            logWarning(() -> String.format("Cannot process a VM without"
+                                            + " instanceUuid: %s",
+                                    VimUtils.convertMoRefToString(vm.getId())));
                         } else if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
                             vms.add(vm);
                         }
@@ -541,7 +543,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             state.tenantLinks = tenantLinks;
         }
 
-        logFine("Syncing Network %s", net.getName());
+        logFine(() -> String.format("Syncing Network %s", net.getName()));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion(trackNetwork(enumerationContext, net))
@@ -557,7 +559,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setCompletion(trackNetwork(enumerationContext, net))
                 .sendWith(this);
 
-        logFine("Found new Network %s", net.getName());
+        logFine(() -> String.format("Found new Network %s", net.getName()));
     }
 
     private String getSelfLinkFromOperation(Operation o) {
@@ -705,7 +707,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             desc.tenantLinks = tenantLinks;
         }
 
-        logFine("Syncing Storage %s", ds.getName());
+        logFine(() -> String.format("Syncing Storage %s", ds.getName()));
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
                 .setCompletion(trackDatastore(enumerationContext, ds))
@@ -718,7 +720,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         String regionId = enumerationContext.getRegionId();
         StorageDescription desc = makeStorageFromResults(request, ds, regionId);
         desc.tenantLinks = tenantLinks;
-        logFine("Found new Datastore %s", ds.getName());
+        logFine(() -> String.format("Found new Datastore %s", ds.getName()));
 
         Operation.createPost(this, StorageDescriptionService.FACTORY_LINK)
                 .setBody(desc)
@@ -793,7 +795,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
         populateTags(cr, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logFine("Syncing ComputeResource %s", oldDocument.documentSelfLink);
+        logFine(() -> String.format("Syncing ComputeResource %s", oldDocument.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .sendWith(this);
@@ -842,7 +844,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.descriptionLink = desc.documentSelfLink;
         populateTags(cr, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logFine("Found new ComputeResource %s", cr.getId().getValue());
+        logFine(() -> String.format("Found new ComputeResource %s", cr.getId().getValue()));
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .setCompletion(trackComputeResource(enumerationContext, cr))
@@ -996,7 +998,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
         populateTags(hs, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logFine("Syncing HostSystem %s", oldDocument.documentSelfLink);
+        logFine(() -> String.format("Syncing HostSystem %s", oldDocument.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), state.documentSelfLink))
                 .setBody(state)
                 .setCompletion(trackHostSystem(enumerationContext, hs))
@@ -1022,7 +1024,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.tenantLinks = tenantLinks;
         populateTags(hs, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logFine("Found new HostSystem %s", hs.getName());
+        logFine(() -> String.format("Found new HostSystem %s", hs.getName()));
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .setCompletion(trackHostSystem(enumerationContext, hs))
@@ -1102,7 +1104,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
         populateTags(vm, enumerationContext.getEndpoint(), state, tenantLinks);
 
-        logFine("Syncing VM %s", state.documentSelfLink);
+        logFine(() -> String.format("Syncing VM %s", state.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
                 .setCompletion(trackVm(enumerationContext, vm))
@@ -1142,11 +1144,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 state.networkInterfaceLinks.add(iface.documentSelfLink);
             } else {
                 //TODO add support for DVS
-                logFine("Will not add nic of type %s", backing.getClass().getName());
+                logFine(() -> String.format("Will not add nic of type %s",
+                        backing.getClass().getName()));
             }
         }
 
-        logFine("Found new VM %s", vm.getInstanceUuid());
+        logFine(() -> String.format("Found new VM %s", vm.getInstanceUuid()));
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
                 .setCompletion(trackVm(enumerationContext, vm))
@@ -1220,7 +1223,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setBody(task)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logWarning("Error processing task %s", task.documentSelfLink);
+                        logWarning(() -> String.format("Error processing task %s",
+                                task.documentSelfLink));
                         return;
                     }
 

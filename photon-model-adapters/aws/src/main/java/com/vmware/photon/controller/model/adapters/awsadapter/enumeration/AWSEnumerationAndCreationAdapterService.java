@@ -257,8 +257,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         case ENUMERATE:
             switch (aws.request.enumerationAction) {
             case START:
-                logInfo("Started enumeration for creation for %s",
-                        aws.request.resourceReference);
+                logInfo(() -> String.format("Started enumeration for creation for %s",
+                        aws.request.resourceReference));
                 aws.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequest(aws);
                 break;
@@ -266,8 +266,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 processRefreshSubStages(aws);
                 break;
             case STOP:
-                logInfo("Stopping enumeration service for creation for %s",
-                        aws.request.resourceReference);
+                logInfo(() -> String.format("Stopping enumeration service for creation for %s",
+                        aws.request.resourceReference));
                 setOperationDurationStat(aws.operation);
                 aws.operation.complete();
                 break;
@@ -280,7 +280,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     aws.request.taskReference, aws.error);
             break;
         default:
-            logSevere("Unknown AWS enumeration stage %s ", aws.stage.toString());
+            logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
+                    aws.stage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     aws.request.taskReference, aws.error);
@@ -301,10 +302,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             break;
         case COMPUTE:
             if (aws.pageNo == 1) {
-                logFine("Running creation enumeration in refresh mode for %s",
-                        aws.parentCompute.description.environmentName);
+                logFine(() -> String.format("Running creation enumeration in refresh mode for %s",
+                        aws.parentCompute.description.environmentName));
             }
-            logFine("Processing page %d ", aws.pageNo);
+            logFine(() -> String.format("Processing page %d ", aws.pageNo));
             aws.pageNo++;
             if (aws.describeInstancesRequest == null) {
                 creatAWSRequestAndAsyncHandler(aws);
@@ -313,7 +314,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     aws.resultHandler);
             break;
         default:
-            logSevere("Unknown AWS enumeration stage %s ", aws.refreshSubStage.toString());
+            logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
+                    aws.refreshSubStage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     aws.request.taskReference, aws.error);
@@ -365,7 +367,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 .sendWithDeferredResult(patchSGOperation,
                         AWSSecurityGroupEnumerationAdapterService.AWSSecurityGroupEnumerationResponse.class)
                 .thenAccept(securityGroupEnumerationResponse -> {
-                    logFine("Successfully enumerated security group states");
+                    logFine(() -> "Successfully enumerated security group states");
                     aws.enumeratedSecurityGroups = securityGroupEnumerationResponse;
                     aws.refreshSubStage = next;
                     processRefreshSubStages(aws);
@@ -390,7 +392,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                         patchNetworkOperation,
                         AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationResponse.class)
                 .thenAccept(networkResponse -> {
-                    logFine("Successfully enumerated subnet states");
+                    logFine(() -> "Successfully enumerated subnet states");
                     aws.enumeratedNetworks = networkResponse;
                     aws.refreshSubStage = next;
                     processRefreshSubStages(aws);
@@ -430,7 +432,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
             List<AvailabilityZone> zones = result.getAvailabilityZones();
             if (zones == null || zones.isEmpty()) {
-                this.service.logFine("No AvailabilityZones found. Nothing to be created locally");
+                this.service.logFine(() -> "No AvailabilityZones found. Nothing to be created locally");
                 this.context.refreshSubStage = this.next;
                 this.service.processRefreshSubStages(this.context);
                 return;
@@ -442,8 +444,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                             .collect(Collectors.toList()),
                     cm -> createMissingLocalInstances(zones, cm),
                     cm -> {
-                        this.service.logFine("No AvailabilityZones found. Nothing to be created"
-                                + " locally");
+                        this.service.logFine(() -> "No AvailabilityZones found. Nothing to be"
+                                + " created locally");
                         this.context.refreshSubStage = this.next;
                         this.service.processRefreshSubStages(this.context);
                     });
@@ -483,9 +485,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                             (ops, exs) -> {
                                 if (exs != null) {
                                     this.service
-                                            .logSevere("Error creating a compute descriptions for "
+                                            .logSevere(() -> String.format("Error creating a"
+                                                            + " compute descriptions for "
                                                             + "discovered AvailabilityZone: %s",
-                                                    Utils.toString(exs));
+                                                    Utils.toString(exs)));
                                     AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
                                             this.context.request.taskReference,
                                             exs.values().iterator().next());
@@ -516,9 +519,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             OperationJoin.create(computeOps)
                     .setCompletion((ops, exs) -> {
                         if (exs != null) {
-                            this.service.logSevere("Error creating a compute states for discovered"
-                                            + " AvailabilityZone: %s",
-                                    Utils.toString(exs));
+                            this.service.logSevere(() -> String.format("Error creating a compute"
+                                            + " states for discovered AvailabilityZone: %s",
+                                    Utils.toString(exs)));
                             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
                                     this.context.request.taskReference,
                                     exs.values().iterator().next());
@@ -621,14 +624,16 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             // Print the details of the instances discovered on the AWS endpoint
             for (Reservation r : result.getReservations()) {
                 for (Instance i : r.getInstances()) {
-                    this.service.logFine("%d=====Instance details %s =====",
-                            ++totalNumberOfInstances,
-                            i.getInstanceId());
+                    ++totalNumberOfInstances;
+                    final int finalTotal1 = totalNumberOfInstances;
+                    this.service.logFine(() -> String.format("%d=====Instance details %s =====",
+                            finalTotal1, i.getInstanceId()));
                     this.context.remoteAWSInstances.put(i.getInstanceId(), i);
                 }
             }
-            this.service.logFine("Successfully enumerated %d instances on the AWS host",
-                    totalNumberOfInstances);
+            final int finalTotal2 = totalNumberOfInstances;
+            this.service.logFine(() -> String.format("Successfully enumerated %d instances on the"
+                            + " AWS host", finalTotal2));
             // Save the reference to the next token that will be used to retrieve the next page of
             // results from AWS.
             this.context.nextToken = result.getNextToken();
@@ -712,12 +717,12 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     },
                     lcsm -> {
                         if (this.context.nextToken == null) {
-                            this.service.logFine("Completed enumeration");
+                            this.service.logFine(() -> "Completed enumeration");
                             this.context.subStage = AWSComputeEnumerationCreationSubStage
                                     .ENUMERATION_STOP;
                         } else {
-                            this.service.logFine("No remote resources found, proceeding to next"
-                                    + " page");
+                            this.service.logFine(() -> "No remote resources found, proceeding to"
+                                    + " next page");
                             this.context.subStage = AWSComputeEnumerationCreationSubStage
                                     .GET_NEXT_PAGE;
                         }
@@ -736,7 +741,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             // No remote instances
             if (this.context.remoteAWSInstances == null
                     || this.context.remoteAWSInstances.size() == 0) {
-                this.service.logFine("No remote resources found. Nothing to be created locally");
+                this.service.logFine(() -> "No remote resources found. Nothing to be created locally");
                 // no local instances
             } else if (this.context.localAWSInstanceMap == null
                     || this.context.localAWSInstanceMap.size() == 0) {
@@ -804,11 +809,11 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             } else {
                 DeferredResult.allOf(getNICsDR).whenComplete((o, e) -> {
                     if (e != null) {
-                        this.service.logSevere("Failure querying NetworkInterfaceStates for update"
-                                        + " %s",Utils.toString(e));
+                        this.service.logSevere(() -> String.format("Failure querying"
+                                + " NetworkInterfaceStates for update %s",Utils.toString(e)));
                     }
-                    this.service.logFine("Populated NICs to be updated: %s",
-                            this.context.nicStatesToBeUpdated);
+                    this.service.logFine(() -> String.format("Populated NICs to be updated: %s",
+                            this.context.nicStatesToBeUpdated));
                     this.context.subStage = next;
                     handleReceivedEnumerationData();
                 });
@@ -819,7 +824,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
          * Posts a compute description to the compute description service for creation.
          */
         private void createComputeDescriptions(AWSComputeEnumerationCreationSubStage next) {
-            this.service.logFine("Creating compute descriptions for enumerated VMs");
+            this.service.logFine(() -> "Creating compute descriptions for enumerated VMs");
             AWSComputeDescriptionCreationState cd = new AWSComputeDescriptionCreationState();
             cd.instancesToBeCreated = this.context.instancesToBeCreated;
             cd.parentTaskLink = this.context.request.taskReference;
@@ -836,11 +841,11 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .setBody(cd)
                     .setCompletion((o, e) -> {
                         if (e != null) {
-                            this.service.logSevere("Failure creating compute descriptions %s",
-                                    Utils.toString(e));
+                            this.service.logSevere(() -> String.format("Failure creating compute"
+                                            + " descriptions %s", Utils.toString(e)));
                             signalErrorToEnumerationAdapter(e);
                         } else {
-                            this.service.logFine("Successfully created compute descriptions.");
+                            this.service.logFine(() -> "Successfully created compute descriptions.");
                             this.context.subStage = next;
                             handleReceivedEnumerationData();
                         }
@@ -852,7 +857,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
          * enumeration.
          */
         private void createComputeStates(AWSComputeEnumerationCreationSubStage next) {
-            this.service.logFine("Creating compute states for enumerated VMs");
+            this.service.logFine(() -> "Creating compute states for enumerated VMs");
             AWSComputeStateCreationRequest awsComputeState = new AWSComputeStateCreationRequest();
             awsComputeState.instancesToBeCreated = this.context.instancesToBeCreated;
             awsComputeState.instancesToBeUpdated = this.context.instancesToBeUpdated;
@@ -874,11 +879,11 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .setBody(awsComputeState)
                     .setCompletion((o, e) -> {
                         if (e != null) {
-                            this.service.logSevere("Failure creating compute states %s",
-                                    Utils.toString(e));
+                            this.service.logSevere(() -> String.format("Failure creating compute"
+                                            + " states %s", Utils.toString(e)));
                             signalErrorToEnumerationAdapter(e);
                         } else {
-                            this.service.logFine("Successfully created compute states.");
+                            this.service.logFine(() -> "Successfully created compute states.");
                             this.context.subStage = next;
                             handleReceivedEnumerationData();
                         }
@@ -963,16 +968,17 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 .build();
         queryTask.tenantLinks = context.parentCompute.tenantLinks;
 
-        service.logFine("Created query for resources: " + remoteIds);
+        service.logFine(() -> String.format("Created query for resources: " + remoteIds));
         QueryUtils.startQueryTask(service, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
-                        service.logSevere("Failure retrieving query results: %s",
-                                e.toString());
+                        service.logSevere(() -> String.format("Failure retrieving query results: %s",
+                                e.toString()));
                         signalErrorToEnumerationAdapter(e, context, service);
                         return;
                     }
-                    service.logFine("%d compute states found", qrt.results.documentCount);
+                    service.logFine(() -> String.format("%d compute states found",
+                            qrt.results.documentCount));
 
                     Map<String, ComputeState> localInstances = new HashMap<>();
                     for (Object s : qrt.results.documents.values()) {

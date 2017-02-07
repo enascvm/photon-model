@@ -127,7 +127,8 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
     @Override
     public void handlePeriodicMaintenance(Operation maintenanceOp) {
         if (getProcessingStage() != ProcessingStage.AVAILABLE) {
-            logFine("Skipping maintenance since service is not available: %s ", getUri());
+            logFine(() -> String.format("Skipping maintenance since service is not available: %s ",
+                    getUri()));
             return;
         }
         sendRequest(Operation.createGet(getUri())
@@ -149,8 +150,8 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                 try {
                     TaskUtils.assumeIdentity(this, op, state.userLink);
                 } catch (Exception e) {
-                    logWarning("Unhandled exception while assuming identity for %s: %s",
-                            state.userLink, e.getMessage());
+                    logWarning(() -> String.format("Unhandled exception while assuming identity"
+                                    + " for %s: %s", state.userLink, e.getMessage()));
                     return;
                 }
             }
@@ -162,10 +163,10 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                                 adjustStat(INVOCATION_COUNT, 1);
                                 // if a task instance is already running, just log the fact
                                 if (o.getStatusCode() == Operation.STATUS_CODE_NOT_MODIFIED) {
-                                    logFine("service instance already running.");
+                                    logFine(() -> "Service instance already running.");
                                 } else if (e != null) {
-                                    logWarning("Scheduled task invocation failed: %s",
-                                            e.getMessage());
+                                    logWarning(() -> String.format("Scheduled task invocation"
+                                                    + " failed: %s", e.getMessage()));
                                     return;
                                 }
                             }));

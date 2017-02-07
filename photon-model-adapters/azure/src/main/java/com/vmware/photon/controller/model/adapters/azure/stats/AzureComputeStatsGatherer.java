@@ -210,8 +210,8 @@ public class AzureComputeStatsGatherer extends StatelessService {
                         .get(AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK), onSuccess,
                 ((throwable) -> {
                     if (throwable instanceof ServiceNotFoundException) {
-                        logInfo("Skipping stats collection - storage account not found for [%s]",
-                                statsData.computeDesc.name);
+                        logInfo(() -> String.format("Skipping stats collection - storage account"
+                                        + " not found for [%s]", statsData.computeDesc.name));
                         patchEmptyResponse(statsData);
                         return;
                     }
@@ -232,7 +232,8 @@ public class AzureComputeStatsGatherer extends StatelessService {
     private Consumer<Throwable> getFailureConsumer(AzureStatsDataHolder statsData) {
         return ((throwable) -> {
             if (throwable instanceof ServiceNotFoundException) {
-                logWarning("Skipping stats collection because [%s]", throwable.getMessage());
+                logWarning(() -> String.format("Skipping stats collection because [%s]",
+                        throwable.getMessage()));
                 patchEmptyResponse(statsData);
                 return;
             }
@@ -499,7 +500,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                                 dp.setCount(properties.get(key).getValueAsIntegerObject());
                                 break;
                             default:
-                                logFine("Unhandled columns [%s]", key);
+                                logFine(() -> String.format("Unhandled columns [%s]", key));
                                 break;
                             }
                         }

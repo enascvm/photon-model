@@ -161,7 +161,7 @@ public class AWSMockStatsService extends StatelessService {
         for (String metricName : metricNames) {
             // start feeding mock stats data
             if (MOCK_STATS_MAP.get(metricName) != null) {
-                logFine("Retrieving %s mock metric from AWS", metricName);
+                logFine(() -> String.format("Retrieving %s mock metric from AWS", metricName));
                 List<ServiceStat> statValue = MOCK_STATS_MAP.get(metricName);
                 statsData.statsResponse.statValues
                         .put(AWSStatsNormalizer.getNormalizedStatKeyValue(metricName), statValue);

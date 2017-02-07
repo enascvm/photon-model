@@ -275,10 +275,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             switch (context.request.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
-                    logWarning("Enumeration service has already been started for %s", enumKey);
+                    logWarning(() -> String.format("Enumeration service has already been started"
+                            + " for %s", enumKey));
                     return;
                 }
-                logInfo("Launching enumeration service for %s", enumKey);
+                logInfo(() -> String.format("Launching enumeration service for %s", enumKey));
                 context.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 context.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumeration(context);
@@ -289,16 +290,18 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 break;
             case STOP:
                 if (this.ongoingEnumerations.remove(enumKey)) {
-                    logInfo("Enumeration service will be stopped for %s", enumKey);
+                    logInfo(() -> String.format("Enumeration service will be stopped for %s",
+                            enumKey));
                 } else {
-                    logInfo("Enumeration service is not running or has already been stopped for %s",
-                            enumKey);
+                    logInfo(() -> String.format("Enumeration service is not running or has already"
+                                    + " been stopped for %s", enumKey));
                 }
                 context.stage = EnumerationStages.FINISHED;
                 handleEnumeration(context);
                 break;
             default:
-                logSevere("Unknown enumeration action %s", context.request.enumerationAction);
+                logSevere(() -> String.format("Unknown enumeration action %s",
+                        context.request.enumerationAction));
                 context.stage = EnumerationStages.ERROR;
                 handleEnumeration(context);
                 break;
@@ -307,19 +310,19 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         case FINISHED:
             context.operation.complete();
             cleanUpHttpClient(this, context.httpClient);
-            logInfo("Enumeration finished for %s", getEnumKey(context));
+            logInfo(() -> String.format("Enumeration finished for %s", getEnumKey(context)));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
             context.operation.fail(context.error);
             cleanUpHttpClient(this, context.httpClient);
-            logWarning("Enumeration error for %s", getEnumKey(context));
+            logWarning(() -> String.format("Enumeration error for %s", getEnumKey(context)));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         default:
             String msg = String.format("Unknown Azure enumeration stage %s ",
                     context.stage.toString());
-            logSevere(msg);
+            logSevere(() -> msg);
             context.error = new IllegalStateException(msg);
             cleanUpHttpClient(this, context.httpClient);
             this.ongoingEnumerations.remove(getEnumKey(context));
@@ -390,7 +393,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     }
 
     private void handleError(StorageEnumContext context, Throwable e) {
-        logSevere("Failed at stage %s with exception: %s", context.stage, Utils.toString(e));
+        logSevere(() -> String.format("Failed at stage %s with exception: %s", context.stage,
+                Utils.toString(e)));
         context.error = e;
         context.stage = EnumerationStages.ERROR;
         handleEnumeration(context);
@@ -453,7 +457,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
             context.enumNextPageLink = results.nextLink;
 
-            logFine("Retrieved %d storage accounts from Azure", storageAccounts.size());
+            logFine(() -> String.format("Retrieved %d storage accounts from Azure",
+                    storageAccounts.size()));
 
             for (StorageAccount storageAccount : storageAccounts) {
                 String id = storageAccount.id;
@@ -462,7 +467,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 context.storageAccountIds.add(id);
             }
 
-            logFine("Processing %d storage accounts", context.storageAccountIds.size());
+            logFine(() -> String.format("Processing %d storage accounts",
+                    context.storageAccountIds.size()));
 
             context.subStage = next;
             handleSubStage(context);
@@ -511,8 +517,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         handleError(context, e);
                         return;
                     }
-                    logFine("Found %d matching storage descriptions for Azure storage accounts",
-                            queryTask.results.documentCount);
+                    logFine(() -> String.format("Found %d matching storage descriptions for Azure"
+                                    + " storage accounts", queryTask.results.documentCount));
 
                     // If there are no matches, there is nothing to update.
                     if (queryTask.results.documentCount == 0) {
@@ -543,7 +549,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private void updateStorageDescriptions(StorageEnumContext context, StorageEnumStages next) {
         if (context.storageDescriptions.size() == 0) {
-            logFine("No storage descriptions available for update");
+            logFine(() -> "No storage descriptions available for update");
             context.subStage = next;
             handleSubStage(context);
             return;
@@ -578,12 +584,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
                         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-2765
                         if (failure != null) {
-                            logWarning("Failed to update storage description: %s",
-                                    failure.getMessage());
+                            logWarning(() -> String.format("Failed to update storage description:"
+                                            + " %s", failure.getMessage()));
                         }
 
                         if (numOfUpdates.decrementAndGet() == 0) {
-                            logFine("Finished updating storage descriptions");
+                            logFine(() -> "Finished updating storage descriptions");
                             context.subStage = StorageEnumStages.CREATE_STORAGE_DESCRIPTIONS;
                             handleSubStage(context);
                         }
@@ -604,13 +610,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 handleSubStage(context);
                 return;
             }
-            logFine("No storage account found for creation");
+            logFine(() -> "No storage account found for creation");
             context.subStage = next;
             handleSubStage(context);
             return;
         }
 
-        logFine("%d storage description to be created", context.storageAccountsToUpdateCreate.size());
+        logFine(() -> String.format("%d storage description to be created",
+                context.storageAccountsToUpdateCreate.size()));
 
         Iterator<Map.Entry<String, StorageAccount>> iterator =
                 context.storageAccountsToUpdateCreate.entrySet().iterator();
@@ -680,7 +687,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             OperationJoin.create(opCollection)
                     .setCompletion((ops, exs) -> {
                         if (exs != null) {
-                            exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                            exs.values().forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                    ex.getMessage())));
                         }
 
                         if (context.enumNextPageLink != null) {
@@ -689,7 +697,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         }
 
                         if (size.decrementAndGet() == 0) {
-                            logFine("Finished creating storage descriptions");
+                            logFine(() -> "Finished creating storage descriptions");
                             context.subStage = StorageEnumStages.DELETE_STORAGE_DESCRIPTIONS;
                             handleSubStage(context);
                         }
@@ -734,7 +742,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        logFine("Querying storage descriptions for deletion");
+        logFine(() -> "Querying storage descriptions for deletion");
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
@@ -742,7 +750,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         return;
                     }
                     if (queryTask.results.nextPageLink == null) {
-                        logFine("No storage accounts found for deletion");
+                        logFine(() -> "No storage accounts found for deletion");
                         context.subStage = next;
                         handleSubStage(context);
                         return;
@@ -755,7 +763,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private void deleteStorageDescriptionHelper(StorageEnumContext context) {
         if (context.deletionNextPageLink == null) {
-            logFine("Finished deletion of storage descriptions for Azure");
+            logFine(() -> "Finished deletion of storage descriptions for Azure");
             context.subStage = StorageEnumStages.GET_STORAGE_CONTAINERS;
             handleSubStage(context);
             return;
@@ -782,11 +790,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 }
 
                 operations.add(Operation.createDelete(this, storageDescription.documentSelfLink));
-                logFine("Deleting storage description %s", storageDescription.documentSelfLink);
+                logFine(() -> String.format("Deleting storage description %s",
+                        storageDescription.documentSelfLink));
             }
 
             if (operations.size() == 0) {
-                logFine("No storage descriptions deleted");
+                logFine(() -> "No storage descriptions deleted");
                 deleteStorageDescriptionHelper(context);
                 return;
             }
@@ -797,14 +806,16 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             // We don't want to fail the whole data collection if some of the
                             // operation fails.
                             exs.values().forEach(
-                                    ex -> logWarning("Error: %s", ex.getMessage()));
+                                    ex -> logWarning(() -> String.format("Error: %s",
+                                            ex.getMessage())));
                         }
 
                         deleteStorageDescriptionHelper(context);
                     })
                     .sendWith(this);
         };
-        logFine("Querying page [%s] for resources to be deleted", context.deletionNextPageLink);
+        logFine(() -> String.format("Querying page [%s] for resources to be deleted",
+                context.deletionNextPageLink));
         sendRequest(Operation.createGet(this, context.deletionNextPageLink)
                 .setCompletion(completionHandler));
     }
@@ -814,7 +825,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     public void getStorageContainers(StorageEnumContext context, StorageEnumStages next) {
         if (context.allStorageAccounts.size() == 0) {
-            logFine("No storage description available - clean up all resources");
+            logFine(() -> "No storage description available - clean up all resources");
             context.subStage = StorageEnumStages.DELETE_RESOURCE_GROUP_STATES;
             handleSubStage(context);
             return;
@@ -837,7 +848,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     context.containerIds.add(uri);
                     context.storageContainers.put(uri, container);
                 }
-                logFine("Processing %d storage containers", context.containerIds.size());
+                logFine(() -> String.format("Processing %d storage containers",
+                        context.containerIds.size()));
             } catch (Exception e) {
                 handleError(context, e);
                 return;
@@ -894,8 +906,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         handleError(context, e);
                         return;
                     }
-                    logFine("Found %d matching resource for Azure storage containers",
-                            queryTask.results.documentCount);
+                    logFine(() -> String.format("Found %d matching resource for Azure storage"
+                                    + " containers", queryTask.results.documentCount));
 
                     // If there are no matches, there is nothing to update.
                     if (queryTask.results.documentCount == 0) {
@@ -918,7 +930,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private void updateResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
         if (context.resourceGroupStates.size() == 0) {
-            logFine("No resource group states available for update");
+            logFine(() -> "No resource group states available for update");
             context.subStage = next;
             handleSubStage(context);
             return;
@@ -959,10 +971,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
-                        logWarning("Could not retrieve storage description link");
+                        logWarning(() -> "Could not retrieve storage description link");
                         return;
                     }
-                    logFine("Found %d matching resource group", queryTask.results.documentCount);
+                    logFine(() -> String.format("Found %d matching resource group",
+                            queryTask.results.documentCount));
 
                     String storageDescSelfLink = null;
                     // the storage account names are unique so we should only get 1 result back
@@ -974,8 +987,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                     .fromJson(queryTask.results.documents
                                                     .get(queryTask.results.documentLinks.get(0)),
                                             StorageDescription.class);
-                            logWarning("Found multiple instance of the same storage description %s",
-                                    storageDesc.name);
+                            logWarning(() -> String.format("Found multiple instance of the same"
+                                            + " storage description %s", storageDesc.name));
                         }
 
                         ResourceGroupState resourceGroupState = createResourceGroupStateObject(
@@ -1034,11 +1047,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
                     // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-2765
                     if (failure != null) {
-                        logWarning("Failed to update storage containers: %s", failure.getMessage());
+                        logWarning(() -> String.format("Failed to update storage containers: %s",
+                                failure.getMessage()));
                     }
 
                     if (size.decrementAndGet() == 0) {
-                        logFine("Finished updating resource group states");
+                        logFine(() -> "Finished updating resource group states");
                         context.subStage = StorageEnumStages.CREATE_RESOURCE_GROUP_STATES;
                         handleSubStage(context);
                     }
@@ -1053,15 +1067,17 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private void createResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
         if (context.storageContainers.size() == 0) {
-            logFine("No storage container found for creation");
+            logFine(() -> "No storage container found for creation");
             context.subStage = next;
             handleSubStage(context);
             return;
         }
 
-        logFine("%d storage container to be created", context.storageContainers.size());
+        logFine(() -> String.format("%d storage container to be created",
+                context.storageContainers.size()));
 
-        Iterator<Map.Entry<String, CloudBlobContainer>> iterator = context.storageContainers.entrySet().iterator();
+        Iterator<Map.Entry<String, CloudBlobContainer>> iterator =
+                context.storageContainers.entrySet().iterator();
         AtomicInteger size = new AtomicInteger(context.storageContainers.size());
 
         while (iterator.hasNext()) {
@@ -1084,7 +1100,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     }
 
                     if (size.decrementAndGet() == 0) {
-                        logFine("Finished creating resource group states");
+                        logFine(() -> "Finished creating resource group states");
                         context.subStage = StorageEnumStages.DELETE_RESOURCE_GROUP_STATES;
                         handleSubStage(context);
                     }
@@ -1127,7 +1143,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        logFine("Querying resource group states for deletion");
+        logFine(() -> "Querying resource group states for deletion");
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
@@ -1135,7 +1151,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         return;
                     }
                     if (queryTask.results.nextPageLink == null) {
-                        logFine("No storage containers found for deletion");
+                        logFine(() -> "No storage containers found for deletion");
                         context.subStage = next;
                         handleSubStage(context);
                         return;
@@ -1148,7 +1164,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private void deleteResourceGroupHelper(StorageEnumContext context) {
         if (context.deletionNextPageLink == null) {
-            logFine("Finished deletion of resource group states for Azure");
+            logFine(() -> "Finished deletion of resource group states for Azure");
             context.subStage = StorageEnumStages.GET_BLOBS;
             handleSubStage(context);
             return;
@@ -1175,11 +1191,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 }
 
                 operations.add(Operation.createDelete(this, resourceGroupState.documentSelfLink));
-                logFine("Deleting storage group state %s", resourceGroupState.documentSelfLink);
+                logFine(() -> String.format("Deleting storage group state %s",
+                        resourceGroupState.documentSelfLink));
             }
 
             if (operations.size() == 0) {
-                logFine("No resource group states deleted");
+                logFine(() -> "No resource group states deleted");
                 deleteResourceGroupHelper(context);
                 return;
             }
@@ -1190,14 +1207,16 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             // We don't want to fail the whole data collection if some of the
                             // operation fails.
                             exs.values().forEach(
-                                    ex -> logWarning("Error: %s", ex.getMessage()));
+                                    ex -> logWarning(() -> String.format("Error: %s",
+                                            ex.getMessage())));
                         }
 
                         deleteResourceGroupHelper(context);
                     })
                     .sendWith(this);
         };
-        logFine("Querying page [%s] for resources to be deleted", context.deletionNextPageLink);
+        logFine(() -> String.format("Querying page [%s] for resources to be deleted",
+                context.deletionNextPageLink));
         sendRequest(Operation.createGet(this, context.deletionNextPageLink)
                 .setCompletion(completionHandler));
     }
@@ -1206,7 +1225,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         // If no storage accounts exist in Azure, no disks exist either
         // Move on to disk deletion stage
         if (context.storageAccountIds.size() == 0) {
-            logFine("No storage description available - clean up all local disks");
+            logFine(() -> "No storage description available - clean up all local disks");
             context.subStage = StorageEnumStages.DELETE_DISK_STATES;
             handleSubStage(context);
             return;
@@ -1306,8 +1325,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         handleError(context, e);
                         return;
                     }
-                    logFine("Found %d matching disk states for Azure blobs",
-                            queryTask.results.documentCount);
+                    logFine(() -> String.format("Found %d matching disk states for Azure blobs",
+                            queryTask.results.documentCount));
 
                     // If there are no matches, there is nothing to update.
                     if (queryTask.results.documentCount == 0) {
@@ -1332,7 +1351,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private void updateDiskStates(StorageEnumContext context, StorageEnumStages next) {
         if (context.diskStates.size() == 0) {
-            logFine("No disk states found for update");
+            logFine(() -> "No disk states found for update");
             context.subStage = next;
             handleSubStage(context);
             return;
@@ -1377,11 +1396,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             QueryUtils.startQueryTask(this, q)
                     .whenComplete((queryTask, e) -> {
                         if (e != null) {
-                            logWarning("Could not retrieve resource group state.");
+                            logWarning(() -> "Could not retrieve resource group state.");
                             return;
                         }
-                        logFine("Found %d matching resource group",
-                                queryTask.results.documentCount);
+                        logFine(() -> String.format("Found %d matching resource group",
+                                queryTask.results.documentCount));
 
                         String containerSelfLink = null;
                         // the storage container names are unique so we should only get 1 result back
@@ -1393,8 +1412,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                         .fromJson(queryTask.results.documents
                                                         .get(queryTask.results.documentLinks.get(0)),
                                                 ResourceGroupState.class);
-                                logWarning("Found multiple instance of the same resource group %s",
-                                        rGState.id);
+                                logWarning(() -> String.format("Found multiple instance of the same"
+                                                + " resource group %s", rGState.id));
                             }
                         }
 
@@ -1407,11 +1426,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         }
                     });
         } catch (URISyntaxException e) {
-            logWarning("Could not set storage description link for blob: %s",
-                    blob.getUri().toString());
+            logWarning(() -> String.format("Could not set storage description link for blob: %s",
+                    blob.getUri().toString()));
         } catch (StorageException e) {
-            logWarning("Could not set storage description link for disk blob: %s",
-                    blob.getUri().toString());
+            logWarning(() -> String.format("Could not set storage description link for disk blob: %s",
+                    blob.getUri().toString()));
         }
     }
 
@@ -1425,11 +1444,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
                     if (failure != null) {
                         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-2765
-                        logWarning("Failed deleting disk %s", failure.getMessage());
+                        logWarning(() -> String.format("Failed deleting disk %s",
+                                failure.getMessage()));
                     }
 
                     if (size.decrementAndGet() == 0) {
-                        logFine("Finished updating disk states");
+                        logFine(() -> "Finished updating disk states");
                         context.subStage = StorageEnumStages.CREATE_DISK_STATES;
                         handleSubStage(context);
                     }
@@ -1446,13 +1466,13 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
      */
     private void createDiskStates(StorageEnumContext context, StorageEnumStages next) {
         if (context.storageBlobs.size() == 0) {
-            logFine("No disk states found for creation");
+            logFine(() -> "No disk states found for creation");
             context.subStage = next;
             handleSubStage(context);
             return;
         }
 
-        logFine("%d disk states to be created", context.storageBlobs.size());
+        logFine(() -> String.format("%d disk states to be created", context.storageBlobs.size()));
         Iterator<Map.Entry<String, ListBlobItem>> iterator = context.storageBlobs.entrySet()
                 .iterator();
         AtomicInteger size = new AtomicInteger(context.storageBlobs.size());
@@ -1515,7 +1535,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     }
 
                     if (size.decrementAndGet() == 0) {
-                        logFine("Finished creating disk states");
+                        logFine(() -> "Finished creating disk states");
                         context.subStage = StorageEnumStages.DELETE_DISK_STATES;
                         handleSubStage(context);
                     }
@@ -1569,7 +1589,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        logFine("Querying disk states for deletion");
+        logFine(() -> "Querying disk states for deletion");
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
@@ -1577,7 +1597,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         return;
                     }
                     if (queryTask.results.nextPageLink == null) {
-                        logFine("No disk states found for deletion");
+                        logFine(() -> "No disk states found for deletion");
                         context.subStage = next;
                         handleSubStage(context);
                         return;
@@ -1590,7 +1610,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private void deleteDisksHelper(StorageEnumContext context) {
         if (context.deletionNextPageLink == null) {
-            logFine("Finished deletion of disk states for Azure");
+            logFine(() -> "Finished deletion of disk states for Azure");
             context.subStage = StorageEnumStages.FINISHED;
             handleSubStage(context);
             return;
@@ -1617,11 +1637,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 }
 
                 operations.add(Operation.createDelete(this, diskState.documentSelfLink));
-                logFine("Deleting disk state %s", diskState.documentSelfLink);
+                logFine(() -> String.format("Deleting disk state %s", diskState.documentSelfLink));
             }
 
             if (operations.size() == 0) {
-                logFine("No disk states deleted");
+                logFine(() -> "No disk states deleted");
                 deleteDisksHelper(context);
                 return;
             }
@@ -1632,14 +1652,16 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             // We don't want to fail the whole data collection if some of the
                             // operation fails.
                             exs.values().forEach(
-                                    ex -> logWarning("Error: %s", ex.getMessage()));
+                                    ex -> logWarning(() -> String.format("Error: %s",
+                                            ex.getMessage())));
                         }
 
                         deleteDisksHelper(context);
                     })
                     .sendWith(this);
         };
-        logFine("Querying page [%s] for resources to be deleted", context.deletionNextPageLink);
+        logFine(() -> String.format("Querying page [%s] for resources to be deleted",
+                context.deletionNextPageLink));
         sendRequest(Operation.createGet(this, context.deletionNextPageLink)
                 .setCompletion(completionHandler));
     }
@@ -1671,8 +1693,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setCompletion(
                         (op, ex) -> {
                             if (ex != null) {
-                                logWarning("Failed to get storage description credentials: %s",
-                                        ex.getMessage());
+                                logWarning(() -> String.format("Failed to get storage description"
+                                                + " credentials: %s", ex.getMessage()));
                                 return;
                             }
 

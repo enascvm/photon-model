@@ -129,9 +129,8 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
             currState.taskSubStage = nextStage(currState);
 
             handleSubStages(currState);
-            logInfo("%s %s on %s started", "Firewall",
-                    currState.requestType.toString(),
-                    currState.firewallDescriptionLink);
+            logInfo(() -> String.format("%s %s on %s started", "Firewall",
+                    currState.requestType.toString(), currState.firewallDescriptionLink));
             break;
 
         case STARTED:
@@ -141,14 +140,14 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
             SubStage nextStage = nextStage(currState);
             if (nextStage == SubStage.FINISHED) {
                 currState.taskInfo.stage = TaskState.TaskStage.FINISHED;
-                logInfo("task is complete");
+                logInfo(() -> "Rask is complete");
             } else {
                 sendSelfPatch(TaskState.TaskStage.CREATED, null);
             }
             break;
         case FAILED:
-            logWarning("Task failed with %s",
-                    Utils.toJsonHtml(currState.taskInfo.failure));
+            logWarning(() -> String.format("Task failed with %s",
+                    Utils.toJsonHtml(currState.taskInfo.failure)));
             break;
         case CANCELLED:
             break;
@@ -248,7 +247,7 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
         } else {
             body.taskInfo.stage = TaskState.TaskStage.FAILED;
             body.taskInfo.failure = Utils.toServiceErrorResponse(e);
-            logWarning("Patching to failed: %s", Utils.toString(e));
+            logWarning(() -> String.format("Patching to failed: %s", Utils.toString(e)));
         }
 
         sendSelfPatch(body);

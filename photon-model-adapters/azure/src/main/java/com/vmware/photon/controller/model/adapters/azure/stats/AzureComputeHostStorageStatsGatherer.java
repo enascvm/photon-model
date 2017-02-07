@@ -212,12 +212,14 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
             dataHolder.azureStorageStatsOperation.setBody(dataHolder.statsResponse);
             dataHolder.azureStorageStatsOperation.complete();
             cleanUpHttpClient(this, dataHolder.httpClient);
-            logInfo("Storage utilization stats collection complete for compute host %s", dataHolder.computeHostDesc.id);
+            logInfo(() -> String.format("Storage utilization stats collection complete for compute"
+                            + " host %s", dataHolder.computeHostDesc.id));
             break;
         case ERROR:
             dataHolder.azureStorageStatsOperation.fail(dataHolder.error);
             cleanUpHttpClient(this, dataHolder.httpClient);
-            logWarning("Storage utilization stats collection failed for compute host %s", dataHolder.computeHostDesc.id);
+            logWarning(() -> String.format("Storage utilization stats collection failed for compute"
+                            + " host %s", dataHolder.computeHostDesc.id));
             break;
         default:
         }
@@ -290,12 +292,14 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                 return;
             }
 
-            logFine("Retrieved %d storage accounts from Azure", storageAccounts.size());
+            logFine(() -> String.format("Retrieved %d storage accounts from Azure",
+                    storageAccounts.size()));
 
             for (StorageAccount storageAccount : storageAccounts) {
                 statsData.storageAccounts.put(storageAccount.id, storageAccount);
             }
-            logFine("Processing %d storage accounts", statsData.storageAccounts.size());
+            logFine(() -> String.format("Processing %d storage accounts",
+                    statsData.storageAccounts.size()));
 
             statsData.stage = next;
             handleStorageMetricDiscovery(statsData);
@@ -319,8 +323,8 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                         }
 
                         public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
-                            logFine("Retrieved the storage account keys for storage account [%s].",
-                                    account.getValue().name);
+                            logFine(() -> String.format("Retrieved the storage account keys for"
+                                            + " storage account [%s].", account.getValue().name));
                             accountsCount.decrementAndGet();
                             StorageAccountKeys keys = result.getBody();
                             String storageConnectionString = String
@@ -428,7 +432,8 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
     }
 
     private void handleError(AzureStorageStatsDataHolder dataHolder, Throwable e) {
-        logSevere("Failed at stage %s with exception: %s", dataHolder.stage, Utils.toString(e));
+        logSevere(() -> String.format("Failed at stage %s with exception: %s", dataHolder.stage,
+                Utils.toString(e)));
         dataHolder.error = e;
         dataHolder.stage = StorageMetricsStages.ERROR;
         handleStorageMetricDiscovery(dataHolder);
@@ -437,7 +442,8 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
     private Consumer<Throwable> getFailureConsumer(AzureStorageStatsDataHolder statsData) {
         return ((throwable) -> {
             if (throwable instanceof ServiceHost.ServiceNotFoundException) {
-                logWarning("Skipping storage stats collection because [%s]", throwable.getMessage());
+                logWarning(() -> String.format("Skipping storage stats collection because [%s]",
+                        throwable.getMessage()));
                 return;
             }
             AdapterUtils.sendFailurePatchToProvisioningTask(this,

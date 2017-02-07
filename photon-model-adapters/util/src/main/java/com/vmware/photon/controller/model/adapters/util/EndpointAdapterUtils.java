@@ -110,8 +110,7 @@ public class EndpointAdapterUtils {
             EndpointState endpoint, Stream<Operation> operations) {
 
         OperationJoin joinOp = OperationJoin.create(operations);
-        joinOp.setCompletion((ox,
-                exc) -> {
+        joinOp.setCompletion((ox, exc) -> {
             if (exc != null) {
                 service.logSevere(
                         "Error patching endpoint configuration data for %s. %s",
@@ -121,8 +120,8 @@ public class EndpointAdapterUtils {
                         exc.values().iterator().next());
                 return;
             }
-            service.logFine("Successfully completed %s endpoint configuration tasks.",
-                    endpoint.endpointType);
+            service.logFine(() -> String.format("Successfully completed %s endpoint configuration tasks.",
+                    endpoint.endpointType));
             AdapterUtils.sendPatchToProvisioningTask(service, body.taskReference);
         });
         joinOp.sendWith(service);

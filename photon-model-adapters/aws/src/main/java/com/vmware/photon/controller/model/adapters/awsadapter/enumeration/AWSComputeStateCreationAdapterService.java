@@ -192,7 +192,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      *            additional compute states in the local system.
      */
     private void handleComputeStateCreateOrUpdate(AWSComputeStateCreationContext context) {
-        this.logFine("Transition to: %s", context.creationStage);
+        this.logFine(() -> String.format("Transition to: %s", context.creationStage));
         switch (context.creationStage) {
         case GET_RELATED_COMPUTE_DESCRIPTIONS:
             getRelatedComputeDescriptions(context,
@@ -295,7 +295,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         QueryUtils.startQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
-                        logWarning("Failure retrieving query results: %s", e.toString());
+                        logWarning(() -> String.format("Failure retrieving query results: %s",
+                                e.toString()));
                         finishWithFailure(context, e);
                         return;
                     }
@@ -308,10 +309,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                                     getKeyForComputeDescriptionFromCD(localComputeDescription),
                                     localComputeDescription.documentSelfLink);
                         }
-                        logFine("%d compute descriptions found",
-                                context.computeDescriptionMap.size());
+                        logFine(() -> String.format("%d compute descriptions found",
+                                context.computeDescriptionMap.size()));
                     } else {
-                        logFine("No compute descriptions found");
+                        logFine(() -> "No compute descriptions found");
                     }
                     context.creationStage = next;
                     handleComputeStateCreateOrUpdate(context);
@@ -325,12 +326,12 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             AWSComputeStateCreationStage next) {
         if (context.request.instancesToBeCreated == null
                 || context.request.instancesToBeCreated.size() == 0) {
-            logFine("No local compute states to be created");
+            logFine(() -> "No local compute states to be created");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
         } else {
-            logFine("Need to create %d local compute states",
-                    context.request.instancesToBeCreated.size());
+            logFine(() -> String.format("Need to create %d local compute states",
+                    context.request.instancesToBeCreated.size()));
 
             for (int i = 0; i < context.request.instancesToBeCreated.size(); i++) {
 
@@ -441,12 +442,12 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             AWSComputeStateCreationStage next) {
         if (context.request.instancesToBeUpdated == null
                 || context.request.instancesToBeUpdated.size() == 0) {
-            logFine("No local compute states to be updated");
+            logFine(() -> "No local compute states to be updated");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
         } else {
-            logFine("Need to update %d local compute states",
-                    context.request.instancesToBeUpdated.size());
+            logFine(() -> String.format("Need to update %d local compute states",
+                    context.request.instancesToBeUpdated.size()));
 
             for (String instanceId : context.request.instancesToBeUpdated.keySet()) {
 
@@ -543,7 +544,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             AWSComputeStateCreationStage next) {
         if (context.enumerationOperations == null
                 || context.enumerationOperations.size() == 0) {
-            logFine("No compute or networks states to be created");
+            logFine(() -> "No compute or networks states to be created");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
             return;
@@ -551,12 +552,12 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
             if (exc != null) {
-                logSevere("Error creating compute state and the associated network %s",
-                        Utils.toString(exc));
+                logSevere(() -> String.format("Error creating compute state and the associated"
+                                + " network %s", Utils.toString(exc)));
                 finishWithFailure(context, exc.values().iterator().next());
                 return;
             }
-            logFine("Successfully created compute and networks states.");
+            logFine(() -> "Successfully created compute and networks states.");
             context.creationStage = next;
             handleComputeStateCreateOrUpdate(context);
         };

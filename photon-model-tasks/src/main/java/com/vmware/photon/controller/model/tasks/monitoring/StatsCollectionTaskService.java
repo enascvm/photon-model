@@ -120,7 +120,8 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                     .getBody(StatsCollectionTaskState.class);
 
             validateState(state);
-            logInfo("Starting stats collection task for: " + state.resourcePoolLink);
+            logInfo(() -> String.format("Starting stats collection task for: %s",
+                    state.resourcePoolLink));
             start.complete();
             state.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
             state.taskSubStage = StatsCollectionStage.INIT;
@@ -153,7 +154,8 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                     logWarning(currentState.failureMessage);
                 }
             }
-            logInfo("Finished stats collection task for: " + currentState.resourcePoolLink);
+            logInfo(() -> String.format("Finished stats collection task for: %s",
+                    currentState.resourcePoolLink));
 
             if (currentState.options != null
                     && currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {

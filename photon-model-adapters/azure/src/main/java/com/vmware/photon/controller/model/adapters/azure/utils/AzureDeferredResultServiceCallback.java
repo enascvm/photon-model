@@ -87,8 +87,8 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
         if (consumedError == RECOVERED) {
             // The code has recovered from exception
             if (this.service != null) {
-                this.service.logFine("%s: SUCCESS with error. Details: %s",
-                        this.message, exc.getMessage());
+                this.service.logFine(() -> String.format("%s: SUCCESS with error. Details: %s",
+                        this.message, exc.getMessage()));
             }
             toDeferredResult().complete(null);
         } else {

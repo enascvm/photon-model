@@ -197,7 +197,7 @@ public class AWSInstanceService extends StatelessService {
      * @see #handleAllocation(AWSInstanceContext, AWSInstanceStage)
      */
     private void handleAllocation(AWSInstanceContext context) {
-        logInfo("Transition to: %s", context.stage);
+        logFine(() -> String.format("Transition to: %s", context.stage));
         switch (context.stage) {
         case PROVISIONTASK:
             getProvisioningTaskReference(context, AWSInstanceStage.CLIENT);
@@ -409,7 +409,8 @@ public class AWSInstanceService extends StatelessService {
                 OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                         exc) -> {
                     if (exc != null) {
-                        this.service.logSevere("Error updating VM state. %s", Utils.toString(exc));
+                        this.service.logSevere(() -> String.format("Error updating VM state. %s",
+                                Utils.toString(exc)));
                         AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
                                 this.context.computeRequest.taskReference,
                                 new IllegalStateException("Error updating VM state"));
@@ -546,8 +547,8 @@ public class AWSInstanceService extends StatelessService {
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
 
-            AWSInstanceService.this.logWarning("Error deleting instances received from AWS: %s",
-                    exception.getMessage());
+            AWSInstanceService.this.logWarning(() -> String.format("Error deleting instances"
+                            + " received from AWS: %s", exception.getMessage()));
 
             AdapterUtils.sendFailurePatchToProvisioningTask(AWSInstanceService.this,
                     this.context.computeRequest.taskReference, exception);
@@ -578,8 +579,9 @@ public class AWSInstanceService extends StatelessService {
                                         new IllegalStateException(
                                                 "Error deleting AWS subnet", exc));
                             } else {
-                                AWSInstanceService.this.logInfo("Deleting Subnets 'created-by' [%s]: SUCCESS",
-                                        this.context.computeRequest.resourceLink());
+                                AWSInstanceService.this.logInfo(() -> String.format("Deleting"
+                                                + " subnets 'created-by' [%s]: SUCCESS",
+                                        this.context.computeRequest.resourceLink()));
 
                                 AdapterUtils.sendPatchToProvisioningTask(AWSInstanceService.this,
                                         this.context.computeRequest.taskReference);
@@ -589,13 +591,14 @@ public class AWSInstanceService extends StatelessService {
 
             AWSTaskStatusChecker.create(this.context.amazonEC2Client, this.instanceId,
                     AWSInstanceService.AWS_TERMINATED_NAME, postTerminationCallback,
-                    this.context.computeRequest, AWSInstanceService.this, this.context.taskExpirationMicros).start();
+                    this.context.computeRequest, AWSInstanceService.this,
+                    this.context.taskExpirationMicros).start();
         }
 
         private DeferredResult<List<ResourceState>> deleteConstructsReferredByInstance() {
 
-            AWSInstanceService.this.logInfo("Get all states to delete 'created-by' [%s]",
-                    this.context.computeRequest.resourceLink());
+            AWSInstanceService.this.logInfo(() -> String.format("Get all states to delete"
+                            + " 'created-by' [%s]", this.context.computeRequest.resourceLink()));
 
             // Query all states that are usedBy/createdBy the VM state we are deleting
             Query query = Builder.create()
@@ -629,8 +632,9 @@ public class AWSInstanceService extends StatelessService {
         // Do AWS subnet deletion
         private DeferredResult<ResourceState> deleteAWSSubnet(ResourceState stateToDelete) {
 
-            AWSInstanceService.this.logInfo("Deleting AWS Subnet [%s] 'created-by' [%s]", stateToDelete.id,
-                    this.context.computeRequest.resourceLink());
+            AWSInstanceService.this.logInfo(() -> String.format("Deleting AWS Subnet [%s]"
+                            + " 'created-by' [%s]", stateToDelete.id,
+                    this.context.computeRequest.resourceLink()));
 
             DeleteSubnetRequest req = new DeleteSubnetRequest().withSubnetId(stateToDelete.id);
 
@@ -674,8 +678,9 @@ public class AWSInstanceService extends StatelessService {
                 return DeferredResult.completed(stateToDelete);
             }
 
-            AWSInstanceService.this.logInfo("Deleting Subnet state [%s] 'created-by' [%s]",
-                    stateToDelete.documentSelfLink, this.context.computeRequest.resourceLink());
+            AWSInstanceService.this.logInfo(() -> String.format("Deleting Subnet state [%s]"
+                            + " 'created-by' [%s]", stateToDelete.documentSelfLink,
+                    this.context.computeRequest.resourceLink()));
 
             Operation delOp = Operation.createDelete(AWSInstanceService.this, stateToDelete.documentSelfLink);
 

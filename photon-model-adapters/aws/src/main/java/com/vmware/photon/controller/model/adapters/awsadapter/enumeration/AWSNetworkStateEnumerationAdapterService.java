@@ -310,7 +310,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         QueryUtils.startQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
                     if (e != null) {
-                        logSevere("Failure retrieving query results: %s", e.toString());
+                        logSevere(() -> String.format("Failure retrieving query results: %s",
+                                e.toString()));
                         finishWithFailure(context, e);
                         return;
                     }
@@ -323,7 +324,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         }
                     }
 
-                    logFine("%d network states found.", qrt.results.documentCount);
+                    logFine(() -> String.format("%d network states found.",
+                            qrt.results.documentCount));
                     handleNetworkStateChanges(context, next);
                 });
     }
@@ -356,7 +358,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
                     if (e != null) {
-                        logSevere("Failed retrieving query results: %s", e.toString());
+                        logSevere(() -> String.format("Failed retrieving query results: %s",
+                                e.toString()));
                         finishWithFailure(context, e);
                         return;
                     }
@@ -367,7 +370,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                                     subnetState.documentSelfLink);
                         }
                     }
-                    logFine("%d subnet states found.", queryTask.results.documentCount);
+                    logFine(() -> String.format("%d subnet states found.",
+                            queryTask.results.documentCount));
 
                     handleNetworkStateChanges(context, next);
                 });
@@ -414,8 +418,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         this.context.request.tenantLinks,
                         adapterUri);
                 if (networkState.subnetCIDR == null) {
-                    logWarning("AWS did not return CIDR information for VPC %s",
-                            resultVPC.toString());
+                    logWarning(() -> String.format("AWS did not return CIDR information for VPC %s",
+                            resultVPC.toString()));
                 }
                 this.context.vpcs.put(resultVPC.getVpcId(), networkState);
             }
@@ -480,8 +484,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             for (Subnet subnet : result.getSubnets()) {
 
                 if (!this.context.vpcs.containsKey(subnet.getVpcId())) {
-                    logWarning("AWS returned Subnet [%s] with VCP [%s] that is missing locally.",
-                            subnet.getSubnetId(), subnet.getVpcId());
+                    logWarning(() -> String.format("AWS returned Subnet [%s] with VCP [%s] that is"
+                                    + " missing locally.", subnet.getSubnetId(), subnet.getVpcId()));
                     continue;
                 }
 
@@ -490,8 +494,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         this.context.request.request.endpointLink);
 
                 if (subnetState.subnetCIDR == null) {
-                    logWarning("AWS did not return CIDR information for Subnet %s",
-                            subnet.toString());
+                    logWarning(() -> String.format("AWS did not return CIDR information for Subnet"
+                                    + " %s", subnet.toString()));
                 }
 
                 this.context.subnets.put(
@@ -564,7 +568,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
 
         if (context.vpcs.isEmpty()) {
-            logFine("No new VPCs have been discovered.");
+            logFine(() -> "No new VPCs have been discovered.");
             handleNetworkStateChanges(context, next);
             return;
         }
@@ -594,11 +598,12 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 Entry<Long, Throwable> excEntry = excs.entrySet().iterator().next();
                 Throwable exc = excEntry.getValue();
                 Operation op = ops.get(excEntry.getKey());
-                logSevere("Error %s-ing a Network state: %s", op.getAction(), Utils.toString(excs));
+                logSevere(() -> String.format("Error %s-ing a Network state: %s", op.getAction(),
+                        Utils.toString(excs)));
                 finishWithFailure(context, exc);
                 return;
             }
-            logFine("Created/updated all network states.");
+            logFine(() -> "Created/updated all network states.");
             ops.values().stream()
                     .filter(op -> op.getStatusCode() != Operation.STATUS_CODE_NOT_MODIFIED)
                     .forEach(op -> {
@@ -621,7 +626,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
 
         if (context.subnets.isEmpty()) {
-            logFine("No new subnets found.");
+            logFine(() -> "No new subnets found.");
             handleNetworkStateChanges(context, next);
             return;
         }
@@ -657,11 +662,12 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 Entry<Long, Throwable> excEntry = excs.entrySet().iterator().next();
                 Throwable exc = excEntry.getValue();
                 Operation op = ops.get(excEntry.getKey());
-                logSevere("Error %s-ing a Subnet state: %s", op.getAction(), Utils.toString(excs));
+                logSevere(() -> String.format("Error %s-ing a Subnet state: %s", op.getAction(),
+                        Utils.toString(excs)));
                 finishWithFailure(context, exc);
                 return;
             }
-            logFine("Successfully created/updated all subnet states.");
+            logFine(() -> "Successfully created/updated all subnet states.");
             ops.values().stream()
                     .filter(op -> op.getStatusCode() != Operation.STATUS_CODE_NOT_MODIFIED)
                     .forEach(op -> {

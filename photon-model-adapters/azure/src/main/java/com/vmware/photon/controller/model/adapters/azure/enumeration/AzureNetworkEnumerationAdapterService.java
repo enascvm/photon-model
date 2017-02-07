@@ -255,11 +255,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             switch (context.request.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
-                    logWarning("Enumeration service has already been started for %s", enumKey);
+                    logWarning(() -> String.format("Enumeration service has already been started"
+                            + " for %s", enumKey));
                     handleSubStage(context, NetworkEnumStages.FINISHED);
                     return;
                 }
-                logInfo("Launching enumeration service for %s", enumKey);
+                logInfo(() -> String.format("Launching enumeration service for %s", enumKey));
                 context.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumeration(context);
                 break;
@@ -270,16 +271,18 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 break;
             case STOP:
                 if (this.ongoingEnumerations.remove(enumKey)) {
-                    logInfo("Enumeration service will be stopped for %s", enumKey);
+                    logInfo(() -> String.format("Enumeration service will be stopped for %s",
+                            enumKey));
                 } else {
-                    logInfo("Enumeration service is not running or has already been stopped for %s",
-                            enumKey);
+                    logInfo(() -> String.format("Enumeration service is not running or has already"
+                                    + " been stopped for %s", enumKey));
                 }
                 context.stage = EnumerationStages.FINISHED;
                 handleEnumeration(context);
                 break;
             default:
-                logSevere("Unknown enumeration action %s", context.request.enumerationAction);
+                logSevere(() -> String.format("Unknown enumeration action %s",
+                        context.request.enumerationAction));
                 context.stage = EnumerationStages.ERROR;
                 handleEnumeration(context);
                 break;
@@ -287,18 +290,18 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             break;
         case FINISHED:
             context.operation.complete();
-            logInfo("Enumeration finished for %s", getEnumKey(context));
+            logInfo(() -> String.format("Enumeration finished for %s", getEnumKey(context)));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
             context.operation.fail(context.error);
-            logWarning("Enumeration error for %s", getEnumKey(context));
+            logWarning(() -> String.format("Enumeration error for %s", getEnumKey(context)));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         default:
             String msg = String
                     .format("Unknown Azure enumeration stage %s ", context.stage.toString());
-            logSevere(msg);
+            logSevere(() -> msg);
             context.error = new IllegalStateException(msg);
             this.ongoingEnumerations.remove(getEnumKey(context));
         }
@@ -354,13 +357,14 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * {@link #handleSubStage(NetworkEnumContext)}.
      */
     private void handleSubStage(NetworkEnumContext ctx, NetworkEnumStages nextStage) {
-        logFine("Transition to " + nextStage);
+        logFine(() -> String.format("Transition to " + nextStage));
         ctx.subStage = nextStage;
         handleSubStage(ctx);
     }
 
     private void handleError(NetworkEnumContext ctx, Throwable e) {
-        logSevere("Failed at stage %s with exception: %s", ctx.stage, Utils.toString(e));
+        logSevere(() -> String.format("Failed at stage %s with exception: %s", ctx.stage,
+                Utils.toString(e)));
         ctx.error = e;
         ctx.stage = EnumerationStages.ERROR;
         handleEnumeration(ctx);
@@ -380,7 +384,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * description.
      */
     private void getVirtualNetworks(NetworkEnumContext context, NetworkEnumStages next) {
-        logFine("Enumerating Virtual Networks from Azure.");
+        logFine(() -> "Enumerating Virtual Networks from Azure.");
 
         URI uri;
         if (context.enumNextPageLink == null) {
@@ -425,15 +429,17 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             // Store next page link.
             context.enumNextPageLink = results.nextLink;
 
-            logFine("Retrieved %d Virtual Networks from Azure", virtualNetworks.size());
-            logFine("Next page link %s", context.enumNextPageLink);
+            logFine(() -> String.format("Retrieved %d Virtual Networks from Azure",
+                    virtualNetworks.size()));
+            logFine(() -> String.format("Next page link %s", context.enumNextPageLink));
 
             // Store virtual networks for further processing during the next stages.
             virtualNetworks.forEach(virtualNetwork -> {
                 context.addVirtualNetwork(virtualNetwork);
             });
 
-            logFine("Processing %d virtual networks", context.virtualNetworks.size());
+            logFine(() -> String.format("Processing %d virtual networks",
+                    context.virtualNetworks.size()));
 
             handleSubStage(context, next);
         });
@@ -446,7 +452,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * structures holding Azure Subnets data.
      */
     private void getSubnets(NetworkEnumContext context, NetworkEnumStages next) {
-        logFine("Enumerating Subnets from Azure.");
+        logFine(() -> "Enumerating Subnets from Azure.");
 
         context.virtualNetworks.values().forEach(virtualNetwork -> {
             if (virtualNetwork.properties.subnets != null) {
@@ -542,7 +548,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * virtual networks.
      */
     private void queryNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logFine("Query Network States from local document store.");
+        logFine(() -> "Query Network States from local document store.");
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
@@ -565,8 +571,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         return;
                     }
 
-                    logFine("Found %d matching network states for Azure virtual networks.",
-                            queryTask.results.documentCount);
+                    logFine(() -> String.format("Found %d matching network states for Azure virtual"
+                                    + " networks.", queryTask.results.documentCount));
 
                     // If there are no matches, there is nothing to update.
                     if (queryTask.results != null && queryTask.results.documentCount > 0) {
@@ -590,7 +596,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        logFine("Query Subnet States from local document store.");
+        logFine(() -> "Query Subnet States from local document store.");
         Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
                 .addInClause(SubnetState.FIELD_NAME_ID, context.subnets.keySet());
@@ -612,8 +618,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         return;
                     }
 
-                    logFine("Found %d matching subnet states for Azure subnets.",
-                            queryTask.results.documentCount);
+                    logFine(() -> String.format("Found %d matching subnet states for Azure subnets.",
+                            queryTask.results.documentCount));
 
                     // If there are no matches, there is nothing to update.
                     if (queryTask.results != null || queryTask.results.documentCount > 0) {
@@ -634,10 +640,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * Azure.
      */
     private void createUpdateNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logFine("Create or update Network States with the actual state in Azure.");
+        logFine(() -> "Create or update Network States with the actual state in Azure.");
 
         if (context.virtualNetworks.size() == 0) {
-            logFine("No virtual networks found to create/update.");
+            logFine(() -> "No virtual networks found to create/update.");
             handleSubStage(context, next);
             return;
         }
@@ -653,7 +659,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     CompletionHandler handler = (completedOp, failure) -> {
                         if (failure != null) {
                             // Process successful operations only.
-                            logWarning("Error: %s", failure.getMessage());
+                            logWarning(() -> String.format("Error: %s", failure.getMessage()));
                             return;
                         }
 
@@ -685,7 +691,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             // any potential operation failures. They are already logged at individual operation
             // level.
 
-            logFine("Finished updating network states.");
+            logFine(() -> "Finished updating network states.");
 
             handleSubStage(context, next);
         }).sendWith(this);
@@ -697,7 +703,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      */
     private void createUpdateSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
         if (context.subnets.size() == 0) {
-            logFine("No network states available for update.");
+            logFine(() -> "No network states available for update.");
             handleSubStage(context, next);
             return;
         }
@@ -716,8 +722,9 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     if (networkState != null) {
                         subnetState.networkLink = networkState.documentSelfLink;
                     } else {
-                        logWarning("Network state corresponding to subnet with name [" +
-                                subnetState.name + "] was not found. Network Link is left empty.");
+                        logWarning(() -> String.format("Network state corresponding to subnet with"
+                                + " name [%s] was not found. Network Link is left empty.",
+                                subnetState.name));
                     }
                     subnetState.endpointLink = context.request.endpointLink;
 
@@ -734,7 +741,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             if (failures != null) {
                 // We don't want to fail the whole data collection if some of the
                 // operation fails.
-                failures.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                failures.values().forEach(ex -> logWarning(() -> String.format("Error: %s",
+                        ex.getMessage())));
             }
 
             // Process successful operations.
@@ -749,12 +757,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     });
 
             if (context.enumNextPageLink != null) {
-                logFine("Fetch next page of Virtual Networks from Azure.");
+                logFine(() -> "Fetch next page of Virtual Networks from Azure.");
                 handleSubStage(context, NetworkEnumStages.GET_VNETS);
                 return;
             }
 
-            logFine("Finished updating network states");
+            logFine(() -> "Finished updating network states");
 
             handleSubStage(context, next);
         }).sendWith(this);
@@ -797,7 +805,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         if (gatewayId != null) {
             resultNetworkState.customProperties = Collections.singletonMap(
                     ComputeProperties.FIELD_VIRTUAL_GATEWAY, gatewayId);
-            logFine("Added Gateway %s for Network State %s.", gatewayId, resultNetworkState.name);
+            logFine(() -> String.format("Added Gateway %s for Network State %s.", gatewayId,
+                    resultNetworkState.name));
         }
 
         // TODO: There is no Azure Network Adapter Service. Add a default reference since this is
@@ -828,7 +837,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * lookup resources which haven't been touched as part of current enumeration cycle.
      */
     private void deleteNetworkStates(NetworkEnumContext context, NetworkEnumStages next) {
-        logFine("Delete Network States that no longer exists in Azure.");
+        logFine(() -> "Delete Network States that no longer exists in Azure.");
 
         Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
@@ -846,7 +855,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        logFine("Querying Network States for deletion.");
+        logFine(() -> "Querying Network States for deletion.");
 
         // Add deleted NetworkStates to the list.
         sendDeleteQueryTask(q, context, next, context.deletedNetworkLinks::add);
@@ -874,7 +883,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = context.parentCompute.tenantLinks;
 
-        logFine("Querying Subnet States for deletion.");
+        logFine(() -> "Querying Subnet States for deletion.");
         sendDeleteQueryTask(q, context, next, null);
     }
 
@@ -904,12 +913,13 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             NetworkEnumStages next, Consumer<String> preDeleteProcessor) {
 
         if (context.deletionNextPageLink == null) {
-            logFine("Finished deletion stage.");
+            logFine(() -> "Finished deletion stage.");
             handleSubStage(context, next);
             return;
         }
 
-        logFine("Querying page [%s] for resources to be deleted", context.deletionNextPageLink);
+        logFine(() -> String.format("Querying page [%s] for resources to be deleted",
+                context.deletionNextPageLink));
         sendRequest(Operation.createGet(this, context.deletionNextPageLink)
                 .setCompletion((completedOp, ex) -> {
                     if (ex != null) {
@@ -939,8 +949,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                                             // We don't want to fail the whole data collection if some of the
                                             // operation fails.
                                             failures.values()
-                                                    .forEach(e -> logWarning("Error: %s",
-                                                            e.getMessage()));
+                                                    .forEach(e -> logWarning(() -> String.format("Error: %s",
+                                                            e.getMessage())));
                                         }
                                     })
                                     .sendWith(this);

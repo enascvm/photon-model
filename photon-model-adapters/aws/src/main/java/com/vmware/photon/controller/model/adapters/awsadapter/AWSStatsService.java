@@ -247,7 +247,7 @@ public class AWSStatsService extends StatelessService {
 
             metricRequest.setMetricName(metricName);
 
-            logFine("Retrieving %s metric from AWS", metricName);
+            logFine(() -> String.format("Retrieving %s metric from AWS", metricName));
             AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler = new AWSStatsHandler(
                     this, statsData, metricNames.length, isAggregateStats);
             statsData.statsClient.getMetricStatisticsAsync(metricRequest, resultHandler);
@@ -273,7 +273,8 @@ public class AWSStatsService extends StatelessService {
         request.setDimensions(Collections.singletonList(dimension));
         request.setMetricName(AWSConstants.ESTIMATED_CHARGES);
 
-        logFine("Retrieving %s metric from AWS", AWSConstants.ESTIMATED_CHARGES);
+        logFine(() -> String.format("Retrieving %s metric from AWS",
+                AWSConstants.ESTIMATED_CHARGES));
         AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler = new AWSBillingStatsHandler(
                 this, statsData);
         statsData.billingClient.getMetricStatisticsAsync(request, resultHandler);

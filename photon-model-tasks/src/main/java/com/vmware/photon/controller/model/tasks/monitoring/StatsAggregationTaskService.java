@@ -112,7 +112,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
 
     @Override
     protected void initializeState(StatsAggregationTaskState state, Operation postOp) {
-        logFine("Started stats aggregation");
+        logFine(() -> "Started stats aggregation");
         super.initializeState(state, postOp);
         state.taskSubStage = StatsAggregationStage.INIT;
     }
@@ -129,8 +129,8 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         switch (currentState.taskInfo.stage) {
         case STARTED:
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-3111
-            logFine("Started stats aggregation. Stage [%s], PageLink [%s]",
-                    currentState.taskSubStage, currentState.queryResultLink);
+            logFine(() -> String.format("Started stats aggregation. Stage [%s], PageLink [%s]",
+                    currentState.taskSubStage, currentState.queryResultLink));
             handleStagePatch(currentState);
             break;
         case FINISHED:
@@ -142,7 +142,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                     logWarning(currentState.failureMessage);
                 }
             }
-            logInfo("Finished stats aggregation");
+            logInfo(() -> "Finished stats aggregation");
             sendRequest(Operation
                         .createDelete(getUri()));
             break;

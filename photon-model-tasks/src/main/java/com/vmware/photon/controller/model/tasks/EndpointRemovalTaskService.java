@@ -205,7 +205,7 @@ public class EndpointRemovalTaskService
             handleStagePatch(currentState);
             break;
         case FINISHED:
-            logInfo("Task was completed");
+            logInfo(() -> "Task was completed");
             break;
         case FAILED:
         case CANCELLED:
@@ -247,12 +247,14 @@ public class EndpointRemovalTaskService
 
     private void stopEnumeration(EndpointRemovalTaskState currentState, SubStage next) {
         String id = UriUtils.getLastPathSegment(currentState.endpointLink);
-        logFine("Stopping any scheduled task for endpoint %s", currentState.endpointLink);
+        logFine(() -> String.format("Stopping any scheduled task for endpoint %s",
+                currentState.endpointLink));
         Operation.createDelete(this, UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logWarning("Unable to delete ScheduleTaskState for endpoint %s : %s",
-                                currentState.endpointLink, e.getMessage());
+                        logWarning(() -> String.format("Unable to delete ScheduleTaskState for"
+                                        + " endpoint %s : %s", currentState.endpointLink,
+                                e.getMessage()));
                     }
 
                     sendSelfPatch(TaskStage.STARTED, next);
@@ -273,8 +275,8 @@ public class EndpointRemovalTaskService
 
         OperationJoin.create(crdOp, cdsOp, csOp, epOp).setCompletion((ops, exc) -> {
             if (exc != null) {
-                logFine("Failed delete some of the associated resources, reason %s",
-                        Utils.toString(exc));
+                logFine(() -> String.format("Failed delete some of the associated resources,"
+                                + " reason %s", Utils.toString(exc)));
             }
             // all resources deleted; mark the operation as complete
             sendSelfPatch(TaskStage.STARTED, next);
@@ -338,8 +340,8 @@ public class EndpointRemovalTaskService
             OperationJoin joinOp = OperationJoin.create(deleteOps);
             JoinedCompletionHandler joinHandler = (ops, exc) -> {
                 if (exc != null) {
-                    logWarning("Failed delete some of the associated resources, reason %s",
-                            Utils.toString(exc));
+                    logWarning(() -> String.format("Failed delete some of the associated resources,"
+                                    + " reason %s", Utils.toString(exc)));
                 }
 
                 if (queryTask.results.nextPageLink == null) {
@@ -443,8 +445,8 @@ public class EndpointRemovalTaskService
                     if (e != null) {
                         // the task might have expired, with no results every
                         // becoming available
-                        logWarning("Failure retrieving endpoint: %s, reason: %s",
-                                currentState.endpointLink, e.toString());
+                        logWarning(() -> String.format("Failure retrieving endpoint: %s, reason:"
+                                        + " %s", currentState.endpointLink, e.toString()));
                         sendFailureSelfPatch(e);
                         return;
                     }
@@ -496,8 +498,8 @@ public class EndpointRemovalTaskService
         currentState.taskInfo.stage = body.taskInfo.stage;
         currentState.taskSubStage = body.taskSubStage;
 
-        logFine("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
-                body.taskSubStage, currentState.taskInfo.stage);
+        logFine(() -> String.format("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
+                body.taskSubStage, currentState.taskInfo.stage));
 
         return false;
     }
@@ -519,7 +521,7 @@ public class EndpointRemovalTaskService
         body.taskSubStage = subStage;
         if (e != null) {
             body.taskInfo.failure = Utils.toServiceErrorResponse(e);
-            logWarning("Patching to failed: %s", Utils.toString(e));
+            logWarning(() -> String.format("Patching to failed: %s", Utils.toString(e)));
         }
         return body;
     }

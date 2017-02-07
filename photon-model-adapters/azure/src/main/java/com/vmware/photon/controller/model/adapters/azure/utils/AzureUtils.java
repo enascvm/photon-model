@@ -52,7 +52,7 @@ public class AzureUtils {
                         "Executor service can't be shutdown for Azure. Trying to shutdown now...");
                 executor.shutdownNow();
             }
-            service.logFine("Executor service shutdown for Azure");
+            service.logFine(() -> "Executor service shutdown for Azure");
         } catch (InterruptedException e) {
             service.logSevere(e);
             Thread.currentThread().interrupt();

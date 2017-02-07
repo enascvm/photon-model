@@ -245,8 +245,8 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     rulesList.add(rule);
                 } catch (IllegalArgumentException e) {
                     // Ignore this rule as not supported by the system.
-                    this.service.logWarning("Network Security Rule is ignored. Rule ip "
-                            + "range: %s.", rule.ipRangeCidr);
+                    this.service.logWarning(() -> String.format("Network Security Rule is ignored."
+                            + " Rule ip range: %s.", rule.ipRangeCidr));
                 }
             });
 
@@ -346,12 +346,13 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             switch (context.request.original.enumerationAction) {
             case START:
                 if (!this.ongoingEnumerations.add(enumKey)) {
-                    logWarning("Enumeration service has already been started for %s", enumKey);
+                    logWarning(() -> String.format("Enumeration service has already been started"
+                            + " for %s", enumKey));
                     context.stage = EnumerationStages.FINISHED;
                     handleEnumeration(context);
                     return;
                 }
-                logInfo("Launching enumeration service for %s", enumKey);
+                logInfo(() -> String.format("Launching enumeration service for %s", enumKey));
                 context.request.original.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumeration(context);
                 break;
@@ -371,34 +372,35 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 break;
             case STOP:
                 if (this.ongoingEnumerations.remove(enumKey)) {
-                    logInfo("Enumeration service will be stopped for %s", enumKey);
+                    logInfo(() -> String.format("Enumeration service will be stopped for %s",
+                            enumKey));
                 } else {
-                    logInfo("Enumeration service is not running or has already been stopped for %s",
-                            enumKey);
+                    logInfo(() -> String.format("Enumeration service is not running or has already"
+                                    + " been stopped for %s", enumKey));
                 }
                 context.stage = EnumerationStages.FINISHED;
                 handleEnumeration(context);
                 break;
             default:
-                handleError(context, new RuntimeException(
-                        "Unknown enumeration action" + context.request.original.enumerationAction));
+                handleError(context, new RuntimeException("Unknown enumeration action"
+                        + context.request.original.enumerationAction));
                 break;
             }
             break;
         case FINISHED:
             context.operation.complete();
-            logInfo("Enumeration finished for %s", getEnumKey(context));
+            logInfo(() -> String.format("Enumeration finished for %s", getEnumKey(context)));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
             context.operation.fail(context.error);
-            logWarning("Enumeration error for %s", getEnumKey(context));
+            logWarning(() -> String.format("Enumeration error for %s", getEnumKey(context)));
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         default:
-            String msg = String
-                    .format("Unknown Azure enumeration stage %s ", context.stage.toString());
-            logSevere(msg);
+            String msg = String.format("Unknown Azure enumeration stage %s ",
+                    context.stage.toString());
+            logSevere(() -> msg);
             context.error = new IllegalStateException(msg);
             this.ongoingEnumerations.remove(getEnumKey(context));
         }
@@ -414,7 +416,8 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
     }
 
     private void handleError(SecurityGroupEnumContext ctx, Throwable e) {
-        logSevere("Failed at stage %s with exception: %s", ctx.stage, Utils.toString(e));
+        logSevere(() -> String.format("Failed at stage %s with exception: %s", ctx.stage,
+                Utils.toString(e)));
         ctx.error = e;
         ctx.stage = EnumerationStages.ERROR;
         handleEnumeration(ctx);

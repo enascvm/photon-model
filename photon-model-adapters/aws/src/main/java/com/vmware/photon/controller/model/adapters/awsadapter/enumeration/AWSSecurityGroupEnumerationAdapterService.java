@@ -105,8 +105,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 .thenApply(queryTask -> {
                     AWSSecurityGroupEnumerationResponse response = new AWSSecurityGroupEnumerationResponse();
                     if (queryTask.results != null) {
-                        this.logFine("Found %d matching security group states for AWS resources.",
-                                queryTask.results.documentCount);
+                        this.logFine(() -> String.format("Found %d matching security group states"
+                                        + " for AWS resources.", queryTask.results.documentCount));
                         // If there are no matches, there is nothing to update.
                         if (queryTask.results != null && queryTask.results.documentCount > 0) {
                             queryTask.results.documents.values().forEach(
@@ -118,7 +118,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                                     });
                         }
                     } else {
-                        this.logFine("No matching security group states found for AWS resources.");
+                        this.logFine(() -> "No matching security group states found for AWS"
+                                + " resources.");
                     }
 
                     return response;
@@ -144,7 +145,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(
                 String nextPageLink) {
-            this.service.logFine("Getting SecurityGroups from AWS");
+            this.service.logFine(() -> "Getting SecurityGroups from AWS");
             DescribeSecurityGroupsRequest securityGroupsRequest = new DescribeSecurityGroupsRequest();
 
             String msg = "Getting AWS Security Groups [" + this.request.original.resourceReference + "]";
@@ -346,7 +347,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             createResponse(context).whenComplete(
                     (resp, ex) -> {
                         if (ex != null) {
-                            this.logWarning("Exception creating response: %s", ex.getMessage());
+                            this.logWarning(() -> String.format("Exception creating response: %s",
+                                    ex.getMessage()));
                             handleError(context, ex);
                             return;
                         }
@@ -360,13 +362,14 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         default:
             String msg = String.format("Unknown AWS enumeration stage %s ",
                     context.stage.toString());
-            logSevere(msg);
+            logSevere(() -> msg);
             context.error = new IllegalStateException(msg);
         }
     }
 
     private void handleError(SecurityGroupEnumContext ctx, Throwable e) {
-        logSevere("Failed at stage %s with exception: %s", ctx.stage, Utils.toString(e));
+        logSevere(() -> String.format("Failed at stage %s with exception: %s", ctx.stage,
+                Utils.toString(e)));
         ctx.error = e;
         ctx.stage = EnumerationStages.ERROR;
         handleEnumeration(ctx);

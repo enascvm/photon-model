@@ -135,8 +135,8 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             return;
         }
 
-        logFine("Moving from %s to %s", currentState.taskInfo.stage.toString(),
-                body.taskInfo.stage.toString());
+        logFine(() -> String.format("Moving from %s to %s", currentState.taskInfo.stage.toString(),
+                body.taskInfo.stage.toString()));
 
         currentState.taskInfo = body.taskInfo;
         // go-dcp will actuate the state. When the document is created, the
@@ -146,15 +146,15 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
         // followed by FINISHED or FAILED when complete
         switch (currentState.taskInfo.stage) {
         case CREATED:
-            logFine("Created enum task");
+            logFine(() -> "Created enum task");
             break;
         case STARTED:
-            logFine("Started enum task");
+            logFine(() -> "Started enum task");
             currentState.taskInfo.stage = TaskStage.STARTED;
             sendEnumRequest(patch, currentState);
             break;
         case FINISHED:
-            logFine("task is complete");
+            logFine(() -> "Task is complete");
             if (currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
                 sendRequest(Operation
                         .createDelete(getUri()));
@@ -162,14 +162,14 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             break;
         case FAILED:
         case CANCELLED:
-            logWarning("Task was canceled or task failed");
+            logWarning(() -> "Task was canceled or task failed");
             if (currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
                 sendRequest(Operation
                         .createDelete(getUri()));
             }
             break;
         default:
-            logWarning("Unknown stage");
+            logWarning(() -> "Unknown stage");
             break;
         }
 

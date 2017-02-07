@@ -89,8 +89,8 @@ public class VSphereAdapterStatsService extends StatelessService {
 
                     String type = CustomProperties.of(ctx.child).getString(CustomProperties.TYPE);
                     if (type == null) {
-                        logInfo("Missing type for %s, cannot retrieve stats",
-                                ctx.child.documentSelfLink);
+                        logInfo(() -> String.format("Missing type for %s, cannot retrieve stats",
+                                ctx.child.documentSelfLink));
                         return;
                     }
 
@@ -156,7 +156,7 @@ public class VSphereAdapterStatsService extends StatelessService {
             metrics = client.retrieveMetricsForHost(obj);
             break;
         default:
-            logInfo("Cannot retrieve metrics for type " + type);
+            logInfo(() -> String.format("Cannot retrieve metrics for type %s", type));
         }
 
         return metrics;

@@ -153,7 +153,8 @@ public class AWSEnumerationAdapterService extends StatelessService {
                     aws.request.taskReference, aws.error);
             break;
         default:
-            logSevere("Unknown AWS enumeration stage %s ", aws.stage.toString());
+            logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
+                    aws.stage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     aws.request.taskReference, aws.error);
@@ -194,7 +195,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
         context.enumerationOperations.add(patchAWSStorageAdapterService);
 
         if (context.enumerationOperations == null || context.enumerationOperations.size() == 0) {
-            logFine("No enumeration tasks to run");
+            logFine(() -> "No enumeration tasks to run");
             context.stage = next;
             handleEnumerationRequest(context);
             return;
@@ -202,20 +203,21 @@ public class AWSEnumerationAdapterService extends StatelessService {
         OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                 exc) -> {
             if (exc != null) {
-                logSevere("Error starting the enumeration workflows for AWS: %s",
-                        Utils.toString(exc));
+                logSevere(() -> String.format("Error starting the enumeration workflows for AWS: %s",
+                        Utils.toString(exc)));
                 AdapterUtils.sendFailurePatchToEnumerationTask(this,
                         context.request.taskReference,
                         exc.values().iterator().next());
                 return;
             }
-            logFine("Completed creation and deletion enumeration for compute and storage states");
+            logFine(() -> "Completed creation and deletion enumeration for compute and storage"
+                    + " states");
             context.stage = next;
             handleEnumerationRequest(context);
         };
         OperationJoin joinOp = OperationJoin.create(context.enumerationOperations);
         joinOp.setCompletion(joinCompletion);
         joinOp.sendWith(getHost());
-        logFine("Started creation and deletion enumeration for AWS computes and storage");
+        logFine(() -> "Started creation and deletion enumeration for AWS computes and storage");
     }
 }

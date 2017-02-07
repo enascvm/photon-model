@@ -106,9 +106,9 @@ public class AzureEndpointAdapterService extends StatelessService {
                             @Override
                             public void success(ServiceResponse<Subscription> result) {
                                 Subscription subscription = result.getBody();
-                                logFine("Got subscription %s with id %s",
+                                logFine(() -> String.format("Got subscription %s with id %s",
                                         subscription.getDisplayName(),
-                                        subscription.getId());
+                                        subscription.getId()));
                                 callback.accept(null, null);
                             }
                         });

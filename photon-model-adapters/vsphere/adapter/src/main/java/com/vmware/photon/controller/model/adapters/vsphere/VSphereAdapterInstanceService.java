@@ -370,15 +370,15 @@ public class VSphereAdapterInstanceService extends StatelessService {
                 .setBody(qt)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logWarning("Error looking up network %s: %s", VimUtils
-                                .convertMoRefToString(network), e.getMessage());
+                        logWarning(() -> String.format("Error looking up network %s: %s", VimUtils
+                                .convertMoRefToString(network), e.getMessage()));
                         return;
                     }
 
                     List<String> links = o.getBody(QueryTask.class).results.documentLinks;
                     if (links.isEmpty()) {
-                        logWarning("Could not locate network %s", VimUtils
-                                .convertMoRefToString(network));
+                        logWarning(() -> String.format("Could not locate network %s", VimUtils
+                                .convertMoRefToString(network)));
                         return;
                     }
 

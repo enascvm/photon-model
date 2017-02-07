@@ -198,7 +198,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         case ENUMERATE:
             switch (aws.request.enumerationAction) {
             case START:
-                logInfo("Started storage enumeration for %s", aws.request.resourceReference);
+                logInfo(() -> String.format("Started storage enumeration for %s",
+                        aws.request.resourceReference));
                 aws.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
                 aws.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequest(aws);
@@ -207,7 +208,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 processRefreshSubStages(aws);
                 break;
             case STOP:
-                logInfo("Stopping storage enumeration for %s", aws.request.resourceReference);
+                logInfo(() -> String.format("Stopping storage enumeration for %s",
+                        aws.request.resourceReference));
                 setOperationDurationStat(aws.operation);
                 aws.operation.complete();
                 break;
@@ -220,7 +222,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     aws.request.taskReference, aws.error);
             break;
         default:
-            logSevere("Unknown AWS enumeration stage %s ", aws.stage.toString());
+            logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
+                    aws.stage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
             aws.stage = AWSStorageEnumerationStages.ERROR;
             handleEnumerationRequest(aws);
@@ -235,10 +238,10 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         switch (aws.refreshSubStage) {
         case EBS_VOLUMES:
             if (aws.pageNo == 1) {
-                logInfo("Running creation enumeration in refresh mode for %s",
-                        aws.request.resourceReference);
+                logInfo(() -> String.format("Running creation enumeration in refresh mode for %s",
+                        aws.request.resourceReference));
             }
-            logFine("Processing page %d ", aws.pageNo);
+            logFine(() -> String.format("Processing page %d ", aws.pageNo));
             aws.pageNo++;
             if (aws.describeVolumesRequest == null) {
                 creatAWSRequestAndAsyncHandler(aws);
@@ -250,7 +253,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             // TODO https://jira-hzn.eng.vmware.com/browse/VSYM-2319
             break;
         default:
-            logSevere("Unknown AWS enumeration stage %s ", aws.refreshSubStage.toString());
+            logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
+                    aws.refreshSubStage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     aws.request.taskReference, aws.error);
@@ -322,8 +326,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                         this.context.remoteAWSVolumeIds.add(volume.getVolumeId());
                     });
 
-            this.service.logFine("Successfully enumerated %d volumes on the AWS host",
-                    result.getVolumes().size());
+            this.service.logFine(() -> String.format("Successfully enumerated %d volumes on the AWS"
+                            + " host", result.getVolumes().size()));
             // Save the reference to the next token that will be used to retrieve the next page of
             // results from AWS.
             this.context.nextToken = result.getNextToken();
@@ -419,8 +423,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             QueryUtils.startQueryTask(this.service, queryTask)
                     .whenComplete((qrt, e) -> {
                         if (e != null) {
-                            this.service.logSevere("Failure retrieving query results: %s",
-                                    e.toString());
+                            this.service.logSevere(() -> String.format("Failure retrieving query"
+                                            + " results: %s", e.toString()));
                             signalErrorToEnumerationAdapter(e);
                             return;
                         }
@@ -431,7 +435,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                                     localDisk.documentSelfLink);
 
                         });
-                        this.service.logFine("%d disk states found.", qrt.results.documentCount);
+                        this.service.logFine(() -> String.format("%d disk states found.",
+                                qrt.results.documentCount));
                         this.context.subStage = next;
                         handleReceivedEnumerationData();
                     });
@@ -446,7 +451,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             // No remote disks
             if (this.context.remoteAWSVolumes == null
                     || this.context.remoteAWSVolumes.size() == 0) {
-                this.service.logFine("No disks discovered on the remote system.");
+                this.service.logFine(() -> "No disks discovered on the remote system.");
                 // no local disks
             } else if (this.context.localDiskStateMap == null
                     || this.context.localDiskStateMap.size() == 0) {
@@ -487,7 +492,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     this.context.enumerationOperations.add(
                             createPostOperation(this.service, diskState,
                                     DiskService.FACTORY_LINK)));
-            this.service.logFine("Creating %d disks", this.context.volumesToBeCreated.size());
+            this.service.logFine(() -> String.format("Creating %d disks",
+                    this.context.volumesToBeCreated.size()));
             // For all the disks to be updated, map the updated state from the received
             // volumes and issue patch requests against the existing disk state representations
             // in the system
@@ -507,16 +513,18 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                                 this.context.localDiskStateMap.get(diskState.id)));
             });
 
-            this.service.logFine("Updating %d disks", this.context.disksToBeUpdated.size());
+            this.service.logFine(() -> String.format("Updating %d disks",
+                    this.context.disksToBeUpdated.size()));
 
             OperationJoin.JoinedCompletionHandler joinCompletion = (ox,
                     exc) -> {
                 if (exc != null) {
-                    this.service.logSevere("Error creating/updating disk %s", Utils.toString(exc));
+                    this.service.logSevere(() -> String.format("Error creating/updating disk %s",
+                            Utils.toString(exc)));
                     signalErrorToEnumerationAdapter(exc.values().iterator().next());
                     return;
                 }
-                this.service.logFine("Successfully created and updated all the disk states.");
+                this.service.logFine(() -> "Successfully created and updated all the disk states.");
                 this.context.subStage = next;
                 handleReceivedEnumerationData();
             };
@@ -641,7 +649,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .build();
             q.tenantLinks = this.context.parentCompute.tenantLinks;
 
-            this.service.logFine("Querying disks for deletion");
+            this.service.logFine(() -> "Querying disks for deletion");
             QueryUtils.startQueryTask(this.service, q)
                     .whenComplete((queryTask, e) -> {
                         if (e != null) {
@@ -650,7 +658,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                         }
 
                         if (queryTask.results.nextPageLink == null) {
-                            this.service.logFine("No disk states match for deletion");
+                            this.service.logFine(() -> "No disk states match for deletion");
                             this.context.subStage = next;
                             handleReceivedEnumerationData();
                             return;
@@ -665,13 +673,13 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          */
         private void processDeletionRequest(EBSVolumesEnumerationSubStage next) {
             if (this.context.deletionNextPageLink == null) {
-                this.service.logFine("Finished deletion of disk states for AWS");
+                this.service.logFine(() -> "Finished deletion of disk states for AWS");
                 this.context.subStage = next;
                 handleReceivedEnumerationData();
                 return;
             }
-            this.service.logFine("Querying page [%s] for resources to be deleted",
-                    this.context.deletionNextPageLink);
+            this.service.logFine(() -> String.format("Querying page [%s] for resources to be deleted",
+                    this.context.deletionNextPageLink));
             this.service
                     .sendRequest(
                             Operation.createGet(this.service, this.context.deletionNextPageLink)
@@ -699,10 +707,10 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                                                                 diskState.documentSelfLink));
                                             }
                                         }
-                                        this.service.logFine("Deleting %d disks",
-                                                deleteOperations.size());
+                                        this.service.logFine(() -> String.format("Deleting %d disks",
+                                                deleteOperations.size()));
                                         if (deleteOperations.size() == 0) {
-                                            this.service.logFine("No disk states to be deleted");
+                                            this.service.logFine(() -> "No disk states to be deleted");
                                             processDeletionRequest(next);
                                             return;
                                         }
@@ -713,8 +721,9 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                                                         // if some of the operation fails.
                                                         exs.values().forEach(
                                                                 ex -> this.service
-                                                                        .logWarning("Error: %s",
-                                                                                ex.getMessage()));
+                                                                        .logWarning(() ->
+                                                                                String.format("Error: %s",
+                                                                                ex.getMessage())));
                                                     }
                                                     processDeletionRequest(next);
                                                 })

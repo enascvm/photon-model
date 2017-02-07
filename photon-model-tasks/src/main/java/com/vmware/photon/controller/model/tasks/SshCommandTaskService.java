@@ -163,7 +163,7 @@ public class SshCommandTaskService extends TaskService<SshCommandTaskService.Ssh
         if (TaskState.isFinished(currentState.taskInfo)
                 || TaskState.isFailed(currentState.taskInfo)
                 || TaskState.isCancelled(currentState.taskInfo)) {
-            logFine("Task is complete, patch ignored");
+            logFine(() -> "Task is complete, patch ignored");
             patch.complete();
             return;
         }

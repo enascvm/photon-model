@@ -139,11 +139,13 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
         case FINISHED:
             dataHolder.computeHostStatsOp.setBody(dataHolder.statsResponse);
             dataHolder.computeHostStatsOp.complete();
-            logInfo("Stats collection complete for compute host %s", dataHolder.computeHost.id);
+            logInfo(() -> String.format("Stats collection complete for compute host %s",
+                    dataHolder.computeHost.id));
             break;
         case ERROR:
             dataHolder.computeHostStatsOp.fail(dataHolder.error);
-            logWarning("Stats collection failed for compute host %s", dataHolder.computeHost.id);
+            logWarning(() -> String.format("Stats collection failed for compute host %s",
+                    dataHolder.computeHost.id));
             break;
         default:
         }

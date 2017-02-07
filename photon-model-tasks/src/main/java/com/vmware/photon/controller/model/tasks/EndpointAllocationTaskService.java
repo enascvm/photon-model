@@ -173,7 +173,7 @@ public class EndpointAllocationTaskService
             handleStagePatch(currentState);
             break;
         case FINISHED:
-            logInfo("task is complete");
+            logInfo(() -> "Task is complete");
             break;
         case FAILED:
         case CANCELLED:
@@ -305,7 +305,8 @@ public class EndpointAllocationTaskService
                         if (exs != null) {
                             long firstKey = exs.keySet().iterator().next();
                             exs.values()
-                                    .forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                                    .forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                            ex.getMessage())));
                             sendFailurePatch(this, currentState, exs.get(firstKey));
                             return;
                         }
@@ -328,7 +329,8 @@ public class EndpointAllocationTaskService
                     if (exs != null) {
                         long firstKey = exs.keySet().iterator().next();
                         exs.values()
-                                .forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                                .forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                        ex.getMessage())));
                         sendFailurePatch(this, currentState, exs.get(firstKey));
                         return;
                     }
@@ -347,8 +349,8 @@ public class EndpointAllocationTaskService
                         if (exs != null) {
                             long firstKey = exs.keySet().iterator().next();
                             exs.values().forEach(
-                                    ex -> logWarning("Error creating resource pool: %s",
-                                            ex.getMessage()));
+                                    ex -> logWarning(() -> String.format("Error creating resource"
+                                                    + " pool: %s", ex.getMessage())));
                             sendFailurePatch(this, currentState, exs.get(firstKey));
                             return;
                         }
@@ -367,8 +369,8 @@ public class EndpointAllocationTaskService
                         if (exs != null) {
                             long firstKey = exs.keySet().iterator().next();
                             exs.values().forEach(
-                                    ex -> logWarning("Error retrieving resource pool: %s",
-                                            ex.getMessage()));
+                                    ex -> logWarning(() -> String.format("Error retrieving resource"
+                                                    + " pool: %s", ex.getMessage())));
                             sendFailurePatch(this, currentState, exs.get(firstKey));
                             return;
                         }
@@ -396,7 +398,8 @@ public class EndpointAllocationTaskService
                             if (exs != null) {
                                 long firstKey = exs.keySet().iterator().next();
                                 exs.values().forEach(
-                                        ex -> logWarning("Error: %s", ex.getMessage()));
+                                        ex -> logWarning(() -> String.format("Error: %s",
+                                                ex.getMessage())));
                                 sendFailurePatch(this, currentState, exs.get(firstKey));
                                 return;
                             }
@@ -410,7 +413,7 @@ public class EndpointAllocationTaskService
                     if (exs != null) {
                         long firstKey = exs.keySet().iterator().next();
                         exs.values().forEach(
-                                ex -> logWarning("Error: %s", ex.getMessage()));
+                                ex -> logWarning(() -> String.format("Error: %s", ex.getMessage())));
                         sendFailurePatch(this, currentState, exs.get(firstKey));
                         return;
                     }
@@ -432,11 +435,12 @@ public class EndpointAllocationTaskService
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         if (o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
-                            logInfo("Endpoint %s not found, creating new.", es.documentSelfLink);
+                            logInfo(() -> String.format("Endpoint %s not found, creating new.",
+                                    es.documentSelfLink));
                             createEndpoint(currentState);
                         } else {
-                            logSevere("Failed to update endpoint %s : %s",
-                                    es.documentSelfLink, e.getMessage());
+                            logSevere(() -> String.format("Failed to update endpoint %s : %s",
+                                    es.documentSelfLink, e.getMessage()));
                             sendFailurePatch(this, currentState, e);
                         }
                         return;
@@ -452,12 +456,14 @@ public class EndpointAllocationTaskService
         loadedState.endpointProperties = currentState.endpointState.endpointProperties;
 
         String id = UriUtils.getLastPathSegment(loadedState.documentSelfLink);
-        logFine("Stopping any scheduled task for endpoint %s", loadedState.documentSelfLink);
+        logFine(() -> String.format("Stopping any scheduled task for endpoint %s",
+                loadedState.documentSelfLink));
         Operation.createDelete(this, UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logWarning("Unable to delete ScheduleTaskState for endpoint %s : %s",
-                                loadedState.documentSelfLink, e.getMessage());
+                        logWarning(() -> String.format("Unable to delete ScheduleTaskState for"
+                                        + " endpoint %s : %s",
+                                loadedState.documentSelfLink, e.getMessage()));
                     }
 
                     EndpointAllocationTaskState state = createUpdateSubStageTask(
@@ -479,7 +485,7 @@ public class EndpointAllocationTaskService
                 .setBody(req)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logWarning("%s", e.getMessage());
+                        logWarning(() -> e.getMessage());
                         sendFailurePatch(this, currentState, e);
                         return;
                     }
@@ -560,7 +566,8 @@ public class EndpointAllocationTaskService
                 .setBody(scheduledTaskState)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logWarning("Error triggering Enumeration task, reason: %s", e.getMessage());
+                        logWarning(() -> String.format("Error triggering Enumeration task, reason:"
+                                + " %s", e.getMessage()));
                     }
                     sendSelfPatch(createUpdateSubStageTask(next));
                 })
@@ -672,8 +679,8 @@ public class EndpointAllocationTaskService
         }
 
         if (body.taskInfo.failure != null) {
-            logWarning("Referer %s is patching us to failure: %s",
-                    patch.getReferer(), Utils.toJsonHtml(body.taskInfo.failure));
+            logWarning(() -> String.format("Referer %s is patching us to failure: %s",
+                    patch.getReferer(), Utils.toJsonHtml(body.taskInfo.failure)));
 
             currentState.taskInfo.failure = body.taskInfo.failure;
             currentState.taskInfo.stage = body.taskInfo.stage;
@@ -684,8 +691,8 @@ public class EndpointAllocationTaskService
         currentState.taskInfo.stage = body.taskInfo.stage;
         currentState.taskSubStage = body.taskSubStage;
 
-        logFine("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
-                body.taskSubStage, body.taskInfo.stage);
+        logFine(() -> String.format("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
+                body.taskSubStage, body.taskInfo.stage));
 
         return false;
     }
@@ -756,7 +763,7 @@ public class EndpointAllocationTaskService
         } else {
             body.taskInfo.stage = TaskStage.FAILED;
             body.taskInfo.failure = Utils.toServiceErrorResponse(e);
-            logWarning("Patching to failed: %s", Utils.toString(e));
+            logWarning(() -> String.format("Patching to failed: %s", Utils.toString(e)));
         }
 
         return body;

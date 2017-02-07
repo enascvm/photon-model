@@ -182,7 +182,8 @@ public class AzureEnumerationAdapterService extends StatelessService {
                     context.request.taskReference, context.error);
             break;
         default:
-            logSevere("Unknown Azure enumeration stage %s ", context.stage.toString());
+            logSevere(() -> String.format("Unknown Azure enumeration stage %s ",
+                    context.stage.toString()));
             context.error = new Exception("Unknown Azure enumeration stage");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     context.request.taskReference, context.error);
@@ -206,7 +207,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
                         context.error);
                 return;
             }
-            logFine("Completed Azure enumeration adapter %s", adapterSelfLink);
+            logFine(() -> String.format("Completed Azure enumeration adapter %s", adapterSelfLink));
             context.stage = next;
             handleEnumerationRequest(context);
         };
@@ -224,7 +225,7 @@ public class AzureEnumerationAdapterService extends StatelessService {
         patchEnumAdapterService
                 .setCompletion(completionHandler)
                 .sendWith(getHost());
-        logInfo("Triggered Azure enumeration adapter %s", adapterSelfLink);
+        logInfo(() -> String.format("Triggered Azure enumeration adapter %s", adapterSelfLink));
     }
 
 }

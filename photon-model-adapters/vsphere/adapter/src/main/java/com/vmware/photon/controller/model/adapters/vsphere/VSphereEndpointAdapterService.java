@@ -197,7 +197,7 @@ public class VSphereEndpointAdapterService extends StatelessService {
         try {
             connection.close();
         } catch (Exception e) {
-            logWarning("Error closing connection to " + connection.getURI(), e);
+            logWarning(() -> String.format("Error closing connection to " + connection.getURI(), e));
         }
     }
 }

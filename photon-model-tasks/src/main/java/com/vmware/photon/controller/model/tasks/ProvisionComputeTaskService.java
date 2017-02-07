@@ -139,8 +139,8 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
     private void validateComputeHostAndStart(Operation startPost,
             Operation get, Throwable e, ProvisionComputeTaskState state) {
         if (e != null) {
-            logWarning("Failure retrieving host state (%s): %s", get.getUri(),
-                    e.toString());
+            logWarning(() -> String.format("Failure retrieving host state (%s): %s", get.getUri(),
+                    e.toString()));
             startPost.complete();
             failTask(e);
             return;
@@ -201,9 +201,8 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
-                                logWarning("Self patch failed: %s",
-                                        com.vmware.xenon.common.Utils
-                                                .toString(e));
+                                logWarning(() -> String.format("Self patch failed: %s",
+                                        com.vmware.xenon.common.Utils.toString(e)));
                             }
                         });
         sendRequest(patch);
@@ -240,8 +239,8 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
         case CANCELLED:
             break;
         case FAILED:
-            logWarning("Task failed with %s",
-                    Utils.toJsonHtml(currentState.taskInfo.failure));
+            logWarning(() -> String.format("Task failed with %s",
+                    Utils.toJsonHtml(currentState.taskInfo.failure)));
             notifyParentTask(currentState);
             break;
         case FINISHED:
@@ -257,7 +256,7 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
             return;
         }
 
-        logFine("Patching parent task %s", clonedState.parentTaskLink);
+        logFine(() -> String.format("Patching parent task %s", clonedState.parentTaskLink));
         ProvisionComputeTaskState parentPatchBody = new ProvisionComputeTaskState();
         parentPatchBody.taskInfo = clonedState.taskInfo;
         sendRequest(Operation.createPatch(this, clonedState.parentTaskLink)
@@ -388,8 +387,8 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
                     if (e != null) {
                         // the compute host is co-located so it is unexpected
                         // that it failed the GET
-                        logWarning("GET to %s failed:", o.getUri(),
-                                Utils.toString(e));
+                        logWarning(() -> String.format("GET to %s failed:", o.getUri(),
+                                Utils.toString(e)));
                         failTask(e);
                         return;
                     }
@@ -441,8 +440,8 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
             ProvisionComputeTaskState currentState) {
 
         if (patchBody.taskInfo != null && patchBody.taskInfo.failure != null) {
-            logWarning("Task failed: %s",
-                    Utils.toJson(patchBody.taskInfo.failure));
+            logWarning(() -> String.format("Task failed: %s",
+                    Utils.toJson(patchBody.taskInfo.failure)));
             currentState.taskInfo.failure = patchBody.taskInfo.failure;
             if (patchBody.taskSubStage == null) {
                 patchBody.taskSubStage = currentState.taskSubStage;
@@ -480,16 +479,16 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
 
             if (currentState.taskSubStage.ordinal() > patchBody.taskSubStage
                     .ordinal()) {
-                logWarning("Attempt to move progress backwards, not allowed");
+                logWarning(() -> "Attempt to move progress backwards, not allowed");
                 patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED)
                         .complete();
                 return true;
             }
         }
 
-        logFine("Current: %s(%s). New: %s(%s)", currentState.taskInfo.stage,
+        logFine(() -> String.format("Current: %s(%s). New: %s(%s)", currentState.taskInfo.stage,
                 currentState.taskSubStage, patchBody.taskInfo.stage,
-                patchBody.taskSubStage);
+                patchBody.taskSubStage));
 
         // update current stage to new stage
         currentState.taskInfo.stage = patchBody.taskInfo.stage;
@@ -503,7 +502,7 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
     }
 
     private void failTask(Throwable e) {
-        logWarning("Self patching to FAILED, task failure: %s", e.toString());
+        logWarning(() -> String.format("Self patching to FAILED, task failure: %s", e.toString()));
         sendSelfPatch(TaskStage.FAILED,
                 ProvisionComputeTaskState.SubStage.FAILED, e);
     }

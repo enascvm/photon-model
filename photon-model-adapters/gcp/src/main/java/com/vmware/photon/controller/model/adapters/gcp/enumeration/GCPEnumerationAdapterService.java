@@ -223,7 +223,8 @@ public class GCPEnumerationAdapterService extends StatelessService {
                 handleEnumerationRequest(ctx);
                 break;
             default:
-                logSevere("Unknown enumeration action %s", ctx.enumRequest.enumerationAction);
+                logSevere(() -> String.format("Unknown enumeration action %s",
+                        ctx.enumRequest.enumerationAction));
                 ctx.stage = EnumerationStages.ERROR;
                 handleEnumerationRequest(ctx);
             }
@@ -240,7 +241,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
             break;
         default:
             String msg = String.format("Unknown GCP enumeration stage %s ", ctx.stage.toString());
-            logSevere(msg);
+            logSevere(() -> msg);
             ctx.error = new IllegalStateException(msg);
             ctx.gcpAdapterOperation.fail(ctx.error);
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
@@ -315,7 +316,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
                 .build();
         q.tenantLinks = ctx.computeHostDesc.tenantLinks;
 
-        logFine("Querying compute resources for deletion");
+        logFine(() -> "Querying compute resources for deletion");
         sendRequest(Operation
                 .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                 .setConnectionSharing(true)
@@ -346,12 +347,13 @@ public class GCPEnumerationAdapterService extends StatelessService {
 
             if (!ctx.vmIds.contains(vmId)) {
                 operations.add(Operation.createDelete(this, computeState.documentSelfLink));
-                logFine("Deleting compute state %s", computeState.documentSelfLink);
+                logFine(() -> String.format("Deleting compute state %s",
+                        computeState.documentSelfLink));
 
                 if (computeState.diskLinks != null && !computeState.diskLinks.isEmpty()) {
                     computeState.diskLinks.forEach(diskLink -> {
                         operations.add(Operation.createDelete(this, diskLink));
-                        logFine("Deleting disk state %s", diskLink);
+                        logFine(() -> String.format("Deleting disk state %s", diskLink));
                     });
                 }
             }
@@ -368,7 +370,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
                         // We don't want to fail the whole data collection if some of the
                         // operation fails.
                         exs.values().forEach(
-                                ex -> logWarning("Error: %s", ex.getMessage()));
+                                ex -> logWarning(() -> String.format("Error: %s", ex.getMessage())));
                     }
                     checkLinkAndFinishDeleting(ctx, results.nextPageLink);
                 }).sendWith(this);
@@ -397,13 +399,14 @@ public class GCPEnumerationAdapterService extends StatelessService {
      */
     private void checkLinkAndFinishDeleting(EnumerationContext ctx, String deletionNextPageLink) {
         if (deletionNextPageLink != null) {
-            logFine("Querying page [%s] for resources to be deleted", deletionNextPageLink);
+            logFine(() -> String.format("Querying page [%s] for resources to be deleted",
+                    deletionNextPageLink));
             Operation.createGet(this, deletionNextPageLink)
                     .setCompletion((o, e) -> deleteQueryCompletionHandler(ctx, o, e))
                     .sendWith(this);
             return;
         }
-        logInfo("No compute states match for deletion");
+        logFine(() -> "No compute states match for deletion");
         ctx.subStage = EnumerationSubStages.FINISHED;
         handleSubStage(ctx);
     }
@@ -413,10 +416,11 @@ public class GCPEnumerationAdapterService extends StatelessService {
      * @param ctx The Enumeration Context.
      */
     private void create(EnumerationContext ctx) {
-        logFine("Creating Local Compute States");
+        logFine(() -> "Creating Local Compute States");
 
         AtomicInteger size = new AtomicInteger(ctx.virtualMachines.size());
-        logFine("%s compute description with states to be created", size.toString());
+        logFine(() -> String.format("%s compute description with states to be created",
+                size.toString()));
         ctx.virtualMachines.values().forEach(virtualMachine ->
                 createHelper(ctx, virtualMachine, size));
     }
@@ -529,14 +533,15 @@ public class GCPEnumerationAdapterService extends StatelessService {
         OperationJoin.create(operations)
                 .setCompletion((ops, exs) -> {
                     if (exs != null) {
-                        exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                        exs.values().forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                ex.getMessage())));
                     }
                     if (size.decrementAndGet() == 0) {
                         ctx.virtualMachines.clear();
                         if (ctx.enumNextPageLink != null) {
                             ctx.subStage = EnumerationSubStages.LIST_REMOTE_VMS;
                         } else {
-                            logFine("Finished creating compute states");
+                            logFine(() -> "Finished creating compute states");
                             ctx.subStage = EnumerationSubStages.DELETE_LOCAL_VMS;
                         }
                         handleSubStage(ctx);
@@ -549,7 +554,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
      * @param ctx The Enumeration Context.
      */
     private void update(EnumerationContext ctx) {
-        logFine("Updating Local VMs");
+        logFine(() -> "Updating Local VMs");
 
         AtomicInteger numOfUpdates = new AtomicInteger(ctx.computeStates.size());
         ctx.computeStates.forEach(computeState -> {
@@ -604,7 +609,8 @@ public class GCPEnumerationAdapterService extends StatelessService {
         OperationJoin.create(operations)
                 .setCompletion((ops, exs) -> {
                     if (exs != null) {
-                        exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                        exs.values().forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                ex.getMessage())));
                     }
                     countAndFinishUpdating(ctx, numOfUpdates);
                 }).sendWith(this);
@@ -620,7 +626,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
     private void countAndFinishUpdating(EnumerationContext ctx, AtomicInteger numOfUpdates) {
         if (numOfUpdates.decrementAndGet() == 0) {
             ctx.computeStates.clear();
-            logFine("Finished updating compute states");
+            logFine(() -> "Finished updating compute states");
             // If there are still some cloud instances left, these instances
             // should be mapped to local compute states. So we jump to create stage.
             // Otherwise, we go to delete stage or list vms stage depending on
@@ -649,7 +655,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
      * @param vms The Map of VM IDs and VMs.
      */
     private void queryForComputeStates(EnumerationContext ctx, Map<Long, GCPInstance> vms) {
-        logFine("Enumerating Local Compute States");
+        logFine(() -> "Enumerating Local Compute States");
 
         QueryTask.Query.Builder instanceIdFilterParentQuery =
                 QueryTask.Query.Builder.create(QueryTask.Query.Occurance.MUST_OCCUR);
@@ -687,8 +693,8 @@ public class GCPEnumerationAdapterService extends StatelessService {
                     }
                     QueryTask queryTask = o.getBody(QueryTask.class);
 
-                    logFine("Found %d matching compute states for GCP Instances",
-                            queryTask.results.documentCount);
+                    logFine(() -> String.format("Found %d matching compute states for GCP Instances",
+                            queryTask.results.documentCount));
 
                     // If there are local compute states with same id as cloud instances,
                     // these compute states need to be updated.
@@ -711,7 +717,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
      * @param ctx The Enumeration Context.
      */
     private void enumerate(EnumerationContext ctx) {
-        logFine("Enumerating VMs from GCP");
+        logFine(() -> "Enumerating VMs from GCP");
         URI uri;
 
         if (ctx.enumNextPageLink != null) {
@@ -743,15 +749,15 @@ public class GCPEnumerationAdapterService extends StatelessService {
 
                     ctx.enumNextPageLink = GCPInstancesList.nextPageToken;
 
-                    logFine("Retrieved %d VMs from GCP", GCPInstances.size());
-                    logFine("Next page link %s", ctx.enumNextPageLink);
+                    logFine(() -> String.format("Retrieved %d VMs from GCP", GCPInstances.size()));
+                    logFine(() -> String.format("Next page link %s", ctx.enumNextPageLink));
 
                     for (GCPInstance GCPInstance : GCPInstances) {
                         ctx.virtualMachines.put(GCPInstance.id, GCPInstance);
                         ctx.vmIds.add(GCPInstance.id);
                     }
 
-                    logFine("Processing %d VMs", ctx.vmIds.size());
+                    logFine(() -> String.format("Processing %d VMs", ctx.vmIds.size()));
 
                     ctx.subStage = EnumerationSubStages.QUERY_LOCAL_VMS;
                     handleSubStage(ctx);

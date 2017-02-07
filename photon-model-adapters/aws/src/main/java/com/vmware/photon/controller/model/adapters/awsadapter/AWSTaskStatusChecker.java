@@ -75,7 +75,7 @@ public class AWSTaskStatusChecker {
             String msg = String
                     .format("Compute with instance id %s did not reach desired %s state in the required time interval.",
                             this.instanceId, this.desiredState);
-            this.service.logSevere(msg);
+            this.service.logSevere(() -> msg);
             Throwable t = new RuntimeException(msg);
             AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
                     this.computeRequest.taskReference, t);

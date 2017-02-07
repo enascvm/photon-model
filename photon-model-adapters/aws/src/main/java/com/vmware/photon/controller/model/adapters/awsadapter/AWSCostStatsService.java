@@ -200,7 +200,8 @@ public class AWSCostStatsService extends StatelessService {
             postAllResourcesCostStats(statsData);
             break;
         default:
-            logSevere("Unknown AWS Cost Stats enumeration stage %s ", statsData.stage.toString());
+            logSevere(() -> String.format("Unknown AWS Cost Stats enumeration stage %s ",
+                    statsData.stage.toString()));
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     statsData.statsRequest.taskReference,
                     new Exception("Unknown AWS Cost Stats enumeration stage"));
@@ -215,8 +216,8 @@ public class AWSCostStatsService extends StatelessService {
             String accountId = statsData.computeDesc.customProperties
                     .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
             if (accountId == null) {
-                logWarning("Account ID is not set for compute state '%s'. Not collecting cost"
-                                + " stats.", statsData.computeDesc.documentSelfLink);
+                logWarning(() -> String.format("Account ID is not set for compute state '%s'. Not"
+                        + " collecting cost stats.", statsData.computeDesc.documentSelfLink));
                 postAllResourcesCostStats(statsData);
                 return;
             }
@@ -232,9 +233,9 @@ public class AWSCostStatsService extends StatelessService {
                     // We want to run only once corresponding to the primary compute state.
                     getParentAuth(statsData, next);
                 } else {
-                    logFine("Compute state '%s' is not primary for account '%s'. Not collecting"
-                                    + " cost stats.", statsData.computeDesc.documentSelfLink,
-                            accountId);
+                    logFine(() -> String.format("Compute state '%s' is not primary for account '%s'."
+                                    + " Not collecting cost stats.",
+                            statsData.computeDesc.documentSelfLink, accountId));
                     postAllResourcesCostStats(statsData);
                     return;
                 }
@@ -325,12 +326,12 @@ public class AWSCostStatsService extends StatelessService {
 
         String accountId = statsData.computeDesc.customProperties
                 .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
-        logFine("Account: %s was last processed at: %s.", accountId,
-                statsData.accountIdToBillProcessedTime.get(accountId));
+        logFine(() -> String.format("Account: %s was last processed at: %s.", accountId,
+                statsData.accountIdToBillProcessedTime.get(accountId)));
 
         if (accountId == null) {
-            logWarning("Account ID is not set for account '%s'. Not collecting cost stats.",
-                    statsData.computeDesc.documentSelfLink);
+            logWarning(() -> String.format("Account ID is not set for account '%s'. Not collecting"
+                            + " cost stats.", statsData.computeDesc.documentSelfLink));
             postAllResourcesCostStats(statsData);
             return;
         }
@@ -341,8 +342,9 @@ public class AWSCostStatsService extends StatelessService {
             billsBucketName = AWSUtils
                     .autoDiscoverBillsBucketName(statsData.s3Client.getAmazonS3Client(), accountId);
             if (billsBucketName == null) {
-                logWarning("Bills Bucket name is not configured for account '%s'. Not collecting"
-                                + " cost stats.", statsData.computeDesc.documentSelfLink);
+                logWarning(() -> String.format("Bills Bucket name is not configured for account"
+                        + " '%s'. Not collecting cost stats.",
+                        statsData.computeDesc.documentSelfLink));
                 postAllResourcesCostStats(statsData);
                 return;
             } else {
@@ -395,8 +397,8 @@ public class AWSCostStatsService extends StatelessService {
             }
         }
         context.billMonthToDownload = start.withDayOfMonth(1);
-        logFine("Downloading AWS account %s bills since: %s.", accountId,
-                context.billMonthToDownload);
+        logFine(() -> String.format("Downloading AWS account %s bills since: %s.", accountId,
+                context.billMonthToDownload));
     }
 
     private void setBillsBucketNameInAccount(AWSCostStatsCreationContext statsData,
@@ -441,8 +443,8 @@ public class AWSCostStatsService extends StatelessService {
                                         ComputeService.ComputeState.class);
                                 statsData.awsInstancesById.put(localInstance.id, localInstance);
                             }
-                            logFine("Got %d localresources in AWS cost adapter.",
-                                    responseTask.results.documentCount);
+                            logFine(() -> String.format("Got %d localresources in AWS cost adapter.",
+                                    responseTask.results.documentCount));
                             statsData.stage = next;
                             handleCostStatsCreationRequest(statsData);
                         }));
@@ -545,8 +547,9 @@ public class AWSCostStatsService extends StatelessService {
                     .count();
             accountDetailDto.deletedVmCount = deletedVmCount.intValue();
 
-            logFine("Found %s deleted VMs for the account: %s for the month of: %s-%s",
-                    deletedVmCount, accountDetailDto.id, month.getYear(), month.getMonthOfYear());
+            logFine(() -> String.format("Found %s deleted VMs for the account: %s for the month of:"
+                            + " %s-%s", deletedVmCount, accountDetailDto.id, month.getYear(),
+                    month.getMonthOfYear()));
         }
     }
 
@@ -580,8 +583,9 @@ public class AWSCostStatsService extends StatelessService {
                         .filter(vmId -> !instancesInNextMonth.contains(vmId)).count();
                 accountDetailsOfMonthUnderConsideration.deletedVmCount = deletedVmCount
                         .intValue();
-                logFine("Found %s deleted VMs for the account: %s for the month of: %s",
-                        deletedVmCount, accountDetailsOfMonthUnderConsideration.id, month);
+                logFine(() -> String.format("Found %s deleted VMs for the account: %s for the month"
+                                + " of: %s", deletedVmCount,
+                        accountDetailsOfMonthUnderConsideration.id, month));
             }
         }
     }
@@ -609,8 +613,8 @@ public class AWSCostStatsService extends StatelessService {
         inferDeletedVmCounts(statsData);
         int count = 0;
 
-        for (Entry<LocalDate, Map<String, AwsAccountDetailDto>> accountsHistoricalDataMapEntry : statsData.accountsHistoricalDetailsMap
-                .entrySet()) {
+        for (Entry<LocalDate, Map<String, AwsAccountDetailDto>> accountsHistoricalDataMapEntry :
+                statsData.accountsHistoricalDetailsMap.entrySet()) {
             for (Entry<String, AwsAccountDetailDto> accountsMonthlyDataEntry : accountsHistoricalDataMapEntry
                     .getValue().entrySet()) {
                 AwsAccountDetailDto awsAccountDetailDto = accountsMonthlyDataEntry.getValue();
@@ -627,15 +631,15 @@ public class AWSCostStatsService extends StatelessService {
                             .get(AWSConstants.AWS_ACCOUNT_ID_KEY);
                     billProcessedTimeMillis = statsData.accountIdToBillProcessedTime
                             .getOrDefault(accountId, 0L);
-                    logFine("Processing and persisting stats for the account: %s "
-                                    + "for the month: %s.",
-                            accountComputeState.documentSelfLink, accountsHistoricalDataMapEntry.getKey());
+                    logFine(() -> String.format("Processing and persisting stats for the account: %s "
+                                    + "for the month: %s.", accountComputeState.documentSelfLink,
+                            accountsHistoricalDataMapEntry.getKey()));
                     ComputeStats accountStats = createComputeStatsForAccount(statsData,
                             accountComputeState.documentSelfLink, awsAccountDetailDto,
                             billProcessedTimeMillis);
                     statsData.statsResponse.statsList.add(accountStats);
                 } else {
-                    logFine("AWS account with ID '%s' is not configured yet. Not creating cost"
+                    logFine(() -> "AWS account with ID '%s' is not configured yet. Not creating cost"
                             + " metrics for the same.");
                 }
 
@@ -664,8 +668,8 @@ public class AWSCostStatsService extends StatelessService {
                         ComputeState computeState = statsData.awsInstancesById
                                 .get(resourceName);
                         if (computeState == null) {
-                            logFine("Missing compute links. Skipping costs for AWS instance %s",
-                                    resourceName);
+                            logFine(() -> String.format("Missing compute links. Skipping costs for"
+                                            + " AWS instance %s", resourceName));
                             continue;
                         }
                         AwsResourceDetailDto resourceDetails = entry.getValue();
@@ -680,7 +684,8 @@ public class AWSCostStatsService extends StatelessService {
                 }
             }
         }
-        logFine("Created Stats for %d instances", count);
+        final int finalCount = count;
+        logFine(() -> String.format("Created Stats for %d instances", finalCount));
         statsData.stage = next;
         handleCostStatsCreationRequest(statsData);
     }
@@ -732,8 +737,9 @@ public class AWSCostStatsService extends StatelessService {
                             LocalDate firstDayOfBillMonthToDownload = new LocalDate(
                                     statsData.billMonthToDownload.getYear(),
                                     statsData.billMonthToDownload.getMonthOfYear(), 1);
-                            logFine("Processing AWS bill for account: %s for the month: %s.",
-                                    accountId, firstDayOfBillMonthToDownload);
+                            logFine(() -> String.format("Processing AWS bill for account: %s for"
+                                            + " the month: %s.", accountId,
+                                    firstDayOfBillMonthToDownload));
                             statsData.accountsHistoricalDetailsMap
                                     .put(firstDayOfBillMonthToDownload,
                                             parser.parseDetailedCsvBill(
@@ -777,15 +783,16 @@ public class AWSCostStatsService extends StatelessService {
             String accountId, Exception exception) {
         LocalDate firstDayOfCurrentMonth = getFirstDayOfCurrentMonth();
         if (statsData.billMonthToDownload.isEqual(firstDayOfCurrentMonth)) {
-            logFine("Current month's bill is not available in the AWS S3 bucket.");
+            logFine(() -> "Current month's bill is not available in the AWS S3 bucket.");
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     statsData.statsRequest.taskReference, exception);
         } else {
             // Ignore if bill(s) of previous month(s) are not available.
-            logFine("AWS bill for account: %s for the month of: %s-%s was not available from the "
-                            + "bucket: %s. Proceeding to process bills for following months.",
-                    accountId, statsData.billMonthToDownload.getYear(),
-                    statsData.billMonthToDownload.getMonthOfYear(), awsBucketName);
+            logFine(() -> String.format("AWS bill for account: %s for the month of: %s-%s was not"
+                            + " available from the bucket: %s. Proceeding to process bills for"
+                            + " following months.", accountId,
+                    statsData.billMonthToDownload.getYear(),
+                    statsData.billMonthToDownload.getMonthOfYear(), awsBucketName));
             // Continue downloading and processing the bills for following
             // month's bill
             statsData.billMonthToDownload = statsData.billMonthToDownload.plusMonths(1);
@@ -957,8 +964,8 @@ public class AWSCostStatsService extends StatelessService {
                             Collections.singletonList(billProcessedTimeStat));
 
         } else {
-            logWarning("Primary account ID not found. Not updating the processed time for this "
-                    + "collection cycle.");
+            logWarning(() -> "Primary account ID not found. Not updating the processed time for"
+                    + " this collection cycle.");
         }
     }
 
@@ -1021,8 +1028,9 @@ public class AWSCostStatsService extends StatelessService {
                         .setQuery(builder.build()).build())
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
-                        logWarning("Failed to get bill processed time for account: %s %s",
-                                accountComputeState.documentSelfLink, exception);
+                        logWarning(() -> String.format("Failed to get bill processed time for"
+                                        + " account: %s %s", accountComputeState.documentSelfLink,
+                                exception));
                         AdapterUtils.sendFailurePatchToProvisioningTask(this,
                                 context.statsRequest.taskReference, exception);
                     }

@@ -109,7 +109,7 @@ public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskServic
         } else if (patchBody.taskInfo.stage == TaskStage.STARTED) {
             // don't decrement completions remaining.
         } else {
-            logFine("ignoring patch from %s", patch.getReferer());
+            logFine(() -> String.format("ignoring patch from %s", patch.getReferer()));
             // ignore status updates from boot/power services
             patch.complete();
             return;
@@ -118,7 +118,7 @@ public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskServic
         // any operation on state before a operation is completed, is guaranteed
         // to be atomic
         // (service is synchronized)
-        logFine("Remaining %d", currentState.completionsRemaining);
+        logFine(() -> String.format("Remaining %d", currentState.completionsRemaining));
         boolean isFinished = currentState.completionsRemaining == 0;
         patch.complete();
 
@@ -135,9 +135,9 @@ public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskServic
 
             if (currentState.errorThreshold == 0
                     || failedRatio > currentState.errorThreshold) {
-                logWarning("Notifying parent of task failure: %s (%s)",
+                logWarning(() -> String.format("Notifying parent of task failure: %s (%s)",
                         Utils.toJsonHtml(patchBody.failureMessage),
-                        patchBody.taskInfo.stage);
+                        patchBody.taskInfo.stage));
 
                 parentPatchBody = currentState.serviceTaskCallback
                         .getFailedResponse(patchBody.taskInfo.failure);

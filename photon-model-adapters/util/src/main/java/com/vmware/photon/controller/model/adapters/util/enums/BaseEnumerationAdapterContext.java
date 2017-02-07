@@ -254,7 +254,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             return createUpdateLocalResourceStates(self())
                     .thenCompose(c -> {
                         if (c.enumExternalResourcesNextPageLink != null) {
-                            c.service.logFine("Fetch the next page of remote resources.");
+                            c.service.logFine(() -> "Fetch the next page of remote resources.");
                             return enumerate(BaseEnumerationAdapterStage.GET_REMOTE_RESOURCES);
                         }
                         return enumerate(BaseEnumerationAdapterStage.DELETE_LOCAL_STATES);
@@ -320,11 +320,11 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      */
     protected DeferredResult<T> createUpdateLocalResourceStates(T context) {
 
-        context.service.logFine("Create/Update local %ss to match remote resources.",
-                context.localStateClass.getSimpleName());
+        context.service.logFine(() -> String.format("Create/Update local %ss to match remote resources.",
+                context.localStateClass.getSimpleName()));
 
         if (context.remoteResources.isEmpty()) {
-            context.service.logFine("No resources available for create/update.");
+            context.service.logFine(() -> "No resources available for create/update.");
             return DeferredResult.completed(context);
         }
 
@@ -380,8 +380,9 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
         return this.service.sendWithDeferredResult(op)
                 .exceptionally(ex -> {
-                    this.service.logWarning("%s local %s to match remote resources: ERROR - %s",
-                            op.getAction(), op.getUri().getPath(), ex.getMessage());
+                    this.service.logWarning(() -> String.format("%s local %s to match remote"
+                                    + " resources: ERROR - %s", op.getAction(),
+                            op.getUri().getPath(), ex.getMessage()));
                     return op;
                 });
     }
@@ -405,8 +406,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      */
     protected DeferredResult<T> deleteLocalStates(T context) {
 
-        context.service.logFine("Delete %ss that no longer exist in the Endpoint.",
-                context.localStateClass.getSimpleName());
+        context.service.logFine(() -> String.format("Delete %ss that no longer exist in the endpoint.",
+                context.localStateClass.getSimpleName()));
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(context.localStateClass)

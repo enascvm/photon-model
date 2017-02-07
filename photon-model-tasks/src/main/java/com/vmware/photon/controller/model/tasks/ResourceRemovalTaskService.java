@@ -141,8 +141,8 @@ public class ResourceRemovalTaskService
                         if (e != null) {
                             // the task might have expired, with no results
                             // every becoming available
-                            logWarning("Failure retrieving query results: %s",
-                                    e.toString());
+                            logWarning(() -> String.format("Failure retrieving query results: %s",
+                                    e.toString()));
                             sendFailureSelfPatch(e);
                             return;
                         }
@@ -182,7 +182,7 @@ public class ResourceRemovalTaskService
             handleStagePatch(currentState, null);
             break;
         case FINISHED:
-            logInfo("task is complete");
+            logInfo(() -> "Task is complete");
             break;
         case FAILED:
         case CANCELLED:
@@ -204,7 +204,8 @@ public class ResourceRemovalTaskService
         switch (currentState.taskSubStage) {
         case WAITING_FOR_QUERY_COMPLETION:
             if (TaskState.isFailed(queryTask.taskInfo)) {
-                logWarning("query task failed: %s", Utils.toJsonHtml(queryTask.taskInfo.failure));
+                logWarning(() -> String.format("query task failed: %s",
+                        Utils.toJsonHtml(queryTask.taskInfo.failure)));
                 currentState.taskInfo.stage = TaskState.TaskStage.FAILED;
                 currentState.taskInfo.failure = queryTask.taskInfo.failure;
                 sendSelfPatch(currentState);
@@ -228,7 +229,7 @@ public class ResourceRemovalTaskService
                 return;
             }
 
-            logFine("Resource query not complete yet, retrying");
+            logFine(() -> "Resource query not complete yet, retrying");
             getHost().schedule(() -> {
                 getQueryResults(currentState);
             }, 1, TimeUnit.SECONDS);
@@ -269,8 +270,8 @@ public class ResourceRemovalTaskService
                     // delete query
                     sendRequest(Operation.createDelete(this, currentState.resourceQueryLink));
                     if (exc != null) {
-                        logSevere("Failure deleting compute states from the local system",
-                                Utils.toString(exc));
+                        logSevere(() -> String.format("Failure deleting compute states from the"
+                                        + " local system", Utils.toString(exc)));
                         sendFailureSelfPatch(exc.values().iterator().next());
                         return;
                     }
@@ -289,8 +290,8 @@ public class ResourceRemovalTaskService
             return;
         }
 
-        logFine("Starting delete of %d compute resources using sub task %s",
-                resourceCount, subTaskLink);
+        logFine(() -> String.format("Starting delete of %d compute resources using sub task %s",
+                resourceCount, subTaskLink));
         // for each compute resource link in the results, expand it with the
         // description, and issue
         // a DELETE request to its associated instance service.
@@ -345,8 +346,8 @@ public class ResourceRemovalTaskService
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
-                                logWarning("Failure creating sub task: %s",
-                                        Utils.toString(e));
+                                logWarning(() -> String.format("Failure creating sub task: %s",
+                                        Utils.toString(e)));
                                 this.sendSelfPatch(TaskState.TaskStage.FAILED,
                                         SubStage.FAILED, e);
                                 return;
@@ -376,8 +377,8 @@ public class ResourceRemovalTaskService
                     .setCompletion(
                             (deleteOp, e) -> {
                                 if (e != null) {
-                                    logWarning("PATCH to instance service %s, failed: %s",
-                                            deleteOp.getUri(), e.toString());
+                                    logWarning(() -> String.format("PATCH to instance service %s, failed: %s",
+                                            deleteOp.getUri(), e.toString()));
                                     ResourceOperationResponse fail = ResourceOperationResponse
                                             .fail(resourceLink, e);
                                     sendPatch(subTaskLink, fail);
@@ -385,9 +386,9 @@ public class ResourceRemovalTaskService
                                 }
                             }));
         } else {
-            logWarning("Compute instance %s doesn't not have configured instanceAdapter. Only "
-                            + "local resource will be deleted.",
-                    resourceLink);
+            logWarning(() -> String.format("Compute instance %s doesn't not have configured"
+                            + " instanceAdapter. Only local resource will be deleted.",
+                    resourceLink));
             ResourceOperationResponse subTaskPatchBody = ResourceOperationResponse
                     .finish(resourceLink);
             sendPatch(subTaskLink, subTaskPatchBody);
@@ -401,7 +402,8 @@ public class ResourceRemovalTaskService
                     if (e != null) {
                         // the task might have expired, with no results every
                         // becoming available
-                        logWarning("Failure retrieving query results: %s", e.toString());
+                        logWarning(() -> String.format("Failure retrieving query results: %s",
+                                e.toString()));
                         sendFailureSelfPatch(e);
                         return;
                     }
@@ -440,8 +442,8 @@ public class ResourceRemovalTaskService
         currentState.taskInfo.stage = body.taskInfo.stage;
         currentState.taskSubStage = body.taskSubStage;
 
-        logFine("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
-                body.taskSubStage, currentState.taskInfo.stage);
+        logFine(() -> String.format("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
+                body.taskSubStage, currentState.taskInfo.stage));
 
         return false;
     }
@@ -458,7 +460,7 @@ public class ResourceRemovalTaskService
         body.taskSubStage = subStage;
         if (e != null) {
             body.taskInfo.failure = Utils.toServiceErrorResponse(e);
-            logWarning("Patching to failed: %s", Utils.toString(e));
+            logWarning(() -> String.format("Patching to failed: %s", Utils.toString(e)));
         }
         sendSelfPatch(body);
     }
@@ -470,7 +472,8 @@ public class ResourceRemovalTaskService
                 .setCompletion(
                         (o, ex) -> {
                             if (ex != null) {
-                                logWarning("Self patch failed: %s", Utils.toString(ex));
+                                logWarning(() -> String.format("Self patch failed: %s",
+                                        Utils.toString(ex)));
                             }
                         });
         sendRequest(patch);

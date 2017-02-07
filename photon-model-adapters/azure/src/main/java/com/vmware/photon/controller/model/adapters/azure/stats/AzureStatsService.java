@@ -121,7 +121,8 @@ public class AzureStatsService extends StatelessService {
         OperationJoin.create(opCollection)
                 .setCompletion((ops, exs) -> {
                     if (exs != null) {
-                        exs.values().forEach(ex -> logWarning("Error: %s", ex.getMessage()));
+                        exs.values().forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                ex.getMessage())));
                         sendFailurePatch(statsData, exs.values().iterator().next());
                         return;
                     }
@@ -151,7 +152,7 @@ public class AzureStatsService extends StatelessService {
                     this.sendRequest(
                             Operation.createPatch(statsData.statsRequest.taskReference)
                                     .setBody(statsResponse));
-                    logFine("Finished collection of compute host stats");
+                    logFine(() -> "Finished collection of compute host stats");
                 })
                 .sendWith(this);
     }

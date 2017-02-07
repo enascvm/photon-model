@@ -256,7 +256,8 @@ public class SingleResourceStatsAggregationTaskService extends
         case CREATED:
             break;
         case STARTED:
-            logFine("Starting single resource stats aggregation for [%s] ", currentState.resourceLink);
+            logFine(() -> String.format("Starting single resource stats aggregation for [%s] ",
+                    currentState.resourceLink));
             handleStagePatch(currentState);
             break;
         case FINISHED:
@@ -265,7 +266,7 @@ public class SingleResourceStatsAggregationTaskService extends
             if (TaskState.isFailed(currentState.taskInfo) ||
                     TaskState.isCancelled(currentState.taskInfo)) {
                 if (currentState.failureMessage != null) {
-                    logWarning(currentState.failureMessage);
+                    logWarning(() -> currentState.failureMessage);
                 }
             }
             if (currentState.parentTaskReference != null) {
@@ -275,15 +276,16 @@ public class SingleResourceStatsAggregationTaskService extends
                         .setCompletion(
                                 (patchOp, patchEx) -> {
                                     if (patchEx != null) {
-                                        logWarning("Patching parent task failed %s",
-                                                Utils.toString(patchEx));
+                                        logWarning(() -> String.format("Patching parent task failed"
+                                                        + " %s", Utils.toString(patchEx)));
                                     }
                                     sendRequest(Operation.createDelete(getUri()));
                                 }));
             } else {
                 sendRequest(Operation.createDelete(getUri()));
             }
-            logFine("Single resource stats aggregation in [%s] stage", currentState.taskInfo.stage);
+            logFine(() -> String.format("Single resource stats aggregation in [%s] stage",
+                    currentState.taskInfo.stage));
             break;
         default:
             break;
@@ -329,8 +331,8 @@ public class SingleResourceStatsAggregationTaskService extends
         sendRequest(Operation.createGet(statsUri)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logWarning("Could not get stats for resource: %s, error: %s",
-                                currentState.resourceLink, e.getMessage());
+                        logWarning(() -> String.format("Could not get stats for resource: %s,"
+                                        + " error: %s", currentState.resourceLink, e.getMessage()));
                         // get the value based on a query.
                         getLastRollupTimeFromQuery(currentState, lastUpdateMap);
                         return;
@@ -376,8 +378,8 @@ public class SingleResourceStatsAggregationTaskService extends
                                 .setResultLimit(1)
                                 .setQuery(builder.build()).build())
                         .setConnectionSharing(true);
-                logInfo("Invoking a query to obtain last rollup time for %s ",
-                        StatsUtil.getMetricKeyPrefix(currentState.resourceLink, rollupKey));
+                logInfo(() -> String.format("Invoking a query to obtain last rollup time for %s ",
+                        StatsUtil.getMetricKeyPrefix(currentState.resourceLink, rollupKey)));
                 operations.add(op);
             }
         }
@@ -529,7 +531,8 @@ public class SingleResourceStatsAggregationTaskService extends
                             String msg = (ex == null) ?
                                     String.valueOf(operation.getStatusCode()) :
                                     ex.getMessage();
-                            logFine("In-memory metric lookup failed: %s with error %s", uri, msg);
+                            logFine(() -> String.format("In-memory metric lookup failed: %s with"
+                                    + " error %s", uri, msg));
                             processFailedOperations(currentState, metricsToBeQueried, uri);
                             continue;
                         }
@@ -676,7 +679,7 @@ public class SingleResourceStatsAggregationTaskService extends
         for (Entry<String, Set<String>> entry : metricsToBeQueried.entrySet()) {
             String resourceId = entry.getKey();
             for (String metricKey : entry.getValue()) {
-                logFine("Querying raw metrics from disk for %s", metricKey);
+                logFine(() -> String.format("Querying raw metrics from disk for %s", metricKey));
                 Long range = null;
                 int binSize = 0;
                 for (Entry<String, Long> metricEntry : currentState.lastRollupTimeForMetric.entrySet()) {

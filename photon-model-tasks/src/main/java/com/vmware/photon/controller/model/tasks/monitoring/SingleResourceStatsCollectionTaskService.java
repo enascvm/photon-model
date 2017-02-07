@@ -213,12 +213,12 @@ public class SingleResourceStatsCollectionTaskService
                     .setCompletion(
                             (patchOp, patchEx) -> {
                                 if (patchEx != null) {
-                                    logWarning("Patching parent task failed %s",
-                                            Utils.toString(patchEx));
+                                    logWarning(() -> String.format("Patching parent task failed %s",
+                                            Utils.toString(patchEx)));
                                 }
                                 sendRequest(Operation
                                         .createDelete(getUri()));
-                                logFine("Finished single resource stats collection");
+                                logFine(() -> "Finished single resource stats collection");
                             }));
             break;
         default:
@@ -427,8 +427,8 @@ public class SingleResourceStatsCollectionTaskService
         Integer finalNextBatchIndex = nextBatchIndex;
         opSequence.setCompletion((ops, exc) -> {
             if (exc != null) {
-                logWarning("Failed stats collection: %s",
-                        exc.values().iterator().next().getMessage());
+                logWarning(() -> String.format("Failed stats collection: %s",
+                        exc.values().iterator().next().getMessage()));
                 TaskUtils.sendFailurePatch(this,
                         new SingleResourceStatsCollectionTaskState(), exc.values());
                 return;
@@ -504,8 +504,8 @@ public class SingleResourceStatsCollectionTaskService
         Operation.createGet(computeStatsUri)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logSevere("Could not get the last collection time from in memory stats: %s",
-                                Utils.toString(e));
+                        logSevere(() -> String.format("Could not get the last collection time from"
+                                        + " in memory stats: %s", Utils.toString(e)));
                         // get the value from the persisted store.
                         populateLastCollectionTimeFromPersistenceStore(currentState,
                                 computeStatsRequest, patchUri, tenantLinks);

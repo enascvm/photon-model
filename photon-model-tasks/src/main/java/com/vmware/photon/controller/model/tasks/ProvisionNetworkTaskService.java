@@ -132,9 +132,8 @@ public class ProvisionNetworkTaskService extends TaskService<ProvisionNetworkTas
             currState.taskSubStage = nextStage(currState);
 
             handleSubStages(currState);
-            logInfo("%s %s on %s started", "Network",
-                    currState.requestType.toString(),
-                    currState.networkDescriptionLink);
+            logInfo(() -> String.format("%s %s on %s started", "Network",
+                    currState.requestType.toString(), currState.networkDescriptionLink));
             break;
         case STARTED:
             currState.taskInfo.stage = TaskState.TaskStage.STARTED;
@@ -143,14 +142,14 @@ public class ProvisionNetworkTaskService extends TaskService<ProvisionNetworkTas
             SubStage nextStage = nextStage(currState);
             if (nextStage == SubStage.FINISHED) {
                 currState.taskInfo.stage = TaskState.TaskStage.FINISHED;
-                logInfo("task is complete");
+                logInfo(() -> "Task is complete");
             } else {
                 sendSelfPatch(TaskState.TaskStage.CREATED, null);
             }
             break;
         case FAILED:
-            logWarning("Task failed with %s",
-                    Utils.toJsonHtml(currState.taskInfo.failure));
+            logWarning(() -> String.format("Task failed with %s",
+                    Utils.toJsonHtml(currState.taskInfo.failure)));
             break;
         case CANCELLED:
             break;
@@ -249,7 +248,7 @@ public class ProvisionNetworkTaskService extends TaskService<ProvisionNetworkTas
         } else {
             body.taskInfo.stage = TaskState.TaskStage.FAILED;
             body.taskInfo.failure = Utils.toServiceErrorResponse(e);
-            logWarning("Patching to failed: %s", Utils.toString(e));
+            logWarning(() -> String.format("Patching to failed: %s", Utils.toString(e)));
         }
 
         sendSelfPatch(body);

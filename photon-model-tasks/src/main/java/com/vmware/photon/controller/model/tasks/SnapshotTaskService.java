@@ -117,8 +117,8 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
     private void validateSnapshotAndStart(Operation startPost, Operation get,
             Throwable e, SnapshotTaskState state) {
         if (e != null) {
-            logWarning("Failure retrieving snapshot state (%s): %s",
-                    get.getUri(), e.toString());
+            logWarning(() -> String.format("Failure retrieving snapshot state (%s): %s",
+                    get.getUri(), e.toString()));
             startPost.complete();
             failTask(e);
             return;
@@ -180,7 +180,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
             createSnapshot(currentState, null);
             break;
         case FINISHED:
-            logInfo("task is complete");
+            logInfo(() -> "Task is complete");
             break;
         case FAILED:
         case CANCELLED:
@@ -196,7 +196,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
             createSubTaskForSnapshotCallback(updatedState);
             return;
         }
-        logFine("Starting to create snapshot using sub task %s", subTaskLink);
+        logFine(() -> String.format("Starting to create snapshot using sub task %s", subTaskLink));
 
         SnapshotRequest sr = new SnapshotRequest();
         sr.resourceReference = UriUtils.buildUri(getHost(),
@@ -227,8 +227,8 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
-                                logWarning("Failure creating sub task: %s",
-                                        Utils.toString(e));
+                                logWarning(() -> String.format("Failure creating sub task: %s",
+                                        Utils.toString(e)));
                                 this.sendSelfPatch(TaskState.TaskStage.FAILED,
                                         e);
                                 return;
@@ -244,8 +244,8 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
             SnapshotTaskState patchBody, SnapshotTaskState currentState) {
 
         if (patchBody.taskInfo != null && patchBody.taskInfo.failure != null) {
-            logWarning("Task failed: %s",
-                    Utils.toJson(patchBody.taskInfo.failure));
+            logWarning(() -> String.format("Task failed: %s",
+                    Utils.toJson(patchBody.taskInfo.failure)));
             currentState.taskInfo.failure = patchBody.taskInfo.failure;
         } else {
             if (patchBody.taskInfo == null || patchBody.taskInfo.stage == null) {
@@ -254,8 +254,8 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
                 return true;
             }
         }
-        logFine("Current: %s. New: %s(%s)", currentState.taskInfo.stage,
-                patchBody.taskInfo.stage);
+        logFine(() -> String.format("Current: %s. New: %s(%s)", currentState.taskInfo.stage,
+                patchBody.taskInfo.stage));
 
         if (TaskState.isFailed(currentState.taskInfo)
                 || TaskState.isCancelled(currentState.taskInfo)) {
@@ -277,7 +277,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
     }
 
     private void failTask(Throwable e) {
-        logWarning("Self patching to FAILED, task failure: %s", e.toString());
+        logWarning(() -> String.format("Self patching to FAILED, task failure: %s", e.toString()));
         sendSelfPatch(TaskState.TaskStage.FAILED, e);
     }
 }

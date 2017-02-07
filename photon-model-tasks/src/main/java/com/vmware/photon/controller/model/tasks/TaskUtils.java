@@ -164,7 +164,7 @@ public class TaskUtils {
         Throwable errorToPatch = null;
         for (Throwable t : tList) {
             errorToPatch = t;
-            service.logWarning("Operation failed: %s", Utils.toString(t));
+            service.logWarning(() -> String.format("Operation failed: %s", Utils.toString(t)));
         }
         sendFailurePatch(service, taskState, errorToPatch);
     }
@@ -182,7 +182,7 @@ public class TaskUtils {
         TaskState state = new TaskState();
         state.stage = TaskStage.FAILED;
         state.failure = Utils.toServiceErrorResponse(t);
-        service.logWarning("Operation failed: %s", Utils.toString(t));
+        service.logWarning(() -> String.format("Operation failed: %s", Utils.toString(t)));
         taskState.taskInfo = state;
         sendPatch(service, taskState);
     }
@@ -300,8 +300,8 @@ public class TaskUtils {
                 .setCompletion(
                         (delOp, delEx) -> {
                             if (delEx != null) {
-                                service.logWarning("Stopping subscriber failed %s",
-                                        Utils.toString(delEx));
+                                service.logWarning(() -> String.format("Stopping subscriber failed"
+                                                + " %s", Utils.toString(delEx)));
                                 return;
                             }
                         });
@@ -343,7 +343,7 @@ public class TaskUtils {
         body.taskInfo = new TaskState();
         body.taskInfo.stage = TaskStage.FAILED;
         body.taskInfo.failure = Utils.toServiceErrorResponse(e);
-        service.logWarning("Operation failed: %s", Utils.toString(e));
+        service.logWarning(() -> String.format("Operation failed: %s", Utils.toString(e)));
         sendPatch(service, body);
     }
 
