@@ -30,7 +30,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -125,9 +124,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Network States stored in local document store.
         // key -> Network State id (matching Azure Virtual Network id); value -> Network State
         Map<String, NetworkState> networkStates = new ConcurrentHashMap<>();
-        // Stores the link to NetworkStates that were deleted in the current enumeration
-        // in the local document store. This list is used during SubnetStates deletion.
-        List<String> deletedNetworkLinks = new ArrayList<>();
         // Stores the map of resource groups state ids to document self links.
         // key -> resource group id; value - link to the local ResourceGroupState object.
         Map<String, String> resourceGroupStates = new ConcurrentHashMap<>();
@@ -841,8 +837,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkState.class)
-                .addFieldClause(NetworkState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
-                        context.parentCompute.description.authCredentialsLink)
                 .addRangeClause(NetworkState.FIELD_NAME_UPDATE_TIME_MICROS,
                         NumericRange.createLessThanRange(context.enumerationStartTimeInMicros));
 
@@ -858,7 +852,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         logFine(() -> "Querying Network States for deletion.");
 
         // Add deleted NetworkStates to the list.
-        sendDeleteQueryTask(q, context, next, context.deletedNetworkLinks::add);
+        sendDeleteQueryTask(q, context, next);
     }
 
     /**
@@ -884,11 +878,11 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         q.tenantLinks = context.parentCompute.tenantLinks;
 
         logFine(() -> "Querying Subnet States for deletion.");
-        sendDeleteQueryTask(q, context, next, null);
+        sendDeleteQueryTask(q, context, next);
     }
 
     private void sendDeleteQueryTask(QueryTask q, NetworkEnumContext context,
-            NetworkEnumStages next, Consumer<String> preDeleteProcessor) {
+            NetworkEnumStages next) {
 
         QueryUtils.startQueryTask(this, q)
                 .whenComplete((queryTask, e) -> {
@@ -899,7 +893,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
                     context.deletionNextPageLink = queryTask.results.nextPageLink;
 
-                    handleDeleteQueryTaskResult(context, next, preDeleteProcessor);
+                    handleDeleteQueryTaskResult(context, next);
                 });
     }
 
@@ -910,7 +904,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      *                           the matching resources.
      */
     private void handleDeleteQueryTaskResult(NetworkEnumContext context,
-            NetworkEnumStages next, Consumer<String> preDeleteProcessor) {
+            NetworkEnumStages next) {
 
         if (context.deletionNextPageLink == null) {
             logFine(() -> "Finished deletion stage.");
@@ -933,12 +927,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         // Delete all matching states.
                         List<Operation> operations = queryTask.results.documentLinks.stream()
                                 .filter(link -> shouldDelete(context, queryTask, link))
-                                .map(link -> {
-                                    if (preDeleteProcessor != null) {
-                                        preDeleteProcessor.accept(link);
-                                    }
-                                    return link;
-                                })
                                 .map(link -> Operation.createDelete(this, link))
                                 .collect(Collectors.toList());
 
@@ -961,7 +949,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     context.deletionNextPageLink = queryTask.results.nextPageLink;
 
                     // Handle next page of results.
-                    handleDeleteQueryTaskResult(context, next, preDeleteProcessor);
+                    handleDeleteQueryTaskResult(context, next);
                 }));
     }
 
@@ -978,8 +966,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         } else if (link.startsWith(SubnetService.FACTORY_LINK)) {
             SubnetState subnetState = Utils
                     .fromJson(queryTask.results.documents.get(link), SubnetState.class);
-            if (context.subnetIds.contains(subnetState.id)
-                    || !context.deletedNetworkLinks.contains(subnetState.networkLink)) {
+            if (context.subnetIds.contains(subnetState.id)) {
                 return false;
             }
         }
