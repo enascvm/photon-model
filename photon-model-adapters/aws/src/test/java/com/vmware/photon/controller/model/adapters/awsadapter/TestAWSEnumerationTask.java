@@ -521,7 +521,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // instancesToCleanUp.size() are name tags, which are skipped. This means we should have
         // allTags.size() TagState documents
         ServiceDocumentQueryResult serviceDocumentQueryResult = queryDocumentsAndAssertExpectedCount(
-                this.host, allTags.size(), TagService.FACTORY_LINK, true);
+                this.host, allTags.size(), TagService.FACTORY_LINK, false);
 
         Map<Tag, String> tagLinks = new HashMap<>();
 

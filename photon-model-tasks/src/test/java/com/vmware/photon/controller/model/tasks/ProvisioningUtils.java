@@ -15,12 +15,14 @@ package com.vmware.photon.controller.model.tasks;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -33,7 +35,6 @@ import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 /**
  * Helper class for VM provisioning tests.
- *
  */
 public class ProvisioningUtils {
 
@@ -46,8 +47,14 @@ public class ProvisioningUtils {
 
     }
 
+    public static void waitForTaskCompletion(VerificationHost host, String endpoint,
+            Class<? extends TaskServiceState> clazz)
+            throws Throwable, InterruptedException, TimeoutException {
+        waitForTaskCompletion(host, Arrays.asList(UriUtils.buildUri(host, endpoint)), clazz);
+    }
+
     public static void waitForTaskCompletion(VerificationHost host,
-                                             List<URI> provisioningTasks, Class<? extends TaskServiceState> clazz)
+            List<URI> provisioningTasks, Class<? extends TaskServiceState> clazz)
             throws Throwable, InterruptedException, TimeoutException {
         Date expiration = host.getTestExpiration();
         List<String> pendingTasks = new ArrayList<String>();
@@ -108,9 +115,23 @@ public class ProvisioningUtils {
             }
         } while (new Date().before(expiration));
         throw new TimeoutException("Desired number of compute states not found. Expected "
-                + desiredCount + "Found " + res.documents.size());
+                + desiredCount + ", found " + res.documents.size());
     }
 
+    /**
+     * Queries the documents and ensures expected count. If <code>exactCountFlag</code> is
+     * <code>true</code> the <code>desiredCount</code> should be equals to the documents found,
+     * in case it is <code>false</code> then  <code>desiredCount</code> the minimal number of
+     * documents that should be loaded.
+     *
+     * @param host           the host
+     * @param desiredCount   expected count of documents
+     * @param factoryLink    factory link for the documents
+     * @param exactCountFlag if true the documents count should be equal to the
+     *                       <code>desiredCount</code>, else documents should be more then
+     *                       <code>desiredCount</code>
+     * @return the documents
+     */
     public static ServiceDocumentQueryResult queryDocumentsAndAssertExpectedCount(
             VerificationHost host, int desiredCount, String factoryLink, boolean exactCountFlag)
             throws Throwable {
@@ -121,29 +142,34 @@ public class ProvisioningUtils {
     public static ServiceDocumentQueryResult queryDocumentsAndAssertExpectedCount(
             VerificationHost host, URI peerURI,
             int desiredCount, String factoryLink, boolean exactCountFlag) throws Throwable {
-        ServiceDocumentQueryResult res;
-        res = host.getFactoryState(UriUtils
-                .buildExpandLinksQueryUri(createServiceURI(host, peerURI,
-                        factoryLink)));
-        if (exactCountFlag && res.documents.size() == desiredCount) {
-            return res;
-        } else if (res.documents.size() >= desiredCount) {
-            return res;
+        ServiceDocumentQueryResult res = host.getFactoryState(
+                UriUtils.buildExpandLinksQueryUri(createServiceURI(host, peerURI, factoryLink)));
+        if (exactCountFlag) {
+            if (res.documents.size() == desiredCount) {
+                return res;
+            }
+        } else {
+            if (res.documents.size() >= desiredCount) {
+                host.log(Level.INFO, "Documents count in %s is %s, expected at least %s",
+                        factoryLink, res.documents.size(), desiredCount);
+                return res;
+            }
         }
         throw new Exception("Desired number of documents not found in " + factoryLink
-                + " factory states. Expected "
-                + desiredCount + "Found " + res.documents.size());
+                + " factory states. Expected " + desiredCount + ", found " + res.documents.size());
     }
 
     /**
      * Query all States for the given Service
      */
-    public static <K extends ResourceState> Map<String, K> getResourceStates(VerificationHost host, String serviceFactoryLink, Class<K> typeKey)
-           throws Throwable {
+    public static <K extends ResourceState> Map<String, K> getResourceStates(VerificationHost host,
+            String serviceFactoryLink, Class<K> typeKey)
+            throws Throwable {
         return getResourceStates(host, null, serviceFactoryLink, typeKey);
     }
 
-    public static <K extends ResourceState> Map<String, K> getResourceStates(VerificationHost host, URI peerURI, String serviceFactoryLink, Class<K> resourceStateClass)
+    public static <K extends ResourceState> Map<String, K> getResourceStates(VerificationHost host,
+            URI peerURI, String serviceFactoryLink, Class<K> resourceStateClass)
             throws Throwable {
         Map<String, K> elementStateMap = new HashMap<>();
         ServiceDocumentQueryResult res;
@@ -163,7 +189,6 @@ public class ProvisioningUtils {
      * Creates the URI for the service based on the passed in values of the verification host and the peer URI.
      * If the peerURI value is set, then it is used to create the service URI else the verification host URI
      * is used to compute the service URI.
-     *
      */
     public static URI createServiceURI(VerificationHost host, URI peerURI, String factoryLink) {
         URI uri = (peerURI != null) ? UriUtils.buildUri(peerURI,

@@ -318,12 +318,11 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 2,
                 ComputeService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 1,
-                StorageDescriptionService.FACTORY_LINK, true);
+                StorageDescriptionService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 1,
-                ResourceGroupService.FACTORY_LINK, true);
+                ResourceGroupService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 1,
-                DiskService.FACTORY_LINK,
-                true);
+                DiskService.FACTORY_LINK, false);
 
         this.numberOfVMsToDelete++;
 
@@ -332,7 +331,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             deleteVMs(this.host, this.vmState.documentSelfLink, this.isMock, 1);
             this.vmState = null;
             ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 1,
-                    ComputeService.FACTORY_LINK, true);
+                    ComputeService.FACTORY_LINK, false);
 
             deleteServiceDocument(this.host, this.storageDescription.documentSelfLink);
             this.storageDescription = null;
@@ -342,12 +341,12 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             deleteServiceDocument(this.host, this.resourceGroupState.documentSelfLink);
             this.resourceGroupState = null;
             ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 0,
-                    ResourceGroupService.FACTORY_LINK, true);
+                    ResourceGroupService.FACTORY_LINK, false);
 
             deleteServiceDocument(this.host, this.diskState.documentSelfLink);
             this.diskState = null;
             ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, 0,
-                    DiskService.FACTORY_LINK, true);
+                    DiskService.FACTORY_LINK, false);
             return;
         }
 
@@ -368,12 +367,12 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 .queryDocumentsAndAssertExpectedCount(this.host, STALE_VM_RESOURCES_COUNT + 2,
                         ComputeService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
-                STALE_STORAGE_ACCOUNTS_COUNT + 1, StorageDescriptionService.FACTORY_LINK, true);
+                STALE_STORAGE_ACCOUNTS_COUNT + 1, StorageDescriptionService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_CONTAINERS_COUNT + STALE_RG_COUNT + 1, ResourceGroupService.FACTORY_LINK,
-                true);
+                false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, STALE_BLOBS_COUNT + 1,
-                DiskService.FACTORY_LINK, true);
+                DiskService.FACTORY_LINK, false);
         // 1 network per each stale vm resource + 1 network for original vm compute state.
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_VM_RESOURCES_COUNT + 1,
@@ -382,10 +381,10 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // compute state.
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_VM_RESOURCES_COUNT + 1,
-                SubnetService.FACTORY_LINK, true);
+                SubnetService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host,
                 STALE_SECURITY_GROUPS_COUNT,
-                SecurityGroupService.FACTORY_LINK, true);
+                SecurityGroupService.FACTORY_LINK, false);
 
         this.vmCount = getAzureVMCount(this.computeManagementClient);
         this.host.log(Level.INFO, "Initial VM Count: %d", this.vmCount);
@@ -400,19 +399,19 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         // expect to find as many local accounts, containers, and blobs as there are on Azure
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.storageAcctCount,
-                StorageDescriptionService.FACTORY_LINK, true);
+                StorageDescriptionService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.containerCount +
                         resourceGroupsCount,
-                ResourceGroupService.FACTORY_LINK, true);
+                ResourceGroupService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.blobCount,
-                DiskService.FACTORY_LINK, true);
+                DiskService.FACTORY_LINK, false);
 
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, networksCount,
                 NetworkService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, subnetsCount,
                 SubnetService.FACTORY_LINK, true);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, securityGroupsCount,
-                SecurityGroupService.FACTORY_LINK, true);
+                SecurityGroupService.FACTORY_LINK, false);
 
         // VM count + 1 compute host instance
         this.vmCount = this.vmCount + 1;
