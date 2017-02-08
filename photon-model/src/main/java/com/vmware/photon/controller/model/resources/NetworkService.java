@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.UUID;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -61,7 +62,6 @@ public class NetworkService extends StatefulService {
         /**
          * Link to secrets. Required
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String authCredentialsLink;
 
