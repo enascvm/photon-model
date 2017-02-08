@@ -18,8 +18,8 @@ import java.util.UUID;
 
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.xenon.common.FactoryService;
-import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.UriUtils;
 
 /**
@@ -30,6 +30,8 @@ public class TagFactoryService extends FactoryService {
 
     public TagFactoryService() {
         super(TagState.class);
+
+        this.setUseBodyForSelfLink(true);
     }
 
     @Override
@@ -38,37 +40,15 @@ public class TagFactoryService extends FactoryService {
     }
 
     /**
-     * Override the handlePost method to set the documentSelfLink. We don't want to have multiple
-     * tags with the same values, so we build the documentSelfLink ourselves taking into account all
-     * fields in the TagState @see TagFactoryService#generateSelfLink
+     * Override the buildDefaultChildSelfLink method to set the documentSelfLink. We don't want to
+     * have multiple tags with the same values, so we build the documentSelfLink ourselves taking
+     * into account all fields in the TagState
      *
-     * @param op
+     * @see #generateSelfLink(TagState)
      */
     @Override
-    public void handlePost(Operation op) {
-        if (op.isSynchronize()) {
-            op.complete();
-            return;
-        }
-
-        if (op.hasBody()) {
-            TagState body = (TagState) op.getBody(this.stateType);
-            if (body == null) {
-                op.fail(new IllegalArgumentException("structured body is required"));
-                return;
-            }
-
-            if (body.documentSourceLink != null) {
-                op.fail(new IllegalArgumentException("clone request not supported"));
-                return;
-            }
-
-            body.documentSelfLink = generateSelfLink(body);
-            op.setBody(body);
-            op.complete();
-        } else {
-            op.fail(new IllegalArgumentException("body is required"));
-        }
+    protected String buildDefaultChildSelfLink(ServiceDocument document) {
+        return generateId((TagState)document);
     }
 
     public static String generateSelfLink(TagState tagState) {
