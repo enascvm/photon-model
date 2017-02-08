@@ -72,7 +72,8 @@ public class ComputeDescriptionService extends StatefulService {
             VM_GUEST,
             DOCKER_CONTAINER,
             PHYSICAL,
-            OS_ON_PHYSICAL
+            OS_ON_PHYSICAL,
+            ZONE
         }
 
         /**

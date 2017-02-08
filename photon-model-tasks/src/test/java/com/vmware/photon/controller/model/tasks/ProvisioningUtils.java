@@ -25,12 +25,16 @@ import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 /**
@@ -115,6 +119,41 @@ public class ProvisioningUtils {
             }
         } while (new Date().before(expiration));
         throw new TimeoutException("Desired number of compute states not found. Expected "
+                + desiredCount + ", found " + res.documents.size());
+    }
+
+    public static ServiceDocumentQueryResult queryComputeInstancesByType(VerificationHost host,
+            long desiredCount, String type, boolean exactCountFlag) throws Throwable {
+        ServiceDocumentQueryResult res;
+
+        QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
+                ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(
+                Utils.buildKind(ComputeState.class));
+        kindClause.occurance = Occurance.MUST_OCCUR;
+
+        QueryTask.Query typeClause = new QueryTask.Query().setTermPropertyName(
+                ComputeState.FIELD_NAME_TYPE).setTermMatchValue(type);
+        kindClause.occurance = Occurance.MUST_OCCUR;
+
+        QueryTask.QuerySpecification querySpec  = new QueryTask.QuerySpecification();
+        querySpec.query.addBooleanClause(kindClause);
+        querySpec.query.addBooleanClause(typeClause);
+
+        res  = host.createAndWaitSimpleDirectQuery(querySpec, desiredCount, desiredCount);
+
+        if (exactCountFlag) {
+            if (res.documentCount == desiredCount) {
+                return res;
+            }
+        } else {
+            if (res.documentCount >= desiredCount) {
+                host.log(Level.INFO, "Documents count for %s compute states is %s, expected at "
+                                + "least %s", type, res.documentCount, desiredCount);
+                return res;
+            }
+        }
+
+        throw new TimeoutException("Desired number of availability zones not found. Expected "
                 + desiredCount + ", found " + res.documents.size());
     }
 

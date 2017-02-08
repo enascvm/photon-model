@@ -308,7 +308,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             logFine(() -> String.format("Processing page %d ", aws.pageNo));
             aws.pageNo++;
             if (aws.describeInstancesRequest == null) {
-                creatAWSRequestAndAsyncHandler(aws);
+                createAWSRequestAndAsyncHandler(aws);
             }
             aws.amazonEC2Client.describeInstancesAsync(aws.describeInstancesRequest,
                     aws.resultHandler);
@@ -342,7 +342,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
      * responses received from AWS. It sets the nextToken value in the request object sent to AWS
      * for getting the next page of results from AWS.
      */
-    private void creatAWSRequestAndAsyncHandler(EnumerationCreationContext aws) {
+    private void createAWSRequestAndAsyncHandler(EnumerationCreationContext aws) {
         DescribeInstancesRequest request = new DescribeInstancesRequest();
         Filter runningInstanceFilter = getAWSNonTerminatedInstancesFilter();
         request.getFilters().add(runningInstanceFilter);
@@ -498,7 +498,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                         .values()
                                         .stream()
                                         .map(o -> o.getBody(ComputeDescription.class))
-                                        .map(this::createComputeInstance)
+                                        .map(this::createComputeInstanceForAvailabilityZone)
                                         .map(c -> Operation
                                                 .createPost(this.service,
                                                         ComputeService.FACTORY_LINK)
@@ -538,16 +538,17 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .sendWith(this.service);
         }
 
-        private ComputeState createComputeInstance(ComputeDescription cd) {
+        private ComputeState createComputeInstanceForAvailabilityZone(ComputeDescription cd) {
             ComputeService.ComputeState computeState = new ComputeService.ComputeState();
             computeState.name = cd.name;
             computeState.id = cd.id;
-            computeState.adapterManagementReference = this.context.parentCompute.adapterManagementReference;
+            computeState.adapterManagementReference =
+                    this.context.parentCompute.adapterManagementReference;
             computeState.parentLink = this.context.parentCompute.documentSelfLink;
             computeState.resourcePoolLink = this.context.request.resourcePoolLink;
             computeState.endpointLink = this.context.request.endpointLink;
             computeState.descriptionLink = cd.documentSelfLink;
-            computeState.type = ComputeType.VM_HOST;
+            computeState.type = ComputeType.ZONE;
             computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
 
             computeState.powerState = PowerState.ON;

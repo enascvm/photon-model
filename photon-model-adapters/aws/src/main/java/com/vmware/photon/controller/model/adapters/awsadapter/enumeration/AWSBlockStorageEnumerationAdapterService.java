@@ -244,7 +244,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             logFine(() -> String.format("Processing page %d ", aws.pageNo));
             aws.pageNo++;
             if (aws.describeVolumesRequest == null) {
-                creatAWSRequestAndAsyncHandler(aws);
+                createAWSRequestAndAsyncHandler(aws);
             }
             aws.amazonEC2Client.describeVolumesAsync(aws.describeVolumesRequest,
                     aws.resultHandler);
@@ -280,7 +280,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
      * responses received from AWS. It sets the nextToken value in the request object sent to AWS
      * for getting the next page of results from AWS.
      */
-    private void creatAWSRequestAndAsyncHandler(BlockStorageEnumerationContext aws) {
+    private void createAWSRequestAndAsyncHandler(BlockStorageEnumerationContext aws) {
         DescribeVolumesRequest request = new DescribeVolumesRequest();
         request.setMaxResults(getQueryPageSize());
         request.setNextToken(aws.nextToken);

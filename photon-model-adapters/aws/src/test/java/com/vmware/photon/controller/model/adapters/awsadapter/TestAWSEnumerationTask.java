@@ -250,6 +250,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         queryDocumentsAndAssertExpectedCount(this.host,
                 count7, DiskService.FACTORY_LINK, false);
 
+        // Validate at least 4 availability zones were enumerated
+        ProvisioningUtils.queryComputeInstancesByType(this.host, count4,
+                ComputeType.ZONE.toString(), false);
+
         // Update Scenario : Check that the tag information is present for the VM tagged above.
         String vpCId = validateTagAndNetworkAndComputeDescriptionInformation(vmState);
         validateVPCInformation(vpCId);
