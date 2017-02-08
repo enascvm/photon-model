@@ -951,17 +951,18 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             failureHandler.accept(null);
             return;
         }
-        Query query = Query.Builder.create()
+        Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
                         context.request.resourceLink())
                 .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
                         context.request.resourcePoolLink)
-                .addInClause(ResourceState.FIELD_NAME_ID, remoteIds)
-                .build();
+                .addInClause(ResourceState.FIELD_NAME_ID, remoteIds);
+
+        addScopeCriteria(qBuilder, ComputeState.class, context);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(query)
+                .setQuery(qBuilder.build())
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
@@ -989,4 +990,15 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     successHandler.accept(localInstances);
                 });
     }
+
+    /**
+     * Constrain every query with endpointLink and tenantLinks, if presented.
+     */
+    private static void addScopeCriteria(Query.Builder qBuilder, Class<? extends ResourceState> stateClass, EnumerationCreationContext ctx) {
+        // Add TENANT_LINKS criteria
+        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
+        // Add ENDPOINT_LINK criteria
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
+    }
+
 }

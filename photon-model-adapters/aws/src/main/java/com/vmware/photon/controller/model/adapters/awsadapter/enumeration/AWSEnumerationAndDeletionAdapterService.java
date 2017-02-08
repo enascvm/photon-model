@@ -44,8 +44,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -260,16 +260,17 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             AWSEnumerationDeletionSubStage next) {
         // query all ComputeState resources known to the local system.
         logFine(() -> "Getting local resources that need to be reconciled with the AWS endpoint.");
-        Query query = Query.Builder.create()
+        Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
                         context.request.resourceLink())
                 .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
-                        context.request.resourcePoolLink)
-                .build();
+                        context.request.resourcePoolLink);
+
+        addScopeCriteria(qBuilder, ComputeState.class, context);
 
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(query)
+                .setQuery(qBuilder.build())
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setResultLimit(getQueryResultLimit())
                 .build();
@@ -579,6 +580,16 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                     context.subStage = next;
                     deleteResourcesInLocalSystem(context);
                 }));
+    }
+
+    /**
+     * Constrain every query with endpointLink and tenantLinks, if presented.
+     */
+    private static void addScopeCriteria(Query.Builder qBuilder, Class<? extends ResourceState> stateClass, EnumerationDeletionContext ctx) {
+        // Add TENANT_LINKS criteria
+        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
+        // Add ENDPOINT_LINK criteria
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
     }
 
 }

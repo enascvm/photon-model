@@ -15,8 +15,6 @@ package com.vmware.photon.controller.model.tasks;
 
 import static java.util.stream.Collector.Characteristics.IDENTITY_FINISH;
 
-import static com.vmware.photon.controller.model.resources.ResourceState.FIELD_NAME_TENANT_LINKS;
-
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
@@ -110,6 +108,18 @@ public class QueryUtils {
     }
 
     /**
+     * Add {@code tenantLinks} constraint to passed query builder, if present.
+     */
+    public static Query.Builder addTenantLinks(Query.Builder qBuilder, List<String> tenantLinks) {
+        if (tenantLinks != null && !tenantLinks.isEmpty()) {
+            return qBuilder.addInCollectionItemClause(
+                    ResourceState.FIELD_NAME_TENANT_LINKS,
+                    tenantLinks);
+        }
+        return qBuilder;
+    }
+
+    /**
      * Query strategy template.
      *
      * @see {#link {@link QueryTop}
@@ -189,12 +199,8 @@ public class QueryUtils {
             {
                 // Wrap original query...
                 Query.Builder qBuilder = Query.Builder.create().addClause(query);
-
-                if (this.tenantLinks != null && !this.tenantLinks.isEmpty()) {
-                    // ...and extend with TENANT_LINKS
-                    qBuilder.addInCollectionItemClause(FIELD_NAME_TENANT_LINKS, this.tenantLinks);
-                }
-
+                // ...and extend with TENANT_LINKS
+                QueryUtils.addTenantLinks(qBuilder, this.tenantLinks);
                 // ...and extend with ENDPOINT_LINK
                 QueryUtils.addEndpointLink(qBuilder, this.documentClass, endpointLink);
 

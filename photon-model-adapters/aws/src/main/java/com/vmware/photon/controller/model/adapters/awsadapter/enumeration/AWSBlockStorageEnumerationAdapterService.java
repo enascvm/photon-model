@@ -55,9 +55,9 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -393,27 +393,20 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             // query all disk state resources for the cluster filtered by the received set of
             // instance Ids. the filtering is performed on the selected resource pool and auth
             // credentials link.
-            Query query = Query.Builder.create()
+            Query.Builder qBuilder = Query.Builder.create()
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
                             this.context.request.resourcePoolLink)
-                    .build();
+                    .addInCollectionItemClause(
+                            ComputeState.FIELD_NAME_ID,
+                            this.context.remoteAWSVolumes.keySet());
 
-            Query volumeIdFilterParentQuery = Query.Builder.create().build();
-            this.context.remoteAWSVolumes.keySet().forEach(volumeId -> {
-                Query volumeIdFilter = new Query()
-                        .setTermPropertyName(ComputeState.FIELD_NAME_ID)
-                        .setTermMatchValue(volumeId);
-                volumeIdFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
-                volumeIdFilterParentQuery.addBooleanClause(volumeIdFilter);
-            });
-
-            query.addBooleanClause(volumeIdFilterParentQuery);
+            addScopeCriteria(qBuilder, DiskState.class, this.context);
 
             QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                    .setQuery(query)
+                    .setQuery(qBuilder.build())
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .addOption(QueryOption.TOP_RESULTS)
                     .setResultLimit(getQueryResultLimit())
@@ -627,7 +620,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * The method paginates through list of resources for deletion.
          */
         private void deleteDiskStates(EBSVolumesEnumerationSubStage next) {
-            Query query = Builder.create()
+            Query.Builder qBuilder = Builder.create()
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
                             this.context.request.resourcePoolLink)
@@ -639,12 +632,13 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .addCompositeFieldClause(
                             ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                             SOURCE_TASK_LINK, ResourceEnumerationTaskService.FACTORY_LINK,
-                            QueryTask.Query.Occurance.MUST_OCCUR)
-                    .build();
+                            QueryTask.Query.Occurance.MUST_OCCUR);
+
+            addScopeCriteria(qBuilder, DiskState.class, this.context);
 
             QueryTask q = QueryTask.Builder.createDirectTask()
                     .addOption(QueryOption.EXPAND_CONTENT)
-                    .setQuery(query)
+                    .setQuery(qBuilder.build())
                     .setResultLimit(getQueryResultLimit())
                     .build();
             q.tenantLinks = this.context.parentCompute.tenantLinks;
@@ -765,6 +759,20 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             this.service.handleEnumerationRequest(this.context);
         }
 
+    }
+
+
+    /**
+     * Constrain every query with endpointLink and tenantLinks, if presented.
+     */
+    private static void addScopeCriteria(
+            Query.Builder qBuilder,
+            Class<? extends ResourceState> stateClass,
+            BlockStorageEnumerationContext ctx) {
+        // Add TENANT_LINKS criteria
+        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
+        // Add ENDPOINT_LINK criteria
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
     }
 
 }
