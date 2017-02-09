@@ -167,6 +167,14 @@ public class EnumerationClient extends BaseHelper {
         dcToVmf.setName("dcToVmf");
         dcToVmf.getSelectSet().add(getSelectionSpec("VisitFolders"));
 
+
+        TraversalSpec dcToNetf = new TraversalSpec();
+        dcToNetf.setType(VimNames.TYPE_DATACENTER);
+        dcToNetf.setSkip(Boolean.FALSE);
+        dcToNetf.setPath("networkFolder");
+        dcToNetf.setName("dcToNetf");
+        dcToNetf.getSelectSet().add(getSelectionSpec("VisitFolders"));
+
         TraversalSpec dcToNet = new TraversalSpec();
         dcToNet.setType(VimNames.TYPE_DATACENTER);
         dcToNet.setSkip(Boolean.FALSE);
@@ -191,6 +199,7 @@ public class EnumerationClient extends BaseHelper {
         sspecarrvf.add(getSelectionSpec("hToVm"));
         sspecarrvf.add(getSelectionSpec("rpToVm"));
         sspecarrvf.add(getSelectionSpec("dcToNet"));
+        sspecarrvf.add(getSelectionSpec("dcToNetf"));
         sspecarrvf.add(getSelectionSpec("VisitFolders"));
 
         visitFolders.getSelectSet().addAll(sspecarrvf);
@@ -208,6 +217,7 @@ public class EnumerationClient extends BaseHelper {
         resultspec.add(rpToVm);
         resultspec.add(rpToRp);
         resultspec.add(dcToNet);
+        resultspec.add(dcToNetf);
 
         return resultspec;
     }
@@ -287,6 +297,13 @@ public class EnumerationClient extends BaseHelper {
         PropertySpec pgSpec = new PropertySpec();
         pgSpec.setType(VimNames.TYPE_PORTGROUP);
         pgSpec.getPathSet().addAll(Arrays.asList(
+                VimPath.pg_config_distributedVirtualSwitch,
+                VimNames.PROPERTY_NAME
+        ));
+
+        PropertySpec dvsSpec = new PropertySpec();
+        dvsSpec.setType(VimNames.TYPE_DVS);
+        dvsSpec.getPathSet().addAll(Arrays.asList(
                 VimNames.PROPERTY_NAME
         ));
 
@@ -299,6 +316,7 @@ public class EnumerationClient extends BaseHelper {
         filterSpec.getPropSet().add(dsSpec);
         filterSpec.getPropSet().add(netSpec);
         filterSpec.getPropSet().add(pgSpec);
+        filterSpec.getPropSet().add(dvsSpec);
         return filterSpec;
     }
 

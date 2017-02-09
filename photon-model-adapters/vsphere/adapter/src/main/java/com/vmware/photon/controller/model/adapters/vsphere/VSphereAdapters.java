@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
 import com.vmware.photon.controller.model.adapters.vsphere.stats.VSphereAdapterStatsService;
 import com.vmware.xenon.common.ServiceHost;
@@ -30,7 +31,8 @@ public class VSphereAdapters {
             VSphereAdapterStatsService.SELF_LINK,
             OvfImporterService.SELF_LINK,
             DatacenterEnumeratorService.SELF_LINK,
-            VSphereEndpointAdapterService.SELF_LINK
+            VSphereEndpointAdapterService.SELF_LINK,
+            DvsNetworkService.SELF_LINK,
     };
 
     public static void startServices(ServiceHost host) throws Throwable {
@@ -42,5 +44,6 @@ public class VSphereAdapters {
         host.startService(new OvfImporterService());
         host.startService(new DatacenterEnumeratorService());
         host.startService(new VSphereEndpointAdapterService());
+        host.startService(new DvsNetworkService());
     }
 }

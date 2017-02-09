@@ -270,6 +270,7 @@ public final class VimUtils {
 
         return VimNames.TYPE_NETWORK.equals(obj.getType()) ||
                 VimNames.TYPE_OPAQUE_NETWORK.equals(obj.getType()) ||
+                VimNames.TYPE_DVS.equals(obj.getType()) ||
                 VimNames.TYPE_PORTGROUP.equals(obj.getType());
     }
 

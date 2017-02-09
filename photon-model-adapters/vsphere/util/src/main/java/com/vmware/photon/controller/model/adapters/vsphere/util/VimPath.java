@@ -1710,4 +1710,154 @@ public class VimPath {
     /** PropertyType: <code>string</code> */
     public static final String opaque_net_summary_opaqueNetworkType = "summary.opaqueNetworkType";
 
+    /** PropertyType: <code>DVPortgroupConfigInfo</code> */
+    public static final String pg_config = "config";
+
+    /** PropertyType: <code>ArrayOfDistributedVirtualSwitchKeyedOpaqueBlob</code> */
+    public static final String pg_config_vendorSpecificConfig = "config.vendorSpecificConfig";
+
+    /** PropertyType: <code>string</code> */
+    public static final String pg_config_configVersion = "config.configVersion";
+
+    /** PropertyType: <code>string</code> */
+    public static final String pg_config_description = "config.description";
+
+    /** PropertyType: <code>DVPortSetting</code> */
+    public static final String pg_config_defaultPortConfig = "config.defaultPortConfig";
+
+    /** PropertyType: <code>DVSVendorSpecificConfig</code> */
+    public static final String pg_config_defaultPortConfig_vendorSpecificConfig = "config.defaultPortConfig.vendorSpecificConfig";
+
+    /** PropertyType: <code>ArrayOfDistributedVirtualSwitchKeyedOpaqueBlob</code> */
+    public static final String pg_config_defaultPortConfig_vendorSpecificConfig_keyValue = "config.defaultPortConfig.vendorSpecificConfig.keyValue";
+
+    /** PropertyType: <code>BoolPolicy</code> */
+    public static final String pg_config_defaultPortConfig_blocked = "config.defaultPortConfig.blocked";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_defaultPortConfig_blocked_value = "config.defaultPortConfig.blocked.value";
+
+    /** PropertyType: <code>StringPolicy</code> */
+    public static final String pg_config_defaultPortConfig_networkResourcePoolKey = "config.defaultPortConfig.networkResourcePoolKey";
+
+    /** PropertyType: <code>string</code> */
+    public static final String pg_config_defaultPortConfig_networkResourcePoolKey_value = "config.defaultPortConfig.networkResourcePoolKey.value";
+
+    /** PropertyType: <code>DvsFilterPolicy</code> */
+    public static final String pg_config_defaultPortConfig_filterPolicy = "config.defaultPortConfig.filterPolicy";
+
+    /** PropertyType: <code>ArrayOfDvsFilterConfig</code> */
+    public static final String pg_config_defaultPortConfig_filterPolicy_filterConfig = "config.defaultPortConfig.filterPolicy.filterConfig";
+
+    /** PropertyType: <code>BoolPolicy</code> */
+    public static final String pg_config_defaultPortConfig_vmDirectPathGen2Allowed = "config.defaultPortConfig.vmDirectPathGen2Allowed";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_defaultPortConfig_vmDirectPathGen2Allowed_value = "config.defaultPortConfig.vmDirectPathGen2Allowed.value";
+
+    /** PropertyType: <code>DVSTrafficShapingPolicy</code> */
+    public static final String pg_config_defaultPortConfig_inShapingPolicy = "config.defaultPortConfig.inShapingPolicy";
+
+    /** PropertyType: <code>LongPolicy</code> */
+    public static final String pg_config_defaultPortConfig_inShapingPolicy_averageBandwidth = "config.defaultPortConfig.inShapingPolicy.averageBandwidth";
+
+    /** PropertyType: <code>long</code> */
+    public static final String pg_config_defaultPortConfig_inShapingPolicy_averageBandwidth_value = "config.defaultPortConfig.inShapingPolicy.averageBandwidth.value";
+
+    /** PropertyType: <code>LongPolicy</code> */
+    public static final String pg_config_defaultPortConfig_inShapingPolicy_burstSize = "config.defaultPortConfig.inShapingPolicy.burstSize";
+
+    /** PropertyType: <code>long</code> */
+    public static final String pg_config_defaultPortConfig_inShapingPolicy_burstSize_value = "config.defaultPortConfig.inShapingPolicy.burstSize.value";
+
+    /** PropertyType: <code>LongPolicy</code> */
+    public static final String pg_config_defaultPortConfig_inShapingPolicy_peakBandwidth = "config.defaultPortConfig.inShapingPolicy.peakBandwidth";
+
+    /** PropertyType: <code>long</code> */
+    public static final String pg_config_defaultPortConfig_inShapingPolicy_peakBandwidth_value = "config.defaultPortConfig.inShapingPolicy.peakBandwidth.value";
+
+    /** PropertyType: <code>BoolPolicy</code> */
+    public static final String pg_config_defaultPortConfig_inShapingPolicy_enabled = "config.defaultPortConfig.inShapingPolicy.enabled";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_defaultPortConfig_inShapingPolicy_enabled_value = "config.defaultPortConfig.inShapingPolicy.enabled.value";
+
+    /** PropertyType: <code>DVSTrafficShapingPolicy</code> */
+    public static final String pg_config_defaultPortConfig_outShapingPolicy = "config.defaultPortConfig.outShapingPolicy";
+
+    /** PropertyType: <code>LongPolicy</code> */
+    public static final String pg_config_defaultPortConfig_outShapingPolicy_averageBandwidth = "config.defaultPortConfig.outShapingPolicy.averageBandwidth";
+
+    /** PropertyType: <code>long</code> */
+    public static final String pg_config_defaultPortConfig_outShapingPolicy_averageBandwidth_value = "config.defaultPortConfig.outShapingPolicy.averageBandwidth.value";
+
+    /** PropertyType: <code>LongPolicy</code> */
+    public static final String pg_config_defaultPortConfig_outShapingPolicy_burstSize = "config.defaultPortConfig.outShapingPolicy.burstSize";
+
+    /** PropertyType: <code>long</code> */
+    public static final String pg_config_defaultPortConfig_outShapingPolicy_burstSize_value = "config.defaultPortConfig.outShapingPolicy.burstSize.value";
+
+    /** PropertyType: <code>LongPolicy</code> */
+    public static final String pg_config_defaultPortConfig_outShapingPolicy_peakBandwidth = "config.defaultPortConfig.outShapingPolicy.peakBandwidth";
+
+    /** PropertyType: <code>long</code> */
+    public static final String pg_config_defaultPortConfig_outShapingPolicy_peakBandwidth_value = "config.defaultPortConfig.outShapingPolicy.peakBandwidth.value";
+
+    /** PropertyType: <code>BoolPolicy</code> */
+    public static final String pg_config_defaultPortConfig_outShapingPolicy_enabled = "config.defaultPortConfig.outShapingPolicy.enabled";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_defaultPortConfig_outShapingPolicy_enabled_value = "config.defaultPortConfig.outShapingPolicy.enabled.value";
+
+    /** PropertyType: <code>string</code> */
+    public static final String pg_config_type = "config.type";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_autoExpand = "config.autoExpand";
+
+    /** PropertyType: <code>ManagedObjectReference</code> */
+    public static final String pg_config_distributedVirtualSwitch = "config.distributedVirtualSwitch";
+
+    /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
+    public static final String pg_config_scope = "config.scope";
+
+    /** PropertyType: <code>string</code> */
+    public static final String pg_config_name = "config.name";
+
+    /** PropertyType: <code>int</code> */
+    public static final String pg_config_numPorts = "config.numPorts";
+
+    /** PropertyType: <code>string</code> */
+    public static final String pg_config_key = "config.key";
+
+    /** PropertyType: <code>string</code> */
+    public static final String pg_config_portNameFormat = "config.portNameFormat";
+
+    /** PropertyType: <code>string</code> */
+    public static final String pg_config_vmVnicNetworkResourcePoolKey = "config.vmVnicNetworkResourcePoolKey";
+
+    /** PropertyType: <code>DVPortgroupPolicy</code> */
+    public static final String pg_config_policy = "config.policy";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_policy_portConfigResetAtDisconnect = "config.policy.portConfigResetAtDisconnect";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_policy_blockOverrideAllowed = "config.policy.blockOverrideAllowed";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_policy_livePortMovingAllowed = "config.policy.livePortMovingAllowed";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_policy_networkResourcePoolOverrideAllowed = "config.policy.networkResourcePoolOverrideAllowed";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_policy_vendorConfigOverrideAllowed = "config.policy.vendorConfigOverrideAllowed";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_policy_shapingOverrideAllowed = "config.policy.shapingOverrideAllowed";
+
+    /** PropertyType: <code>boolean</code> */
+    public static final String pg_config_policy_trafficFilterOverrideAllowed = "config.policy.trafficFilterOverrideAllowed";
+
 }

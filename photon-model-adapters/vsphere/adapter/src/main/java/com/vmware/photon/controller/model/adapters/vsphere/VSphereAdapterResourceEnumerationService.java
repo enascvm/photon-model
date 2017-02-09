@@ -43,6 +43,7 @@ import org.codehaus.jackson.node.ObjectNode;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.tagging.TagCache;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
@@ -643,13 +644,21 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.subnetCIDR = FAKE_SUBNET_CIDR;
         state.regionId = parent.description.regionId;
         state.resourcePoolLink = request.resourcePoolLink;
-        state.instanceAdapterReference = parent.description.instanceAdapterReference;
+        state.adapterManagementReference =  request.adapterManagementReference;
         state.authCredentialsLink = parent.description.authCredentialsLink;
-        state.adapterManagementReference = request.adapterManagementReference;
+
+        URI ref = parent.description.instanceAdapterReference;
+        state.instanceAdapterReference = UriUtils.buildUri(
+                ref.getHost(), ref.getPort(), VSphereUriPaths.DVS_NETWORK_SERVICE, null);
+
         CustomProperties custProp = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
+
+        if (net.getParentSwitch() != null) {
+            custProp.put(DvsProperties.PARENT_DVS_MOREF, net.getParentSwitch());
+        }
 
         if (net.getSummary() instanceof OpaqueNetworkSummary) {
             OpaqueNetworkSummary ons = (OpaqueNetworkSummary) net.getSummary();

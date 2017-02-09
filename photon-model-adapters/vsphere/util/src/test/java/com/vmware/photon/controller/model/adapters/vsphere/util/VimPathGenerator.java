@@ -128,6 +128,8 @@ public final class VimPathGenerator {
         this.roots.put("ds:summary", "DatastoreSummary");
         this.roots.put("net:summary", "NetworkSummary");
         this.roots.put("opaque_net:summary", "OpaqueNetworkSummary");
+
+        this.roots.put("pg:config", "DVPortgroupConfigInfo");
     }
 
     private static class FieldType {
