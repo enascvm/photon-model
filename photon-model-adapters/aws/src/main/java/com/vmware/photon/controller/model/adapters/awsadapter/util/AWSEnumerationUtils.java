@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
+import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.WINDOWS_PLATFORM;
@@ -164,7 +165,7 @@ public class AWSEnumerationUtils {
      */
     public static ComputeState mapInstanceToComputeState(Instance instance,
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
-            String endpointLink,  String computeDescriptionLink,
+            String endpointLink,  String computeDescriptionLink, String regionId,
             List<String> tenantLinks) {
         ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
@@ -184,7 +185,7 @@ public class AWSEnumerationUtils {
         computeState.address = instance.getPublicIpAddress();
         computeState.powerState = AWSUtils.mapToPowerState(instance.getState());
         computeState.customProperties = new HashMap<String, String>();
-
+        computeState.customProperties.put(REGION_ID, regionId);
         computeState.customProperties.put(CUSTOM_OS_TYPE,
                 getNormalizedOSType(instance));
 

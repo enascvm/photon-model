@@ -105,6 +105,7 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -310,7 +311,7 @@ public class TestAWSSetupUtils {
      * Create a compute host description for an AWS instance
      */
     public static ComputeService.ComputeState createAWSComputeHost(VerificationHost host,
-            String resourcePoolLink,
+            String resourcePoolLink, String zoneId, String regionId,
             String accessKey, String secretKey, boolean isAwsClientMock,
             String awsMockEndpointReference, Set<String> tagLinks)
             throws Throwable {
@@ -341,7 +342,7 @@ public class TestAWSSetupUtils {
                 AWSUriPaths.AWS_STATS_ADAPTER);
 
         awshostDescription.zoneId = zoneId;
-        awshostDescription.regionId = zoneId;
+        awshostDescription.regionId = regionId;
         awshostDescription.authCredentialsLink = authLink;
         TestUtils.doPost(host, awshostDescription,
                 ComputeDescriptionService.ComputeDescription.class,
@@ -391,10 +392,11 @@ public class TestAWSSetupUtils {
      */
     public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
             String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
+            String zoneId, String regionId,
             Set<String> tagLinks, AwsNicSpecs nicSpec)
             throws Throwable {
         return createAWSVMResource(host, parentLink, resourcePoolLink, clazz,
-                instanceType_t2_micro,
+                instanceType_t2_micro, zoneId, regionId,
                 tagLinks, nicSpec);
     }
 
@@ -403,7 +405,7 @@ public class TestAWSSetupUtils {
      */
     public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
             String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
-            String vmName,
+            String vmName, String zoneId, String regionId,
             Set<String> tagLinks,
             AwsNicSpecs nicSpecs)
             throws Throwable {
@@ -437,7 +439,7 @@ public class TestAWSSetupUtils {
 
         // set zone to east
         awsVMDesc.zoneId = zoneId;
-        awsVMDesc.regionId = zoneId;
+        awsVMDesc.regionId = regionId;
 
         awsVMDesc.authCredentialsLink = authCredentialsLink;
 
@@ -515,7 +517,6 @@ public class TestAWSSetupUtils {
         NetworkState networkState;
         {
             networkState = new NetworkState();
-
             networkState.id = nicSpecs.network.id;
             networkState.name = nicSpecs.network.name;
             networkState.subnetCIDR = nicSpecs.network.cidr;
@@ -525,7 +526,6 @@ public class TestAWSSetupUtils {
             networkState.regionId = zoneId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
                     AWSUriPaths.AWS_NETWORK_ADAPTER);
-
             networkState = TestUtils.doPost(host, networkState,
                     NetworkState.class,
                     UriUtils.buildUri(host, NetworkService.FACTORY_LINK));

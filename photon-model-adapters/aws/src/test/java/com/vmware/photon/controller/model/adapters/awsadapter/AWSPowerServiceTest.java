@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNotNull;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -122,7 +123,8 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         assertNotNull("Power addpter must be configured", cd.powerAdapterReference);
 
         ComputeState cs = TestAWSSetupUtils.createAWSVMResource(this.host, endpoint.computeLink,
-                endpoint.resourcePoolLink, getClass(), "trainingVM", null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                endpoint.resourcePoolLink, getClass(),
+                "trainingVM",zoneId, zoneId, null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         this.computesToRemove.add(cs.documentSelfLink);
         assertEquals(PowerState.UNKNOWN, cs.powerState);

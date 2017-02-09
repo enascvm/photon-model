@@ -30,6 +30,7 @@ import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.handlers.AsyncHandler;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
@@ -45,6 +46,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
@@ -90,6 +92,9 @@ public class AWSEndpointAdapterService extends StatelessService {
 
         return (credentials, callback) -> {
             String regionId = body.endpointProperties.get(REGION_KEY);
+            if (regionId == null) {
+                regionId = Regions.DEFAULT_REGION.getName();
+            }
             AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(credentials, regionId,
                     this.clientManager.getExecutor(getHost()));
 
@@ -130,7 +135,7 @@ public class AWSEndpointAdapterService extends StatelessService {
 
     private BiConsumer<ComputeDescription, Retriever> computeDesc() {
         return (cd, r) -> {
-            cd.regionId = r.getRequired(REGION_KEY);
+            cd.regionId = r.get(REGION_KEY).orElse(null);
             cd.zoneId = r.get(ZONE_KEY).orElse(null);
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
             List<String> children = new ArrayList<>();
@@ -159,7 +164,7 @@ public class AWSEndpointAdapterService extends StatelessService {
     private BiConsumer<ComputeState, Retriever> compute() {
         return (c, r) -> {
             StringBuffer b = new StringBuffer("https://ec2.");
-            b.append(r.getRequired(REGION_KEY));
+            b.append(r.get(REGION_KEY).orElse(""));
             b.append(".amazonaws.com");
 
             c.type = ComputeType.VM_HOST;

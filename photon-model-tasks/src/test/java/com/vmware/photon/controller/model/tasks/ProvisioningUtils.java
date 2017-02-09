@@ -27,6 +27,7 @@ import java.util.logging.Level;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
@@ -35,6 +36,7 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskService.TaskServiceState;
 
 /**
@@ -124,8 +126,6 @@ public class ProvisioningUtils {
 
     public static ServiceDocumentQueryResult queryComputeInstancesByType(VerificationHost host,
             long desiredCount, String type, boolean exactCountFlag) throws Throwable {
-        ServiceDocumentQueryResult res;
-
         QueryTask.Query kindClause = new QueryTask.Query().setTermPropertyName(
                 ServiceDocument.FIELD_NAME_KIND).setTermMatchValue(
                 Utils.buildKind(ComputeState.class));
@@ -139,22 +139,29 @@ public class ProvisioningUtils {
         querySpec.query.addBooleanClause(kindClause);
         querySpec.query.addBooleanClause(typeClause);
 
-        res  = host.createAndWaitSimpleDirectQuery(querySpec, desiredCount, desiredCount);
-
-        if (exactCountFlag) {
-            if (res.documentCount == desiredCount) {
-                return res;
+        QueryTask[] tasks = new QueryTask[1];
+        host.waitFor("", () -> {
+            QueryTask task = QueryTask.create(querySpec).setDirect(true);
+            host.createQueryTaskService(UriUtils.buildUri(host, ServiceUriPaths.CORE_QUERY_TASKS),
+                    task, false, true, task, null);
+            if (exactCountFlag) {
+                if (task.results.documentLinks.size() == desiredCount) {
+                    tasks[0] = task;
+                    return true;
+                }
+            } else {
+                if (task.results.documentLinks.size() >= desiredCount) {
+                    tasks[0] = task;
+                    return true;
+                }
             }
-        } else {
-            if (res.documentCount >= desiredCount) {
-                host.log(Level.INFO, "Documents count for %s compute states is %s, expected at "
-                                + "least %s", type, res.documentCount, desiredCount);
-                return res;
-            }
-        }
+            host.log("Expected %d, got %d, Query task: %s", desiredCount,
+                    task.results.documentLinks.size(), task);
+            return false;
+        });
 
-        throw new TimeoutException("Desired number of availability zones not found. Expected "
-                + desiredCount + ", found " + res.documents.size());
+        QueryTask resultTask = tasks[0];
+        return resultTask.results;
     }
 
     /**

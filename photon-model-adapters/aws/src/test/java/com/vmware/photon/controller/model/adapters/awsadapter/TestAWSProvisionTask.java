@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getCompute;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.util.ArrayList;
@@ -160,14 +161,14 @@ public class TestAWSProvisionTask {
 
         // create a compute host for the AWS EC2 VM
         ComputeService.ComputeState outComputeHost = createAWSComputeHost(this.host,
-                outPool.documentSelfLink, this.accessKey, this.secretKey,
+                outPool.documentSelfLink, zoneId, zoneId, this.accessKey, this.secretKey,
                 this.isAwsClientMock, this.awsMockEndpointReference, null);
 
         // create a AWS VM compute resoruce
 
         this.vmState = createAWSVMResource(this.host, outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(),
-                this.currentTestName.getMethodName() + "_vm1",
+                this.currentTestName.getMethodName() + "_vm1", zoneId, zoneId,
                 null /* tagLinks */, TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         // kick off a provision task to do the actual VM creation
@@ -269,6 +270,7 @@ public class TestAWSProvisionTask {
                 outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(),
                 this.currentTestName.getMethodName() + "_vm2",
+                zoneId, zoneId,
                 tagLinks, TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);

@@ -347,7 +347,8 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
         this.outPool = createAWSResourcePool(this.host);
 
         // create a compute host for the AWS EC2 VM
-        this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink, this.accessKey,
+        this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
+                zoneId, zoneId, this.accessKey,
                 this.secretKey, this.isAwsClientMock, this.awsMockEndpointReference, null);
     }
 }

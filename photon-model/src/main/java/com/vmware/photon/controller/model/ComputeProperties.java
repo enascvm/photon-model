@@ -69,6 +69,8 @@ public class ComputeProperties {
 
     public static final String FIELD_VIRTUAL_GATEWAY = "__virtualGateway";
 
+    public static final String REGION_ID = "__regionId";
+
     public enum OSType {
         WINDOWS, LINUX;
     }

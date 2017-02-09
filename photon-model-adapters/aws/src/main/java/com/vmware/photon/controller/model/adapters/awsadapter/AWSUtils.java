@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_SHUTTING_DOWN;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_STOPPED;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_STOPPING;
+import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,12 +32,14 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
@@ -46,6 +49,8 @@ import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
+import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
+import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.DescribeTagsRequest;
@@ -67,9 +72,14 @@ import com.amazonaws.services.s3.transfer.TransferManager;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -134,11 +144,37 @@ public class AWSUtils {
             ec2AsyncClient.setEndpoint(getAWSMockHost() + AWS_EC2_ENDPOINT);
             return ec2AsyncClient;
         }
-
         ec2AsyncClient.setRegion(Region.getRegion(Regions.fromName(region)));
-
         return ec2AsyncClient;
 
+    }
+
+    public static void validateCredentials(AmazonEC2AsyncClient ec2Client,
+            ComputeEnumerateAdapterRequest context,
+            Operation op, StatelessService service,
+            Consumer<DescribeAvailabilityZonesResult> onSuccess) {
+        ec2Client.describeAvailabilityZonesAsync(new DescribeAvailabilityZonesRequest(),
+                new AsyncHandler<DescribeAvailabilityZonesRequest,
+                        DescribeAvailabilityZonesResult>() {
+                    @Override
+                    public void onError(Exception e) {
+                        if (e instanceof AmazonServiceException) {
+                            AmazonServiceException ase = (AmazonServiceException) e;
+                            if (ase.getStatusCode() == STATUS_CODE_UNAUTHORIZED) {
+                                op.complete();
+                                return;
+                            }
+                            AdapterUtils.sendFailurePatchToEnumerationTask(service,
+                                    context.original.taskReference, e);
+                        }
+                    }
+
+                    @Override
+                    public void onSuccess(DescribeAvailabilityZonesRequest request,
+                            DescribeAvailabilityZonesResult describeAvailabilityZonesResult) {
+                        onSuccess.accept(describeAvailabilityZonesResult);
+                    }
+                });
     }
 
     public static AmazonCloudWatchAsyncClient getStatsAsyncClient(

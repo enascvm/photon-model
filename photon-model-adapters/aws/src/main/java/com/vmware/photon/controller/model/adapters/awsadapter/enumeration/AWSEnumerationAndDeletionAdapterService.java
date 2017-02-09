@@ -32,10 +32,11 @@ import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Reservation;
 
-import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
+import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -69,6 +70,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     private AWSClientManager clientManager;
 
     public static enum AWSEnumerationDeletionStages {
+        CLIENT,
         ENUMERATE,
         ERROR
     }
@@ -95,7 +97,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
      */
     public static class EnumerationDeletionContext {
         public AmazonEC2AsyncClient amazonEC2Client;
-        public ComputeEnumerateResourceRequest request;
+        public ComputeEnumerateAdapterRequest request;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public ComputeStateWithDescription parentCompute;
         public AWSEnumerationDeletionStages stage;
@@ -114,14 +116,14 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
 
         public EnumerationDeletionContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
-            this.request = request.original;
+            this.request = request;
             this.operation = op;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
             this.localInstanceIds = new ConcurrentSkipListMap<>();
             this.remoteInstanceIds = new HashSet<>();
             this.instancesToBeDeleted = new ArrayList<>();
-            this.stage = AWSEnumerationDeletionStages.ENUMERATE;
+            this.stage = AWSEnumerationDeletionStages.CLIENT;
             this.subStage = AWSEnumerationDeletionSubStage.GET_LOCAL_RESOURCES;
         }
     }
@@ -142,10 +144,10 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         }
         EnumerationDeletionContext awsEnumerationContext = new EnumerationDeletionContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
-        if (awsEnumerationContext.request.isMockRequest) {
+        if (awsEnumerationContext.request.original.isMockRequest) {
             // patch status to parent task
             AdapterUtils.sendPatchToEnumerationTask(this,
-                    awsEnumerationContext.request.taskReference);
+                    awsEnumerationContext.request.original.taskReference);
             return;
         }
         handleEnumerationRequestForDeletion(awsEnumerationContext);
@@ -158,12 +160,15 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
      */
     private void handleEnumerationRequestForDeletion(EnumerationDeletionContext aws) {
         switch (aws.stage) {
+        case CLIENT:
+            getAWSAsyncClient(aws, AWSEnumerationDeletionStages.ENUMERATE);
+            break;
         case ENUMERATE:
-            switch (aws.request.enumerationAction) {
+            switch (aws.request.original.enumerationAction) {
             case START:
                 logInfo(() -> String.format("Started deletion enumeration for %s",
-                        aws.request.resourceReference));
-                aws.request.enumerationAction = EnumerationAction.REFRESH;
+                        aws.request.original.resourceReference));
+                aws.request.original.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequestForDeletion(aws);
                 break;
             case REFRESH:
@@ -173,13 +178,13 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 break;
             case STOP:
                 logInfo(() -> String.format("Stopping deletion enumeration for %s",
-                        aws.request.resourceReference));
+                        aws.request.original.resourceReference));
                 setOperationDurationStat(aws.operation);
                 aws.operation.complete();
                 break;
             default:
                 logSevere(() -> String.format("Unknown AWS enumeration action %s",
-                        aws.request.enumerationAction.toString()));
+                        aws.request.original.enumerationAction.toString()));
                 Throwable t = new Exception("Unknown AWS enumeration action");
                 signalErrorToEnumerationAdapter(aws, t);
                 break;
@@ -187,7 +192,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             break;
         case ERROR:
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.taskReference, aws.error);
+                    aws.request.original.taskReference, aws.error);
             break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s", aws.stage.toString()));
@@ -195,6 +200,23 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             signalErrorToEnumerationAdapter(aws, t);
             break;
         }
+    }
+
+    /**
+     * Method to instantiate the AWS Async client for future use
+     */
+    private void getAWSAsyncClient(EnumerationDeletionContext aws,
+            AWSEnumerationDeletionStages next) {
+        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
+                aws.request.regionId, this,
+                aws.request.original.taskReference, true);
+        OperationContext opContext = OperationContext.getOperationContext();
+        AWSUtils.validateCredentials(aws.amazonEC2Client, aws.request, aws.operation, this,
+                (describeAvailabilityZonesResult) -> {
+                    aws.stage = next;
+                    OperationContext.restoreOperationContext(opContext);
+                    handleEnumerationRequestForDeletion(aws);
+                });
     }
 
     /**
@@ -232,7 +254,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 deleteResourcesInLocalSystem(aws);
                 return;
             } else {
-                if (aws.request.preserveMissing) {
+                if (aws.request.original.preserveMissing) {
                     retireComputeStates(aws);
                 } else {
                     deleteComputeStates(aws);
@@ -263,12 +285,15 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
-                        context.request.resourceLink())
+                        context.request.original.resourceLink())
                 .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
-                        context.request.resourcePoolLink);
+                        context.request.original.resourcePoolLink);
 
         addScopeCriteria(qBuilder, ComputeState.class, context);
 
+        qBuilder.addCompositeFieldClause(
+                ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                ComputeProperties.REGION_ID, context.request.regionId);
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(qBuilder.build())
                 .addOption(QueryOption.EXPAND_CONTENT)
@@ -334,9 +359,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         request.getInstanceIds().addAll(new ArrayList<String>(aws.localInstanceIds.keySet()));
         AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> resultHandler =
                 new AWSEnumerationAsyncHandler(this, aws, next);
-        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
-                aws.parentCompute.description.regionId, this,
-                aws.request.taskReference, true);
         aws.amazonEC2Client.describeInstancesAsync(request,
                 resultHandler);
     }
@@ -366,7 +388,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             OperationContext.restoreOperationContext(this.opContext);
             this.service.logSevere(exception);
             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.aws.request.taskReference,
+                    this.aws.request.original.taskReference,
                     exception);
 
         }
@@ -539,7 +561,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
      * turn patch the parent task to indicate completion.
      */
     public void stopEnumeration(EnumerationDeletionContext aws) {
-        aws.request.enumerationAction = EnumerationAction.STOP;
+        aws.request.original.enumerationAction = EnumerationAction.STOP;
         handleEnumerationRequestForDeletion(aws);
     }
 
@@ -589,7 +611,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
 }

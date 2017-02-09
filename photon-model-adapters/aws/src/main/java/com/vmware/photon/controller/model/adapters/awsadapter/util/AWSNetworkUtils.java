@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
+import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,6 +34,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
@@ -71,7 +74,7 @@ public class AWSNetworkUtils {
         networkState.tenantLinks = tenantLinks;
         networkState.customProperties = new HashMap<>();
         networkState.customProperties.put("defaultInstance", String.valueOf(vpc.isDefault()));
-
+        networkState.customProperties.put(REGION_ID, regionId);
         return networkState;
     }
 
@@ -80,7 +83,7 @@ public class AWSNetworkUtils {
      * valid NetworkState.documentSelfLink is available.
      */
     public static SubnetState mapSubnetToSubnetState(Subnet subnet, List<String> tenantLinks,
-            String endpointLink) {
+            String regionId, String endpointLink) {
         if (subnet == null) {
             throw new IllegalArgumentException(
                     "Cannot map Subnet to subnet state for null instance");
@@ -93,7 +96,8 @@ public class AWSNetworkUtils {
         subnetState.defaultForZone = subnet.isDefaultForAz();
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
-
+        subnetState.customProperties = new HashMap<>();
+        subnetState.customProperties.put(REGION_ID, regionId);
         return subnetState;
     }
 
@@ -101,26 +105,27 @@ public class AWSNetworkUtils {
      * Creates the query to retrieve existing network states filtered by the discovered VPCs.
      */
     public static QueryTask createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
-            Set<String> vpcIds, String endpointLink, List<String> tenantLinks) {
+            Set<String> vpcIds, String endpointLink, String regionId, List<String> tenantLinks) {
 
         return createQueryToGetExistingStatesFilteredByDiscoveredIds(
-                NetworkService.NetworkState.class, vpcIds, endpointLink, tenantLinks);
+                NetworkService.NetworkState.class, vpcIds, endpointLink, regionId, tenantLinks);
     }
 
     /**
      * Creates the query to retrieve existing subnet states filtered by the discovered Subnets.
      */
     public static QueryTask createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
-            Set<String> subnetIds, String endpointLink, List<String> tenantLinks) {
+            Set<String> subnetIds, String endpointLink, String regionId, List<String> tenantLinks) {
 
         return createQueryToGetExistingStatesFilteredByDiscoveredIds(
-                SubnetService.SubnetState.class, subnetIds, endpointLink, tenantLinks);
+                SubnetService.SubnetState.class, subnetIds, endpointLink, regionId, tenantLinks);
     }
 
     private static QueryTask createQueryToGetExistingStatesFilteredByDiscoveredIds(
             Class<? extends ResourceState> stateClass,
             Set<String> stateIds,
             String endpointLink,
+            String regionId,
             List<String> tenantLinks) {
         Query query = Query.Builder.create()
                 .addKindFieldClause(stateClass)
@@ -131,6 +136,13 @@ public class AWSNetworkUtils {
             query.addBooleanClause(Query.Builder.create()
                     .addFieldClause(NetworkState.FIELD_NAME_ENDPOINT_LINK, endpointLink)
                     .build());
+        }
+
+        if (regionId != null) {
+            query.addBooleanClause(Query.Builder.create()
+                    .addCompositeFieldClause(
+                            ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                            REGION_ID, regionId).build());
         }
 
         if (tenantLinks != null && !tenantLinks.isEmpty()) {

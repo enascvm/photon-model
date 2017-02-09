@@ -2,6 +2,10 @@
 
 ## 0.6.3-SNAPSHOT
 
+* Make regionId an optional parameter when defining an endpoint
+for AWS. If not specified the enumeration operation will go
+across all regions
+
 ## 0.6.2
 
 * [AWS] Add, remove or update NetworkInterfaceState when updating ComputeState.

@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.util;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -35,6 +36,10 @@ public class ComputeEnumerateAdapterRequest {
 
     public AuthCredentialsServiceState parentAuth;
     public ComputeStateWithDescription parentCompute;
+    /**
+     * Optional region to run the enumeration operation on
+     */
+    public String regionId;
 
     public ComputeEnumerateAdapterRequest(ComputeEnumerateResourceRequest request,
             AuthCredentialsService.AuthCredentialsServiceState parentAuth,
@@ -42,5 +47,14 @@ public class ComputeEnumerateAdapterRequest {
         this.original = request;
         this.parentAuth = parentAuth;
         this.parentCompute = parentCompute;
+    }
+
+    public ComputeEnumerateAdapterRequest(ComputeEnumerateResourceRequest request,
+            AuthCredentialsService.AuthCredentialsServiceState parentAuth,
+            ComputeStateWithDescription parentCompute, String regionId) {
+        this.original = request;
+        this.parentAuth = parentAuth;
+        this.parentCompute = parentCompute;
+        this.regionId = regionId;
     }
 }

@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
+import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_ENCRYPTED_FLAG;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.SNAPSHOT_ID;
@@ -41,10 +42,10 @@ import com.amazonaws.services.ec2.model.DescribeVolumesRequest;
 import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.Volume;
 
-import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -105,7 +106,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
      */
     public static class BlockStorageEnumerationContext {
         public AmazonEC2AsyncClient amazonEC2Client;
-        public ComputeEnumerateResourceRequest request;
+        public ComputeEnumerateAdapterRequest request;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public ComputeStateWithDescription parentCompute;
         public AWSStorageEnumerationStages stage;
@@ -140,7 +141,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         public BlockStorageEnumerationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
             this.operation = op;
-            this.request = request.original;
+            this.request = request;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
             this.localDiskStateMap = new ConcurrentSkipListMap<>();
@@ -177,10 +178,10 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         }
         BlockStorageEnumerationContext awsEnumerationContext = new BlockStorageEnumerationContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
-        if (awsEnumerationContext.request.isMockRequest) {
+        if (awsEnumerationContext.request.original.isMockRequest) {
             // patch status to parent task
             AdapterUtils.sendPatchToEnumerationTask(this,
-                    awsEnumerationContext.request.taskReference);
+                    awsEnumerationContext.request.original.taskReference);
             return;
         }
         handleEnumerationRequest(awsEnumerationContext);
@@ -196,12 +197,12 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             getAWSAsyncClient(aws, AWSStorageEnumerationStages.ENUMERATE);
             break;
         case ENUMERATE:
-            switch (aws.request.enumerationAction) {
+            switch (aws.request.original.enumerationAction) {
             case START:
                 logInfo(() -> String.format("Started storage enumeration for %s",
-                        aws.request.resourceReference));
+                        aws.request.original.resourceReference));
                 aws.enumerationStartTimeInMicros = Utils.getNowMicrosUtc();
-                aws.request.enumerationAction = EnumerationAction.REFRESH;
+                aws.request.original.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequest(aws);
                 break;
             case REFRESH:
@@ -209,7 +210,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 break;
             case STOP:
                 logInfo(() -> String.format("Stopping storage enumeration for %s",
-                        aws.request.resourceReference));
+                        aws.request.original.resourceReference));
                 setOperationDurationStat(aws.operation);
                 aws.operation.complete();
                 break;
@@ -219,7 +220,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             break;
         case ERROR:
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.taskReference, aws.error);
+                    aws.request.original.taskReference, aws.error);
             break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
@@ -239,7 +240,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         case EBS_VOLUMES:
             if (aws.pageNo == 1) {
                 logInfo(() -> String.format("Running creation enumeration in refresh mode for %s",
-                        aws.request.resourceReference));
+                        aws.request.original.resourceReference));
             }
             logFine(() -> String.format("Processing page %d ", aws.pageNo));
             aws.pageNo++;
@@ -257,7 +258,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     aws.refreshSubStage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.taskReference, aws.error);
+                    aws.request.original.taskReference, aws.error);
             break;
         }
     }
@@ -268,10 +269,15 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
     private void getAWSAsyncClient(BlockStorageEnumerationContext aws,
             AWSStorageEnumerationStages next) {
         aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
-                aws.parentCompute.description.regionId, this,
-                aws.request.taskReference, true);
-        aws.stage = next;
-        handleEnumerationRequest(aws);
+                aws.request.regionId, this,
+                aws.request.original.taskReference, true);
+        OperationContext opContext = OperationContext.getOperationContext();
+        AWSUtils.validateCredentials(aws.amazonEC2Client, aws.request, aws.operation, this,
+                (describeAvailabilityZonesResult) -> {
+                    aws.stage = next;
+                    OperationContext.restoreOperationContext(opContext);
+                    handleEnumerationRequest(aws);
+                });
     }
 
     /**
@@ -312,7 +318,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.context.request.taskReference,
+                    this.context.request.original.taskReference,
                     exception);
         }
 
@@ -398,7 +404,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
-                            this.context.request.resourcePoolLink)
+                            this.context.request.original.resourcePoolLink)
                     .addInCollectionItemClause(
                             ComputeState.FIELD_NAME_ID,
                             this.context.remoteAWSVolumes.keySet());
@@ -475,9 +481,10 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             List<DiskState> diskStatesToBeCreated = new ArrayList<>();
             this.context.volumesToBeCreated.forEach(volume -> {
                 diskStatesToBeCreated.add(mapVolumeToDiskState(volume,
-                        this.context.request.resourcePoolLink,
+                        this.context.request.original.resourcePoolLink,
                         this.context.parentAuth.documentSelfLink,
-                        this.context.request.endpointLink,
+                        this.context.request.original.endpointLink,
+                        this.context.request.regionId,
                         this.context.parentCompute.tenantLinks));
 
             });
@@ -494,9 +501,10 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             List<DiskState> diskStatesToBeUpdated = new ArrayList<>();
             this.context.disksToBeUpdated.forEach(volume -> {
                 diskStatesToBeUpdated.add(mapVolumeToDiskState(volume,
-                        this.context.request.resourcePoolLink,
+                        this.context.request.original.resourcePoolLink,
                         this.context.parentAuth.documentSelfLink,
-                        this.context.request.endpointLink,
+                        this.context.request.original.endpointLink,
+                        this.context.request.regionId,
                         this.context.parentCompute.tenantLinks));
 
             });
@@ -530,7 +538,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * Map an EBS volume to a photon-model disk state.
          */
         private DiskState mapVolumeToDiskState(Volume volume, String resourcePoolLink,
-                String authCredentialsLink, String endpointLink, List<String> tenantLinks) {
+                String authCredentialsLink, String endpointLink, String regionId, List<String> tenantLinks) {
             DiskState diskState = new DiskState();
             diskState.id = volume.getVolumeId();
             // TODO Get the disk name from the tag if present. Else default to the volumeID.
@@ -543,6 +551,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             diskState.resourcePoolLink = resourcePoolLink;
             diskState.endpointLink = endpointLink;
             diskState.tenantLinks = tenantLinks;
+            diskState.customProperties = new HashMap<>();
+            diskState.customProperties.put(REGION_ID, regionId);
             if (volume.getCreateTime() != null) {
                 diskState.creationTimeMicros = TimeUnit.MILLISECONDS
                         .toMicros(volume.getCreateTime().getTime());
@@ -623,7 +633,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             Query.Builder qBuilder = Builder.create()
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
-                            this.context.request.resourcePoolLink)
+                            this.context.request.original.resourcePoolLink)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
                     .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
@@ -636,6 +646,12 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
 
             addScopeCriteria(qBuilder, DiskState.class, this.context);
 
+            String regionId = this.context.request.regionId;
+            if (regionId != null) {
+                qBuilder.addCompositeFieldClause(
+                        ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        REGION_ID, regionId);
+            }
             QueryTask q = QueryTask.Builder.createDirectTask()
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .setQuery(qBuilder.build())
@@ -731,7 +747,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * in turn patch the parent task to indicate completion.
          */
         private void signalStopToEnumerationAdapter() {
-            this.context.request.enumerationAction = EnumerationAction.STOP;
+            this.context.request.original.enumerationAction = EnumerationAction.STOP;
             this.service.handleEnumerationRequest(this.context);
         }
 
@@ -772,7 +788,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
 }

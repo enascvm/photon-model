@@ -119,7 +119,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             super(service, request, op, SecurityGroupState.class,
                     SecurityGroupService.FACTORY_LINK);
 
-            this.regionId = request.parentCompute.description.regionId;
+            this.regionId = request.regionId;
         }
 
         @Override
@@ -163,6 +163,9 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                     this.request.parentCompute.documentSelfLink);
+            qBuilder.addCompositeFieldClause(
+                    ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                    ComputeProperties.REGION_ID, this.request.regionId);
         }
 
         @Override
@@ -179,6 +182,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 resultSecurityGroupState.instanceAdapterReference = AdapterUriUtil
                         .buildAdapterUri(this.service.getHost(),
                                 AWS_FIREWALL_ADAPTER);
+                resultSecurityGroupState.customProperties = new HashMap<>();
+                resultSecurityGroupState.customProperties.put(ComputeProperties.REGION_ID, this.regionId);
             }
             resultSecurityGroupState.id = remoteResource.getGroupId();
             resultSecurityGroupState.name = remoteResource.getGroupName();

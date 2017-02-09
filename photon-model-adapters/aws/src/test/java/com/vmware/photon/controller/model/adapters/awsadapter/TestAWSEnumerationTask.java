@@ -48,6 +48,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.stopVMsUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryComputeInstances;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
@@ -145,6 +146,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     public boolean isMock = true;
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
+    public boolean useAllRegions = false;
     public int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
 
     @Rule
@@ -196,8 +198,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName);
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
-                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null,
-                TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class,
+                zoneId, zoneId, null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
@@ -345,7 +347,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName);
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
-                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null,
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class, zoneId, zoneId, null,
                 TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         this.host.setTimeoutSeconds(this.timeoutSeconds);
@@ -406,8 +408,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName);
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
-                this.outPool.documentSelfLink, TestAWSSetupUtils.class, null,
-                TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                this.outPool.documentSelfLink, TestAWSSetupUtils.class, zoneId, zoneId,
+                null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
@@ -800,6 +802,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         // create a compute host for the AWS EC2 VM
         this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
+                null, this.useAllRegions ? null : zoneId,
                 this.accessKey, this.secretKey, this.isAwsClientMock,
                 this.awsMockEndpointReference, null);
 

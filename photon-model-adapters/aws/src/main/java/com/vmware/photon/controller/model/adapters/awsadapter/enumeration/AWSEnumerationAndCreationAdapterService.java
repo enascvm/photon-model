@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
+import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
@@ -39,10 +40,10 @@ import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Reservation;
 
-import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeDescriptionEnumerationAdapterService.AWSComputeDescriptionCreationState;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSComputeStateCreationAdapterService.AWSComputeStateCreationRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSNetworkStateEnumerationAdapterService.AWSNetworkEnumerationRequest;
@@ -65,6 +66,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -123,7 +125,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
      */
     public static class EnumerationCreationContext {
         public AmazonEC2AsyncClient amazonEC2Client;
-        public ComputeEnumerateResourceRequest request;
+        public ComputeEnumerateAdapterRequest request;
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public ComputeStateWithDescription parentCompute;
         public AWSEnumerationCreationStages stage;
@@ -160,7 +162,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         public EnumerationCreationContext(ComputeEnumerateAdapterRequest request,
                 Operation op) {
             this.operation = op;
-            this.request = request.original;
+            this.request = request;
             this.parentAuth = request.parentAuth;
             this.parentCompute = request.parentCompute;
             this.localAWSInstanceMap = new ConcurrentSkipListMap<>();
@@ -198,10 +200,10 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         }
         EnumerationCreationContext awsEnumerationContext = new EnumerationCreationContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
-        if (awsEnumerationContext.request.isMockRequest) {
+        if (awsEnumerationContext.request.original.isMockRequest) {
             // patch status to parent task
             AdapterUtils.sendPatchToEnumerationTask(this,
-                    awsEnumerationContext.request.taskReference);
+                    awsEnumerationContext.request.original.taskReference);
             return;
         }
         handleEnumerationRequest(awsEnumerationContext);
@@ -255,11 +257,11 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             getAWSAsyncClient(aws, AWSEnumerationCreationStages.ENUMERATE);
             break;
         case ENUMERATE:
-            switch (aws.request.enumerationAction) {
+            switch (aws.request.original.enumerationAction) {
             case START:
                 logInfo(() -> String.format("Started enumeration for creation for %s",
-                        aws.request.resourceReference));
-                aws.request.enumerationAction = EnumerationAction.REFRESH;
+                        aws.request.original.resourceReference));
+                aws.request.original.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumerationRequest(aws);
                 break;
             case REFRESH:
@@ -267,7 +269,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                 break;
             case STOP:
                 logInfo(() -> String.format("Stopping enumeration service for creation for %s",
-                        aws.request.resourceReference));
+                        aws.request.original.resourceReference));
                 setOperationDurationStat(aws.operation);
                 aws.operation.complete();
                 break;
@@ -277,14 +279,14 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             break;
         case ERROR:
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.taskReference, aws.error);
+                    aws.request.original.taskReference, aws.error);
             break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
                     aws.stage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.taskReference, aws.error);
+                    aws.request.original.taskReference, aws.error);
             break;
         }
     }
@@ -318,7 +320,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     aws.refreshSubStage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.taskReference, aws.error);
+                    aws.request.original.taskReference, aws.error);
             break;
         }
 
@@ -330,10 +332,15 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     private void getAWSAsyncClient(EnumerationCreationContext aws,
             AWSEnumerationCreationStages next) {
         aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
-                aws.parentCompute.description.regionId, this,
-                aws.request.taskReference, true);
-        aws.stage = next;
-        handleEnumerationRequest(aws);
+                aws.request.regionId, this,
+                aws.request.original.taskReference, true);
+        OperationContext opContext = OperationContext.getOperationContext();
+        AWSUtils.validateCredentials(aws.amazonEC2Client, aws.request, aws.operation, this,
+                (describeAvailabilityZonesResult) -> {
+                    aws.stage = next;
+                    OperationContext.restoreOperationContext(opContext);
+                    handleEnumerationRequest(aws);
+                });
     }
 
     /**
@@ -355,9 +362,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     private void refreshSecurityGroupInformation(EnumerationCreationContext aws,
             AWSEnumerationRefreshSubStage next) {
         ComputeEnumerateAdapterRequest sgEnumeration = new ComputeEnumerateAdapterRequest(
-                aws.request,
+                aws.request.original,
                 aws.parentAuth,
-                aws.parentCompute
+                aws.parentCompute, aws.request.regionId
         );
         Operation patchSGOperation = Operation
                 .createPatch(this, AWSSecurityGroupEnumerationAdapterService.SELF_LINK)
@@ -379,8 +386,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         AWSNetworkEnumerationRequest networkEnumeration = new AWSNetworkEnumerationRequest();
         networkEnumeration.tenantLinks = aws.parentCompute.tenantLinks;
         networkEnumeration.parentAuth = aws.parentAuth;
-        networkEnumeration.regionId = aws.parentCompute.description.regionId;
-        networkEnumeration.request = aws.request;
+        networkEnumeration.regionId = aws.request.regionId;
+        networkEnumeration.request = aws.request.original;
 
         Operation patchNetworkOperation = Operation
                 .createPatch(this, AWSNetworkStateEnumerationAdapterService.SELF_LINK)
@@ -463,7 +470,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     .forEach(z -> {
                         ComputeState c = cm.get(z.getZoneName());
                         this.context.zones.put(c.id,
-                                ZoneData.build(this.context.parentCompute.description.regionId,
+                                ZoneData.build(this.context.request.regionId,
                                         c.id, c.documentSelfLink));
                     });
             List<Operation> descOps = zones.stream()
@@ -490,7 +497,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                                             + "discovered AvailabilityZone: %s",
                                                     Utils.toString(exs)));
                                     AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                                            this.context.request.taskReference,
+                                            this.context.request.original.taskReference,
                                             exs.values().iterator().next());
                                     return;
                                 }
@@ -523,7 +530,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                             + " states for discovered AvailabilityZone: %s",
                                     Utils.toString(exs)));
                             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                                    this.context.request.taskReference,
+                                    this.context.request.original.taskReference,
                                     exs.values().iterator().next());
                             return;
                         }
@@ -531,7 +538,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                 .map(o -> o.getBody(ComputeState.class))
                                 .forEach(c -> this.context.zones.put(c.id,
                                         ZoneData.build(
-                                                this.context.parentCompute.description.regionId,
+                                                this.context.request.regionId,
                                                 c.id, c.documentSelfLink)));
                         proceedWithRefresh();
                     })
@@ -545,8 +552,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             computeState.adapterManagementReference =
                     this.context.parentCompute.adapterManagementReference;
             computeState.parentLink = this.context.parentCompute.documentSelfLink;
-            computeState.resourcePoolLink = this.context.request.resourcePoolLink;
-            computeState.endpointLink = this.context.request.endpointLink;
+            computeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
+            computeState.endpointLink = this.context.request.original.endpointLink;
             computeState.descriptionLink = cd.documentSelfLink;
             computeState.type = ComputeType.ZONE;
             computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
@@ -557,6 +564,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             if (computeState.customProperties == null) {
                 computeState.customProperties = new HashMap<>();
             }
+            computeState.customProperties.put(REGION_ID, this.context.request.regionId);
             computeState.customProperties.put(SOURCE_TASK_LINK,
                     ResourceEnumerationTaskService.FACTORY_LINK);
 
@@ -571,7 +579,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             cd.id = z.getZoneName();
             cd.zoneId = z.getZoneName();
             cd.name = z.getZoneName();
-            cd.endpointLink = this.context.request.endpointLink;
+            cd.endpointLink = this.context.request.original.endpointLink;
             // Book keeping information about the creation of the compute description in the system.
             if (cd.customProperties == null) {
                 cd.customProperties = new HashMap<>();
@@ -585,7 +593,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         @Override
         protected void handleError(Exception exception) {
             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.context.request.taskReference,
+                    this.context.request.original.taskReference,
                     exception);
         }
 
@@ -613,7 +621,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
             AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.context.request.taskReference,
+                    this.context.request.original.taskReference,
                     exception);
         }
 
@@ -828,12 +836,12 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             this.service.logFine(() -> "Creating compute descriptions for enumerated VMs");
             AWSComputeDescriptionCreationState cd = new AWSComputeDescriptionCreationState();
             cd.instancesToBeCreated = this.context.instancesToBeCreated;
-            cd.parentTaskLink = this.context.request.taskReference;
+            cd.parentTaskLink = this.context.request.original.taskReference;
             cd.authCredentiaslLink = this.context.parentAuth.documentSelfLink;
             cd.tenantLinks = this.context.parentCompute.tenantLinks;
             cd.parentDescription = this.context.parentCompute.description;
-            cd.endpointLink = this.context.request.endpointLink;
-            cd.regionId = this.context.parentCompute.description.regionId;
+            cd.endpointLink = this.context.request.original.endpointLink;
+            cd.regionId = this.context.request.regionId;
             cd.zones = this.context.zones;
 
             this.service.sendRequest(Operation
@@ -865,12 +873,12 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.nicStatesToBeUpdated = this.context.nicStatesToBeUpdated;
             awsComputeState.computeStatesToBeUpdated = this.context.computeStatesToBeUpdated;
             awsComputeState.parentComputeLink = this.context.parentCompute.documentSelfLink;
-            awsComputeState.resourcePoolLink = this.context.request.resourcePoolLink;
-            awsComputeState.endpointLink = this.context.request.endpointLink;
-            awsComputeState.parentTaskLink = this.context.request.taskReference;
+            awsComputeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
+            awsComputeState.endpointLink = this.context.request.original.endpointLink;
+            awsComputeState.parentTaskLink = this.context.request.original.taskReference;
             awsComputeState.tenantLinks = this.context.parentCompute.tenantLinks;
             awsComputeState.parentAuth = this.context.parentAuth;
-            awsComputeState.regionId = this.context.parentCompute.description.regionId;
+            awsComputeState.regionId = this.context.request.regionId;
             awsComputeState.enumeratedNetworks = this.context.enumeratedNetworks;
             awsComputeState.enumeratedSecurityGroups = this.context.enumeratedSecurityGroups;
             awsComputeState.zones = this.context.zones;
@@ -896,7 +904,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
          * in turn patch the parent task to indicate completion.
          */
         private void signalStopToEnumerationAdapter() {
-            this.context.request.enumerationAction = EnumerationAction.STOP;
+            this.context.request.original.enumerationAction = EnumerationAction.STOP;
             this.service.handleEnumerationRequest(this.context);
         }
 
@@ -955,9 +963,9 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
-                        context.request.resourceLink())
+                        context.request.original.resourceLink())
                 .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
-                        context.request.resourcePoolLink)
+                        context.request.original.resourcePoolLink)
                 .addInClause(ResourceState.FIELD_NAME_ID, remoteIds);
 
         addScopeCriteria(qBuilder, ComputeState.class, context);
@@ -999,7 +1007,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         // Add TENANT_LINKS criteria
         QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
         // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
 }

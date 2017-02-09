@@ -304,6 +304,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
         QueryTask queryTask = createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
                 context.vpcs.keySet(), context.request.request.endpointLink,
+                context.request.regionId,
                 context.request.tenantLinks);
 
         // create the query to find resources
@@ -352,6 +353,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
         QueryTask q = createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
                 context.subnets.keySet(), context.request.request.endpointLink,
+                context.request.regionId,
                 context.request.tenantLinks);
 
         // create the query to find resources
@@ -491,6 +493,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
                 SubnetState subnetState = mapSubnetToSubnetState(subnet,
                         this.context.request.tenantLinks,
+                        this.context.request.regionId,
                         this.context.request.request.endpointLink);
 
                 if (subnetState.subnetCIDR == null) {

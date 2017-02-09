@@ -14,7 +14,11 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+
+import com.amazonaws.regions.Regions;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
@@ -22,8 +26,10 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.OperationSequence;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 
@@ -42,6 +48,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
     }
 
     public enum AWSEnumerationStages {
+        GET_REGIONS,
         KICKOFF_ENUMERATION,
         PATCH_COMPLETION,
         ERROR
@@ -56,14 +63,14 @@ public class AWSEnumerationAdapterService extends StatelessService {
         public ComputeEnumerateResourceRequest request;
         public AWSEnumerationStages stage;
 
-        public List<Operation> enumerationOperations;
+        public List<String> regions;
 
         public EnumerationContext(StatelessService service, ComputeEnumerateResourceRequest request,
                 Operation op) {
             super(service, request.resourceReference);
             this.request = request;
-            this.stage = AWSEnumerationStages.KICKOFF_ENUMERATION;
-            this.enumerationOperations = new ArrayList<>();
+            this.stage = AWSEnumerationStages.GET_REGIONS;
+            this.regions = new ArrayList<>();
             this.operation = op;
         }
     }
@@ -140,6 +147,9 @@ public class AWSEnumerationAdapterService extends StatelessService {
      */
     public void handleEnumerationRequest(EnumerationContext aws) {
         switch (aws.stage) {
+        case GET_REGIONS:
+            getRegions(aws, AWSEnumerationStages.KICKOFF_ENUMERATION);
+            break;
         case KICKOFF_ENUMERATION:
             kickOffEnumerationWorkFlows(aws, AWSEnumerationStages.PATCH_COMPLETION);
             break;
@@ -164,37 +174,56 @@ public class AWSEnumerationAdapterService extends StatelessService {
     }
 
     /**
+     * get the list of regions to enumerate on.
+     */
+    public void getRegions(EnumerationContext context,
+            AWSEnumerationStages next) {
+        if (context.parent.description.regionId != null) {
+            context.regions.add(context.parent.description.regionId);
+        } else {
+            context.regions.addAll(Arrays.asList(
+                    Regions.values()).stream().map(r-> r.getName()).collect(Collectors.toList()));
+        }
+        context.stage = next;
+        handleEnumerationRequest(context);
+    }
+
+    /**
      * Kicks off the enumeration flows for creation and deletion.
      */
-    public void kickOffEnumerationWorkFlows(EnumerationContext context,
-            AWSEnumerationStages next) {
-        ComputeEnumerateAdapterRequest awsEnumerationRequest =
-                new ComputeEnumerateAdapterRequest(
+    public void kickOffEnumerationWorkFlows(EnumerationContext context, AWSEnumerationStages next) {
+        List<List<Operation>> enumOperations = new ArrayList<>();
+        for (String regionId : context.regions) {
+            List<Operation> enumOperationsForRegion = new ArrayList<>();
+            ComputeEnumerateAdapterRequest awsEnumerationRequest =
+                    new ComputeEnumerateAdapterRequest(
                         context.request, context.parentAuth,
-                        context.parent);
+                        context.parent, regionId);
 
-        Operation patchAWSCreationAdapterService = Operation
-                .createPatch(this, AWSEnumerationAndCreationAdapterService.SELF_LINK)
-                .setBody(awsEnumerationRequest)
-                .setReferer(this.getHost().getUri());
+            Operation patchAWSCreationAdapterService = Operation
+                    .createPatch(this, AWSEnumerationAndCreationAdapterService.SELF_LINK)
+                    .setBody(awsEnumerationRequest)
+                    .setReferer(this.getHost().getUri());
 
-        Operation patchAWSDeletionAdapterService = Operation
-                .createPatch(this,
-                        AWSEnumerationAndDeletionAdapterService.SELF_LINK)
-                .setBody(awsEnumerationRequest)
-                .setReferer(getHost().getUri());
+            Operation patchAWSDeletionAdapterService = Operation
+                    .createPatch(this,
+                            AWSEnumerationAndDeletionAdapterService.SELF_LINK)
+                    .setBody(awsEnumerationRequest)
+                    .setReferer(getHost().getUri());
 
-        Operation patchAWSStorageAdapterService = Operation
-                .createPatch(this,
-                        AWSBlockStorageEnumerationAdapterService.SELF_LINK)
-                .setBody(awsEnumerationRequest)
-                .setReferer(getHost().getUri());
+            Operation patchAWSStorageAdapterService = Operation
+                    .createPatch(this,
+                            AWSBlockStorageEnumerationAdapterService.SELF_LINK)
+                    .setBody(awsEnumerationRequest)
+                    .setReferer(getHost().getUri());
 
-        context.enumerationOperations.add(patchAWSCreationAdapterService);
-        context.enumerationOperations.add(patchAWSDeletionAdapterService);
-        context.enumerationOperations.add(patchAWSStorageAdapterService);
+            enumOperationsForRegion.add(patchAWSCreationAdapterService);
+            enumOperationsForRegion.add(patchAWSDeletionAdapterService);
+            enumOperationsForRegion.add(patchAWSStorageAdapterService);
+            enumOperations.add(enumOperationsForRegion);
+        }
 
-        if (context.enumerationOperations == null || context.enumerationOperations.size() == 0) {
+        if (enumOperations.size() == 0) {
             logFine(() -> "No enumeration tasks to run");
             context.stage = next;
             handleEnumerationRequest(context);
@@ -210,14 +239,17 @@ public class AWSEnumerationAdapterService extends StatelessService {
                         exc.values().iterator().next());
                 return;
             }
-            logFine(() -> "Completed creation and deletion enumeration for compute and storage"
+            logInfo(() -> "Completed creation and deletion enumeration for compute and storage"
                     + " states");
             context.stage = next;
             handleEnumerationRequest(context);
         };
-        OperationJoin joinOp = OperationJoin.create(context.enumerationOperations);
-        joinOp.setCompletion(joinCompletion);
-        joinOp.sendWith(getHost());
+        OperationSequence enumOp = OperationSequence.create(OperationJoin.create(enumOperations.get(0)));
+        for (int i = 1; i < enumOperations.size(); i++) {
+            enumOp = enumOp.next(OperationJoin.create(enumOperations.get(i)));
+        }
+        enumOp.setCompletion(joinCompletion);
+        enumOp.sendWith(getHost());
         logFine(() -> "Started creation and deletion enumeration for AWS computes and storage");
     }
 }
