@@ -75,6 +75,7 @@ import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -501,7 +502,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             instanceIdFilterParentQuery.addClause(instanceIdFilter);
         }
 
-        qBuilder.addClause(instanceIdFilterParentQuery.build());
+        Query sdq = instanceIdFilterParentQuery.build();
+        if (sdq.booleanClauses == null || sdq.booleanClauses.isEmpty()) {
+            context.subStage = StorageEnumStages.CREATE_STORAGE_DESCRIPTIONS;
+            handleSubStage(context);
+            return;
+        }
+
+        qBuilder.addClause(sdq);
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
@@ -1292,7 +1300,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             diskUriFilterParentQuery.addClause(diskUriFilter);
         }
 
-        qBuilder.addClause(diskUriFilterParentQuery.build());
+        Query sdq = diskUriFilterParentQuery.build();
+        if (sdq.booleanClauses == null || sdq.booleanClauses.isEmpty()) {
+            context.subStage = StorageEnumStages.CREATE_DISK_STATES;
+            handleSubStage(context);
+            return;
+        }
+
+        qBuilder.addClause(sdq);
 
         String blobProperty = QueryTask.QuerySpecification
                 .buildCompositeFieldName(DiskState.FIELD_NAME_CUSTOM_PROPERTIES,
