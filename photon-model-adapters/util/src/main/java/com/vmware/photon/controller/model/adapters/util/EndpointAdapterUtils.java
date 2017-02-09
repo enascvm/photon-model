@@ -36,6 +36,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 public class EndpointAdapterUtils {
 
     public static final String MOCK_REQUEST = "mockRequest";
+    public static final String ENDPOINT_REFERENCE_URI = "endpointReferenceUri";
 
     public static void handleEndpointRequest(StatelessService service, Operation op,
             EndpointConfigRequest body,
@@ -71,6 +72,7 @@ public class EndpointAdapterUtils {
 
             Map<String, String> props = new HashMap<>(endpoint.endpointProperties);
             props.put(MOCK_REQUEST, String.valueOf(body.isMockRequest));
+            props.put(ENDPOINT_REFERENCE_URI, body.resourceReference.toString());
 
             Retriever r = Retriever.of(props);
             try {
