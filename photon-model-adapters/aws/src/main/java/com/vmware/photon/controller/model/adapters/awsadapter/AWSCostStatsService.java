@@ -81,6 +81,7 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 /**
  * Service to gather AWS Cost related stats
@@ -294,7 +295,11 @@ public class AWSCostStatsService extends StatelessService {
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                         PhotonModelConstants.EndpointType.aws.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        AWSConstants.AWS_ACCOUNT_ID_KEY, accountId).build();
+                        AWSConstants.AWS_ACCOUNT_ID_KEY, accountId)
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, "*", QueryTask.QueryTerm.MatchType.WILDCARD,
+                        QueryTask.Query.Occurance.MUST_NOT_OCCUR)
+                .addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK, "*", MatchType.WILDCARD, Occurance.MUST_OCCUR)
+                .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT).setQuery(awsAccountsQuery).build();
         queryTask.setDirect(true);
