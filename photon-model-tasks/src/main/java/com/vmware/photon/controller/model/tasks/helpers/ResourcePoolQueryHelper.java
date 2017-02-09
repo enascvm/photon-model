@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2015-2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -11,10 +11,11 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.resources.util;
+package com.vmware.photon.controller.model.tasks.helpers;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -23,19 +24,15 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
-import com.vmware.photon.controller.model.resources.util.ResourcePoolQueryHelper.QueryResult.ResourcePoolData;
-import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.OperationJoin;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.tasks.helpers.ResourcePoolQueryHelper.QueryResult.ResourcePoolData;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * {@code ResourcePoolQueryHelper} aims to simplify the retrieval of computes per resource pool
@@ -61,6 +58,9 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  * {@code null}. Use {@link ResourcePoolQueryHelper#setExpandComputes()} to change this.
  */
 public class ResourcePoolQueryHelper {
+    private static final int PAGE_SIZE = Integer
+            .getInteger(UriPaths.PROPERTY_PREFIX + "rp.query.helper.page.size", 1024);
+
     // input fields
     private final ServiceHost host;
     private Collection<String> resourcePoolLinks;
@@ -69,7 +69,6 @@ public class ResourcePoolQueryHelper {
     private Consumer<Query.Builder> additionalQueryClausesProvider;
 
     // internal state
-    private Consumer<QueryResult> completionHandler;
     private QueryResult result;
 
     /**
@@ -149,65 +148,38 @@ public class ResourcePoolQueryHelper {
      * Perform the actual retrieval and notifies the client through the given completionHandler.
      */
     public void query(Consumer<QueryResult> completionHandler) {
-        this.completionHandler = completionHandler;
         this.result = new QueryResult();
 
         // start by retrieving the requested resource pools
-        retrieveResourcePools();
+        retrieveResourcePools()
+                .thenCompose(ignore -> executeRpQueries())
+                .thenCompose(ignore -> findComputesWithoutPool())
+                .thenCompose(this::handleMissingComputes)
+                .thenApply(ignore -> this.result)
+                .exceptionally(QueryResult::forError)
+                .thenAccept(completionHandler);
     }
 
     /**
      * Retrieves the requested resource pools documents.
      */
-    private void retrieveResourcePools() {
+    private DeferredResult<Void> retrieveResourcePools() {
         Query.Builder queryBuilder = Query.Builder.create()
                 .addKindFieldClause(ResourcePoolState.class);
         if (this.resourcePoolLinks != null && !this.resourcePoolLinks.isEmpty()) {
             queryBuilder.addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, this.resourcePoolLinks);
         }
 
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(queryBuilder.build())
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .build();
-
-        this.host.sendRequest(Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTask)
-                .setReferer(this.host.getUri())
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        this.completionHandler.accept(QueryResult.forError(e));
-                        return;
-                    }
-
-                    QueryTask task = o.getBody(QueryTask.class);
-                    if (task.results.documents == null ||
-                            (this.resourcePoolLinks != null && task.results.documents.size() <
-                                    this.resourcePoolLinks.size())) {
-                        this.completionHandler.accept(QueryResult.forError(new IllegalStateException(
-                                "Couldn't retrieve the requested resource pools")));
-                        return;
-                    }
-
-                    storeResourcePools(task.results.documents.values().stream()
-                            .map(json -> Utils.fromJson(json, ResourcePoolState.class))
-                            .collect(Collectors.toSet()));
-
-                    // continue by executing the resource pool queries, if any
-                    if (!this.result.resourcesPools.isEmpty()) {
-                        executeRpQueries();
-                    } else {
-                        findComputesWithoutPool();
-                    }
-                }));
+        return new QueryByPages<>(this.host, queryBuilder.build(), ResourcePoolState.class, null)
+                .setMaxPageSize(PAGE_SIZE)
+                .queryDocuments(rp -> storeResourcePool(rp));
     }
 
     /**
      * Executes the resource pool queries in parallel and then collects the result.
      */
-    private void executeRpQueries() {
-        List<Operation> queryOperations = new ArrayList<>(this.result.resourcesPools.size());
-        Map<Long, String> rpLinkByOperationId = new HashMap<>();
+    private DeferredResult<Void> executeRpQueries() {
+        List<DeferredResult<Void>> rpQueryDRs = new ArrayList<>(this.result.resourcesPools.size());
         for (ResourcePoolData rpData : this.result.resourcesPools.values()) {
             String rpLink = rpData.resourcePoolState.documentSelfLink;
             Query rpQuery = rpData.resourcePoolState.query;
@@ -219,39 +191,25 @@ public class ResourcePoolQueryHelper {
                 this.additionalQueryClausesProvider.accept(queryBuilder);
             }
 
-            QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
-                    .setQuery(queryBuilder.build());
-
+            QueryByPages<ComputeState> computeQuery =
+                    new QueryByPages<>(this.host, queryBuilder.build(), ComputeState.class, null)
+                            .setMaxPageSize(PAGE_SIZE);
+            DeferredResult<Map<String, ComputeState>> rpQueryDR;
             if (this.expandComputes) {
-                queryTaskBuilder.addOption(QueryOption.EXPAND_CONTENT);
+                rpQueryDR = computeQuery
+                        .collectDocuments(Collectors.toMap(cs -> cs.documentSelfLink, cs -> cs));
+            } else {
+                // manually collect links since Collectors.toMap() does not allow null values
+                Map<String, ComputeState> computesMap = new HashMap<>();
+                rpQueryDR = computeQuery
+                        .queryLinks(csLink -> computesMap.put(csLink, null))
+                        .thenApply(ignore -> computesMap);
             }
 
-            Operation queryOperation =
-                    Operation.createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                    .setBody(queryTaskBuilder.build())
-                    .setReferer(this.host.getUri());
-            rpLinkByOperationId.put(queryOperation.getId(), rpLink);
-            queryOperations.add(queryOperation);
+            rpQueryDRs.add(rpQueryDR.thenAccept(computesMap -> storeComputes(rpLink, computesMap)));
         }
 
-        OperationJoin.create(queryOperations).setCompletion((ops, exs) -> {
-            if (exs != null) {
-                this.completionHandler.accept(QueryResult.forError(exs.values().iterator().next()));
-                return;
-            }
-            for (Operation op : ops.values()) {
-                QueryTask task = op.getBody(QueryTask.class);
-                if (task.results == null || task.results.documentLinks == null) {
-                    continue;
-                }
-
-                String rpLink = rpLinkByOperationId.get(op.getId());
-                storeComputes(rpLink, task.results);
-            }
-
-            // last step is to find computes that are not part of any resource pool
-            findComputesWithoutPool();
-        }).sendWith(this.host);
+        return DeferredResult.allOf(rpQueryDRs).thenApply(ignore -> (Void)null);
     }
 
     /**
@@ -261,10 +219,9 @@ public class ResourcePoolQueryHelper {
      * - If we have input computeLinks, check them.
      * - Otherwise, get all computes and check which are missing in the already collected result.
      */
-    private void findComputesWithoutPool() {
+    private DeferredResult<Collection<String>> findComputesWithoutPool() {
         if (this.resourcePoolLinks != null && !this.resourcePoolLinks.isEmpty()) {
-            this.completionHandler.accept(this.result);
-            return;
+            return DeferredResult.completed(Collections.emptyList());
         }
 
         if (this.computeLinks != null && !this.computeLinks.isEmpty()) {
@@ -273,8 +230,7 @@ public class ResourcePoolQueryHelper {
                     .filter(e -> !e.getValue().computeStateLinks.isEmpty())
                     .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
 
-            handleMissingComputes(this.computeLinks);
-            return;
+            return DeferredResult.completed(this.computeLinks);
         }
 
         // query for all computes (without expanding the documents)
@@ -283,89 +239,48 @@ public class ResourcePoolQueryHelper {
         if (this.additionalQueryClausesProvider != null) {
             this.additionalQueryClausesProvider.accept(queryBuilder);
         }
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(queryBuilder.build())
-                .build();
 
-        this.host.sendRequest(Operation
-                .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTask)
-                .setReferer(this.host.getUri())
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        this.completionHandler.accept(QueryResult.forError(e));
-                        return;
-                    }
-
-                    QueryTask task = o.getBody(QueryTask.class);
-                    handleMissingComputes(task.results.documentLinks);
-                }));
+        return new QueryByPages<>(this.host, queryBuilder.build(), ComputeState.class, null)
+                .setMaxPageSize(PAGE_SIZE)
+                .collectLinks(Collectors.toCollection(ArrayList::new));
     }
 
     /**
      * With the given compute links, finds which ones are not already retrieved as part of a
      * resource pool, and loads the corresponding ComputeState documents into the result.
      */
-    private void handleMissingComputes(Collection<String> allComputeLinks) {
+    private DeferredResult<Void> handleMissingComputes(Collection<String> allComputeLinks) {
         Collection<String> missingComputeLinks = new HashSet<>(allComputeLinks);
         missingComputeLinks.removeAll(this.result.computesByLink.keySet());
         if (missingComputeLinks.isEmpty()) {
-            this.completionHandler.accept(this.result);
-            return;
+            return DeferredResult.completed(null);
         }
 
         Query query = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, missingComputeLinks)
                 .build();
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(query)
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .build();
-
-        this.host.sendRequest(Operation
-                .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTask)
-                .setReferer(this.host.getUri())
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        this.completionHandler.accept(QueryResult.forError(e));
-                        return;
-                    }
-
-                    QueryTask task = o.getBody(QueryTask.class);
-                    if (task.results != null && task.results.documentLinks != null) {
-                        storeComputes(null, task.results);
-                    }
-
-                    this.completionHandler.accept(this.result);
-                }));
+        return new QueryByPages<>(this.host, query, ComputeState.class, null)
+                .setMaxPageSize(PAGE_SIZE)
+                .collectDocuments(Collectors.toMap(cs -> cs.documentSelfLink, cs -> cs))
+                .thenAccept(computesMap -> storeComputes(null, computesMap));
     }
 
     /**
      * Stores the retrieved resource pool states into the QueryResult instance.
      */
-    private void storeResourcePools(Collection<ResourcePoolState> resourcePools) {
-        for (ResourcePoolState rp : resourcePools) {
-            ResourcePoolData rpData = new ResourcePoolData();
-            rpData.resourcePoolState = rp;
-            rpData.computeStateLinks = new HashSet<>();
-            this.result.resourcesPools.put(rp.documentSelfLink, rpData);
-        }
+    private void storeResourcePool(ResourcePoolState rp) {
+        ResourcePoolData rpData = new ResourcePoolData();
+        rpData.resourcePoolState = rp;
+        rpData.computeStateLinks = new HashSet<>();
+        this.result.resourcesPools.put(rp.documentSelfLink, rpData);
     }
 
     /**
      * Stores the retrieved compute states into the QueryResult instance.
      * The rpLink may be null in case the given computes do not fall into any resource pool.
      */
-    private void storeComputes(String rpLink, ServiceDocumentQueryResult queryResult) {
-        // deserialize json objects from the query result
-        Map<String, ComputeState> computes = new HashMap<>();
-        queryResult.documentLinks.forEach(link -> computes.put(link,
-                this.expandComputes
-                        ? Utils.fromJson(queryResult.documents.get(link), ComputeState.class)
-                        : null));
-
+    private void storeComputes(String rpLink, Map<String, ComputeState> computes) {
         if (rpLink != null) {
             ResourcePoolData rpData = this.result.resourcesPools.get(rpLink);
             rpData.computeStateLinks.addAll(computes.keySet());
