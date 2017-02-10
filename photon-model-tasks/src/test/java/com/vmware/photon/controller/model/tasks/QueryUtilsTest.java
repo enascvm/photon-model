@@ -60,7 +60,11 @@ public class QueryUtilsTest extends BaseModelTest {
                 ModelUtils.createCompute(this, cd).documentSelfLink,
                 ModelUtils.createCompute(this, cd).documentSelfLink));
 
-        doTest(cd, expected);
+        doTest(cd, expected, null);
+        doTest(cd, expected, Arrays.asList());
+        doTest(cd, expected, Arrays.asList("http://tenant"));
+        doTest(cd, new HashSet<>(), Arrays.asList("http://tenant", "http://non-present-tenant"));
+        doTest(cd, new HashSet<>(), Arrays.asList("http://non-present-tenant"));
     }
 
     @Test
@@ -70,10 +74,10 @@ public class QueryUtilsTest extends BaseModelTest {
 
         Set<String> expected = Collections.emptySet();
 
-        doTest(cd, expected);
+        doTest(cd, expected, Collections.singletonList("http://tenant"));
     }
 
-    private void doTest(ComputeDescription cd, Set<String> expected) {
+    private void doTest(ComputeDescription cd, Set<String> expected, List<String> tenantLinks) {
 
         Query queryForReferrers = QueryUtils.queryForReferrers(
                 cd.documentSelfLink,
@@ -86,13 +90,13 @@ public class QueryUtilsTest extends BaseModelTest {
                         getHost(),
                         queryForReferrers,
                         ComputeState.class,
-                        Collections.singletonList("http://tenant"),
+                        tenantLinks,
                         null /*endpointLink*/),
                 new QueryTop<>(
                         getHost(),
                         queryForReferrers,
                         ComputeState.class,
-                        Collections.singletonList("http://tenant"),
+                        tenantLinks,
                         null /*endpointLink*/));
 
         // Test collectDocuments/queryDocuments/collectLinks/queryLinks per QueryByPages and

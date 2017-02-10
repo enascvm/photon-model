@@ -111,10 +111,10 @@ public class QueryUtils {
      * Add {@code tenantLinks} constraint to passed query builder, if present.
      */
     public static Query.Builder addTenantLinks(Query.Builder qBuilder, List<String> tenantLinks) {
-        if (tenantLinks != null && !tenantLinks.isEmpty()) {
-            return qBuilder.addInCollectionItemClause(
-                    ResourceState.FIELD_NAME_TENANT_LINKS,
-                    tenantLinks);
+        if (tenantLinks != null) {
+            // all given tenant links must be present in the document
+            tenantLinks.forEach(link ->
+                    qBuilder.addCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, link));
         }
         return qBuilder;
     }
