@@ -1,7 +1,15 @@
 # CHANGELOG
 
-## 0.6.2-SNAPSHOT
+## 0.6.2
 
+* [AWS] Add, remove or update NetworkInterfaceState when updating ComputeState.
+* [AWS] Fix tenantLinks usage.
+* Make authCredentialsLink in NetworkState not a required field.
+* Handle duplicate secondary account.
+* [Azure]Fix validate virtual gateways.
+* Use pagination in ResourcePoolQueryHelper.
+* [AWSCostAdapter] Improve the Account Compute State query.
+* Distinguish availability zone computeState from host.
 
 ## 0.6.1
 
