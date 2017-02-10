@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 0.6.3-SNAPSHOT
+
 ## 0.6.2
 
 * [AWS] Add, remove or update NetworkInterfaceState when updating ComputeState.
