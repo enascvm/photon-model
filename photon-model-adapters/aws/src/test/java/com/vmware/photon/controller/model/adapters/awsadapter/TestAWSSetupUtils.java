@@ -52,6 +52,8 @@ import com.amazonaws.services.ec2.model.DeleteNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
+import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
+import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.DetachNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
@@ -61,6 +63,7 @@ import com.amazonaws.services.ec2.model.NetworkInterfaceAttachmentChanges;
 import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
+import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesResult;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
@@ -106,7 +109,6 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -262,7 +264,7 @@ public class TestAWSSetupUtils {
 
     public static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
     public static final String AWS_DEFAULT_GROUP_ID = "sg-d46efeac";
-    public static final String AWS_NEW_GROUP_NAME = "new-security-group";
+    public static final String AWS_NEW_GROUP_PREFIX = "test-new-";
 
     public static final String DEFAULT_AUTH_TYPE = "PublicKey";
     public static final String DEFAULT_ROOT_DISK_NAME = "CoreOS root disk";
@@ -398,7 +400,7 @@ public class TestAWSSetupUtils {
             throws Throwable {
         return createAWSVMResource(host, parentLink, resourcePoolLink, clazz,
                 instanceType_t2_micro, zoneId, regionId,
-                tagLinks, nicSpec);
+                tagLinks, nicSpec, /* add new security group */ false);
     }
 
     /**
@@ -408,7 +410,8 @@ public class TestAWSSetupUtils {
             String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
             String vmName, String zoneId, String regionId,
             Set<String> tagLinks,
-            AwsNicSpecs nicSpecs)
+            AwsNicSpecs nicSpecs,
+            boolean addNewSecurityGroup)
             throws Throwable {
 
         // Step 1: Create an auth credential to login to the VM
@@ -476,7 +479,7 @@ public class TestAWSSetupUtils {
 
         // Create NIC States
         List<String> nicLinks = createAWSNicStates(
-                host, resourcePoolLink, awsVMDesc.authCredentialsLink, awsVMDesc.name, nicSpecs)
+                host, resourcePoolLink, awsVMDesc.authCredentialsLink, awsVMDesc.name, nicSpecs, addNewSecurityGroup)
                         .stream()
                         .map(nic -> nic.documentSelfLink)
                         .collect(Collectors.toList());
@@ -512,7 +515,8 @@ public class TestAWSSetupUtils {
             String resourcePoolLink,
             String authCredentialsLink,
             String vmName,
-            AwsNicSpecs nicSpecs) throws Throwable {
+            AwsNicSpecs nicSpecs,
+            boolean addNewSecurityGroup) throws Throwable {
 
         // Create network state.
         NetworkState networkState;
@@ -587,6 +591,13 @@ public class TestAWSSetupUtils {
             nicState.securityGroupLinks = new ArrayList<>();
             nicState.securityGroupLinks.add(existingSecurityGroupState.documentSelfLink);
 
+            if (addNewSecurityGroup) {
+                // Create security group state for a new security group
+                SecurityGroupState newSecurityGroupState = createSecurityGroupState(host,
+                        authCredentialsLink, false);
+                nicState.securityGroupLinks.add(newSecurityGroupState.documentSelfLink);
+            }
+
             nicState = TestUtils.doPost(host, nicState,
                     NetworkInterfaceState.class,
                     UriUtils.buildUri(host, NetworkInterfaceService.FACTORY_LINK));
@@ -607,7 +618,7 @@ public class TestAWSSetupUtils {
                 securityGroupState.name = AWS_DEFAULT_GROUP_NAME;
             } else {
                 securityGroupState.id = "sg-" + UUID.randomUUID().toString().substring(0, 8);
-                securityGroupState.name = AWS_NEW_GROUP_NAME;
+                securityGroupState.name = AWS_NEW_GROUP_PREFIX + securityGroupState.id;
             }
             securityGroupState.authCredentialsLink = authCredentialsLink;
             securityGroupState.tenantLinks = new ArrayList<>();
@@ -968,8 +979,12 @@ public class TestAWSSetupUtils {
     /**
      * Delete an AWS Nic by id
      */
-    public static void deleteNICDirectlyWithEC2Client(String nicId, AmazonEC2Client client,
-            VerificationHost host) {
+    public static void deleteNICDirectlyWithEC2Client(AmazonEC2Client client,
+            VerificationHost host, String nicId) {
+        if (nicId == null) {
+            return;
+        }
+
         DeleteNetworkInterfaceRequest deleteNicRequest = new DeleteNetworkInterfaceRequest()
                 .withNetworkInterfaceId(nicId);
         host.log("Clean-up NIC with id: %s", nicId);
@@ -1666,10 +1681,53 @@ public class TestAWSSetupUtils {
         return Utils.fromJson(result.documents.values().iterator().next(), NetworkInterfaceState.class);
     }
 
-    public static void deleteSecurityGroupsUsingEC2Client(AmazonEC2AsyncClient client,
-            VerificationHost host, String awsGroupName) {
-        DeleteSecurityGroupRequest deleteSecurityGroupRequest = new DeleteSecurityGroupRequest()
-                .withGroupName(awsGroupName);
-        client.deleteSecurityGroup(deleteSecurityGroupRequest);
+    public static SecurityGroup getSecurityGroupsIdUsingEC2Client(AmazonEC2AsyncClient client, String awsGroupId) {
+        if (awsGroupId == null) {
+            return null;
+        }
+
+        DescribeSecurityGroupsRequest describeSGsRequest = new DescribeSecurityGroupsRequest()
+                .withFilters(new Filter(AWSConstants.AWS_GROUP_ID_FILTER,Collections.singletonList(awsGroupId)));
+        DescribeSecurityGroupsResult describeSGResult = client.describeSecurityGroups(describeSGsRequest);
+
+        if (describeSGResult.getSecurityGroups().size() > 0) {
+            return describeSGResult.getSecurityGroups().get(0);
+        } else {
+            return null;
+        }
+    }
+
+    public static void deleteSecurityGroupUsingEC2Client(AmazonEC2AsyncClient client,
+            VerificationHost host, String awsGroupId) {
+        host.log(Level.INFO, "Starting to delete aws Security group with id %s", awsGroupId);
+        if (awsGroupId == null) {
+            return;
+        }
+
+        try {
+            DeleteSecurityGroupRequest deleteSecurityGroupRequest = new DeleteSecurityGroupRequest()
+                    .withGroupId(awsGroupId);
+            client.deleteSecurityGroup(deleteSecurityGroupRequest);
+
+            host.waitFor(
+                    "Timeout waiting for AWS to delete a SecurityGroup with name " + awsGroupId,
+                    () -> {
+                        // Check if the SG is actually not present on AWS after the delete operation
+                        SecurityGroup discoveredSGOnAWS = getSecurityGroupsIdUsingEC2Client(client, awsGroupId);
+
+                        if (discoveredSGOnAWS != null) {
+                            // Requested SG was not deleted from AWS
+                            return false;
+                        }
+
+                        host.log("Deleted SG with id: %s", awsGroupId);
+                        return true;
+                    });
+        } catch (Exception e) {
+            String message = e.getMessage();
+            if (!message.contains("The security group '" + awsGroupId + "' already exists")) {
+                throw e;
+            }
+        }
     }
 }

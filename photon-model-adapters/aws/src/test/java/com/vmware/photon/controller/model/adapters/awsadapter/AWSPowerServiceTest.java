@@ -122,9 +122,10 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         assertNotNull(cd);
         assertNotNull("Power addpter must be configured", cd.powerAdapterReference);
 
+        boolean addNonExistingSecurityGroup = false;
         ComputeState cs = TestAWSSetupUtils.createAWSVMResource(this.host, endpoint.computeLink,
                 endpoint.resourcePoolLink, getClass(),
-                "trainingVM",zoneId, zoneId, null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                "trainingVM",zoneId, zoneId, null, TestAWSSetupUtils.SINGLE_NIC_SPEC, addNonExistingSecurityGroup);
 
         this.computesToRemove.add(cs.documentSelfLink);
         assertEquals(PowerState.UNKNOWN, cs.powerState);

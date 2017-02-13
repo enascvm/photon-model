@@ -822,9 +822,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                 this.instancesToCleanUp.clear();
             }
             //Delete newly created NIC
-            if (this.nicToCleanUp != null) {
-                deleteNICDirectlyWithEC2Client(this.nicToCleanUp, this.client, this.host);
-            }
+            deleteNICDirectlyWithEC2Client(this.client, this.host, this.nicToCleanUp);
         } catch (Throwable deleteEx) {
             // just log and move on
             this.host.log(Level.WARNING, "Exception deleting VMs - %s, instance ids - %s",

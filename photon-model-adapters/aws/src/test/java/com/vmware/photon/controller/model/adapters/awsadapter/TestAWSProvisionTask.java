@@ -21,8 +21,10 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteSecurityGroupUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getAwsInstancesByIds;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getCompute;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getSecurityGroupsIdUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
@@ -30,7 +32,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.g
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,12 +39,15 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.GroupIdentifier;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
+import com.amazonaws.services.ec2.model.IpPermission;
+import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
 
 import org.junit.After;
@@ -92,6 +96,7 @@ public class TestAWSProvisionTask {
     private VerificationHost host;
     // fields that are used across method calls, stash them as private fields
     private ComputeService.ComputeState vmState;
+    private String sgToCleanUp = null;
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
     public boolean isMock = true;
@@ -140,6 +145,8 @@ public class TestAWSProvisionTask {
         if (this.vmState != null && this.vmState.id.startsWith(INSTANCEID_PREFIX)) {
             try {
                 TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
+
+                deleteSecurityGroupUsingEC2Client(this.client, this.host, this.sgToCleanUp);
             } catch (Throwable deleteEx) {
                 // just log and move on
                 this.host.log(Level.WARNING, "Exception deleting VM - %s", deleteEx.getMessage());
@@ -165,11 +172,11 @@ public class TestAWSProvisionTask {
                 this.isAwsClientMock, this.awsMockEndpointReference, null);
 
         // create a AWS VM compute resoruce
-
+        boolean addNonExistingSecurityGroup = true;
         this.vmState = createAWSVMResource(this.host, outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(),
                 this.currentTestName.getMethodName() + "_vm1", zoneId, zoneId,
-                null /* tagLinks */, TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                null /* tagLinks */, TestAWSSetupUtils.SINGLE_NIC_SPEC, addNonExistingSecurityGroup);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
@@ -266,12 +273,13 @@ public class TestAWSProvisionTask {
 
         Set<String> tagLinks = tags.stream().map(t -> t.documentSelfLink)
                 .collect(Collectors.toSet());
+        addNonExistingSecurityGroup = false;
         this.vmState = TestAWSSetupUtils.createAWSVMResource(this.host,
                 outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(),
                 this.currentTestName.getMethodName() + "_vm2",
                 zoneId, zoneId,
-                tagLinks, TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                tagLinks, TestAWSSetupUtils.SINGLE_NIC_SPEC, addNonExistingSecurityGroup);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
 
@@ -298,10 +306,14 @@ public class TestAWSProvisionTask {
 
             } finally {
                 TestAWSSetupUtils.deleteVMsUsingEC2Client(this.client, this.host, instanceIdList);
+                deleteSecurityGroupUsingEC2Client(this.client, this.host, this.sgToCleanUp);
             }
         }
         this.vmState = null;
+        this.sgToCleanUp = null;
     }
+
+
 
     private void assertVmNetworksConfiguration(Instance awsInstance) throws Throwable {
 
@@ -348,28 +360,74 @@ public class TestAWSProvisionTask {
                     "NetworkInterfaceState[" + nicState.deviceIndex
                             + "].address should be set to AWS NIC private IP.",
                     awsNic.getPrivateIpAddress(), nicState.address);
+        }
+        assertVMSercurityGroupsConfiguration(awsInstance, vm);
+    }
 
-            // Assert security groups
-            {
-                assertEquals("Provisioned instance should have the same number of security groups assigned, as its state's links",
-                        awsInstance.getSecurityGroups().size(),
-                        nicState.securityGroupLinks.size());
+    private void assertVMSercurityGroupsConfiguration(Instance instance, ComputeState vm) {
+        // This assert is only suitable for real (non-mocking env).
+        if (this.isMock) {
+            return;
+        }
 
-                Map<String, SecurityGroupState> securityGroupStatesByName = new HashMap<>();
+        this.host.log(Level.INFO, "%s: Assert security groups configuration for [%s] VM",
+                this.currentTestName.getMethodName(), this.vmState.name);
 
-                for (String sgLink : nicState.securityGroupLinks) {
-                    SecurityGroupState sg = this.host.getServiceState(null,
-                            SecurityGroupState.class,
-                            UriUtils.buildUri(this.host, sgLink));
-                    if (sg != null) {
-                        securityGroupStatesByName.put(sg.name, sg);
-                    }
+        // Get the SecurityGroupStates that were provided in the request ComputeState
+        Collector<SecurityGroupState, ?, Map<String, SecurityGroupState>> convertToMap =
+                Collectors.<SecurityGroupState, String, SecurityGroupState> toMap(sg -> sg.name, sg -> sg);
+        Map<String, SecurityGroupState> currentSGNamesToStates = vm.networkInterfaceLinks.stream()
+                // collect all NIC states in a List
+                .map(nicLink -> this.host.getServiceState(null,
+                        NetworkInterfaceState.class,
+                        UriUtils.buildUri(this.host, nicLink)))
+                //collect all SecurityGroup States from all NIC states
+                .<SecurityGroupState> flatMap(nicState -> nicState.securityGroupLinks.stream()
+                                // obtain SecurityGroupState from each SG link
+                                .map(sgLink -> {
+                                    SecurityGroupState sgState = this.host.getServiceState(null,
+                                            SecurityGroupState.class,
+                                            UriUtils.buildUri(this.host, sgLink));
+                                    return sgState;
+                                }))
+                // collect security group states in a map with key = SG name
+                .collect(convertToMap);
+
+        // Compare ComputeState after provisioning to the ComputeState in the request
+        assertNotNull("Instance should have security groups attached.",
+                instance.getSecurityGroups());
+        // Provisioned Instance should have the same number of SecurityGroups as requested
+        assertEquals(instance.getSecurityGroups().size(), currentSGNamesToStates.size());
+
+        for (SecurityGroupState currentSGState : currentSGNamesToStates.values()) {
+            // Get corresponding requested state
+            GroupIdentifier provisionedGroupIdentifier = null;
+            for (GroupIdentifier awsGroupIdentifier : instance.getSecurityGroups()) {
+                if (awsGroupIdentifier.getGroupId().equals(currentSGState.id)) {
+                    provisionedGroupIdentifier = awsGroupIdentifier;
+                    break;
                 }
+            }
 
-                for (GroupIdentifier awsSecurityGroup : awsInstance.getSecurityGroups()) {
-                    assertTrue("Provisioned vm should have the same security groups as specified in the request",
-                            securityGroupStatesByName.keySet().contains(awsSecurityGroup.getGroupName()));
-                }
+            // Ensure that the requested SecurityGroup was actually provisioned
+            assertNotNull(provisionedGroupIdentifier);
+
+            if (currentSGState.name.contains(TestAWSSetupUtils.AWS_NEW_GROUP_PREFIX)) {
+
+                this.sgToCleanUp = currentSGState.id;
+
+                SecurityGroup awsSecurityGroup = getSecurityGroupsIdUsingEC2Client(this.client, provisionedGroupIdentifier.getGroupId());
+
+                assertNotNull(awsSecurityGroup);
+                // Validate rules are correctly created as requested
+                IpPermission awsIngressRule = awsSecurityGroup.getIpPermissions().get(0);
+                IpPermission awsEgressRule = awsSecurityGroup.getIpPermissionsEgress().get(1);
+                assertNotNull(awsIngressRule);
+                assertNotNull(awsEgressRule);
+                assertEquals("Error in created ingress rule", awsIngressRule.getIpProtocol(), currentSGState.ingress.get(0).protocol);
+                assertEquals("Error in created ingress rule", awsIngressRule.getIpRanges().get(0), currentSGState.ingress.get(0).ipRangeCidr);
+                assertEquals("Error in created egress rule", awsEgressRule.getIpProtocol(), currentSGState.egress.get(0).protocol);
+                assertEquals("Error in created egress rule", awsEgressRule.getIpRanges().get(0), currentSGState.egress.get(0).ipRangeCidr);
             }
         }
     }
