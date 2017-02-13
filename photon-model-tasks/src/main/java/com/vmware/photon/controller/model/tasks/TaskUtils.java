@@ -268,9 +268,16 @@ public class TaskUtils {
         // Fail if task was cancelled or has failed
         if (TaskState.isCancelled(opTaskState)
                 || TaskState.isFailed(opTaskState)) {
-            sendFailureSelfPatch(service,
-                    new IllegalStateException("Operation failed:"
-                            + Utils.toJsonHtml(update)));
+            if (update.getBodyRaw() != null) {
+                sendFailureSelfPatch(service,
+                        new IllegalStateException("Operation failed:"
+                                + Utils.toJson(update.getBodyRaw())));
+            } else {
+                sendFailureSelfPatch(service,
+                        new IllegalStateException("Operation failed:"
+                                + "Operation cancelled or failed while deleting computes"));
+            }
+
             if (deleteTask) {
                 service.sendRequest(Operation
                         .createDelete(
