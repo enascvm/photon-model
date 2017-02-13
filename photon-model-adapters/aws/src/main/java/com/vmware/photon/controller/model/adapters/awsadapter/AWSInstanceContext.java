@@ -493,19 +493,13 @@ public class AWSInstanceContext
 
             for (SecurityGroupState missingSGState : missingSecurityGroupStates) {
 
-                DeferredResult<Void> createSGDR = createSecurityGroup(
-                        context, nicCtx, missingSGState);
-
-                DeferredResult<AuthorizeSecurityGroupIngressResult> createIngressRulesDR = createIngressRules(
-                        context, nicCtx, missingSGState);
-
-                DeferredResult<AuthorizeSecurityGroupEgressResult> createEgressRulesDR = createEgressRules(
-                        context, nicCtx, missingSGState);
-
-                DeferredResult<Void> createSGWithRulesDR = createSGDR
-                        .thenCompose(ignore -> createIngressRulesDR)
-                        .thenCompose(ignore -> createEgressRulesDR)
-                        .thenApply(ignore -> (Void) null);
+                DeferredResult<Void> createSGWithRulesDR =
+                        createSecurityGroup(context, nicCtx, missingSGState)
+                                .thenCompose(ignore -> createIngressRules(context, nicCtx,
+                                        missingSGState))
+                                .thenCompose(ignore -> createEgressRules(context, nicCtx,
+                                        missingSGState))
+                                .thenApply(ignore -> (Void) null);
 
                 createSecurityGroupsDRs.add(createSGWithRulesDR);
             }
@@ -534,8 +528,10 @@ public class AWSInstanceContext
                 .withDescription(missingSecurityGroupState.name)
                 .withGroupName(missingSecurityGroupState.name)
                 .withVpcId(nicCtx.vpc.getVpcId());
+
         // Create AWS security group
         String msg = "Create AWS Security Group [" + missingSecurityGroupState.name + "]";
+
         AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest, CreateSecurityGroupResult> createAWSSecurityGroup = new AWSDeferredResultAsyncHandler<CreateSecurityGroupRequest, CreateSecurityGroupResult>(
                 this.service, msg) {
 
@@ -545,20 +541,23 @@ public class AWSInstanceContext
                     CreateSecurityGroupResult result) {
 
                 nicCtx.securityGroupIds.add(result.getGroupId());
-                //keep the new ID in order to patch the state after creation is done
+                // keep the new ID in order to patch the state after creation is done
                 missingSecurityGroupState.id = result.getGroupId();
 
                 return DeferredResult.completed(result);
             }
         };
-        context.amazonEC2Client.createSecurityGroupAsync(securityGroupRequest, createAWSSecurityGroup);
+        context.amazonEC2Client.createSecurityGroupAsync(securityGroupRequest,
+                createAWSSecurityGroup);
         // }}
 
         // Once AWS security group creation is done PATCH SecurityGroupState.id {{
-        Function<CreateSecurityGroupResult, DeferredResult<SecurityGroupState>> patchSecurityGroupState = (ignore) -> {
+        Function<CreateSecurityGroupResult, DeferredResult<SecurityGroupState>> patchSecurityGroupState = (
+                ignore) -> {
 
             SecurityGroupState patchSecurityGroup = new SecurityGroupState();
-            patchSecurityGroup.id = missingSecurityGroupState.id;//updated after creating SG in AWS
+            // updated after creating SG in AWS
+            patchSecurityGroup.id = missingSecurityGroupState.id;
 
             Operation op = Operation.createPatch(
                     context.service.getHost(),
@@ -569,14 +568,19 @@ public class AWSInstanceContext
         // }}
 
         // Chain AWS security group creation with SecurityGroupState patching
-        return createAWSSecurityGroup.toDeferredResult().thenCompose(patchSecurityGroupState).thenApply(ignore -> (Void) null);
+        return createAWSSecurityGroup.toDeferredResult().thenCompose(patchSecurityGroupState)
+                .thenApply(ignore -> (Void) null);
     }
 
     private DeferredResult<AuthorizeSecurityGroupIngressResult> createIngressRules(
-            AWSInstanceContext context, AWSNicContext nicCtx, SecurityGroupState createdGroupSGState) {
+            AWSInstanceContext context, AWSNicContext nicCtx,
+            SecurityGroupState createdGroupSGState) {
 
         if (!nicCtx.securityGroupIds.contains(createdGroupSGState.id)) {
             // The group was not successfully created on AWS, so no need to create Rules
+            context.service.logWarning(
+                    "The SG [%s] was not successfully created on AWS, so no need to create Ingress Rules.",
+                    createdGroupSGState.name);
             return DeferredResult.completed(null);
         }
 
@@ -586,7 +590,8 @@ public class AWSInstanceContext
                 .withGroupId(createdGroupSGState.id)
                 .withIpPermissions(ingressRules);
 
-        String msg = "Create AWS Ingress rules for [" + createdGroupSGState.name + "] Security Group";
+        String msg = "Create AWS Ingress rules for [" + createdGroupSGState.name
+                + "] Security Group";
 
         AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest, AuthorizeSecurityGroupIngressResult> asyncHandler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupIngressRequest, AuthorizeSecurityGroupIngressResult>(
                 this.service, msg) {
@@ -606,10 +611,15 @@ public class AWSInstanceContext
     }
 
     private DeferredResult<AuthorizeSecurityGroupEgressResult> createEgressRules(
-            AWSInstanceContext context, AWSNicContext nicCtx, SecurityGroupState createdGroupSGState) {
+            AWSInstanceContext context, AWSNicContext nicCtx,
+            SecurityGroupState createdGroupSGState) {
 
         if (!nicCtx.securityGroupIds.contains(createdGroupSGState.id)) {
             // The group was not successfully created on AWS, so no need to create Rules
+            context.service.logWarning(
+                    "The SG [%s] was not successfully created on AWS, so no need to create Egress Rules.",
+                    createdGroupSGState.name);
+
             return DeferredResult.completed(null);
         }
 
@@ -619,7 +629,8 @@ public class AWSInstanceContext
                 .withGroupId(createdGroupSGState.id)
                 .withIpPermissions(egressRules);
 
-        String msg = "Create AWS Egress rules for [" + createdGroupSGState.name + "] Security Group";
+        String msg = "Create AWS Egress rules for [" + createdGroupSGState.name
+                + "] Security Group";
 
         AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest, AuthorizeSecurityGroupEgressResult> asyncHandler = new AWSDeferredResultAsyncHandler<AuthorizeSecurityGroupEgressRequest, AuthorizeSecurityGroupEgressResult>(
                 this.service, msg) {
