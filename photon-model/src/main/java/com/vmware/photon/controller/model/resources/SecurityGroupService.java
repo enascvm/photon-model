@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -26,6 +27,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -162,6 +164,29 @@ public class SecurityGroupService extends StatefulService {
                 Allow,
                 Deny
             }
+
+            @Override
+            public boolean equals(Object obj) {
+                if (obj == null) {
+                    return false;
+                }
+                if (!Rule.class.isAssignableFrom(obj.getClass())) {
+                    return false;
+                }
+                Rule newRule = (Rule)obj;
+                if (this.protocol.equals(newRule.protocol) &&
+                        this.access.equals(newRule.access) &&
+                        this.ipRangeCidr.equals(newRule.ipRangeCidr) &&
+                        this.ports.equals(newRule.ports)) {
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(this.access, this.ipRangeCidr, this.ports, this.protocol);
+            }
         }
     }
 
@@ -193,15 +218,18 @@ public class SecurityGroupService extends StatefulService {
             SecurityGroupState patchBody = patch.getBody(SecurityGroupState.class);
             boolean hasStateChanged = false;
             // rules are overwritten -- it's not a merge
-            // will result in a new version of the service on every call
+            // if a new set of rules are input they will be overwritten
             if (patchBody.ingress != null) {
-                currentState.ingress = patchBody.ingress;
-                hasStateChanged = true;
+                if (currentState.ingress == null || !currentState.ingress.equals(patchBody.ingress)) {
+                    currentState.ingress = patchBody.ingress;
+                    hasStateChanged = true;
+                }
             }
-
             if (patchBody.egress != null) {
-                currentState.egress = patchBody.egress;
-                hasStateChanged = true;
+                if (currentState.egress == null || !currentState.egress.equals(patchBody.egress)) {
+                    currentState.egress = patchBody.egress;
+                    hasStateChanged = true;
+                }
             }
             return hasStateChanged;
         };

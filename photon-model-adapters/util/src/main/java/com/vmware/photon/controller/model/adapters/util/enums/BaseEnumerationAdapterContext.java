@@ -363,7 +363,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
         if (existsLocally) {
             // Update case.
-            op = Operation.createPatch(this.service, localState.documentSelfLink);
+            LOCAL_STATE currentState = this.localResourceStates.get(localState.id);
+            op = Operation.createPatch(this.service, currentState.documentSelfLink);
         } else {
             // Create case.
 

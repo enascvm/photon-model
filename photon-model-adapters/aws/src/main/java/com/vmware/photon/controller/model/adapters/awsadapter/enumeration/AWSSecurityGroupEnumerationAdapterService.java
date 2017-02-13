@@ -199,6 +199,13 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 resultSecurityGroupState.egress.add(generateSecurityRuleFromAWSIpPermission(
                         ipPermission, Rule.Access.Deny));
             }
+            resultSecurityGroupState.customProperties = new HashMap<>();
+            resultSecurityGroupState.customProperties.put(
+                    ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+                    this.request.parentCompute.documentSelfLink);
+            resultSecurityGroupState.customProperties.put(
+                    ComputeProperties.REGION_ID,
+                    this.request.regionId);
 
             return DeferredResult.completed(resultSecurityGroupState);
         }
