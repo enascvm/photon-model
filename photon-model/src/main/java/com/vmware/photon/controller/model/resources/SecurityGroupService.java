@@ -19,6 +19,7 @@ import java.util.UUID;
 import java.util.function.Function;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -86,6 +87,7 @@ public class SecurityGroupService extends StatefulService {
     public static class SecurityGroupState extends ResourceState {
         public static final String FIELD_NAME_AUTH_CREDENTIAL_LINK = "authCredentialsLink";
         public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
+        public static final String FIELD_NAME_REGION_ID = "regionId";
 
         /**
          * Region identifier of this security group service instance.
@@ -97,7 +99,6 @@ public class SecurityGroupService extends StatefulService {
         /**
          * Link to secrets. Required
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String authCredentialsLink;
 
@@ -233,10 +234,6 @@ public class SecurityGroupService extends StatefulService {
 
         if (state.regionId.isEmpty()) {
             throw new IllegalArgumentException("regionId required");
-        }
-
-        if (state.authCredentialsLink.isEmpty()) {
-            throw new IllegalArgumentException("authCredentialsLink required");
         }
 
         if (state.resourcePoolLink.isEmpty()) {
