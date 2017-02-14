@@ -48,7 +48,14 @@ public class TagFactoryService extends FactoryService {
      */
     @Override
     protected String buildDefaultChildSelfLink(ServiceDocument document) {
-        return generateId((TagState)document);
+        TagState initState = (TagState)document;
+        if (initState.key != null && initState.value != null) {
+            return generateId(initState);
+        }
+        if (initState.documentSelfLink != null) {
+            return initState.documentSelfLink;
+        }
+        return super.buildDefaultChildSelfLink();
     }
 
     public static String generateSelfLink(TagState tagState) {

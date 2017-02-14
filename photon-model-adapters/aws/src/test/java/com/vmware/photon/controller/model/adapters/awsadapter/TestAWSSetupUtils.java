@@ -17,6 +17,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
@@ -526,6 +527,8 @@ public class TestAWSSetupUtils {
             networkState.regionId = zoneId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
                     AWSUriPaths.AWS_NETWORK_ADAPTER);
+            networkState.customProperties = new HashMap<>();
+            networkState.customProperties.put(REGION_ID, zoneId);
             networkState = TestUtils.doPost(host, networkState,
                     NetworkState.class,
                     UriUtils.buildUri(host, NetworkService.FACTORY_LINK));
