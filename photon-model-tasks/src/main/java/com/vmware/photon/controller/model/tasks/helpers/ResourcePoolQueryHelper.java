@@ -67,6 +67,7 @@ public class ResourcePoolQueryHelper {
     private Collection<String> computeLinks;
     private boolean expandComputes = false;
     private Consumer<Query.Builder> additionalQueryClausesProvider;
+    private Consumer<Query.Builder> additionalResourcePoolQueryClausesProvider;
 
     // internal state
     private QueryResult result;
@@ -137,6 +138,14 @@ public class ResourcePoolQueryHelper {
     }
 
     /**
+     * Allows clients to dynamically add query clauses for narrowing down the list of returned
+     * ResourcePools.
+     */
+    public void setAdditionalResourcePoolQueryClausesProvider(Consumer<Query.Builder> provider) {
+        this.additionalResourcePoolQueryClausesProvider = provider;
+    }
+
+    /**
      * Whether to expand {@link ComputeState} documents or not. If {@code false}, values in
      * {@link QueryResult#computesByLink} are {@code null}.
      */
@@ -168,6 +177,8 @@ public class ResourcePoolQueryHelper {
                 .addKindFieldClause(ResourcePoolState.class);
         if (this.resourcePoolLinks != null && !this.resourcePoolLinks.isEmpty()) {
             queryBuilder.addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, this.resourcePoolLinks);
+        } else if (this.additionalResourcePoolQueryClausesProvider != null) {
+            this.additionalResourcePoolQueryClausesProvider.accept(queryBuilder);
         }
 
         return new QueryByPages<>(this.host, queryBuilder.build(), ResourcePoolState.class, null)
