@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.4-SNAPSHOT
+
+
 ## 0.6.3
 
 * Make regionId an optional parameter when defining an endpoint
