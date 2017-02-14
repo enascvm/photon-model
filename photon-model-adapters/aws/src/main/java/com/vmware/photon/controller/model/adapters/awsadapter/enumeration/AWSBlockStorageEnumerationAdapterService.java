@@ -405,8 +405,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                             this.context.parentAuth.documentSelfLink)
                     .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
                             this.context.request.original.resourcePoolLink)
-                    .addInCollectionItemClause(
-                            ComputeState.FIELD_NAME_ID,
+                    .addInClause(ComputeState.FIELD_NAME_ID,
                             this.context.remoteAWSVolumes.keySet());
 
             addScopeCriteria(qBuilder, DiskState.class, this.context);
@@ -551,15 +550,13 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             diskState.resourcePoolLink = resourcePoolLink;
             diskState.endpointLink = endpointLink;
             diskState.tenantLinks = tenantLinks;
-            diskState.customProperties = new HashMap<>();
-            diskState.customProperties.put(REGION_ID, regionId);
             if (volume.getCreateTime() != null) {
                 diskState.creationTimeMicros = TimeUnit.MILLISECONDS
                         .toMicros(volume.getCreateTime().getTime());
             }
             mapAttachmentState(diskState, volume);
             mapDiskType(diskState, volume);
-            mapCustomProperties(diskState, volume);
+            mapCustomProperties(diskState, volume, regionId);
             return diskState;
 
         }
@@ -568,7 +565,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * Method for mapping additionl properties in the EBS volume to the local diskstate. For e.g. snapshotID, iops,
          * encrypted etc.
          */
-        private void mapCustomProperties(DiskState diskState, Volume volume) {
+        private void mapCustomProperties(DiskState diskState, Volume volume, String regionId) {
             diskState.customProperties = new HashMap<>();
             if (volume.getSnapshotId() != null) {
                 diskState.customProperties.put(SNAPSHOT_ID, volume.getSnapshotId());
@@ -580,6 +577,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 diskState.customProperties.put(DISK_ENCRYPTED_FLAG,
                         volume.getEncrypted().toString());
             }
+            diskState.customProperties.put(REGION_ID, regionId);
             diskState.customProperties.put(VOLUME_TYPE,
                     volume.getVolumeType());
             diskState.customProperties.put(SOURCE_TASK_LINK,
