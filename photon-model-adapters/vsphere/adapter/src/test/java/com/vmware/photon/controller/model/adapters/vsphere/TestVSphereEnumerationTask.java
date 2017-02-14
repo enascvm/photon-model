@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 import java.io.IOException;
 import java.util.EnumSet;
@@ -69,6 +70,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         if (!isMock()) {
             ComputeState vm = findRandomVm();
             assertInternalPropertiesSet(vm);
+            assertNotNull(vm.endpointLink);
         }
 
         captureFactoryState("initial");
@@ -141,6 +143,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         task.enumerationAction = EnumerationAction.REFRESH;
         task.parentComputeLink = this.computeHost.documentSelfLink;
         task.resourcePoolLink = this.resourcePool.documentSelfLink;
+        task.endpointLink = "/some/made-up/link";
 
         ResourceEnumerationTaskState outTask = TestUtils.doPost(this.host,
                 task,

@@ -641,6 +641,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         NetworkState state = new NetworkState();
 
         state.id = state.name = net.getName();
+        state.endpointLink = enumerationContext.getRequest().endpointLink;
         state.subnetCIDR = FAKE_SUBNET_CIDR;
         state.regionId = parent.description.regionId;
         state.resourcePoolLink = request.resourcePoolLink;
@@ -743,6 +744,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.id = res.name = ds.getName();
         res.type = ds.getType();
         res.resourcePoolLink = request.resourcePoolLink;
+        res.endpointLink = request.endpointLink;
         res.adapterManagementReference = request.adapterManagementReference;
         res.capacityBytes = ds.getCapacityBytes();
         res.regionId = regionId;
@@ -829,7 +831,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
         res.totalMemoryBytes = cr.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
-
+        res.endpointLink = enumerationContext.getRequest().endpointLink;
         res.instanceAdapterReference = enumerationContext
                 .getParent().description.instanceAdapterReference;
         res.enumerationAdapterReference = enumerationContext
@@ -954,6 +956,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = new ComputeState();
         state.id = cr.getId().getValue();
         state.type = ComputeType.VM_HOST;
+        state.endpointLink = enumerationContext.getRequest().endpointLink;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         state.adapterManagementReference = enumerationContext.getRequest().adapterManagementReference;
         state.parentLink = enumerationContext.getRequest().resourceLink();
@@ -1052,6 +1055,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.documentSelfLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.cpuCount = hs.getCoreCount();
+        res.endpointLink = enumerationContext.getRequest().endpointLink;
         res.cpuMhzPerCore = hs.getCpuMhz();
         res.totalMemoryBytes = hs.getTotalMemoryBytes();
         res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
@@ -1069,6 +1073,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = new ComputeState();
         state.type = ComputeType.VM_HOST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
+        state.endpointLink = enumerationContext.getRequest().endpointLink;
         state.id = hs.getId().getValue();
         state.adapterManagementReference = enumerationContext.getRequest().adapterManagementReference;
         state.parentLink = enumerationContext.getRequest().resourceLink();
@@ -1169,6 +1174,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             VmOverlay vm) {
         ComputeDescription res = new ComputeDescription();
         res.name = vm.getName();
+        res.endpointLink = enumerationContext.getRequest().endpointLink;
         res.documentSelfLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.instanceAdapterReference = enumerationContext
@@ -1200,6 +1206,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = new ComputeState();
         state.type = ComputeType.VM_GUEST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
+        state.endpointLink = enumerationContext.getRequest().endpointLink;
         state.adapterManagementReference = request.adapterManagementReference;
         state.parentLink = request.resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;
