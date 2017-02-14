@@ -13,9 +13,13 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.network;
 
+import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest.InstanceRequestType;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereUriPaths;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.TaskState.TaskStage;
 
 public class DvsNetworkService extends StatelessService {
     public static final String SELF_LINK = VSphereUriPaths.DVS_NETWORK_SERVICE;
@@ -27,6 +31,25 @@ public class DvsNetworkService extends StatelessService {
             return;
         }
 
-        op.fail(new UnsupportedOperationException("not implemented"));
+        NetworkInstanceRequest req = op.getBody(NetworkInstanceRequest.class);
+
+        if (req.isMockRequest) {
+            new TaskManager(this, req.taskReference).patchTask(TaskStage.FINISHED);
+            op.complete();
+        }
+
+        if (req.requestType == InstanceRequestType.CREATE) {
+            op.complete();
+            new CreatePortgroupFlow(this, req).provisionAsync();
+            return;
+        }
+
+        if (req.requestType == InstanceRequestType.DELETE) {
+            op.complete();
+            new DeletePortgroupFlow(this, req).provisionAsync();
+            return;
+        }
+
+        op.fail(new IllegalArgumentException("bad request type"));
     }
 }

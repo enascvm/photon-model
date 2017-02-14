@@ -15,5 +15,8 @@ package com.vmware.photon.controller.model.adapters.vsphere.network;
 
 public class DvsProperties {
 
-    public static final String PARENT_DVS_MOREF = "__parentDvsMoref";
+    /**
+     * a NetworkState describing a Portgroup keeps a link to its parent DVS
+     */
+    public static final String PARENT_DVS_LINK = "__parentDvsMoref";
 }

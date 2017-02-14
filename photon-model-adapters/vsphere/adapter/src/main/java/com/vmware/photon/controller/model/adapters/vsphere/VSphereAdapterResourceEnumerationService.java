@@ -219,7 +219,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         if (old != null) {
             logFine(() -> String.format("Enumeration process for %s already started, not starting a"
-                            + " new one", parent.documentSelfLink));
+                    + " new one", parent.documentSelfLink));
             return;
         }
 
@@ -252,7 +252,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         } catch (RejectedExecutionException e) {
             String msg = String
                     .format("Max number of resource enumeration processes reached: will not start "
-                                    + "one for %s", parent.documentSelfLink);
+                            + "one for %s", parent.documentSelfLink);
             logWarning(msg);
             mgr.patchTaskToFailure(msg, e);
         }
@@ -645,7 +645,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.subnetCIDR = FAKE_SUBNET_CIDR;
         state.regionId = parent.description.regionId;
         state.resourcePoolLink = request.resourcePoolLink;
-        state.adapterManagementReference =  request.adapterManagementReference;
+        state.adapterManagementReference = request.adapterManagementReference;
         state.authCredentialsLink = parent.description.authCredentialsLink;
 
         URI ref = parent.description.instanceAdapterReference;
@@ -657,8 +657,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
-        if (net.getParentSwitch() != null) {
-            custProp.put(DvsProperties.PARENT_DVS_MOREF, net.getParentSwitch());
+        ManagedObjectReference parentSwitch = net.getParentSwitch();
+        if (parentSwitch != null) {
+            // only if net is portgroup
+            custProp.put(DvsProperties.PARENT_DVS_LINK,
+                    buildStableDvsLink(parentSwitch, request.adapterManagementReference.toString()));
         }
 
         if (net.getSummary() instanceof OpaqueNetworkSummary) {
@@ -667,7 +670,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             custProp.put(CustomProperties.OPAQUE_NET_TYPE, ons.getOpaqueNetworkType());
         }
 
+        if (net.getId().getType().equals(VimNames.TYPE_DVS)) {
+            // dvs have a stable link
+            state.documentSelfLink = buildStableDvsLink(net.getId(), request.adapterManagementReference.toString());
+        }
+
         return state;
+    }
+
+    private String buildStableDvsLink(ManagedObjectReference ref, String adapterManagementReference) {
+        return NetworkService.FACTORY_LINK + "/" + VimUtils.buildStableManagedObjectId(ref, adapterManagementReference);
     }
 
     private QueryTask queryForNetwork(EnumerationContext ctx, String name) {

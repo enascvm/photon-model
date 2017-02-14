@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
@@ -198,5 +199,16 @@ public class VimUtilsTest {
         LocalizedMethodFault lmf = VimUtils.convertExceptionToFault(e);
         assertNull(lmf.getFault());
         assertSame(msg, lmf.getLocalizedMessage());
+    }
+
+    @Test
+    public void buildStableManagedObjectId() {
+        ManagedObjectReference ref = new ManagedObjectReference();
+        ref.setType("type");
+        ref.setValue("value");
+        String id = VimUtils.buildStableManagedObjectId(ref, "test");
+        assertNotNull(id);
+
+        assertEquals(id, VimUtils.buildStableManagedObjectId(ref, "test"));
     }
 }

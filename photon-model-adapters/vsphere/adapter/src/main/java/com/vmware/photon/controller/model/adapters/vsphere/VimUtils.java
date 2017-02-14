@@ -13,16 +13,21 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.GregorianCalendar;
 import java.util.Objects;
 
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.XMLGregorianCalendar;
+
+import org.apache.commons.codec.binary.Hex;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
@@ -36,6 +41,7 @@ import com.vmware.vim25.MethodFault;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
+import com.vmware.xenon.common.Utils;
 
 /**
  */
@@ -319,6 +325,39 @@ public final class VimUtils {
 
         return Objects.equals(a.getType(), b.getType()) &&
                 Objects.equals(a.getValue(), b.getValue());
+    }
+
+    /**
+     * Builds a stable link from a managed object and a set of string that differentiate
+     * @param ref
+     * @param markers
+     * @return
+     */
+    public static String buildStableManagedObjectId(ManagedObjectReference ref, String... markers) {
+        MessageDigest md;
+        try {
+            md = MessageDigest.getInstance("SHA-1");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+        try {
+            md.update(convertMoRefToString(ref).getBytes(Utils.CHARSET));
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
+
+        if (markers != null) {
+            for (String s : markers) {
+                try {
+                    md.update(s.getBytes(Utils.CHARSET));
+                } catch (UnsupportedEncodingException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+
+        byte[] digest = md.digest();
+        return Hex.encodeHexString(digest);
     }
 }
 
