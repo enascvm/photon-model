@@ -25,6 +25,7 @@ import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
+import com.amazonaws.services.ec2.model.Tag;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -169,43 +170,50 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         }
 
         @Override
-        protected DeferredResult<SecurityGroupState> buildLocalResourceState(
+        protected DeferredResult<LocalStateHolder> buildLocalResourceState(
                 SecurityGroup remoteResource,
                 SecurityGroupState existingLocalResourceState) {
-
-            SecurityGroupState resultSecurityGroupState = new SecurityGroupState();
+            LocalStateHolder stateHolder = new LocalStateHolder();
+            stateHolder.localState = new SecurityGroupState();
 
             if (existingLocalResourceState == null) {
-                resultSecurityGroupState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
-                resultSecurityGroupState.regionId = this.regionId;
-                resultSecurityGroupState.resourcePoolLink = this.request.parentCompute.resourcePoolLink;
-                resultSecurityGroupState.instanceAdapterReference = AdapterUriUtil
+                stateHolder.localState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
+                stateHolder.localState.regionId = this.regionId;
+                stateHolder.localState.resourcePoolLink = this.request.parentCompute.resourcePoolLink;
+                stateHolder.localState.instanceAdapterReference = AdapterUriUtil
                         .buildAdapterUri(this.service.getHost(),
                                 AWS_FIREWALL_ADAPTER);
             }
-            resultSecurityGroupState.id = remoteResource.getGroupId();
-            resultSecurityGroupState.name = remoteResource.getGroupName();
+            stateHolder.localState.id = remoteResource.getGroupId();
+            stateHolder.localState.name = remoteResource.getGroupName();
 
-            resultSecurityGroupState.ingress = new ArrayList<>();
+            stateHolder.localState.ingress = new ArrayList<>();
             for (IpPermission ipPermission : remoteResource.getIpPermissions()) {
-                resultSecurityGroupState.ingress.add(generateSecurityRuleFromAWSIpPermission(
+                stateHolder.localState.ingress.add(generateSecurityRuleFromAWSIpPermission(
                         ipPermission, Rule.Access.Allow));
             }
 
-            resultSecurityGroupState.egress = new ArrayList<>();
+            stateHolder.localState.egress = new ArrayList<>();
             for (IpPermission ipPermission : remoteResource.getIpPermissionsEgress()) {
-                resultSecurityGroupState.egress.add(generateSecurityRuleFromAWSIpPermission(
+                stateHolder.localState.egress.add(generateSecurityRuleFromAWSIpPermission(
                         ipPermission, Rule.Access.Deny));
             }
-            resultSecurityGroupState.customProperties = new HashMap<>();
-            resultSecurityGroupState.customProperties.put(
+            stateHolder.localState.customProperties = new HashMap<>();
+            stateHolder.localState.customProperties.put(
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                     this.request.parentCompute.documentSelfLink);
-            resultSecurityGroupState.customProperties.put(
+            stateHolder.localState.customProperties.put(
                     ComputeProperties.REGION_ID,
                     this.regionId);
 
-            return DeferredResult.completed(resultSecurityGroupState);
+            if (remoteResource.getTags() != null) {
+
+                for (Tag awsSGTag : remoteResource.getTags()) {
+                    stateHolder.remoteTags.put(awsSGTag.getKey(), awsSGTag.getValue());
+                }
+            }
+
+            return DeferredResult.completed(stateHolder);
         }
 
         @Override

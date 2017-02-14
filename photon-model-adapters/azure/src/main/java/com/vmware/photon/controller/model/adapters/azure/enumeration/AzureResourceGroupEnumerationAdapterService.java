@@ -128,30 +128,31 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
         }
 
         @Override
-        protected DeferredResult<ResourceGroupState> buildLocalResourceState(
+        protected DeferredResult<LocalStateHolder> buildLocalResourceState(
                 ResourceGroup remoteResourceGroup,
                 ResourceGroupState localResourceGroupState) {
 
-            ResourceGroupState resourceGroupState = new ResourceGroupState();
+            LocalStateHolder holder = new LocalStateHolder();
+            holder.localState = new ResourceGroupState();
 
             if (localResourceGroupState != null) {
                 // Update: do not set Photon fields which are not explicitly affected by Azure
-                resourceGroupState.documentSelfLink = localResourceGroupState.documentSelfLink;
+                holder.localState.documentSelfLink = localResourceGroupState.documentSelfLink;
             } else {
                 // Create: set Photon fields
-                resourceGroupState.customProperties = new HashMap<>();
-                resourceGroupState.customProperties.put(
+                holder.localState.customProperties = new HashMap<>();
+                holder.localState.customProperties.put(
                         ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                         this.request.parentCompute.documentSelfLink);
-                resourceGroupState.customProperties.put(
+                holder.localState.customProperties.put(
                         ComputeProperties.RESOURCE_TYPE_KEY,
                         ResourceGroupStateType.AzureResourceGroup.name());
             }
 
             // Fields explicitly affected by Azure
-            resourceGroupState.name = remoteResourceGroup.name;
+            holder.localState.name = remoteResourceGroup.name;
 
-            return DeferredResult.completed(resourceGroupState);
+            return DeferredResult.completed(holder);
         }
     }
 

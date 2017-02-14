@@ -24,8 +24,11 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryResultLimit;
+
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.unTagResources;
+
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_LINUX_AMI;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_WINDOWS_AMI;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.addNICDirectlyWithEC2Client;
@@ -93,6 +96,7 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -567,70 +571,91 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         this.host.log("Running test: " + this.currentTestName);
 
-        Tag tag1 = new Tag("key1", "value1");
-        Tag tag2 = new Tag("key2", "value2");
-        Tag tag3 = new Tag("key3", "value3");
-        List<Tag> allTags = Arrays.asList(tag1, tag2, tag3);
+        // SG tag
+        List<Tag> sgTags = new ArrayList<>();
+        sgTags.add(new Tag("sgTagKey", "valueSGTag"));
 
-        String linuxVMId1 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
-        this.instancesToCleanUp.add(linuxVMId1);
-        waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
+        try {
+            // VM tags
+            Tag tag1 = new Tag("key1", "value1");
+            Tag tag2 = new Tag("key2", "value2");
+            Tag tag3 = new Tag("key3", "value3");
+            List<Tag> vmTags = Arrays.asList(tag1, tag2, tag3);
 
-        // Tag the first VM with a name and add some additional tags
-        tagResourcesWithName(this.client, VM_NAME, linuxVMId1);
-        List<Tag> linuxVMId1Tags = Arrays.asList(tag1, tag2);
-        tagResources(this.client, linuxVMId1Tags, linuxVMId1);
+            String linuxVMId1 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
+            this.instancesToCleanUp.add(linuxVMId1);
+            waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
 
-        enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
-                TEST_CASE_INITIAL);
+            // Tag the first VM with a name and add some additional tags
+            tagResourcesWithName(this.client, VM_NAME, linuxVMId1);
+            List<Tag> linuxVMId1Tags = Arrays.asList(tag1, tag2);
+            tagResources(this.client, linuxVMId1Tags, linuxVMId1);
+            // tag default SG
+            tagResources(this.client, sgTags, TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
 
-        String linuxVMId2 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
-        this.instancesToCleanUp.add(linuxVMId2);
+            enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
+                    this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                    TEST_CASE_INITIAL);
 
-        waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
+            String linuxVMId2 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
+            this.instancesToCleanUp.add(linuxVMId2);
 
-        // Name the second VM and add some tags
-        tagResourcesWithName(this.client, VM_UPDATED_NAME, linuxVMId2);
-        List<Tag> linuxVMId2Tags = Arrays.asList(tag2, tag3);
-        tagResources(this.client, linuxVMId2Tags, linuxVMId2);
+            waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
 
-        enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
-                TEST_CASE_INITIAL);
+            // Name the second VM and add some tags
+            tagResourcesWithName(this.client, VM_UPDATED_NAME, linuxVMId2);
+            List<Tag> linuxVMId2Tags = Arrays.asList(tag2, tag3);
+            tagResources(this.client, linuxVMId2Tags, linuxVMId2);
 
-        validateComputeName(linuxVMId1, VM_NAME);
-        validateComputeName(linuxVMId2, VM_UPDATED_NAME);
+            // tag default SG again, so that there is a difference between local and remote tags
+            sgTags.remove(0);
+            //value is different with the same key, local state should be deleted and new one created
+            sgTags.add(0, new Tag("sgTagKey", "newValueSGTag"));
+            //new key-value set remotely should result in a new tag state created locally
+            sgTags.add(new Tag("sgTagKey1", "valueSGTag1"));
+            tagResources(this.client, sgTags, TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
 
-        // There are a total of allTags.size() + instancesToCleanUp.size() tags.
-        // instancesToCleanUp.size() are name tags, which are skipped. This means we should have
-        // allTags.size() TagState documents
-        ServiceDocumentQueryResult serviceDocumentQueryResult = queryDocumentsAndAssertExpectedCount(
-                this.host, allTags.size(), TagService.FACTORY_LINK, false);
+            enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
+                    this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                    TEST_CASE_INITIAL);
 
-        Map<Tag, String> tagLinks = new HashMap<>();
+            validateComputeName(linuxVMId1, VM_NAME);
+            validateComputeName(linuxVMId2, VM_UPDATED_NAME);
 
-        for (Tag tag : allTags) {
-            for (Map.Entry<String, Object> entry : serviceDocumentQueryResult.documents
-                    .entrySet()) {
-                TagState tagState = Utils.fromJson(entry.getValue(), TagState.class);
-                if (tagState.key.equals(tag.getKey())) {
-                    tagLinks.put(tag, entry.getKey());
-                    return;
+            // There are a total of allTags.size() + instancesToCleanUp.size() + sgTags.size() tags.
+            // instancesToCleanUp.size() are name tags, which are skipped. This means we should have
+            // allTags.size() + sgTags.size() TagState documents
+            int allTagsNumber = vmTags.size() + sgTags.size();
+            ServiceDocumentQueryResult serviceDocumentQueryResult = queryDocumentsAndAssertExpectedCount(
+                    this.host, allTagsNumber, TagService.FACTORY_LINK, false);
+
+            Map<Tag, String> tagLinks = new HashMap<>();
+
+            for (Tag tag : vmTags) {
+                for (Map.Entry<String, Object> entry : serviceDocumentQueryResult.documents
+                        .entrySet()) {
+                    TagState tagState = Utils.fromJson(entry.getValue(), TagState.class);
+                    if (tagState.key.equals(tag.getKey())) {
+                        tagLinks.put(tag, entry.getKey());
+                        return;
+                    }
                 }
             }
-        }
 
-        ComputeState linuxVMId1ComputeState = getComputeByAWSId(this.host, linuxVMId1);
-        assertEquals(linuxVMId1Tags.size(), linuxVMId1ComputeState.tagLinks.size());
-        for (Tag tag : linuxVMId1Tags) {
-            assertTrue(linuxVMId1ComputeState.tagLinks.contains(tagLinks.get(tag)));
-        }
+            ComputeState linuxVMId1ComputeState = getComputeByAWSId(this.host, linuxVMId1);
+            assertEquals(linuxVMId1Tags.size(), linuxVMId1ComputeState.tagLinks.size());
+            for (Tag tag : linuxVMId1Tags) {
+                assertTrue(linuxVMId1ComputeState.tagLinks.contains(tagLinks.get(tag)));
+            }
 
-        ComputeState linuxVMId2ComputeState = getComputeByAWSId(this.host, linuxVMId2);
-        assertEquals(linuxVMId2Tags.size(), linuxVMId2ComputeState.tagLinks.size());
-        for (Tag tag : linuxVMId2Tags) {
-            assertTrue(linuxVMId2ComputeState.tagLinks.contains(tagLinks.get(tag)));
+            ComputeState linuxVMId2ComputeState = getComputeByAWSId(this.host, linuxVMId2);
+            assertEquals(linuxVMId2Tags.size(), linuxVMId2ComputeState.tagLinks.size());
+            for (Tag tag : linuxVMId2Tags) {
+                assertTrue(linuxVMId2ComputeState.tagLinks.contains(tagLinks.get(tag)));
+            }
+        } finally {
+            // un-tag default SG
+            unTagResources(this.client, sgTags, TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
         }
     }
 

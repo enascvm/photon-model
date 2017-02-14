@@ -160,52 +160,54 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
         }
 
         @Override
-        protected DeferredResult<SecurityGroupState> buildLocalResourceState(
+        protected DeferredResult<LocalStateHolder> buildLocalResourceState(
                 NetworkSecurityGroup networkSecurityGroup,
                 SecurityGroupState localSecurityGroupState) {
+            LocalStateHolder holder = new LocalStateHolder();
 
             String resourceGroupId = AzureUtils.getResourceGroupId(networkSecurityGroup.id);
             String rgDocumentSelfLink = this.securityGroupRGStates.get(resourceGroupId);
             if (rgDocumentSelfLink == null) {
                 // The Resource Group of Security Group is still not enumerated.
                 // TODO: add log.
-                return DeferredResult.completed(this.SKIP);
+                holder.localState = this.SKIP;
+                return DeferredResult.completed(holder);
             }
 
-            SecurityGroupState securityGroupState = new SecurityGroupState();
+            holder.localState = new SecurityGroupState();
 
             if (localSecurityGroupState != null) {
                 // Update: no need to touch Photon fields which are not affected by Azure
-                securityGroupState.documentSelfLink = localSecurityGroupState.documentSelfLink;
+                holder.localState.documentSelfLink = localSecurityGroupState.documentSelfLink;
             } else {
                 // Create: need to set Photon fields
-                securityGroupState.customProperties = new HashMap<>();
-                securityGroupState.customProperties.put(
+                holder.localState.customProperties = new HashMap<>();
+                holder.localState.customProperties.put(
                         ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                         this.request.parentCompute.documentSelfLink);
 
-                securityGroupState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
-                securityGroupState.resourcePoolLink = this.request.original.resourcePoolLink;
+                holder.localState.authCredentialsLink = this.request.parentAuth.documentSelfLink;
+                holder.localState.resourcePoolLink = this.request.original.resourcePoolLink;
 
                 // TODO: AzureFirewallService currently doesn't exist.
-                securityGroupState.instanceAdapterReference = UriUtils
+                holder.localState.instanceAdapterReference = UriUtils
                         .buildUri(this.service.getHost(), AZURE_FIREWALL_ADAPTER);
             }
 
             // Fields explicitly affected by Azure
 
-            securityGroupState.groupLinks = Collections.singleton(rgDocumentSelfLink);
-            securityGroupState.name = networkSecurityGroup.name;
-            securityGroupState.regionId = networkSecurityGroup.location;
+            holder.localState.groupLinks = Collections.singleton(rgDocumentSelfLink);
+            holder.localState.name = networkSecurityGroup.name;
+            holder.localState.regionId = networkSecurityGroup.location;
 
             if (networkSecurityGroup.properties == null
                     || networkSecurityGroup.properties.securityRules == null) {
                 // No rules.
-                return DeferredResult.completed(securityGroupState);
+                return DeferredResult.completed(holder);
             }
 
-            securityGroupState.ingress = new ArrayList<>();
-            securityGroupState.egress = new ArrayList<>();
+            holder.localState.ingress = new ArrayList<>();
+            holder.localState.egress = new ArrayList<>();
 
             networkSecurityGroup.properties.securityRules.forEach(securityRule -> {
 
@@ -225,12 +227,12 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     // ingress rule.
                     rule.ipRangeCidr = securityRule.properties.sourceAddressPrefix;
                     ports = securityRule.properties.sourcePortRange;
-                    rulesList = securityGroupState.ingress;
+                    rulesList = holder.localState.ingress;
                 } else {
                     // egress rule.
                     rule.ipRangeCidr = securityRule.properties.destinationPortRange;
                     ports = securityRule.properties.destinationPortRange;
-                    rulesList = securityGroupState.egress;
+                    rulesList = holder.localState.egress;
                 }
 
                 if (SecurityGroupService.ANY.equals(ports)) {
@@ -250,7 +252,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 }
             });
 
-            return DeferredResult.completed(securityGroupState);
+            return DeferredResult.completed(holder);
         }
 
         /**

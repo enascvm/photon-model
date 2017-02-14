@@ -49,6 +49,7 @@ import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
+import com.amazonaws.services.ec2.model.DeleteTagsRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
@@ -154,6 +155,7 @@ public class AWSUtils {
             Consumer<DescribeAvailabilityZonesResult> onSuccess) {
         ec2Client.describeAvailabilityZonesAsync(new DescribeAvailabilityZonesRequest(),
                 new AsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult>() {
+
                     @Override
                     public void onError(Exception e) {
                         if (e instanceof AmazonServiceException) {
@@ -203,6 +205,22 @@ public class AWSUtils {
         AmazonS3Client amazonS3Client = new AmazonS3Client(
                 new BasicAWSCredentials(credentials.privateKeyId, credentials.privateKey));
         return new TransferManager(amazonS3Client, executorService);
+    }
+
+    /**
+     * Synchronous UnTagging of one or many AWS resources with the provided tags.
+     */
+    public static void unTagResources(AmazonEC2AsyncClient client, Collection<Tag> tags,
+            String... resourceIds) {
+        if (isAwsClientMock()) {
+            return;
+        }
+
+        DeleteTagsRequest req = new DeleteTagsRequest()
+                .withTags(tags)
+                .withResources(resourceIds);
+
+        client.deleteTags(req);
     }
 
     /**
