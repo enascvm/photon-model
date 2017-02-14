@@ -1,10 +1,13 @@
 # CHANGELOG
 
-## 0.6.3-SNAPSHOT
+## 0.6.3
 
 * Make regionId an optional parameter when defining an endpoint
-for AWS. If not specified the enumeration operation will go
-across all regions
+  for AWS. If not specified the enumeration operation will go
+  across all regions.
+* Fix tenantLinks clause in QueryUtils.
+* Make authCredentialsLink non mandatory field in SecurityGroupState.
+* Add support to extend ResourcePools seach criteria.
 
 ## 0.6.2
 
