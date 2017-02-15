@@ -328,10 +328,11 @@ public class AWSInstanceService extends StatelessService {
                 .withMinCount(1).withMaxCount(1)
                 .withMonitoring(true);
 
-        if (aws.nics.isEmpty()) {
-            runInstancesRequest.withSecurityGroupIds(AWSUtils.getOrCreateSecurityGroups(aws, null));
+        AWSNicContext primaryNic = aws.getPrimaryNic();
+        if (primaryNic != null && primaryNic.nicSpec != null) {
+            runInstancesRequest.withNetworkInterfaces(primaryNic.nicSpec);
         } else {
-            runInstancesRequest.withNetworkInterfaces(aws.getAWSNicSpecs());
+            runInstancesRequest.withSecurityGroupIds(AWSUtils.getOrCreateSecurityGroups(aws, null));
         }
 
         if (cloudConfig != null) {

@@ -182,8 +182,6 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 resultSecurityGroupState.instanceAdapterReference = AdapterUriUtil
                         .buildAdapterUri(this.service.getHost(),
                                 AWS_FIREWALL_ADAPTER);
-                resultSecurityGroupState.customProperties = new HashMap<>();
-                resultSecurityGroupState.customProperties.put(ComputeProperties.REGION_ID, this.regionId);
             }
             resultSecurityGroupState.id = remoteResource.getGroupId();
             resultSecurityGroupState.name = remoteResource.getGroupName();
@@ -205,7 +203,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     this.request.parentCompute.documentSelfLink);
             resultSecurityGroupState.customProperties.put(
                     ComputeProperties.REGION_ID,
-                    this.request.regionId);
+                    this.regionId);
 
             return DeferredResult.completed(resultSecurityGroupState);
         }

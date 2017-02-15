@@ -384,9 +384,14 @@ public class AWSInstanceContext
             primaryNic.nicSpec = new InstanceNetworkInterfaceSpecification()
                     .withDeviceIndex(primaryNic.nicStateWithDesc.deviceIndex)
                     .withSubnetId(primaryNic.subnet.getSubnetId())
-                    .withGroups(primaryNic.securityGroupIds)
                     .withAssociatePublicIpAddress(
                             primaryNic.nicStateWithDesc.description.assignPublicIpAddress);
+            if (primaryNic.securityGroupIds.isEmpty()) {
+                primaryNic.nicSpec.withGroups(
+                        AWSUtils.getOrCreateDefaultSecurityGroup(this.amazonEC2Client, primaryNic));
+            } else {
+                primaryNic.nicSpec.withGroups(primaryNic.securityGroupIds);
+            }
         }
 
         return DeferredResult.completed(context);

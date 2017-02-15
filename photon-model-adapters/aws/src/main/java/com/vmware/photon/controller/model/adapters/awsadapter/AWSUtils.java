@@ -77,7 +77,6 @@ import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterR
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -102,8 +101,8 @@ public class AWSUtils {
     public static final String AWS_CLOUDWATCH_ENDPOINT = "/aws-mock/cloudwatch/";
 
     /**
-     * Flag to use aws-mock, will be set in test files.
-     * Aws-mock is a open-source tool for testing AWS services in a mock EC2 environment.
+     * Flag to use aws-mock, will be set in test files. Aws-mock is a open-source tool for testing
+     * AWS services in a mock EC2 environment.
      *
      * @see <a href="https://github.com/treelogic-swe/aws-mock">aws-mock</a>
      */
@@ -154,8 +153,7 @@ public class AWSUtils {
             Operation op, StatelessService service,
             Consumer<DescribeAvailabilityZonesResult> onSuccess) {
         ec2Client.describeAvailabilityZonesAsync(new DescribeAvailabilityZonesRequest(),
-                new AsyncHandler<DescribeAvailabilityZonesRequest,
-                        DescribeAvailabilityZonesResult>() {
+                new AsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult>() {
                     @Override
                     public void onError(Exception e) {
                         if (e instanceof AmazonServiceException) {
@@ -201,7 +199,7 @@ public class AWSUtils {
     public static TransferManager getS3AsyncClient(AuthCredentialsServiceState credentials,
             String region,
             ExecutorService executorService) {
-        //Ignoring the region parameter for now.
+        // Ignoring the region parameter for now.
         AmazonS3Client amazonS3Client = new AmazonS3Client(
                 new BasicAWSCredentials(credentials.privateKeyId, credentials.privateKey));
         return new TransferManager(amazonS3Client, executorService);
@@ -323,15 +321,14 @@ public class AWSUtils {
     /*
      * method will create new or validate existing security group has the necessary settings for CM
      * to function. It will return the security group id that is required during instance
-     * provisioning.
-     * for each nicContext element provided, for each of its securityGroupStates, security group is
-     * discovered from AWS
-     * in case that there are no securityGroupStates, security group ID is obtained from the custom
-     * properties
-     * in case that none of the above methods discover a security group, the default one is discovered from AWS
-     * in case that none of the above method discover a security group, a new security group is created
+     * provisioning. for each nicContext element provided, for each of its securityGroupStates,
+     * security group is discovered from AWS in case that there are no securityGroupStates, security
+     * group ID is obtained from the custom properties in case that none of the above methods
+     * discover a security group, the default one is discovered from AWS in case that none of the
+     * above method discover a security group, a new security group is created
      */
-    public static List<String> getOrCreateSecurityGroups(AWSInstanceContext aws, AWSNicContext nicCtx) {
+    public static List<String> getOrCreateSecurityGroups(AWSInstanceContext aws,
+            AWSNicContext nicCtx) {
 
         String groupId;
         SecurityGroup group;
@@ -381,6 +378,52 @@ public class AWSUtils {
         groupId = createAWSSecurityGroup(aws);
 
         return Collections.singletonList(groupId);
+    }
+
+    public static List<String> getOrCreateDefaultSecurityGroup(AmazonEC2AsyncClient amazonEC2Client,
+            AWSNicContext nicCtx) {
+
+        // in case no group is configured in the properties, attempt to discover the default one
+        if (nicCtx != null && nicCtx.vpc != null) {
+            try {
+                SecurityGroup group = getSecurityGroup(amazonEC2Client, DEFAULT_SECURITY_GROUP_NAME,
+                        nicCtx.vpc.getVpcId());
+                if (group != null) {
+                    return Arrays.asList(group.getGroupId());
+                }
+            } catch (AmazonServiceException t) {
+                if (!t.getMessage().contains(
+                        DEFAULT_SECURITY_GROUP_NAME)) {
+                    throw t;
+                }
+            }
+        }
+
+        // if the group doesn't exist an exception is thrown. We won't throw a
+        // missing group exception
+        // we will continue and create the group
+        String groupId = createDefaultSecurityGroup(amazonEC2Client, nicCtx.vpc);
+
+        return Collections.singletonList(groupId);
+    }
+
+    private static String createDefaultSecurityGroup(AmazonEC2AsyncClient amazonEC2Client,
+            Vpc vpc) {
+        String groupId;
+        try {
+            groupId = createSecurityGroup(amazonEC2Client, vpc.getVpcId());
+            updateIngressRules(amazonEC2Client, groupId,
+                    getDefaultRules(vpc.getCidrBlock()));
+        } catch (AmazonServiceException t) {
+            if (t.getMessage().contains(
+                    DEFAULT_SECURITY_GROUP_NAME)) {
+                groupId = getSecurityGroup(amazonEC2Client, DEFAULT_SECURITY_GROUP_NAME,
+                        vpc.getVpcId()).getGroupId();
+            } else {
+                throw t;
+            }
+        }
+        return groupId;
     }
 
     // method create a security group in the VPC from custom properties or the default VPC
@@ -571,10 +614,13 @@ public class AWSUtils {
         Datapoint oldestDatapoint = dpList.get(0);
         Datapoint latestDatapoint = dpList.get(dpList.size() - 1);
 
-        // Adjust oldest datapoint to account for billing cycle when the estimated charges is reset to 0.
-        // Iterate over the sublist from the oldestDatapoint element + 1 to the latestDatapoint element (excluding).
+        // Adjust oldest datapoint to account for billing cycle when the estimated charges is reset
+        // to 0.
+        // Iterate over the sublist from the oldestDatapoint element + 1 to the latestDatapoint
+        // element (excluding).
         // If the oldestDatapoint value is greater than the latestDatapoint value,
-        // move the oldestDatapoint pointer until the oldestDatapoint value is less than the latestDatapoint value.
+        // move the oldestDatapoint pointer until the oldestDatapoint value is less than the
+        // latestDatapoint value.
         // Eg: 4,5,6,7,0,1,2,3 -> 4 is greater than 3. Move the pointer until 0.
         // OldestDatapoint value is 0 and the latestDatapoint value is 3.
         for (Datapoint datapoint : dpList.subList(1, dpList.size() - 1)) {
@@ -587,8 +633,9 @@ public class AWSUtils {
         double averageBurnRate = (latestDatapoint.getAverage()
                 - oldestDatapoint.getAverage())
                 / getDateDifference(oldestDatapoint.getTimestamp(),
-                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
-        // If there are only 2 datapoints and the oldestDatapoint is greater than the latestDatapoint, value will be negative.
+                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+        // If there are only 2 datapoints and the oldestDatapoint is greater than the
+        // latestDatapoint, value will be negative.
         // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
         // In such cases, set the burn rate value to 0
         averageBurnRate = (averageBurnRate < 0 ? 0 : averageBurnRate);
@@ -605,10 +652,13 @@ public class AWSUtils {
         Datapoint dayOldDatapoint = dpList.get(dpList.size() - 7);
         Datapoint latestDatapoint = dpList.get(dpList.size() - 1);
 
-        // Adjust the dayOldDatapoint to account for billing cycle when the estimated charges is reset to 0.
-        // Iterate over the sublist from the oldestDatapoint element + 1 to the latestDatapoint element.
+        // Adjust the dayOldDatapoint to account for billing cycle when the estimated charges is
+        // reset to 0.
+        // Iterate over the sublist from the oldestDatapoint element + 1 to the latestDatapoint
+        // element.
         // If the oldestDatapoint value is greater than the latestDatapoint value,
-        // move the oldestDatapoint pointer until the oldestDatapoint value is less than the latestDatapoint value.
+        // move the oldestDatapoint pointer until the oldestDatapoint value is less than the
+        // latestDatapoint value.
         // Eg: 4,5,6,7,0,1,2,3 -> 4 is greater than 3. Move the pointer until 0.
         // OldestDatapoint value is 0 and the latestDatapoint value is 3.
         for (Datapoint datapoint : dpList.subList(dpList.size() - 6, dpList.size() - 1)) {
@@ -621,8 +671,9 @@ public class AWSUtils {
         double currentBurnRate = (latestDatapoint.getAverage()
                 - dayOldDatapoint.getAverage())
                 / getDateDifference(dayOldDatapoint.getTimestamp(),
-                latestDatapoint.getTimestamp(), TimeUnit.HOURS);
-        // If there are only 2 datapoints and the oldestDatapoint is greater than the latestDatapoint, value will be negative.
+                        latestDatapoint.getTimestamp(), TimeUnit.HOURS);
+        // If there are only 2 datapoints and the oldestDatapoint is greater than the
+        // latestDatapoint, value will be negative.
         // Eg: oldestDatapoint = 5 and latestDatapoint = 0, when the billing cycle is reset.
         // In such cases, set the burn rate value to 0
         currentBurnRate = (currentBurnRate < 0 ? 0 : currentBurnRate);
@@ -637,10 +688,12 @@ public class AWSUtils {
     public static String autoDiscoverBillsBucketName(AmazonS3 s3Client, String awsAccountId) {
         String billFilePrefix = awsAccountId + AWSCsvBillParser.AWS_DETAILED_BILL_CSV_FILE_NAME_MID;
         for (Bucket bucket : s3Client.listBuckets()) {
-            // For each bucket accessible to this client, try to search for files with the 'billFilePrefix'
+            // For each bucket accessible to this client, try to search for files with the
+            // 'billFilePrefix'
             ObjectListing objectListing = s3Client.listObjects(bucket.getName(), billFilePrefix);
             if (!objectListing.getObjectSummaries().isEmpty()) {
-                // This means that this bucket contains zip files representing the detailed csv bills.
+                // This means that this bucket contains zip files representing the detailed csv
+                // bills.
                 return bucket.getName();
             }
         }
