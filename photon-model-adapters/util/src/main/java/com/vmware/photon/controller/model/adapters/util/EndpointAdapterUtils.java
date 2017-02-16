@@ -156,10 +156,8 @@ public class EndpointAdapterUtils {
                         if (body.requestType == RequestType.VALIDATE) {
                             op.complete();
                         }
-                    } else if (e != null && r != null) {
-                        op.fail(e, r);
                     } else {
-                        op.fail(e);
+                        op.fail(e, r);
                     }
                 };
 

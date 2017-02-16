@@ -42,6 +42,7 @@ import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.xenon.common.Operation;
@@ -91,7 +92,8 @@ public class EndpointAllocationTaskService
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
         public EndpointState endpointState;
 
-        @Documentation(description = "URI reference to the adapter used to validate and enhance the endpoint data.")
+        @Documentation(
+                description = "URI reference to the adapter used to validate and enhance the endpoint data.")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
         public URI adapterReference;
 
@@ -507,8 +509,18 @@ public class EndpointAllocationTaskService
                         sendFailurePatch(this, currentState, e);
                         return;
                     }
+                    EndpointAllocationTaskState st = createUpdateSubStageTask(next);
+                    if (o.hasBody() && currentState.taskSubStage == SubStage.VALIDATE_CREDENTIALS) {
+                        CertificateInfoServiceErrorResponse errorResponse =
+                                o.getBody(CertificateInfoServiceErrorResponse.class);
 
-                    sendSelfPatch(createUpdateSubStageTask(next));
+                        if (CertificateInfoServiceErrorResponse.KIND.equals(
+                                errorResponse.documentKind)) {
+                            st.taskInfo.failure = errorResponse;
+                            st.taskInfo.stage = TaskStage.FAILED;
+                        }
+                    }
+                    sendSelfPatch(st);
                 }).sendWith(this);
     }
 

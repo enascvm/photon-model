@@ -30,6 +30,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -46,12 +47,16 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.support.CertificateInfo;
+import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockFailNPEEndpointAdapter;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
+import com.vmware.photon.controller.model.tasks.MockAdapter.MockUntrustedCertEndpointAdapter;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -287,7 +292,8 @@ public class EndpointAllocationTaskServiceTest extends Suite {
                     MockSuccessEndpointAdapter.SELF_LINK);
             startState.enumerationRequest = new EndpointAllocationTaskService.ResourceEnumerationRequest();
             startState.enumerationRequest.resourcePoolLink = pool.documentSelfLink;
-            startState.enumerationRequest.refreshIntervalMicros = TimeUnit.MILLISECONDS.toMicros(250);
+            startState.enumerationRequest.refreshIntervalMicros = TimeUnit.MILLISECONDS
+                    .toMicros(250);
 
             EndpointAllocationTaskState returnState = this
                     .postServiceSynchronously(
@@ -350,7 +356,8 @@ public class EndpointAllocationTaskServiceTest extends Suite {
 
             assertNotNull(endpointState.endpointProperties);
             assertEquals(TEST_ACCESS_KEY, endpointState.endpointProperties.get(PRIVATE_KEYID_KEY));
-            assertTrue(endpointState.endpointProperties == null || !endpointState.endpointProperties.containsKey(PRIVATE_KEY_KEY));
+            assertTrue(endpointState.endpointProperties == null || !endpointState.endpointProperties
+                    .containsKey(PRIVATE_KEY_KEY));
 
             ComputeState computeState = getServiceSynchronously(
                     completeState.endpointState.computeLink, ComputeState.class);
@@ -400,7 +407,8 @@ public class EndpointAllocationTaskServiceTest extends Suite {
             assertEquals(EndpointType.aws.name(), endpointState.endpointType);
             assertNotNull(endpointState.endpointProperties);
             assertEquals("new-access-key", endpointState.endpointProperties.get(PRIVATE_KEYID_KEY));
-            assertTrue(endpointState.endpointProperties == null || !endpointState.endpointProperties.containsKey(PRIVATE_KEY_KEY));
+            assertTrue(endpointState.endpointProperties == null || !endpointState.endpointProperties
+                    .containsKey(PRIVATE_KEY_KEY));
 
             computeState = getServiceSynchronously(
                     completeState.endpointState.computeLink, ComputeState.class);
@@ -456,6 +464,31 @@ public class EndpointAllocationTaskServiceTest extends Suite {
             assertNotNull(scheduledTaskState);
             // delete scheduled task
             deleteServiceSynchronously(schedTaskLink);
+        }
+
+        @Test
+        public void testValidateConnection() throws Throwable {
+            EndpointState endpoint = createEndpointState();
+
+            EndpointAllocationTaskState validateEndpoint = new EndpointAllocationTaskState();
+            validateEndpoint.options = EnumSet.of(TaskOption.VALIDATE_ONLY);
+            validateEndpoint.endpointState = endpoint;
+            validateEndpoint.taskInfo = TaskState.createDirect();
+
+            validateEndpoint.adapterReference = UriUtils.buildUri(getHost(),
+                    MockUntrustedCertEndpointAdapter.SELF_LINK);
+
+            EndpointAllocationTaskState outTask = TestUtils.doPost(this.host, validateEndpoint,
+                    EndpointAllocationTaskState.class,
+                    UriUtils.buildUri(this.host, EndpointAllocationTaskService.FACTORY_LINK));
+            Assert.assertEquals(outTask.taskInfo.stage, TaskStage.FAILED);
+            ServiceErrorResponse errorResponse = outTask.taskInfo.failure;
+            Assert.assertTrue(errorResponse instanceof CertificateInfoServiceErrorResponse);
+            CertificateInfoServiceErrorResponse certificateErrorRespounce =
+                    (CertificateInfoServiceErrorResponse) errorResponse;
+            CertificateInfo certificateInfo = certificateErrorRespounce.certificateInfo;
+            Assert.assertEquals(MockUntrustedCertEndpointAdapter.UNTRUSTED_CERT,
+                    certificateInfo.certificate);
         }
     }
 

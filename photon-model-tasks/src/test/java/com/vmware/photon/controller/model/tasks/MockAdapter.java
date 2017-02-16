@@ -15,6 +15,9 @@ package com.vmware.photon.controller.model.tasks;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 
+import java.net.HttpURLConnection;
+import java.security.cert.CertificateException;
+import java.util.Collections;
 import java.util.HashMap;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -30,6 +33,8 @@ import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.support.CertificateInfo;
+import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.xenon.common.Operation;
@@ -63,6 +68,7 @@ public class MockAdapter {
         host.startService(new MockFirewallInstanceSuccessAdapter());
         host.startService(new MockFirewallInstanceFailureAdapter());
         host.startService(new MockSuccessEndpointAdapter(test));
+        host.startService(new MockUntrustedCertEndpointAdapter());
         host.startService(new MockFailNPEEndpointAdapter());
     }
 
@@ -110,7 +116,7 @@ public class MockAdapter {
                 computeSubTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                                computeSubTaskState));
+                        computeSubTaskState));
                 break;
             default:
                 super.handleRequest(op);
@@ -140,7 +146,7 @@ public class MockAdapter {
                 computeSubTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                                computeSubTaskState));
+                        computeSubTaskState));
                 break;
             default:
                 super.handleRequest(op);
@@ -171,7 +177,7 @@ public class MockAdapter {
                 computeSubTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                                computeSubTaskState));
+                        computeSubTaskState));
                 break;
             default:
                 super.handleRequest(op);
@@ -202,7 +208,7 @@ public class MockAdapter {
                 computeSubTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                                computeSubTaskState));
+                        computeSubTaskState));
                 break;
             default:
                 super.handleRequest(op);
@@ -391,7 +397,7 @@ public class MockAdapter {
                 provisionNetworkTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                                provisionNetworkTaskState));
+                        provisionNetworkTaskState));
                 op.complete();
                 break;
             default:
@@ -422,7 +428,7 @@ public class MockAdapter {
                 provisionNetworkTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                                provisionNetworkTaskState));
+                        provisionNetworkTaskState));
                 op.complete();
                 break;
             default:
@@ -454,7 +460,7 @@ public class MockAdapter {
                 provisionFirewallTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                                provisionFirewallTaskState));
+                        provisionFirewallTaskState));
                 op.complete();
                 break;
             default:
@@ -485,7 +491,7 @@ public class MockAdapter {
                 provisionFirewallTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                                provisionFirewallTaskState));
+                        provisionFirewallTaskState));
                 op.complete();
                 break;
             default:
@@ -505,6 +511,7 @@ public class MockAdapter {
             op.fail(new NullPointerException());
         }
     }
+
     /**
      * Mock endpoint adapter that always succeeds.
      */
@@ -540,8 +547,10 @@ public class MockAdapter {
                     if (endpoint.endpointProperties == null) {
                         endpoint.endpointProperties = new HashMap<>();
                     }
-                    endpoint.endpointProperties.put(EndpointConfigRequest.REGION_KEY, request.endpointProperties.get(EndpointConfigRequest.REGION_KEY));
-                    endpoint.endpointProperties.put(EndpointConfigRequest.PRIVATE_KEYID_KEY, request.endpointProperties.get(PRIVATE_KEYID_KEY));
+                    endpoint.endpointProperties.put(EndpointConfigRequest.REGION_KEY,
+                            request.endpointProperties.get(EndpointConfigRequest.REGION_KEY));
+                    endpoint.endpointProperties.put(EndpointConfigRequest.PRIVATE_KEYID_KEY,
+                            request.endpointProperties.get(PRIVATE_KEYID_KEY));
                     this.test.patchServiceSynchronously(endpoint.documentSelfLink, endpoint);
 
                     ComputeDescription cd = new ComputeDescription();
@@ -566,6 +575,46 @@ public class MockAdapter {
                 } catch (Throwable e) {
                     op.fail(e);
                 }
+                break;
+            default:
+                super.handleRequest(op);
+            }
+        }
+    }
+
+    /**
+     * Mock endpoint adapter that always succeeds.
+     */
+    public static class MockUntrustedCertEndpointAdapter extends StatelessService {
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_untrusted_cert_endpoint_adapter";
+        public static final String UNTRUSTED_CERT = "untrusted cert";
+
+        public MockUntrustedCertEndpointAdapter() {
+        }
+
+        @Override
+        public void handleRequest(Operation op) {
+            if (!op.hasBody()) {
+                op.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+            switch (op.getAction()) {
+            case PATCH:
+                EndpointConfigRequest request = op
+                        .getBody(EndpointConfigRequest.class);
+                if (request.requestType == RequestType.VALIDATE) {
+                    CertificateInfoServiceErrorResponse errorResponse =
+                            CertificateInfoServiceErrorResponse.create(
+                                    CertificateInfo.of(UNTRUSTED_CERT, Collections.emptyMap()),
+                                    HttpURLConnection.HTTP_UNAVAILABLE,
+                                    CertificateInfoServiceErrorResponse.ERROR_CODE_UNTRUSTED_CERTIFICATE,
+                                    new CertificateException("Untrusted certificate")
+                            );
+                    op.fail(null, errorResponse);
+                    return;
+                }
+                op.fail(new UnsupportedOperationException("Not implemented"));
                 break;
             default:
                 super.handleRequest(op);
