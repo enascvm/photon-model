@@ -83,11 +83,9 @@ public class ComputeDescriptionServiceTest extends Suite {
 
         cd.supportedChildren = children;
         cd.environmentName = ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-        cd.costPerMinute = 1;
         cd.cpuMhzPerCore = 1000;
         cd.cpuCount = 2;
         cd.gpuCount = 1;
-        cd.currencyUnit = "USD";
         cd.totalMemoryBytes = Integer.MAX_VALUE;
         cd.id = UUID.randomUUID().toString();
         cd.name = "friendly-name";

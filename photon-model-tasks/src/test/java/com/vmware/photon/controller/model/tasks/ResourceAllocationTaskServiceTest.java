@@ -79,11 +79,9 @@ public class ResourceAllocationTaskServiceTest extends Suite {
         cd.supportedChildren = new ArrayList<>();
         cd.supportedChildren.add(ComputeType.VM_GUEST.toString());
         cd.environmentName = ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-        cd.costPerMinute = 1;
         cd.cpuMhzPerCore = 1000;
         cd.cpuCount = 2;
         cd.gpuCount = 1;
-        cd.currencyUnit = "USD";
         cd.totalMemoryBytes = Integer.MAX_VALUE;
         cd.id = UUID.randomUUID().toString();
         cd.name = "friendly-name";
@@ -121,11 +119,9 @@ public class ResourceAllocationTaskServiceTest extends Suite {
         // Create ComputeDescription
         ComputeDescriptionService.ComputeDescription cd = new ComputeDescriptionService.ComputeDescription();
         cd.environmentName = ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-        cd.costPerMinute = 1;
         cd.cpuMhzPerCore = 1000;
         cd.cpuCount = 2;
         cd.gpuCount = 1;
-        cd.currencyUnit = "USD";
         cd.totalMemoryBytes = Integer.MAX_VALUE;
         cd.id = UUID.randomUUID().toString();
         cd.name = "friendly-name";

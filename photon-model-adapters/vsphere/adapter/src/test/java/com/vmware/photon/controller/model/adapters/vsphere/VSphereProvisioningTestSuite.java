@@ -176,6 +176,10 @@ public class VSphereProvisioningTestSuite {
             computeDesc.name = computeDesc.id;
             computeDesc.dataStoreId = this.dataStoreId;
 
+            // set default cpu and memory
+            computeDesc.cpuCount = 1;
+            computeDesc.totalMemoryBytes = 1024 * 1024 * 1024; // 1GB
+
             return TestUtils.doPost(this.host, computeDesc,
                     ComputeDescription.class,
                     UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));

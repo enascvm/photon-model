@@ -127,39 +127,36 @@ public class ComputeDescriptionService extends StatefulService {
         public List<String> networkInterfaceDescLinks;
 
         /**
-         * Number of CPU Cores in this host.
+         * Number of CPU cores in this compute. {@code 0} when not applicable.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public long cpuCount;
 
         /**
-         * Clock Speed (in Mhz) per CPU Core.
+         * Clock speed (in MHz) per CPU core. {@code 0} when not applicable.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public long cpuMhzPerCore;
 
         /**
-         * Number of GPU Cores in this host.
+         * Number of GPU cores in this compute. {@code 0} when not applicable.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public long gpuCount;
 
         /**
-         * Total amount of memory (in bytes) available on this host.
+         * Total amount of memory (in bytes) available on this compute. {@code 0} when not
+         * applicable.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public long totalMemoryBytes;
 
         /**
          * Pricing associated with this host (measured per minute).
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public double costPerMinute;
 
         /**
          * Currency unit used for pricing.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public String currencyUnit;
 
         /**
@@ -266,14 +263,6 @@ public class ComputeDescriptionService extends StatefulService {
 
         validateBootAdapterReference(state);
         validateInstanceAdapterReference(state);
-
-        if (state.cpuCount == 0) {
-            state.cpuCount = 1;
-        }
-
-        if (state.totalMemoryBytes == 0) {
-            state.totalMemoryBytes = (long) Math.pow(2, 30); // 1GB
-        }
     }
 
     private static void validateBootAdapterReference(ComputeDescription state) {
@@ -343,7 +332,29 @@ public class ComputeDescriptionService extends StatefulService {
     public void handlePatch(Operation patch) {
         ComputeDescription currentState = getState(patch);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                ComputeDescription.class, null);
+                ComputeDescription.class, op -> {
+                    ComputeDescription patchBody = op.getBody(ComputeDescription.class);
+                    boolean hasChanged = false;
+
+                    if (patchBody.cpuCount != 0) {
+                        hasChanged |= currentState.cpuCount != patchBody.cpuCount;
+                        currentState.cpuCount = patchBody.cpuCount;
+                    }
+                    if (patchBody.cpuMhzPerCore != 0) {
+                        hasChanged |= currentState.cpuMhzPerCore != patchBody.cpuMhzPerCore;
+                        currentState.cpuMhzPerCore = patchBody.cpuMhzPerCore;
+                    }
+                    if (patchBody.gpuCount != 0) {
+                        hasChanged |= currentState.gpuCount != patchBody.gpuCount;
+                        currentState.gpuCount = patchBody.gpuCount;
+                    }
+                    if (patchBody.totalMemoryBytes != 0) {
+                        hasChanged |= currentState.totalMemoryBytes != patchBody.totalMemoryBytes;
+                        currentState.totalMemoryBytes = patchBody.totalMemoryBytes;
+                    }
+
+                    return Boolean.valueOf(hasChanged);
+                });
     }
 
     @Override
