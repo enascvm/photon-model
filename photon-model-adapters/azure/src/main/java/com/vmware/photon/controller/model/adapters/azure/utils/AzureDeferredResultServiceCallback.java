@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_NOT_FOUND;
+
+import com.microsoft.azure.CloudException;
 import com.microsoft.rest.ServiceResponse;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
@@ -68,8 +71,14 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     /**
      * Hook that might be implemented by descendants to handle failed Azure call.
      */
-    protected Throwable consumeError(Throwable exception) {
-        return exception;
+    protected Throwable consumeError(Throwable exc) {
+        if (exc instanceof CloudException) {
+            CloudException azureExc = (CloudException) exc;
+            if (RESOURCE_NOT_FOUND.equalsIgnoreCase(azureExc.getBody().getCode())) {
+                return RECOVERED;
+            }
+        }
+        return exc;
     }
 
     @Override

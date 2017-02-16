@@ -309,7 +309,7 @@ public class AzureInstanceService extends StatelessService {
                 differentiateVMImages(ctx, AzureInstanceStage.INIT_STORAGE);
                 break;
             case INIT_STORAGE:
-                initStorageAccount(ctx, AzureInstanceStage.POPULATE_NIC_CONTEXT);
+                createStorageAccount(ctx, AzureInstanceStage.POPULATE_NIC_CONTEXT);
                 break;
             case POPULATE_NIC_CONTEXT:
                 ctx.populateContext()
@@ -542,7 +542,7 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
-    private void initStorageAccount(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+    private void createStorageAccount(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
         StorageAccountCreateParameters storageParameters = new StorageAccountCreateParameters();
         storageParameters.setLocation(ctx.resourceGroup.getLocation());
 
@@ -678,9 +678,11 @@ public class AzureInstanceService extends StatelessService {
         final VirtualNetwork vNetToCreate = newAzureVirtualNetwork(
                 ctx, primaryNic, subnetsToCreate);
 
-        final String vNetToCreateName = primaryNic.networkState.name;
+        final String vNetName = primaryNic.networkState.name;
 
-        final String vNetToCreateRGName = primaryNic.networkResourceGroupState.name;
+        final String vNetRGName = primaryNic.networkRGState != null
+                ? primaryNic.networkRGState.name
+                : ctx.resourceGroup.getName();
 
         VirtualNetworksOperations azureClient = getNetworkManagementClient(ctx)
                 .getVirtualNetworksOperations();
@@ -689,7 +691,7 @@ public class AzureInstanceService extends StatelessService {
                 .map(Subnet::getName)
                 .collect(Collectors.joining(","));
 
-        final String msg = "Creating Azure vNet-Subnet [v=" + vNetToCreateName + "; s="
+        final String msg = "Creating Azure vNet-Subnet [v=" + vNetName + "; s="
                 + subnetNames
                 + "] for ["
                 + ctx.vmName + "] VM";
@@ -737,18 +739,15 @@ public class AzureInstanceService extends StatelessService {
             protected Runnable checkProvisioningStateCall(
                     ServiceCallback<VirtualNetwork> checkProvisioningStateCallback) {
                 return () -> azureClient.getAsync(
-                        vNetToCreateRGName,
-                        vNetToCreateName,
+                        vNetRGName,
+                        vNetName,
                         null /* expand */,
                         checkProvisioningStateCallback);
             }
         };
 
         azureClient.beginCreateOrUpdateAsync(
-                vNetToCreateRGName,
-                vNetToCreateName,
-                vNetToCreate,
-                handler);
+                vNetRGName, vNetName, vNetToCreate, handler);
 
         handler.toDeferredResult()
                 .thenApply(ignore -> ctx)
@@ -801,6 +800,7 @@ public class AzureInstanceService extends StatelessService {
         final PublicIPAddress publicIPAddress = newAzurePublicIPAddress(ctx, nicCtx);
 
         final String publicIPName = ctx.vmName + "-pip";
+        final String publicIPRGName = ctx.resourceGroup.getName();
 
         String msg = "Creating Azure Public IP [" + publicIPName + "] for [" + ctx.vmName + "] VM";
 
@@ -823,7 +823,7 @@ public class AzureInstanceService extends StatelessService {
             protected Runnable checkProvisioningStateCall(
                     ServiceCallback<PublicIPAddress> checkProvisioningStateCallback) {
                 return () -> azureClient.getAsync(
-                        ctx.resourceGroup.getName(),
+                        publicIPRGName,
                         publicIPName,
                         null /* expand */,
                         checkProvisioningStateCallback);
@@ -831,10 +831,7 @@ public class AzureInstanceService extends StatelessService {
         };
 
         azureClient.beginCreateOrUpdateAsync(
-                ctx.resourceGroup.getName(),
-                publicIPName,
-                publicIPAddress,
-                handler);
+                publicIPRGName, publicIPName, publicIPAddress,handler);
 
         handler.toDeferredResult()
                 .thenApply(ignore -> ctx)
@@ -945,15 +942,18 @@ public class AzureInstanceService extends StatelessService {
         NetworkSecurityGroupsOperations azureClient = getNetworkManagementClient(ctx)
                 .getNetworkSecurityGroupsOperations();
 
-        String nsgName = nicCtx.securityGroupStates.get(0).name;
+        final String nsgName = nicCtx.securityGroupState().name;
 
-        String msg = "Create Azure Security Group["
-                + nicCtx.networkResourceGroupState.name + "/"
-                + nsgName + "/"
-                + nicCtx.securityGroupStates.get(0).name
+        final String nsgRGName = nicCtx.securityGroupRGState != null
+                ? nicCtx.securityGroupRGState.name
+                : ctx.resourceGroup.getName();
+
+        final String msg = "Create Azure Security Group["
+                + nsgRGName + "/" + nsgName
                 + "] for [" + nicCtx.nicStateWithDesc.name + "] NIC for ["
                 + ctx.vmName
                 + "] VM";
+
         AzureProvisioningCallback<NetworkSecurityGroup> handler = new AzureProvisioningCallback<NetworkSecurityGroup>(
                 this, msg) {
             @Override
@@ -969,7 +969,7 @@ public class AzureInstanceService extends StatelessService {
             protected Runnable checkProvisioningStateCall(
                     ServiceCallback<NetworkSecurityGroup> checkProvisioningStateCallback) {
                 return () -> azureClient.getAsync(
-                        ctx.resourceGroup.getName(),
+                        nsgRGName,
                         nsgName,
                         null /* expand */,
                         checkProvisioningStateCallback);
@@ -982,10 +982,7 @@ public class AzureInstanceService extends StatelessService {
         };
 
         azureClient.beginCreateOrUpdateAsync(
-                ctx.resourceGroup.getName(),
-                nsgName,
-                securityGroupToCreate,
-                handler);
+                nsgRGName, nsgName, securityGroupToCreate, handler);
 
         return handler.toDeferredResult();
     }

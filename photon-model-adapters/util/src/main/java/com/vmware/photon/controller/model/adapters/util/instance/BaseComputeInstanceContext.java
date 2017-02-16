@@ -71,7 +71,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
         /**
          * Resolved from FIRST {@code NetworkState.groupLinks}.
          */
-        public ResourceGroupState networkResourceGroupState;
+        public ResourceGroupState networkRGState;
 
         /**
          * Resolved from {@code NetworkInterfaceStateWithDescription.firewallLinks}.
@@ -324,7 +324,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
                     return context.service
                             .sendWithDeferredResult(op, ResourceGroupState.class)
-                            .thenAccept(rgState -> nicCtx.networkResourceGroupState = rgState);
+                            .thenAccept(rgState -> nicCtx.networkRGState = rgState);
                 })
                 .collect(Collectors.toList());
 
