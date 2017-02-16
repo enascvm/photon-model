@@ -421,8 +421,7 @@ public class AWSStatsService extends StatelessService {
                                 Collections.singletonList(currentBurnRate));
                     }
                 }
-
-                getEC2Stats(this.statsData, AGGREGATE_METRIC_NAMES_ACROSS_INSTANCES, true);
+                sendStats(this.statsData);
             } catch (Exception e) {
                 AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
                         this.statsData.statsRequest.taskReference, e);
@@ -478,28 +477,7 @@ public class AWSStatsService extends StatelessService {
                 }
 
                 if (this.statsData.numResponses.incrementAndGet() == this.numOfMetrics) {
-                    // Put the number of API requests as a stat
-                    ServiceStat apiCallCountStat = new ServiceStat();
-                    apiCallCountStat.latestValue = this.numOfMetrics;
-                    if (this.isAggregateStats) {
-                        // Number of Aggregate metrics + 1 call for cost metric
-                        apiCallCountStat.latestValue += 1;
-                    }
-                    apiCallCountStat.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
-                    apiCallCountStat.unit = PhotonModelConstants.UNIT_COUNT;
-                    this.statsData.statsResponse.statValues.put(PhotonModelConstants.API_CALL_COUNT,
-                            Collections.singletonList(apiCallCountStat));
-
-                    SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
-                    this.statsData.statsResponse.computeLink = this.statsData.computeDesc.documentSelfLink;
-                    respBody.taskStage = SingleResourceTaskCollectionStage
-                            .valueOf(this.statsData.statsRequest.nextStage);
-                    respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
-                    respBody.statsList = new ArrayList<>();
-                    respBody.statsList.add(this.statsData.statsResponse);
-                    this.service.sendRequest(
-                            Operation.createPatch(this.statsData.statsRequest.taskReference)
-                                    .setBody(respBody));
+                    sendStats(this.statsData);
                 }
             } catch (Exception e) {
                 AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
@@ -508,6 +486,26 @@ public class AWSStatsService extends StatelessService {
         }
     }
 
+    private void sendStats(AWSStatsDataHolder statsData) {
+        // Put the number of API requests as a stat
+        ServiceStat apiCallCountStat = new ServiceStat();
+        apiCallCountStat.latestValue = statsData.statsResponse.statValues.size();
+        apiCallCountStat.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
+        apiCallCountStat.unit = PhotonModelConstants.UNIT_COUNT;
+        statsData.statsResponse.statValues.put(PhotonModelConstants.API_CALL_COUNT,
+                Collections.singletonList(apiCallCountStat));
+
+        SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
+        statsData.statsResponse.computeLink = statsData.computeDesc.documentSelfLink;
+        respBody.taskStage = SingleResourceTaskCollectionStage
+                .valueOf(statsData.statsRequest.nextStage);
+        respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
+        respBody.statsList = new ArrayList<>();
+        respBody.statsList.add(statsData.statsResponse);
+        sendRequest(
+                Operation.createPatch(statsData.statsRequest.taskReference)
+                        .setBody(respBody));
+    }
     /**
      * Returns if the given compute description is a compute host or not.
      */

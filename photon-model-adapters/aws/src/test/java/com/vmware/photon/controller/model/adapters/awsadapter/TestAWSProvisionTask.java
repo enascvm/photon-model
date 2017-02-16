@@ -224,31 +224,6 @@ public class TestAWSProvisionTask {
             return true;
         });
 
-        this.host.waitFor("Error waiting for host stats", () -> {
-            try {
-                this.host.log(Level.INFO,
-                        "Issuing stats request for compute host with default collection window.");
-                issueStatsRequest(outComputeHost, null);
-            } catch (Throwable t) {
-                return false;
-            }
-            return true;
-        });
-
-        this.host.waitFor("Error waiting for stats with explicit collection window", () -> {
-            try {
-                this.host.log(Level.INFO,
-                        "Issuing stats request for compute host with explicit collection window.");
-                Long currentTime = Utils.getNowMicrosUtc();
-                Long lastCollectionTimeInMicros = currentTime
-                        - TimeUnit.MINUTES.toMicros(this.timeElapsedSinceLastCollectionInMinutes);
-                issueStatsRequest(outComputeHost, lastCollectionTimeInMicros);
-            } catch (Throwable t) {
-                return false;
-            }
-            return true;
-        });
-
         // store the network links and disk links for removal check later
         List<String> resourcesToDelete = new ArrayList<>();
         if (this.vmState.diskLinks != null) {
