@@ -51,7 +51,6 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.EndpointRemovalTaskService.EndpointRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessEndpointAdapter;
-
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
@@ -276,7 +275,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         cs.tenantLinks = tenantLinks;
         cs.endpointLink = endpointLink;
 
-        ComputeState computeState = test.postServiceSynchronously(ComputeService.FACTORY_LINK, cs,
+        test.postServiceSynchronously(ComputeService.FACTORY_LINK, cs,
                 ComputeService.ComputeState.class);
     }
 
@@ -289,8 +288,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         d.capacityMBytes = 100L;
         d.tenantLinks = tenantLinks;
         d.endpointLink = endpointLink;
-        DiskState disk = test.postServiceSynchronously(DiskService.FACTORY_LINK, d,
-                DiskState.class);
+        test.postServiceSynchronously(DiskService.FACTORY_LINK, d, DiskState.class);
     }
 
     private static void createNetworkState(BaseModelTest test, String endpointLink,
@@ -304,8 +302,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         net.resourcePoolLink = "resourcePoolLink";
         net.regionId = "region-id";
         net.instanceAdapterReference = UriUtils.buildUri(test.getHost(), "instance-adapter");
-        NetworkState networkState = test.postServiceSynchronously(NetworkService.FACTORY_LINK, net,
-                NetworkState.class);
+        test.postServiceSynchronously(NetworkService.FACTORY_LINK, net, NetworkState.class);
     }
 
     private static void createAuthCredentials(BaseModelTest test, String endpointLink,
@@ -316,8 +313,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         auth.customProperties = new HashMap<>();
         auth.tenantLinks = tenantLinks;
         auth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK, endpointLink);
-        AuthCredentialsServiceState authCreds = test
-                .postServiceSynchronously(AuthCredentialsService.FACTORY_LINK, auth,
+        test.postServiceSynchronously(AuthCredentialsService.FACTORY_LINK, auth,
                         AuthCredentialsServiceState.class);
     }
 

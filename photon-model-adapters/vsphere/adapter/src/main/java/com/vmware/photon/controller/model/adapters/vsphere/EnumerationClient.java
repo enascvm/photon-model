@@ -24,7 +24,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
-import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -49,8 +48,6 @@ public class EnumerationClient extends BaseHelper {
 
     private final Finder finder;
 
-    private final GetMoRef get;
-
     public EnumerationClient(Connection connection, ComputeStateWithDescription parent)
             throws FinderException, ClientException {
         super(connection);
@@ -68,8 +65,6 @@ public class EnumerationClient extends BaseHelper {
             throw new ClientException(
                     String.format("Error looking for datacenter for id '%s'", id), e);
         }
-
-        this.get = new GetMoRef(this.connection);
     }
 
     private ManagedObjectReference createPropertyCollector() throws RuntimeFaultFaultMsg {

@@ -126,6 +126,7 @@ public class StatsUtil {
     private static class MetricKeyComponents {
         public String resourceId;
         public String metricName;
+        @SuppressWarnings("unused")
         public String timestamp;
     }
 }

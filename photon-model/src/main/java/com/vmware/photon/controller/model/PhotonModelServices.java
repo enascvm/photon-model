@@ -42,7 +42,6 @@ import com.vmware.xenon.common.UriUtils;
 /**
  * Helper class that starts all the photon model provisioning services
  */
-@SuppressWarnings( "deprecation" )
 public class PhotonModelServices {
 
     public static final String[] LINKS = {

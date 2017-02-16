@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.getClientManager;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.getClientReferenceCount;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
@@ -26,13 +25,13 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.s3.transfer.TransferManager;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
@@ -158,8 +157,8 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         testCreds.privateKey = this.accessKey;
         testCreds.privateKeyId = this.secretKey;
 
-        TransferManager s3Client = s3ClientManager
-                .getOrCreateS3AsyncClient(testCreds, TestAWSSetupUtils.zoneId, this.statsService, null);
+        s3ClientManager.getOrCreateS3AsyncClient(testCreds, TestAWSSetupUtils.zoneId,
+                this.statsService, null);
         assertEquals(count1, s3ClientManager.getCacheCount());
 
         // Return the references from the test

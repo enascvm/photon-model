@@ -234,6 +234,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         return returnState;
     }
 
+    @SuppressWarnings("unused")
     private DiskState createBootDisk(String cloudConfig)
             throws Throwable {
         DiskState res = new DiskState();

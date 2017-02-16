@@ -38,7 +38,7 @@ public class ResourceTracker {
     }
 
     public void track(String key, String selfLink) {
-        String old = this.mapping.put(key, selfLink);
+        this.mapping.put(key, selfLink);
         this.countdownLatch.countDown();
     }
 

@@ -80,6 +80,7 @@ public class TestVSphereProvisionWithMissingDatacenter extends BaseVSphereAdapte
         fail("Task should have failed");
     }
 
+    @SuppressWarnings("unused")
     private void doRefresh() throws Throwable {
         ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
         task.adapterManagementReference = this.computeHost.adapterManagementReference;
@@ -100,6 +101,7 @@ public class TestVSphereProvisionWithMissingDatacenter extends BaseVSphereAdapte
         this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
     }
 
+    @SuppressWarnings("unused")
     private ComputeDescription createCloneDescription(String templateComputeLink) throws Throwable {
         ComputeDescription computeDesc = new ComputeDescription();
 

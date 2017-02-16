@@ -31,7 +31,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
@@ -83,6 +82,7 @@ public class AWSMockStatsService extends StatelessService {
 
     private class AWSMockStatsDataHolder {
         public ComputeStateWithDescription computeState;
+        @SuppressWarnings("unused")
         public ComputeStateWithDescription parentComputeState;
         public ComputeStatsRequest statsRequest;
         public ComputeStats statsResponse;

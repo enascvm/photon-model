@@ -38,7 +38,6 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
 
     private ComputeDescription computeHostDescription;
-    private ComputeState computeHost;
 
     @Test
     public void importOvfAsDescriptions() throws Throwable {
@@ -46,7 +45,7 @@ public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
         this.auth = createAuth();
 
         this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost();
+        createComputeHost();
 
         ComputeDescription computeDesc = new ComputeDescription();
         computeDesc.supportedChildren = new ArrayList<>();
