@@ -524,7 +524,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
                 String remoteTagValue = remoteTags.remove(existingTag.key);
 
-                if (!existingTag.value.equals(remoteTagValue)) {
+                if (shouldUpdate(existingTag, remoteTagValue)) {
                     // in case there is a new value for the tag's key, delete the old tag state and post a new one
                     postAndDeleteOperationsDR.add(this.service.sendWithDeferredResult(Operation.createDelete(
                             this.service.getHost(), existingTag.documentSelfLink).setBody(existingTag)));
@@ -555,6 +555,13 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
         return DeferredResult.allOf(postAndDeleteOperationsDR)
                 .thenApply(ignore -> DeferredResult.completed(currentState));
+    }
+
+    private boolean shouldUpdate(TagState existingTag, String remoteTagValue) {
+        if (existingTag.value == null) {
+            return remoteTagValue != null;
+        }
+        return !existingTag.value.equals(remoteTagValue);
     }
 
     private DeferredResult<Void> createLocalTagStates(LocalStateHolder localStateHolder) {
