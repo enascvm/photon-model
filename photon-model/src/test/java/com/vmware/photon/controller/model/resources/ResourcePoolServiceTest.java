@@ -72,11 +72,8 @@ public class ResourcePoolServiceTest extends Suite {
             throws Throwable {
         ResourcePoolService.ResourcePoolState rp = new ResourcePoolService.ResourcePoolState();
         rp.id = UUID.randomUUID().toString();
-        rp.currencyUnit = "US dollar";
-        rp.maxCpuCostPerMinute = 10.0;
         rp.maxCpuCount = 16L;
         rp.maxDiskCapacityBytes = 2 ^ 40L;
-        rp.maxDiskCostPerMinute = 10.0;
         rp.maxGpuCount = 16L;
         rp.maxMemoryBytes = 2 ^ 36L;
         rp.minCpuCount = 2L;
@@ -129,15 +126,12 @@ public class ResourcePoolServiceTest extends Suite {
             assertThat(returnState.id, is(startState.id));
             assertThat(returnState.name, is(startState.name));
             assertThat(returnState.projectName, is(startState.projectName));
-            assertThat(returnState.currencyUnit, is(startState.currencyUnit));
             assertThat(returnState.maxCpuCount, is(startState.maxCpuCount));
             assertThat(returnState.maxGpuCount, is(startState.maxGpuCount));
             assertThat(returnState.maxMemoryBytes,
                     is(startState.maxMemoryBytes));
             assertThat(returnState.minMemoryBytes,
                     is(startState.minMemoryBytes));
-            assertThat(returnState.maxCpuCostPerMinute,
-                    is(startState.maxCpuCostPerMinute));
             assertThat(returnState.maxDiskCapacityBytes,
                     is(startState.maxDiskCapacityBytes));
             assertNotNull(returnState.query);
@@ -415,26 +409,22 @@ public class ResourcePoolServiceTest extends Suite {
             ResourcePoolService.ResourcePoolState patchState = new ResourcePoolService.ResourcePoolState();
             patchState.maxCpuCount = 5L;
             patchState.maxMemoryBytes = 5L;
-            patchState.maxCpuCostPerMinute = 5d;
             ResourcePoolService.ResourcePoolState newState = patchServiceSynchronously(
                     startState.documentSelfLink, patchState,
                     ResourcePoolService.ResourcePoolState.class);
 
             assertThat(newState.maxCpuCount, is(5L));
             assertThat(newState.maxMemoryBytes, is(5L));
-            assertThat(newState.maxCpuCostPerMinute, is(5d));
             assertThat(newState.minCpuCount, is(nullValue()));
 
             // patch with new values
             patchState = new ResourcePoolService.ResourcePoolState();
             patchState.maxMemoryBytes = 6L;
-            patchState.maxCpuCostPerMinute = 6d;
             newState = patchServiceSynchronously(startState.documentSelfLink, patchState,
                     ResourcePoolService.ResourcePoolState.class);
 
             assertThat(newState.maxCpuCount, is(5L));
             assertThat(newState.maxMemoryBytes, is(6L));
-            assertThat(newState.maxCpuCostPerMinute, is(6d));
             assertThat(newState.minCpuCount, is(nullValue()));
         }
 

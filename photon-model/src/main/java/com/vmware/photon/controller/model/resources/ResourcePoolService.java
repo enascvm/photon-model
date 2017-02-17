@@ -123,18 +123,19 @@ public class ResourcePoolService extends StatefulService {
         /**
          * Maximum CPU Cost (per minute) in this resource pool.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public Double maxCpuCostPerMinute;
 
         /**
          * Maximum Disk cost (per minute) in this resource pool.
          */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Deprecated
         public Double maxDiskCostPerMinute;
 
         /**
          * Currency unit used for pricing.
          */
+        @Deprecated
         public String currencyUnit;
 
         /**
