@@ -571,27 +571,38 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         this.host.log("Running test: " + this.currentTestName);
 
+        // VM tags
+        Tag tag1 = new Tag("key1", "value1");
+        Tag tag2 = new Tag("key2", "value2");
+        Tag tag3 = new Tag("key3", "value3");
+        List<Tag> vmTags = Arrays.asList(tag1, tag2, tag3);
         // SG tag
         List<Tag> sgTags = new ArrayList<>();
         sgTags.add(new Tag("sgTagKey", "valueSGTag"));
+        // Network tag
+        List<Tag> networkTags = new ArrayList<>();
+        networkTags.add(new Tag("netTagKey", "netTagValue"));
+        // Subnet tag
+        List<Tag> subnetTags = new ArrayList<>();
+        subnetTags.add(new Tag("subNetTagKey", "subNetTagValue"));
 
         try {
-            // VM tags
-            Tag tag1 = new Tag("key1", "value1");
-            Tag tag2 = new Tag("key2", "value2");
-            Tag tag3 = new Tag("key3", "value3");
-            List<Tag> vmTags = Arrays.asList(tag1, tag2, tag3);
-
             String linuxVMId1 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
             this.instancesToCleanUp.add(linuxVMId1);
             waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
 
             // Tag the first VM with a name and add some additional tags
             tagResourcesWithName(this.client, VM_NAME, linuxVMId1);
+
             List<Tag> linuxVMId1Tags = Arrays.asList(tag1, tag2);
+            // tag vm
             tagResources(this.client, linuxVMId1Tags, linuxVMId1);
             // tag default SG
             tagResources(this.client, sgTags, TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
+            // tag default VPC
+            tagResources(this.client, networkTags, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID);
+            // tag default Subnet
+            tagResources(this.client, subnetTags, TestAWSSetupUtils.AWS_DEFAULT_SUBNET_ID);
 
             enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
@@ -625,7 +636,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             // There are a total of allTags.size() + instancesToCleanUp.size() + sgTags.size() tags.
             // instancesToCleanUp.size() are name tags, which are skipped. This means we should have
             // allTags.size() + sgTags.size() TagState documents
-            int allTagsNumber = vmTags.size() + sgTags.size();
+            int allTagsNumber = vmTags.size() + sgTags.size() + networkTags.size() + subnetTags.size();
             ServiceDocumentQueryResult serviceDocumentQueryResult = queryDocumentsAndAssertExpectedCount(
                     this.host, allTagsNumber, TagService.FACTORY_LINK, false);
 
@@ -653,9 +664,15 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             for (Tag tag : linuxVMId2Tags) {
                 assertTrue(linuxVMId2ComputeState.tagLinks.contains(tagLinks.get(tag)));
             }
+        } catch (Throwable t) {
+            this.host.log("Exception occured during test execution: %s", t.getMessage());
         } finally {
             // un-tag default SG
             unTagResources(this.client, sgTags, TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
+            // un-tag default VPC
+            unTagResources(this.client, networkTags, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID);
+            // un-tag default Subnet
+            unTagResources(this.client, subnetTags, TestAWSSetupUtils.AWS_DEFAULT_SUBNET_ID);
         }
     }
 

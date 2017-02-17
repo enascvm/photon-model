@@ -19,6 +19,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.WINDOWS_PLATFORM;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
+import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.xenon.common.UriUtils.URI_PATH_CHAR;
 
@@ -45,7 +46,6 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
-import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 
 import com.vmware.xenon.common.StatelessService;
@@ -194,12 +194,12 @@ public class AWSEnumerationUtils {
             // we have already made sure that the tags exist and we can build their links ourselves
             computeState.tagLinks = instance.getTags().stream()
                     .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                    .map(t -> mapTagToTagState(t, tenantLinks))
+                    .map(t -> newTagState(t.getKey(), t.getValue(), tenantLinks))
                     .map(TagFactoryService::generateSelfLink)
                     .collect(Collectors.toSet());
 
             // The name of the compute state is the value of the AWS_TAG_NAME tag
-            String nameTag = getTagValue(instance, AWS_TAG_NAME);
+            String nameTag = getTagValue(instance.getTags(), AWS_TAG_NAME);
             if (nameTag != null) {
                 computeState.name = nameTag;
             }
@@ -231,15 +231,6 @@ public class AWSEnumerationUtils {
                         .equals(AWSConstants.INSTANCE_STATE_STOPPING);
     }
 
-    public static TagState mapTagToTagState(Tag tag, List<String> tenantLinks) {
-        TagState tagState = new TagState();
-        tagState.key = tag.getKey() == null ? "" : tag.getKey();
-        tagState.value = tag.getValue();
-        tagState.tenantLinks = tenantLinks;
-
-        return tagState;
-    }
-
     /**
      * Extracts the id from the document link. This is the unique identifier of the document returned as part of the result.
      * @param documentLink
@@ -253,8 +244,8 @@ public class AWSEnumerationUtils {
     /**
      * Get the Tag value corresponding to the provided key.
      */
-    private static String getTagValue(Instance instance, String key) {
-        for (Tag tag : instance.getTags()) {
+    public static String getTagValue(List<Tag> tags, String key) {
+        for (Tag tag : tags) {
             if (tag.getKey().equals(key)) {
                 return tag.getValue();
             }

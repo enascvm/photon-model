@@ -134,7 +134,7 @@ public class TestAWSSetupUtils {
 
     // VPC/subnet details are copy-pasted from AWS, region N.Virginia, Availability Zone: us-east-1a
     // {{
-    private static final String AWS_DEFAULT_VPC_ID = "vpc-95a29bf1";
+    public static final String AWS_DEFAULT_VPC_ID = "vpc-95a29bf1";
     private static final String AWS_DEFAULT_VPC_CIDR = "172.31.0.0/16";
 
     // Default Subnet; auto-assign public IP
