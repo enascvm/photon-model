@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model.network;
 
+import java.util.Map;
+
 /**
  * Network security group resource.
  */
@@ -31,6 +33,11 @@ public class NetworkSecurityGroup {
      * Resource location.
      */
     public String location;
+
+    /**
+     * Resource tags.
+     */
+    public Map<String, String> tags;
 
     /**
      * Resource properties.

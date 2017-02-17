@@ -259,6 +259,53 @@ public class AzureTestUtil {
         return returnPool;
     }
 
+    public static VirtualNetwork getAzureVirtualNetwork(NetworkManagementClient networkManagementClient, String resourceGroupName, String virtualNetworkName) throws Exception {
+        ServiceResponse<VirtualNetwork> response = networkManagementClient
+                .getVirtualNetworksOperations().get(resourceGroupName, virtualNetworkName, null);
+
+        return response.getBody();
+    }
+
+    public static VirtualMachine getAzureVirtualMachine(ComputeManagementClient computeManagementClient,
+            String resourceGroupName, String vmName) throws Exception {
+        ServiceResponse<VirtualMachine> response = computeManagementClient
+                .getVirtualMachinesOperations().get(resourceGroupName, vmName, null);
+
+        return response.getBody();
+    }
+
+    public static NetworkSecurityGroup getAzureSecurityGroup(NetworkManagementClient networkManagementClient, String resourceGroupName,
+            String securityGroupName) throws Exception {
+        ServiceResponse<NetworkSecurityGroup> response = networkManagementClient
+                .getNetworkSecurityGroupsOperations().get(resourceGroupName, securityGroupName, null);
+
+        return response.getBody();
+    }
+
+    public static VirtualNetwork updateAzureVirtualNetwork(NetworkManagementClient networkManagementClient, String resourceGroupName,
+            String virtualNetworkName, VirtualNetwork parameters) throws Exception {
+        ServiceResponse<VirtualNetwork> response = networkManagementClient
+                .getVirtualNetworksOperations().createOrUpdate(resourceGroupName, virtualNetworkName, parameters);
+
+        return response.getBody();
+    }
+
+    public static NetworkSecurityGroup updateAzureSecurityGroup(NetworkManagementClient networkManagementClient, String resourceGroupName,
+            String networkSecurityGroupName, NetworkSecurityGroup parameters) throws Exception {
+        ServiceResponse<NetworkSecurityGroup> response = networkManagementClient
+                .getNetworkSecurityGroupsOperations().createOrUpdate(resourceGroupName, networkSecurityGroupName, parameters);
+
+        return response.getBody();
+    }
+
+    public static VirtualMachine updateAzureVirtualMachine(ComputeManagementClient computeManagementClient, String resourceGroupName,
+            String vmName, VirtualMachine parameters) throws Exception {
+        ServiceResponse<VirtualMachine> response = computeManagementClient
+                .getVirtualMachinesOperations().createOrUpdate(resourceGroupName, vmName, parameters);
+
+        return response.getBody();
+    }
+
     public static int getAzureVMCount(ComputeManagementClient computeManagementClient)
             throws Exception {
         ServiceResponse<List<VirtualMachine>> response = computeManagementClient

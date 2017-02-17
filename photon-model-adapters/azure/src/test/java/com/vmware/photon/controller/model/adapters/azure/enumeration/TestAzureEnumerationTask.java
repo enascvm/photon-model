@@ -31,11 +31,18 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteServiceDocument;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getAzureSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getAzureVMCount;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getAzureVirtualMachine;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getAzureVirtualNetwork;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.randomString;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureSecurityGroup;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualMachine;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualNetwork;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.photon.controller.model.tasks.ModelUtils.createSecurityGroup;
+import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.net.URI;
@@ -87,6 +94,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -104,6 +112,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -373,6 +382,43 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         createAzureBlobs(STALE_BLOBS_COUNT);
         createAzureSecurityGroups(STALE_SECURITY_GROUPS_COUNT);
 
+        // {{ Add tags, that later should be discovered as part of first enumeration cycle.
+
+        // tag v-Net
+        VirtualNetwork vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient, this.azureVMName,
+                AzureTestUtil.AZURE_NETWORK_NAME);
+
+        Map<String, String> vmNetwTags = new HashMap<String, String>();
+        vmNetwTags.put("testvNetTag", "vNetTagValue");
+        vmNetwUpdate.setTags(vmNetwTags);
+
+        updateAzureVirtualNetwork(this.networkManagementClient, this.azureVMName,
+                AzureTestUtil.AZURE_NETWORK_NAME, vmNetwUpdate);
+
+        // tag VM
+        com.microsoft.azure.management.compute.models.VirtualMachine vmUpdate = getAzureVirtualMachine(
+                this.computeManagementClient, this.azureVMName, this.azureVMName);
+
+        Map<String, String> vmTags = new HashMap<String, String>();
+        vmTags.put("testVMTag", "VMTagValue");
+        vmUpdate.setTags(vmTags);
+
+        updateAzureVirtualMachine(this.computeManagementClient, this.azureVMName,
+                this.azureVMName, vmUpdate);
+
+        // tag Security Group
+        NetworkSecurityGroup sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
+                this.azureVMName, AzureTestUtil.AZURE_SECURITY_GROUP_NAME);
+
+        Map<String, String> sgTags = new HashMap<String, String>();
+        sgTags.put("testSGTag", "SGTagValue");
+        sgUpdate.setTags(sgTags);
+        sgUpdate.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+        updateAzureSecurityGroup(this.networkManagementClient, this.azureVMName,
+                AzureTestUtil.AZURE_SECURITY_GROUP_NAME, sgUpdate);
+        // }}
+
         // No need to create stale networks or subnets since createAzureVMResources will create
         // such for us.
 
@@ -426,6 +472,10 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 SubnetService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, securityGroupsCount,
                 SecurityGroupService.FACTORY_LINK, false);
+        // There are a total of sgTags.size() + vmNetwTags.size() + vmTags.size() tags.
+        // This means we should have the same number of TagState documents
+        int allTagsNumber = sgTags.size() + vmNetwTags.size() + vmTags.size();
+        queryDocumentsAndAssertExpectedCount(this.host, allTagsNumber, TagService.FACTORY_LINK, false);
 
         // VM count + 1 compute host instance
         this.vmCount = this.vmCount + 1;

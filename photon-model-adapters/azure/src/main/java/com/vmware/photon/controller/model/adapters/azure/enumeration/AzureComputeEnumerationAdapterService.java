@@ -29,6 +29,8 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
+import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.addTagLinksToResourceState;
+import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.newTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
@@ -48,6 +50,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
@@ -88,6 +91,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -131,6 +135,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         GET_STORAGE_DESCRIPTIONS,
         CREATE_COMPUTE_DESCRIPTIONS,
         UPDATE_DISK_STATES,
+        CREATE_TAG_STATES,
         CREATE_NETWORK_INTERFACE_STATES,
         CREATE_COMPUTE_STATES,
         PATCH_ADDITIONAL_FIELDS,
@@ -340,6 +345,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             break;
         case UPDATE_DISK_STATES:
             updateDiskStates(ctx);
+            break;
+        case CREATE_TAG_STATES:
+            createTagStates(ctx);
             break;
         case CREATE_NETWORK_INTERFACE_STATES:
             createNetworkInterfaceStates(ctx);
@@ -964,11 +972,51 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                 ex.getMessage())));
                     }
 
-                    logFine(() -> "Continue on to create network interface.");
-                    ctx.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
+                    logFine(() -> "Continue on to create tag states.");
+                    ctx.subStage = ComputeEnumerationSubStages.CREATE_TAG_STATES;
                     handleSubStage(ctx);
 
                 }).sendWith(this);
+    }
+
+    /**
+     * Create tag states for the VM's tags
+     */
+    private void createTagStates(EnumerationContext context) {
+        logFine(() -> "Create or update Tag States for discovered VMs with the actual state in Azure.");
+
+        if (context.virtualMachines.isEmpty()) {
+            logFine("No tags found to create/update. Continue on to create network interface.");
+            context.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
+            handleSubStage(context);
+            return;
+        }
+
+        // POST each of the tags. If a tag exists it won't be created again. We don't want the name
+        // tags, so filter them out
+        List<Operation> operations = context.virtualMachines.values()
+                .stream().filter(vm -> vm.tags != null && !vm.tags.isEmpty())
+                .flatMap(vm -> vm.tags.entrySet().stream())
+                .map(entry -> newTagState(entry.getKey(), entry.getValue(), context.parentCompute.tenantLinks))
+                .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
+                        .setBody(tagState))
+                .collect(Collectors.toList());
+
+        if (operations.isEmpty()) {
+            context.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
+            handleSubStage(context);
+        } else {
+            OperationJoin.create(operations).setCompletion((ops, exs) -> {
+                if (exs != null && !exs.isEmpty()) {
+                    handleError(context, exs.values().iterator().next());
+                    return;
+                }
+
+                logFine("Continue on to create network interface.");
+                context.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
+                handleSubStage(context);
+            }).sendWith(this);
+        }
     }
 
     /**
@@ -1063,6 +1111,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeState.diskLinks = vmDisks;
             computeState.customProperties = new HashMap<>();
             computeState.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
+
+            // add tag links
+            addTagLinksToResourceState(computeState, virtualMachine.tags);
 
             if (virtualMachine.properties.diagnosticsProfile != null) {
                 String diagnosticsAccountUri = virtualMachine.properties.diagnosticsProfile

@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model.vm;
 
+import java.util.Map;
+
 /**
  * Describes a virtual machine.
  */
@@ -21,5 +23,6 @@ public class VirtualMachine {
     public String name;
     public String type;
     public String location;
+    public Map<String, String> tags;
     public Properties properties;
 }

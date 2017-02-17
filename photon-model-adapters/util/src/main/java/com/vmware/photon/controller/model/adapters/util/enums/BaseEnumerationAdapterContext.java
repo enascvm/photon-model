@@ -476,29 +476,43 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     // Tag Utility methods {{
     private DeferredResult<Void> createLocalTagStates(LocalStateHolder localStateHolder) {
         DeferredResult<Void> tagsDR = DeferredResult.completed((Void) null);
-        if (!localStateHolder.remoteTags.isEmpty()) {
-
-            localStateHolder.localState.tagLinks = new HashSet<>();
-
-            List<DeferredResult<TagState>> localTagStatesDRs = localStateHolder.remoteTags
-                    .entrySet()
-                    .stream()
-                    .map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(), this.request.parentCompute.tenantLinks))
-                    .map(tagState -> {
-                        // add the link of the new tag in to the tagLinks list
-                        localStateHolder.localState.tagLinks.add(tagState.documentSelfLink);
-                        return tagState;
-                    })
-                    .map(tagState -> Operation
-                            .createPost(this.service.getHost(), TagService.FACTORY_LINK)
-                            .setBody(tagState))
-                    .map(tagOperation -> this.service.sendWithDeferredResult(tagOperation,
-                            TagState.class))
-                    .collect(Collectors.toList());
-
-            tagsDR = DeferredResult.allOf(localTagStatesDRs).thenApply(ignore -> (Void) null);
+        if (localStateHolder.remoteTags == null || localStateHolder.remoteTags.isEmpty()) {
+            return tagsDR;
         }
+
+        localStateHolder.localState.tagLinks = new HashSet<>();
+
+        List<DeferredResult<TagState>> localTagStatesDRs = localStateHolder.remoteTags
+                .entrySet()
+                .stream()
+                .map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(),
+                        this.request.parentCompute.tenantLinks))
+                .map(tagState -> {
+                    // add the link of the new tag in to the tagLinks list
+                    localStateHolder.localState.tagLinks.add(tagState.documentSelfLink);
+                    return tagState;
+                })
+                .map(tagState -> Operation
+                        .createPost(this.service.getHost(), TagService.FACTORY_LINK)
+                        .setBody(tagState))
+                .map(tagOperation -> this.service.sendWithDeferredResult(tagOperation,
+                        TagState.class))
+                .collect(Collectors.toList());
+
+        tagsDR = DeferredResult.allOf(localTagStatesDRs).thenApply(ignore -> (Void) null);
         return tagsDR;
+    }
+
+    public static void addTagLinksToResourceState(ResourceState resourceState, Map<String, String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return;
+        }
+
+        // we have already made sure that the tags exist and we can build their links ourselves
+        resourceState.tagLinks = tags.entrySet().stream()
+                .map(t -> newTagState(t.getKey(), t.getValue(), resourceState.tenantLinks))
+                .map(TagFactoryService::generateSelfLink)
+                .collect(Collectors.toSet());
     }
 
     public static TagState newTagState(String key, String value, List<String> tenantLinks) {

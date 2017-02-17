@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model.network;
 
+import java.util.Map;
+
 /**
  * Virtual Network resource.
  */
@@ -20,5 +22,6 @@ public class VirtualNetwork {
     public String id;
     public String name;
     public String location;
+    public Map<String, String> tags;
     public NetworkProperties properties;
 }

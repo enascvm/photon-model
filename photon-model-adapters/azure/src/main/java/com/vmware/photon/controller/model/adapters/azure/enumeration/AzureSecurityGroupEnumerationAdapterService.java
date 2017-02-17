@@ -200,6 +200,11 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             holder.localState.name = networkSecurityGroup.name;
             holder.localState.regionId = networkSecurityGroup.location;
 
+            // Add tags
+            if (networkSecurityGroup.tags != null) {
+                holder.remoteTags.putAll(networkSecurityGroup.tags);
+            }
+
             if (networkSecurityGroup.properties == null
                     || networkSecurityGroup.properties.securityRules == null) {
                 // No rules.
