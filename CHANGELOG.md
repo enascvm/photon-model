@@ -1,7 +1,11 @@
 # CHANGELOG
 
-## 0.6.4-SNAPSHOT
+## 0.6.4
 
+* Add regionId to DiskState.
+* Use default maven repository.
+* Turn off PATCH auto merge of primitive fields in ComputeDescription.
+* Compute only the estimated charges for compute host.
 
 ## 0.6.3
 
