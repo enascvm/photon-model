@@ -107,16 +107,16 @@ public class SingleResourceStatsAggregationTaskService extends
                     + "SingleResourceStatsAggregationTaskService.query.resultLimit";
     private static final int DEFAULT_QUERY_RESULT_LIMIT = 25;
 
-    public static final String RESOURCE_METRIC_RETENTION_LIMIT_DAYS = UriPaths.PROPERTY_PREFIX
-            + "SingleResourceStatsAggregationTaskService.metric.retentionLimitDays";
-    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 7;
+    public static final String RESOURCE_METRIC_RETENTION_LIMIT_HOURS = UriPaths.PROPERTY_PREFIX
+            + "SingleResourceStatsAggregationTaskService.metric.retentionLimitHours";
+    private static final int DEFAULT_RETENTION_LIMIT_HOURS = 6;
 
     private static final long EXPIRATION_INTERVAL = Integer
-            .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_DAYS, DEFAULT_RETENTION_LIMIT_DAYS);
+            .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_HOURS, DEFAULT_RETENTION_LIMIT_HOURS);
 
     public static final String RAW_METRICS_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
             + "SingleResourceStatsAggregationTaskService.query.rawMetrics.resultLimit";
-    private static final int DEFAULT_RAW_METRICS_RESULT_LIMIT = 50000;
+    private static final int DEFAULT_RAW_METRICS_RESULT_LIMIT = 10000;
     private static final int RAW_METRICS_LIMIT = Integer
             .getInteger(RAW_METRICS_RESULT_LIMIT, DEFAULT_RAW_METRICS_RESULT_LIMIT);
 

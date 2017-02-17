@@ -73,12 +73,12 @@ public class SingleResourceStatsCollectionTaskService
             + "/stats-collection-resource-tasks";
     private static final long DEFAULT_EXPIRATION_MINUTES = 30;
 
-    public static final String RESOURCE_METRIC_RETENTION_LIMIT_DAYS = UriPaths.PROPERTY_PREFIX
-            + "SingleResourceStatsCollectionTaskService.metric.retentionLimitDays";
-    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 7;
+    public static final String RESOURCE_METRIC_RETENTION_LIMIT_HOURS = UriPaths.PROPERTY_PREFIX
+            + "SingleResourceStatsCollectionTaskService.metric.retentionLimitHours";
+    private static final int DEFAULT_RETENTION_LIMIT_HOURS = 6;
 
     private static final long EXPIRATION_INTERVAL = Integer
-            .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_DAYS, DEFAULT_RETENTION_LIMIT_DAYS);
+            .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_HOURS, DEFAULT_RETENTION_LIMIT_HOURS);
 
     public static FactoryService createFactory() {
         TaskFactoryService fs = new TaskFactoryService(
