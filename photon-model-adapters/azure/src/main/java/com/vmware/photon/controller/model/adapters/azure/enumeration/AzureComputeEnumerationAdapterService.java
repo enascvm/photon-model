@@ -1266,8 +1266,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     private void patchComputeResource(EnumerationContext ctx, ComputeState computeState,
             AtomicInteger numOfPatches) {
+        String documentLink = computeState.documentSelfLink
+                .startsWith(ComputeService.FACTORY_LINK) ? computeState.documentSelfLink
+                        : UriUtils.buildUriPath(ComputeService.FACTORY_LINK,
+                                computeState.documentSelfLink);
         Operation computePatchOp = Operation
-                .createPost(getHost(), ComputeService.FACTORY_LINK)
+                .createPatch(getHost(), documentLink)
                 .setBody(computeState);
         sendRequest(computePatchOp);
 

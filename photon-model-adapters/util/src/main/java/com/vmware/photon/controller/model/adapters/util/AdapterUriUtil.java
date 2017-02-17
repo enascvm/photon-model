@@ -60,7 +60,11 @@ public class AdapterUriUtil {
     }
 
     public static URI buildAdapterUri(ServiceHost host, String path) {
-        return UriUtils.buildUri(ServiceHost.LOCAL_HOST, host.getPort(), path, null);
+        return buildAdapterUri(host.getPort(), path);
+    }
+
+    public static URI buildAdapterUri(int port, String path) {
+        return UriUtils.buildUri(ServiceHost.LOCAL_HOST, port, path, null);
     }
 
     /**

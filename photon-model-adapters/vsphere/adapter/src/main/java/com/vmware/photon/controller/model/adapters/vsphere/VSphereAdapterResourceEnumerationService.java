@@ -42,6 +42,7 @@ import org.codehaus.jackson.node.ObjectNode;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.tagging.TagCache;
@@ -76,6 +77,7 @@ import com.vmware.vim25.UpdateSet;
 import com.vmware.vim25.VirtualDeviceBackingInfo;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationContext;
@@ -649,8 +651,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.authCredentialsLink = parent.description.authCredentialsLink;
 
         URI ref = parent.description.instanceAdapterReference;
-        state.instanceAdapterReference = UriUtils.buildUri(
-                ref.getHost(), ref.getPort(), VSphereUriPaths.DVS_NETWORK_SERVICE, null);
+        state.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(ref.getPort(),
+                VSphereUriPaths.DVS_NETWORK_SERVICE);
 
         CustomProperties custProp = CustomProperties.of(state)
                 .put(CustomProperties.MOREF, net.getId())

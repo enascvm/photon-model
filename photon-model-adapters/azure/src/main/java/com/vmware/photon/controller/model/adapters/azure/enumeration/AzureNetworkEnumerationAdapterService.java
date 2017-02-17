@@ -807,7 +807,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         // TODO: There is no Azure Network Adapter Service. Add a default reference since this is
         // required field.
-        resultNetworkState.instanceAdapterReference = UriUtils.buildUri(getHost(),
+        resultNetworkState.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(getHost().getPort(),
                 DEFAULT_INSTANCE_ADAPTER_REFERENCE);
         String resourceGroupId = AzureUtils.getResourceGroupId(azureVirtualNetwork.id);
         String resourceGroupStateLink = context.resourceGroupStates.get(resourceGroupId);
