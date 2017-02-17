@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.5-SNAPSHOT
+
+
 ## 0.6.4
 
 * Add regionId to DiskState.
