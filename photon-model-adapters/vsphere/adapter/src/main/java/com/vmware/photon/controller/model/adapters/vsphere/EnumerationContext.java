@@ -30,6 +30,7 @@ public class EnumerationContext {
     private ResourceTracker hostSystemTracker;
     private ResourceTracker computeResourceTracker;
     private ResourceTracker vmTracker;
+    private ResourceTracker resourcePoolTracker;
 
     public EnumerationContext(ComputeEnumerateResourceRequest request,
             ComputeStateWithDescription parent, VapiConnection endpoint) {
@@ -92,5 +93,13 @@ public class EnumerationContext {
 
     public ResourceTracker getVmTracker() {
         return this.vmTracker;
+    }
+
+    public void expectResourcePoolCount(int count) {
+        this.resourcePoolTracker = new ResourceTracker(count);
+    }
+
+    public ResourceTracker getResourcePoolTracker() {
+        return this.resourcePoolTracker;
     }
 }

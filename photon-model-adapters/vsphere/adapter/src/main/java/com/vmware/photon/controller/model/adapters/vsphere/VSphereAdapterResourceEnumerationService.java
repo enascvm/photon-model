@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,6 +84,7 @@ import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -331,6 +333,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         List<HostSystemOverlay> hosts = new ArrayList<>();
         List<DatastoreOverlay> datastores = new ArrayList<>();
         List<ComputeResourceOverlay> computeResources = new ArrayList<>();
+        List<ResourcePoolOverlay> resourcePools = new ArrayList<>();
 
         Map<String, ComputeResourceOverlay> nonDrsClusters = new HashMap<>();
 
@@ -376,6 +379,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                     } else if (VimUtils.isDatastore(cont.getObj())) {
                         DatastoreOverlay ds = new DatastoreOverlay(cont);
                         datastores.add(ds);
+                    } else if (VimUtils.isResourcePool(cont.getObj())) {
+                        ResourcePoolOverlay rp = new ResourcePoolOverlay(cont);
+                        resourcePools.add(rp);
                     }
                 }
             }
@@ -418,10 +424,28 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             processFoundComputeResource(enumerationContext, cr, parent.tenantLinks);
         }
 
+
+        // exclude all root resource pools
+        for (Iterator<ResourcePoolOverlay> it = resourcePools.iterator(); it.hasNext();) {
+            ResourcePoolOverlay rp = it.next();
+            if (!VimNames.TYPE_RESOURCE_POOL.equals(rp.getParent().getType())) {
+                // no need to collect the root resource pool
+                it.remove();
+            }
+        }
+
+        Map<String, String> computeResourceNamesByMoref = collectComputeNames(hosts, computeResources);
+        enumerationContext.expectResourcePoolCount(resourcePools.size());
+        for (ResourcePoolOverlay rp : resourcePools) {
+            String ownerName = computeResourceNamesByMoref.get(VimUtils.convertMoRefToString(rp.getOwner()));
+            processFoundResourcePool(enumerationContext, rp, ownerName, parent.tenantLinks);
+        }
+
         // checkpoint compute
         try {
             enumerationContext.getHostSystemTracker().await();
             enumerationContext.getComputeResourceTracker().await();
+            enumerationContext.getResourcePoolTracker().await();
         } catch (InterruptedException e) {
             threadInterrupted(mgr, e);
             return;
@@ -446,6 +470,26 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         garbageCollectUntouchedComputeResources(enumerationContext, mgr, request,
                 parent.tenantLinks);
+    }
+
+    /**
+     * Collect the names of all hosts and cluster indexed by the string representation
+     * of their moref.
+     * Used to construct user-friendly resource pool names without fetching their owner's name again.
+     * @param hosts
+     * @param computeResources
+     * @return
+     */
+    private Map<String, String> collectComputeNames(List<HostSystemOverlay> hosts,
+            List<ComputeResourceOverlay> computeResources) {
+        Map<String, String> computeResourceNamesByMoref = new HashMap<>();
+        for (HostSystemOverlay host : hosts) {
+            computeResourceNamesByMoref.put(VimUtils.convertMoRefToString(host.getId()), host.getName());
+        }
+        for (ComputeResourceOverlay cr : computeResources) {
+            computeResourceNamesByMoref.put(VimUtils.convertMoRefToString(cr.getId()), cr.getName());
+        }
+        return computeResourceNamesByMoref;
     }
 
     private void garbageCollectUntouchedComputeResources(EnumerationContext ctx, TaskManager mgr,
@@ -851,6 +895,28 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .sendWith(this);
     }
 
+    private ComputeDescription makeDescriptionForResourcePool(EnumerationContext enumerationContext,
+            ResourcePoolOverlay rp, String rpSelfLink) {
+        ComputeDescription res = new ComputeDescription();
+        res.name = rp.getName();
+        res.documentSelfLink = UriUtils
+                .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UriUtils.getLastPathSegment(rpSelfLink));
+
+        res.totalMemoryBytes = rp.getMemoryReservationBytes();
+        // resource pools CPU is measured in Mhz
+        res.cpuCount = 0;
+        res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
+        res.endpointLink = enumerationContext.getRequest().endpointLink;
+        res.instanceAdapterReference = enumerationContext
+                .getParent().description.instanceAdapterReference;
+        res.enumerationAdapterReference = enumerationContext
+                .getParent().description.enumerationAdapterReference;
+        res.statsAdapterReference = enumerationContext
+                .getParent().description.statsAdapterReference;
+
+        return res;
+    }
+
     private ComputeDescription makeDescriptionForCluster(EnumerationContext enumerationContext,
             ComputeResourceOverlay cr) {
         ComputeDescription res = new ComputeDescription();
@@ -1233,6 +1299,112 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.cpuCount = vm.getNumCpu();
         res.totalMemoryBytes = vm.getMemoryBytes();
         return res;
+    }
+
+    private void processFoundResourcePool(EnumerationContext enumerationContext, ResourcePoolOverlay rp,
+            String ownerName, List<String> tenantLinks) {
+        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
+        String selfLink = buildStableResourcePoolLink(rp.getId(), request.adapterManagementReference.toString());
+
+        Operation.createGet(this, selfLink)
+                .setCompletion((o, e) -> {
+                    if (e == null) {
+                        updateResourcePool(enumerationContext, ownerName, selfLink, rp, tenantLinks);
+                    } else if (e instanceof ServiceNotFoundException) {
+                        createNewResourcePool(enumerationContext, ownerName, selfLink, rp, tenantLinks);
+                    } else {
+                        trackResourcePool(enumerationContext, rp).handle(o, e);
+                    }
+                })
+                .sendWith(this);
+    }
+
+    private void updateResourcePool(EnumerationContext enumerationContext, String ownerName, String selfLink,
+            ResourcePoolOverlay rp,
+            List<String> tenantLinks) {
+        ComputeState state = makeResourcePoolFromResults(enumerationContext, rp, selfLink);
+        state.name = rp.makeUserFriendlyName(ownerName);
+        state.tenantLinks = tenantLinks;
+
+        ComputeDescription desc = makeDescriptionForResourcePool(enumerationContext, rp, selfLink);
+        state.descriptionLink = desc.documentSelfLink;
+
+        logFine(() -> String.format("Refreshed ResourcePool %s", state.name));
+        Operation.createPatch(this, selfLink)
+                .setBody(state)
+                .setCompletion(trackResourcePool(enumerationContext, rp))
+                .sendWith(this);
+
+        Operation.createPatch(this, desc.documentSelfLink)
+                .setBody(desc)
+                .sendWith(this);
+    }
+
+    private void createNewResourcePool(EnumerationContext enumerationContext, String ownerName, String selfLink,
+            ResourcePoolOverlay rp,
+            List<String> tenantLinks) {
+        ComputeState state = makeResourcePoolFromResults(enumerationContext, rp, selfLink);
+        state.name = rp.makeUserFriendlyName(ownerName);
+        state.tenantLinks = tenantLinks;
+
+        ComputeDescription desc = makeDescriptionForResourcePool(enumerationContext, rp, selfLink);
+        state.descriptionLink = desc.documentSelfLink;
+
+        logFine(() -> String.format("Found new ResourcePool %s", state.name));
+        Operation.createPost(this, ComputeService.FACTORY_LINK)
+                .setBody(state)
+                .setCompletion(trackResourcePool(enumerationContext, rp))
+                .sendWith(this);
+
+        Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
+                .setBody(desc)
+                .sendWith(this);
+    }
+
+    private ComputeState makeResourcePoolFromResults(EnumerationContext enumerationContext, ResourcePoolOverlay rp,
+            String selfLink) {
+        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
+
+        ComputeState state = new ComputeState();
+        state.documentSelfLink = selfLink;
+        state.name = rp.getName();
+        state.id = rp.getId().getValue();
+        state.type = ComputeType.VM_HOST;
+        state.powerState = PowerState.ON;
+        state.endpointLink = request.endpointLink;
+        state.resourcePoolLink = request.resourcePoolLink;
+        state.adapterManagementReference = request.adapterManagementReference;
+
+        String parentResourcePoolLink = null;
+        if (rp.getParent() != null) {
+            if (VimNames.TYPE_RESOURCE_POOL.equals(rp.getParent().getType())) {
+                parentResourcePoolLink = buildStableResourcePoolLink(rp.getParent(),
+                        request.adapterManagementReference.toString());
+            }
+        }
+
+        CustomProperties.of(state)
+                .put(CustomProperties.MOREF, rp.getId())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink())
+                .put(CustomProperties.TYPE, VimNames.TYPE_RESOURCE_POOL);
+        return state;
+    }
+
+    private CompletionHandler trackResourcePool(EnumerationContext enumerationContext, ResourcePoolOverlay rp) {
+        return (o, e) -> {
+            String key = VimUtils.convertMoRefToString(rp.getId());
+
+            if (e == null) {
+                enumerationContext.getResourcePoolTracker().track(key, getSelfLinkFromOperation(o));
+            } else {
+                enumerationContext.getResourcePoolTracker().track(key, ResourceTracker.ERROR);
+            }
+        };
+    }
+
+    private String buildStableResourcePoolLink(ManagedObjectReference ref, String adapterManagementReference) {
+        return ComputeService.FACTORY_LINK + "/"
+                + VimUtils.buildStableManagedObjectId(ref, adapterManagementReference);
     }
 
     /**

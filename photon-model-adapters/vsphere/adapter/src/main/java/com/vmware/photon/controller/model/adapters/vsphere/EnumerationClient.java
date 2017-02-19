@@ -259,6 +259,8 @@ public class EnumerationClient extends BaseHelper {
         rpSpec.getPathSet().addAll(Arrays.asList(
                 VimPath.rp_summary_config_memoryAllocation_limit,
                 VimPath.rp_summary_config_memoryAllocation_reservation,
+                VimNames.PROPERTY_PARENT,
+                VimNames.PROPERTY_OWNER,
                 VimNames.PROPERTY_NAME
         ));
 

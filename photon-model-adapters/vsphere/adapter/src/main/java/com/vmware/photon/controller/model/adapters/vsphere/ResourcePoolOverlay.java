@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
+import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 
 public class ResourcePoolOverlay extends AbstractOverlay {
@@ -29,18 +30,33 @@ public class ResourcePoolOverlay extends AbstractOverlay {
     }
 
     public long getMemoryLimitBytes() {
-        long value = (Long) getOrFail(VimPath.rp_summary_config_memoryAllocation_limit);
+        long value = (long) getOrDefault(VimPath.rp_summary_config_memoryAllocation_limit, 0L);
         if (value < 0) {
-            return value;
+            return 0;
         }
-        return value * MB_to_bytes;
+        return value;
+    }
+
+    public ManagedObjectReference getParent() {
+        return (ManagedObjectReference) getOrFail(VimNames.PROPERTY_PARENT);
+    }
+
+    public ManagedObjectReference getOwner() {
+        return (ManagedObjectReference) getOrFail(VimNames.PROPERTY_OWNER);
     }
 
     public long getMemoryReservationBytes() {
-        long value = (Long) getOrFail(VimPath.rp_summary_config_memoryAllocation_reservation);
+        long value = (long) getOrDefault(VimPath.rp_summary_config_memoryAllocation_reservation, 0L);
         if (value < 0) {
-            return value;
+            return 0;
         }
-        return value * MB_to_bytes;
+        return value;
+    }
+
+    public String makeUserFriendlyName(String context) {
+        if (context != null) {
+            return context + " / " + getName();
+        }
+        return getName();
     }
 }
