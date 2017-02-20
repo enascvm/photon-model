@@ -164,6 +164,15 @@ public class AzureConstants {
     public static final String DEFAULT_INSTANCE_ADAPTER_REFERENCE = "defaultInstanceAdapterReference";
 
     /**
+     * The required name for any gateway subnet.
+     *
+     * From the docs (https://docs.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-vpn-faq):
+     * "All gateway subnets must be named 'GatewaySubnet' to work properly. Don't name your
+     * gateway subnet something else. And don't deploy VMs or anything else to the gateway subnet.
+     */
+    public static final String GATEWAY_SUBNET_NAME = "GatewaySubnet";
+
+    /**
      * Describes the type of a specific
      * {@link com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState}.
      *

@@ -141,8 +141,6 @@ public class AzureTestUtil {
     public static final String AZURE_SECURITY_GROUP_NAME = "temp-NSG";
 
     public static final String AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME = "temp-sharedNetworkRG";
-    // As prerequisite Azure Gateway requires subnet named "GatewaySubnet".
-    public static final String AZURE_GATEWAY_SUBNET_NAME = "GatewaySubnet";
 
     public static final String[] AZURE_SUBNET_CIDR;
 
@@ -717,12 +715,12 @@ public class AzureTestUtil {
 
         // create Gateway Subnet
         Subnet gatewaySubnetParams = new Subnet();
-        gatewaySubnetParams.setName(AZURE_GATEWAY_SUBNET_NAME);
+        gatewaySubnetParams.setName(AzureConstants.GATEWAY_SUBNET_NAME);
         gatewaySubnetParams.setAddressPrefix(AZURE_SUBNET_CIDR[NUMBER_OF_NICS]);
         Subnet gatewaySubnet = networkManagementClient
                 .getSubnetsOperations()
                 .createOrUpdate(resourceGroupName, azureNetworkName,
-                        AZURE_GATEWAY_SUBNET_NAME,
+                        AzureConstants.GATEWAY_SUBNET_NAME,
                         gatewaySubnetParams)
                 .getBody();
 

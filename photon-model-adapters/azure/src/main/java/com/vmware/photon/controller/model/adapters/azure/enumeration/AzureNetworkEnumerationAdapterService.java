@@ -24,6 +24,7 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,7 @@ import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureNetworkEnumerationAdapterService.NetworkEnumContext.SubnetStateWithParentVNetId;
 import com.vmware.photon.controller.model.adapters.azure.model.network.AddressSpace;
@@ -487,6 +489,12 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
 
+        subnetState.customProperties = new HashMap<>();
+        if (AzureConstants.GATEWAY_SUBNET_NAME.equalsIgnoreCase(subnet.name)) {
+            // This is a subnet gateway. Mark it for infrastructure use only.
+            subnetState.customProperties.put(ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME,
+                    Boolean.TRUE.toString());
+        }
         return subnetState;
     }
 

@@ -49,7 +49,7 @@ public class ResourceState extends ServiceDocument {
     public String name;
 
     /**
-     * Custom property bag that can be used to store disk specific properties.
+     * Custom property bag that can be used to store resource specific properties.
      */
     @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
     @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.EXPAND,

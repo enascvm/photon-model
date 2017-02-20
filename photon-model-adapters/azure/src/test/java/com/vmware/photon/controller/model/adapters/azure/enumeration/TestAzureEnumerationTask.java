@@ -19,7 +19,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_GATEWAY_SUBNET_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_NETWORK_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
@@ -86,6 +85,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -772,7 +772,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 assertFalse(subnetStates.isEmpty());
 
                 subnetStates.stream()
-                        .filter(subnetState -> AZURE_GATEWAY_SUBNET_NAME
+                        .filter(subnetState -> AzureConstants.GATEWAY_SUBNET_NAME
                                 .equalsIgnoreCase(subnetState.name))
                         .forEach(subnetState -> {
                             this.host.log(Level.INFO, "Validating gateway for network" +
@@ -781,6 +781,13 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                                     networkState.customProperties);
                             assertNotNull("Virtual gateway property not found.",
                                     networkState.customProperties.get(ComputeProperties.FIELD_VIRTUAL_GATEWAY));
+                            assertNotNull("SubnetState custom properties are null.",
+                                    subnetState.customProperties);
+                            assertEquals("Gateway SubnetState is not marked currectly with "
+                                    + "infrastructure use custom property.",
+                                    Boolean.TRUE.toString(),
+                                    subnetState.customProperties.get(
+                                            ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME));
                             isGatewayFound.set(true);
                         });
             }

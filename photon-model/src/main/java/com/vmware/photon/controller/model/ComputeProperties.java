@@ -71,6 +71,12 @@ public class ComputeProperties {
 
     public static final String REGION_ID = "__regionId";
 
+    /**
+     * A key for the custom properties which indicates if the resource is for infrastructure use
+     * only (the value is set to "true" in this case).
+     */
+    public static final String INFRASTRUCTURE_USE_PROP_NAME = "__infrastructureUse";
+
     public enum OSType {
         WINDOWS, LINUX;
     }
