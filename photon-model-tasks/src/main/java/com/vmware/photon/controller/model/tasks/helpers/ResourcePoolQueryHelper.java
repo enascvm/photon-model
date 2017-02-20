@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -191,6 +192,7 @@ public class ResourcePoolQueryHelper {
      */
     private DeferredResult<Void> executeRpQueries() {
         List<DeferredResult<Void>> rpQueryDRs = new ArrayList<>(this.result.resourcesPools.size());
+        Map<String, Map<String, ComputeState>> computeMapByRpLink = new ConcurrentHashMap<>();
         for (ResourcePoolData rpData : this.result.resourcesPools.values()) {
             String rpLink = rpData.resourcePoolState.documentSelfLink;
             Query rpQuery = rpData.resourcePoolState.query;
@@ -217,10 +219,13 @@ public class ResourcePoolQueryHelper {
                         .thenApply(ignore -> computesMap);
             }
 
-            rpQueryDRs.add(rpQueryDR.thenAccept(computesMap -> storeComputes(rpLink, computesMap)));
+            rpQueryDRs.add(rpQueryDR
+                    .thenAccept(computesMap -> computeMapByRpLink.put(rpLink, computesMap)));
         }
 
-        return DeferredResult.allOf(rpQueryDRs).thenApply(ignore -> (Void)null);
+        return DeferredResult.allOf(rpQueryDRs)
+                .thenAccept(ignore -> computeMapByRpLink.forEach(this::storeComputes))
+                .thenApply(ignore -> (Void)null);
     }
 
     /**
