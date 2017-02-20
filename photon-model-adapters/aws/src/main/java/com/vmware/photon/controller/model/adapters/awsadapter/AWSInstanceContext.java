@@ -666,26 +666,25 @@ public class AWSInstanceContext
             return DeferredResult.failed(new IllegalStateException(msg));
         }
 
-        List<DeferredResult<Void>> getStatesDR = context.child.diskLinks.stream()
+        List<DeferredResult<DiskState>> getStatesDR = context.child.diskLinks.stream()
                 .map(diskStateLink -> {
                     Operation op = Operation.createGet(context.service.getHost(), diskStateLink);
-
-                    return context.service
-                            .sendWithDeferredResult(op, DiskState.class)
-                            .thenAccept(
-                                    diskState -> context.childDisks.put(diskState.type, diskState));
+                    return context.service.sendWithDeferredResult(op, DiskState.class);
                 })
                 .collect(Collectors.toList());
 
-        return DeferredResult.allOf(getStatesDR).handle((all, exc) -> {
-            if (exc != null) {
-                String msg = String.format(
-                        "Error getting Disk states for [%s] VM.",
-                        context.child.name);
-                throw new IllegalStateException(msg, exc);
-            }
-            return context;
-        });
+        return DeferredResult.allOf(getStatesDR)
+                .thenAccept(diskStates -> diskStates.forEach(
+                        diskState -> context.childDisks.put(diskState.type, diskState)))
+                .handle((all, exc) -> {
+                    if (exc != null) {
+                        String msg = String.format(
+                                "Error getting Disk states for [%s] VM.",
+                                context.child.name);
+                        throw new IllegalStateException(msg, exc);
+                    }
+                    return context;
+                });
     }
 
 }
