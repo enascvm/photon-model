@@ -21,6 +21,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.FirewallService;
+import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -61,6 +62,7 @@ public class PhotonModelServices {
             ResourceMetricsService.FACTORY_LINK,
             InMemoryResourceMetricService.FACTORY_LINK,
             EndpointService.FACTORY_LINK,
+            ImageService.FACTORY_LINK,
             ResourceAggregateMetricService.FACTORY_LINK,
             TagService.FACTORY_LINK };
 
@@ -81,6 +83,7 @@ public class PhotonModelServices {
         host.startFactory(new SecurityGroupService());
         host.startFactory(new StorageDescriptionService());
         host.startFactory(new EndpointService());
+        host.startFactory(new ImageService());
         host.startFactory(new InMemoryResourceMetricService());
         host.startFactory(TagService.class, TagFactoryService::new);
         host.startFactory(ResourceMetricsService.class, ResourceMetricsService::createFactory);

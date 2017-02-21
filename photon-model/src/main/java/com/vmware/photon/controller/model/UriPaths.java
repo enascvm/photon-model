@@ -29,6 +29,8 @@ public class UriPaths {
     public static final String RESOURCES_SUBNETS = RESOURCES + "/sub-networks";
     public static final String RESOURCES_SECURITY_GROUPS = RESOURCES + "/security-groups";
 
+    public static final String RESOURCES_IMAGES = RESOURCES + "/images";
+
     public static final String MONITORING = "/monitoring";
 
     public static final String PROPERTY_PREFIX = "photon-model.";

@@ -24,6 +24,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
@@ -54,6 +55,7 @@ public class PhotonModelUtils {
         set.add(ComputeState.class);
         set.add(ComputeStateWithDescription.class);
         set.add(DiskState.class);
+        set.add(ImageState.class);
         set.add(NetworkInterfaceDescription.class);
         set.add(NetworkInterfaceState.class);
         set.add(NetworkInterfaceStateWithDescription.class);
