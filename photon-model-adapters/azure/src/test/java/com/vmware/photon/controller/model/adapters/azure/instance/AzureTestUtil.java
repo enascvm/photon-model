@@ -67,6 +67,8 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureComputeEnumerationAdapterService;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.GatewaySpec;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -120,9 +122,6 @@ public class AzureTestUtil {
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "storage";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_RAGRS";
 
-    // If you change the number of NICs, please do so with the CIDRs!
-    public static final int NUMBER_OF_NICS = 2;
-
     /*
      * VERY IMPORTANT: Do NOT change the vNet-subnet name to something random/unique per test run.
      * There's no need since for every VM deployment we are creating new Resource Group and the
@@ -133,36 +132,121 @@ public class AzureTestUtil {
      * result in orphan vNets under 'test-sharedNetworkRG' RG.
      */
 
-    // NOTE: change to "temp" instead of "test" to prevent collision with existing.
-    // Once IN will revert back to test.
-    public static final String AZURE_NETWORK_NAME = "temp-vNet";
-    public static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
-    public static final String AZURE_SUBNET_NAME = "temp-subnet";
-    public static final String AZURE_SECURITY_GROUP_NAME = "temp-NSG";
+    public static final String AZURE_SECURITY_GROUP_NAME = "test-NSG";
 
-    public static final String AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME = "temp-sharedNetworkRG";
+    public static final String AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME = "test-sharedNetworkRG";
 
-    public static final String[] AZURE_SUBNET_CIDR;
+    public static final AzureNicSpecs DEFAULT_NIC_SPEC;
+    public static final AzureNicSpecs NIC_SPEC_NO_PUBLIC_IP;
 
-    // Split the address space among the subnets attached to NICs and Gateway
-    // The first [number of NICs] Subnet CIDRs are reserved for the NICs and the last one for the
-    // Gateway.
     static {
-        AZURE_SUBNET_CIDR = new String[NUMBER_OF_NICS + 1];
-        AZURE_SUBNET_CIDR[0] = "172.16.0.0/18";
-        AZURE_SUBNET_CIDR[1] = "172.16.64.0/18";
-        AZURE_SUBNET_CIDR[2] = "172.16.128.0/18";
+        String AZURE_NETWORK_NAME = "test-vNet";
+        String AZURE_NETWORK_CIDR = "172.16.0.0/16";
+        String AZURE_SUBNET_NAME = "test-subnet";
+
+        // The number of subnet CIDRs drives the number of nics created.
+        String[] AZURE_SUBNET_CIDR = {"172.16.0.0/18", "172.16.64.0/18"};
+
+        String AZURE_GATEWAY_NAME = "gateway";
+        // Split the address space among the subnets attached to NICs and Gateway
+        String AZURE_GATEWAY_CIDR = "172.16.128.0/18";
+        String AZURE_GATEWAY_IP_CONFIGURATION_NAME = "gateway-ipconfig";
+        String AZURE_GATEWAY_PUBLIC_IP_NAME = "gateway-pip";
+        String AZURE_GATEWAY_IP_ALLOCATION_METHOD = "Dynamic";
+        String AZURE_GATEWAY_SKU = "Standard";
+        String AZURE_GATEWAY_TYPE = "Vpn";
+        String AZURE_GATEWAY_VPN_TYPE = "RouteBased";
+
+        NetSpec network = new NetSpec(
+                AZURE_NETWORK_NAME,
+                AZURE_NETWORK_NAME,
+                AZURE_NETWORK_CIDR,
+                AZURE_RESOURCE_GROUP_LOCATION);
+
+        List<NetSpec> subnets = new ArrayList<>();
+        for (int i = 0; i < AZURE_SUBNET_CIDR.length; i++) {
+
+            subnets.add(new NetSpec(AZURE_SUBNET_NAME + i,
+                    AZURE_SUBNET_NAME + i,
+                    AZURE_SUBNET_CIDR[i],
+                    AZURE_RESOURCE_GROUP_LOCATION));
+        }
+
+        GatewaySpec gateway = new GatewaySpec(AZURE_GATEWAY_NAME,
+                AZURE_GATEWAY_CIDR,
+                AZURE_RESOURCE_GROUP_LOCATION,
+                AZURE_GATEWAY_IP_CONFIGURATION_NAME,
+                AZURE_GATEWAY_PUBLIC_IP_NAME,
+                AZURE_GATEWAY_IP_ALLOCATION_METHOD,
+                AZURE_GATEWAY_SKU,
+                AZURE_GATEWAY_TYPE,
+                AZURE_GATEWAY_VPN_TYPE);
+
+        DEFAULT_NIC_SPEC = new AzureNicSpecs(network, subnets, gateway, true /*
+        assignPublicIpAddress */);
+
+        NIC_SPEC_NO_PUBLIC_IP = new AzureNicSpecs(network, subnets, gateway, false /*
+        assignPublicIpAddress */);
     }
 
-    public static final String AZURE_GATEWAY_NAME = "gateway";
-    public static final String AZURE_GATEWAY_IP_CONFIGURATION_NAME = "gateway-ipconfig";
-    public static final String AZURE_GATEWAY_PUBLIC_IP_NAME = "gateway-pip";
-    public static final String AZURE_GATEWAY_IP_ALLOCATION_METHOD = "Dynamic";
-    public static final String AZURE_GATEWAY_SKU = "Standard";
-    public static final String AZURE_GATEWAY_TYPE = "Vpn";
-    public static final String AZURE_GATEWAY_VPN_TYPE = "RouteBased";
-
     public static final String DEFAULT_OS_DISK_CACHING = "None";
+
+    public static class AzureNicSpecs {
+
+        public static class NetSpec {
+
+            public final String id;
+            public final String name;
+            public final String cidr;
+            public final String zoneId;
+
+            public NetSpec(String id, String name, String cidr, String zoneId) {
+                this.id = id;
+                this.name = name;
+                this.cidr = cidr;
+                this.zoneId = zoneId;
+            }
+        }
+
+        public static class GatewaySpec {
+            public final String name;
+            public final String cidr;
+            public final String zoneId;
+            public final String ipConfigurationName;
+            public final String publicIpName;
+            public final String ipAllocationMethod;
+            public final String sku;
+            public final String type;
+            public final String vpnType;
+
+            public GatewaySpec(String name, String cidr, String zoneId, String ipConfigurationName,
+                    String publicIpName, String ipAllocationMethod, String sku, String type,
+                    String vpnType) {
+                this.name = name;
+                this.cidr = cidr;
+                this.zoneId = zoneId;
+                this.ipConfigurationName = ipConfigurationName;
+                this.publicIpName = publicIpName;
+                this.ipAllocationMethod = ipAllocationMethod;
+                this.sku = sku;
+                this.type = type;
+                this.vpnType = vpnType;
+            }
+        }
+
+        public final NetSpec network;
+        public final List<NetSpec> subnets;
+        public final GatewaySpec gateway;
+        public final boolean assignPublicIpAddress;
+
+        public AzureNicSpecs(NetSpec network, List<NetSpec> subnets, GatewaySpec gateway, boolean
+                assignPublicIpAddress) {
+            this.network = network;
+            this.subnets = subnets;
+            this.gateway = gateway;
+            this.assignPublicIpAddress = assignPublicIpAddress;
+        }
+    }
 
     public static ResourcePoolState createDefaultResourcePool(
             VerificationHost host)
@@ -293,16 +377,16 @@ public class AzureTestUtil {
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
-            String parentLink, String resourcePoolLink, String computeHostAuthLink)
-            throws Throwable {
+            String parentLink, String resourcePoolLink, String computeHostAuthLink,
+            AzureNicSpecs nicSpecs) throws Throwable {
 
         return createDefaultVMResource(host, azureVMName, parentLink, resourcePoolLink,
-                computeHostAuthLink, null /* networkRGLink */);
+                computeHostAuthLink, nicSpecs, null /* networkRGLink */);
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
             String parentLink, String resourcePoolLink, String computeHostAuthLink,
-            String networkRGLink)
+            AzureNicSpecs nicSpecs, String networkRGLink)
             throws Throwable {
 
         ResourceGroupState vmRG = createDefaultResourceGroupState(
@@ -366,7 +450,7 @@ public class AzureTestUtil {
 
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
-                host, resourcePoolLink, computeHostAuthLink, networkRGLink)
+                host, resourcePoolLink, computeHostAuthLink, networkRGLink, nicSpecs)
                         .stream()
                         .map(nic -> nic.documentSelfLink)
                         .collect(Collectors.toList());
@@ -490,19 +574,20 @@ public class AzureTestUtil {
             VerificationHost host,
             String resourcePoolLink,
             String authCredentialsLink,
-            String networkRGLink) throws Throwable {
+            String networkRGLink,
+            AzureNicSpecs nicSpecs) throws Throwable {
 
         // Create network state.
         NetworkState networkState;
         {
             networkState = new NetworkState();
-            networkState.id = AZURE_NETWORK_NAME;
-            networkState.name = AZURE_NETWORK_NAME;
-            networkState.subnetCIDR = AZURE_NETWORK_CIDR;
+            networkState.id = nicSpecs.network.id;
+            networkState.name = nicSpecs.network.name;
+            networkState.subnetCIDR = nicSpecs.network.cidr;
             networkState.authCredentialsLink = authCredentialsLink;
             networkState.resourcePoolLink = resourcePoolLink;
             networkState.groupLinks = Collections.singleton(networkRGLink);
-            networkState.regionId = AZURE_RESOURCE_GROUP_LOCATION;
+            networkState.regionId = nicSpecs.network.zoneId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
                     DEFAULT_INSTANCE_ADAPTER_REFERENCE);
 
@@ -514,17 +599,18 @@ public class AzureTestUtil {
         // Create NIC states.
         List<NetworkInterfaceState> nics = new ArrayList<>();
 
-        for (int i = 0; i < NUMBER_OF_NICS; i++) {
+        for (int i = 0; i < nicSpecs.subnets.size(); i++) {
 
             // Create subnet state per NIC.
             SubnetState subnetState;
             {
                 subnetState = new SubnetState();
 
-                subnetState.id = AZURE_SUBNET_NAME + i;
-                subnetState.name = AZURE_SUBNET_NAME + i;
+                subnetState.id = nicSpecs.subnets.get(i).id;
+                subnetState.name = nicSpecs.subnets.get(i).name;
+                subnetState.subnetCIDR = nicSpecs.subnets.get(i).cidr;
+                subnetState.zoneId = nicSpecs.subnets.get(i).zoneId;
                 subnetState.networkLink = networkState.documentSelfLink;
-                subnetState.subnetCIDR = AZURE_SUBNET_CIDR[i];
 
                 subnetState = TestUtils.doPost(host, subnetState,
                         SubnetState.class,
@@ -579,6 +665,7 @@ public class AzureTestUtil {
                 nicDescription.name = "nicDesc" + i;
                 nicDescription.deviceIndex = i;
                 nicDescription.assignment = IpAssignment.DYNAMIC;
+                nicDescription.assignPublicIpAddress = nicSpecs.assignPublicIpAddress;
 
                 nicDescription = TestUtils.doPost(host, nicDescription,
                         NetworkInterfaceDescription.class,
@@ -632,7 +719,8 @@ public class AzureTestUtil {
                 .createOrUpdate(sharedNetworkRGParams.getName(), sharedNetworkRGParams).getBody();
 
         // Create shared vNet-Subnet-Gateway under shared RG
-        createAzureVirtualNetwork(sharedNetworkRG.getName(), networkManagementClient);
+        createAzureVirtualNetwork(sharedNetworkRG.getName(), DEFAULT_NIC_SPEC,
+                networkManagementClient);
 
         // Create shared NSG under shared RG
         createAzureNetworkSecurityGroup(sharedNetworkRG.getName(), networkManagementClient);
@@ -640,35 +728,32 @@ public class AzureTestUtil {
         return sharedNetworkRG;
     }
 
-    /**
-     * @return VirtualNetwork name.
-     */
     private static void createAzureVirtualNetwork(String resourceGroupName,
+            AzureNicSpecs nicSpecs,
             NetworkManagementClient networkManagementClient) throws Exception {
 
         try {
             VirtualNetwork vNet = new VirtualNetwork();
-            vNet.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+            vNet.setLocation(nicSpecs.network.zoneId);
 
             vNet.setAddressSpace(new AddressSpace());
             vNet.getAddressSpace().setAddressPrefixes(
-                    Collections.singletonList(AzureTestUtil.AZURE_NETWORK_CIDR));
+                    Collections.singletonList(nicSpecs.network.cidr));
 
             vNet.setSubnets(new ArrayList<>());
 
-            for (int i = 0; i < AzureTestUtil.NUMBER_OF_NICS; i++) {
+            for (int i = 0; i < nicSpecs.subnets.size(); i++) {
                 Subnet subnet = new Subnet();
-                subnet.setName(AzureTestUtil.AZURE_SUBNET_NAME + i);
-                subnet.setAddressPrefix(AzureTestUtil.AZURE_SUBNET_CIDR[i]);
+                subnet.setName(nicSpecs.subnets.get(i).name);
+                subnet.setAddressPrefix(nicSpecs.subnets.get(i).cidr);
 
                 vNet.getSubnets().add(subnet);
             }
 
             networkManagementClient.getVirtualNetworksOperations().createOrUpdate(
-                    resourceGroupName, AZURE_NETWORK_NAME, vNet);
+                    resourceGroupName, nicSpecs.network.name, vNet);
 
-            addAzureGatewayToVirtualNetwork(resourceGroupName, AZURE_NETWORK_NAME,
-                    networkManagementClient);
+            addAzureGatewayToVirtualNetwork(resourceGroupName, nicSpecs, networkManagementClient);
 
         } catch (CloudException ex) {
             /*
@@ -710,28 +795,28 @@ public class AzureTestUtil {
      * Adds Gateway to Virtual Network in Azure
      */
     private static void addAzureGatewayToVirtualNetwork(String resourceGroupName,
-            String azureNetworkName, NetworkManagementClient networkManagementClient)
+            AzureNicSpecs nicSpecs, NetworkManagementClient networkManagementClient)
             throws CloudException, IOException, InterruptedException {
 
         // create Gateway Subnet
         Subnet gatewaySubnetParams = new Subnet();
-        gatewaySubnetParams.setName(AzureConstants.GATEWAY_SUBNET_NAME);
-        gatewaySubnetParams.setAddressPrefix(AZURE_SUBNET_CIDR[NUMBER_OF_NICS]);
+        gatewaySubnetParams.setName(nicSpecs.gateway.name);
+        gatewaySubnetParams.setAddressPrefix(nicSpecs.gateway.cidr);
         Subnet gatewaySubnet = networkManagementClient
                 .getSubnetsOperations()
-                .createOrUpdate(resourceGroupName, azureNetworkName,
+                .createOrUpdate(resourceGroupName, nicSpecs.network.name,
                         AzureConstants.GATEWAY_SUBNET_NAME,
                         gatewaySubnetParams)
                 .getBody();
 
         // create Public IP
         PublicIPAddress publicIPAddressParams = new PublicIPAddress();
-        publicIPAddressParams.setPublicIPAllocationMethod(AZURE_GATEWAY_IP_ALLOCATION_METHOD);
-        publicIPAddressParams.setLocation(AZURE_RESOURCE_GROUP_LOCATION);
+        publicIPAddressParams.setPublicIPAllocationMethod(nicSpecs.gateway.ipAllocationMethod);
+        publicIPAddressParams.setLocation(nicSpecs.gateway.zoneId);
 
         PublicIPAddress publicIPAddress = networkManagementClient
                 .getPublicIPAddressesOperations()
-                .createOrUpdate(resourceGroupName, AZURE_GATEWAY_PUBLIC_IP_NAME,
+                .createOrUpdate(resourceGroupName, nicSpecs.gateway.publicIpName,
                         publicIPAddressParams)
                 .getBody();
 
@@ -740,19 +825,19 @@ public class AzureTestUtil {
 
         // create IP Configuration
         VirtualNetworkGatewayIPConfiguration ipConfiguration = new VirtualNetworkGatewayIPConfiguration();
-        ipConfiguration.setName(AZURE_GATEWAY_IP_CONFIGURATION_NAME);
+        ipConfiguration.setName(nicSpecs.gateway.ipConfigurationName);
         ipConfiguration.setSubnet(gatewaySubnet);
-        ipConfiguration.setPrivateIPAllocationMethod(AZURE_GATEWAY_IP_ALLOCATION_METHOD);
+        ipConfiguration.setPrivateIPAllocationMethod(nicSpecs.gateway.ipAllocationMethod);
 
         ipConfiguration.setPublicIPAddress(publicIPSubResource);
 
         // create Virtual Network Gateway
         VirtualNetworkGateway virtualNetworkGateway = new VirtualNetworkGateway();
-        virtualNetworkGateway.setGatewayType(AZURE_GATEWAY_TYPE);
-        virtualNetworkGateway.setVpnType(AZURE_GATEWAY_VPN_TYPE);
+        virtualNetworkGateway.setGatewayType(nicSpecs.gateway.type);
+        virtualNetworkGateway.setVpnType(nicSpecs.gateway.vpnType);
         VirtualNetworkGatewaySku vNetGatewaySku = new VirtualNetworkGatewaySku();
-        vNetGatewaySku.setName(AZURE_GATEWAY_SKU);
-        vNetGatewaySku.setTier(AZURE_GATEWAY_SKU);
+        vNetGatewaySku.setName(nicSpecs.gateway.sku);
+        vNetGatewaySku.setTier(nicSpecs.gateway.sku);
         vNetGatewaySku.setCapacity(2);
         virtualNetworkGateway.setSku(vNetGatewaySku);
         virtualNetworkGateway.setLocation(AZURE_RESOURCE_GROUP_LOCATION);
@@ -764,7 +849,7 @@ public class AzureTestUtil {
         // Call the async variant because the virtual network gateway provisioning depends on
         // the public IP address assignment which is time-consuming operation
         networkManagementClient.getVirtualNetworkGatewaysOperations().createOrUpdateAsync(
-                resourceGroupName, AZURE_GATEWAY_NAME, virtualNetworkGateway,
+                resourceGroupName, nicSpecs.gateway.name, virtualNetworkGateway,
                 new ServiceCallback<VirtualNetworkGateway>() {
                     @Override
                     public void failure(Throwable throwable) {

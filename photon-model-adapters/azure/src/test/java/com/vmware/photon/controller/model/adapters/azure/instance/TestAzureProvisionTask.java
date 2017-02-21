@@ -17,6 +17,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.NIC_SPEC_NO_PUBLIC_IP;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
@@ -54,6 +56,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -179,10 +182,10 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
     @Test
     public void testProvision() throws Throwable {
 
-        // create a Azure VM compute resoruce
+        // create a Azure VM compute resource.
         this.vmState = createDefaultVMResource(this.host, azureVMName,
                 computeHost.documentSelfLink,
-                resourcePoolLink, authLink);
+                resourcePoolLink, authLink, DEFAULT_NIC_SPEC);
 
         kickOffProvisionTask();
 
@@ -200,6 +203,24 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 return true;
             });
         }
+    }
+
+    /**
+     * Creates a Azure instance via a provision task.
+     */
+    @Test
+    @Ignore("This test does an additional VM provisioning that will cause the total preflight "
+            + "time to exceed the limit and timeout the preflight. Only for manual execution.")
+    public void testProvisionNoPublicIP() throws Throwable {
+
+        // create a Azure VM compute resource.
+        this.vmState = createDefaultVMResource(this.host, azureVMName,
+                computeHost.documentSelfLink,
+                resourcePoolLink, authLink, NIC_SPEC_NO_PUBLIC_IP);
+
+        kickOffProvisionTask();
+
+        assertVmNetworksConfiguration();
     }
 
     /**
@@ -244,6 +265,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
         this.vmState = createDefaultVMResource(this.host, vmName,
                 computeHost.documentSelfLink,
                 resourcePoolLink, authLink,
+                DEFAULT_NIC_SPEC,
                 // In addition to standard provisioning pass the RG of the shared network
                 sharedNetworkRGState.documentSelfLink);
 
@@ -328,13 +350,20 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 ComputeState.class,
                 UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
-        assertNotNull("VM address should be set.", vm.address);
+        NetworkInterfaceStateWithDescription primaryNicState = this.host.getServiceState(null,
+                NetworkInterfaceStateWithDescription.class,
+                NetworkInterfaceStateWithDescription.buildUri(
+                        UriUtils.buildUri(this.host, vm.networkInterfaceLinks.get(0))));
 
-        NetworkInterfaceState primaryNicState = this.host.getServiceState(null,
-                NetworkInterfaceState.class,
-                UriUtils.buildUri(this.host, vm.networkInterfaceLinks.get(0)));
+        if (primaryNicState.description.assignPublicIpAddress == null ||
+                primaryNicState.description.assignPublicIpAddress == Boolean.TRUE) {
+            assertNotNull("VM address should be set.", vm.address);
+            assertNotNull("Primary NIC public IP should be set.", primaryNicState.address);
+        } else {
+            assertNull("VM address should be empty.", vm.address);
+            assertNull("Primary NIC public IP should be set.", primaryNicState.address);
+        }
 
-        assertNotNull("Primary NIC public IP should be set.", primaryNicState.address);
         assertNotNull("Primary NIC security group should be set.",
                 primaryNicState.securityGroupLinks != null
                         && primaryNicState.securityGroupLinks.size() == 1);

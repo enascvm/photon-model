@@ -19,7 +19,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_NETWORK_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultDiskState;
@@ -312,7 +312,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 this.mockedStorageAccountName, resourcePoolLink);
         // create an Azure VM compute resource (this also creates a disk and a storage account)
         this.vmState = createDefaultVMResource(this.host, this.azureVMName,
-                computeHost.documentSelfLink, resourcePoolLink, authLink);
+                computeHost.documentSelfLink, resourcePoolLink, authLink, DEFAULT_NIC_SPEC);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();
@@ -536,7 +536,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         for (int i = 0; i < numOfVMs; i++) {
             String staleVMName = "stalevm-" + i;
             createDefaultVMResource(this.host, staleVMName, computeHost.documentSelfLink,
-                    resourcePoolLink, authLink);
+                    resourcePoolLink, authLink, DEFAULT_NIC_SPEC);
         }
     }
 
@@ -766,7 +766,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         AtomicBoolean isGatewayFound = new AtomicBoolean(false);
 
         networkStatesMap.values().forEach(networkState -> {
-            if (networkState.name.contains(AZURE_NETWORK_NAME)) {
+            if (networkState.name.contains(DEFAULT_NIC_SPEC.network.name)) {
 
                 List<SubnetState> subnetStates = getSubnetStates(this.host, networkState);
                 assertFalse(subnetStates.isEmpty());

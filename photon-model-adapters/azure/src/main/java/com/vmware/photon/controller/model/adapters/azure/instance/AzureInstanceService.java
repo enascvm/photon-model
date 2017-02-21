@@ -792,10 +792,21 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
+        AzureNicContext nicCtx = ctx.getPrimaryNic();
+
+        // For now if not specified default to TRUE!
+        if (nicCtx.nicStateWithDesc.description.assignPublicIpAddress == null) {
+            nicCtx.nicStateWithDesc.description.assignPublicIpAddress = Boolean.TRUE;
+        }
+
+        if (nicCtx.nicStateWithDesc.description.assignPublicIpAddress == Boolean.FALSE) {
+            // Do nothing in this method -> proceed to next stage.
+            handleAllocation(ctx, nextStage);
+            return;
+        }
+
         PublicIPAddressesOperations azureClient = getNetworkManagementClient(ctx)
                 .getPublicIPAddressesOperations();
-
-        AzureNicContext nicCtx = ctx.getPrimaryNic();
 
         final PublicIPAddress publicIPAddress = newAzurePublicIPAddress(ctx, nicCtx);
 
@@ -1171,9 +1182,15 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * Gets the public IP address from the VM and patches the compute state and primary NIC state.
+     * Gets the public IP address from the VM (if exists) and patches the compute state and primary
+     * NIC state.
      */
     private void getPublicIpAddress(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+        if (ctx.getPrimaryNic().publicIP == null) {
+            // No public IP address created.
+            handleAllocation(ctx, nextStage);
+            return;
+        }
 
         NetworkManagementClient client = getNetworkManagementClient(ctx);
 
