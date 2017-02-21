@@ -91,6 +91,7 @@ import com.vmware.vim25.VirtualMachineCloneSpec;
 import com.vmware.vim25.VirtualMachineConfigSpec;
 import com.vmware.vim25.VirtualMachineFileInfo;
 import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
+import com.vmware.vim25.VirtualMachineRelocateDiskMoveOptions;
 import com.vmware.vim25.VirtualMachineRelocateSpec;
 import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSCSISharing;
@@ -117,6 +118,10 @@ public class InstanceClient extends BaseHelper {
 
     private static final String CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS = "public-keys";
     private static final String OVF_PROPERTY_ENV = "ovf-env";
+
+    private static final String CLONE_STRATEGY_FULL = "FULL";
+
+    private static final String CLONE_STRATEGY_LINKED = "LINKED";
 
     private final ComputeStateWithDescription state;
     private final ComputeStateWithDescription parent;
@@ -216,6 +221,7 @@ public class InstanceClient extends BaseHelper {
         relocSpec.setDatastore(datastore);
         relocSpec.setFolder(folder);
         relocSpec.setPool(resourcePool);
+        relocSpec.setDiskMoveType(computeDiskMoveType().value());
 
         VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
         cloneSpec.setLocation(relocSpec);
@@ -240,6 +246,20 @@ public class InstanceClient extends BaseHelper {
         }
 
         return (ManagedObjectReference) info.getResult();
+    }
+
+    private VirtualMachineRelocateDiskMoveOptions computeDiskMoveType() {
+        String strategy = CustomProperties.of(this.state)
+                .getString(CustomProperties.CLONE_STRATEGY, CLONE_STRATEGY_LINKED);
+
+        if (CLONE_STRATEGY_FULL.equals(strategy)) {
+            return VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_ALLOW_SHARING;
+        } else if (CLONE_STRATEGY_LINKED.equals(strategy)) {
+            return VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
+        } else {
+            logger.warn("Unknown clone strategy {}, defaulting to LINKED", strategy);
+            return VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
+        }
     }
 
     public void deleteInstance() throws Exception {

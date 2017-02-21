@@ -50,6 +50,13 @@ public class CustomProperties {
      */
     public static final String TYPE = "__computeType";
 
+    /**
+     * How cloning should be performed. Valid values are FULL and LINKED.
+     * If not specified LINKED is assumed.
+     * https://www.vmware.com/support/developer/vc-sdk/linked_vms_note.pdf
+     */
+    public static final String CLONE_STRATEGY = "__cloneStrategy";
+
     public static final String OPAQUE_NET_ID = "__opaqueNetworkId";
 
     public static final String OPAQUE_NET_TYPE = "__opaqueNetworkType";
