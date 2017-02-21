@@ -1,7 +1,14 @@
 # CHANGELOG
 
-## 0.6.5-SNAPSHOT
+## 0.6.5
 
+* Deprecating unused currency/cost fields in resource pool.
+* [vsphere] Create dvPortgroups in a DVS.
+* Updating documentExpiration on ResourceMetrics and ResourceAggregateMetrics to 6 hours.
+* [AWS] Enumerate tags in Networks and Subnets.
+* [Azure] Mark Gateway subnet with special custom property.
+* Fix concurrency issue in ResourcePoolQueryHelper.
+* Fix possible concurrent issue in AWS adapter.
 
 ## 0.6.4
 
