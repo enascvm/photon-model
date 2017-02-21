@@ -245,6 +245,10 @@ public class InstanceClient extends BaseHelper {
     public void deleteInstance() throws Exception {
         ManagedObjectReference vm = CustomProperties.of(this.state)
                 .getMoRef(CustomProperties.MOREF);
+        if (vm == null) {
+            logger.info("No moref associated with the given instance, skipping delete.");
+            return;
+        }
 
         TaskInfo info;
         // power off
