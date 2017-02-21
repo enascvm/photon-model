@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.6-SNAPSHOT
+
+
 ## 0.6.5
 
 * Deprecating unused currency/cost fields in resource pool.
