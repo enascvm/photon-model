@@ -71,6 +71,10 @@ public class EndpointService extends StatefulService {
 
     }
 
+    public static class EndpointStateWithCredentials extends EndpointState {
+        public Map<String, String> credentials;
+    }
+
     public EndpointService() {
         super(EndpointState.class);
         super.toggleOption(ServiceOption.PERSISTENCE, true);

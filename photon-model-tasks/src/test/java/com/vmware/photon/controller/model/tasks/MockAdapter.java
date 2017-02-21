@@ -13,6 +13,10 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
+
+import java.util.HashMap;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ComputeBootRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
@@ -532,9 +536,17 @@ public class MockAdapter {
                     EndpointState endpoint = this.test.getServiceSynchronously(
                             request.resourceLink(),
                             EndpointState.class);
+
+                    if (endpoint.endpointProperties == null) {
+                        endpoint.endpointProperties = new HashMap<>();
+                    }
+                    endpoint.endpointProperties.put(EndpointConfigRequest.REGION_KEY, request.endpointProperties.get(EndpointConfigRequest.REGION_KEY));
+                    endpoint.endpointProperties.put(EndpointConfigRequest.PRIVATE_KEYID_KEY, request.endpointProperties.get(PRIVATE_KEYID_KEY));
+                    this.test.patchServiceSynchronously(endpoint.documentSelfLink, endpoint);
+
                     ComputeDescription cd = new ComputeDescription();
-                    if (endpoint.endpointProperties.containsKey(EndpointConfigRequest.ZONE_KEY)) {
-                        cd.zoneId = endpoint.endpointProperties.get(EndpointConfigRequest.ZONE_KEY);
+                    if (request.endpointProperties.containsKey(EndpointConfigRequest.ZONE_KEY)) {
+                        cd.zoneId = request.endpointProperties.get(EndpointConfigRequest.ZONE_KEY);
                     }
                     cd.enumerationAdapterReference = UriUtils.buildUri(getHost(),
                             MockSuccessEnumerationAdapter.SELF_LINK);

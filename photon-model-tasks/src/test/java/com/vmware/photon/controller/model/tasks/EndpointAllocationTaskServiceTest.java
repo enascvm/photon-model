@@ -18,6 +18,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
@@ -346,9 +347,10 @@ public class EndpointAllocationTaskServiceTest extends Suite {
             EndpointState endpointState = getServiceSynchronously(
                     completeState.endpointState.documentSelfLink, EndpointState.class);
             assertEquals(EndpointType.aws.name(), endpointState.endpointType);
+
             assertNotNull(endpointState.endpointProperties);
             assertEquals(TEST_ACCESS_KEY, endpointState.endpointProperties.get(PRIVATE_KEYID_KEY));
-            assertEquals(TEST_SECRETE_KEY, endpointState.endpointProperties.get(PRIVATE_KEY_KEY));
+            assertTrue(endpointState.endpointProperties == null || !endpointState.endpointProperties.containsKey(PRIVATE_KEY_KEY));
 
             ComputeState computeState = getServiceSynchronously(
                     completeState.endpointState.computeLink, ComputeState.class);
@@ -398,7 +400,7 @@ public class EndpointAllocationTaskServiceTest extends Suite {
             assertEquals(EndpointType.aws.name(), endpointState.endpointType);
             assertNotNull(endpointState.endpointProperties);
             assertEquals("new-access-key", endpointState.endpointProperties.get(PRIVATE_KEYID_KEY));
-            assertEquals(TEST_SECRETE_KEY, endpointState.endpointProperties.get(PRIVATE_KEY_KEY));
+            assertTrue(endpointState.endpointProperties == null || !endpointState.endpointProperties.containsKey(PRIVATE_KEY_KEY));
 
             computeState = getServiceSynchronously(
                     completeState.endpointState.computeLink, ComputeState.class);

@@ -43,6 +43,7 @@ public class EndpointAdapterUtils {
             BiConsumer<AuthCredentialsServiceState, Retriever> credEnhancer,
             BiConsumer<ComputeDescription, Retriever> descEnhancer,
             BiConsumer<ComputeState, Retriever> compEnhancer,
+            BiConsumer<EndpointState, Retriever> endpointEnhancer,
             BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validator) {
 
         switch (body.requestType) {
@@ -56,7 +57,7 @@ public class EndpointAdapterUtils {
 
         default:
             op.complete();
-            configureEndpoint(service, body, credEnhancer, descEnhancer, compEnhancer);
+            configureEndpoint(service, body, credEnhancer, descEnhancer, compEnhancer, endpointEnhancer);
             break;
         }
     }
@@ -64,13 +65,14 @@ public class EndpointAdapterUtils {
     private static void configureEndpoint(StatelessService service, EndpointConfigRequest body,
             BiConsumer<AuthCredentialsServiceState, Retriever> credEnhancer,
             BiConsumer<ComputeDescription, Retriever> descEnhancer,
-            BiConsumer<ComputeState, Retriever> compEnhancer) {
+            BiConsumer<ComputeState, Retriever> compEnhancer,
+            BiConsumer<EndpointState, Retriever> endpointEnhancer) {
 
         Consumer<Operation> onSuccess = (op) -> {
             EndpointState endpoint = op.getBody(EndpointState.class);
             op.complete();
 
-            Map<String, String> props = new HashMap<>(endpoint.endpointProperties);
+            Map<String, String> props = new HashMap<>(body.endpointProperties);
             props.put(MOCK_REQUEST, String.valueOf(body.isMockRequest));
             props.put(ENDPOINT_REFERENCE_URI, body.resourceReference.toString());
 
@@ -86,10 +88,15 @@ public class EndpointAdapterUtils {
                 cs.powerState = PowerState.ON;
                 compEnhancer.accept(cs, r);
 
+                EndpointState es = new EndpointState();
+                es.endpointProperties = new HashMap<>();
+                endpointEnhancer.accept(es, r);
+
                 Stream<Operation> operations = Stream.of(
                         Pair.of(authState, endpoint.authCredentialsLink),
                         Pair.of(cd, endpoint.computeDescriptionLink),
-                        Pair.of(cs, endpoint.computeLink))
+                        Pair.of(cs, endpoint.computeLink),
+                        Pair.of(es, endpoint.documentSelfLink))
                         .map((p) -> {
                             return Operation.createPatch(body.buildUri(p.right)).setBody(p.left)
                                     .setReferer(service.getUri());

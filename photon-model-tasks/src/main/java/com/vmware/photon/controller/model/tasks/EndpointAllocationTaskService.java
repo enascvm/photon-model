@@ -26,6 +26,7 @@ import java.net.URI;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -230,6 +231,7 @@ public class EndpointAllocationTaskService
             req.resourceReference = UriUtils.buildUri(getHost(),
                     currentState.endpointState.documentSelfLink);
             req.taskReference = o.getUri();
+            req.endpointProperties = currentState.endpointState.endpointProperties;
             sendEnhanceRequest(req, currentState);
         };
 
@@ -270,6 +272,10 @@ public class EndpointAllocationTaskService
     private void createEndpoint(EndpointAllocationTaskState currentState) {
 
         EndpointState es = currentState.endpointState;
+
+        Map<String, String> endpointProperties = currentState.endpointState.endpointProperties;
+        es.endpointProperties = null;
+
         if (es.documentSelfLink == null) {
             es.documentSelfLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
                     UUID.randomUUID().toString());
@@ -350,7 +356,7 @@ public class EndpointAllocationTaskService
                             long firstKey = exs.keySet().iterator().next();
                             exs.values().forEach(
                                     ex -> logWarning(() -> String.format("Error creating resource"
-                                                    + " pool: %s", ex.getMessage())));
+                                            + " pool: %s", ex.getMessage())));
                             sendFailurePatch(this, currentState, exs.get(firstKey));
                             return;
                         }
@@ -370,7 +376,7 @@ public class EndpointAllocationTaskService
                             long firstKey = exs.keySet().iterator().next();
                             exs.values().forEach(
                                     ex -> logWarning(() -> String.format("Error retrieving resource"
-                                                    + " pool: %s", ex.getMessage())));
+                                            + " pool: %s", ex.getMessage())));
                             sendFailurePatch(this, currentState, exs.get(firstKey));
                             return;
                         }
@@ -413,12 +419,15 @@ public class EndpointAllocationTaskService
                     if (exs != null) {
                         long firstKey = exs.keySet().iterator().next();
                         exs.values().forEach(
-                                ex -> logWarning(() -> String.format("Error: %s", ex.getMessage())));
+                                ex -> logWarning(
+                                        () -> String.format("Error: %s", ex.getMessage())));
                         sendFailurePatch(this, currentState, exs.get(firstKey));
                         return;
                     }
                     Operation esOp = ops.get(endpointOp.getId());
                     EndpointState endpoint = esOp.getBody(EndpointState.class);
+                    // propagate the endpoint properties to the next stage
+                    endpoint.endpointProperties = endpointProperties;
                     EndpointAllocationTaskState state = createUpdateSubStageTask(
                             SubStage.INVOKE_ADAPTER);
                     state.endpointState = endpoint;
@@ -429,6 +438,8 @@ public class EndpointAllocationTaskService
     private void updateOrCreateEndpoint(EndpointAllocationTaskState currentState) {
 
         EndpointState es = currentState.endpointState;
+        Map<String, String> endpointProperties = currentState.endpointState.endpointProperties;
+        es.endpointProperties = null;
 
         Operation.createPatch(this, es.documentSelfLink)
                 .setBody(es)
@@ -437,6 +448,7 @@ public class EndpointAllocationTaskService
                         if (o.getStatusCode() == Operation.STATUS_CODE_NOT_FOUND) {
                             logInfo(() -> String.format("Endpoint %s not found, creating new.",
                                     es.documentSelfLink));
+                            currentState.endpointState.endpointProperties = endpointProperties;
                             createEndpoint(currentState);
                         } else {
                             logSevere(() -> String.format("Failed to update endpoint %s : %s",
@@ -446,6 +458,7 @@ public class EndpointAllocationTaskService
                         return;
                     }
                     // update endpoint, but first stop current enumeration.
+                    currentState.endpointState.endpointProperties = endpointProperties;
                     doUpdateEndpoint(o.getBody(EndpointState.class), currentState);
                 })
                 .sendWith(this);

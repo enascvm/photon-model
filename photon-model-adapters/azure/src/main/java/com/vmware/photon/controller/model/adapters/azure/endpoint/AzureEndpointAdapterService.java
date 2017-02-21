@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
@@ -48,6 +49,7 @@ import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Ret
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
@@ -79,7 +81,18 @@ public class AzureEndpointAdapterService extends StatelessService {
         EndpointConfigRequest body = op.getBody(EndpointConfigRequest.class);
 
         EndpointAdapterUtils.handleEndpointRequest(this, op, body, credentials(),
-                computeDesc(), compute(), validate(body));
+                computeDesc(), compute(), endpoint(), validate(body));
+    }
+
+    private BiConsumer<EndpointService.EndpointState,Retriever> endpoint() {
+        return (e , r) -> {
+            e.endpointProperties.put(PRIVATE_KEYID_KEY, r.getRequired(PRIVATE_KEYID_KEY));
+            e.endpointProperties.put(USER_LINK_KEY, r.getRequired(USER_LINK_KEY));
+            e.endpointProperties.put(AZURE_TENANT_ID, r.getRequired(AZURE_TENANT_ID));
+
+            r.get(REGION_KEY).ifPresent(rk -> e.endpointProperties.put(REGION_KEY, rk));
+            r.get(ZONE_KEY).ifPresent(zk -> e.endpointProperties.put(ZONE_KEY, zk));
+        };
     }
 
     private BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validate(
@@ -130,8 +143,7 @@ public class AzureEndpointAdapterService extends StatelessService {
             c.privateKeyId = r.getRequired(PRIVATE_KEYID_KEY);
             c.userLink = r.getRequired(USER_LINK_KEY);
             c.customProperties = new HashMap<>();
-            c.customProperties.put(AzureConstants.AZURE_TENANT_ID,
-                    r.getRequired(AzureConstants.AZURE_TENANT_ID));
+            c.customProperties.put(AZURE_TENANT_ID, r.getRequired(AZURE_TENANT_ID));
         };
     }
 

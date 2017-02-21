@@ -45,8 +45,7 @@ import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Ret
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.EndpointService;
-
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
@@ -56,7 +55,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 
 /**
  * Adapter to validate and enhance AWS based endpoints.
- *
  */
 public class AWSEndpointAdapterService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_ENDPOINT_CONFIG_ADAPTER;
@@ -84,7 +82,7 @@ public class AWSEndpointAdapterService extends StatelessService {
         EndpointConfigRequest body = op.getBody(EndpointConfigRequest.class);
 
         EndpointAdapterUtils.handleEndpointRequest(this, op, body, credentials(),
-                computeDesc(), compute(), validate(body));
+                computeDesc(), compute(), endpoint(), validate(body));
     }
 
     private BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validate(
@@ -182,14 +180,22 @@ public class AWSEndpointAdapterService extends StatelessService {
                         r.getRequired(PRIVATE_KEY_KEY));
                 if (accountId != null && !accountId.isEmpty()) {
                     addEntryToCustomProperties(c, AWSConstants.AWS_ACCOUNT_ID_KEY, accountId);
-                    EndpointService.EndpointState es = new EndpointService.EndpointState();
+                    EndpointState es = new EndpointState();
                     es.endpointProperties = new HashMap<>();
                     es.endpointProperties.put(AWSConstants.AWS_ACCOUNT_ID_KEY, accountId);
-                    String endpointReference = r.getRequired(EndpointAdapterUtils.ENDPOINT_REFERENCE_URI);
+                    String endpointReference = r
+                            .getRequired(EndpointAdapterUtils.ENDPOINT_REFERENCE_URI);
                     Operation.createPatch(UriUtils.buildUri(endpointReference)).setReferer(getUri())
                             .setBody(es).sendWith(this);
                 }
             }
+        };
+    }
+
+    private BiConsumer<EndpointState, Retriever> endpoint() {
+        return (e, r) -> {
+            e.endpointProperties.put(EndpointConfigRequest.REGION_KEY, r.get(REGION_KEY).orElse(null));
+            e.endpointProperties.put(EndpointConfigRequest.PRIVATE_KEYID_KEY, r.getRequired(PRIVATE_KEYID_KEY));
         };
     }
 

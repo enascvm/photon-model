@@ -37,6 +37,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderEx
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
@@ -48,7 +49,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 
 /**
  * Adapter to validate and enhance vSphere based endpoints.
- *
  */
 public class VSphereEndpointAdapterService extends StatelessService {
     public static final String SELF_LINK = VSphereUriPaths.ENDPOINT_CONFIG_ADAPTER;
@@ -64,7 +64,17 @@ public class VSphereEndpointAdapterService extends StatelessService {
         EndpointConfigRequest body = op.getBody(EndpointConfigRequest.class);
 
         EndpointAdapterUtils.handleEndpointRequest(this, op, body, credentials(),
-                computeDesc(), compute(), validate(body));
+                computeDesc(), compute(), endpoint(), validate(body));
+    }
+
+    private BiConsumer<EndpointService.EndpointState, Retriever> endpoint() {
+        return (e, r) -> {
+            e.endpointProperties.put(PRIVATE_KEYID_KEY, r.getRequired(PRIVATE_KEYID_KEY));
+            e.endpointProperties.put(HOST_NAME_KEY, r.getRequired(HOST_NAME_KEY));
+
+            r.get(REGION_KEY).ifPresent(rk -> e.endpointProperties.put(REGION_KEY, rk));
+            r.get(ZONE_KEY).ifPresent(zk -> e.endpointProperties.put(ZONE_KEY, zk));
+        };
     }
 
     private BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validate(
