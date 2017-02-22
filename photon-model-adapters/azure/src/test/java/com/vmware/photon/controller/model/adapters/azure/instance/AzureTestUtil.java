@@ -148,7 +148,6 @@ public class AzureTestUtil {
         String[] AZURE_SUBNET_CIDR = {"172.16.0.0/18", "172.16.64.0/18"};
 
         String AZURE_GATEWAY_NAME = "gateway";
-        // Split the address space among the subnets attached to NICs and Gateway
         String AZURE_GATEWAY_CIDR = "172.16.128.0/18";
         String AZURE_GATEWAY_IP_CONFIGURATION_NAME = "gateway-ipconfig";
         String AZURE_GATEWAY_PUBLIC_IP_NAME = "gateway-pip";
@@ -159,7 +158,6 @@ public class AzureTestUtil {
 
         NetSpec network = new NetSpec(
                 AZURE_NETWORK_NAME,
-                AZURE_NETWORK_NAME,
                 AZURE_NETWORK_CIDR,
                 AZURE_RESOURCE_GROUP_LOCATION);
 
@@ -167,7 +165,6 @@ public class AzureTestUtil {
         for (int i = 0; i < AZURE_SUBNET_CIDR.length; i++) {
 
             subnets.add(new NetSpec(AZURE_SUBNET_NAME + i,
-                    AZURE_SUBNET_NAME + i,
                     AZURE_SUBNET_CIDR[i],
                     AZURE_RESOURCE_GROUP_LOCATION));
         }
@@ -195,13 +192,11 @@ public class AzureTestUtil {
 
         public static class NetSpec {
 
-            public final String id;
             public final String name;
             public final String cidr;
             public final String zoneId;
 
-            public NetSpec(String id, String name, String cidr, String zoneId) {
-                this.id = id;
+            public NetSpec(String name, String cidr, String zoneId) {
                 this.name = name;
                 this.cidr = cidr;
                 this.zoneId = zoneId;
@@ -581,7 +576,7 @@ public class AzureTestUtil {
         NetworkState networkState;
         {
             networkState = new NetworkState();
-            networkState.id = nicSpecs.network.id;
+            networkState.id = nicSpecs.network.name;
             networkState.name = nicSpecs.network.name;
             networkState.subnetCIDR = nicSpecs.network.cidr;
             networkState.authCredentialsLink = authCredentialsLink;
@@ -606,7 +601,7 @@ public class AzureTestUtil {
             {
                 subnetState = new SubnetState();
 
-                subnetState.id = nicSpecs.subnets.get(i).id;
+                subnetState.id = nicSpecs.subnets.get(i).name;
                 subnetState.name = nicSpecs.subnets.get(i).name;
                 subnetState.subnetCIDR = nicSpecs.subnets.get(i).cidr;
                 subnetState.zoneId = nicSpecs.subnets.get(i).zoneId;

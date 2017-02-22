@@ -767,7 +767,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         List<SubnetState> subnetStates = TestUtils.getSubnetStates(this.host, networkState);
         assertFalse(subnetStates.isEmpty());
-        subnetStates.stream().forEach(subnetState -> assertNotNull(subnetState.subnetCIDR));
+        subnetStates.stream().forEach(subnetState -> {
+            assertNotNull(subnetState.subnetCIDR);
+            assertNotNull(subnetState.zoneId);
+        });
     }
 
     private void validateSecurityGroupsInformation(Set<String> securityGroupLinks) throws Throwable {

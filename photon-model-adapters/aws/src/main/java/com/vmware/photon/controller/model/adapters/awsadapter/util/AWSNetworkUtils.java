@@ -94,6 +94,7 @@ public class AWSNetworkUtils {
         subnetState.subnetCIDR = subnet.getCidrBlock();
         subnetState.supportPublicIpAddress = subnet.isMapPublicIpOnLaunch();
         subnetState.defaultForZone = subnet.isDefaultForAz();
+        subnetState.zoneId = subnet.getAvailabilityZone();
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
         subnetState.customProperties = new HashMap<>();
