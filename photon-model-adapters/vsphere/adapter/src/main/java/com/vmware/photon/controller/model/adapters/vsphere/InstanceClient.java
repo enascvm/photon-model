@@ -127,7 +127,7 @@ public class InstanceClient extends BaseHelper {
     private final ComputeStateWithDescription parent;
     private final List<DiskState> disks;
     private final List<NetworkInterfaceStateWithDetails> nics;
-    private final ManagedObjectReference parentComputeResource;
+    private final ManagedObjectReference placementTarget;
 
     private final GetMoRef get;
     private final Finder finder;
@@ -143,7 +143,7 @@ public class InstanceClient extends BaseHelper {
             ComputeStateWithDescription parent,
             List<DiskState> disks,
             List<NetworkInterfaceStateWithDetails> nics,
-            ManagedObjectReference parentComputeResource)
+            ManagedObjectReference placementTarget)
             throws ClientException, FinderException {
         super(connection);
 
@@ -151,7 +151,7 @@ public class InstanceClient extends BaseHelper {
         this.parent = parent;
         this.disks = disks;
         this.nics = nics;
-        this.parentComputeResource = parentComputeResource;
+        this.placementTarget = placementTarget;
 
         // the regionId is used as a ref to a vSphere datacenter name
         String id = resource.description.regionId;
@@ -1094,8 +1094,7 @@ public class InstanceClient extends BaseHelper {
         String datastorePath = this.state.description.dataStoreId;
 
         if (datastorePath == null) {
-            ArrayOfManagedObjectReference datastores = this.get
-                    .entityProp(this.parentComputeResource, VimPath.res_datastore);
+            ArrayOfManagedObjectReference datastores = findDatastoresForPlacement(this.placementTarget);
             if (datastores == null || datastores.getManagedObjectReference().isEmpty()) {
                 this.datastore = this.finder.defaultDatastore().object;
             } else {
@@ -1108,20 +1107,36 @@ public class InstanceClient extends BaseHelper {
         return this.datastore;
     }
 
+    private ArrayOfManagedObjectReference findDatastoresForPlacement(ManagedObjectReference target)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        if (VimNames.TYPE_RESOURCE_POOL.equals(target.getType())) {
+            ManagedObjectReference owner = this.get.entityProp(target, VimNames.PROPERTY_OWNER);
+            return findDatastoresForPlacement(owner);
+        }
+        // at this point a target is either host or ComputeResource: both have a property "datastore"
+        return this.get.entityProp(target, VimPath.res_datastore);
+    }
+
     public ManagedObjectReference getResourcePool()
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         if (this.resourcePool != null) {
             return this.resourcePool;
         }
 
-        if (VimNames.TYPE_HOST.equals(this.parentComputeResource.getType())) {
-            ManagedObjectReference parentCompute = this.get.entityProp(this.parentComputeResource,
-                    VimPath.host_parent);
+        if (VimNames.TYPE_HOST.equals(this.placementTarget.getType())) {
+            // find the ComputeResource representing this host and use its root resource pool
+            ManagedObjectReference parentCompute = this.get.entityProp(this.placementTarget, VimPath.host_parent);
             this.resourcePool = this.get.entityProp(parentCompute, VimPath.res_resourcePool);
+        } else if (VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(this.placementTarget.getType()) ||
+                VimNames.TYPE_COMPUTE_RESOURCE.equals(this.placementTarget.getType())) {
+            // place in the root resource pool of a cluster
+            this.resourcePool = this.get.entityProp(this.placementTarget, VimPath.res_resourcePool);
+        } else if (VimNames.TYPE_RESOURCE_POOL.equals(this.placementTarget.getType())) {
+            // place in the resource pool itself
+            this.resourcePool = this.placementTarget;
         } else {
-            this.resourcePool = this.get.entityProp(this.parentComputeResource,
-                    VimPath.res_resourcePool);
-
+            throw new IllegalArgumentException("Cannot place instance on " +
+                    VimUtils.convertMoRefToString(this.placementTarget));
         }
 
         return this.resourcePool;
@@ -1133,8 +1148,8 @@ public class InstanceClient extends BaseHelper {
             return this.host;
         }
 
-        if (VimNames.TYPE_HOST.equals(this.parentComputeResource.getType())) {
-            this.host = this.parentComputeResource;
+        if (VimNames.TYPE_HOST.equals(this.placementTarget.getType())) {
+            this.host = this.placementTarget;
         }
 
         return this.host;
