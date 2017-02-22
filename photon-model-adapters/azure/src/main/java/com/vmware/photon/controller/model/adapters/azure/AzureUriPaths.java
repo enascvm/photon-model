@@ -36,6 +36,8 @@ public class AzureUriPaths {
             + "/compute-host-storage-stats-gatherer";
     public static final String AZURE_ENUMERATION_ADAPTER = AdapterTypePath.ENUMERATION_ADAPTER
             .adapterLink(EndpointType.azure.name());
+    public static final String AZURE_IMAGE_ENUMERATION_ADAPTER = AdapterTypePath.IMAGE_ENUMERATION_ADAPTER
+            .adapterLink(EndpointType.azure.name());
     public static final String AZURE_COMPUTE_ENUMERATION_ADAPTER = PROVISIONING_AZURE
             + "/compute-enumeration-adapter";
     public static final String AZURE_STORAGE_ENUMERATION_ADAPTER = PROVISIONING_AZURE

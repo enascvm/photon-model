@@ -27,6 +27,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
@@ -36,6 +37,7 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.photon.controller.model.support.CertificateInfo;
 import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
+import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
@@ -56,17 +58,28 @@ public class MockAdapter {
         }
         host.startService(new MockSuccessInstanceAdapter());
         host.startService(new MockFailureInstanceAdapter());
+
         host.startService(new MockSuccessBootAdapter());
         host.startService(new MockFailureBootAdapter());
+
         host.startService(new MockSuccessEnumerationAdapter());
         host.startService(new MockPreserveMissingEnumerationAdapter());
         host.startService(new MockFailureEnumerationAdapter());
+
+        host.startService(new MockSuccessImageEnumerationAdapter());
+        host.startService(new MockFailureImageEnumerationAdapter());
+        host.startService(new MockFailOperationImageEnumerationAdapter());
+        host.startService(new MockCancelledImageEnumerationAdapter());
+
         host.startService(new MockSnapshotSuccessAdapter());
         host.startService(new MockSnapshotFailureAdapter());
+
         host.startService(new MockNetworkInstanceSuccessAdapter());
         host.startService(new MockNetworkInstanceFailureAdapter());
+
         host.startService(new MockFirewallInstanceSuccessAdapter());
         host.startService(new MockFirewallInstanceFailureAdapter());
+
         host.startService(new MockSuccessEndpointAdapter(test));
         host.startService(new MockUntrustedCertEndpointAdapter());
         host.startService(new MockFailNPEEndpointAdapter());
@@ -77,6 +90,20 @@ public class MockAdapter {
         taskState.stage = TaskState.TaskStage.FAILED;
         taskState.failure = ServiceErrorResponse
                 .create(new IllegalStateException("Mock adapter failing task on purpose"), 500);
+        return taskState;
+    }
+
+    public static TaskState createCancelledTaskInfo() {
+        TaskState taskState = new TaskState();
+        taskState.stage = TaskState.TaskStage.CANCELLED;
+        taskState.failure = ServiceErrorResponse
+                .create(new IllegalStateException("Mock adapter cancelling task on purpose"), 500);
+        return taskState;
+    }
+
+    private static TaskState createSuccessTaskInfo() {
+        TaskState taskState = new TaskState();
+        taskState.stage = TaskState.TaskStage.FINISHED;
         return taskState;
     }
 
@@ -507,6 +534,7 @@ public class MockAdapter {
         public static final String SELF_LINK = UriPaths.PROVISIONING
                 + "/mock_fail_npe_endpoint_adapter";
 
+        @Override
         public void handleRequest(Operation op) {
             op.fail(new NullPointerException());
         }
@@ -579,6 +607,101 @@ public class MockAdapter {
             default:
                 super.handleRequest(op);
             }
+        }
+    }
+
+    /**
+     * Mock Image Enumeration adapter that always fails the PATCH operation.
+     */
+    public static class MockFailOperationImageEnumerationAdapter extends StatelessService {
+
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_fail_operation_image_enumeration_adapter";
+
+        @Override
+        public void handlePatch(Operation patchOp) {
+            patchOp.fail(new IllegalStateException("Mock adapter failing operation on purpose"));
+        }
+    }
+
+    /**
+     * Mock Image Enumeration adapter that always completes with {@link TaskState.TaskStage#FAILED}.
+     */
+    public static class MockFailureImageEnumerationAdapter
+            extends MockImageEnumerationAdapter {
+
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_failure_image_enumeration_adapter";
+
+        public static final TaskState COMPLETE_STATE = createFailedTaskInfo();
+
+        public MockFailureImageEnumerationAdapter() {
+            super(COMPLETE_STATE);
+        }
+    }
+
+    /**
+     * Mock Image Enumeration adapter that always completes with
+     * {@link TaskState.TaskStage#CANCELLED}.
+     */
+    public static class MockCancelledImageEnumerationAdapter
+            extends MockImageEnumerationAdapter {
+
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_cancelled_image_enumeration_adapter";
+
+        public static final TaskState COMPLETE_STATE = createCancelledTaskInfo();
+
+        public MockCancelledImageEnumerationAdapter() {
+            super(COMPLETE_STATE);
+        }
+    }
+
+    /**
+     * Mock Image Enumeration adapter that always completes with
+     * {@link TaskState.TaskStage#FINISHED}.
+     */
+    public static class MockSuccessImageEnumerationAdapter
+            extends MockImageEnumerationAdapter {
+
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_success_image_enumeration_adapter";
+
+        public static final TaskState COMPLETE_STATE  = createSuccessTaskInfo();
+
+        public MockSuccessImageEnumerationAdapter() {
+            super(COMPLETE_STATE);
+        }
+    }
+
+    private static class MockImageEnumerationAdapter extends StatelessService {
+
+        final TaskState completedTaskState;
+
+        MockImageEnumerationAdapter(TaskState completedTaskState) {
+            this.completedTaskState = completedTaskState;
+        }
+
+        @Override
+        public void handlePatch(Operation patchOp) {
+            if (!patchOp.hasBody()) {
+                patchOp.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+
+            // Complete the operation.
+            patchOp.complete();
+
+            ImageEnumerateRequest adapterRequest = patchOp.getBody(ImageEnumerateRequest.class);
+
+            // PATCH the task with 'completed' TaskState
+            ImageEnumerationTaskState taskResponse = new ImageEnumerationTaskState();
+            taskResponse.taskInfo = this.completedTaskState;
+            if (taskResponse.taskInfo.failure != null) {
+                taskResponse.failureMessage = taskResponse.taskInfo.failure.message;
+            }
+
+            sendRequest(Operation.createPatch(adapterRequest.taskReference).setBody(taskResponse));
         }
     }
 

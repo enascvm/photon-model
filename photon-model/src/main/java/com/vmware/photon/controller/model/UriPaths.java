@@ -44,6 +44,7 @@ public class UriPaths {
         POWER_ADAPTER("powerAdapter", "power-adapter"),
         ENDPOINT_CONFIG_ADAPTER("endpointConfigAdapter", "endpoint-config-adapter"),
         ENUMERATION_ADAPTER("enumerationAdapter", "enumeration-adapter"),
+        IMAGE_ENUMERATION_ADAPTER("imageEnumerationAdapter", "image-enumeration-adapter"),
         ENUMERATION_CREATION_ADAPTER("enumerationCreationAdapter", "enumeration-creation-adapter"),
         ENUMERATION_DELETION_ADAPTER("enumerationDeletionAdapter", "enumeration-deletion-adapter"),
         COMPUTE_DESCRIPTION_CREATION_ADAPTER("computeDescriptionCreationAdapter", "compute-description-creation-adapter"),

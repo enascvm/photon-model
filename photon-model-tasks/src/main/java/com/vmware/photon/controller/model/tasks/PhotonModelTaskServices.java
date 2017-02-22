@@ -31,6 +31,7 @@ public class PhotonModelTaskServices {
             SshCommandTaskService.FACTORY_LINK,
             ResourceAllocationTaskService.FACTORY_LINK,
             ResourceEnumerationTaskService.FACTORY_LINK,
+            ImageEnumerationTaskService.FACTORY_LINK,
             ScheduledTaskService.FACTORY_LINK,
             ResourceRemovalTaskService.FACTORY_LINK,
             ProvisionComputeTaskService.FACTORY_LINK,
@@ -52,6 +53,8 @@ public class PhotonModelTaskServices {
                 () -> TaskFactoryService.create(ResourceAllocationTaskService.class));
         host.startFactory(ResourceEnumerationTaskService.class,
                 () -> ResourceEnumerationTaskService.createFactory());
+        host.startFactory(ImageEnumerationTaskService.class,
+                () -> ImageEnumerationTaskService.createFactory());
         host.startFactory(ScheduledTaskService.class,
                 () -> TaskFactoryService.create(ScheduledTaskService.class));
         host.startFactory(ResourceRemovalTaskService.class,

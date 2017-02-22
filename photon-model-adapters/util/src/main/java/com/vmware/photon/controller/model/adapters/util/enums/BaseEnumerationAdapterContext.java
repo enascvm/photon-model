@@ -475,9 +475,9 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
     // Tag Utility methods {{
     private DeferredResult<Void> createLocalTagStates(LocalStateHolder localStateHolder) {
-        DeferredResult<Void> tagsDR = DeferredResult.completed((Void) null);
+
         if (localStateHolder.remoteTags == null || localStateHolder.remoteTags.isEmpty()) {
-            return tagsDR;
+            return DeferredResult.completed((Void) null);
         }
 
         localStateHolder.localState.tagLinks = new HashSet<>();
@@ -493,14 +493,13 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                     return tagState;
                 })
                 .map(tagState -> Operation
-                        .createPost(this.service.getHost(), TagService.FACTORY_LINK)
+                        .createPost(this.service, TagService.FACTORY_LINK)
                         .setBody(tagState))
                 .map(tagOperation -> this.service.sendWithDeferredResult(tagOperation,
                         TagState.class))
                 .collect(Collectors.toList());
 
-        tagsDR = DeferredResult.allOf(localTagStatesDRs).thenApply(ignore -> (Void) null);
-        return tagsDR;
+        return DeferredResult.allOf(localTagStatesDRs).thenApply(ignore -> (Void) null);
     }
 
     public static void setTagLinksToResourceState(ResourceState resourceState, Map<String, String> tags) {

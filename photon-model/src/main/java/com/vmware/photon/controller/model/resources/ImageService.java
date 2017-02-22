@@ -66,9 +66,9 @@ public class ImageService extends StatefulService {
         public String regionId;
 
         /**
-         * Optional link to the cloud account/subscription (of type {@code EndpointState}) the image
-         * belongs to. Leave blank to indicate the image is public/shared or provide an end-point
-         * link to indicate it is private (requires explicit launch permissions).
+         * Optional link to the {@code EndpointState} the image belongs to. Leave blank to indicate
+         * the image is public/shared or provide an end-point link to indicate it is private
+         * (requires explicit launch permissions).
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @UsageOption(option = PropertyUsageOption.LINK)
@@ -119,7 +119,6 @@ public class ImageService extends StatefulService {
         return false;
     }
 
-
     @Override
     public ImageState getDocumentTemplate() {
 
@@ -132,7 +131,8 @@ public class ImageService extends StatefulService {
         image.regionId = "endpoint-specific-image-region-id";
 
         image.endpointLink = buildUriPath(EndpointService.FACTORY_LINK, "the-A-cloud");
-        image.groupLinks = singleton(buildUriPath(ResourceGroupService.FACTORY_LINK, "the-A-folder"));
+        image.groupLinks = singleton(
+                buildUriPath(ResourceGroupService.FACTORY_LINK, "the-A-folder"));
         image.tenantLinks = singletonList(buildUriPath(TenantService.FACTORY_LINK, "the-A-tenant"));
 
         return image;

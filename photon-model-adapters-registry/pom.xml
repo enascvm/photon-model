@@ -11,21 +11,16 @@
 
     <artifactId>photon-model-adapters-registry</artifactId>
 
-    <properties>
-        <!-- JUnit -->
-        <junit.version>4.11</junit.version>
-
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>com.vmware.xenon</groupId>
             <artifactId>xenon-common</artifactId>
             <version>${xenon.version}</version>
         </dependency>
+
         <dependency>
             <groupId>com.vmware.photon.controller</groupId>
-            <artifactId>photon-model-tasks</artifactId>
+            <artifactId>photon-model</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -34,7 +29,6 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <scope>test</scope>
-            <version>${junit.version}</version>
         </dependency>
 
         <dependency>
