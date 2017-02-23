@@ -278,7 +278,7 @@ public class EndpointAllocationTaskService
 
         if (es.documentSelfLink == null) {
             es.documentSelfLink = UriUtils.buildUriPath(EndpointService.FACTORY_LINK,
-                    UUID.randomUUID().toString());
+                    this.getHost().nextUUID());
         }
 
         if (es.tenantLinks == null || es.tenantLinks.isEmpty()) {

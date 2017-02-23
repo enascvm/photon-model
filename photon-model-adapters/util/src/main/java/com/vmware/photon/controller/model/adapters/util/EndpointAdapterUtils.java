@@ -103,7 +103,7 @@ public class EndpointAdapterUtils {
                         });
 
                 applyChanges(service, body, endpoint, operations);
-            } catch (IllegalArgumentException e) {
+            } catch (Exception e) {
                 AdapterUtils.sendFailurePatchToProvisioningTask(service, body.taskReference, e);
             }
         };
