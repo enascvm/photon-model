@@ -71,6 +71,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
             ComputeState vm = findRandomVm();
             assertInternalPropertiesSet(vm);
             assertNotNull(vm.endpointLink);
+            assertNotNull(vm.tenantLinks);
         }
 
         captureFactoryState("initial");

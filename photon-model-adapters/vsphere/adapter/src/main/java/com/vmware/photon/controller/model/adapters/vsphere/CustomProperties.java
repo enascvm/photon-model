@@ -57,10 +57,6 @@ public class CustomProperties {
      */
     public static final String CLONE_STRATEGY = "__cloneStrategy";
 
-    public static final String OPAQUE_NET_ID = "__opaqueNetworkId";
-
-    public static final String OPAQUE_NET_TYPE = "__opaqueNetworkType";
-
     /**
      * The guest type, valid values are any constants in {@link com.vmware.vim25.VirtualMachineGuestOsIdentifier}
      */

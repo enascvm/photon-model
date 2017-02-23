@@ -295,13 +295,15 @@ public class EnumerationClient extends BaseHelper {
         pgSpec.setType(VimNames.TYPE_PORTGROUP);
         pgSpec.getPathSet().addAll(Arrays.asList(
                 VimPath.pg_config_distributedVirtualSwitch,
+                VimPath.pg_config_key,
                 VimNames.PROPERTY_NAME
         ));
 
         PropertySpec dvsSpec = new PropertySpec();
         dvsSpec.setType(VimNames.TYPE_DVS);
         dvsSpec.getPathSet().addAll(Arrays.asList(
-                VimNames.PROPERTY_NAME
+                VimNames.PROPERTY_NAME,
+                VimPath.dvs_uuid
         ));
 
         PropertyFilterSpec filterSpec = new PropertyFilterSpec();

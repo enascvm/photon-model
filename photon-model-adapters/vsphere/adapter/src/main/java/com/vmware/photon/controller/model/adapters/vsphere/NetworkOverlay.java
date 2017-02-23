@@ -41,4 +41,12 @@ public class NetworkOverlay extends AbstractOverlay {
     public String getName() {
         return (String) getOrFail(VimNames.PROPERTY_NAME);
     }
+
+    public String getPortgroupKey() {
+        return (String) getOrDefault(VimPath.pg_config_key, null);
+    }
+
+    public String getDvsUuid() {
+        return (String) getOrDefault(VimPath.dvs_uuid, null);
+    }
 }

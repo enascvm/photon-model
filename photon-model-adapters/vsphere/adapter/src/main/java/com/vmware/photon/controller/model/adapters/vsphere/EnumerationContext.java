@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.List;
+
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -101,5 +103,9 @@ public class EnumerationContext {
 
     public ResourceTracker getResourcePoolTracker() {
         return this.resourcePoolTracker;
+    }
+
+    public List<String> getTenantLinks() {
+        return this.parent.tenantLinks;
     }
 }

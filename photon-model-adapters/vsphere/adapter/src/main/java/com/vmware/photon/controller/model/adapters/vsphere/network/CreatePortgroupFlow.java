@@ -17,10 +17,13 @@ import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.CustomProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPool.ConnectionCallback;
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.vim25.DVPortgroupConfigSpec;
 import com.vmware.vim25.DistributedVirtualPortgroupPortgroupType;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.xenon.common.DeferredResult;
@@ -107,8 +110,17 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
 
             ManagedObjectReference pg = (ManagedObjectReference) taskInfo.getResult();
 
+            String pgKey = null;
+            try {
+                pgKey = new GetMoRef(connection).entityProp(pg, DvsProperties.PORT_GROUP_KEY);
+            } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg ignore) {
+                getService().logWarning("Cannot retrieve porgroup key of %s", VimUtils.convertMoRefToString(pg));
+            }
+
             // store the moref as custom property
-            CustomProperties.of(this.networkState).put(CustomProperties.MOREF, pg);
+            CustomProperties.of(this.networkState)
+                    .put(CustomProperties.MOREF, pg)
+                    .put(DvsProperties.PORT_GROUP_KEY, pgKey);
 
             OperationContext.setFrom(getOperationContext());
             Operation.createPatch(getService().getHost(), this.networkState.documentSelfLink)

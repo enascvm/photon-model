@@ -22,6 +22,7 @@ import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
@@ -331,6 +332,7 @@ public class BaseVSphereAdapterTest {
         computeState.descriptionLink = computeHostDescription.documentSelfLink;
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
         computeState.adapterManagementReference = getAdapterManagementReference();
+        computeState.tenantLinks = Collections.singletonList("/a/tenant");
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

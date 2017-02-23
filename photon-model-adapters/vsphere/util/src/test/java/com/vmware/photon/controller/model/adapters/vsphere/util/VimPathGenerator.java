@@ -130,6 +130,8 @@ public final class VimPathGenerator {
         this.roots.put("opaque_net:summary", "OpaqueNetworkSummary");
 
         this.roots.put("pg:config", "DVPortgroupConfigInfo");
+
+        this.roots.put("dvs:uuid", "String");
     }
 
     private static class FieldType {

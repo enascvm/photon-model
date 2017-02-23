@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
+import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfParser;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfRetriever;
@@ -1057,8 +1058,8 @@ public class InstanceClient extends BaseHelper {
         CustomProperties custProp = CustomProperties.of(network);
         if (VimNames.TYPE_OPAQUE_NETWORK.equals(custProp.getString(CustomProperties.TYPE, null))) {
             VirtualEthernetCardOpaqueNetworkBackingInfo backing = new VirtualEthernetCardOpaqueNetworkBackingInfo();
-            backing.setOpaqueNetworkId(custProp.getString(CustomProperties.OPAQUE_NET_ID));
-            backing.setOpaqueNetworkType(custProp.getString(CustomProperties.OPAQUE_NET_TYPE));
+            backing.setOpaqueNetworkId(custProp.getString(NsxProperties.OPAQUE_NET_ID));
+            backing.setOpaqueNetworkType(custProp.getString(NsxProperties.OPAQUE_NET_TYPE));
             nic.setBacking(backing);
         } else {
             VirtualEthernetCardNetworkBackingInfo backing = new VirtualEthernetCardNetworkBackingInfo();

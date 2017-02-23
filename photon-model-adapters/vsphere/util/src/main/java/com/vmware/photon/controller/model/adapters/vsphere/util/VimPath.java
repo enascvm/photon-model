@@ -1860,4 +1860,7 @@ public class VimPath {
     /** PropertyType: <code>boolean</code> */
     public static final String pg_config_policy_trafficFilterOverrideAllowed = "config.policy.trafficFilterOverrideAllowed";
 
+    /** PropertyType: <code>String</code> */
+    public static final String dvs_uuid = "uuid";
+
 }
