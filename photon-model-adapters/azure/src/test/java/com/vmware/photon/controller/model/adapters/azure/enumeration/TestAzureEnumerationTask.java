@@ -386,14 +386,14 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         // tag v-Net
         VirtualNetwork vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient, this.azureVMName,
-                AzureTestUtil.AZURE_NETWORK_NAME);
+                DEFAULT_NIC_SPEC.network.name);
 
         Map<String, String> vmNetwTags = new HashMap<String, String>();
         vmNetwTags.put("testvNetTag", "vNetTagValue");
         vmNetwUpdate.setTags(vmNetwTags);
 
         updateAzureVirtualNetwork(this.networkManagementClient, this.azureVMName,
-                AzureTestUtil.AZURE_NETWORK_NAME, vmNetwUpdate);
+                DEFAULT_NIC_SPEC.network.name, vmNetwUpdate);
 
         // tag VM
         com.microsoft.azure.management.compute.models.VirtualMachine vmUpdate = getAzureVirtualMachine(
