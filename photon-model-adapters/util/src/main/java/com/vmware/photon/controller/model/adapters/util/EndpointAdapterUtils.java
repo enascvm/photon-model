@@ -51,7 +51,7 @@ public class EndpointAdapterUtils {
             if (body.isMockRequest) {
                 op.complete();
             } else {
-                validate(op, body, credEnhancer, validator);
+                validate(service, op, body, credEnhancer, validator);
             }
             break;
 
@@ -68,9 +68,16 @@ public class EndpointAdapterUtils {
             BiConsumer<ComputeState, Retriever> compEnhancer,
             BiConsumer<EndpointState, Retriever> endpointEnhancer) {
 
+        Consumer<Throwable> onFailure = (t) -> {
+            AdapterUtils.sendFailurePatchToProvisioningTask(service, body.taskReference, t);
+        };
+
         Consumer<Operation> onSuccess = (op) -> {
+
             EndpointState endpoint = op.getBody(EndpointState.class);
             op.complete();
+
+            AuthCredentialsServiceState authState = new AuthCredentialsServiceState();
 
             Map<String, String> props = new HashMap<>(body.endpointProperties);
             props.put(MOCK_REQUEST, String.valueOf(body.isMockRequest));
@@ -78,7 +85,6 @@ public class EndpointAdapterUtils {
 
             Retriever r = Retriever.of(props);
             try {
-                AuthCredentialsServiceState authState = new AuthCredentialsServiceState();
                 credEnhancer.accept(authState, r);
 
                 ComputeDescription cd = new ComputeDescription();
@@ -106,10 +112,7 @@ public class EndpointAdapterUtils {
             } catch (Exception e) {
                 AdapterUtils.sendFailurePatchToProvisioningTask(service, body.taskReference, e);
             }
-        };
 
-        Consumer<Throwable> onFailure = (t) -> {
-            AdapterUtils.sendFailurePatchToProvisioningTask(service, body.taskReference, t);
         };
 
         AdapterUtils.getServiceState(service, body.resourceReference, onSuccess, onFailure);
@@ -136,30 +139,53 @@ public class EndpointAdapterUtils {
         joinOp.sendWith(service);
     }
 
-    private static void validate(Operation op, EndpointConfigRequest body,
+    private static void validate(StatelessService service, Operation op, EndpointConfigRequest body,
             BiConsumer<AuthCredentialsServiceState, Retriever> enhancer,
             BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validator) {
 
-        try {
-            AuthCredentialsServiceState credentials = new AuthCredentialsServiceState();
-            enhancer.accept(credentials, Retriever.of(body.endpointProperties));
+        Consumer<Operation> onSuccessGetCredentials = oc -> {
+            try {
+                AuthCredentialsServiceState credentials = oc.getBody(AuthCredentialsServiceState.class);
+                enhancer.accept(credentials, Retriever.of(body.endpointProperties));
 
-            BiConsumer<ServiceErrorResponse, Throwable> callback = (r, e) -> {
-                if (r == null && e == null) {
-                    if (body.requestType == RequestType.VALIDATE) {
-                        op.complete();
+                BiConsumer<ServiceErrorResponse, Throwable> callback = (r, e) -> {
+                    if (r == null && e == null) {
+                        if (body.requestType == RequestType.VALIDATE) {
+                            op.complete();
+                        }
+                    } else if (e != null && r != null) {
+                        op.fail(e, r);
+                    } else {
+                        op.fail(e);
                     }
-                } else if (e != null && r != null) {
-                    op.fail(e, r);
-                } else {
-                    op.fail(e);
-                }
-            };
+                };
 
-            validator.accept(credentials, callback);
-        } catch (Throwable e) {
-            op.fail(e);
+                validator.accept(credentials, callback);
+            } catch (Throwable e) {
+                op.fail(e);
+            }
+        };
+
+        Consumer<Operation> onSuccessGetEndpoint = o -> {
+            EndpointState endpointState = o.getBody(EndpointState.class);
+
+            if (endpointState.authCredentialsLink != null) {
+                AdapterUtils.getServiceState(service, endpointState.authCredentialsLink,
+                        onSuccessGetCredentials, e -> op.fail(e));
+            } else {
+                onSuccessGetCredentials.accept(new Operation().setBody(new AuthCredentialsServiceState()));
+            }
+        };
+
+        // if there is an endpoint, get it and then get the credentials
+        if (body.resourceReference != null) {
+            AdapterUtils.getServiceState(service, body.resourceReference, onSuccessGetEndpoint,
+                    e -> op.fail(e));
+        } else { // otherwise, proceed with empty credentials and rely on what's in endpointProperties
+            onSuccessGetCredentials.accept(new Operation().setBody(new AuthCredentialsServiceState()));
         }
+
+
     }
 
     public static class Retriever {

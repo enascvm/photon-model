@@ -491,6 +491,11 @@ public class EndpointAllocationTaskService
         EndpointConfigRequest req = new EndpointConfigRequest();
         req.requestType = RequestType.VALIDATE;
         req.endpointProperties = currentState.endpointState.endpointProperties;
+
+        if (currentState.endpointState.documentSelfLink != null) {
+            req.resourceReference = UriUtils.buildUri(getHost(),
+                    currentState.endpointState.documentSelfLink);
+        }
         req.isMockRequest = currentState.options.contains(TaskOption.IS_MOCK);
 
         Operation

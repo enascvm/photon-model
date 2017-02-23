@@ -112,8 +112,18 @@ public class VSphereEndpointAdapterService extends StatelessService {
 
     private BiConsumer<AuthCredentialsServiceState, Retriever> credentials() {
         return (c, r) -> {
-            c.privateKey = r.getRequired(PRIVATE_KEY_KEY);
-            c.privateKeyId = r.getRequired(PRIVATE_KEYID_KEY);
+            // overwrite fields that are set in endpointProperties, otherwise use the present ones
+            if (c.privateKey != null) {
+                r.get(PRIVATE_KEY_KEY).ifPresent(pKey -> c.privateKey = pKey);
+            } else {
+                c.privateKey = r.getRequired(PRIVATE_KEY_KEY);
+            }
+
+            if (c.privateKeyId != null) {
+                r.get(PRIVATE_KEYID_KEY).ifPresent(pKeyId -> c.privateKeyId = pKeyId);
+            } else {
+                c.privateKeyId = r.getRequired(PRIVATE_KEYID_KEY);
+            }
             c.type = "Username";
         };
     }

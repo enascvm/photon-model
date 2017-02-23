@@ -139,11 +139,31 @@ public class AzureEndpointAdapterService extends StatelessService {
 
     private BiConsumer<AuthCredentialsServiceState, Retriever> credentials() {
         return (c, r) -> {
-            c.privateKey = r.getRequired(PRIVATE_KEY_KEY);
-            c.privateKeyId = r.getRequired(PRIVATE_KEYID_KEY);
-            c.userLink = r.getRequired(USER_LINK_KEY);
-            c.customProperties = new HashMap<>();
-            c.customProperties.put(AZURE_TENANT_ID, r.getRequired(AZURE_TENANT_ID));
+            // overwrite fields that are set in endpointProperties, otherwise use the present ones
+            if (c.privateKey != null) {
+                r.get(PRIVATE_KEY_KEY).ifPresent(pKey -> c.privateKey = pKey);
+            } else {
+                c.privateKey = r.getRequired(PRIVATE_KEY_KEY);
+            }
+
+            if (c.privateKeyId != null) {
+                r.get(PRIVATE_KEYID_KEY).ifPresent(pKeyId -> c.privateKeyId = pKeyId);
+            } else {
+                c.privateKeyId = r.getRequired(PRIVATE_KEYID_KEY);
+            }
+
+            if (c.userLink != null) {
+                r.get(USER_LINK_KEY).ifPresent(pKeyId -> c.userLink = pKeyId);
+            } else {
+                c.userLink = r.getRequired(USER_LINK_KEY);
+            }
+
+            if (c.customProperties != null && c.customProperties.containsKey(AZURE_TENANT_ID)) {
+                r.get(AZURE_TENANT_ID).ifPresent(tenant -> c.customProperties.put(AZURE_TENANT_ID, tenant));
+            } else {
+                c.customProperties = new HashMap<>();
+                c.customProperties.put(AZURE_TENANT_ID, r.getRequired(AZURE_TENANT_ID));
+            }
         };
     }
 
