@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.util.connection;
 
+import com.vmware.vim25.ServiceContent;
 import com.vmware.vim25.VimPortType;
 
 public abstract class BaseHelper {
@@ -28,6 +29,10 @@ public abstract class BaseHelper {
 
     protected VimPortType getVimPort() {
         return this.connection.getVimPort();
+    }
+
+    protected ServiceContent getServiceContent() {
+        return this.connection.getServiceContent();
     }
 
     public static class HelperException extends RuntimeException {

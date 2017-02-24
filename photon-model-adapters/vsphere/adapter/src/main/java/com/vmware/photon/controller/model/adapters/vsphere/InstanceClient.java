@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -32,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
+import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfDeployer;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfParser;
@@ -41,6 +41,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -54,13 +55,12 @@ import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayUpdateOperation;
+import com.vmware.vim25.DistributedVirtualSwitchPortConnection;
 import com.vmware.vim25.FileAlreadyExists;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
-import com.vmware.vim25.KeyValue;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.MethodFault;
-import com.vmware.vim25.OvfNetworkMapping;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
@@ -80,6 +80,7 @@ import com.vmware.vim25.VirtualDiskMode;
 import com.vmware.vim25.VirtualDiskSpec;
 import com.vmware.vim25.VirtualE1000;
 import com.vmware.vim25.VirtualEthernetCard;
+import com.vmware.vim25.VirtualEthernetCardDistributedVirtualPortBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardMacType;
 import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
 import com.vmware.vim25.VirtualEthernetCardOpaqueNetworkBackingInfo;
@@ -94,6 +95,8 @@ import com.vmware.vim25.VirtualMachineFileInfo;
 import com.vmware.vim25.VirtualMachineGuestOsIdentifier;
 import com.vmware.vim25.VirtualMachineRelocateDiskMoveOptions;
 import com.vmware.vim25.VirtualMachineRelocateSpec;
+import com.vmware.vim25.VirtualMachineSnapshotInfo;
+import com.vmware.vim25.VirtualPCIController;
 import com.vmware.vim25.VirtualSCSIController;
 import com.vmware.vim25.VirtualSCSISharing;
 import com.vmware.vim25.VirtualSIOController;
@@ -101,10 +104,9 @@ import com.vmware.vim25.VmConfigSpec;
 import com.vmware.xenon.common.Utils;
 
 /**
- * A simple client for vsphere. Consist of a valid connection and some context.
- * This class does blocking IO but doesn't talk back to xenon.
- * A client operates in the context of a datacenter. If the datacenter cannot be determined at
- * construction time a ClientException is thrown.
+ * A simple client for vsphere. Consist of a valid connection and some context. This class does
+ * blocking IO but doesn't talk back to xenon. A client operates in the context of a datacenter. If
+ * the datacenter cannot be determined at construction time a ClientException is thrown.
  */
 public class InstanceClient extends BaseHelper {
     private static final Logger logger = LoggerFactory.getLogger(InstanceClient.class.getName());
@@ -158,8 +160,9 @@ public class InstanceClient extends BaseHelper {
         String id = resource.description.regionId;
 
         if (id == null || id.length() == 0) {
-            throw new IllegalArgumentException("The regionId is mandatory for vSphere resources, it's missing for "
-                    + resource.description.documentSelfLink);
+            throw new IllegalArgumentException(
+                    "The regionId is mandatory for vSphere resources, it's missing for "
+                            + resource.description.documentSelfLink);
         }
         try {
             this.finder = new Finder(connection, id);
@@ -171,7 +174,8 @@ public class InstanceClient extends BaseHelper {
         this.get = new GetMoRef(this.connection);
     }
 
-    public ComputeState createInstanceFromTemplate(ManagedObjectReference template) throws Exception {
+    public ComputeState createInstanceFromTemplate(ManagedObjectReference template)
+            throws Exception {
         ManagedObjectReference vm = cloneVm(template);
 
         VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
@@ -188,7 +192,8 @@ public class InstanceClient extends BaseHelper {
         spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
 
         // set ovf environment
-        ArrayOfVAppPropertyInfo infos = this.get.entityProp(vm, VimPath.vm_config_vAppConfig_property);
+        ArrayOfVAppPropertyInfo infos = this.get.entityProp(vm,
+                VimPath.vm_config_vAppConfig_property);
         populateCloudConfig(spec, infos);
 
         ManagedObjectReference task = getVimPort().reconfigVMTask(vm, spec);
@@ -310,6 +315,7 @@ public class InstanceClient extends BaseHelper {
 
             // store reference to created vm for further processing
             this.vm = vm;
+            attachDisks(this.disks);
         }
 
         ComputeState state = new ComputeState();
@@ -325,7 +331,6 @@ public class InstanceClient extends BaseHelper {
                 cp.getString(OvfParser.PROP_OVF_ARCHIVE_URI) != null;
     }
 
-    @SuppressWarnings("unchecked")
     private ManagedObjectReference deployOvf() throws Exception {
         OvfDeployer deployer = new OvfDeployer(this.connection);
         CustomProperties cust = CustomProperties.of(this.state.description);
@@ -339,93 +344,278 @@ public class InstanceClient extends BaseHelper {
             ovfUri = retriever.downloadIfOva(archiveUri);
         }
 
-        ManagedObjectReference host = null;
         ManagedObjectReference folder = getVmFolder();
-        List<OvfNetworkMapping> network = Collections.emptyList();
         ManagedObjectReference ds = getDatastore();
         ManagedObjectReference resourcePool = getResourcePool();
 
-        Map<String, KeyValue> props = new HashMap<>();
+        String vmName = "pmt-" + deployer.getRetriever().hash(ovfUri);
 
-        DiskState bootDisk = findBootDisk();
-        String ovfEnv = getFileItemByPath(bootDisk, OVF_PROPERTY_ENV);
-        if (ovfEnv != null) {
-            Map<String, String> map = Utils.fromJson(ovfEnv, Map.class);
-            for (Entry<String, String> entry : map.entrySet()) {
-                KeyValue kv = new KeyValue();
-                kv.setKey(entry.getKey());
-                kv.setValue(entry.getValue());
-                props.put(kv.getKey(), kv);
+        GetMoRef get = new GetMoRef(this.connection);
+
+        ManagedObjectReference vm = findTemplateByName(vmName, get);
+        if (vm != null) {
+            if (!isSameDatastore(ds, vm, get)) {
+                vm = replicateVMTemplate(resourcePool, ds, folder, vmName, vm, get);
+            }
+        } else {
+            String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
+            try {
+                vm = deployer.deployOvf(ovfUri, getHost(), folder, vmName, Collections.emptyList(),
+                        ds, Collections.emptyList(), config, resourcePool);
+
+                logger.info("Removing NICs from deployed template: %s (%s)", vmName, vm.getValue());
+                ArrayOfVirtualDevice devices = get.entityProp(vm,
+                        VimPath.vm_config_hardware_device);
+                if (devices != null) {
+                    VirtualMachineConfigSpec reconfig = new VirtualMachineConfigSpec();
+
+                    for (VirtualDevice device : devices.getVirtualDevice()) {
+                        if (device instanceof VirtualEthernetCard) {
+                            VirtualDeviceConfigSpec spec = new VirtualDeviceConfigSpec();
+                            spec.setDevice(device);
+                            spec.setOperation(VirtualDeviceConfigSpecOperation.REMOVE);
+                            reconfig.getDeviceChange().add(spec);
+                        }
+                    }
+                    ManagedObjectReference reconfigTask = getVimPort().reconfigVMTask(vm, reconfig);
+                    VimUtils.waitTaskEnd(this.connection, reconfigTask);
+                }
+                ManagedObjectReference snapshotTask = getVimPort().createSnapshotTask(vm, "initial",
+                        null, false, false);
+                VimUtils.waitTaskEnd(this.connection, snapshotTask);
+            } catch (Exception e) {
+                awaitVM(vmName, folder, ds, get);
             }
         }
-        mergeCloudConfigPropsIntoOvfEnv(props, bootDisk);
 
-        String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
+        return cloneOvfBasedTemplate(vm, ds, folder, resourcePool);
+    }
+
+    private ManagedObjectReference replicateVMTemplate(ManagedObjectReference resourcePool,
+            ManagedObjectReference datastore, ManagedObjectReference vmFolder, String vmName,
+            ManagedObjectReference vm, GetMoRef get) throws Exception {
+        logger.info("Template lives on a different datastore, looking for a local copy of: %s.",
+                vmName);
+
+        String replicatedName = vmName + "_" + datastore.getValue();
+        ManagedObjectReference repVm = findTemplateByName(replicatedName, get);
+        if (repVm != null) {
+            return repVm;
+        }
+
+        logger.info("Replicating %s (%s) to %s", vmName, vm.getValue(), replicatedName);
+
+        VirtualMachineRelocateSpec spec = new VirtualMachineRelocateSpec();
+        spec.setPool(resourcePool);
+        spec.setDatastore(datastore);
+
+        VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
+        cloneSpec.setLocation(spec);
+        cloneSpec.setTemplate(false);
+
+        ManagedObjectReference cloneTask = getVimPort()
+                .cloneVMTask(vm, vmFolder, replicatedName, cloneSpec);
+
+        TaskInfo info = VimUtils.waitTaskEnd(this.connection, cloneTask);
+
+        if (info.getState() == TaskInfoState.ERROR) {
+            MethodFault fault = info.getError().getFault();
+            if (fault instanceof FileAlreadyExists) {
+                logger.info(
+                        "Template is being replicated by another thread, waiting for %s to be ready",
+                        replicatedName);
+                return awaitVM(replicatedName, vmFolder, datastore, get);
+            } else {
+                return VimUtils.rethrow(info.getError());
+            }
+        }
+        ManagedObjectReference rvm = (ManagedObjectReference) info.getResult();
+        logger.info("Replicated %s (%s) to %s (%s)", vmName, vm.getValue(), replicatedName,
+                rvm.getValue());
+
+        logger.info("Creating initial snapshot for linked clones on %s", rvm.getValue());
+        ManagedObjectReference snapshotTask = getVimPort().createSnapshotTask(rvm, "initial",
+                null, false, false);
+        VimUtils.waitTaskEnd(this.connection, snapshotTask);
+        logger.info("Created initial snapshot for linked clones on %s", rvm.getValue());
+        return rvm;
+    }
+
+    private ManagedObjectReference awaitVM(String replicatedName, ManagedObjectReference vmFolder,
+            ManagedObjectReference datastore, GetMoRef get)
+            throws RuntimeFaultFaultMsg, InvalidPropertyFaultMsg, FinderException {
+
+        Element element = this.finder.fullPath(vmFolder);
+        String path = element.path;
+
+        if (path.endsWith("/")) {
+            path = path + replicatedName;
+        } else {
+            path = path + "/" + replicatedName;
+        }
+
+        // remove the datacenters folder from path, as findByInventoryPath is using relative to it
+        // paths
+        if (path.startsWith("/Datacenters")) {
+            path = path.substring("/Datacenters".length());
+        }
+
+        ManagedObjectReference reference = getVimPort()
+                .findByInventoryPath(getServiceContent().getSearchIndex(), path);
+
+        get.entityProp(reference, VimPath.vm_snapshot);
+
+        return reference;
+    }
+
+    private ManagedObjectReference findTemplateByName(String vmName, GetMoRef get)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        return get.vmByVMname(vmName,
+                this.connection.getServiceContent().getPropertyCollector());
+    }
+
+    private boolean isSameDatastore(ManagedObjectReference datastore, ManagedObjectReference vm,
+            GetMoRef get) throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        ArrayOfManagedObjectReference datastores = get.entityProp(vm,
+                VimPath.vm_datastore);
+        if (null != datastores) {
+            for (ManagedObjectReference p : datastores.getManagedObjectReference()) {
+                if (p.getValue().equals(datastore.getValue())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private ManagedObjectReference cloneOvfBasedTemplate(ManagedObjectReference vmTempl,
+            ManagedObjectReference datastore, ManagedObjectReference folder,
+            ManagedObjectReference resourcePool) throws Exception {
 
         String vmName = this.state.name;
 
-        ManagedObjectReference vm = deployer
-                .deployOvf(ovfUri, host, folder, vmName, network, ds, props.values(), config, resourcePool);
+        Map<String, Object> props = this.get.entityProps(vmTempl, VimPath.vm_summary_config_numCpu,
+                VimPath.vm_summary_config_memorySizeMB, VimPath.vm_snapshot,
+                VimPath.vm_config_hardware_device, VimPath.vm_config_vAppConfig_property);
 
-        // Sometimes ComputeDescriptions created from an OVF can be modified. For such
-        // cases one more reconfiguration is needed to set the cpu/mem correctly.
-        reconfigure(vm);
+        VirtualMachineSnapshotInfo snapshot = (VirtualMachineSnapshotInfo) props
+                .get(VimPath.vm_snapshot);// this.get.entityProp(vmTempl, VimPath.vm_snapshot);
+        ArrayOfVirtualDevice devices = (ArrayOfVirtualDevice) props
+                .get(VimPath.vm_config_hardware_device);// this.get.entityProp(vmTempl,
+        // VimPath.vm_config_hardware_device);
 
-        return vm;
-    }
+        VirtualDisk vd = devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .map(d -> (VirtualDisk) d).findFirst().orElse(null);
+        VirtualMachineRelocateDiskMoveOptions diskMoveOptions = VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING;
 
-    /**
-     * Converts all cloud-config properties from the bootDisk to OVF properties. There are two implementations
-     * of cloud config currently, the second being from CoreOS. As a result a single cloud-config prop can be added
-     * under different keys.
-     * @param props
-     * @param bootDisk
-     */
-    private void mergeCloudConfigPropsIntoOvfEnv(Map<String, KeyValue> props, DiskState bootDisk) {
-        String userData = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_USER_DATA);
-        if (userData != null) {
-            String encoded = Base64.getEncoder().encodeToString(userData.getBytes());
-            KeyValue kv = new KeyValue();
-            kv.setKey(CLOUD_CONFIG_PROPERTY_USER_DATA);
-            kv.setValue(encoded);
-            props.put(kv.getKey(), kv);
+        String datastoreName = this.get.entityProp(datastore, VimPath.ds_summary_name);
+        VirtualDevice scsiController = getFirstScsiController(devices);
+        int scsiUnit = findFreeUnit(scsiController, devices.getVirtualDevice());
 
-            // CoreOs specific ovf keys
-            kv = new KeyValue();
-            kv.setKey(COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA);
-            kv.setValue(encoded);
-            props.put(kv.getKey(), kv);
-
-            kv = new KeyValue();
-            kv.setKey(COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA_ENCODING);
-            kv.setValue(CLOUD_CONFIG_BASE64_ENCODING);
-            props.put(kv.getKey(), kv);
+        List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
+        DiskState bootDisk = findBootDisk();
+        if (bootDisk != null) {
+            if (vd == null) {
+                String path = makePathToVmdkFile("ephemeral_disk", vmName);
+                String diskName = String.format("[%s] %s", datastoreName, path);
+                VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(), scsiUnit, bootDisk,
+                        diskName, datastore);
+                newDisks.add(hdd);
+            } else {
+                if (vd.getCapacityInKB() < toKb(bootDisk.capacityMBytes)) {
+                    VirtualDeviceConfigSpec hdd = resizeHdd(vd, bootDisk);
+                    newDisks.add(hdd);
+                    diskMoveOptions = VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
+                }
+            }
         }
 
-        String sshKeys = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
-        if (sshKeys != null) {
-            KeyValue kv = new KeyValue();
-            kv.setKey(CLOUD_CONFIG_PROPERTY_PUBLIC_KEYS);
-            kv.setValue(sshKeys);
-            props.put(kv.getKey(), kv);
+        VirtualCdrom vcd = devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualCdrom)
+                .map(d -> (VirtualCdrom) d).findFirst().orElse(null);
+
+        // add a cdrom so that ovf transport works
+        if (vcd == null) {
+            VirtualDevice ideController = getFirstIdeController(devices);
+            int ideUnit = findFreeUnit(ideController, devices.getVirtualDevice());
+            VirtualDeviceConfigSpec cdrom = createCdrom(ideController, ideUnit);
+            newDisks.add(cdrom);
+        } else {
+            VirtualDeviceConfigSpec cdrom = reconfigureCdrom(vcd);
+            newDisks.add(cdrom);
         }
 
-        String hostname = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_HOSTNAME);
-        if (hostname != null) {
-            KeyValue kv = new KeyValue();
-            kv.setKey(CLOUD_CONFIG_PROPERTY_HOSTNAME);
-            kv.setValue(hostname);
-            props.put(kv.getKey(), kv);
+        VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
 
-            kv = new KeyValue();
-            kv.setKey(COREOS_CLOUD_CONFIG_PROPERTY_HOSTNAME);
-            kv.setValue(hostname);
-            props.put(kv.getKey(), kv);
+        // even though this is a clone, hw config from the compute resource
+        // is takes precedence
+        spec.setNumCPUs((int) this.state.description.cpuCount);
+        spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
+        String gt = CustomProperties.of(this.state).getString(CustomProperties.GUEST_ID, null);
+        if (gt != null) {
+            spec.setGuestId(gt);
         }
+
+        // set ovf environment
+        ArrayOfVAppPropertyInfo infos = (ArrayOfVAppPropertyInfo) props
+                .get(VimPath.vm_config_vAppConfig_property);// this.get.entityProp(vmTempl,
+        // VimPath.vm_config_vAppConfig_property);
+        populateVAppProperties(spec, infos);
+        populateCloudConfig(spec, infos);
+        // add disks one at a time
+        for (VirtualDeviceConfigSpec newDisk : newDisks) {
+            spec.getDeviceChange().add(newDisk);
+        }
+
+        // configure network
+        VirtualPCIController pci = getFirstPciController(devices);
+        for (NetworkInterfaceStateWithDetails ni : this.nics) {
+            VirtualDevice nic = createNic(ni.network, pci.getControllerKey());
+            addDeviceToVm(spec, nic);
+        }
+
+        // remove any networks from the template
+        devices.getVirtualDevice().stream()
+                .filter(d -> VirtualEthernetCard.class.isAssignableFrom(d.getClass()))
+                .forEach(d -> addRemoveDeviceFromVm(spec, d));
+
+        VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
+        relocSpec.setDatastore(datastore);
+        relocSpec.setFolder(folder);
+        relocSpec.setPool(resourcePool);
+        relocSpec.setDiskMoveType(diskMoveOptions.value());
+
+        VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
+        cloneSpec.setLocation(relocSpec);
+        cloneSpec.setPowerOn(false);
+        cloneSpec.setTemplate(false);
+        cloneSpec.setSnapshot(snapshot.getCurrentSnapshot());
+        cloneSpec.setConfig(spec);
+
+        ManagedObjectReference cloneTask = getVimPort().cloneVMTask(vmTempl, folder, vmName,
+                cloneSpec);
+        TaskInfo info = waitTaskEnd(cloneTask);
+
+        // ManagedObjectReference reconfigureTask = getVimPort().reconfigVMTask(clonedVm, spec);
+        // TaskInfo info = waitTaskEnd(reconfigureTask);
+
+        if (info.getState() == TaskInfoState.ERROR) {
+            MethodFault fault = info.getError().getFault();
+            if (fault instanceof FileAlreadyExists) {
+                // a .vmx file already exists, assume someone won the race to create the vm
+                return null;
+            } else {
+                return VimUtils.rethrow(info.getError());
+            }
+        }
+
+        return (ManagedObjectReference) info.getResult();
     }
 
     /**
      * The first HDD disk is considered the boot disk.
+     *
      * @return
      */
     private DiskState findBootDisk() {
@@ -440,25 +630,8 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
-     * Sets the cpu count/memory properties of a powered-off VM to the desired values.
-     * @param vm
-     * @throws Exception
-     */
-    private void reconfigure(ManagedObjectReference vm) throws Exception {
-        VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
-        spec.setNumCPUs((int) this.state.description.cpuCount);
-        spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
-
-        ManagedObjectReference reconfigTask = getVimPort().reconfigVMTask(vm, spec);
-        TaskInfo taskInfo = VimUtils.waitTaskEnd(this.connection, reconfigTask);
-        if (taskInfo.getState() == TaskInfoState.ERROR) {
-            VimUtils.rethrow(taskInfo.getError());
-        }
-    }
-
-    /**
-     * Creates disks and attaches them to the vm created by {@link #createInstance()}.
-     * The given diskStates are enriched with data from vSphere and can be patched back to xenon.
+     * Creates disks and attaches them to the vm created by {@link #createInstance()}. The given
+     * diskStates are enriched with data from vSphere and can be patched back to xenon.
      */
     public void attachDisks(List<DiskState> diskStates) throws Exception {
         if (isOvfDeploy()) {
@@ -509,7 +682,9 @@ public class InstanceClient extends BaseHelper {
                             scsiController, scsiUnit);
                     newDisks.add(hdd);
                 } else {
-                    VirtualDeviceConfigSpec hdd = createHdd(scsiController, ds, dir, scsiUnit);
+                    String diskName = makePathToVmdkFile(ds.id, dir);
+                    VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(),
+                            scsiUnit, ds, diskName, getDatastore());
                     newDisks.add(hdd);
                 }
 
@@ -571,7 +746,7 @@ public class InstanceClient extends BaseHelper {
                 .getVirtualDiskManager();
 
         // put full clone in the vm folder
-        String destName = makePathToVmdkFile(ds, dir);
+        String destName = makePathToVmdkFile(ds.id, dir);
 
         // all ops are withing a datacenter
         ManagedObjectReference sourceDc = this.finder.getDatacenter().object;
@@ -636,11 +811,34 @@ public class InstanceClient extends BaseHelper {
         return spec;
     }
 
+    private VirtualDeviceConfigSpec reconfigureCdrom(VirtualCdrom vcd) {
+        VirtualCdrom cdrom = new VirtualCdrom();
+
+        cdrom.setControllerKey(vcd.getControllerKey());
+        cdrom.setKey(vcd.getKey());
+        cdrom.setUnitNumber(vcd.getUnitNumber());
+
+        VirtualDeviceConnectInfo info = new VirtualDeviceConnectInfo();
+        info.setAllowGuestControl(true);
+        info.setConnected(true);
+        info.setStartConnected(true);
+        cdrom.setConnectable(info);
+
+        cdrom.setBacking(vcd.getBacking());
+
+        VirtualDeviceConfigSpec spec = new VirtualDeviceConfigSpec();
+        spec.setDevice(cdrom);
+        spec.setOperation(VirtualDeviceConfigSpecOperation.EDIT);
+
+        return spec;
+    }
+
     /**
      * Changes to backing of the cdrom to an iso-backed one.
      *
      * @param cdrom
-     * @param imagePath path to iso on disk, sth. like "[datastore] /images/ubuntu-16.04-amd64.iso"
+     * @param imagePath
+     *            path to iso on disk, sth. like "[datastore] /images/ubuntu-16.04-amd64.iso"
      */
     private void insertCdrom(VirtualCdrom cdrom, String imagePath) {
         VirtualCdromIsoBackingInfo backing = new VirtualCdromIsoBackingInfo();
@@ -721,22 +919,20 @@ public class InstanceClient extends BaseHelper {
         return unitNumber + 1;
     }
 
-    private VirtualDeviceConfigSpec createHdd(VirtualDevice scsiController, DiskState ds,
-            String dir, int unitNumber)
+    private VirtualDeviceConfigSpec createHdd(Integer controllerKey, int unitNumber, DiskState ds,
+            String diskName, ManagedObjectReference datastore)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-        String diskName = makePathToVmdkFile(ds, dir);
-
-        VirtualDisk disk = new VirtualDisk();
-        disk.setCapacityInKB(toKb(ds.capacityMBytes));
 
         VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
         backing.setDiskMode(VirtualDiskMode.PERSISTENT.value());
         backing.setThinProvisioned(true);
         backing.setFileName(diskName);
-        backing.setDatastore(getDatastore());
+        backing.setDatastore(datastore);
 
+        VirtualDisk disk = new VirtualDisk();
+        disk.setCapacityInKB(toKb(ds.capacityMBytes));
         disk.setBacking(backing);
-        disk.setControllerKey(scsiController.getKey());
+        disk.setControllerKey(controllerKey);
         disk.setUnitNumber(unitNumber);
         disk.setKey(-1);
 
@@ -748,8 +944,32 @@ public class InstanceClient extends BaseHelper {
         return change;
     }
 
-    private String makePathToVmdkFile(DiskState ds, String dir) {
-        String diskName = Paths.get(dir, ds.id).toString();
+    private VirtualDeviceConfigSpec resizeHdd(VirtualDisk sysdisk, DiskState ds)
+            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+
+        VirtualDiskFlatVer2BackingInfo oldbacking = (VirtualDiskFlatVer2BackingInfo) sysdisk
+                .getBacking();
+        VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
+        backing.setDiskMode(oldbacking.getDiskMode());
+        backing.setThinProvisioned(true);
+        backing.setFileName(oldbacking.getFileName());
+
+        VirtualDisk disk = new VirtualDisk();
+        disk.setCapacityInKB(toKb(ds.capacityMBytes));
+        disk.setBacking(backing);
+        disk.setControllerKey(sysdisk.getControllerKey());
+        disk.setUnitNumber(sysdisk.getUnitNumber());
+        disk.setKey(sysdisk.getKey());
+
+        VirtualDeviceConfigSpec change = new VirtualDeviceConfigSpec();
+        change.setDevice(disk);
+        change.setOperation(VirtualDeviceConfigSpecOperation.EDIT);
+
+        return change;
+    }
+
+    private String makePathToVmdkFile(String name, String dir) {
+        String diskName = Paths.get(dir, name).toString();
         if (!diskName.endsWith(".vmdk")) {
             diskName += ".vmdk";
         }
@@ -766,6 +986,16 @@ public class InstanceClient extends BaseHelper {
         throw new IllegalStateException("No IDE controller found");
     }
 
+    private VirtualPCIController getFirstPciController(ArrayOfVirtualDevice devices) {
+        for (VirtualDevice dev : devices.getVirtualDevice()) {
+            if (dev instanceof VirtualPCIController) {
+                return (VirtualPCIController) dev;
+            }
+        }
+
+        return null;
+    }
+
     private VirtualSCSIController getFirstScsiController(ArrayOfVirtualDevice devices) {
         for (VirtualDevice dev : devices.getVirtualDevice()) {
             if (dev instanceof VirtualSCSIController) {
@@ -777,8 +1007,8 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
-     * Once a vm is provisioned this method collects vsphere-assigned properties and stores them
-     * in the {@link ComputeState#customProperties}
+     * Once a vm is provisioned this method collects vsphere-assigned properties and stores them in
+     * the {@link ComputeState#customProperties}
      *
      * @param state
      * @throws InvalidPropertyFaultMsg
@@ -812,9 +1042,9 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
-     * Creates a VM in vsphere. This method will block until the CreateVM_Task completes.
-     * The path to the .vmx file is explicitly set and its existence is iterpreted as if the VM has
-     * been successfully created and returns null.
+     * Creates a VM in vsphere. This method will block until the CreateVM_Task completes. The path
+     * to the .vmx file is explicitly set and its existence is iterpreted as if the VM has been
+     * successfully created and returns null.
      *
      * @return
      * @throws FinderException
@@ -859,12 +1089,77 @@ public class InstanceClient extends BaseHelper {
         return (ManagedObjectReference) info.getResult();
     }
 
+    private boolean populateVAppProperties(VirtualMachineConfigSpec spec,
+            ArrayOfVAppPropertyInfo currentProps) {
+        if (this.disks == null || this.disks.size() == 0) {
+            return false;
+        }
+
+        DiskState bootDisk = findBootDisk();
+
+        if (bootDisk == null) {
+            return false;
+        }
+
+        boolean customizationsApplied = false;
+        int nextKey = 1;
+        if (currentProps != null) {
+            nextKey = currentProps.getVAppPropertyInfo().stream()
+                    .mapToInt(VAppPropertyInfo::getKey)
+                    .max()
+                    .orElse(1);
+        }
+
+        String ovfEnv = getFileItemByPath(bootDisk, OVF_PROPERTY_ENV);
+        if (ovfEnv != null) {
+            @SuppressWarnings("unchecked")
+            Map<String, String> map = Utils.fromJson(ovfEnv, Map.class);
+            if (!map.isEmpty()) {
+                customizationsApplied = true;
+                VmConfigSpec configSpec = new VmConfigSpec();
+                configSpec.getOvfEnvironmentTransport().add(OvfDeployer.TRANSPORT_ISO);
+                if (currentProps == null) {
+                    currentProps = new ArrayOfVAppPropertyInfo();
+                }
+
+                currentProps.getVAppPropertyInfo().forEach(pi -> {
+                    if (map.containsKey(pi.getId())) {
+                        VAppPropertySpec ps = new VAppPropertySpec();
+                        ps.setOperation(ArrayUpdateOperation.EDIT);
+                        pi.setValue(map.remove(pi.getId()));
+
+                        ps.setInfo(pi);
+                        configSpec.getProperty().add(ps);
+                    }
+                });
+
+                // only new key/values
+                for (Entry<String, String> entry : map.entrySet()) {
+                    VAppPropertyInfo pi = new VAppPropertyInfo();
+                    pi.setId(entry.getKey());
+                    pi.setType("string");
+                    pi.setKey(nextKey++);
+                    pi.setValue(entry.getValue());
+
+                    VAppPropertySpec ps = new VAppPropertySpec();
+                    ps.setOperation(ArrayUpdateOperation.ADD);
+                    ps.setInfo(pi);
+                    configSpec.getProperty().add(ps);
+                }
+                spec.setVAppConfig(configSpec);
+            }
+        }
+        return customizationsApplied;
+    }
+
     /**
      * Puts the cloud-config user data in the OVF environment
+     *
      * @param spec
      * @param currentProps
      */
-    private boolean populateCloudConfig(VirtualMachineConfigSpec spec, ArrayOfVAppPropertyInfo currentProps) {
+    private boolean populateCloudConfig(VirtualMachineConfigSpec spec,
+            ArrayOfVAppPropertyInfo currentProps) {
         if (this.disks == null || this.disks.size() == 0) {
             return false;
         }
@@ -903,6 +1198,20 @@ public class InstanceClient extends BaseHelper {
                             .filter(p -> p.getId().equals(COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA))
                             .findFirst()
                             .orElse(null);
+                    if (userDataInfo != null) {
+                        VAppPropertyInfo coreosEncoding = currentProps.getVAppPropertyInfo()
+                                .stream()
+                                .filter(p -> p.getId()
+                                        .equals(COREOS_CLOUD_CONFIG_PROPERTY_USER_DATA_ENCODING))
+                                .findFirst().orElse(null);
+                        if (coreosEncoding != null) {
+                            VAppPropertySpec pSpec = new VAppPropertySpec();
+                            coreosEncoding.setValue(CLOUD_CONFIG_BASE64_ENCODING);
+                            pSpec.setOperation(ArrayUpdateOperation.EDIT);
+                            pSpec.setInfo(coreosEncoding);
+                            configSpec.getProperty().add(pSpec);
+                        }
+                    }
                 }
             }
 
@@ -946,6 +1255,41 @@ public class InstanceClient extends BaseHelper {
             sshKeyInfo.setValue(publicKeys);
 
             propertySpec.setInfo(sshKeyInfo);
+            configSpec.getProperty().add(propertySpec);
+            customizationsApplied = true;
+        }
+
+        String hostname = getFileItemByPath(bootDisk, CLOUD_CONFIG_PROPERTY_HOSTNAME);
+        if (hostname != null) {
+            VAppPropertySpec propertySpec = new VAppPropertySpec();
+
+            VAppPropertyInfo hostInfo = null;
+            if (currentProps != null) {
+                hostInfo = currentProps.getVAppPropertyInfo().stream()
+                        .filter(p -> p.getId().equals(CLOUD_CONFIG_PROPERTY_HOSTNAME))
+                        .findFirst()
+                        .orElse(null);
+                if (hostInfo == null) {
+                    // try coreOS key
+                    hostInfo = currentProps.getVAppPropertyInfo().stream()
+                            .filter(p -> p.getId().equals(COREOS_CLOUD_CONFIG_PROPERTY_HOSTNAME))
+                            .findFirst()
+                            .orElse(null);
+                }
+            }
+
+            if (hostInfo != null) {
+                propertySpec.setOperation(ArrayUpdateOperation.EDIT);
+            } else {
+                hostInfo = new VAppPropertyInfo();
+                hostInfo.setId(CLOUD_CONFIG_PROPERTY_USER_DATA);
+                hostInfo.setType("string");
+                hostInfo.setKey(nextKey++);
+                propertySpec.setOperation(ArrayUpdateOperation.ADD);
+            }
+            hostInfo.setValue(hostname);
+
+            propertySpec.setInfo(hostInfo);
             configSpec.getProperty().add(propertySpec);
             customizationsApplied = true;
         }
@@ -1023,7 +1367,7 @@ public class InstanceClient extends BaseHelper {
         spec.setFiles(files);
 
         for (NetworkInterfaceStateWithDetails ni : this.nics) {
-            VirtualDevice nic = createNic(ni.network);
+            VirtualDevice nic = createNic(ni.network, null);
             addDeviceToVm(spec, nic);
         }
 
@@ -1040,6 +1384,13 @@ public class InstanceClient extends BaseHelper {
         spec.getDeviceChange().add(change);
     }
 
+    private void addRemoveDeviceFromVm(VirtualMachineConfigSpec spec, VirtualDevice dev) {
+        VirtualDeviceConfigSpec change = new VirtualDeviceConfigSpec();
+        change.setDevice(dev);
+        change.setOperation(VirtualDeviceConfigSpecOperation.REMOVE);
+        spec.getDeviceChange().add(change);
+    }
+
     private VirtualDevice createScsiController() {
         VirtualLsiLogicController scsiCtrl = new VirtualLsiLogicController();
         scsiCtrl.setBusNumber(0);
@@ -1049,11 +1400,12 @@ public class InstanceClient extends BaseHelper {
         return scsiCtrl;
     }
 
-    private VirtualEthernetCard createNic(NetworkState network)
+    private VirtualEthernetCard createNic(NetworkState network, Integer controllerKey)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         VirtualEthernetCard nic = new VirtualE1000();
         nic.setAddressType(VirtualEthernetCardMacType.GENERATED.value());
         nic.setKey(-1);
+        nic.setControllerKey(controllerKey);
 
         CustomProperties custProp = CustomProperties.of(network);
         if (VimNames.TYPE_OPAQUE_NETWORK.equals(custProp.getString(CustomProperties.TYPE, null))) {
@@ -1061,7 +1413,22 @@ public class InstanceClient extends BaseHelper {
             backing.setOpaqueNetworkId(custProp.getString(NsxProperties.OPAQUE_NET_ID));
             backing.setOpaqueNetworkType(custProp.getString(NsxProperties.OPAQUE_NET_TYPE));
             nic.setBacking(backing);
+        } else if (VimNames.TYPE_PORTGROUP
+                .equals(custProp.getString(CustomProperties.TYPE, null))) {
+            ManagedObjectReference moRef = custProp.getMoRef(CustomProperties.MOREF);
+            ManagedObjectReference dvs = this.get.entityProp(moRef,
+                    VimPath.pg_config_distributedVirtualSwitch);
+            String uuid = this.get.entityProp(dvs, VimPath.dvs_uuid);
+
+            DistributedVirtualSwitchPortConnection port = new DistributedVirtualSwitchPortConnection();
+            port.setSwitchUuid(uuid);
+            port.setPortgroupKey(custProp.getString(DvsProperties.PORT_GROUP_KEY));
+
+            VirtualEthernetCardDistributedVirtualPortBackingInfo backing = new VirtualEthernetCardDistributedVirtualPortBackingInfo();
+            backing.setPort(port);
+            nic.setBacking(backing);
         } else {
+
             VirtualEthernetCardNetworkBackingInfo backing = new VirtualEthernetCardNetworkBackingInfo();
             backing.setDeviceName(network.name);
             nic.setBacking(backing);
@@ -1095,7 +1462,8 @@ public class InstanceClient extends BaseHelper {
         String datastorePath = this.state.description.dataStoreId;
 
         if (datastorePath == null) {
-            ArrayOfManagedObjectReference datastores = findDatastoresForPlacement(this.placementTarget);
+            ArrayOfManagedObjectReference datastores = findDatastoresForPlacement(
+                    this.placementTarget);
             if (datastores == null || datastores.getManagedObjectReference().isEmpty()) {
                 this.datastore = this.finder.defaultDatastore().object;
             } else {
@@ -1114,7 +1482,8 @@ public class InstanceClient extends BaseHelper {
             ManagedObjectReference owner = this.get.entityProp(target, VimNames.PROPERTY_OWNER);
             return findDatastoresForPlacement(owner);
         }
-        // at this point a target is either host or ComputeResource: both have a property "datastore"
+        // at this point a target is either host or ComputeResource: both have a property
+        // "datastore"
         return this.get.entityProp(target, VimPath.res_datastore);
     }
 
@@ -1126,7 +1495,8 @@ public class InstanceClient extends BaseHelper {
 
         if (VimNames.TYPE_HOST.equals(this.placementTarget.getType())) {
             // find the ComputeResource representing this host and use its root resource pool
-            ManagedObjectReference parentCompute = this.get.entityProp(this.placementTarget, VimPath.host_parent);
+            ManagedObjectReference parentCompute = this.get.entityProp(this.placementTarget,
+                    VimPath.host_parent);
             this.resourcePool = this.get.entityProp(parentCompute, VimPath.res_resourcePool);
         } else if (VimNames.TYPE_CLUSTER_COMPUTE_RESOURCE.equals(this.placementTarget.getType()) ||
                 VimNames.TYPE_COMPUTE_RESOURCE.equals(this.placementTarget.getType())) {

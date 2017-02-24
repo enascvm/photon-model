@@ -337,7 +337,7 @@ public class OvfRetriever {
         }
     }
 
-    private String hash(URI ovaOrOvfUri) {
+    public String hash(URI ovaOrOvfUri) {
         try {
             MessageDigest sha256 = MessageDigest.getInstance("SHA-1");
             sha256.update(ovaOrOvfUri.toString().getBytes(Utils.CHARSET));

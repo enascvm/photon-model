@@ -109,6 +109,8 @@ public final class VimPathGenerator {
         this.roots.put("vm:config", "VirtualMachineConfigInfo");
         this.roots.put("vm:runtime", "VirtualMachineRuntimeInfo");
         this.roots.put("vm:guest", "GuestInfo");
+        this.roots.put("vm:datastore", "ArrayOfManagedObjectReference");
+        this.roots.put("vm:snapshot", "VirtualMachineSnapshotInfo");
 
         this.roots.put("host:summary", "HostListSummary");
         this.roots.put("host:parent", "ManagedObjectReference");

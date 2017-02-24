@@ -141,7 +141,6 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             state = client.createInstanceFromTemplate(ctx.templateMoRef);
                         } else {
                             state = client.createInstance();
-                            client.attachDisks(ctx.disks);
                             // attach disks, collecting side effects
                             patchDisks = createDiskPatch(ctx.disks);
                         }

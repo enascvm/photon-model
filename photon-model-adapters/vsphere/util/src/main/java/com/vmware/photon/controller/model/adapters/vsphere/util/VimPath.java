@@ -1050,6 +1050,18 @@ public class VimPath {
     /** PropertyType: <code>string</code> */
     public static final String vm_guest_guestId = "guest.guestId";
 
+    /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
+    public static final String vm_datastore = "datastore";
+
+    /** PropertyType: <code>VirtualMachineSnapshotInfo</code> */
+    public static final String vm_snapshot = "snapshot";
+
+    /** PropertyType: <code>ManagedObjectReference</code> */
+    public static final String vm_snapshot_currentSnapshot = "snapshot.currentSnapshot";
+
+    /** PropertyType: <code>ArrayOfVirtualMachineSnapshotTree</code> */
+    public static final String vm_snapshot_rootSnapshotList = "snapshot.rootSnapshotList";
+
     /** PropertyType: <code>HostListSummary</code> */
     public static final String host_summary = "summary";
 
