@@ -165,7 +165,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
-        this.client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.zoneId, getExecutor());
+        this.client = AWSUtils.getAsyncClient(creds, null, getExecutor());
         try {
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);

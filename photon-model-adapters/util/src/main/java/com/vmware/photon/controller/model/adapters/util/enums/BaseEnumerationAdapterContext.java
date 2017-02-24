@@ -503,7 +503,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         return tagsDR;
     }
 
-    public static void addTagLinksToResourceState(ResourceState resourceState, Map<String, String> tags) {
+    public static void setTagLinksToResourceState(ResourceState resourceState, Map<String, String> tags) {
         if (tags == null || tags.isEmpty()) {
             return;
         }

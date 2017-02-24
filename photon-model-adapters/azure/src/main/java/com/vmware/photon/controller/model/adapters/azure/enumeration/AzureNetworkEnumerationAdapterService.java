@@ -20,8 +20,8 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.addTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.newTagState;
+import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.setTagLinksToResourceState;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -701,7 +701,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                     NetworkState networkState = buildNetworkState(context, virtualNetwork,
                             existingNetworkState);
 
-                    addTagLinksToResourceState(networkState, virtualNetwork.tags);
+                    setTagLinksToResourceState(networkState, virtualNetwork.tags);
 
                     CompletionHandler handler = (completedOp, failure) -> {
                         if (failure != null) {

@@ -29,8 +29,8 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.addTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.newTagState;
+import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.setTagLinksToResourceState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
@@ -1113,7 +1113,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeState.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
 
             // add tag links
-            addTagLinksToResourceState(computeState, virtualMachine.tags);
+            setTagLinksToResourceState(computeState, virtualMachine.tags);
 
             if (virtualMachine.properties.diagnosticsProfile != null) {
                 String diagnosticsAccountUri = virtualMachine.properties.diagnosticsProfile

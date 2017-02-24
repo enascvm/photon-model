@@ -117,7 +117,7 @@ public class TestAWSProvisionTask {
         AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
-        this.client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.zoneId, getExecutor());
+        this.client = AWSUtils.getAsyncClient(creds, null, getExecutor());
         this.host = VerificationHost.create(0);
         try {
             this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(250));

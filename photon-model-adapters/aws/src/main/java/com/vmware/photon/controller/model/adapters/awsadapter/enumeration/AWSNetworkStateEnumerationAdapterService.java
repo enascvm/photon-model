@@ -25,8 +25,8 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNet
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapVPCToNetworkState;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.addTagLinksToResourceState;
 import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.newTagState;
+import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.setTagLinksToResourceState;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -66,6 +66,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
@@ -637,20 +638,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
             Vpc awsVpc = context.awsVpcs.get(remoteVPCId);
 
-            if (awsVpc.getTags() != null && awsVpc.getTags().isEmpty()) {
-
-                Map<String, String> awsVPCTags = awsVpc.getTags().stream().collect(
-                        Collectors.toMap(tag -> tag.getKey(), tag -> tag.getValue()));
-
-                // The name of the compute state is the value of the AWS_TAG_NAME tag
-                String nameTag = awsVPCTags.get(AWSConstants.AWS_TAG_NAME);
-                if (nameTag != null) {
-                    networkState.name = nameTag;
-                    awsVPCTags.remove(AWSConstants.AWS_TAG_NAME);
-                }
-                // add tag links
-                addTagLinksToResourceState(networkState, awsVPCTags);
-            }
+            setResourceTags(networkState, awsVpc.getTags());
 
             final Operation networkStateOp;
             if (context.localNetworkStateMap.containsKey(remoteVPCId)) {
@@ -716,20 +704,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             // add tag links
             Subnet awsSubnet = context.awsSubnets.get(remoteSubnetId);
 
-            if (awsSubnet.getTags() != null && awsSubnet.getTags().isEmpty()) {
-
-                Map<String, String> awsSubnetTags = awsSubnet.getTags().stream().collect(
-                        Collectors.toMap(tag -> tag.getKey(), tag -> tag.getValue()));
-
-                // The name of the compute state is the value of the AWS_TAG_NAME tag
-                String nameTag = awsSubnetTags.get(AWSConstants.AWS_TAG_NAME);
-                if (nameTag != null) {
-                    subnetState.name = nameTag;
-                    awsSubnetTags.remove(AWSConstants.AWS_TAG_NAME);
-                }
-                // add tag links
-                addTagLinksToResourceState(subnetState, awsSubnetTags);
-            }
+            setResourceTags(subnetState, awsSubnet.getTags());
 
             // Update networkLink with "latest" (either created or updated)
             // NetworkState.documentSelfLink
@@ -773,6 +748,23 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         OperationJoin.create(subnetOperations)
                 .setCompletion(joinCompletion)
                 .sendWith(this);
+    }
+
+    private void setResourceTags(ResourceState resourceState, List<Tag> tags) {
+        if (tags != null && tags.isEmpty()) {
+
+            Map<String, String> awsSubnetTags = tags.stream().collect(
+                    Collectors.toMap(tag -> tag.getKey(), tag -> tag.getValue()));
+
+            // The name of the compute state is the value of the AWS_TAG_NAME tag
+            String nameTag = awsSubnetTags.get(AWSConstants.AWS_TAG_NAME);
+            if (nameTag != null) {
+                resourceState.name = nameTag;
+                awsSubnetTags.remove(AWSConstants.AWS_TAG_NAME);
+            }
+            // add tag links
+            setTagLinksToResourceState(resourceState, awsSubnetTags);
+        }
     }
 
     /**

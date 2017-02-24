@@ -144,7 +144,9 @@ public class AWSUtils {
             ec2AsyncClient.setEndpoint(getAWSMockHost() + AWS_EC2_ENDPOINT);
             return ec2AsyncClient;
         }
-        ec2AsyncClient.setRegion(Region.getRegion(Regions.fromName(region)));
+        if (region != null) {
+            ec2AsyncClient.setRegion(Region.getRegion(Regions.fromName(region)));
+        }
         return ec2AsyncClient;
 
     }
