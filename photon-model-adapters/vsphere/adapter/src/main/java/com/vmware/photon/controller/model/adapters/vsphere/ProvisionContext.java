@@ -182,7 +182,7 @@ public class ProvisionContext {
             return;
         }
 
-        if (ctx.nics == null) {
+        if (ctx.nics == null && ctx.instanceRequestType == InstanceRequestType.CREATE) {
             if (ctx.child.networkInterfaceLinks == null || ctx.child.networkInterfaceLinks
                     .isEmpty()) {
                 ctx.nics = Collections.emptyList();
@@ -287,7 +287,7 @@ public class ProvisionContext {
             return;
         }
 
-        if (ctx.disks == null) {
+        if (ctx.disks == null && ctx.instanceRequestType == InstanceRequestType.CREATE) {
             // no disks attached
             if (ctx.child.diskLinks == null || ctx.child.diskLinks
                     .isEmpty()) {
