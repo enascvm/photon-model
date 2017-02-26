@@ -107,6 +107,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
         collectionTaskState.resourcePoolLink = rpReturnState.documentSelfLink;
         collectionTaskState.taskInfo = TaskState.createDirect();
         int counter = 0;
+        // executing stats collection multiple times
         while (counter < NUM_COLLECTIONS) {
             this.postServiceSynchronously(
                             StatsCollectionTaskService.FACTORY_LINK,
@@ -180,7 +181,6 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                 // Make sure all the documents have expiration time set.
                 Assert.assertTrue("Expiration time is not correctly set.",
                         aggrMetric.documentExpirationTimeMicros <  expectedExpirationTime);
-
                 if (aggrMetric.timeBin.count == NUM_COLLECTIONS) {
                     continue;
                 }
@@ -320,6 +320,54 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                 rightVersion = false;
             }
             return rightVersion;
+        });
+
+        // kick off an aggregation task with 'SingleResourceStatsAggregationTaskState.hasResources'
+        // set to false.
+        aggregationTaskState =
+                new SingleResourceStatsAggregationTaskState();
+        aggregationTaskState.resourceLink = computeStateArray[1].documentSelfLink;
+        aggregationTaskState.metricNames = new HashSet<>(
+                Arrays.asList(MockStatsAdapter.KEY_1, MockStatsAdapter.KEY_2,
+                        MockStatsAdapter.KEY_3));
+        aggregationTaskState.hasResources = false;
+
+        // 3 ResourceAggregateMetricService services are created for 3
+        // MockStatsAdapter constants: KEY_1, KEY_2 and KEY_3
+        postServiceSynchronously(SingleResourceStatsAggregationTaskService.FACTORY_LINK,
+                aggregationTaskState,
+                SingleResourceStatsAggregationTaskState.class);
+
+        this.host.waitFor("Error waiting for rolled up stats", () -> {
+            ServiceDocumentQueryResult result = this.host
+                    .getExpandedFactoryState(UriUtils.buildUri(this.host,
+                            ResourceAggregateMetricService.FACTORY_LINK));
+
+            // Expiration time = Now + 7 day.
+            long expectedExpirationTime = Utils.getNowMicrosUtc()
+                    + TimeUnit.DAYS.toMicros(DEFAULT_RETENTION_LIMIT_DAYS);
+
+            boolean isMetricZero = true;
+            int count = 0;
+            for (Object aggrDocument : result.documents.values()) {
+                ResourceAggregateMetric aggrMetric = Utils
+                        .fromJson(aggrDocument, ResourceAggregateMetric.class);
+                // Make sure all the documents have expiration time set.
+                Assert.assertTrue("Expiration time is not correctly set.",
+                        aggrMetric.documentExpirationTimeMicros < expectedExpirationTime);
+
+                // make sure the timeBin values are 0 and count is 1
+                if (aggrMetric.timeBin.sum == 0 && aggrMetric.timeBin.avg == 0 &&
+                        aggrMetric.timeBin.max == 0 && aggrMetric.timeBin.min == 0 &&
+                        aggrMetric.timeBin.count == 1) {
+                    count++;
+                }
+                // count should match the new documents created with hasResources = false.
+                if (count == 3) {
+                    isMetricZero = true;
+                }
+            }
+            return isMetricZero;
         });
 
         // verify that the aggregation tasks have been deleted

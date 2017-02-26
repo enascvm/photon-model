@@ -172,6 +172,11 @@ public class SingleResourceStatsAggregationTaskService extends
         @UsageOption(option = PropertyUsageOption.SERVICE_USE)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String queryResultLink;
+
+        // specifies if there are any resources available for aggregation to take place
+        @UsageOption(option = PropertyUsageOption.SERVICE_USE)
+        @UsageOption(option = ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public boolean hasResources = true;
     }
 
     public enum StatsAggregationStage {
@@ -389,6 +394,8 @@ public class SingleResourceStatsAggregationTaskService extends
         if (operations.size() == 0) {
             SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
             patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+            // setting hasResources for purpose of test cases
+            patchBody.hasResources = currentState.hasResources;
             patchBody.taskStage = StatsAggregationStage.INIT_RESOURCE_QUERY;
             patchBody.lastRollupTimeForMetric = lastUpdateMap;
             sendSelfPatch(patchBody);
@@ -422,6 +429,7 @@ public class SingleResourceStatsAggregationTaskService extends
             }
             SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
             patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+            patchBody.hasResources = currentState.hasResources;
             patchBody.taskStage = StatsAggregationStage.INIT_RESOURCE_QUERY;
             patchBody.lastRollupTimeForMetric = lastUpdateMap;
             sendSelfPatch(patchBody);
@@ -451,9 +459,11 @@ public class SingleResourceStatsAggregationTaskService extends
                     QueryTask rsp = queryOp.getBody(QueryTask.class);
                     SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
                     if (rsp.results.nextPageLink == null) {
+                        patchBody.hasResources = false;
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
                         patchBody.taskStage = StatsAggregationStage.PUBLISH_METRICS;
                     } else {
+                        patchBody.hasResources = currentState.hasResources;
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
                         patchBody.taskStage = StatsAggregationStage.PROCESS_RESOURCES;
                         patchBody.queryResultLink = rsp.results.nextPageLink;
@@ -477,6 +487,8 @@ public class SingleResourceStatsAggregationTaskService extends
                             }
                             QueryTask queryTask = getOp.getBody(QueryTask.class);
                             if (queryTask.results.documentCount == 0) {
+                                // set to false when no resources are found.
+                                currentState.hasResources = false;
                                 currentState.taskStage = StatsAggregationStage.PUBLISH_METRICS;
                                 sendSelfPatch(currentState);
                                 return;
@@ -769,6 +781,7 @@ public class SingleResourceStatsAggregationTaskService extends
     private void aggregateMetrics(SingleResourceStatsAggregationTaskState currentState,
             QueryTask resourceQueryTask, Map<String, List<ResourceMetrics>> rawMetricsForKey,
             Map<String, SortedMap<Long, List<TimeBin>>> inMemoryStats) {
+
         if (inMemoryStats != null) {
             aggregateInMemoryMetrics(currentState, inMemoryStats);
         }
@@ -780,6 +793,7 @@ public class SingleResourceStatsAggregationTaskService extends
         SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
         patchBody.aggregatedTimeBinMap = currentState.aggregatedTimeBinMap;
+        patchBody.hasResources = currentState.hasResources;
         if (resourceQueryTask.results.nextPageLink == null) {
             patchBody.taskStage = StatsAggregationStage.PUBLISH_METRICS;
         } else {
@@ -897,9 +911,7 @@ public class SingleResourceStatsAggregationTaskService extends
 
                 timeBinMap.put(binId, bin);
             }
-
         }
-
     }
 
     /**
@@ -984,38 +996,45 @@ public class SingleResourceStatsAggregationTaskService extends
         List<Operation> operations = new ArrayList<>();
         Set<String> publishedKeys = new HashSet<>();
 
-        if (currentState.aggregatedTimeBinMap == null) {
-            addLastRollupTimeForMissingKeys(currentState, publishedKeys, operations);
+        if (!currentState.hasResources) {
+            // reset the metrics to default, when no stats endpoint is available for a resource
+            operations = setDefaultMetricValue(currentState, operations, publishedKeys);
         } else {
-            for (Entry<String, Map<Long, TimeBin>> aggregateEntries : currentState.aggregatedTimeBinMap
-                    .entrySet()) {
-                Map<Long, TimeBin> aggrValue = aggregateEntries.getValue();
-                List<Long> keys = new ArrayList<>();
-                keys.addAll(aggrValue.keySet());
-                // create list of operations sorted by the timebin
-                Collections.sort(keys);
-                Long latestTimeKey = null;
-                for (Long timeKey : keys) {
-                    ResourceAggregateMetric aggrMetric = new ResourceAggregateMetric();
-                    aggrMetric.timeBin = aggrValue.get(timeKey);
-                    aggrMetric.currentIntervalTimeStampMicrosUtc = timeKey;
-                    aggrMetric.documentSelfLink = StatsUtil.getMetricKey(currentState.resourceLink,
-                            aggregateEntries.getKey(), Utils.getNowMicrosUtc());
-                    aggrMetric.documentExpirationTimeMicros = expirationTime;
-                    operations.add(Operation
-                            .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
-                            .setBody(aggrMetric));
-                    publishedKeys.add(aggregateEntries.getKey());
-                    latestTimeKey = timeKey;
+            if (currentState.aggregatedTimeBinMap == null) {
+                addLastRollupTimeForMissingKeys(currentState, publishedKeys, operations);
+            } else {
+                for (Entry<String, Map<Long, TimeBin>> aggregateEntries : currentState.aggregatedTimeBinMap
+                        .entrySet()) {
+                    Map<Long, TimeBin> aggrValue = aggregateEntries.getValue();
+                    List<Long> keys = new ArrayList<>();
+                    keys.addAll(aggrValue.keySet());
+                    // create list of operations sorted by the timebin
+                    Collections.sort(keys);
+                    Long latestTimeKey = null;
+                    for (Long timeKey : keys) {
+                        ResourceAggregateMetric aggrMetric = new ResourceAggregateMetric();
+                        aggrMetric.timeBin = aggrValue.get(timeKey);
+                        aggrMetric.currentIntervalTimeStampMicrosUtc = timeKey;
+                        aggrMetric.documentSelfLink = StatsUtil
+                                .getMetricKey(currentState.resourceLink,
+                                        aggregateEntries.getKey(), Utils.getNowMicrosUtc());
+                        aggrMetric.documentExpirationTimeMicros = expirationTime;
+                        operations.add(Operation
+                                .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
+                                .setBody(aggrMetric));
+                        publishedKeys.add(aggregateEntries.getKey());
+                        latestTimeKey = timeKey;
+                    }
+                    // update the last update time as a stat
+                    ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
+                    lastUpdateStat.name = aggregateEntries.getKey();
+                    lastUpdateStat.latestValue = latestTimeKey;
+                    URI inMemoryStatsUri = UriUtils
+                            .buildStatsUri(getHost(), currentState.resourceLink);
+                    operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
                 }
-                // update the last update time as a stat
-                ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
-                lastUpdateStat.name = aggregateEntries.getKey();
-                lastUpdateStat.latestValue = latestTimeKey;
-                URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.resourceLink);
-                operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
+                addLastRollupTimeForMissingKeys(currentState, publishedKeys, operations);
             }
-            addLastRollupTimeForMissingKeys(currentState, publishedKeys, operations);
         }
 
         if (operations.isEmpty()) {
@@ -1025,6 +1044,49 @@ public class SingleResourceStatsAggregationTaskService extends
         }
 
         batchPublishMetrics(currentState, operations, 0);
+    }
+
+    /**
+     * Sets metric constants related to a resource to '0' value.
+     * Metric constants like 'EstimatedCharges', 'Cost', 'CurrentBurnRatePerHour',
+     * 'AverageBurnRatePerHour' stored in 'lastRollupTimeForMetric' map attribute will be
+     * set to 0 when project is newly created or has all endpoints removed.
+     */
+    private List<Operation> setDefaultMetricValue(
+            SingleResourceStatsAggregationTaskState currentState,
+            List<Operation> operations, Set<String> publishedKeys) {
+
+        Map<String, Long> lastRollTimeMetric = currentState.lastRollupTimeForMetric;
+        for (Entry<String, Long> aggregateEntries : lastRollTimeMetric.entrySet()) {
+            // value is null when project is newly created and raw metrics are not yet generated.
+            // upon stats aggregation value is set to 0. As project resources don't exist,
+            // only newly created projects will have aggregate-metrics services generated .
+
+            Long aggregateMetricUnit = aggregateEntries.getValue() == null ?
+                    0L : aggregateEntries.getValue();
+
+            ResourceAggregateMetric aggrMetric = new ResourceAggregateMetric();
+            TimeBin timeBin = new TimeBin();
+            updateBin(timeBin, 0.0, EnumSet.allOf(AggregationType.class));
+
+            aggrMetric.timeBin = timeBin;
+            aggrMetric.currentIntervalTimeStampMicrosUtc = aggregateMetricUnit;
+            aggrMetric.documentSelfLink = StatsUtil.getMetricKey(currentState.resourceLink,
+                    aggregateEntries.getKey(), Utils.getNowMicrosUtc());
+
+            operations.add(Operation
+                    .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
+                    .setBody(aggrMetric));
+            publishedKeys.add(aggregateEntries.getKey());
+
+            ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
+            lastUpdateStat.name = aggregateEntries.getKey();
+            lastUpdateStat.latestValue = aggregateMetricUnit;
+            URI inMemoryStatsUri = UriUtils
+                    .buildStatsUri(getHost(), currentState.resourceLink);
+            operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
+        }
+        return operations;
     }
 
     public void batchPublishMetrics(SingleResourceStatsAggregationTaskState currentState,
