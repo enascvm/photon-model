@@ -217,7 +217,7 @@ public class EnumerationClient extends BaseHelper {
         return resultspec;
     }
 
-    public PropertyFilterSpec createFullFilterSpec() {
+    public PropertyFilterSpec createVmFilterSpec() {
         ObjectSpec ospec = new ObjectSpec();
         ospec.setObj(this.finder.getDatacenter().object);
         ospec.setSkip(false);
@@ -242,6 +242,20 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.vm_summary_guest_ipAddress,
                 VimPath.vm_summary_guest_hostName
         ));
+
+        PropertyFilterSpec filterSpec = new PropertyFilterSpec();
+        filterSpec.getObjectSet().add(ospec);
+        filterSpec.getPropSet().add(vmSpec);
+
+        return filterSpec;
+    }
+
+    public PropertyFilterSpec createResourcesFilterSpec() {
+        ObjectSpec ospec = new ObjectSpec();
+        ospec.setObj(this.finder.getDatacenter().object);
+        ospec.setSkip(false);
+
+        ospec.getSelectSet().addAll(buildFullTraversal());
 
         PropertySpec hostSpec = new PropertySpec();
         hostSpec.setType(VimNames.TYPE_HOST);
@@ -308,7 +322,6 @@ public class EnumerationClient extends BaseHelper {
 
         PropertyFilterSpec filterSpec = new PropertyFilterSpec();
         filterSpec.getObjectSet().add(ospec);
-        filterSpec.getPropSet().add(vmSpec);
         filterSpec.getPropSet().add(hostSpec);
         filterSpec.getPropSet().add(rpSpec);
         filterSpec.getPropSet().add(clusterSpec);

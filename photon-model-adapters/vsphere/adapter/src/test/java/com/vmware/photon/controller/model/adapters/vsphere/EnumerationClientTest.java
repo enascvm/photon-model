@@ -58,7 +58,7 @@ public class EnumerationClientTest {
 
         EnumerationClient client = new EnumerationClient(conn, parent);
 
-        PropertyFilterSpec spec = client.createFullFilterSpec();
+        PropertyFilterSpec spec = client.createResourcesFilterSpec();
 
         for (List<ObjectContent> page : client.retrieveObjects(spec)) {
             for (ObjectContent cont : page) {

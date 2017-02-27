@@ -273,7 +273,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void startEnumerationProcess(ComputeStateWithDescription parent,
             EnumerationClient client)
             throws Exception {
-        PropertyFilterSpec spec = client.createFullFilterSpec();
+        PropertyFilterSpec spec = client.createResourcesFilterSpec();
 
         try {
             for (UpdateSet updateSet : client.pollForUpdates(spec)) {
@@ -311,7 +311,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        PropertyFilterSpec spec = client.createFullFilterSpec();
+        PropertyFilterSpec spec = client.createResourcesFilterSpec();
 
         VapiConnection vapiConnection = new VapiConnection(getVapiUri(connection.getURI()));
         vapiConnection.setUsername(connection.getUsername());
@@ -330,7 +330,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 vapiConnection);
 
         List<NetworkOverlay> networks = new ArrayList<>();
-        List<VmOverlay> vms = new ArrayList<>();
         List<HostSystemOverlay> hosts = new ArrayList<>();
         List<DatastoreOverlay> datastores = new ArrayList<>();
         List<ComputeResourceOverlay> computeResources = new ArrayList<>();
@@ -339,23 +338,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         Map<String, ComputeResourceOverlay> nonDrsClusters = new HashMap<>();
 
         // put results in different buckets by type
-        long latestAcceptableModification = System.currentTimeMillis()
-                - VM_FERMENTATION_PERIOD_MILLIS;
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
                 for (ObjectContent cont : page) {
                     if (VimUtils.isNetwork(cont.getObj())) {
                         NetworkOverlay net = new NetworkOverlay(cont);
                         networks.add(net);
-                    } else if (VimUtils.isVirtualMachine(cont.getObj())) {
-                        VmOverlay vm = new VmOverlay(cont);
-                        if (vm.getInstanceUuid() == null) {
-                            logWarning(() -> String.format("Cannot process a VM without"
-                                    + " instanceUuid: %s",
-                                    VimUtils.convertMoRefToString(vm.getId())));
-                        } else if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
-                            vms.add(vm);
-                        }
                     } else if (VimUtils.isHost(cont.getObj())) {
                         // this includes all standalone and clustered hosts
                         HostSystemOverlay hs = new HostSystemOverlay(cont);
@@ -452,16 +440,35 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        enumerationContext.expectVmCount(vms.size());
-        for (VmOverlay vm : vms) {
-            processFoundVm(enumerationContext, vm, parent.tenantLinks);
-        }
+        long latestAcceptableModification = System.currentTimeMillis()
+                - VM_FERMENTATION_PERIOD_MILLIS;
+        spec = client.createVmFilterSpec();
         try {
-            enumerationContext.getVmTracker().await();
-        } catch (InterruptedException e) {
-            threadInterrupted(mgr, e);
+            for (List<ObjectContent> page : client.retrieveObjects(spec)) {
+                for (ObjectContent cont : page) {
+                    if (!VimUtils.isVirtualMachine(cont.getObj())) {
+                        continue;
+                    }
+                    VmOverlay vm = new VmOverlay(cont);
+                    if (vm.getInstanceUuid() == null) {
+                        logWarning(() -> String.format("Cannot process a VM without"
+                                        + " instanceUuid: %s",
+                                VimUtils.convertMoRefToString(vm.getId())));
+                    } else if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
+                        enumerationContext.getVmTracker().register();
+                        processFoundVm(enumerationContext, vm);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            String msg = "Error processing PropertyCollector results";
+            logWarning(msg);
+            mgr.patchTaskToFailure(msg, e);
             return;
         }
+
+
+        enumerationContext.getVmTracker().arriveAndAwaitAdvance();
 
         try {
             vapiConnection.close();
@@ -632,16 +639,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         };
     }
 
-    private CompletionHandler trackVm(EnumerationContext enumerationContext,
-            VmOverlay vm) {
+    private CompletionHandler trackVm(EnumerationContext enumerationContext) {
         return (o, e) -> {
-            String key = VimUtils.convertMoRefToString(vm.getId());
-
-            if (e == null) {
-                enumerationContext.getVmTracker().track(key, getSelfLinkFromOperation(o));
-            } else {
-                enumerationContext.getVmTracker().track(key, ResourceTracker.ERROR);
-            }
+            enumerationContext.getVmTracker().arrive();
         };
     }
 
@@ -1184,52 +1184,49 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     /**
      * @param enumerationContext
      * @param vm
-     * @param tenantLinks
      */
-    private void processFoundVm(EnumerationContext enumerationContext, VmOverlay vm,
-            List<String> tenantLinks) {
+    private void processFoundVm(EnumerationContext enumerationContext, VmOverlay vm) {
         ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
         QueryTask task = queryForVm(enumerationContext, request.resourceLink(),
-                vm.getInstanceUuid(), tenantLinks);
-        task.tenantLinks = tenantLinks;
+                vm.getInstanceUuid(), enumerationContext.getTenantLinks());
+        task.tenantLinks = enumerationContext.getTenantLinks();
 
         withTaskResults(task, result -> {
             if (result.documentLinks.isEmpty()) {
-                createNewVm(enumerationContext, vm, tenantLinks);
+                createNewVm(enumerationContext, vm);
             } else {
                 ComputeState oldDocument = convertOnlyResultToDocument(result, ComputeState.class);
-                updateVm(oldDocument, enumerationContext, vm, tenantLinks);
+                updateVm(oldDocument, enumerationContext, vm);
             }
         });
     }
 
     private void updateVm(ComputeState oldDocument, EnumerationContext enumerationContext,
-            VmOverlay vm, List<String> tenantLinks) {
+            VmOverlay vm) {
         ComputeState state = makeVmFromResults(enumerationContext, vm);
         state.documentSelfLink = oldDocument.documentSelfLink;
         if (oldDocument.tenantLinks == null) {
-            state.tenantLinks = tenantLinks;
+            state.tenantLinks = enumerationContext.getTenantLinks();
         }
         populateTags(enumerationContext,  vm, state);
 
         logFine(() -> String.format("Syncing VM %s", state.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
-                .setCompletion(trackVm(enumerationContext, vm))
+                .setCompletion(trackVm(enumerationContext))
                 .sendWith(this);
     }
 
-    private void createNewVm(EnumerationContext enumerationContext, VmOverlay vm,
-            List<String> tenantLinks) {
+    private void createNewVm(EnumerationContext enumerationContext, VmOverlay vm) {
         ComputeDescription desc = makeDescriptionForVm(enumerationContext, vm);
-        desc.tenantLinks = tenantLinks;
+        desc.tenantLinks = enumerationContext.getTenantLinks();
         Operation.createPost(this, ComputeDescriptionService.FACTORY_LINK)
                 .setBody(desc)
                 .sendWith(this);
 
         ComputeState state = makeVmFromResults(enumerationContext, vm);
         state.descriptionLink = desc.documentSelfLink;
-        state.tenantLinks = tenantLinks;
+        state.tenantLinks = enumerationContext.getTenantLinks();
         populateTags(enumerationContext, vm, state);
 
         state.networkInterfaceLinks = new ArrayList<>();
@@ -1260,7 +1257,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         logFine(() -> String.format("Found new VM %s", vm.getInstanceUuid()));
         Operation.createPost(this, ComputeService.FACTORY_LINK)
                 .setBody(state)
-                .setCompletion(trackVm(enumerationContext, vm))
+                .setCompletion(trackVm(enumerationContext))
                 .sendWith(this);
     }
 

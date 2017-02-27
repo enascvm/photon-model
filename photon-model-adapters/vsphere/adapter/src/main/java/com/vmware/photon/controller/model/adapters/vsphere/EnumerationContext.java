@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.List;
+import java.util.concurrent.Phaser;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
@@ -31,14 +32,16 @@ public class EnumerationContext {
     private ResourceTracker datastoreTracker;
     private ResourceTracker hostSystemTracker;
     private ResourceTracker computeResourceTracker;
-    private ResourceTracker vmTracker;
     private ResourceTracker resourcePoolTracker;
+
+    private Phaser vmTracker;
 
     public EnumerationContext(ComputeEnumerateResourceRequest request,
             ComputeStateWithDescription parent, VapiConnection endpoint) {
         this.request = request;
         this.parent = parent;
         this.endpoint = endpoint;
+        this.vmTracker = new Phaser(1);
     }
 
     public VapiConnection getEndpoint() {
@@ -89,14 +92,6 @@ public class EnumerationContext {
         return this.computeResourceTracker;
     }
 
-    public void expectVmCount(int count) {
-        this.vmTracker = new ResourceTracker(count);
-    }
-
-    public ResourceTracker getVmTracker() {
-        return this.vmTracker;
-    }
-
     public void expectResourcePoolCount(int count) {
         this.resourcePoolTracker = new ResourceTracker(count);
     }
@@ -107,5 +102,9 @@ public class EnumerationContext {
 
     public List<String> getTenantLinks() {
         return this.parent.tenantLinks;
+    }
+
+    public Phaser getVmTracker() {
+        return this.vmTracker;
     }
 }
