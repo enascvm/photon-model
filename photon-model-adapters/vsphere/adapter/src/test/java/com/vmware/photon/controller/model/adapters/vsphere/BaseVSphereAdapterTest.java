@@ -350,6 +350,7 @@ public class BaseVSphereAdapterTest {
         task.enumerationAction = EnumerationAction.REFRESH;
         task.parentComputeLink = computeHost.documentSelfLink;
         task.resourcePoolLink = this.resourcePool.documentSelfLink;
+        task.endpointLink = "/some/endpoint/link";
 
         ResourceEnumerationTaskState outTask = TestUtils.doPost(this.host,
                 task,

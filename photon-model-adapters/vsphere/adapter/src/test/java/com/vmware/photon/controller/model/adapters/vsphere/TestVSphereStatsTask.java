@@ -13,21 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-import java.util.EnumSet;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
-import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -87,23 +82,7 @@ public class TestVSphereStatsTask extends BaseVSphereAdapterTest {
     }
 
     private void doRefresh() throws Throwable {
-        ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
-        task.adapterManagementReference = this.computeHost.adapterManagementReference;
-
-        if (isMock()) {
-            task.options = EnumSet.of(TaskOption.IS_MOCK);
-        }
-        task.enumerationAction = EnumerationAction.REFRESH;
-        task.parentComputeLink = this.computeHost.documentSelfLink;
-        task.resourcePoolLink = this.resourcePool.documentSelfLink;
-
-        ResourceEnumerationTaskState outTask = TestUtils.doPost(this.host,
-                task,
-                ResourceEnumerationTaskState.class,
-                UriUtils.buildUri(this.host,
-                        ResourceEnumerationTaskService.FACTORY_LINK));
-
-        this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
+        enumerateComputes(this.computeHost);
     }
 
     /**

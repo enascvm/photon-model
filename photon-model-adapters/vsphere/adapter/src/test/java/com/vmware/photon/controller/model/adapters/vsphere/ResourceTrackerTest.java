@@ -19,13 +19,20 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
 
+import com.vmware.vim25.ManagedObjectReference;
+
 public class ResourceTrackerTest {
 
     @Test
     public void test() throws InterruptedException {
         ResourceTracker tracker = new ResourceTracker(2);
-        String k1 = "moref";
-        String k2 = "moref2";
+        ManagedObjectReference k1 = new ManagedObjectReference();
+        k1.setType("t1");
+        k1.setValue("v1");
+
+        ManagedObjectReference k2 = new ManagedObjectReference();
+        k2.setType("t2");
+        k2.setValue("v2");
 
         String v1 = "/link";
         String v2 = "/link2";

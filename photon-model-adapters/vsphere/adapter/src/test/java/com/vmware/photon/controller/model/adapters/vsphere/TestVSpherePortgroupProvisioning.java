@@ -14,14 +14,12 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.UUID;
 
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
@@ -35,9 +33,6 @@ import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService.ProvisionNetworkTaskState;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
-import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -53,6 +48,7 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 @Ignore
 public class TestVSpherePortgroupProvisioning extends BaseVSphereAdapterTest {
     private ComputeDescription computeHostDescription;
+
     private ComputeState computeHost;
 
     @Test
@@ -160,24 +156,7 @@ public class TestVSpherePortgroupProvisioning extends BaseVSphereAdapterTest {
     }
 
     private void doRefresh() throws Throwable {
-        ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
-        task.adapterManagementReference = this.computeHost.adapterManagementReference;
-
-        if (isMock()) {
-            task.options = EnumSet.of(TaskOption.IS_MOCK);
-        }
-
-        task.enumerationAction = EnumerationAction.REFRESH;
-        task.parentComputeLink = this.computeHost.documentSelfLink;
-        task.resourcePoolLink = this.resourcePool.documentSelfLink;
-
-        ResourceEnumerationTaskState outTask = TestUtils.doPost(this.host,
-                task,
-                ResourceEnumerationTaskState.class,
-                UriUtils.buildUri(this.host,
-                        ResourceEnumerationTaskService.FACTORY_LINK));
-
-        this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
+        enumerateComputes(this.computeHost);
     }
 
     /**

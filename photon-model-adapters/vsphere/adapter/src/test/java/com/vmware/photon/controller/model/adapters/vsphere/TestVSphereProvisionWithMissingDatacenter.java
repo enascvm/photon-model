@@ -13,19 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
-
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.UUID;
 
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
-import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -33,9 +30,6 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
-import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
@@ -78,27 +72,6 @@ public class TestVSphereProvisionWithMissingDatacenter extends BaseVSphereAdapte
         }
 
         fail("Task should have failed");
-    }
-
-    @SuppressWarnings("unused")
-    private void doRefresh() throws Throwable {
-        ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
-        task.adapterManagementReference = this.computeHost.adapterManagementReference;
-
-        if (isMock()) {
-            task.options = EnumSet.of(TaskOption.IS_MOCK);
-        }
-        task.enumerationAction = EnumerationAction.REFRESH;
-        task.parentComputeLink = this.computeHost.documentSelfLink;
-        task.resourcePoolLink = this.resourcePool.documentSelfLink;
-
-        ResourceEnumerationTaskState outTask = TestUtils.doPost(this.host,
-                task,
-                ResourceEnumerationTaskState.class,
-                UriUtils.buildUri(this.host,
-                        ResourceEnumerationTaskService.FACTORY_LINK));
-
-        this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
     }
 
     @SuppressWarnings("unused")

@@ -49,7 +49,6 @@ public abstract class AbstractOverlay {
     protected Object getOrFail(String name) {
         Object res = this.props.get(name);
         if (res == null) {
-            // TODO how to handle null-valued properties
             throw new IllegalArgumentException("property '" + name + "' not fetched");
         }
         return res;

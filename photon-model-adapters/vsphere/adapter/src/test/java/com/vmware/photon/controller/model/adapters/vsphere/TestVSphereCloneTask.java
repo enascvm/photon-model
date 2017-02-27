@@ -17,13 +17,11 @@ import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.EnumSet;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
-import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -38,9 +36,6 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
-import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.xenon.common.Operation;
@@ -106,23 +101,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
     }
 
     private void doRefresh() throws Throwable {
-        ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
-        task.adapterManagementReference = this.computeHost.adapterManagementReference;
-
-        if (isMock()) {
-            task.options = EnumSet.of(TaskOption.IS_MOCK);
-        }
-        task.enumerationAction = EnumerationAction.REFRESH;
-        task.parentComputeLink = this.computeHost.documentSelfLink;
-        task.resourcePoolLink = this.resourcePool.documentSelfLink;
-
-        ResourceEnumerationTaskState outTask = doPost(this.host,
-                task,
-                ResourceEnumerationTaskState.class,
-                UriUtils.buildUri(this.host,
-                        ResourceEnumerationTaskService.FACTORY_LINK));
-
-        this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
+        enumerateComputes(this.computeHost);
     }
 
     private ComputeDescription createCloneDescription(String templateComputeLink) throws Throwable {

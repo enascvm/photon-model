@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -26,7 +25,6 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
-import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -38,11 +36,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
-import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
@@ -59,9 +53,6 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  */
 @Ignore
 public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterTest {
-
-    // fields that are used across method calls, stash them as private fields
-    private ResourcePoolState resourcePool;
 
     private AuthCredentialsServiceState auth;
     private ComputeDescription computeHostDescription;
@@ -121,24 +112,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
     }
 
     private void doRefresh() throws Throwable {
-        ResourceEnumerationTaskState task = new ResourceEnumerationTaskState();
-        task.adapterManagementReference = this.computeHost.adapterManagementReference;
-
-        if (isMock()) {
-            task.options = EnumSet.of(TaskOption.IS_MOCK);
-        }
-
-        task.enumerationAction = EnumerationAction.REFRESH;
-        task.parentComputeLink = this.computeHost.documentSelfLink;
-        task.resourcePoolLink = this.resourcePool.documentSelfLink;
-
-        ResourceEnumerationTaskState outTask = TestUtils.doPost(this.host,
-                task,
-                ResourceEnumerationTaskState.class,
-                UriUtils.buildUri(this.host,
-                        ResourceEnumerationTaskService.FACTORY_LINK));
-
-        this.host.waitForFinishedTask(ResourceEnumerationTaskState.class, outTask.documentSelfLink);
+        enumerateComputes(this.computeHost);
     }
 
     private ComputeState createVmState(ComputeDescription vmDescription,
