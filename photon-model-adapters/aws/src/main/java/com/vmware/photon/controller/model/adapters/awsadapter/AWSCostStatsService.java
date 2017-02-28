@@ -63,9 +63,11 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNorma
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
@@ -178,7 +180,6 @@ public class AWSCostStatsService extends StatelessService {
         }
         AWSCostStatsCreationContext statsData = new AWSCostStatsCreationContext(statsRequest);
         handleCostStatsCreationRequest(statsData);
-
     }
 
     protected void handleCostStatsCreationRequest(AWSCostStatsCreationContext statsData) {
@@ -221,16 +222,14 @@ public class AWSCostStatsService extends StatelessService {
             default:
                 logSevere(() -> String.format("Unknown AWS Cost Stats enumeration stage %s ",
                         statsData.stage.toString()));
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        statsData.statsRequest.taskReference,
-                        new Exception("Unknown AWS Cost Stats enumeration stage"));
+                getFailureConsumer(statsData)
+                        .accept(new Exception("Unknown AWS Cost Stats enumeration stage"));
                 break;
             }
         } catch (Exception e) {
             getFailureConsumer(statsData).accept(e);
             return;
         }
-
     }
 
     protected void getAccountDescription(AWSCostStatsCreationContext statsData,
@@ -330,9 +329,7 @@ public class AWSCostStatsService extends StatelessService {
                 .setBody(queryTask)
                 .setConnectionSharing(true).setCompletion((o, e) -> {
                     if (e != null) {
-                        logSevere(e);
-                        AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                                context.statsRequest.taskReference, e);
+                        getFailureConsumer(context).accept(e);
                         return;
                     }
                     QueryTask responseTask = o.getBody(QueryTask.class);
@@ -372,29 +369,29 @@ public class AWSCostStatsService extends StatelessService {
                     statsData.accountIdToBillProcessedTime.get(accountId)));
 
             if (accountId == null) {
-                logWarning(() -> String.format("Account ID is not set for account '%s'. Not collecting"
-                        + " cost stats.", statsData.computeDesc.documentSelfLink));
+                logWarning(() -> String.format("Account ID is not set for account '%s'. "
+                        + "Not collecting cost stats.", statsData.computeDesc.documentSelfLink));
                 postAllResourcesCostStats(statsData);
                 return;
             }
 
             String billsBucketName = statsData.computeDesc.customProperties
                     .getOrDefault(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, null);
-            if (billsBucketName == null) {
-                billsBucketName = AWSUtils
-                        .autoDiscoverBillsBucketName(statsData.s3Client.getAmazonS3Client(), accountId);
-                if (billsBucketName == null) {
-                    logWarning(() -> String.format("Bills Bucket name is not configured for account"
-                            + " '%s'. Not collecting cost stats.",
-                            statsData.computeDesc.documentSelfLink));
-                    postAllResourcesCostStats(statsData);
-                    return;
-                } else {
-                    setCustomProperty(statsData, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
-                            billsBucketName);
-                }
-            }
             try {
+                if (billsBucketName == null) {
+                    billsBucketName = AWSUtils.autoDiscoverBillsBucketName
+                            (statsData.s3Client.getAmazonS3Client(), accountId);
+                    if (billsBucketName == null) {
+                        logWarning(() -> String.format("Bills Bucket name is not configured for "
+                                        + "account '%s'. Not collecting cost stats.",
+                                statsData.computeDesc.documentSelfLink));
+                        postAllResourcesCostStats(statsData);
+                        return;
+                    } else {
+                        setCustomProperty(statsData, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
+                                billsBucketName);
+                    }
+                }
                 if (statsData.billMonthToDownload == null) {
                     populateBillMonthToProcess(statsData, accountId);
                 }
@@ -407,10 +404,8 @@ public class AWSCostStatsService extends StatelessService {
                     statsData.stage = next;
                     handleCostStatsCreationRequest(statsData);
                 }
-            } catch (IOException e) {
-                logSevere(e);
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        statsData.statsRequest.taskReference, e);
+            } catch (Exception e) {
+                getFailureConsumer(statsData).accept(e);
             }
         });
     }
@@ -461,35 +456,55 @@ public class AWSCostStatsService extends StatelessService {
                 .stream().flatMap(List::stream) // flatten collection of lists to single list
                 .map(e -> e.documentSelfLink).collect(Collectors.toList()); // extract document self links of all accounts
 
-        Query query = Query.Builder.create().addKindFieldClause(ComputeState.class)
+        Query query = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE,
+                        ComputeDescriptionService.ComputeDescription.ComputeType.VM_GUEST)
                 .addInClause(ComputeState.FIELD_NAME_PARENT_LINK, linkedAccountsLinks,
-                        Occurance.MUST_OCCUR).build();
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT).setQuery(query)
+                        Occurance.MUST_OCCUR)
                 .build();
-        queryTask.setDirect(true);
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .setQuery(query)
+                .setResultLimit(AWSConstants.getQueryResultLimit())
+                .build();
         queryTask.tenantLinks = statsData.computeDesc.tenantLinks;
         queryTask.documentSelfLink = UUID.randomUUID().toString();
-        sendRequest(
-                Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS).setBody(queryTask)
-                        .setConnectionSharing(true).setCompletion((o, e) -> {
-                            if (e != null) {
-                                logSevere(e);
-                                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                                        statsData.statsRequest.taskReference, e);
-                                return;
-                            }
-                            QueryTask responseTask = o.getBody(QueryTask.class);
-                            Map<String, List<ComputeState>> result = responseTask.results.documents
-                                    .values().stream()
-                                    .map(s -> Utils.fromJson(s, ComputeState.class))
-                                    .collect(Collectors.groupingBy(c -> c.id));
-                            statsData.awsInstancesById.putAll(result);
-                            logFine(() -> String.format("Got %d localresources in AWS cost adapter.",
-                                    responseTask.results.documentCount));
-                            statsData.stage = next;
-                            handleCostStatsCreationRequest(statsData);
+        QueryUtils.startQueryTask(this, queryTask).whenComplete((qrt, e) -> {
+            if (e != null) {
+                getFailureConsumer(statsData).accept(e);
+                return;
+            }
+            populateAwsInstances(qrt.results.nextPageLink, statsData, next);
+        });
+    }
+
+    private void populateAwsInstances(String nextPageLink, AWSCostStatsCreationContext context,
+            AWSCostStatsCreationStages next) {
+        if (nextPageLink == null) {
+            context.stage = next;
+            handleCostStatsCreationRequest(context);
+        } else {
+            Operation.createGet(this, nextPageLink).setCompletion((o, e) -> {
+                if (e != null) {
+                    getFailureConsumer(context).accept(e);
+                    return;
+                }
+                QueryTask queryTask = o.getBody(QueryTask.class);
+                Map<String, List<ComputeState>> instancesById = queryTask.results.documents.values()
+                        .stream()
+                        .map(s -> Utils.fromJson(s, ComputeState.class))
+                        .collect(Collectors.groupingBy(c -> c.id));
+                instancesById.forEach(
+                        (k, v) -> context.awsInstancesById.merge(k, v, (list1, list2) -> {
+                            list1.addAll(list2);
+                            return list1;
                         }));
+                logFine(() -> String.format("Found %d instances in current page",
+                        queryTask.results.documentCount));
+                populateAwsInstances(queryTask.results.nextPageLink, context, next);
+            }).sendWith(this);
+        }
     }
 
     protected void queryBillProcessedTime(AWSCostStatsCreationContext context,
@@ -508,7 +523,6 @@ public class AWSCostStatsService extends StatelessService {
                 continue;
             }
             ComputeState accountComputeState = findRootAccountComputeState(entry.getValue());
-
             queryOps.add(createBillProcessedTimeOperation(
                     context, accountComputeState, entry.getKey()));
         }
@@ -519,7 +533,6 @@ public class AWSCostStatsService extends StatelessService {
             handleCostStatsCreationRequest(context);
             return;
         }
-
         joinOperationAndSendRequest(context, next, queryOps);
     }
 
@@ -565,7 +578,6 @@ public class AWSCostStatsService extends StatelessService {
             handleCostStatsCreationRequest(context);
             return;
         }
-
         joinOperationAndSendRequest(context, next, queryOps);
     }
 
@@ -786,9 +798,7 @@ public class AWSCostStatsService extends StatelessService {
         sendRequest(Operation.createPatch(statsData.statsRequest.taskReference).setBody(respBody)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        logSevere(e);
-                        AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                                statsData.statsRequest.taskReference, e);
+                        getFailureConsumer(statsData).accept(e);
                         return;
                     }
                 }));
@@ -812,8 +822,6 @@ public class AWSCostStatsService extends StatelessService {
                     csvBillZipFileName);
             Download download = statsData.s3Client.download(getObjectRequest,
                     csvBillZipFilePath.toFile());
-
-            final StatelessService service = this;
             download.addProgressListener(new ProgressListener() {
                 @Override
                 public void progressChanged(ProgressEvent progressEvent) {
@@ -872,8 +880,7 @@ public class AWSCostStatsService extends StatelessService {
             // Abort if the current month's bill is NOT available.
             logSevere(() -> "Current month's bill is not available in the AWS S3 bucket. "
                     + error.toString());
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, exception);
+            getFailureConsumer(statsData).accept(exception);
         } else {
             // Ignore if bill(s) of previous month(s) are not available.
             logFine(() -> String.format("AWS bill for account: %s for the month of: %s-%s was not"
@@ -1082,11 +1089,8 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     private Consumer<Throwable> getFailureConsumer(AWSCostStatsCreationContext statsData) {
-
-        return ((t) -> {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, t);
-        });
+        return ((t) -> AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                statsData.statsRequest.taskReference, t));
     }
 
     /**
@@ -1128,10 +1132,8 @@ public class AWSCostStatsService extends StatelessService {
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
                         logWarning(() -> String.format("Failed to get bill processed time for"
-                                        + " account: %s %s", accountComputeState.documentSelfLink,
-                                exception));
-                        AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                                context.statsRequest.taskReference, exception);
+                                + " account: %s", accountComputeState.documentSelfLink));
+                        getFailureConsumer(context).accept(exception);
                         return;
                     }
                     QueryTask body = operation.getBody(QueryTask.class);
@@ -1145,7 +1147,6 @@ public class AWSCostStatsService extends StatelessService {
                                         0d);
                         context.accountIdToBillProcessedTime
                                 .put(accountId, accountBillProcessedTime.longValue());
-
                     }
                 });
     }
@@ -1155,14 +1156,11 @@ public class AWSCostStatsService extends StatelessService {
         OperationJoin.create(queryOps).setCompletion((operationMap, exception) -> {
             if (exception != null && !exception.isEmpty()) {
                 Throwable firstException = exception.values().iterator().next();
-                logSevere(firstException);
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        context.statsRequest.taskReference, firstException);
+                getFailureConsumer(context).accept(firstException);
                 return;
             }
             context.stage = next;
             handleCostStatsCreationRequest(context);
         }).sendWith(this, AWSConstants.OPERATION_BATCH_SIZE);
     }
-
 }
