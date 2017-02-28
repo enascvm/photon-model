@@ -356,16 +356,22 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                                     // Due to concurrency issues: We can only get the used bytes of a blob
                                                     // only by creating a snapshot and getting the page ranges of the snapshot
                                                     // TODO https://jira-hzn.eng.vmware.com/browse/VSYM-3445
-                                                    CloudBlob blobSnapshot = pageBlob.createSnapshot();
-                                                    statsData.snapshots.add(blobSnapshot);
-                                                    CloudPageBlob pageBlobSnapshot = (CloudPageBlob) blobSnapshot;
-                                                    ArrayList<PageRange> pages = pageBlobSnapshot.downloadPageRanges();
+                                                    try {
+                                                        CloudBlob blobSnapshot = pageBlob.createSnapshot();
+                                                        statsData.snapshots.add(blobSnapshot);
+                                                        CloudPageBlob pageBlobSnapshot = (CloudPageBlob) blobSnapshot;
+                                                        ArrayList<PageRange> pages = pageBlobSnapshot.downloadPageRanges();
 
-                                                    // TODO store disk utilized bytes more granularly
-                                                    // https://jira-hzn.eng.vmware.com/browse/VSYM-3355
-                                                    for (PageRange pageRange : pages) {
-                                                        statsData.utilizedBytes += pageRange.getEndOffset()
-                                                                - pageRange.getStartOffset();
+                                                        // TODO store disk utilized bytes more granularly
+                                                        // https://jira-hzn.eng.vmware.com/browse/VSYM-3355
+                                                        for (PageRange pageRange : pages) {
+                                                            statsData.utilizedBytes += pageRange.getEndOffset()
+                                                                    - pageRange.getStartOffset();
+                                                        }
+                                                    } catch (StorageException e) {
+                                                        logWarning(() -> String.format("Error getting blob size: [%s]",
+                                                                e.getMessage()));
+                                                        continue;
                                                     }
                                                 }
                                             }
