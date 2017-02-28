@@ -15,7 +15,10 @@ package com.vmware.photon.controller.model.resources;
 
 import java.util.List;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -54,6 +57,31 @@ public class TagService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @PropertyOptions(indexing = PropertyIndexingOption.EXPAND)
         public List<String> tenantLinks;
+
+        /**
+         * Each tag is categorized as local or external.
+         *
+         * <ul>
+         * <li>Local (default) means the tag is managed by this system. If the tag is assigned
+         * to a local resource, changes on the remote state will never affect this assignment.
+         * <li>External means the tag is managed by an external system (e.g. cloud provider). In
+         * this case, if the tag assignment is removed on the remote state, the local state is
+         * updated accordingly.
+         * </ul>
+         *
+         * <p>This flag does not affect the generated unique documentSelfLink for the tag. Thus the
+         * same key-value pair (for the same tenantLinks) can be either local or external, but
+         * cannot have both versions.
+         *
+         * <p>A previously external tag can be turned into local (goes under this system's
+         * management) by a POST/PUT request, but a local tag cannot be turned into an external
+         * anymore. If {@code null} is passed, the current value is not changed.
+         */
+        @Documentation(description = "Whether this tag is from external source")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @PropertyOptions(indexing = PropertyIndexingOption.EXCLUDE_FROM_SIGNATURE)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_6)
+        public Boolean external;
     }
 
     public TagService() {
@@ -86,11 +114,19 @@ public class TagService extends StatefulService {
 
         if (!ServiceDocument.equals(getStateDescription(), currentState, newTagState)) {
             put.fail(new UnsupportedOperationException("Tags may not be modified"));
-        } else {
-            //Do nothing
-            put.setBody(currentState);
-            put.complete();
+            return;
         }
+
+        // check if the tag has to be turned from external to local
+        if (newTagState.external != null) {
+            if (currentState.external == null || (Boolean.TRUE.equals(currentState.external)
+                    && Boolean.FALSE.equals(newTagState.external))) {
+                currentState.external = newTagState.external;
+            }
+        }
+
+        put.setBody(currentState);
+        put.complete();
     }
 
     @Override

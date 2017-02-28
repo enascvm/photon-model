@@ -18,9 +18,8 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.UUID;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -48,11 +47,11 @@ public class TagServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static TagService.TagState buildValidStartState()
+    private static TagService.TagState buildRandomStartState()
             throws Throwable {
         TagService.TagState tag = new TagService.TagState();
-        tag.key = "key-1";
-        tag.value = "value-1";
+        tag.key = UUID.randomUUID().toString();
+        tag.value = UUID.randomUUID().toString();
         return tag;
     }
 
@@ -88,7 +87,7 @@ public class TagServiceTest extends Suite {
     public static class HandleStartTest extends BaseModelTest {
         @Test
         public void testValidStartState() throws Throwable {
-            TagService.TagState startState = buildValidStartState();
+            TagService.TagState startState = buildRandomStartState();
             TagService.TagState returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
@@ -99,7 +98,7 @@ public class TagServiceTest extends Suite {
 
         @Test
         public void testMissingKey() throws Throwable {
-            TagService.TagState startState = buildValidStartState();
+            TagService.TagState startState = buildRandomStartState();
             startState.key = null;
             postServiceSynchronously(TagService.FACTORY_LINK,
                     startState, TagService.TagState.class,
@@ -108,7 +107,7 @@ public class TagServiceTest extends Suite {
 
         @Test
         public void testMissingValue() throws Throwable {
-            TagService.TagState startState = buildValidStartState();
+            TagService.TagState startState = buildRandomStartState();
             startState.value = null;
             postServiceSynchronously(TagService.FACTORY_LINK,
                     startState, TagService.TagState.class,
@@ -117,7 +116,7 @@ public class TagServiceTest extends Suite {
 
         @Test
         public void testEmptyValue() throws Throwable {
-            TagService.TagState startState = buildValidStartState();
+            TagService.TagState startState = buildRandomStartState();
             startState.value = "";
             TagService.TagState returnState = postServiceSynchronously(TagService.FACTORY_LINK,
                     startState, TagService.TagState.class);
@@ -126,7 +125,7 @@ public class TagServiceTest extends Suite {
 
         @Test
         public void testSubsequentPosts() throws Throwable {
-            TagService.TagState startState = buildValidStartState();
+            TagService.TagState startState = buildRandomStartState();
             TagService.TagState returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
@@ -134,7 +133,7 @@ public class TagServiceTest extends Suite {
             assertThat(returnState.key, is(startState.key));
             assertThat(returnState.value, is(startState.value));
 
-            startState.key = "key-2";
+            startState.key = UUID.randomUUID().toString();
             returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
@@ -150,8 +149,74 @@ public class TagServiceTest extends Suite {
         }
 
         @Test
+        public void testExternalTagPost() throws Throwable {
+            TagService.TagState startState = buildRandomStartState();
+            startState.external = Boolean.TRUE;
+            TagService.TagState returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(startState.external));
+
+            startState.external = null;
+            returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(Boolean.TRUE));
+        }
+
+        @Test
+        public void testSwitchExternalToLocalTagPost() throws Throwable {
+            TagService.TagState startState = buildRandomStartState();
+            startState.external = Boolean.TRUE;
+            TagService.TagState returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(startState.external));
+
+            startState.external = Boolean.FALSE;
+            returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(startState.external));
+        }
+
+        @Test
+        public void testSwitchLocalToExternalTagPost() throws Throwable {
+            TagService.TagState startState = buildRandomStartState();
+            startState.external = Boolean.FALSE;
+            TagService.TagState returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(startState.external));
+
+            startState.external = Boolean.TRUE;
+            returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+            assertNotNull(returnState);
+            assertThat(returnState.key, is(startState.key));
+            assertThat(returnState.value, is(startState.value));
+            assertThat(returnState.external, is(Boolean.FALSE));
+        }
+
+        @Test
         public void testIdempotentPost() throws Throwable {
-            TagService.TagState startState = buildValidStartState();
+            TagService.TagState startState = buildRandomStartState();
 
             TagService.TagState returnState = postServiceSynchronously(
                     TagService.FACTORY_LINK, startState,
@@ -172,15 +237,13 @@ public class TagServiceTest extends Suite {
     public static class HandlePatchTest extends BaseModelTest {
         @Test(expected = UnsupportedOperationException.class)
         public void testPatchTag() throws Throwable {
-            TagService.TagState startState = postServiceSynchronously(
-                    TagService.FACTORY_LINK, buildValidStartState(),
+            TagService.TagState startState = buildRandomStartState();
+            TagService.TagState returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
 
-            TagService.TagState patchState = new TagService.TagState();
-            patchState.key = "new-key";
-            patchState.value = "";
-            patchState.tenantLinks = new ArrayList<>(Arrays.asList("tenant2"));
-            patchServiceSynchronously(startState.documentSelfLink, patchState);
+            TagService.TagState patchState = buildRandomStartState();
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
         }
     }
 
@@ -190,26 +253,27 @@ public class TagServiceTest extends Suite {
     public static class HandlePutTest extends BaseModelTest {
         @Test(expected = UnsupportedOperationException.class)
         public void testPutTagDifferentValues() throws Throwable {
-            TagService.TagState startState = postServiceSynchronously(
-                    TagService.FACTORY_LINK, buildValidStartState(),
+            TagService.TagState startState = buildRandomStartState();
+            TagService.TagState returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
 
-            startState.key = "newKey";
-            startState.value = "newValue";
-            putServiceSynchronously(startState.documentSelfLink, startState);
+            startState.key = UUID.randomUUID().toString();
+            startState.value = UUID.randomUUID().toString();
+            putServiceSynchronously(returnState.documentSelfLink, startState);
         }
 
         @Test
         public void testPutTagSameValues() throws Throwable {
-            TagService.TagState startState = postServiceSynchronously(
-                    TagService.FACTORY_LINK, buildValidStartState(),
+            TagService.TagState startState = buildRandomStartState();
+            TagService.TagState returnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
                     TagService.TagState.class);
 
-            TagService.TagState newState = buildValidStartState();
-            putServiceSynchronously(startState.documentSelfLink, newState);
+            putServiceSynchronously(returnState.documentSelfLink, startState);
 
-            newState = getServiceSynchronously(
-                    startState.documentSelfLink,
+            TagService.TagState newState = getServiceSynchronously(
+                    returnState.documentSelfLink,
                     TagService.TagState.class);
             assertThat(newState.key, is(startState.key));
             assertThat(newState.value, is(startState.value));
