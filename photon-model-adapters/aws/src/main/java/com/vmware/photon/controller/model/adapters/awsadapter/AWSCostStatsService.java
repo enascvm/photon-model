@@ -365,7 +365,8 @@ public class AWSCostStatsService extends StatelessService {
                 postAllResourcesCostStats(statsData);
                 return;
             } else {
-                setBillsBucketNameInAccount(statsData, billsBucketName);
+                setCustomProperty(statsData, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
+                        billsBucketName);
             }
         }
         try {
@@ -418,14 +419,11 @@ public class AWSCostStatsService extends StatelessService {
                 context.billMonthToDownload));
     }
 
-    private void setBillsBucketNameInAccount(AWSCostStatsCreationContext statsData,
-            String billsBucketName) {
-
+    private void setCustomProperty(AWSCostStatsCreationContext context, String key, String value) {
         ComputeState accountState = new ComputeState();
         accountState.customProperties = new HashMap<>();
-        accountState.customProperties
-                .put(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, billsBucketName);
-        sendRequest(Operation.createPatch(this.getHost(), statsData.computeDesc.documentSelfLink)
+        accountState.customProperties.put(key, value);
+        sendRequest(Operation.createPatch(this.getHost(), context.computeDesc.documentSelfLink)
                 .setBody(accountState));
     }
 
@@ -498,9 +496,24 @@ public class AWSCostStatsService extends StatelessService {
         joinOperationAndSendRequest(context, next, queryOps);
     }
 
+    private void setLinkedAccountIds(AWSCostStatsCreationContext context) {
+        Map<String, String> primaryAccountProps = context.computeDesc.customProperties;
+        String primaryAccountId = primaryAccountProps.get(AWSConstants.AWS_ACCOUNT_ID_KEY);
+        String linkedAccountIds = context.accountsHistoricalDetailsMap
+                .get(getFirstDayOfCurrentMonth()).keySet().stream()
+                .filter(accountId -> accountId != null && !accountId.equals(primaryAccountId))
+                .sorted().collect(Collectors.joining(","));
+        String prevLinkedAccountIds = primaryAccountProps
+                .getOrDefault(AWSConstants.AWS_LINKED_ACCOUNT_IDS, "");
+        if (!prevLinkedAccountIds.equals(linkedAccountIds)) {
+            setCustomProperty(context, AWSConstants.AWS_LINKED_ACCOUNT_IDS,
+                    linkedAccountIds);
+        }
+    }
+
     protected void queryLinkedAccounts(AWSCostStatsCreationContext context,
             AWSCostStatsCreationStages next) {
-
+        setLinkedAccountIds(context);
         // Construct a list of query operations, one for each account ID to query the
         // corresponding compute states and populate in the context object.
         List<Operation> queryOps = new ArrayList<>();
