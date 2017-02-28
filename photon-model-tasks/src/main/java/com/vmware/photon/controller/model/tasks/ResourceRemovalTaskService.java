@@ -18,6 +18,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -25,9 +26,12 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.Service;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -62,6 +66,8 @@ public class ResourceRemovalTaskService
      */
     public static class ResourceRemovalTaskState extends TaskService.TaskServiceState {
 
+        public static final String FIELD_NAME_NEXT_PAGE_LINK = "nextPageLink";
+
         /**
          * Task sub stage.
          */
@@ -75,7 +81,13 @@ public class ResourceRemovalTaskService
         /**
          * Set by service. Link to resource query task.
          */
+        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String resourceQueryLink;
+
+        /**
+         * Link to the next page of results.
+         */
+        public String nextPageLink;
 
         /**
          * For testing instance service deletion.
@@ -131,6 +143,9 @@ public class ResourceRemovalTaskService
             if (!q.querySpec.options.contains(QueryOption.EXPAND_CONTENT)) {
                 q.querySpec.options.add(QueryOption.EXPAND_CONTENT);
             }
+            if (q.querySpec.resultLimit == null) {
+                q.querySpec.resultLimit = QueryUtils.DEFAULT_RESULT_LIMIT;
+            }
             q.documentSelfLink = UUID.randomUUID().toString();
             q.tenantLinks = state.tenantLinks;
             // create the query to find resources
@@ -148,16 +163,17 @@ public class ResourceRemovalTaskService
                         }
                     }));
 
-            // we do not wait for the query task creation to know its URI, the
-            // URI is created
-            // deterministically. The task itself is not complete but we check
-            // for that in our state
-            // machine
-            state.resourceQueryLink = UriUtils.buildUriPath(
-                    ServiceUriPaths.CORE_LOCAL_QUERY_TASKS, q.documentSelfLink);
             start.complete();
 
-            sendSelfPatch(TaskState.TaskStage.STARTED, state.taskSubStage, null);
+            sendSelfPatch(TaskState.TaskStage.STARTED, state.taskSubStage, s -> {
+                // we do not wait for the query task creation to know its URI, the
+                // URI is created
+                // deterministically. The task itself is not complete but we check
+                // for that in our state
+                // machine
+                s.resourceQueryLink = UriUtils.buildUriPath(
+                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS, q.documentSelfLink);
+            });
         } catch (Throwable e) {
             start.fail(e);
         }
@@ -165,8 +181,7 @@ public class ResourceRemovalTaskService
 
     @Override
     public void handlePatch(Operation patch) {
-        ResourceRemovalTaskState body = patch
-                .getBody(ResourceRemovalTaskState.class);
+        ResourceRemovalTaskState body = getPatchBody(patch);
         ResourceRemovalTaskState currentState = getState(patch);
 
         if (validateTransitionAndUpdateState(patch, body, currentState)) {
@@ -179,7 +194,7 @@ public class ResourceRemovalTaskService
         case CREATED:
             break;
         case STARTED:
-            handleStagePatch(currentState, null);
+            handleStagePatch(currentState);
             break;
         case FINISHED:
             logInfo(() -> "Task is complete");
@@ -192,53 +207,58 @@ public class ResourceRemovalTaskService
         }
     }
 
-    private void handleStagePatch(ResourceRemovalTaskState currentState,
-            QueryTask queryTask) {
+    private void handleStagePatch(ResourceRemovalTaskState currentState) {
 
-        if (queryTask == null) {
-            getQueryResults(currentState);
-            return;
-        }
         adjustStat(currentState.taskSubStage.toString(), 1);
 
         switch (currentState.taskSubStage) {
         case WAITING_FOR_QUERY_COMPLETION:
-            if (TaskState.isFailed(queryTask.taskInfo)) {
-                logWarning(() -> String.format("query task failed: %s",
-                        Utils.toJsonHtml(queryTask.taskInfo.failure)));
-                currentState.taskInfo.stage = TaskState.TaskStage.FAILED;
-                currentState.taskInfo.failure = queryTask.taskInfo.failure;
-                sendSelfPatch(currentState);
-                return;
-            }
-            if (TaskState.isFinished(queryTask.taskInfo)) {
-
-                ResourceRemovalTaskState newState = new ResourceRemovalTaskState();
-                newState.taskInfo = new TaskState();
-                if (queryTask.results.documentLinks.size() == 0) {
-                    newState.taskInfo.stage = TaskState.TaskStage.FINISHED;
-                    newState.taskSubStage = SubStage.FINISHED;
-                } else {
-                    newState.taskInfo.stage = TaskState.TaskStage.STARTED;
-
-                    newState.taskSubStage = currentState.options != null
-                            && currentState.options.contains(TaskOption.DOCUMENT_CHANGES_ONLY)
-                                    ? SubStage.DELETE_DOCUMENTS : SubStage.ISSUE_ADAPTER_DELETES;
+            getQueryResults(currentState.resourceQueryLink, queryTask -> {
+                if (TaskState.isFailed(queryTask.taskInfo)) {
+                    logWarning(() -> String.format("query task failed: %s",
+                            Utils.toJsonHtml(queryTask.taskInfo.failure)));
+                    sendFailureSelfPatch(queryTask.taskInfo.failure);
+                    return;
                 }
-                sendSelfPatch(newState);
-                return;
-            }
 
-            logFine(() -> "Resource query not complete yet, retrying");
-            getHost().schedule(() -> {
-                getQueryResults(currentState);
-            }, 1, TimeUnit.SECONDS);
+                if (TaskState.isFinished(queryTask.taskInfo)) {
+                    if (queryTask.results.nextPageLink == null) {
+                        logFine("Query returned no computes to delete");
+                        sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
+                    } else {
+                        sendSelfPatch(TaskState.TaskStage.STARTED,
+                                currentState.options != null && currentState.options
+                                        .contains(TaskOption.DOCUMENT_CHANGES_ONLY)
+                                                ? SubStage.DELETE_DOCUMENTS
+                                                : SubStage.ISSUE_ADAPTER_DELETES,
+                                s -> s.nextPageLink = queryTask.results.nextPageLink);
+                    }
+                    return;
+                }
+
+                logFine(() -> "Resource query not complete yet, retrying");
+                getHost().schedule(() -> handleStagePatch(currentState), 1, TimeUnit.SECONDS);
+            });
             break;
         case ISSUE_ADAPTER_DELETES:
-            doInstanceDeletes(currentState, queryTask, null);
+            getQueryResults(currentState.nextPageLink, queryTask -> {
+                doInstanceDeletes(currentState, queryTask, null);
+            });
             break;
         case DELETE_DOCUMENTS:
-            deleteDocuments(currentState, queryTask);
+            // if next page is not set, execute the original paged query again
+            if (currentState.nextPageLink == null) {
+                getQueryResults(currentState.resourceQueryLink, queryTask -> {
+                    sendSelfPatch(currentState.taskInfo.stage, currentState.taskSubStage, s -> {
+                        s.nextPageLink = queryTask.results.nextPageLink;
+                    });
+                });
+            } else {
+                // handle current page
+                getQueryResults(currentState.nextPageLink, queryTask -> {
+                    deleteDocuments(currentState, queryTask);
+                });
+            }
             break;
         case FAILED:
             break;
@@ -250,6 +270,12 @@ public class ResourceRemovalTaskService
     }
 
     private void deleteDocuments(ResourceRemovalTaskState currentState, QueryTask queryTask) {
+        // handle empty pages
+        if (queryTask.results.documentCount == 0) {
+            sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
+            return;
+        }
+
         Stream<Operation> deletes = queryTask.results.documents.values().stream()
                 .map(d -> Utils.fromJson(d, ComputeState.class))
                 .flatMap(c -> {
@@ -275,7 +301,14 @@ public class ResourceRemovalTaskService
                         sendFailureSelfPatch(exc.values().iterator().next());
                         return;
                     }
-                    sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
+
+                    if (queryTask.results.nextPageLink != null) {
+                        sendSelfPatch(currentState.taskInfo.stage, currentState.taskSubStage, s -> {
+                            s.nextPageLink = queryTask.results.nextPageLink;
+                        });
+                    } else {
+                        sendSelfPatch(TaskState.TaskStage.FINISHED, SubStage.FINISHED, null);
+                    }
                 })
                 .sendWith(this);
     }
@@ -283,15 +316,22 @@ public class ResourceRemovalTaskService
     private void doInstanceDeletes(ResourceRemovalTaskState currentState,
             QueryTask queryTask, String subTaskLink) {
 
-        int resourceCount = queryTask.results.documentLinks.size();
+        // handle empty pages
+        if (queryTask.results.documentCount == 0) {
+            sendSelfPatch(currentState.taskInfo.stage, SubStage.DELETE_DOCUMENTS, s -> {
+                s.nextPageLink = null;
+            });
+            return;
+        }
+
         if (subTaskLink == null) {
-            createSubTaskForDeleteCallbacks(currentState, resourceCount,
-                    queryTask);
+            createSubTaskForDeleteCallbacks(currentState, queryTask,
+                    link -> doInstanceDeletes(currentState, queryTask, link));
             return;
         }
 
         logFine(() -> String.format("Starting delete of %d compute resources using sub task %s",
-                resourceCount, subTaskLink));
+                queryTask.results.documentLinks.size(), subTaskLink));
         // for each compute resource link in the results, expand it with the
         // description, and issue
         // a DELETE request to its associated instance service.
@@ -314,8 +354,7 @@ public class ResourceRemovalTaskService
                             sendPatch(subTaskLink, subTaskPatchBody);
                             return;
                         }
-                        sendInstanceDelete(resourceLink, subTaskLink, o,
-                                currentState);
+                        sendInstanceDelete(resourceLink, subTaskLink, o, currentState);
                     }));
         }
     }
@@ -325,18 +364,23 @@ public class ResourceRemovalTaskService
      * task that will track the DELETE completions. The instance service will issue a PATCH with
      * TaskStage.FINISHED, for every PATCH we send it, to delete the compute resource
      */
-    private void createSubTaskForDeleteCallbacks(
-            ResourceRemovalTaskState currentState, int resourceCount,
-            QueryTask queryTask) {
+    private void createSubTaskForDeleteCallbacks(ResourceRemovalTaskState currentState,
+            QueryTask queryTask, Consumer<String> subTaskLinkConsumer) {
 
         ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
-        callback.onSuccessTo(SubStage.DELETE_DOCUMENTS);
+        if (queryTask.results.nextPageLink != null) {
+            callback.onSuccessTo(SubStage.ISSUE_ADAPTER_DELETES)
+                    .addProperty(ResourceRemovalTaskState.FIELD_NAME_NEXT_PAGE_LINK,
+                            queryTask.results.nextPageLink);
+        } else {
+            callback.onSuccessTo(SubStage.DELETE_DOCUMENTS);
+        }
 
         SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
 
         // tell the sub task with what to patch us, on completion
         subTaskInitState.serviceTaskCallback = callback;
-        subTaskInitState.completionsRemaining = resourceCount;
+        subTaskInitState.completionsRemaining = queryTask.results.documentLinks.size();
         subTaskInitState.errorThreshold = currentState.errorThreshold;
         subTaskInitState.tenantLinks = currentState.tenantLinks;
         subTaskInitState.documentExpirationTimeMicros = currentState.documentExpirationTimeMicros;
@@ -348,15 +392,13 @@ public class ResourceRemovalTaskService
                             if (e != null) {
                                 logWarning(() -> String.format("Failure creating sub task: %s",
                                         Utils.toString(e)));
-                                this.sendSelfPatch(TaskState.TaskStage.FAILED,
-                                        SubStage.FAILED, e);
+                                sendFailureSelfPatch(e);
                                 return;
                             }
                             SubTaskService.SubTaskState<?> body = o
                                     .getBody(SubTaskService.SubTaskState.class);
-                            // continue with deletes, passing the sub task link
-                            doInstanceDeletes(currentState, queryTask,
-                                    body.documentSelfLink);
+
+                            subTaskLinkConsumer.accept(body.documentSelfLink);
                         });
         getHost().startService(startPost, new SubTaskService<SubStage>());
     }
@@ -395,8 +437,8 @@ public class ResourceRemovalTaskService
         }
     }
 
-    public void getQueryResults(ResourceRemovalTaskState currentState) {
-        sendRequest(Operation.createGet(this, currentState.resourceQueryLink)
+    public void getQueryResults(String resultsLink, Consumer<QueryTask> consumer) {
+        sendRequest(Operation.createGet(this, resultsLink)
                 .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_QUEUE_FOR_SERVICE_AVAILABILITY)
                 .setCompletion((o, e) -> {
                     if (e != null) {
@@ -408,8 +450,7 @@ public class ResourceRemovalTaskService
                         return;
                     }
 
-                    QueryTask rsp = o.getBody(QueryTask.class);
-                    handleStagePatch(currentState, rsp);
+                    consumer.accept(o.getBody(QueryTask.class));
                 }));
     }
 
@@ -442,6 +483,12 @@ public class ResourceRemovalTaskService
         currentState.taskInfo.stage = body.taskInfo.stage;
         currentState.taskSubStage = body.taskSubStage;
 
+        // auto-merge fields based on annotations
+        Utils.mergeWithState(this.getStateDescription(), currentState, body);
+
+        // next page is always overridden (even with null)
+        currentState.nextPageLink = body.nextPageLink;
+
         logFine(() -> String.format("Moving from %s(%s) to %s(%s)", currentSubStage, currentStage,
                 body.taskSubStage, currentState.taskInfo.stage));
 
@@ -449,18 +496,23 @@ public class ResourceRemovalTaskService
     }
 
     private void sendFailureSelfPatch(Throwable e) {
-        sendSelfPatch(TaskState.TaskStage.FAILED, SubStage.FAILED, e);
+        sendFailureSelfPatch(Utils.toServiceErrorResponse(e));
+    }
+
+    private void sendFailureSelfPatch(ServiceErrorResponse errorResponse) {
+        sendSelfPatch(TaskState.TaskStage.FAILED, SubStage.FAILED, s -> {
+            s.taskInfo.failure = errorResponse;
+        });
     }
 
     private void sendSelfPatch(TaskState.TaskStage stage, SubStage subStage,
-            Throwable e) {
+            Consumer<ResourceRemovalTaskState> patchBodyConfigurator) {
         ResourceRemovalTaskState body = new ResourceRemovalTaskState();
         body.taskInfo = new TaskState();
         body.taskInfo.stage = stage;
         body.taskSubStage = subStage;
-        if (e != null) {
-            body.taskInfo.failure = Utils.toServiceErrorResponse(e);
-            logWarning(() -> String.format("Patching to failed: %s", Utils.toString(e)));
+        if (patchBodyConfigurator != null) {
+            patchBodyConfigurator.accept(body);
         }
         sendSelfPatch(body);
     }
@@ -497,5 +549,14 @@ public class ResourceRemovalTaskService
             state.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                     + DEFAULT_TIMEOUT_MICROS;
         }
+    }
+
+    private static ResourceRemovalTaskState getPatchBody(Operation op) {
+        ResourceRemovalTaskState body = op.getBody(ResourceRemovalTaskState.class);
+        if (ServiceTaskCallbackResponse.KIND.equals(body.documentKind)) {
+            ServiceTaskCallbackResponse<?> cr = op.getBody(ServiceTaskCallbackResponse.class);
+            body.nextPageLink = cr.getProperty(ResourceRemovalTaskState.FIELD_NAME_NEXT_PAGE_LINK);
+        }
+        return body;
     }
 }

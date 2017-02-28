@@ -17,7 +17,11 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumSet;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -29,6 +33,7 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.SubStage;
 import com.vmware.xenon.common.Service;
@@ -36,6 +41,8 @@ import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
  * This class implements tests for the {@link ResourceRemovalTaskService} class.
@@ -270,6 +277,76 @@ public class ResourceRemovalTaskServiceTest extends Suite {
             // Clean up the compute and description documents
             this.deleteServiceSynchronously(cs.documentSelfLink);
             this.deleteServiceSynchronously(cs.descriptionLink);
+        }
+
+        @Test
+        public void testPaginatedResourceRemovalSuccess() throws Throwable {
+            testPaginatedResourceRemoval(null);
+        }
+
+        @Test
+        public void testPaginatedLocalResourceRemovalSuccess() throws Throwable {
+            testPaginatedResourceRemoval(EnumSet.of(TaskOption.DOCUMENT_CHANGES_ONLY));
+        }
+
+        private void testPaginatedResourceRemoval(EnumSet<TaskOption> taskOptions) throws Throwable {
+            final int pageSize = 2;
+            final int totalComputeCount = 10;
+
+            ResourceRemovalTaskState startState = buildValidStartState();
+            startState.resourceQuerySpec.resultLimit = pageSize;
+            startState.options = taskOptions;
+
+            List<ComputeService.ComputeStateWithDescription> computes =
+                    new ArrayList<>(totalComputeCount);
+            for (int i = 0; i < totalComputeCount; i++) {
+                computes.add(ModelUtils.createComputeWithDescription(this,
+                        MockAdapter.MockSuccessInstanceAdapter.SELF_LINK,
+                        null));
+            }
+            assertDocumentCount(totalComputeCount,
+                    computes.stream().map(cs -> cs.documentSelfLink).collect(Collectors.toList()));
+
+
+            ResourceRemovalTaskState returnState = this
+                    .postServiceSynchronously(
+                            ResourceRemovalTaskService.FACTORY_LINK,
+                            startState,
+                            ResourceRemovalTaskState.class);
+
+            returnState = this
+                    .waitForServiceState(
+                            ResourceRemovalTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> state.taskInfo.stage == TaskState.TaskStage.FINISHED);
+
+            assertThat(returnState.taskSubStage,
+                    is(SubStage.FINISHED));
+
+            assertDocumentCount(0,
+                    computes.stream().map(cs -> cs.documentSelfLink).collect(Collectors.toList()));
+
+            // Clean up the compute and description documents
+            for (ComputeState computeState : computes) {
+                this.deleteServiceSynchronously(computeState.documentSelfLink);
+                this.deleteServiceSynchronously(computeState.descriptionLink);
+            }
+
+            // Stop factory service.
+            this.deleteServiceSynchronously(ResourceRemovalTaskService.FACTORY_LINK);
+
+            // stop the removal task
+            this.stopServiceSynchronously(returnState.documentSelfLink);
+        }
+
+        private void assertDocumentCount(long expectedCount, Collection<String> documentLinks)
+                throws Throwable {
+            Query query = Query.Builder.create()
+                    .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, documentLinks).build();
+            QueryTask queryTask = QueryTask.Builder.createDirectTask().setQuery(query)
+                    .addOption(QueryOption.COUNT).build();
+            QueryTask returnedTask = querySynchronously(queryTask);
+            assertThat(returnedTask.results.documentCount, is(expectedCount));
         }
     }
 }
