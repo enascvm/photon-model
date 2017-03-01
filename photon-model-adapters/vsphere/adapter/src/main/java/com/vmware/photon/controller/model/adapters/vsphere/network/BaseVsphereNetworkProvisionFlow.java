@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.network;
 
-import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPool;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPoolAllocator;
@@ -27,7 +27,7 @@ public abstract class BaseVsphereNetworkProvisionFlow {
 
     private final StatelessService service;
 
-    private final NetworkInstanceRequest request;
+    private final SubnetInstanceRequest request;
 
     private final OperationContext operationContext;
 
@@ -35,7 +35,7 @@ public abstract class BaseVsphereNetworkProvisionFlow {
 
     public BaseVsphereNetworkProvisionFlow(
             StatelessService service,
-            NetworkInstanceRequest req,
+            SubnetInstanceRequest req,
             OperationContext operationContext) {
         this.service = service;
         this.request = req;
@@ -43,7 +43,7 @@ public abstract class BaseVsphereNetworkProvisionFlow {
         this.taskManager = new TaskManager(service, req.taskReference);
     }
 
-    public BaseVsphereNetworkProvisionFlow(StatelessService service, NetworkInstanceRequest req) {
+    public BaseVsphereNetworkProvisionFlow(StatelessService service, SubnetInstanceRequest req) {
         this(service, req, OperationContext.getOperationContext());
     }
 
@@ -55,7 +55,7 @@ public abstract class BaseVsphereNetworkProvisionFlow {
         return VSphereIOThreadPoolAllocator.getPool(getService());
     }
 
-    protected NetworkInstanceRequest getRequest() {
+    protected SubnetInstanceRequest getRequest() {
         return this.request;
     }
 

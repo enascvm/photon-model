@@ -13,12 +13,13 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.network;
 
-import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.CustomProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPool.ConnectionCallback;
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.DVPortgroupConfigSpec;
 import com.vmware.vim25.DistributedVirtualPortgroupPortgroupType;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
@@ -34,24 +35,25 @@ import com.vmware.xenon.common.TaskState.TaskStage;
 
 public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
 
-    private NetworkState networkState;
-    private NetworkState dvsState;
+    private SubnetState subnetState;
 
-    public CreatePortgroupFlow(StatelessService service, NetworkInstanceRequest req) {
+    private NetworkState networkState;
+
+    public CreatePortgroupFlow(StatelessService service, SubnetInstanceRequest req) {
         super(service, req);
     }
 
     @Override
     public DeferredResult<?> prepare(DeferredResult<Void> start) {
         return start
-                .thenCompose(this::fetchNetworkState)
-                .thenCompose(this::fetchDvs)
+                .thenCompose(this::fetchSubnet)
+                .thenCompose(this::fetchNetwork)
                 .thenCompose(this::createPortgroup);
     }
 
-    private DeferredResult<Operation> fetchDvs(Operation stateOp) {
-        this.networkState = stateOp.getBody(NetworkState.class);
-        String dvsLink = CustomProperties.of(this.networkState).getString(DvsProperties.PARENT_DVS_LINK);
+    private DeferredResult<Operation> fetchNetwork(Operation stateOp) {
+        this.subnetState = stateOp.getBody(SubnetState.class);
+        String dvsLink = this.subnetState.networkLink;
         if (dvsLink == null) {
             return DeferredResult.failed(new IllegalArgumentException("Portgroup must be linked to a parent DVS"));
         }
@@ -61,7 +63,7 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
     }
 
     private DeferredResult<Void> createPortgroup(Operation dvsOp) {
-        this.dvsState = dvsOp.getBody(NetworkState.class);
+        this.networkState = dvsOp.getBody(NetworkState.class);
 
         DeferredResult<Void> res = new DeferredResult<>();
 
@@ -81,7 +83,7 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
             }
 
             // extract moref of the parent DVS switch
-            ManagedObjectReference dvsRef = CustomProperties.of(this.dvsState)
+            ManagedObjectReference dvsRef = CustomProperties.of(this.networkState)
                     .getMoRef(CustomProperties.MOREF);
 
             DVPortgroupConfigSpec pgSpec = createDefaultPortgroupSpec();
@@ -118,13 +120,13 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
             }
 
             // store the moref as custom property
-            CustomProperties.of(this.networkState)
+            CustomProperties.of(this.subnetState)
                     .put(CustomProperties.MOREF, pg)
                     .put(DvsProperties.PORT_GROUP_KEY, pgKey);
 
             OperationContext.setFrom(getOperationContext());
-            Operation.createPatch(getService().getHost(), this.networkState.documentSelfLink)
-                    .setBody(this.networkState)
+            Operation.createPatch(getService().getHost(), this.subnetState.documentSelfLink)
+                    .setBody(this.subnetState)
                     .setCompletion((o, e) -> {
                         if (e != null) {
                             result.fail(e);
@@ -140,13 +142,13 @@ public class CreatePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
 
     private DVPortgroupConfigSpec createDefaultPortgroupSpec() {
         DVPortgroupConfigSpec res = new DVPortgroupConfigSpec();
-        res.setName(this.networkState.name);
-        res.setDescription("Created from " + this.networkState.documentSelfLink);
+        res.setName(this.subnetState.name);
+        res.setDescription("Created from " + this.subnetState.documentSelfLink);
         res.setType(DistributedVirtualPortgroupPortgroupType.EPHEMERAL.value());
         return res;
     }
 
-    private DeferredResult<Operation> fetchNetworkState(Void start) {
+    private DeferredResult<Operation> fetchSubnet(Void start) {
         Operation op = Operation.createGet(getRequest().resourceReference);
         return getService().sendWithDeferredResult(op);
     }

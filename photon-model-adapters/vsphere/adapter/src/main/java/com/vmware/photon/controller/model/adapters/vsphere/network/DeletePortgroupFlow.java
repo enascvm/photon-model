@@ -13,11 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.network;
 
-import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.vsphere.CustomProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPool.ConnectionCallback;
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
@@ -28,17 +29,31 @@ import com.vmware.xenon.common.TaskState.TaskStage;
 
 public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
 
+    private SubnetState subnetState;
+
     private NetworkState networkState;
 
-    public DeletePortgroupFlow(StatelessService service, NetworkInstanceRequest req) {
+    public DeletePortgroupFlow(StatelessService service, SubnetInstanceRequest req) {
         super(service, req);
     }
 
     @Override
     public DeferredResult<Void> prepare(DeferredResult<Void> start) {
         return start
-                .thenCompose(this::fetchState)
+                .thenCompose(this::fetchSubnet)
+                .thenCompose(this::fetchNetwork)
                 .thenCompose(this::deletePortgroup);
+    }
+
+    private DeferredResult<Operation> fetchNetwork(Operation stateOp) {
+        this.subnetState = stateOp.getBody(SubnetState.class);
+        String dvsLink = this.subnetState.networkLink;
+        if (dvsLink == null) {
+            return DeferredResult.failed(new IllegalArgumentException("Portgroup must be linked to a parent DVS"));
+        }
+
+        Operation op = Operation.createGet(getService().getHost(), dvsLink);
+        return getService().sendWithDeferredResult(op);
     }
 
     private DeferredResult<Void> deletePortgroup(Operation stateOp) {
@@ -46,7 +61,9 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
 
         DeferredResult<Void> res = new DeferredResult<>();
 
-        ManagedObjectReference pgRef = CustomProperties.of(this.networkState).getMoRef(CustomProperties.MOREF);
+        ManagedObjectReference pgRef = CustomProperties.of(this.subnetState)
+                .getMoRef(CustomProperties.MOREF);
+
         if (pgRef == null) {
             // a provisioning has failed mid-flight, just proceed, skipping actual vc call
             res.complete(null);
@@ -68,7 +85,7 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
                 return;
             }
 
-            ManagedObjectReference pgRef = CustomProperties.of(this.networkState).getMoRef(CustomProperties.MOREF);
+            ManagedObjectReference pgRef = CustomProperties.of(this.subnetState).getMoRef(CustomProperties.MOREF);
 
             ManagedObjectReference task;
             try {
@@ -98,7 +115,7 @@ public class DeletePortgroupFlow extends BaseVsphereNetworkProvisionFlow {
         };
     }
 
-    private DeferredResult<Operation> fetchState(Void start) {
+    private DeferredResult<Operation> fetchSubnet(Void start) {
         Operation op = Operation.createGet(getRequest().resourceReference);
         return getService().sendWithDeferredResult(op);
     }

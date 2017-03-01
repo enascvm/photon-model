@@ -14,15 +14,15 @@
 package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.UUID;
 
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest.InstanceRequestType;
+import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
-import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -31,8 +31,11 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
-import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService;
-import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService.ProvisionNetworkTaskState;
+import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService;
+import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService.ProvisionSubnetTaskState;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -67,61 +70,58 @@ public class TestVSpherePortgroupProvisioning extends BaseVSphereAdapterTest {
 
         NetworkState dvsSwitch = fetchServiceState(NetworkState.class, findDvs(networkId));
 
-        NetworkState networkState = new NetworkState();
-        networkState.subnetCIDR = "0.0.0.0/0";
-        networkState.regionId = datacenterId;
-        networkState.instanceAdapterReference = UriUtils
-                .buildUri(this.host, DvsNetworkService.SELF_LINK);
-        networkState.authCredentialsLink = this.auth.documentSelfLink;
-        networkState.adapterManagementReference = getAdapterManagementReference();
-        networkState.resourcePoolLink = this.resourcePool.documentSelfLink;
-        networkState.name = nextName("pg");
+        SubnetState subnet = new SubnetState();
+        subnet.subnetCIDR = "0.0.0.0/0";
+        subnet.networkLink = dvsSwitch.documentSelfLink;
+        subnet.name = nextName("pg");
 
-        CustomProperties.of(networkState)
-                .put(DvsProperties.PARENT_DVS_LINK, dvsSwitch.documentSelfLink);
+        subnet.instanceAdapterReference = UriUtils.buildUri(this.host, DvsNetworkService.SELF_LINK);
 
-        networkState = TestUtils.doPost(this.host, networkState, NetworkState.class,
-                UriUtils.buildUri(this.host, NetworkService.FACTORY_LINK));
+        subnet = TestUtils.doPost(this.host, subnet, SubnetState.class,
+                UriUtils.buildUri(this.host, SubnetService.FACTORY_LINK));
 
-        ProvisionNetworkTaskState createTask = new ProvisionNetworkTaskState();
-        createTask.isMockRequest = isMock();
+        ProvisionSubnetTaskState createTask = new ProvisionSubnetTaskState();
+        createTask.options = createOptions();
         createTask.requestType = InstanceRequestType.CREATE;
-        createTask.networkDescriptionLink = networkState.documentSelfLink;
+        createTask.subnetDescriptionLink = subnet.documentSelfLink;
 
         createTask = TestUtils.doPost(this.host,
                 createTask,
-                ProvisionNetworkTaskState.class,
+                ProvisionSubnetTaskState.class,
                 UriUtils.buildUri(this.host,
-                        ProvisionNetworkTaskService.FACTORY_LINK));
+                        ProvisionSubnetTaskService.FACTORY_LINK));
 
         awaitTaskEnd(createTask);
 
         // refresh state
-        networkState = getNetworkState(networkState);
+        subnet = getSubnetState(subnet);
 
         // delete the portgroup
-        deleteThePortgroup(networkState);
+        deleteThePortgroup(subnet);
     }
 
-    protected void deleteThePortgroup(NetworkState networkState) throws Throwable {
-        ProvisionNetworkTaskState removalTask = new ProvisionNetworkTaskState();
-        removalTask.isMockRequest = isMock();
+    private EnumSet<TaskOption> createOptions() {
+        if (isMock()) {
+            return EnumSet.of(TaskOption.IS_MOCK);
+        }
+
+        return EnumSet.noneOf(TaskOption.class);
+    }
+
+    protected void deleteThePortgroup(SubnetState subnet) throws Throwable {
+        ProvisionSubnetTaskState removalTask = new ProvisionSubnetTaskState();
+        removalTask.options = createOptions();
         removalTask.requestType = InstanceRequestType.DELETE;
-        removalTask.networkDescriptionLink = networkState.documentSelfLink;
+        removalTask.subnetDescriptionLink = subnet.documentSelfLink;
 
         removalTask = TestUtils.doPost(this.host,
                 removalTask,
-                ProvisionNetworkTaskState.class,
+                ProvisionSubnetTaskState.class,
                 UriUtils.buildUri(this.host,
-                        ProvisionNetworkTaskService.FACTORY_LINK));
+                        ProvisionSubnetTaskService.FACTORY_LINK));
         awaitTaskEnd(removalTask);
     }
 
-    private NetworkState getNetwork(NetworkState networkState) {
-        return this.host.getServiceState(null, NetworkState.class,
-                UriUtils.buildUri(this.host, networkState.documentSelfLink));
-
-    }
 
     private <T extends ServiceDocument> T fetchServiceState(Class<T> bodyType, String networkLink) {
         Operation op = Operation.createGet(this.host, networkLink);

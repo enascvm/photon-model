@@ -195,6 +195,11 @@ public class BaseVSphereAdapterTest {
                 UriUtils.buildUri(this.host, net.documentSelfLink));
     }
 
+    protected SubnetState getSubnetState(SubnetState net) throws Throwable {
+        return this.host.getServiceState(null, SubnetState.class,
+                UriUtils.buildUri(this.host, net.documentSelfLink));
+    }
+
     protected void snapshotFactoryState(String tag, Class<? extends StatefulService> factoryClass)
             throws ExecutionException, InterruptedException, IOException {
         URI uri = UriUtils.buildFactoryUri(this.host, factoryClass);

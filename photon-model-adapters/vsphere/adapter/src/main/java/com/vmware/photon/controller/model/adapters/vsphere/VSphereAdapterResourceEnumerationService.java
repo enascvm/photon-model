@@ -67,8 +67,11 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
@@ -372,7 +375,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 for (ObjectContent cont : page) {
                     if (VimUtils.isNetwork(cont.getObj())) {
                         NetworkOverlay net = new NetworkOverlay(cont);
-                        networks.add(net);
+                        if (!net.getName().toLowerCase().contains("dvuplinks")) {
+                            // skip uplinks altogether,
+                            // TODO starting with 6.5 query the property config.uplink instead
+                            networks.add(net);
+                        }
                     } else if (VimUtils.isHost(cont.getObj())) {
                         // this includes all standalone and clustered hosts
                         HostSystemOverlay hs = new HostSystemOverlay(cont);
@@ -604,16 +611,94 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void processFoundNetwork(EnumerationContext enumerationContext, NetworkOverlay net) {
-        QueryTask task = queryForNetwork(enumerationContext, net.getName());
+        if (net.getParentSwitch() != null) {
+            // portgroup: create subnet
+            QueryTask task = queryForSubnet(enumerationContext, net);
+            withTaskResults(task, result -> {
+                if (result.documentLinks.isEmpty()) {
+                    createNewSubnet(enumerationContext, net);
+                } else {
+                    SubnetState oldDocument = convertOnlyResultToDocument(result, SubnetState.class);
+                    updateSubnet(oldDocument, enumerationContext, net);
+                }
+            });
+        } else {
+            // DVS or opaque network
+            QueryTask task = queryForNetwork(enumerationContext, net.getName());
+            withTaskResults(task, result -> {
+                if (result.documentLinks.isEmpty()) {
+                    createNewNetwork(enumerationContext, net);
+                } else {
+                    NetworkState oldDocument = convertOnlyResultToDocument(result, NetworkState.class);
+                    updateNetwork(oldDocument, enumerationContext, net);
+                }
+            });
+        }
+    }
 
-        withTaskResults(task, result -> {
-            if (result.documentLinks.isEmpty()) {
-                createNewNetwork(enumerationContext, net);
-            } else {
-                NetworkState oldDocument = convertOnlyResultToDocument(result, NetworkState.class);
-                updateNetwork(oldDocument, enumerationContext, net);
-            }
-        });
+    private void updateSubnet(SubnetState oldDocument, EnumerationContext enumerationContext, NetworkOverlay net) {
+        SubnetState state = makeSubnetStateFromResults(enumerationContext, net);
+        state.documentSelfLink = oldDocument.documentSelfLink;
+        if (oldDocument.tenantLinks == null) {
+            state.tenantLinks = enumerationContext.getTenantLinks();
+        }
+
+        logFine(() -> String.format("Syncing Subnet(Portgroup) %s", net.getName()));
+        Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
+                .setBody(state)
+                .setCompletion(trackNetwork(enumerationContext, net))
+                .sendWith(this);
+    }
+
+    private void createNewSubnet(EnumerationContext enumerationContext, NetworkOverlay net) {
+        SubnetState state = makeSubnetStateFromResults(enumerationContext, net);
+        state.tenantLinks = enumerationContext.getTenantLinks();
+        Operation.createPost(this, SubnetService.FACTORY_LINK)
+                .setBody(state)
+                .setCompletion(trackNetwork(enumerationContext, net))
+                .sendWith(this);
+
+        logFine(() -> String.format("Found new Subnet(Portgroup) %s", net.getName()));
+    }
+
+    private SubnetState makeSubnetStateFromResults(EnumerationContext enumerationContext, NetworkOverlay net) {
+        ComputeEnumerateResourceRequest request = enumerationContext.getRequest();
+
+        SubnetState state = new SubnetState();
+
+        state.id = state.name = net.getName();
+        state.endpointLink = enumerationContext.getRequest().endpointLink;
+        state.subnetCIDR = FAKE_SUBNET_CIDR;
+
+        ManagedObjectReference parentSwitch = net.getParentSwitch();
+        state.networkLink = buildStableDvsLink(parentSwitch, request.endpointLink);
+
+        CustomProperties custProp = CustomProperties.of(state)
+                .put(CustomProperties.MOREF, net.getId())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
+                .put(CustomProperties.TYPE, net.getId().getType());
+
+
+        custProp.put(DvsProperties.PORT_GROUP_KEY, net.getPortgroupKey());
+
+        return state;
+    }
+
+    private QueryTask queryForSubnet(EnumerationContext ctx, NetworkOverlay portgroup) {
+        String dvsLink = buildStableDvsLink(portgroup.getParentSwitch(), ctx.getRequest().endpointLink);
+        String moref = VimUtils.convertMoRefToString(portgroup.getId());
+
+        Builder builder = Query.Builder.create()
+                .addKindFieldClause(SubnetState.class)
+                .addFieldClause(SubnetState.FIELD_NAME_NETWORK_LINK, dvsLink)
+                .addCompositeFieldClause(ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
+                        CustomProperties.MOREF, moref);
+        QueryUtils.addEndpointLink(builder, NetworkState.class, ctx.getRequest().endpointLink);
+        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
+
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
     }
 
     private void updateNetwork(NetworkState oldDocument, EnumerationContext enumerationContext, NetworkOverlay net) {
@@ -718,14 +803,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
 
-        ManagedObjectReference parentSwitch = net.getParentSwitch();
-        if (parentSwitch != null) {
-            // only if net is portgroup
-            String dvsSelfLink = buildStableDvsLink(parentSwitch, request.endpointLink);
-            custProp.put(DvsProperties.PARENT_DVS_LINK, dvsSelfLink);
-            custProp.put(DvsProperties.PORT_GROUP_KEY, net.getPortgroupKey());
-        }
-
         if (net.getSummary() instanceof OpaqueNetworkSummary) {
             OpaqueNetworkSummary ons = (OpaqueNetworkSummary) net.getSummary();
             custProp.put(NsxProperties.OPAQUE_NET_ID, ons.getOpaqueNetworkId());
@@ -742,10 +819,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return state;
     }
 
-    private String buildStableDvsLink(ManagedObjectReference ref,
-            String adapterManagementReference) {
+    private String buildStableDvsLink(ManagedObjectReference ref, String endpointLink) {
         return NetworkService.FACTORY_LINK + "/"
-                + VimUtils.buildStableManagedObjectId(ref, adapterManagementReference);
+                + VimUtils.buildStableManagedObjectId(ref, endpointLink);
     }
 
     private QueryTask queryForNetwork(EnumerationContext ctx, String name) {
@@ -755,6 +831,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         Builder builder = Query.Builder.create()
                 .addFieldClause(NetworkState.FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE,
                         adapterManagementReference.toString())
+                .addKindFieldClause(NetworkState.class)
                 .addCaseInsensitiveFieldClause(NetworkState.FIELD_NAME_NAME, name, MatchType.TERM, Occurance.MUST_OCCUR)
                 .addFieldClause(NetworkState.FIELD_NAME_REGION_ID, regionId);
         QueryUtils.addEndpointLink(builder, NetworkState.class, ctx.getRequest().endpointLink);

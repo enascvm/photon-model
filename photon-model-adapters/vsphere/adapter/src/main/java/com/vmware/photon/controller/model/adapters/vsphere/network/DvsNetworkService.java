@@ -13,8 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere.network;
 
-import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
-import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest.InstanceRequestType;
+import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereUriPaths;
 import com.vmware.xenon.common.Operation;
@@ -31,7 +31,7 @@ public class DvsNetworkService extends StatelessService {
             return;
         }
 
-        NetworkInstanceRequest req = op.getBody(NetworkInstanceRequest.class);
+        SubnetInstanceRequest req = op.getBody(SubnetInstanceRequest.class);
 
         if (req.isMockRequest) {
             new TaskManager(this, req.taskReference).patchTask(TaskStage.FINISHED);
