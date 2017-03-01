@@ -363,7 +363,7 @@ public class InstanceClient extends BaseHelper {
                 vm = deployer.deployOvf(ovfUri, getHost(), folder, vmName, Collections.emptyList(),
                         ds, Collections.emptyList(), config, resourcePool);
 
-                logger.info("Removing NICs from deployed template: %s (%s)", vmName, vm.getValue());
+                logger.info("Removing NICs from deployed template: {} ({})", vmName, vm.getValue());
                 ArrayOfVirtualDevice devices = get.entityProp(vm,
                         VimPath.vm_config_hardware_device);
                 if (devices != null) {
@@ -384,7 +384,8 @@ public class InstanceClient extends BaseHelper {
                         null, false, false);
                 VimUtils.waitTaskEnd(this.connection, snapshotTask);
             } catch (Exception e) {
-                awaitVM(vmName, folder, ds, get);
+                logger.warn("Error deploying Ovf for template [" + vmName + "],reason:", e);
+                vm = awaitVM(vmName, folder, ds, get);
             }
         }
 
@@ -394,7 +395,7 @@ public class InstanceClient extends BaseHelper {
     private ManagedObjectReference replicateVMTemplate(ManagedObjectReference resourcePool,
             ManagedObjectReference datastore, ManagedObjectReference vmFolder, String vmName,
             ManagedObjectReference vm, GetMoRef get) throws Exception {
-        logger.info("Template lives on a different datastore, looking for a local copy of: %s.",
+        logger.info("Template lives on a different datastore, looking for a local copy of: {}.",
                 vmName);
 
         String replicatedName = vmName + "_" + datastore.getValue();
@@ -403,7 +404,7 @@ public class InstanceClient extends BaseHelper {
             return repVm;
         }
 
-        logger.info("Replicating %s (%s) to %s", vmName, vm.getValue(), replicatedName);
+        logger.info("Replicating {} ({}) to {}", vmName, vm.getValue(), replicatedName);
 
         VirtualMachineRelocateSpec spec = new VirtualMachineRelocateSpec();
         spec.setPool(resourcePool);
@@ -422,7 +423,7 @@ public class InstanceClient extends BaseHelper {
             MethodFault fault = info.getError().getFault();
             if (fault instanceof FileAlreadyExists) {
                 logger.info(
-                        "Template is being replicated by another thread, waiting for %s to be ready",
+                        "Template is being replicated by another thread, waiting for {} to be ready",
                         replicatedName);
                 return awaitVM(replicatedName, vmFolder, datastore, get);
             } else {
@@ -430,14 +431,14 @@ public class InstanceClient extends BaseHelper {
             }
         }
         ManagedObjectReference rvm = (ManagedObjectReference) info.getResult();
-        logger.info("Replicated %s (%s) to %s (%s)", vmName, vm.getValue(), replicatedName,
+        logger.info("Replicated {} ({}) to {} ({})", vmName, vm.getValue(), replicatedName,
                 rvm.getValue());
 
-        logger.info("Creating initial snapshot for linked clones on %s", rvm.getValue());
+        logger.info("Creating initial snapshot for linked clones on {}", rvm.getValue());
         ManagedObjectReference snapshotTask = getVimPort().createSnapshotTask(rvm, "initial",
                 null, false, false);
         VimUtils.waitTaskEnd(this.connection, snapshotTask);
-        logger.info("Created initial snapshot for linked clones on %s", rvm.getValue());
+        logger.info("Created initial snapshot for linked clones on {}", rvm.getValue());
         return rvm;
     }
 
@@ -468,10 +469,14 @@ public class InstanceClient extends BaseHelper {
         return reference;
     }
 
-    private ManagedObjectReference findTemplateByName(String vmName, GetMoRef get)
-            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
-        return get.vmByVMname(vmName,
-                this.connection.getServiceContent().getPropertyCollector());
+    private ManagedObjectReference findTemplateByName(String vmName, GetMoRef get) {
+        try {
+            return get.vmByVMname(vmName,
+                    this.connection.getServiceContent().getPropertyCollector());
+        } catch (InvalidPropertyFaultMsg | RuntimeFaultFaultMsg e) {
+            logger.debug("Error finding template vm[" + vmName + "]", e);
+            return null;
+        }
     }
 
     private boolean isSameDatastore(ManagedObjectReference datastore, ManagedObjectReference vm,
