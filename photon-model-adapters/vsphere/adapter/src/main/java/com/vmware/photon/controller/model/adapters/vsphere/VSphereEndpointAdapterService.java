@@ -23,7 +23,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
@@ -31,7 +30,6 @@ import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.ConnectionException;
-import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -130,59 +128,25 @@ public class VSphereEndpointAdapterService extends StatelessService {
 
     private BiConsumer<ComputeDescription, Retriever> computeDesc() {
         return (cd, r) -> {
-            String id = r.get(REGION_KEY).orElse(null);
-            Consumer<String> consumer = (regionId) -> {
-                cd.regionId = regionId;
-                cd.zoneId = r.get(ZONE_KEY).orElse(null);
+            cd.regionId = r.get(REGION_KEY).orElse(null);
+            cd.zoneId = r.get(ZONE_KEY).orElse(null);
 
-                cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
+            cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
 
-                List<String> children = new ArrayList<>();
-                children.add(ComputeType.VM_HOST.toString());
-                children.add(ComputeType.ZONE.toString());
-                cd.supportedChildren = children;
+            List<String> children = new ArrayList<>();
+            children.add(ComputeType.VM_HOST.toString());
+            children.add(ComputeType.ZONE.toString());
+            cd.supportedChildren = children;
 
-                cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
-                        VSphereUriPaths.INSTANCE_SERVICE);
-                cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
-                        VSphereUriPaths.ENUMERATION_SERVICE);
-                cd.statsAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
-                        VSphereUriPaths.STATS_SERVICE);
-                cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
-                        VSphereUriPaths.POWER_SERVICE);
-            };
-
-            if (id == null || id.isEmpty()) {
-                loadDefault(r, consumer);
-            } else {
-                consumer.accept(id);
-            }
-
+            cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    VSphereUriPaths.INSTANCE_SERVICE);
+            cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    VSphereUriPaths.ENUMERATION_SERVICE);
+            cd.statsAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    VSphereUriPaths.STATS_SERVICE);
+            cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+                    VSphereUriPaths.POWER_SERVICE);
         };
-    }
-
-    private void loadDefault(Retriever r, Consumer<String> consumer) {
-
-        String host = r.getRequired(HOST_NAME_KEY);
-        URI adapterManagementUri = getAdapterManagementUri(host);
-        AuthCredentialsServiceState ac = new AuthCredentialsServiceState();
-        credentials().accept(ac, r);
-
-        BasicConnection connection = createConnection(adapterManagementUri, ac);
-        try {
-            // login and session creation
-            connection.connect();
-            Finder finder = new Finder(connection, null);
-            String datacenterName = new GetMoRef(connection)
-                    .entityProp(finder.getDatacenter().object, "name");
-            consumer.accept(datacenterName);
-        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg | FinderException ex) {
-            throw new IllegalArgumentException("Error looking for default datacenter", ex);
-        } catch (ConnectionException e) {
-            throw new IllegalArgumentException(e);
-        } finally {
-            closeQuietly(connection);
-        }
     }
 
     private BiConsumer<ComputeState, Retriever> compute() {

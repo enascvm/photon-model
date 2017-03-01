@@ -23,7 +23,6 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
-
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -162,7 +161,12 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
             break;
         case FAILED:
         case CANCELLED:
-            logWarning(() -> "Task was canceled or task failed");
+            if (currentState.taskInfo.stage == TaskStage.CANCELLED) {
+                logWarning(() -> "Task was cancelled");
+            } else {
+                logWarning(() -> String.format("Task failed: %s",
+                        Utils.toJsonHtml(currentState.taskInfo.failure)));
+            }
             if (currentState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
                 sendRequest(Operation
                         .createDelete(getUri()));

@@ -27,7 +27,6 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.Inst
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
@@ -61,6 +60,7 @@ public class ProvisionContext {
 
     public ManagedObjectReference templateMoRef;
     public ManagedObjectReference computeMoRef;
+    public String datacenterPath; // target datacenter resolved from the target placement
 
     public ServiceDocument task;
     public List<DiskState> disks;
@@ -261,31 +261,42 @@ public class ProvisionContext {
                 return;
             }
 
-            Operation.createGet(service, placementLink)
-                    .setCompletion((o, e) -> {
-                        if (e != null) {
-                            ctx.fail(e);
-                            return;
-                        }
+            URI expandedPlacementUri = UriUtils.extendUriWithQuery(
+                    UriUtils.buildUri(service.getHost(), placementLink),
+                    UriUtils.URI_PARAM_ODATA_EXPAND,
+                    Boolean.TRUE.toString());
+            Operation.createGet(expandedPlacementUri).setCompletion((o, e) -> {
+                if (e != null) {
+                    ctx.fail(e);
+                    return;
+                }
 
-                        ComputeState host = o.getBody(ComputeState.class);
+                ComputeStateWithDescription host = o.getBody(ComputeStateWithDescription.class);
 
-                        // extract the target resource pool for the placement
-                        CustomProperties hostCustomProperties = CustomProperties.of(host);
-                        ctx.computeMoRef = hostCustomProperties.getMoRef(CustomProperties.MOREF);
+                // extract the target resource pool for the placement
+                CustomProperties hostCustomProperties = CustomProperties.of(host);
 
-                        if (ctx.computeMoRef == null) {
-                            Exception error = new IllegalStateException(String.format(
-                                    "Compute @ %s does not contain a %s custom property",
-                                    placementLink,
-                                    CustomProperties.MOREF));
-                            ctx.fail(error);
-                            return;
-                        }
+                ctx.computeMoRef = hostCustomProperties.getMoRef(CustomProperties.MOREF);
+                if (ctx.computeMoRef == null) {
+                    Exception error = new IllegalStateException(String.format(
+                            "Compute @ %s does not contain a %s custom property",
+                            placementLink,
+                            CustomProperties.MOREF));
+                    ctx.fail(error);
+                    return;
+                }
 
-                        populateContextThen(service, ctx, onSuccess);
-                    })
-                    .sendWith(service);
+                ctx.datacenterPath = host.description.regionId;
+                if (ctx.datacenterPath == null) {
+                    Exception error = new IllegalStateException(String.format(
+                            "Compute @ %s does not specify a region", placementLink));
+                    ctx.fail(error);
+                    return;
+                }
+
+                populateContextThen(service, ctx, onSuccess);
+            })
+            .sendWith(service);
 
             return;
         }

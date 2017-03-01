@@ -45,6 +45,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.tagging.TagCache;
@@ -275,7 +276,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void startEnumerationProcess(ComputeStateWithDescription parent,
             EnumerationClient client)
             throws Exception {
-        PropertyFilterSpec spec = client.createResourcesFilterSpec();
+        if (parent.description.regionId == null) {
+            // not implemented if no datacenter is provided
+            return;
+        }
+
+        PropertyFilterSpec spec = client.createResourcesFilterSpec(parent.description.regionId);
 
         try {
             for (UpdateSet updateSet : client.pollForUpdates(spec)) {
@@ -313,8 +319,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        PropertyFilterSpec spec = client.createResourcesFilterSpec();
-
         VapiConnection vapiConnection = new VapiConnection(getVapiUri(connection.getURI()));
         vapiConnection.setUsername(connection.getUsername());
         vapiConnection.setPassword(connection.getPassword());
@@ -325,12 +329,34 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         try {
             vapiConnection.login();
         } catch (IOException | RpcException e) {
-            logWarning(() -> "Cannot login into vAPI endpoint");
+            logWarning(() -> String.format("Cannot login into vAPI endpoint: %s", Utils.toString(e)));
+            // TODO: patchTaskToFailure on each failure?
+            return;
         }
 
-        EnumerationContext enumerationContext = new EnumerationContext(request, parent,
-                vapiConnection);
+        try {
+            for (String datacenterPath : client.getDatacenterList()) {
+                logFine(() -> String.format("Refreshing datacenter %s", datacenterPath));
+                EnumerationContext enumerationContext = new EnumerationContext(request, parent,
+                        vapiConnection, datacenterPath);
+                refreshResourcesOnDatacenter(client, enumerationContext, mgr);
+            }
+        } catch (ClientException e) {
+            logWarning(() -> String.format("Error during enumeration: %s", Utils.toString(e)));
+        }
 
+        try {
+            vapiConnection.close();
+        } catch (Exception e) {
+            logWarning(() -> String.format("Error occurred when closing vAPI connection: %s",
+                    Utils.toString(e)));
+        }
+
+        garbageCollectUntouchedComputeResources(request, parent, mgr);
+    }
+
+    private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationContext ctx,
+            TaskManager mgr) throws ClientException {
         List<NetworkOverlay> networks = new ArrayList<>();
         List<HostSystemOverlay> hosts = new ArrayList<>();
         List<DatastoreOverlay> datastores = new ArrayList<>();
@@ -340,6 +366,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         Map<String, ComputeResourceOverlay> nonDrsClusters = new HashMap<>();
 
         // put results in different buckets by type
+        PropertyFilterSpec spec = client.createResourcesFilterSpec(ctx.getDatacenterPath());
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
                 for (ObjectContent cont : page) {
@@ -378,26 +405,26 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             }
         } catch (Exception e) {
             String msg = "Error processing PropertyCollector results";
-            logWarning(msg);
+            logWarning(() -> msg + ": " + e.toString());
             mgr.patchTaskToFailure(msg, e);
             return;
         }
 
         // process results in topological order
-        enumerationContext.expectNetworkCount(networks.size());
+        ctx.expectNetworkCount(networks.size());
         for (NetworkOverlay net : networks) {
-            processFoundNetwork(enumerationContext, net);
+            processFoundNetwork(ctx, net);
         }
 
-        enumerationContext.expectDatastoreCount(datastores.size());
+        ctx.expectDatastoreCount(datastores.size());
         for (DatastoreOverlay ds : datastores) {
-            processFoundDatastore(enumerationContext, ds);
+            processFoundDatastore(ctx, ds);
         }
 
         // checkpoint net & storage, they are not related currently
         try {
-            enumerationContext.getDatastoreTracker().await();
-            enumerationContext.getNetworkTracker().await();
+            ctx.getDatastoreTracker().await();
+            ctx.getNetworkTracker().await();
         } catch (InterruptedException e) {
             threadInterrupted(mgr, e);
             return;
@@ -405,16 +432,15 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         // include hosts that are part of a non-DRS enabled cluster
         hosts.removeIf(hs -> !nonDrsClusters.containsKey(hs.getParent().getValue()));
-        enumerationContext.expectHostSystemCount(hosts.size());
+        ctx.expectHostSystemCount(hosts.size());
         for (HostSystemOverlay hs : hosts) {
-            processFoundHostSystem(enumerationContext, hs);
+            processFoundHostSystem(ctx, hs);
         }
 
-        enumerationContext.expectComputeResourceCount(computeResources.size());
+        ctx.expectComputeResourceCount(computeResources.size());
         for (ComputeResourceOverlay cr : computeResources) {
-            processFoundComputeResource(enumerationContext, cr);
+            processFoundComputeResource(ctx, cr);
         }
-
 
         // exclude all root resource pools
         for (Iterator<ResourcePoolOverlay> it = resourcePools.iterator(); it.hasNext();) {
@@ -426,17 +452,17 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         }
 
         MoRefKeyedMap<String> computeResourceNamesByMoref = collectComputeNames(hosts, computeResources);
-        enumerationContext.expectResourcePoolCount(resourcePools.size());
+        ctx.expectResourcePoolCount(resourcePools.size());
         for (ResourcePoolOverlay rp : resourcePools) {
             String ownerName = computeResourceNamesByMoref.get(rp.getOwner());
-            processFoundResourcePool(enumerationContext, rp, ownerName);
+            processFoundResourcePool(ctx, rp, ownerName);
         }
 
         // checkpoint compute
         try {
-            enumerationContext.getHostSystemTracker().await();
-            enumerationContext.getComputeResourceTracker().await();
-            enumerationContext.getResourcePoolTracker().await();
+            ctx.getHostSystemTracker().await();
+            ctx.getComputeResourceTracker().await();
+            ctx.getResourcePoolTracker().await();
         } catch (InterruptedException e) {
             threadInterrupted(mgr, e);
             return;
@@ -444,10 +470,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         long latestAcceptableModification = System.currentTimeMillis()
                 - VM_FERMENTATION_PERIOD_MILLIS;
-        spec = client.createVmFilterSpec();
+        spec = client.createVmFilterSpec(ctx.getDatacenterPath());
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
-                enumerationContext.resetVmTracker();
+                ctx.resetVmTracker();
                 for (ObjectContent cont : page) {
                     if (!VimUtils.isVirtualMachine(cont.getObj())) {
                         continue;
@@ -458,26 +484,18 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                                         + " instanceUuid: %s",
                                 VimUtils.convertMoRefToString(vm.getId())));
                     } else if (vm.getLastReconfigureMillis() < latestAcceptableModification) {
-                        enumerationContext.getVmTracker().register();
-                        processFoundVm(enumerationContext, vm);
+                        ctx.getVmTracker().register();
+                        processFoundVm(ctx, vm);
                     }
                 }
-                enumerationContext.getVmTracker().arriveAndAwaitAdvance();
+                ctx.getVmTracker().arriveAndAwaitAdvance();
             }
         } catch (Exception e) {
             String msg = "Error processing PropertyCollector results";
-            logWarning(msg);
+            logWarning(() -> msg + ": " + e.toString());
             mgr.patchTaskToFailure(msg, e);
             return;
         }
-
-        try {
-            vapiConnection.close();
-        } catch (Exception ignore) {
-
-        }
-
-        garbageCollectUntouchedComputeResources(enumerationContext, mgr, request);
     }
 
     /**
@@ -501,8 +519,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return computeResourceNamesByMoref;
     }
 
-    private void garbageCollectUntouchedComputeResources(EnumerationContext ctx, TaskManager mgr,
-            ComputeEnumerateResourceRequest request) {
+    private void garbageCollectUntouchedComputeResources(ComputeEnumerateResourceRequest request,
+            ComputeStateWithDescription parent, TaskManager mgr) {
         // find all computes of the parent which are NOT enumerated by this task AND are enumerated
         // at least once.
 
@@ -519,8 +537,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         LifecycleState.RETIRED.toString(),
                         Occurance.MUST_NOT_OCCUR);
 
-        QueryUtils.addEndpointLink(builder, ComputeState.class, ctx.getRequest().endpointLink);
-        QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
+        QueryUtils.addEndpointLink(builder, ComputeState.class, request.endpointLink);
+        QueryUtils.addTenantLinks(builder, parent.tenantLinks);
 
         // fetch compute resources with their links
         QueryTask task = QueryTask.Builder.createDirectTask()
@@ -530,6 +548,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .setQuery(builder.build())
                 .build();
 
+        // TODO: add query pagination
         QueryUtils.startQueryTask(this, task).whenComplete((result, e) -> {
             if (e != null) {
                 // it's too harsh to fail the task because of failed GC, next time it may pass
@@ -685,7 +704,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.id = state.name = net.getName();
         state.endpointLink = enumerationContext.getRequest().endpointLink;
         state.subnetCIDR = FAKE_SUBNET_CIDR;
-        state.regionId = parent.description.regionId;
+        state.regionId = enumerationContext.getRegionId();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
         state.authCredentialsLink = parent.description.authCredentialsLink;
@@ -731,7 +750,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     private QueryTask queryForNetwork(EnumerationContext ctx, String name) {
         URI adapterManagementReference = ctx.getRequest().adapterManagementReference;
-        String regionId = ctx.getParent().description.regionId;
+        String regionId = ctx.getRegionId();
 
         Builder builder = Query.Builder.create()
                 .addFieldClause(NetworkState.FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE,
@@ -890,6 +909,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .getParent().description.enumerationAdapterReference;
         res.statsAdapterReference = enumerationContext
                 .getParent().description.statsAdapterReference;
+        res.regionId = enumerationContext.getRegionId();
 
         return res;
     }
@@ -913,6 +933,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .getParent().description.enumerationAdapterReference;
         res.statsAdapterReference = enumerationContext
                 .getParent().description.statsAdapterReference;
+        res.regionId = enumerationContext.getRegionId();
 
         return res;
     }
@@ -1141,6 +1162,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .getParent().description.enumerationAdapterReference;
         res.statsAdapterReference = enumerationContext
                 .getParent().description.statsAdapterReference;
+        res.regionId = enumerationContext.getRegionId();
 
         return res;
     }

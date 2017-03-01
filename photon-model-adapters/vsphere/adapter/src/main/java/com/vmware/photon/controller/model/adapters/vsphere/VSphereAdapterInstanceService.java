@@ -130,7 +130,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(connection, ctx.child,
-                                ctx.parent, ctx.disks, ctx.nics, ctx.computeMoRef);
+                                ctx.parent, ctx.disks, ctx.nics, ctx.computeMoRef, ctx.datacenterPath);
 
                         ComputeState state;
 
@@ -273,6 +273,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                     pool.schedule(this, IP_CHECK_INTERVAL_SECONDS, TimeUnit.SECONDS);
                 } else {
                     // still no IP after all
+                    log(Level.INFO, "IP of %s not ready, giving up", computeLink);
                     taskFinisher.sendWith(VSphereAdapterInstanceService.this);
                     connection.close();
                 }
@@ -418,7 +419,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(conn, ctx.child, ctx.parent,
-                                ctx.disks, ctx.nics, null);
+                                ctx.disks, ctx.nics, null, null);
                         client.deleteInstance();
 
                         Operation finishTask = mgr.createTaskPatch(TaskStage.FINISHED);

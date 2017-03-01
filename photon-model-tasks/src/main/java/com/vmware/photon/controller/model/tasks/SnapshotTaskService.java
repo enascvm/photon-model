@@ -254,7 +254,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
                 return true;
             }
         }
-        logFine(() -> String.format("Current: %s. New: %s(%s)", currentState.taskInfo.stage,
+        logFine(() -> String.format("Current: %s. New: %s", currentState.taskInfo.stage,
                 patchBody.taskInfo.stage));
 
         if (TaskState.isFailed(currentState.taskInfo)

@@ -49,12 +49,12 @@ public class Finder extends Recurser {
     private Element vmFolder;
 
     /**
-     * A finder in the context of a datacenter. The datacenter path must uniquely define a datacenter.
+     * A finder in the optional context of a datacenter.
      */
     public Finder(Connection connection, String datacenterPath)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         super(connection);
-        this.datacenter = datacenter(datacenterPath);
+        this.datacenter = datacenterPath != null ? datacenter(datacenterPath) : null;
     }
 
     public static List<String> toParts(String p) {

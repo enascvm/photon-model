@@ -133,6 +133,7 @@ public class InstanceClient extends BaseHelper {
     private final List<DiskState> disks;
     private final List<NetworkInterfaceStateWithDetails> nics;
     private final ManagedObjectReference placementTarget;
+    private final String targetDatacenterPath;
 
     private final GetMoRef get;
     private final Finder finder;
@@ -148,7 +149,8 @@ public class InstanceClient extends BaseHelper {
             ComputeStateWithDescription parent,
             List<DiskState> disks,
             List<NetworkInterfaceStateWithDetails> nics,
-            ManagedObjectReference placementTarget)
+            ManagedObjectReference placementTarget,
+            String targetDatacenterPath)
             throws ClientException, FinderException {
         super(connection);
 
@@ -157,20 +159,13 @@ public class InstanceClient extends BaseHelper {
         this.disks = disks;
         this.nics = nics;
         this.placementTarget = placementTarget;
+        this.targetDatacenterPath = targetDatacenterPath;
 
-        // the regionId is used as a ref to a vSphere datacenter name
-        String id = resource.description.regionId;
-
-        if (id == null || id.length() == 0) {
-            throw new IllegalArgumentException(
-                    "The regionId is mandatory for vSphere resources, it's missing for "
-                            + resource.description.documentSelfLink);
-        }
         try {
-            this.finder = new Finder(connection, id);
+            this.finder = new Finder(connection, this.targetDatacenterPath);
         } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {
             throw new ClientException(
-                    String.format("Error looking for datacenter for id '%s'", id), e);
+                    String.format("Error looking for datacenter for id '%s'", this.targetDatacenterPath), e);
         }
 
         this.get = new GetMoRef(this.connection);
@@ -302,6 +297,11 @@ public class InstanceClient extends BaseHelper {
      * @return
      */
     public ComputeState createInstance() throws Exception {
+        if (this.targetDatacenterPath == null || this.targetDatacenterPath.length() == 0) {
+            throw new IllegalArgumentException(
+                    "Datacenter is required for provisioning " + this.state.description.documentSelfLink);
+        }
+
         ManagedObjectReference vm;
 
         if (isOvfDeploy()) {
@@ -778,8 +778,8 @@ public class InstanceClient extends BaseHelper {
         // put full clone in the vm folder
         String destName = makePathToVmdkFile(ds.id, dir);
 
-        // all ops are withing a datacenter
-        ManagedObjectReference sourceDc = this.finder.getDatacenter().object;
+        // all ops are within a datacenter
+        ManagedObjectReference sourceDc = this.finder.datacenter(this.targetDatacenterPath).object;
         ManagedObjectReference destDc = sourceDc;
 
         Boolean force = true;

@@ -29,6 +29,7 @@ import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -165,7 +166,8 @@ public class VSphereIOThreadPool {
             try {
                 callback.doInConnection(connection, null);
             } catch (Exception e) {
-                logger.log(Level.WARNING, "Uncaught exception in vSphere IO Pool", e);
+                logger.log(Level.SEVERE,
+                        "Uncaught exception in vSphere IO Pool: " + Utils.toString(e));
             } finally {
                 closeQuietly(connection);
             }
@@ -176,7 +178,8 @@ public class VSphereIOThreadPool {
         try {
             connection.close();
         } catch (Exception e) {
-            logger.log(Level.WARNING, "Error closing connection to " + connection.getURI(), e);
+            logger.log(Level.WARNING, "Error closing connection to " + connection.getURI() + ": "
+                    + Utils.toString(e));
         }
     }
 

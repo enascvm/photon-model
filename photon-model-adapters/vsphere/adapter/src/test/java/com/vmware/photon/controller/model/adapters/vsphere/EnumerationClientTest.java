@@ -41,6 +41,7 @@ public class EnumerationClientTest {
 
         String username = System.getProperty(TestProperties.VC_USERNAME);
         String password = System.getProperty(TestProperties.VC_PASSWORD);
+        String datacenter = System.getProperty(TestProperties.VC_DATECENTER_ID);
 
         BasicConnection conn = new BasicConnection();
 
@@ -58,7 +59,7 @@ public class EnumerationClientTest {
 
         EnumerationClient client = new EnumerationClient(conn, parent);
 
-        PropertyFilterSpec spec = client.createResourcesFilterSpec();
+        PropertyFilterSpec spec = client.createResourcesFilterSpec(datacenter);
 
         for (List<ObjectContent> page : client.retrieveObjects(spec)) {
             for (ObjectContent cont : page) {

@@ -18,12 +18,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BaseHelper;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -55,15 +57,12 @@ public class EnumerationClient extends BaseHelper {
         // the regionId is used as a ref to a vSphere datacenter name
         String id = parent.description.regionId;
 
-        if (id == null || id.length() == 0) {
-            throw new IllegalArgumentException("The regionId is mandatory for vSphere resources, it's missing for "
-                    + parent.description.documentSelfLink);
-        }
         try {
             this.finder = new Finder(connection, id);
         } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {
-            throw new ClientException(
-                    String.format("Error looking for datacenter for id '%s'", id), e);
+            throw new ClientException(id != null
+                    ? String.format("Error looking for datacenter for id '%s'", id)
+                    : "Error initializing enumeration for all datacenters", e);
         }
     }
 
@@ -84,6 +83,18 @@ public class EnumerationClient extends BaseHelper {
         SelectionSpec genericSpec = new SelectionSpec();
         genericSpec.setName(name);
         return genericSpec;
+    }
+
+    public List<String> getDatacenterList() throws ClientException {
+        try {
+            return this.finder.getDatacenter() != null
+                    ? Arrays.asList(this.finder.getDatacenter().path)
+                    : this.finder.datacenterList("*").stream()
+                            .map(e -> e.path)
+                            .collect(Collectors.toList());
+        } catch (InvalidPropertyFaultMsg | FinderException | RuntimeFaultFaultMsg e) {
+            throw new ClientException("Cannot retrieve datacenter paths", e);
+        }
     }
 
     /**
@@ -217,9 +228,17 @@ public class EnumerationClient extends BaseHelper {
         return resultspec;
     }
 
-    public PropertyFilterSpec createVmFilterSpec() {
+    public PropertyFilterSpec createVmFilterSpec(String datacenterPath) throws ClientException {
+        Element datacenter;
+        try {
+            datacenter = this.finder.datacenter(datacenterPath);
+        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg | FinderException e) {
+            throw new ClientException(
+                    String.format("Error retrieving datacenter %s", datacenterPath), e);
+        }
+
         ObjectSpec ospec = new ObjectSpec();
-        ospec.setObj(this.finder.getDatacenter().object);
+        ospec.setObj(datacenter.object);
         ospec.setSkip(false);
 
         ospec.getSelectSet().addAll(buildFullTraversal());
@@ -250,9 +269,17 @@ public class EnumerationClient extends BaseHelper {
         return filterSpec;
     }
 
-    public PropertyFilterSpec createResourcesFilterSpec() {
+    public PropertyFilterSpec createResourcesFilterSpec(String datacenterPath) throws ClientException {
+        Element datacenter;
+        try {
+            datacenter = this.finder.datacenter(datacenterPath);
+        } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg | FinderException e) {
+            throw new ClientException(
+                    String.format("Error retrieving datacenter %s", datacenterPath), e);
+        }
+
         ObjectSpec ospec = new ObjectSpec();
-        ospec.setObj(this.finder.getDatacenter().object);
+        ospec.setObj(datacenter.object);
         ospec.setSkip(false);
 
         ospec.getSelectSet().addAll(buildFullTraversal());
@@ -369,6 +396,7 @@ public class EnumerationClient extends BaseHelper {
         private final ManagedObjectReference pc;
         private final PropertyFilterSpec spec;
 
+        private boolean initialRetrievalCompleted = false;
         private RetrieveResult result;
 
         ObjectContentIterator(ManagedObjectReference pc, PropertyFilterSpec spec) {
@@ -381,20 +409,21 @@ public class EnumerationClient extends BaseHelper {
 
         @Override
         public boolean hasNext() {
-            if (this.result == null) {
+            if (!this.initialRetrievalCompleted) {
                 // has to check, may still return an empty first page
                 return true;
             }
 
-            return this.result.getToken() != null;
+            return this.result != null && this.result.getToken() != null;
         }
 
         @Override
         public List<ObjectContent> next() {
-            if (this.result == null) {
+            if (!this.initialRetrievalCompleted) {
                 try {
                     this.result = getVimPort()
                             .retrievePropertiesEx(this.pc, Collections.singletonList(this.spec), this.opts);
+                    this.initialRetrievalCompleted = true;
                 } catch (RuntimeException e) {
                     destroyCollectorQuietly(this.pc);
                     throw e;
@@ -403,7 +432,7 @@ public class EnumerationClient extends BaseHelper {
                     throw new RuntimeException(e);
                 }
 
-                return this.result.getObjects();
+                return this.result != null ? this.result.getObjects() : Collections.emptyList();
             }
 
             try {

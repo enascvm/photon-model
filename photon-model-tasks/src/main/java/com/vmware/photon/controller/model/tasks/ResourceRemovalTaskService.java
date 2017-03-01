@@ -197,10 +197,13 @@ public class ResourceRemovalTaskService
             handleStagePatch(currentState);
             break;
         case FINISHED:
-            logInfo(() -> "Task is complete");
+            logInfo("Task is complete");
             break;
         case FAILED:
+            logSevere("Task failed: %s", Utils.toJsonHtml(currentState.taskInfo.failure));
+            break;
         case CANCELLED:
+            logInfo("Task is cancelled");
             break;
         default:
             break;

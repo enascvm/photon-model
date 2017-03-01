@@ -28,6 +28,7 @@ public class EnumerationContext {
     private final ComputeEnumerateResourceRequest request;
     private final ComputeStateWithDescription parent;
     private final VapiConnection endpoint;
+    private final String datacenterPath;
     private ResourceTracker networkTracker;
     private ResourceTracker datastoreTracker;
     private ResourceTracker hostSystemTracker;
@@ -37,10 +38,12 @@ public class EnumerationContext {
     private Phaser vmTracker;
 
     public EnumerationContext(ComputeEnumerateResourceRequest request,
-            ComputeStateWithDescription parent, VapiConnection endpoint) {
+            ComputeStateWithDescription parent, VapiConnection endpoint,
+            String datacenterPath) {
         this.request = request;
         this.parent = parent;
         this.endpoint = endpoint;
+        this.datacenterPath = datacenterPath;
         this.vmTracker = new Phaser(1);
     }
 
@@ -48,12 +51,16 @@ public class EnumerationContext {
         return this.endpoint;
     }
 
+    public String getDatacenterPath() {
+        return this.datacenterPath;
+    }
+
     public ComputeEnumerateResourceRequest getRequest() {
         return this.request;
     }
 
     public String getRegionId() {
-        return getParent().description.regionId;
+        return this.datacenterPath;
     }
 
     public ComputeStateWithDescription getParent() {
