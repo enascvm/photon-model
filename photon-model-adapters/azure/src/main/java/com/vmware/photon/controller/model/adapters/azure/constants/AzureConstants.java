@@ -55,6 +55,8 @@ public class AzureConstants {
     public static final String WINDOWS_OPERATING_SYSTEM = "Windows";
     public static final String AZURE_URN_VERSION_LATEST = "latest";
     public static final String ORDER_BY_VM_IMAGE_RESOURCE_NAME_DESC = "name desc";
+    public static final String DEFAULT_ADMIN_USER = "azureuser";
+    public static final String DEFAULT_ADMIN_PASSWORD = "Pa$$word1";
 
     // Azure Generic Security Group constants
     public static final int AZURE_SECURITY_GROUP_PRIORITY = 1000;

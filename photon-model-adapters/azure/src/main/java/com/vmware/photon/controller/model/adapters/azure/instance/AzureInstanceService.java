@@ -104,6 +104,7 @@ import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -1084,8 +1085,10 @@ public class AzureInstanceService extends StatelessService {
         OSProfile osProfile = new OSProfile();
         String vmName = ctx.vmName;
         osProfile.setComputerName(vmName);
-        osProfile.setAdminUsername(ctx.childAuth.userEmail);
-        osProfile.setAdminPassword(ctx.childAuth.privateKey);
+        if (ctx.childAuth != null) {
+            osProfile.setAdminUsername(ctx.childAuth.userEmail);
+            osProfile.setAdminPassword(ctx.childAuth.privateKey);
+        }
         if (cloudConfig != null) {
             try {
                 osProfile.setCustomData(Base64.getEncoder()
@@ -1424,7 +1427,11 @@ public class AzureInstanceService extends StatelessService {
 
     private void getChildAuth(AzureInstanceContext ctx, AzureInstanceStage next) {
         if (ctx.child.description.authCredentialsLink == null) {
-            handleError(ctx, new IllegalStateException("Auth information for compute is required"));
+            AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
+            auth.userEmail = AzureConstants.DEFAULT_ADMIN_USER;
+            auth.privateKey = AzureConstants.DEFAULT_ADMIN_PASSWORD;
+            ctx.childAuth = auth;
+            handleAllocation(ctx, next);
             return;
         }
 
