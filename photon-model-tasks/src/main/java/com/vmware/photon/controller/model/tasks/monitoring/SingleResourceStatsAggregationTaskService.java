@@ -38,6 +38,7 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
+
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -107,12 +108,12 @@ public class SingleResourceStatsAggregationTaskService extends
                     + "SingleResourceStatsAggregationTaskService.query.resultLimit";
     private static final int DEFAULT_QUERY_RESULT_LIMIT = 25;
 
-    public static final String RESOURCE_METRIC_RETENTION_LIMIT_HOURS = UriPaths.PROPERTY_PREFIX
-            + "SingleResourceStatsAggregationTaskService.metric.retentionLimitHours";
-    private static final int DEFAULT_RETENTION_LIMIT_HOURS = 6;
+    public static final String RESOURCE_METRIC_RETENTION_LIMIT_DAYS = UriPaths.PROPERTY_PREFIX
+            + "SingleResourceStatsAggregationTaskService.metric.retentionLimitDays";
+    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 56; // 8*7 (8 weeks)
 
     private static final long EXPIRATION_INTERVAL = Integer
-            .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_HOURS, DEFAULT_RETENTION_LIMIT_HOURS);
+            .getInteger(RESOURCE_METRIC_RETENTION_LIMIT_DAYS, DEFAULT_RETENTION_LIMIT_DAYS);
 
     public static final String RAW_METRICS_RESULT_LIMIT = UriPaths.PROPERTY_PREFIX
             + "SingleResourceStatsAggregationTaskService.query.rawMetrics.resultLimit";

@@ -61,7 +61,7 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
 
     private static final int NUM_COMPUTE_RESOURCES = 200;
     private static final int NUM_COLLECTIONS = 5;
-    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 7;
+    private static final int DEFAULT_RETENTION_LIMIT_DAYS = 56;
 
     @Override
     protected void startRequiredServices() throws Throwable {

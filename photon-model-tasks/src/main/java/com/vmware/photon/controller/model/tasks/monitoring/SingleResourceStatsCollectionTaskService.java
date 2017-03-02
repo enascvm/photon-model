@@ -35,6 +35,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationSequence;
@@ -326,7 +327,7 @@ public class SingleResourceStatsCollectionTaskService
             throw new IllegalStateException("stats adapter reference should not be null");
         }
 
-        long expirationTime = Utils.getNowMicrosUtc() + TimeUnit.DAYS.toMicros(EXPIRATION_INTERVAL);
+        long expirationTime = Utils.getNowMicrosUtc() + TimeUnit.HOURS.toMicros(EXPIRATION_INTERVAL);
 
         // Push the last collection metric to the in memory stats available at the
         // compute-link/stats URI.
