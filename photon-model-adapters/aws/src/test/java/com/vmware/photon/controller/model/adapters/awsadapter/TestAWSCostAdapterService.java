@@ -73,8 +73,6 @@ public class TestAWSCostAdapterService extends BasicTestCase {
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
             this.host.waitForServiceAvailable(AWSAdapters.LINKS);
-            // We run tests against a dummy bill: This bill is re-generated every time for current month
-            TestUtils.generateCurrentMonthsBill();
         } catch (Throwable e) {
             this.host.log("Error starting up services for the test %s", e.getMessage());
             throw new Exception(e);
@@ -86,7 +84,6 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         if (this.host == null) {
             return;
         }
-        TestUtils.deleteCurrentMonthsBill();
         this.host.tearDownInProcessPeers();
         this.host.toggleNegativeTestMode(false);
         this.host.tearDown();

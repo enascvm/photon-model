@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -154,7 +155,7 @@ public class AWSCsvBillParser {
         return awsBillFileName;
     }
 
-    public static void unzip(String zipFileName, String outputFolder) throws IOException {
+    private void unzip(String zipFileName, String outputFolder) throws IOException {
         try (ZipInputStream zipInputStream = new ZipInputStream(new FileInputStream(zipFileName))) {
             ZipEntry zipEntry = zipInputStream.getNextEntry();
             String outputFileName = zipEntry.getName();
@@ -260,7 +261,8 @@ public class AWSCsvBillParser {
             // leading to the cost becoming a metric of the next month (since
             // the billProcessedTime for the past months is the last hour of the last day
             // of the month.
-            accountDetails.billProcessedTimeMillis = millisForBillHour;
+            accountDetails.billProcessedTimeMillis =
+                    millisForBillHour - TimeUnit.SECONDS.toMillis(1);
         }
     }
 
@@ -448,7 +450,7 @@ public class AWSCsvBillParser {
         }
     }
 
-    public static CellProcessor[] getDetailedProcessors(String[] header) {
+    private static CellProcessor[] getDetailedProcessors(String[] header) {
         final CellProcessor[] PROCESSORS;
         if (headerContainsBlendedCost(header)) {
             PROCESSORS = new CellProcessor[] { new Optional(), new Optional(), new Optional(),
@@ -514,13 +516,12 @@ public class AWSCsvBillParser {
         }
     }
 
-    public static class DetailedCsvHeaders {
+    private static class DetailedCsvHeaders {
         static final String COST = "Cost";
         static final String PAYER_ACCOUNT_ID = "PayerAccountId";
         static final String LINKED_ACCOUNT_ID = "LinkedAccountId";
         static final String BLENDED_COST = "BlendedCost";
-        public static final String USAGE_START_DATE = "UsageStartDate";
-        public static final String USAGE_END_DATE = "UsageEndDate";
+        static final String USAGE_START_DATE = "UsageStartDate";
         static final String PRODUCT_NAME = "ProductName";
         static final String RESOURCE_ID = "ResourceId";
         static final String AVAILABILITY_ZONE = "AvailabilityZone";
@@ -531,7 +532,6 @@ public class AWSCsvBillParser {
         static final String SUBSCRIPTION_ID = "SubscriptionId";
         static final String OPERATION = "Operation";
         static final String INVOICE_ID = "InvoiceID";
-        public static final String RECORD_ID = "RecordId";
     }
 
     public enum AwsServices {
