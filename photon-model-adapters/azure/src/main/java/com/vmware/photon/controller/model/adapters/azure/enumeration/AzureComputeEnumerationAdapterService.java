@@ -131,12 +131,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private enum ComputeEnumerationSubStages {
         LISTVMS,
         GET_COMPUTE_STATES,
-        UPDATE_RESOURCES,
+        CREATE_TAG_STATES,
+        UPDATE_COMPUTE_STATES,
         GET_DISK_STATES,
         GET_STORAGE_DESCRIPTIONS,
         CREATE_COMPUTE_DESCRIPTIONS,
         UPDATE_DISK_STATES,
-        CREATE_TAG_STATES,
         CREATE_NETWORK_INTERFACE_STATES,
         CREATE_COMPUTE_STATES,
         PATCH_ADDITIONAL_FIELDS,
@@ -332,8 +332,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         case GET_COMPUTE_STATES:
             queryForComputeStates(ctx);
             break;
-        case UPDATE_RESOURCES:
-            updateResources(ctx);
+        case CREATE_TAG_STATES:
+            createTagStates(ctx);
+            break;
+        case UPDATE_COMPUTE_STATES:
+            updateComputeStates(ctx);
             break;
         case GET_DISK_STATES:
             queryForDiskStates(ctx);
@@ -346,9 +349,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             break;
         case UPDATE_DISK_STATES:
             updateDiskStates(ctx);
-            break;
-        case CREATE_TAG_STATES:
-            createTagStates(ctx);
             break;
         case CREATE_NETWORK_INTERFACE_STATES:
             createNetworkInterfaceStates(ctx);
@@ -631,15 +631,55 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         ctx.computeStates.put(instanceId, computeState);
                     }
 
-                    ctx.subStage = ComputeEnumerationSubStages.UPDATE_RESOURCES;
+                    ctx.subStage = ComputeEnumerationSubStages.CREATE_TAG_STATES;
                     handleSubStage(ctx);
                 });
     }
 
     /**
+     * Create tag states for the VM's tags
+     */
+    private void createTagStates(EnumerationContext context) {
+        logFine(() -> "Create or update Tag States for discovered VMs with the actual state in Azure.");
+
+        if (context.virtualMachines.isEmpty()) {
+            logFine("No VMs fount, so no tags need to be created/updated. Continue to update compute states.");
+            context.subStage = ComputeEnumerationSubStages.UPDATE_COMPUTE_STATES;
+            handleSubStage(context);
+            return;
+        }
+
+        // POST each of the tags. If a tag exists it won't be created again. We don't want the name
+        // tags, so filter them out
+        List<Operation> operations = context.virtualMachines.values()
+                .stream().filter(vm -> vm.tags != null && !vm.tags.isEmpty())
+                .flatMap(vm -> vm.tags.entrySet().stream())
+                .map(entry -> newTagState(entry.getKey(), entry.getValue(), context.parentCompute.tenantLinks))
+                .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
+                        .setBody(tagState))
+                .collect(Collectors.toList());
+
+        if (operations.isEmpty()) {
+            context.subStage = ComputeEnumerationSubStages.UPDATE_COMPUTE_STATES;
+            handleSubStage(context);
+        } else {
+            OperationJoin.create(operations).setCompletion((ops, exs) -> {
+                if (exs != null && !exs.isEmpty()) {
+                    handleError(context, exs.values().iterator().next());
+                    return;
+                }
+
+                logFine("Continue on to update compute states.");
+                context.subStage = ComputeEnumerationSubStages.UPDATE_COMPUTE_STATES;
+                handleSubStage(context);
+            }).sendWith(this);
+        }
+    }
+
+    /**
      * Updates matching compute states for given VMs.
      */
-    private void updateResources(EnumerationContext ctx) {
+    private void updateComputeStates(EnumerationContext ctx) {
         if (ctx.computeStates.size() == 0) {
             logFine(() -> "No compute states found to be updated.");
             ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
@@ -655,51 +695,51 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             ComputeState computeState = csEntry.getValue();
             ctx.computeStatesForPatching.put(csEntry.getKey(), computeState);
             VirtualMachine virtualMachine = ctx.virtualMachines.get(csEntry.getKey());
+
+            // add tag links
+            setTagLinksToResourceState(computeState, virtualMachine.tags);
+
             iterator.remove();
-            updateHelper(ctx, computeState, virtualMachine, numOfUpdates);
-        }
-    }
+            // Remove processed virtual machine from the map
+            ctx.virtualMachines.remove(computeState.id);
 
-    private void updateHelper(EnumerationContext ctx, ComputeState computeState,
-            VirtualMachine vm, AtomicInteger numOfUpdates) {
-        if (computeState.diskLinks == null || computeState.diskLinks.size() != 1) {
-            logWarning(() -> String.format("Only 1 disk is currently supported. Update skipped for"
-                            + " compute state %s", computeState.id));
+            if (computeState.diskLinks == null || computeState.diskLinks.size() != 1) {
+                logWarning(() -> String.format("Only 1 disk is currently supported. Update skipped for"
+                                + " compute state %s", computeState.id));
 
-            if (ctx.computeStates.size() == 0) {
-                logFine(() -> "Finished updating compute states.");
-                ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
-                handleSubStage(ctx);
+                if (ctx.computeStates.size() == 0) {
+                    logFine(() -> "Finished updating compute states.");
+                    ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
+                    handleSubStage(ctx);
+                }
+
+                continue;
             }
 
-            return;
+            DiskState rootDisk = new DiskState();
+            rootDisk.customProperties = new HashMap<>();
+            rootDisk.customProperties.put(AZURE_OSDISK_CACHING,
+                    virtualMachine.properties.storageProfile.getOsDisk().getCaching());
+            rootDisk.documentSelfLink = computeState.diskLinks.get(0);
+
+            Operation.createPatch(this, rootDisk.documentSelfLink)
+                    .setBody(rootDisk)
+                    .setCompletion((completedOp, failure) -> {
+
+                        // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-2765
+                        if (failure != null) {
+                            logWarning(() -> String.format("Failed to update compute state: %s",
+                                    failure.getMessage()));
+                        }
+
+                        if (numOfUpdates.decrementAndGet() == 0) {
+                            logFine(() -> "Finished updating compute states.");
+                            ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
+                            handleSubStage(ctx);
+                        }
+                    })
+                    .sendWith(this);
         }
-
-        DiskState rootDisk = new DiskState();
-        rootDisk.customProperties = new HashMap<>();
-        rootDisk.customProperties.put(AZURE_OSDISK_CACHING,
-                vm.properties.storageProfile.getOsDisk().getCaching());
-        rootDisk.documentSelfLink = computeState.diskLinks.get(0);
-
-        Operation.createPatch(this, rootDisk.documentSelfLink)
-                .setBody(rootDisk)
-                .setCompletion((completedOp, failure) -> {
-                    // Remove processed virtual machine from the map
-                    ctx.virtualMachines.remove(computeState.id);
-
-                    // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-2765
-                    if (failure != null) {
-                        logWarning(() -> String.format("Failed to update compute state: %s",
-                                failure.getMessage()));
-                    }
-
-                    if (numOfUpdates.decrementAndGet() == 0) {
-                        logFine(() -> "Finished updating compute states.");
-                        ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
-                        handleSubStage(ctx);
-                    }
-                })
-                .sendWith(this);
     }
 
     /**
@@ -974,50 +1014,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     }
 
                     logFine(() -> "Continue on to create tag states.");
-                    ctx.subStage = ComputeEnumerationSubStages.CREATE_TAG_STATES;
+                    ctx.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
                     handleSubStage(ctx);
 
                 }).sendWith(this);
-    }
-
-    /**
-     * Create tag states for the VM's tags
-     */
-    private void createTagStates(EnumerationContext context) {
-        logFine(() -> "Create or update Tag States for discovered VMs with the actual state in Azure.");
-
-        if (context.virtualMachines.isEmpty()) {
-            logFine("No tags found to create/update. Continue on to create network interface.");
-            context.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
-            handleSubStage(context);
-            return;
-        }
-
-        // POST each of the tags. If a tag exists it won't be created again. We don't want the name
-        // tags, so filter them out
-        List<Operation> operations = context.virtualMachines.values()
-                .stream().filter(vm -> vm.tags != null && !vm.tags.isEmpty())
-                .flatMap(vm -> vm.tags.entrySet().stream())
-                .map(entry -> newTagState(entry.getKey(), entry.getValue(), context.parentCompute.tenantLinks))
-                .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
-                        .setBody(tagState))
-                .collect(Collectors.toList());
-
-        if (operations.isEmpty()) {
-            context.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
-            handleSubStage(context);
-        } else {
-            OperationJoin.create(operations).setCompletion((ops, exs) -> {
-                if (exs != null && !exs.isEmpty()) {
-                    handleError(context, exs.values().iterator().next());
-                    return;
-                }
-
-                logFine("Continue on to create network interface.");
-                context.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
-                handleSubStage(context);
-            }).sendWith(this);
-        }
     }
 
     /**

@@ -42,7 +42,6 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.photon.controller.model.tasks.ModelUtils.createSecurityGroup;
-import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.net.URI;
@@ -114,6 +113,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -471,10 +471,19 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 SubnetService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, securityGroupsCount,
                 SecurityGroupService.FACTORY_LINK, false);
-        // There are a total of sgTags.size() + vmNetwTags.size() + vmTags.size() tags.
+        // There are a total of sgTags.size() + vmNetwTags.size() + vmTags.size() tags
         // This means we should have the same number of TagState documents
         int allTagsNumber = sgTags.size() + vmNetwTags.size() + vmTags.size();
-        queryDocumentsAndAssertExpectedCount(this.host, allTagsNumber, TagService.FACTORY_LINK, false);
+        ServiceDocumentQueryResult serviceDocumentQueryResult = host.getFactoryState(
+                UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(host, TagService.FACTORY_LINK)));
+        if (allTagsNumber > serviceDocumentQueryResult.documents.size()) {
+            host.log(Level.INFO, "Tags documents count is %s, expected at least %s", serviceDocumentQueryResult.documents.size(), allTagsNumber);
+        }
+        for (Map.Entry<String, Object> entry : serviceDocumentQueryResult.documents
+                .entrySet()) {
+            TagState tagState = Utils.fromJson(entry.getValue(), TagState.class);
+            host.log(Level.INFO, "Tag key: %s value: %s", tagState.key, tagState.value);
+        }
 
         // VM count + 1 compute host instance
         this.vmCount = this.vmCount + 1;
