@@ -206,7 +206,7 @@ public class AWSUtils {
         // Ignoring the region parameter for now.
         AmazonS3Client amazonS3Client = new AmazonS3Client(
                 new BasicAWSCredentials(credentials.privateKeyId, credentials.privateKey));
-        return new TransferManager(amazonS3Client, executorService);
+        return new TransferManager(amazonS3Client, executorService, false);
     }
 
     /**

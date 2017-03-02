@@ -172,46 +172,55 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     protected void handleCostStatsCreationRequest(AWSCostStatsCreationContext statsData) {
-        switch (statsData.stage) {
-        case ACCOUNT_DETAILS:
-            getAccountDescription(statsData, AWSCostStatsCreationStages.CLIENT);
-            break;
-        case CLIENT:
-            getAWSAsyncCostingClient(statsData, AWSCostStatsCreationStages.QUERY_BILL_MONTH_TO_DOWNLOAD);
-            break;
-        case QUERY_BILL_MONTH_TO_DOWNLOAD:
-            // Need to query here to get the billProcessedTime before scheduling downloading bills since
-            // the months' for which bills are downloaded are determined by the billProcessedTime.
-            queryBillProcessedTime(statsData, AWSCostStatsCreationStages.DOWNLOAD_THEN_PARSE);
-            break;
-        case DOWNLOAD_THEN_PARSE:
-            scheduleDownload(statsData, AWSCostStatsCreationStages.QUERY_LINKED_ACCOUNTS);
-            break;
-        case QUERY_LINKED_ACCOUNTS:
-            queryLinkedAccounts(statsData, AWSCostStatsCreationStages.QUERY_BILL_PROCESSED_TIME);
-            break;
-        case QUERY_BILL_PROCESSED_TIME:
-            // Need to query billProcessedTime here to get the billProcessedTime for linked accounts
-            // as well which weren't available when queried last.
-            queryBillProcessedTime(statsData, AWSCostStatsCreationStages.QUERY_LOCAL_RESOURCES);
-            break;
-        case QUERY_LOCAL_RESOURCES:
-            queryInstances(statsData, AWSCostStatsCreationStages.CREATE_STATS);
-            break;
-        case CREATE_STATS:
-            createStats(statsData, AWSCostStatsCreationStages.POST_STATS);
-            break;
-        case POST_STATS:
-            postAllResourcesCostStats(statsData);
-            break;
-        default:
-            logSevere(() -> String.format("Unknown AWS Cost Stats enumeration stage %s ",
-                    statsData.stage.toString()));
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference,
-                    new Exception("Unknown AWS Cost Stats enumeration stage"));
-            break;
+        try {
+            switch (statsData.stage) {
+            case ACCOUNT_DETAILS:
+                getAccountDescription(statsData, AWSCostStatsCreationStages.CLIENT);
+                break;
+            case CLIENT:
+                getAWSAsyncCostingClient(statsData,
+                        AWSCostStatsCreationStages.QUERY_BILL_MONTH_TO_DOWNLOAD);
+                break;
+            case QUERY_BILL_MONTH_TO_DOWNLOAD:
+                // Need to query here to get the billProcessedTime before scheduling downloading
+                // bills since the months' for which bills are downloaded are determined by the
+                // billProcessedTime.
+                queryBillProcessedTime(statsData, AWSCostStatsCreationStages.DOWNLOAD_THEN_PARSE);
+                break;
+            case DOWNLOAD_THEN_PARSE:
+                scheduleDownload(statsData, AWSCostStatsCreationStages.QUERY_LINKED_ACCOUNTS);
+                break;
+            case QUERY_LINKED_ACCOUNTS:
+                queryLinkedAccounts(statsData,
+                        AWSCostStatsCreationStages.QUERY_BILL_PROCESSED_TIME);
+                break;
+            case QUERY_BILL_PROCESSED_TIME:
+                // Need to query billProcessedTime for linked accounts as well which weren't
+                // available when queried last.
+                queryBillProcessedTime(statsData, AWSCostStatsCreationStages.QUERY_LOCAL_RESOURCES);
+                break;
+            case QUERY_LOCAL_RESOURCES:
+                queryInstances(statsData, AWSCostStatsCreationStages.CREATE_STATS);
+                break;
+            case CREATE_STATS:
+                createStats(statsData, AWSCostStatsCreationStages.POST_STATS);
+                break;
+            case POST_STATS:
+                postAllResourcesCostStats(statsData);
+                break;
+            default:
+                logSevere(() -> String.format("Unknown AWS Cost Stats enumeration stage %s ",
+                        statsData.stage.toString()));
+                AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                        statsData.statsRequest.taskReference,
+                        new Exception("Unknown AWS Cost Stats enumeration stage"));
+                break;
+            }
+        } catch (Exception e) {
+            getFailureConsumer(statsData).accept(e);
+            return;
         }
+
     }
 
     protected void getAccountDescription(AWSCostStatsCreationContext statsData,
