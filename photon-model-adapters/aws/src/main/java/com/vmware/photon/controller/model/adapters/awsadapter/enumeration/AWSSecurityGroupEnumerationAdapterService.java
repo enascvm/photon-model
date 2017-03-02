@@ -315,7 +315,6 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 handleEnumeration(context);
                 break;
             case REFRESH:
-                context.enumStartTimeInMicros = Utils.getNowMicrosUtc();
                 // Allow base context class to enumerate the resources.
                 context.enumerate()
                         .whenComplete((ignoreCtx, throwable) -> {

@@ -57,19 +57,24 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  * Adapter to validate and enhance AWS based endpoints.
  */
 public class AWSEndpointAdapterService extends StatelessService {
+
     public static final String SELF_LINK = AWSUriPaths.AWS_ENDPOINT_CONFIG_ADAPTER;
 
     private AWSClientManager clientManager;
 
-    public AWSEndpointAdapterService() {
+    @Override
+    public void handleStart(Operation op) {
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
+
+        super.handleStart(op);
     }
 
     @Override
     public void handleStop(Operation op) {
         AWSClientManagerFactory.returnClientManager(this.clientManager,
                 AWSConstants.AwsClientType.EC2);
+
         super.handleStop(op);
     }
 
@@ -79,6 +84,7 @@ public class AWSEndpointAdapterService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
+
         EndpointConfigRequest body = op.getBody(EndpointConfigRequest.class);
 
         EndpointAdapterUtils.handleEndpointRequest(this, op, body, credentials(),
@@ -148,16 +154,16 @@ public class AWSEndpointAdapterService extends StatelessService {
             children.add(ComputeType.VM_GUEST.toString());
             cd.supportedChildren = children;
 
-            cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_INSTANCE_ADAPTER);
-            cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            cd.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_ENUMERATION_ADAPTER);
-            cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            cd.powerAdapterReference = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_POWER_ADAPTER);
 
-            URI statsAdapterUri = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            URI statsAdapterUri = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_STATS_ADAPTER);
-            URI costStatsAdapterUri = AdapterUriUtil.buildAdapterUri(this.getHost(),
+            URI costStatsAdapterUri = AdapterUriUtil.buildAdapterUri(getHost(),
                     AWSUriPaths.AWS_COST_STATS_ADAPTER);
 
             cd.statsAdapterReferences = new LinkedHashSet<>();
@@ -202,8 +208,10 @@ public class AWSEndpointAdapterService extends StatelessService {
 
     private BiConsumer<EndpointState, Retriever> endpoint() {
         return (e, r) -> {
-            e.endpointProperties.put(EndpointConfigRequest.REGION_KEY, r.get(REGION_KEY).orElse(null));
-            e.endpointProperties.put(EndpointConfigRequest.PRIVATE_KEYID_KEY, r.getRequired(PRIVATE_KEYID_KEY));
+            e.endpointProperties.put(EndpointConfigRequest.REGION_KEY,
+                    r.get(REGION_KEY).orElse(null));
+            e.endpointProperties.put(EndpointConfigRequest.PRIVATE_KEYID_KEY,
+                    r.getRequired(PRIVATE_KEYID_KEY));
         };
     }
 
@@ -246,4 +254,5 @@ public class AWSEndpointAdapterService extends StatelessService {
         }
         return userId;
     }
+
 }

@@ -56,7 +56,6 @@ public class ImageService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @PropertyOptions(indexing = PropertyIndexingOption.CASE_INSENSITIVE)
-        // TBD: Alternatives: OS Type or OS Platform? Pls advice!
         public String osFamily;
 
         /**
@@ -77,10 +76,13 @@ public class ImageService extends StatefulService {
 
     public ImageService() {
         super(ImageState.class);
+
         super.toggleOption(ServiceOption.PERSISTENCE, true);
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
+
+        super.toggleOption(ServiceOption.ON_DEMAND_LOAD, true);
     }
 
     @Override

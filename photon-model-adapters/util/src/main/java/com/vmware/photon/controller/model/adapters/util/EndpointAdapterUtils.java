@@ -13,15 +13,21 @@
 
 package com.vmware.photon.controller.model.adapters.util;
 
+import static com.vmware.xenon.common.UriUtils.buildFactoryUri;
+
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.stream.Stream;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -29,6 +35,7 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceErrorResponse;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -37,6 +44,70 @@ public class EndpointAdapterUtils {
 
     public static final String MOCK_REQUEST = "mockRequest";
     public static final String ENDPOINT_REFERENCE_URI = "endpointReferenceUri";
+
+    /**
+     * Register end-point config into Adapters Registry.
+     *
+     * @param service
+     *            The end-point adapter service.
+     * @param serviceStartOp
+     *            The service start operation. It is completed upon completion of registration into
+     *            Adapters Registry.
+     * @param endpointType
+     *            The type of the end-point.
+     * @param endpointConfigEnhancer
+     *            Optional {@link PhotonModelAdapterConfig} enhance logic specific to the end-point
+     *            type. The config passed to the callback is pre-populated with id, name and
+     *            documentSelfLink (all set with {@code endpointType} param). The enhancer might
+     *            populate the config with the links of end-point adapters. Once enhanced the config
+     *            is posted to the {@link PhotonModelAdaptersRegistryService Adapters Registry}.
+     */
+    public static void handleEndpointRegistration(
+            ServiceHost host,
+            String endpointType,
+            Consumer<PhotonModelAdapterConfig> endpointConfigEnhancer) {
+
+        host.registerForServiceAvailability((op, ex) -> {
+
+            // Once End-point Adapters Registry is available register end-point adapters
+
+            if (ex != null) {
+                host.log(Level.WARNING,
+                        "End-point Adapters Registry is not available on this host. Please ensure %s is started.",
+                        PhotonModelAdaptersRegistryService.class.getSimpleName());
+                return;
+            }
+
+            PhotonModelAdapterConfig endpointConfig = new PhotonModelAdapterConfig();
+
+            endpointConfig.id = endpointType;
+            endpointConfig.documentSelfLink = endpointConfig.id;
+            endpointConfig.name = endpointType;
+            endpointConfig.adapterEndpoints = new HashMap<>();
+
+            if (endpointConfigEnhancer != null) {
+                // Pass to enhancer to customize the end-point config.
+                endpointConfigEnhancer.accept(endpointConfig);
+            }
+
+            URI uri = buildFactoryUri(host, PhotonModelAdaptersRegistryService.class);
+
+            Operation postEndpointConfigOp = Operation.createPost(uri).setBody(endpointConfig);
+
+            host.sendWithDeferredResult(postEndpointConfigOp).whenComplete((o, e) -> {
+                if (e != null) {
+                    host.log(Level.WARNING,
+                            "Registering %d '%s' adapters into End-point Adapters Registry: FAILED - %s",
+                            endpointConfig.adapterEndpoints.size(), endpointType, Utils.toString(ex));
+                } else {
+                    host.log(Level.INFO,
+                            "Registering %d '%s' adapters into End-point Adapters Registry: SUCCESS",
+                            endpointConfig.adapterEndpoints.size(), endpointType);
+                }
+            });
+
+        }, PhotonModelAdaptersRegistryService.FACTORY_LINK);
+    }
 
     public static void handleEndpointRequest(StatelessService service, Operation op,
             EndpointConfigRequest body,

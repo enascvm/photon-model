@@ -14,8 +14,8 @@
 package com.vmware.photon.controller.model.adapterapi;
 
 /**
- * Request to enumerate images per end-point. The {@code resourceReference} value is the URI to
- * the end-point.
+ * Request to enumerate images per end-point. The {@code resourceReference} value is the URI to the
+ * end-point.
  */
 public class ImageEnumerateRequest extends ResourceRequest {
 

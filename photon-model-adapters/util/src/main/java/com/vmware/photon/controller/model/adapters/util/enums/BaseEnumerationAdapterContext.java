@@ -40,7 +40,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
@@ -165,6 +165,9 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * Starts the enumeration process and returns a {@link DeferredResult} to signal completion.
      */
     public DeferredResult<T> enumerate() {
+
+        this.enumStartTimeInMicros = Utils.getNowMicrosUtc();
+
         return enumerate(BaseEnumerationAdapterStage.GET_REMOTE_RESOURCES);
     }
 
@@ -590,33 +593,28 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                 .thenAccept(ignore -> { });
     }
 
-    public DeferredResult<Operation> updateResourceTagLinks(Collection<String> tagLinksToDelete,
-            Collection<String> tagLinksToAdd, String currentStateSelfLink) {
-        // cast Collection<String> to Collection<Object>
-        Collection<Object> tagLinksToDeleteObj = tagLinksToDelete.stream()
-                .map(tagLinkStr -> (Object) tagLinkStr).collect(Collectors.toSet());
-        Collection<Object> tagLinksToAddObj = tagLinksToAdd.stream()
-                .map(tagLinkStr -> (Object) tagLinkStr).collect(Collectors.toSet());
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private DeferredResult<Operation> updateResourceTagLinks(
+            Collection<String> tagLinksToDelete,
+            Collection<String> tagLinksToAdd,
+            String currentStateSelfLink) {
 
         // create patch operation to update tag links of the current resource state
-        Map<String, Collection<Object>> collectionsToRemoveMap = new HashMap<String, Collection<Object>>();
-        collectionsToRemoveMap.put(ComputeState.FIELD_NAME_TAG_LINKS, tagLinksToDeleteObj);
+        Map<String, Collection<Object>> collectionsToRemoveMap = new HashMap<>();
+        collectionsToRemoveMap.put(ComputeState.FIELD_NAME_TAG_LINKS, (Collection) tagLinksToDelete);
 
-        Map<String, Collection<Object>> collectionsToAddMap = new HashMap<String, Collection<Object>>();
-        collectionsToAddMap.put(ComputeState.FIELD_NAME_TAG_LINKS, tagLinksToAddObj);
+        Map<String, Collection<Object>> collectionsToAddMap = new HashMap<>();
+        collectionsToAddMap.put(ComputeState.FIELD_NAME_TAG_LINKS, (Collection) tagLinksToAdd);
 
-        ServiceStateCollectionUpdateRequest updateResourceStateRequest =
-                ServiceStateCollectionUpdateRequest.create(collectionsToAddMap,
+        ServiceStateCollectionUpdateRequest updateTagLinksRequest =
+                ServiceStateCollectionUpdateRequest.create(
+                        collectionsToAddMap,
                         collectionsToRemoveMap);
 
-        DeferredResult<Operation> postUpdateTagsListDR = this.service
-                .sendWithDeferredResult(Operation
-                        .createPatch(
-                                UriUtils.buildUri(this.service.getHost(),
-                                        currentStateSelfLink))
-                        .setBody(updateResourceStateRequest)
-                        .setReferer(this.service.getUri()));
-        return postUpdateTagsListDR;
+        Operation createPatch = Operation.createPatch(this.service, currentStateSelfLink)
+                .setBody(updateTagLinksRequest);
+
+        return this.service.sendWithDeferredResult(createPatch);
     }
 
     public static void setTagLinksToResourceState(ResourceState resourceState,

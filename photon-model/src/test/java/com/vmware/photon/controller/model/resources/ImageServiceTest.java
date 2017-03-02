@@ -89,7 +89,8 @@ public class ImageServiceTest extends Suite {
                     Service.ServiceOption.PERSISTENCE,
                     Service.ServiceOption.REPLICATION,
                     Service.ServiceOption.OWNER_SELECTION,
-                    Service.ServiceOption.IDEMPOTENT_POST);
+                    Service.ServiceOption.IDEMPOTENT_POST,
+                    Service.ServiceOption.ON_DEMAND_LOAD);
             assertEquals(expected, this.service.getOptions());
         }
     }

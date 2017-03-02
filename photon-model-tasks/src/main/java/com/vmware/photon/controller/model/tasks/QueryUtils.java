@@ -28,7 +28,6 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
-
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -116,8 +115,8 @@ public class QueryUtils {
     public static Query.Builder addTenantLinks(Query.Builder qBuilder, List<String> tenantLinks) {
         if (tenantLinks != null) {
             // all given tenant links must be present in the document
-            tenantLinks.forEach(link ->
-                    qBuilder.addCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, link));
+            tenantLinks.forEach(link -> qBuilder
+                    .addCollectionItemClause(ResourceState.FIELD_NAME_TENANT_LINKS, link));
         }
         return qBuilder;
     }
@@ -508,6 +507,7 @@ public class QueryUtils {
                     // Handle next page of results
                     .thenCompose(qt -> handleQueryTask(qt, resultConsumer));
         }
+
     }
 
     /**

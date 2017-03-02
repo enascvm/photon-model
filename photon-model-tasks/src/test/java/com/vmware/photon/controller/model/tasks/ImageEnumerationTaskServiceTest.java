@@ -85,22 +85,7 @@ public class ImageEnumerationTaskServiceTest extends Suite {
      */
     static class BaseModelTest extends com.vmware.photon.controller.model.helpers.BaseModelTest {
 
-        EndpointState createEndpointState(EndpointType endpointType) throws Throwable {
-
-            EndpointState endpoint = new EndpointState();
-
-            endpoint.id = endpointType.name() + "Id";
-            endpoint.name = endpointType.name() + "Name";
-            endpoint.endpointType = endpointType.name();
-            endpoint.tenantLinks = singletonList(endpointType.name() + "Tenant");
-
-            return postServiceSynchronously(
-                    EndpointService.FACTORY_LINK,
-                    endpoint,
-                    EndpointState.class);
-        }
-
-        ImageEnumerationTaskState newImageEnumerationRequest(EndpointState endpointState) {
+        static ImageEnumerationTaskState newImageEnumerationRequest(EndpointState endpointState) {
 
             ImageEnumerationTaskState taskState = new ImageEnumerationTaskState();
 
@@ -161,31 +146,54 @@ public class ImageEnumerationTaskServiceTest extends Suite {
             return Arrays.asList(new Object[][] {
                     { MockSuccessImageEnumerationAdapter.class,
                             MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
-                            EndpointType.aws },
+                            EndpointType.aws.name() },
                     { MockCancelledImageEnumerationAdapter.class,
                             MockCancelledImageEnumerationAdapter.COMPLETE_STATE.stage,
-                            EndpointType.azure },
+                            EndpointType.azure.name() },
                     { MockFailureImageEnumerationAdapter.class,
                             MockFailureImageEnumerationAdapter.COMPLETE_STATE.stage,
-                            EndpointType.vsphere },
+                            EndpointType.vsphere.name() },
                     { MockFailOperationImageEnumerationAdapter.class,
                             TaskStage.FAILED,
-                            EndpointType.gpc }
+                            EndpointType.gpc.name() },
+
+                    { null /* no adapter at all */, TaskStage.FAILED,
+                            EP_WITH_CONFIG_AND_NO_ADAPTER },
+                    { null /* does not matter */, TaskStage.FAILED, EP_WITHOUT_CONFIG }
             });
         }
 
+        static final String EP_WITHOUT_CONFIG = "EP_WITHOUT_CONFIG";
+        static final String EP_WITH_CONFIG_AND_NO_ADAPTER = "EP_WITH_CONFIG_AND_NO_ADAPTER";
+        static final Class<? extends Service> NO_ADAPTER = null;
+
         private final Class<? extends Service> adapterClass;
         private final TaskStage expectedCompletedStage;
-        private final EndpointType endpointType;
+        private final String endpointType;
 
         public EndToEndTest(
                 Class<? extends Service> adapterClass,
                 TaskStage expectedCompletedStage,
-                EndpointType endpointType) {
+                String endpointType) {
 
             this.adapterClass = adapterClass;
             this.expectedCompletedStage = expectedCompletedStage;
             this.endpointType = endpointType;
+        }
+
+        private EndpointState createEndpointState(String endpointType) throws Throwable {
+
+            EndpointState endpoint = new EndpointState();
+
+            endpoint.id = endpointType + "Id";
+            endpoint.name = endpointType + "Name";
+            endpoint.endpointType = endpointType;
+            endpoint.tenantLinks = singletonList(endpointType + "Tenant");
+
+            return postServiceSynchronously(
+                    EndpointService.FACTORY_LINK,
+                    endpoint,
+                    EndpointState.class);
         }
 
         private EndpointState endpointState;
@@ -198,18 +206,27 @@ public class ImageEnumerationTaskServiceTest extends Suite {
             registerEndpointConfig();
         }
 
-        private PhotonModelAdapterConfig registerEndpointConfig() throws Throwable {
+        private void registerEndpointConfig() throws Throwable {
+
+            if (this.endpointType == EP_WITHOUT_CONFIG) {
+                // No end-point config registration at all.
+                return;
+            }
 
             PhotonModelAdapterConfig config = new PhotonModelAdapterConfig();
 
             config.id = this.endpointState.endpointType;
             config.documentSelfLink = config.id;
             config.name = this.endpointState.name;
-            config.adapterEndpoints = singletonMap(
-                    AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key,
-                    UriUtils.buildUri(getHost(), this.adapterClass).toString());
 
-            return postServiceSynchronously(
+            if (this.adapterClass != NO_ADAPTER) {
+                // Register adapter only if presented
+                config.adapterEndpoints = singletonMap(
+                        AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key,
+                        UriUtils.buildUri(getHost(), this.adapterClass).toString());
+            }
+
+            postServiceSynchronously(
                     PhotonModelAdaptersRegistryService.FACTORY_LINK,
                     config,
                     PhotonModelAdapterConfig.class);

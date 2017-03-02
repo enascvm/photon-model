@@ -86,14 +86,24 @@ public class ImageEnumerationTaskService
 
         @Documentation(description = "Options used to configure specific aspects of"
                 + " this task execution.")
-        @PropertyOptions(usage = OPTIONAL, indexing = STORE_ONLY)
+        @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
         public EnumSet<TaskOption> options;
+
+        /**
+         * Optional end-point specific filter that might be used by image enumeration adapter to
+         * limit the number of images to enumerate.
+         *
+         * <p>
+         * Note: for internal use only, by tests for example.
+         */
+        @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
+        public String filter;
     }
 
     /**
-     * Defaults to expire a task instance if not completed in 10 mins.
+     * Defaults to expire a task instance if not completed in 30 mins.
      */
-    public static final long DEFAULT_EXPIRATION_MINUTES = 10;
+    public static final long DEFAULT_EXPIRATION_MINUTES = 30;
 
     public ImageEnumerationTaskService() {
         super(ImageEnumerationTaskState.class);
@@ -206,7 +216,7 @@ public class ImageEnumerationTaskService
             case CANCELLED:
                 logSevere(() -> String.format("%s with [%s]",
                         currentState.taskInfo.stage,
-                        currentState.failureMessage));
+                        getFailureMessage(currentState)));
                 handleTaskCompleted(currentState);
                 break;
             default:
@@ -216,8 +226,23 @@ public class ImageEnumerationTaskService
         } catch (Throwable e) {
             if (TaskState.isInProgress(currentState.taskInfo)) {
                 sendSelfFailurePatch(currentState, e.getMessage());
+            } else {
+                logSevere(() -> String.format("An error occurred on stage %s: %s",
+                        currentState.taskInfo.stage, Utils.toString(e)));
             }
         }
+    }
+
+    private static String getFailureMessage(ImageEnumerationTaskState taskState) {
+        if (taskState.failureMessage != null && !taskState.failureMessage.isEmpty()) {
+            return taskState.failureMessage;
+        }
+        if (taskState.taskInfo.failure != null
+                && taskState.taskInfo.failure.message != null
+                && !taskState.taskInfo.failure.message.isEmpty()) {
+            return taskState.taskInfo.failure.message;
+        }
+        return taskState.taskInfo.stage.name();
     }
 
     /**
@@ -248,8 +273,16 @@ public class ImageEnumerationTaskService
      */
     private void handleTaskCompleted(ImageEnumerationTaskState taskState) {
         if (taskState.options.contains(TaskOption.SELF_DELETE_ON_COMPLETION)) {
-            logFine(() -> "Self-delete upon " + taskState.taskInfo.stage + " stage");
-            sendRequest(Operation.createDelete(getUri()));
+            sendWithDeferredResult(Operation.createDelete(getUri()))
+                    .whenComplete((o, e) -> {
+                        if (e != null) {
+                            logSevere(() -> String.format("Self-delete upon %s stage: FAILED - %s",
+                                    taskState.taskInfo.stage, Utils.toString(e)));
+                        } else {
+                            logFine(() -> String.format("Self-delete upon %s stage: SUCCESS",
+                                    taskState.taskInfo.stage));
+                        }
+                    });
         }
     }
 
@@ -258,40 +291,22 @@ public class ImageEnumerationTaskService
      */
     private void sendImageEnumerationAdapterRequest(ImageEnumerationTaskState taskState) {
 
-        DeferredResult.completed(taskState)
+        SendImageEnumerationAdapterContext context = new SendImageEnumerationAdapterContext();
+        context.taskState = taskState;
 
-                // get the EndpointState ImageEnumerationTaskState#endpointLink
+        DeferredResult.completed(context)
+                // get the EndpointState from ImageEnumerationTaskState#endpointLink
                 .thenCompose(this::getEndpointState)
-                .thenApply(endpointState -> {
-                    logFine(() -> String.format("SUCCESS: getEndpointState [%s]",
-                            endpointState.name));
-
-                    return endpointState;
-                })
-
                 // get the 'image-enumeration' URI for passed end-point
                 .thenCompose(this::getImageEnumerationAdapterReference)
-                .thenApply(adapterRef -> {
-                    logFine(() -> String.format("SUCCESS: getImageEnumerationAdapterReference [%s]",
-                            adapterRef));
-
-                    return adapterRef;
-                })
-
-                // call 'image-enumeration' adapter (if registered)
-                .thenCompose(adapterRef -> callImageEnumerationAdapter(taskState, adapterRef))
-                .thenApply(callAdapterOp -> {
-                    logFine("SUCCESS: callImageEnumerationAdapter");
-
-                    return callAdapterOp;
-                })
-
+                // call 'image-enumeration' adapter
+                .thenCompose(this::callImageEnumerationAdapter)
                 .whenComplete((op, exc) -> {
                     if (exc != null) {
                         // If any of above steps failed sendSelfFailurePatch
                         logFine(() -> String.format(
-                                "FAILED: sendImageEnumerationAdapterRequest [%s]",
-                                exc.getMessage()));
+                                "FAILED: sendImageEnumerationAdapterRequest - %s",
+                                Utils.toString(exc)));
 
                         sendSelfFailurePatch(taskState, exc.getMessage());
                     } else {
@@ -303,66 +318,106 @@ public class ImageEnumerationTaskService
     /**
      * Get the {@link EndpointState} from {@link ImageEnumerationTaskState#endpointLink}.
      */
-    private DeferredResult<EndpointState> getEndpointState(ImageEnumerationTaskState taskState) {
+    private DeferredResult<SendImageEnumerationAdapterContext> getEndpointState(
+            SendImageEnumerationAdapterContext ctx) {
 
-        Operation op = Operation.createGet(this, taskState.endpointLink);
+        Operation op = Operation.createGet(this, ctx.taskState.endpointLink);
 
-        return sendWithDeferredResult(op, EndpointState.class);
+        return sendWithDeferredResult(op, EndpointState.class).thenApply(epState -> {
+
+            ctx.endpointState = epState;
+
+            logFine(() -> String.format("SUCCESS: getEndpointState [%s]",
+                    ctx.endpointState.endpointType));
+
+            return ctx;
+        });
     }
 
     /**
      * Go to {@link PhotonModelAdaptersRegistryService Service Registry} and get the
-     * 'image-enumeration' URI for passed end-point, if registered.
+     * 'image-enumeration' URI for passed end-point.
+     *
+     * @return <code>null</code> is returned if 'image-enumeration' adapter is not registered by
+     *         passed end-point.
      *
      * @see PhotonModelAdapterConfig
      * @see AdapterTypePath#IMAGE_ENUMERATION_ADAPTER
      */
-    private DeferredResult<URI> getImageEnumerationAdapterReference(EndpointState endpointState) {
+    private DeferredResult<SendImageEnumerationAdapterContext> getImageEnumerationAdapterReference(
+            SendImageEnumerationAdapterContext ctx) {
 
-        // We use 'endpointType' (such as aws, azure) as AdapterConfig id!
+        // We use 'endpointType' (such as aws, azure) as AdapterConfig id/selfLink!
         String uri = buildUriPath(
-                PhotonModelAdaptersRegistryService.FACTORY_LINK, endpointState.endpointType);
+                PhotonModelAdaptersRegistryService.FACTORY_LINK, ctx.endpointState.endpointType);
 
         Operation getEndpointConfigOp = Operation.createGet(this, uri);
 
         return sendWithDeferredResult(getEndpointConfigOp, PhotonModelAdapterConfig.class)
                 .thenApply(endpointConfig -> {
-                    if (endpointConfig.adapterEndpoints == null) {
-                        return (URI) null;
+                    // Lookup the 'image-enumeration' URI for passed end-point
+                    if (endpointConfig.adapterEndpoints != null) {
+
+                        String uriStr = endpointConfig.adapterEndpoints.get(
+                                AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
+
+                        if (uriStr != null && !uriStr.isEmpty()) {
+                            ctx.adapterRef = URI.create(uriStr);
+                        }
                     }
 
-                    // Lookup the 'image-enumeration' URI for passed end-point
-                    String uriStr = endpointConfig.adapterEndpoints.get(
-                            AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
+                    logFine(() -> String.format("SUCCESS: getImageEnumerationAdapterReference [%s]",
+                            ctx.adapterRef));
 
-                    return uriStr == null || uriStr.isEmpty() ? (URI) null : URI.create(uriStr);
+                    return ctx;
                 });
     }
 
     /**
-     * Call 'image-enumeration' adapter (if registered by the end-point).
+     * Call 'image-enumeration' adapter if registered by the end-point OR fail if not registered.
      */
-    private DeferredResult<Operation> callImageEnumerationAdapter(
-            ImageEnumerationTaskState taskState, URI adapterRef) {
+    private DeferredResult<SendImageEnumerationAdapterContext> callImageEnumerationAdapter(
+            SendImageEnumerationAdapterContext ctx) {
 
-        if (adapterRef == null) {
+        if (ctx.adapterRef == null) {
             // No 'image-enumeration' URI registered for passed end-point
-            return DeferredResult.completed(null);
+            return DeferredResult.failed(new IllegalStateException(
+                    String.format("No '%s' URI registered by '%s' end-point.",
+                            AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key,
+                            ctx.endpointState.endpointType)));
         }
 
         // Create 'image-enumeration' adapter request
         ImageEnumerateRequest adapterReq = new ImageEnumerateRequest();
 
         // Set ImageEnumerateRequest specific params
-        adapterReq.enumerationAction = taskState.enumerationAction;
+        adapterReq.enumerationAction = ctx.taskState.enumerationAction;
         // Set generic ResourceRequest params
-        adapterReq.resourceReference = buildUri(getHost(), taskState.endpointLink);
-        adapterReq.taskReference = buildUri(getHost(), taskState.documentSelfLink);
-        adapterReq.isMockRequest = taskState.options.contains(TaskOption.IS_MOCK);
+        adapterReq.resourceReference = buildUri(getHost(), ctx.taskState.endpointLink);
+        adapterReq.taskReference = buildUri(getHost(), ctx.taskState.documentSelfLink);
+        adapterReq.isMockRequest = ctx.taskState.options.contains(TaskOption.IS_MOCK);
 
-        Operation callAdapterOp = Operation.createPatch(adapterRef).setBody(adapterReq);
+        Operation callAdapterOp = Operation.createPatch(ctx.adapterRef).setBody(adapterReq);
 
-        return sendWithDeferredResult(callAdapterOp);
+        return sendWithDeferredResult(callAdapterOp).thenApply(op -> {
+
+            logFine(() -> String.format("SUCCESS: callImageEnumerationAdapter [%s]",
+                    op.getUri()));
+
+            return ctx;
+        });
     }
 
+    /**
+     * @see ImageEnumerationTaskService#sendImageEnumerationAdapterRequest(SendImageEnumerationAdapterContext)
+     */
+    private static class SendImageEnumerationAdapterContext {
+
+        ImageEnumerationTaskState taskState;
+
+        EndpointState endpointState;
+
+        URI adapterRef;
+
+    }
 }

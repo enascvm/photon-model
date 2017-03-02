@@ -84,28 +84,28 @@ public class QueryUtilsTest extends BaseModelTest {
                 ComputeState.class,
                 ComputeState.FIELD_NAME_DESCRIPTION_LINK);
 
-        // The classes under testing
+        // The classes under testing: QueryByPages and QueryTop
         List<QueryStrategy<ComputeState>> queryStrategies = Arrays.asList(
                 new QueryByPages<>(
                         getHost(),
                         queryForReferrers,
                         ComputeState.class,
                         tenantLinks,
-                        null /*endpointLink*/),
+                        null /* endpointLink */),
                 new QueryTop<>(
                         getHost(),
                         queryForReferrers,
                         ComputeState.class,
                         tenantLinks,
-                        null /*endpointLink*/));
+                        null /* endpointLink */));
 
-        // Test collectDocuments/queryDocuments/collectLinks/queryLinks per QueryByPages and
-        // QueryTop
+        // Test collectDocuments/queryDocuments/collectLinks/queryLinks per strategy
         for (QueryStrategy<ComputeState> queryStrategy : queryStrategies) {
             {
                 // Test collectDocuments, which internally also tests queryDocuments
                 DeferredResult<Set<String>> documentLinksDR = queryStrategy.collectDocuments(
                         Collectors.mapping(cs -> cs.documentSelfLink, Collectors.toSet()));
+
                 Set<String> actual = waitToComplete(documentLinksDR);
 
                 assertThat(actual, equalTo(expected));
@@ -117,6 +117,7 @@ public class QueryUtilsTest extends BaseModelTest {
                         .collectLinks(Collectors.toSet());
 
                 Set<String> actual = waitToComplete(documentLinksDR);
+
                 assertThat(actual, equalTo(expected));
             }
         }
@@ -140,7 +141,7 @@ public class QueryUtilsTest extends BaseModelTest {
                 queryForReferrers,
                 ComputeState.class,
                 Collections.emptyList(),
-                null /*endpointLink*/);
+                null /* endpointLink */);
 
         Set<String> actual = new HashSet<>();
 
