@@ -58,11 +58,14 @@ public class OvfParserTest {
                     .containsKey("ovf.prop:guestinfo.cis.appliance.net.addr.family"));
             assertTrue(description.customProperties
                     .containsKey("ovf.prop:guestinfo.cis.appliance.root.passwd"));
-            assertTrue(description.customProperties.containsKey("ovf.net:Network 1"));
 
             assertTrue(description.cpuCount > 0);
             assertTrue(description.totalMemoryBytes > 0);
         }
+
+        List<String> nets = parser.extractNetworks(ovfDoc);
+        assertEquals(1, nets.size());
+        assertEquals("Network 1", nets.get(0));
     }
 
     /**

@@ -50,8 +50,6 @@ public class OvfParser {
 
     public static final String PREFIX_OVF_PROP = "ovf.prop:";
 
-    public static final String PREFIX_OVF_NET = "ovf.net:";
-
     public static final String PROP_OVF_ARCHIVE_URI = "ova.uri";
 
     private XPath xpath;
@@ -103,13 +101,7 @@ public class OvfParser {
      * @return
      */
     public List<ComputeDescription> parse(Document doc, ComputeDescription template) {
-        NodeList networks = nodes(doc, "/ovf:Envelope/ovf:NetworkSection/ovf:Network");
-
         CustomProperties cust = CustomProperties.of(template);
-
-        for (Element network : iterableElements(networks)) {
-            cust.put(network(attr("ovf:name", network)), text(network, "ovf:Description/text()"));
-        }
 
         NodeList props = nodes(doc,
                 "/ovf:Envelope/ovf:VirtualSystem/ovf:ProductSection/ovf:Property");
@@ -170,6 +162,24 @@ public class OvfParser {
         }
 
         return new ArrayList<>(hwByConfigName.values());
+    }
+
+    /**
+     * Extracts the logical names of the networks the ovf needs.
+     * @param doc
+     * @return
+     */
+    public List<String> extractNetworks(Document doc) {
+        NodeList nodes = nodes(doc,
+                "/ovf:Envelope/ovf:NetworkSection/ovf:Network");
+
+
+        List<String> res = new ArrayList<>(2);
+        for (Element item : iterableElements(nodes)) {
+            res.add(attr("ovf:name", item));
+        }
+
+        return res;
     }
 
     /**
@@ -276,10 +286,6 @@ public class OvfParser {
         }
 
         return sb.toString();
-    }
-
-    private String network(String name) {
-        return PREFIX_OVF_NET + name;
     }
 
     private static XPath newXpath() {
