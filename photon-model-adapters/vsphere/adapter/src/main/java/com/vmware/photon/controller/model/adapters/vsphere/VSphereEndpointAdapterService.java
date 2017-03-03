@@ -34,8 +34,8 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Conne
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
@@ -138,8 +138,8 @@ public class VSphereEndpointAdapterService extends StatelessService {
                 cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
 
                 List<String> children = new ArrayList<>();
-                children.add(ComputeDescriptionService.ComputeDescription.ComputeType.VM_GUEST
-                        .toString());
+                children.add(ComputeType.VM_HOST.toString());
+                children.add(ComputeType.ZONE.toString());
                 cd.supportedChildren = children;
 
                 cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),

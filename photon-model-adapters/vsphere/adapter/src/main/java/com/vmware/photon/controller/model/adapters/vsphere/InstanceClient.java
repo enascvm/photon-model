@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.w3c.dom.Document;
 
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
@@ -61,6 +62,7 @@ import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.MethodFault;
+import com.vmware.vim25.OvfNetworkMapping;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
@@ -360,7 +362,11 @@ public class InstanceClient extends BaseHelper {
         } else {
             String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
             try {
-                vm = deployer.deployOvf(ovfUri, getHost(), folder, vmName, Collections.emptyList(),
+                OvfParser parser = new OvfParser();
+                Document ovfDoc = parser.retrieveDescriptor(ovfUri);
+                List<OvfNetworkMapping> networks = mapNetworks(parser.extractNetworks(ovfDoc),
+                        ovfDoc, this.nics);
+                vm = deployer.deployOvf(ovfUri, getHost(), folder, vmName, networks,
                         ds, Collections.emptyList(), config, resourcePool);
 
                 logger.info("Removing NICs from deployed template: {} ({})", vmName, vm.getValue());
@@ -390,6 +396,25 @@ public class InstanceClient extends BaseHelper {
         }
 
         return cloneOvfBasedTemplate(vm, ds, folder, resourcePool);
+    }
+
+    private List<OvfNetworkMapping> mapNetworks(List<String> ovfNetworkNames, Document ovfDoc,
+            List<NetworkInterfaceStateWithDetails> nics) {
+        List<OvfNetworkMapping> networks = new ArrayList<>();
+
+        if (ovfNetworkNames.isEmpty() || nics.isEmpty()) {
+            return networks;
+        }
+
+        ovfNetworkNames.forEach(n -> {
+            CustomProperties custProp = CustomProperties.of(nics.iterator().next().network);
+            ManagedObjectReference moRef = custProp.getMoRef(CustomProperties.MOREF);
+            OvfNetworkMapping nm = new OvfNetworkMapping();
+            nm.setName(n);
+            nm.setNetwork(moRef);
+            networks.add(nm);
+        });
+        return networks;
     }
 
     private ManagedObjectReference replicateVMTemplate(ManagedObjectReference resourcePool,

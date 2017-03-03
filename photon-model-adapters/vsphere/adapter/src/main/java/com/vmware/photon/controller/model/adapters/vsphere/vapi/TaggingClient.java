@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere.vapi;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -51,7 +52,15 @@ public class TaggingClient extends VapiClient {
         RpcResponse resp = rpc(call);
         throwIfError("Cannot get tags for object " + VimUtils.convertMoRefToString(ref), resp);
 
-        return StreamSupport.stream(resp.result.get("output").spliterator(), false)
+        ObjectNode result = resp.result;
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        JsonNode jsonNode = result.get("output");
+        if (jsonNode == null) {
+            return Collections.emptyList();
+        }
+        return StreamSupport.stream(jsonNode.spliterator(), false)
                 .map(JsonNode::asText)
                 .collect(Collectors.toList());
     }

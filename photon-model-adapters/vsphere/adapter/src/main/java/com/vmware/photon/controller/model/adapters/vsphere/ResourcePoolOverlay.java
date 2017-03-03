@@ -50,7 +50,7 @@ public class ResourcePoolOverlay extends AbstractOverlay {
         if (value < 0) {
             return 0;
         }
-        return value;
+        return value * 1024 * 1024;
     }
 
     public String makeUserFriendlyName(String context) {

@@ -107,4 +107,8 @@ public class EnumerationContext {
     public Phaser getVmTracker() {
         return this.vmTracker;
     }
+
+    public void resetVmTracker() {
+        this.vmTracker = new Phaser(1);
+    }
 }

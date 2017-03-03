@@ -110,6 +110,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     private static final int MAX_CONCURRENT_ENUM_PROCESSES = 10;
     private static final String FAKE_SUBNET_CIDR = "0.0.0.0/0";
+    private static final long QUERY_TASK_EXPIRY_MICROS = TimeUnit.MINUTES.toMicros(1);
 
     /*
      * A VM must "ferment" for a few minutes before being eligible for enumeration. This is the time
@@ -446,6 +447,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         spec = client.createVmFilterSpec();
         try {
             for (List<ObjectContent> page : client.retrieveObjects(spec)) {
+                enumerationContext.resetVmTracker();
                 for (ObjectContent cont : page) {
                     if (!VimUtils.isVirtualMachine(cont.getObj())) {
                         continue;
@@ -460,6 +462,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         processFoundVm(enumerationContext, vm);
                     }
                 }
+                enumerationContext.getVmTracker().arriveAndAwaitAdvance();
             }
         } catch (Exception e) {
             String msg = "Error processing PropertyCollector results";
@@ -467,9 +470,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             mgr.patchTaskToFailure(msg, e);
             return;
         }
-
-
-        enumerationContext.getVmTracker().arriveAndAwaitAdvance();
 
         try {
             vapiConnection.close();
@@ -1313,6 +1313,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.tenantLinks = enumerationContext.getTenantLinks();
 
         ComputeDescription desc = makeDescriptionForResourcePool(enumerationContext, rp, selfLink);
+        desc.tenantLinks = enumerationContext.getTenantLinks();
         state.descriptionLink = desc.documentSelfLink;
 
         logFine(() -> String.format("Found new ResourcePool %s", state.name));
@@ -1405,6 +1406,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      */
     private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
         task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT);
+        task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
         Operation.createPost(UriUtils.buildUri(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(task)
                 .setCompletion((o, e) -> {
