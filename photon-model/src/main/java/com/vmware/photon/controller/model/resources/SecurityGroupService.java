@@ -220,13 +220,13 @@ public class SecurityGroupService extends StatefulService {
             // rules are overwritten -- it's not a merge
             // if a new set of rules are input they will be overwritten
             if (patchBody.ingress != null) {
-                if (currentState.ingress == null || !currentState.ingress.equals(patchBody.ingress)) {
+                if (currentState.ingress == null || !areRuleListsEqual(currentState.ingress, patchBody.ingress)) {
                     currentState.ingress = patchBody.ingress;
                     hasStateChanged = true;
                 }
             }
             if (patchBody.egress != null) {
-                if (currentState.egress == null || !currentState.egress.equals(patchBody.egress)) {
+                if (currentState.egress == null || !areRuleListsEqual(currentState.egress, patchBody.egress)) {
                     currentState.egress = patchBody.egress;
                     hasStateChanged = true;
                 }
@@ -236,6 +236,19 @@ public class SecurityGroupService extends StatefulService {
         ResourceUtils
                 .handlePatch(patch, currentState, getStateDescription(), SecurityGroupState.class,
                         customPatchHandler);
+    }
+
+    // check if the sourceList and destList have the same elements in any order
+    private boolean areRuleListsEqual(List<Rule> sourceList, List<Rule> destList) {
+        if (sourceList.size() != destList.size()) {
+            return false;
+        }
+        for (Rule sourceRule : sourceList) {
+            if (!destList.contains(sourceRule)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

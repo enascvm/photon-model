@@ -1429,6 +1429,13 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                                 ResourceGroupState.class);
                                 logWarning(() -> String.format("Found multiple instance of the same"
                                                 + " resource group %s", rGState.id));
+                                // retain the storageDescriptionLink on the existing instance if it is unchanged
+                                if (oldDiskState != null) {
+                                    if (queryTask.results.documentLinks.contains(
+                                            oldDiskState.storageDescriptionLink)) {
+                                        containerSelfLink = oldDiskState.storageDescriptionLink;
+                                    }
+                                }
                             }
                         }
 

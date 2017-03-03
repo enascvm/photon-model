@@ -118,13 +118,17 @@ public class TagService extends StatefulService {
         }
 
         // check if the tag has to be turned from external to local
+        boolean modified = false;
         if (newTagState.external != null) {
             if (currentState.external == null || (Boolean.TRUE.equals(currentState.external)
                     && Boolean.FALSE.equals(newTagState.external))) {
                 currentState.external = newTagState.external;
+                modified = true;
             }
         }
-
+        if (!modified) {
+            put.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+        }
         put.setBody(currentState);
         put.complete();
     }

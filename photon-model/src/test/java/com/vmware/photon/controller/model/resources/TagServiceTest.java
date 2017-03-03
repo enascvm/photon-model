@@ -168,6 +168,7 @@ public class TagServiceTest extends Suite {
             assertThat(returnState.key, is(startState.key));
             assertThat(returnState.value, is(startState.value));
             assertThat(returnState.external, is(Boolean.TRUE));
+            assertThat(returnState.documentVersion, is (0L));
         }
 
         @Test
@@ -227,7 +228,15 @@ public class TagServiceTest extends Suite {
                     TagService.TagState.class);
 
             assertThat(newReturnState.documentSelfLink, is(returnState.documentSelfLink));
-            assertThat(newReturnState.documentVersion, is(1L));
+            assertThat(newReturnState.documentVersion, is(0L));
+            startState.external = Boolean.TRUE;
+            TagService.TagState updatedReturnState = postServiceSynchronously(
+                    TagService.FACTORY_LINK, startState,
+                    TagService.TagState.class);
+
+            assertThat(updatedReturnState.documentSelfLink, is(returnState.documentSelfLink));
+            assertThat(updatedReturnState.documentVersion, is(1L));
+
         }
     }
 

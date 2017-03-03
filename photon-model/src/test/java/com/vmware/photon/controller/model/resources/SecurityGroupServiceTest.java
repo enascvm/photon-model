@@ -266,11 +266,19 @@ public class SecurityGroupServiceTest extends Suite {
                     SecurityGroupService.FACTORY_LINK,
                             startState, SecurityGroupService.SecurityGroupState.class);
 
-            Rule newIngressrule = new Rule();
-            newIngressrule.name = "ssh";
-            newIngressrule.protocol = "tcp";
-            newIngressrule.ipRangeCidr = "10.10.10.10/10";
-            newIngressrule.ports = "44";
+            Rule newIngressrule1 = new Rule();
+            newIngressrule1.name = "ssh";
+            newIngressrule1.protocol = "tcp";
+            newIngressrule1.ipRangeCidr = "10.10.10.10/10";
+            newIngressrule1.ports = "44";
+            newIngressrule1.access = Access.Allow;
+
+            Rule newIngressrule2 = new Rule();
+            newIngressrule2.name = "ssh";
+            newIngressrule2.protocol = "tcp";
+            newIngressrule2.ipRangeCidr = "10.10.10.10/10";
+            newIngressrule2.ports = "45";
+            newIngressrule2.access = Access.Allow;
 
             Rule newEgressRule = new Rule();
             newEgressRule.name = "out";
@@ -282,7 +290,8 @@ public class SecurityGroupServiceTest extends Suite {
             patchState.name = "newName";
             patchState.ingress = new ArrayList<>();
             patchState.egress = new ArrayList<>();
-            patchState.ingress.add(0, newIngressrule);
+            patchState.ingress.add(0, newIngressrule1);
+            patchState.ingress.add(1, newIngressrule2);
             patchState.egress.add(0, newEgressRule);
             patchState.customProperties = new HashMap<>();
             patchState.customProperties.put("customKey", "customValue");
@@ -332,6 +341,17 @@ public class SecurityGroupServiceTest extends Suite {
                     is("customValue"));
             assertEquals(returnState.tenantLinks.size(), 2);
             assertEquals(returnState.groupLinks, patchState.groupLinks);
+
+            patchState.ingress.clear();
+            patchState.ingress.add(0, newIngressrule2);
+            patchState.ingress.add(1, newIngressrule1);
+            patchServiceSynchronously(returnState.documentSelfLink,
+                    patchState);
+
+            SecurityGroupService.SecurityGroupState newReturnState = getServiceSynchronously(
+                    returnState.documentSelfLink,
+                    SecurityGroupService.SecurityGroupState.class);
+            assertEquals(returnState.documentVersion, newReturnState.documentVersion);
         }
     }
 
