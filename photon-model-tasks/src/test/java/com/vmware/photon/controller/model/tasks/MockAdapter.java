@@ -30,6 +30,7 @@ import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
+import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -38,6 +39,7 @@ import com.vmware.photon.controller.model.support.CertificateInfo;
 import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
+import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService.ProvisionSubnetTaskState;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
@@ -76,6 +78,9 @@ public class MockAdapter {
 
         host.startService(new MockNetworkInstanceSuccessAdapter());
         host.startService(new MockNetworkInstanceFailureAdapter());
+
+        host.startService(new MockSubnetInstanceSuccessAdapter());
+        host.startService(new MockSubnetInstanceFailureAdapter());
 
         host.startService(new MockFirewallInstanceSuccessAdapter());
         host.startService(new MockFirewallInstanceFailureAdapter());
@@ -465,6 +470,68 @@ public class MockAdapter {
     }
 
     /**
+     * Mock subnet instance adapter that always succeeds.
+     */
+    public static class MockSubnetInstanceSuccessAdapter extends
+            StatelessService {
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_subnet_service_success_adapter";
+
+        @Override
+        public void handleRequest(Operation op) {
+            if (!op.hasBody()) {
+                op.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+            switch (op.getAction()) {
+            case PATCH:
+                SubnetInstanceRequest request = op.getBody(SubnetInstanceRequest.class);
+                ProvisionSubnetTaskState provisionSubnetTaskState = new ProvisionSubnetTaskState();
+                provisionSubnetTaskState.taskInfo = new TaskState();
+                provisionSubnetTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
+                sendRequest(Operation.createPatch(
+                        request.taskReference).setBody(
+                        provisionSubnetTaskState));
+                op.complete();
+                break;
+            default:
+                super.handleRequest(op);
+            }
+        }
+    }
+
+    /**
+     * Mock subnet instance adapter that always fails.
+     */
+    public static class MockSubnetInstanceFailureAdapter extends
+            StatelessService {
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_subnet_service_failure_adapter";
+
+        @Override
+        public void handleRequest(Operation op) {
+            if (!op.hasBody()) {
+                op.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+            switch (op.getAction()) {
+            case PATCH:
+                SubnetInstanceRequest request = op.getBody(SubnetInstanceRequest.class);
+                ProvisionSubnetTaskState provisionSubnetTaskState = new ProvisionSubnetTaskState();
+                provisionSubnetTaskState.taskInfo = createFailedTaskInfo();
+
+                sendRequest(Operation.createPatch(
+                        request.taskReference).setBody(
+                        provisionSubnetTaskState));
+                op.complete();
+                break;
+            default:
+                super.handleRequest(op);
+            }
+        }
+    }
+
+    /**
      * Mock firewall instance adapter that always succeeds.
      */
     public static class MockFirewallInstanceSuccessAdapter extends
@@ -667,7 +734,7 @@ public class MockAdapter {
         public static final String SELF_LINK = UriPaths.PROVISIONING
                 + "/mock_success_image_enumeration_adapter";
 
-        public static final TaskState COMPLETE_STATE  = createSuccessTaskInfo();
+        public static final TaskState COMPLETE_STATE = createSuccessTaskInfo();
 
         public MockSuccessImageEnumerationAdapter() {
             super(COMPLETE_STATE);

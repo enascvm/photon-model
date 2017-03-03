@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import java.net.URI;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -112,6 +113,13 @@ public class SubnetService extends StatefulService {
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
         public String endpointLink;
+
+        /**
+         * The subnet adapter to use to create the subnet.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_6)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public URI instanceAdapterReference;
     }
 
     public SubnetService() {

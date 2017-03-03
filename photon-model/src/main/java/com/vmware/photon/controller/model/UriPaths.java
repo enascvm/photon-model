@@ -38,6 +38,7 @@ public class UriPaths {
     public enum AdapterTypePath {
         INSTANCE_ADAPTER("instanceAdapter", "instance-adapter"),
         NETWORK_ADAPTER("networkAdapter", "network-adapter"),
+        SUBNET_ADAPTER("subnetAdapter", "sub-network-adapter"),
         FIREWALL_ADAPTER("firewallAdapter", "firewall-adapter"),
         STATS_ADAPTER("statsAdapter", "stats-adapter"),
         BOOT_ADAPTER("bootAdapter", "boot-adapter"),
