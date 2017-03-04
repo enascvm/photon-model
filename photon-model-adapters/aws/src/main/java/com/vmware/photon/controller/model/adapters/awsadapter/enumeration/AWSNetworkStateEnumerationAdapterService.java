@@ -315,11 +315,14 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      */
     private void getLocalNetworkStates(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
+        if (context.vpcs.isEmpty()) {
+            handleNetworkStateChanges(context, next);
+            return;
+        }
         QueryTask queryTask = createQueryToGetExistingNetworkStatesFilteredByDiscoveredVPCs(
                 context.vpcs.keySet(), context.request.request.endpointLink,
                 context.request.regionId,
                 context.request.tenantLinks);
-
         // create the query to find resources
         QueryUtils.startQueryTask(this, queryTask)
                 .whenComplete((qrt, e) -> {
@@ -364,6 +367,11 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      */
     private void getLocalSubnetStates(AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
+        if (context.subnets.isEmpty()) {
+            handleNetworkStateChanges(context, next);
+            return;
+        }
+
         QueryTask q = createQueryToGetExistingSubnetStatesFilteredByDiscoveredSubnets(
                 context.subnets.keySet(), context.request.request.endpointLink,
                 context.request.regionId,

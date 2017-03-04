@@ -15,6 +15,8 @@ package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -27,6 +29,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
@@ -39,6 +42,9 @@ import com.vmware.xenon.common.Utils;
  * Common utility methods for different adapters.
  */
 public class AdapterUtils {
+
+    private static final int EXECUTOR_SHUTDOWN_INTERVAL_MINUTES = 5;
+
     /**
      * Checks if the given resource is a compute host or a VM.
      *
@@ -232,6 +238,24 @@ public class AdapterUtils {
                 .createDelete(existingStateURI)
                 .setBody(state)
                 .setReferer(service.getUri());
+    }
+
+    /**
+     * Waits for termination of given executor service.
+     */
+    public static void awaitTermination(ExecutorService executor) {
+        try {
+            if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_INTERVAL_MINUTES, TimeUnit.MINUTES)) {
+                Utils.logWarning(
+                        "Executor service can't be shutdown. Trying to shutdown now...");
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Utils.logWarning(e.getMessage());
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            Utils.logWarning(e.getMessage());
+        }
     }
 
     /**

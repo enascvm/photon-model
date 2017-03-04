@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
-
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -79,7 +77,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
     @Override
     public void handleStop(Operation delete) {
         this.executorService.shutdown();
-        awaitTermination(this, this.executorService);
+        AdapterUtils.awaitTermination(this.executorService);
         super.handleStop(delete);
     }
 

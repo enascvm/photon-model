@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumera
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -59,6 +60,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
@@ -531,8 +533,11 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             List<NetworkInterfaceState> existingNicStates) {
 
         // Collect all device indexes of local and remote NICs
-        List<Integer> awsDeviceIndexes = instance.getNetworkInterfaces().stream().map(awsNic -> awsNic.getAttachment().getDeviceIndex()).collect(Collectors.toList());
-        List<Integer> localNICsDeviceIndexes = existingNicStates.stream().map(nicState -> nicState.deviceIndex).collect(Collectors.toList());
+        List<Integer> awsDeviceIndexes = instance.getNetworkInterfaces() != null ?
+                instance.getNetworkInterfaces().stream().map(
+                        awsNic -> awsNic.getAttachment().getDeviceIndex()).collect(Collectors.toList()) : Collections.emptyList();
+        List<Integer> localNICsDeviceIndexes = existingNicStates != null ?
+                existingNicStates.stream().map(nicState -> nicState.deviceIndex).collect(Collectors.toList()) : Collections.emptyList();
 
         // Calculate delta lists {{
 

@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
@@ -105,7 +104,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
     @Override
     public void handleStop(Operation delete) {
         this.executorService.shutdown();
-        awaitTermination(this, this.executorService);
+        AdapterUtils.awaitTermination(this.executorService);
         super.handleStop(delete);
     }
 

@@ -27,7 +27,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REGISTRED_STATE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
@@ -178,7 +177,7 @@ public class AzureInstanceService extends StatelessService {
     @Override
     public void handleStop(Operation delete) {
         this.executorService.shutdown();
-        awaitTermination(this, this.executorService);
+        AdapterUtils.awaitTermination(this.executorService);
         super.handleStop(delete);
     }
 

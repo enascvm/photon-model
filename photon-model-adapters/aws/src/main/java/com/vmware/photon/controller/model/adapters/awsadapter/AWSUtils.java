@@ -33,8 +33,6 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import com.amazonaws.AmazonServiceException;
@@ -80,7 +78,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -91,7 +88,6 @@ public class AWSUtils {
     public static final String AWS_FILTER_VPC_ID = "vpc-id";
     public static final String NO_VALUE = "no-value";
     public static final String TILDA = "~";
-    private static final int EXECUTOR_SHUTDOWN_INTERVAL_MINUTES = 5;
     public static final String DEFAULT_SECURITY_GROUP_NAME = "photon-model-sg";
     public static final String DEFAULT_SECURITY_GROUP_DESC = "VMware Photon model security group";
     public static final int[] DEFAULT_ALLOWED_PORTS = { 22, 443, 80, 8080,
@@ -313,25 +309,6 @@ public class AWSUtils {
         runningInstanceFilter.setName(INSTANCE_STATE);
         runningInstanceFilter.setValues(stateValues);
         return runningInstanceFilter;
-    }
-
-    /**
-     * Waits for termination of given executor service.
-     */
-    public static void awaitTermination(Logger logger, ExecutorService executor) {
-        try {
-            if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_INTERVAL_MINUTES, TimeUnit.MINUTES)) {
-                logger.log(Level.WARNING,
-                        "Executor service can't be shutdown for AWS. Trying to shutdown now...");
-                executor.shutdownNow();
-            }
-            logger.log(Level.FINE, "Executor service shutdown for AWS");
-        } catch (InterruptedException e) {
-            logger.log(Level.SEVERE, Utils.toString(e));
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            logger.log(Level.SEVERE, Utils.toString(e));
-        }
     }
 
     public static List<String> getOrCreateSecurityGroups(AWSInstanceContext aws) {

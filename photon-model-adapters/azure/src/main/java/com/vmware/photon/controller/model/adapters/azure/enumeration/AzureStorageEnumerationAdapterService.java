@@ -33,7 +33,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
@@ -75,7 +74,6 @@ import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
-
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -87,6 +85,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccountResultList;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -98,6 +97,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -154,7 +154,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     @Override
     public void handleStop(Operation delete) {
         this.executorService.shutdown();
-        awaitTermination(this, this.executorService);
+        AdapterUtils.awaitTermination(this.executorService);
         super.handleStop(delete);
     }
 

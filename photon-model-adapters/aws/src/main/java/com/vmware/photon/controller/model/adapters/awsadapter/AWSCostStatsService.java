@@ -18,7 +18,6 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -32,6 +31,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -66,6 +66,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateW
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -96,6 +97,7 @@ public class AWSCostStatsService extends StatelessService {
     protected static final String BILLS_BACK_IN_TIME_MONTHS_KEY = "aws.costsCollection.backInTime.months";
 
     private AWSClientManager clientManager;
+    private ExecutorService executor;
 
     protected enum AWSCostStatsCreationStages {
         ACCOUNT_DETAILS, CLIENT, QUERY_BILL_MONTH_TO_DOWNLOAD, DOWNLOAD_THEN_PARSE, QUERY_LOCAL_RESOURCES, QUERY_LINKED_ACCOUNTS, QUERY_BILL_PROCESSED_TIME, CREATE_STATS, POST_STATS
@@ -145,9 +147,17 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     @Override
+    public void handleStart(Operation start) {
+        this.executor = getHost().allocateExecutor(this);
+        super.handleStart(start);
+    }
+
+    @Override
     public void handleStop(Operation delete) {
         AWSClientManagerFactory.returnClientManager(this.clientManager,
                 AWSConstants.AwsClientType.S3);
+        this.executor.shutdown();
+        AdapterUtils.awaitTermination(this.executor);
         super.handleStop(delete);
     }
 
@@ -350,52 +360,56 @@ public class AWSCostStatsService extends StatelessService {
     protected void scheduleDownload(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
 
-        String accountId = statsData.computeDesc.customProperties
-                .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
-        logFine(() -> String.format("Account: %s was last processed at: %s.", accountId,
-                statsData.accountIdToBillProcessedTime.get(accountId)));
+        OperationContext origContext = OperationContext.getOperationContext();
+        this.executor.submit(() -> {
+            OperationContext.restoreOperationContext(origContext);
+            String accountId = statsData.computeDesc.customProperties
+                    .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
+            logFine(() -> String.format("Account: %s was last processed at: %s.", accountId,
+                    statsData.accountIdToBillProcessedTime.get(accountId)));
 
-        if (accountId == null) {
-            logWarning(() -> String.format("Account ID is not set for account '%s'. Not collecting"
-                            + " cost stats.", statsData.computeDesc.documentSelfLink));
-            postAllResourcesCostStats(statsData);
-            return;
-        }
-
-        String billsBucketName = statsData.computeDesc.customProperties
-                .getOrDefault(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, null);
-        if (billsBucketName == null) {
-            billsBucketName = AWSUtils
-                    .autoDiscoverBillsBucketName(statsData.s3Client.getAmazonS3Client(), accountId);
-            if (billsBucketName == null) {
-                logWarning(() -> String.format("Bills Bucket name is not configured for account"
-                        + " '%s'. Not collecting cost stats.",
-                        statsData.computeDesc.documentSelfLink));
+            if (accountId == null) {
+                logWarning(() -> String.format("Account ID is not set for account '%s'. Not collecting"
+                        + " cost stats.", statsData.computeDesc.documentSelfLink));
                 postAllResourcesCostStats(statsData);
                 return;
-            } else {
-                setCustomProperty(statsData, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
-                        billsBucketName);
             }
-        }
-        try {
-            if (statsData.billMonthToDownload == null) {
-                populateBillMonthToProcess(statsData, accountId);
+
+            String billsBucketName = statsData.computeDesc.customProperties
+                    .getOrDefault(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, null);
+            if (billsBucketName == null) {
+                billsBucketName = AWSUtils
+                        .autoDiscoverBillsBucketName(statsData.s3Client.getAmazonS3Client(), accountId);
+                if (billsBucketName == null) {
+                    logWarning(() -> String.format("Bills Bucket name is not configured for account"
+                            + " '%s'. Not collecting cost stats.",
+                            statsData.computeDesc.documentSelfLink));
+                    postAllResourcesCostStats(statsData);
+                    return;
+                } else {
+                    setCustomProperty(statsData, AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY,
+                            billsBucketName);
+                }
             }
-            LocalDate firstDayOfCurrentMonth = getFirstDayOfCurrentMonth();
-            if (statsData.billMonthToDownload.compareTo(firstDayOfCurrentMonth) <= 0) {
-                downloadAndParse(statsData, billsBucketName);
-            } else {
-                // Proceed to the next stage only after downloading and processing all the past
-                // and current months' bills.
-                statsData.stage = next;
-                handleCostStatsCreationRequest(statsData);
+            try {
+                if (statsData.billMonthToDownload == null) {
+                    populateBillMonthToProcess(statsData, accountId);
+                }
+                LocalDate firstDayOfCurrentMonth = getFirstDayOfCurrentMonth();
+                if (statsData.billMonthToDownload.compareTo(firstDayOfCurrentMonth) <= 0) {
+                    downloadAndParse(statsData, billsBucketName);
+                } else {
+                    // Proceed to the next stage only after downloading and processing all the past
+                    // and current months' bills.
+                    statsData.stage = next;
+                    handleCostStatsCreationRequest(statsData);
+                }
+            } catch (IOException e) {
+                logSevere(e);
+                AdapterUtils.sendFailurePatchToProvisioningTask(this,
+                        statsData.statsRequest.taskReference, e);
             }
-        } catch (IOException e) {
-            logSevere(e);
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, e);
-        }
+        });
     }
 
     /**
@@ -1066,6 +1080,7 @@ public class AWSCostStatsService extends StatelessService {
                                 exception));
                         AdapterUtils.sendFailurePatchToProvisioningTask(this,
                                 context.statsRequest.taskReference, exception);
+                        return;
                     }
                     QueryTask body = operation.getBody(QueryTask.class);
                     Collection<Object> values = body.results.documents.values();

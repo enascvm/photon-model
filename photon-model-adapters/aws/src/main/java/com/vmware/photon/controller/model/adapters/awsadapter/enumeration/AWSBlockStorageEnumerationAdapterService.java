@@ -19,7 +19,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.SNAPSHOT_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_GENERAL_PURPOSED_SSD;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_MAGNETIC;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE_PROVISIONED_SSD;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
@@ -610,7 +609,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             if (volumeType.equalsIgnoreCase(VOLUME_TYPE_GENERAL_PURPOSED_SSD)
                     || (volumeType.equalsIgnoreCase(VOLUME_TYPE_PROVISIONED_SSD))) {
                 diskState.type = DiskType.SSD;
-            } else if (volumeType.equalsIgnoreCase(VOLUME_TYPE_MAGNETIC)) {
+            } else {
                 diskState.type = DiskType.HDD;
             }
         }

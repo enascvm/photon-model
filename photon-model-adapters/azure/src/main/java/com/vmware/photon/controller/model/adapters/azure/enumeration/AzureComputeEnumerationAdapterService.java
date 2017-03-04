@@ -25,7 +25,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.VM_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.WINDOWS_OPERATING_SYSTEM;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
@@ -76,6 +75,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachine;
 import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachineListResult;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -93,6 +93,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -154,7 +155,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     @Override
     public void handleStop(Operation delete) {
         this.executorService.shutdown();
-        awaitTermination(this, this.executorService);
+        AdapterUtils.awaitTermination(this.executorService);
         super.handleStop(delete);
     }
 

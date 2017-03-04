@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.awaitTermination;
 
 import java.io.IOException;
 import java.net.URI;
@@ -104,7 +103,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
     @Override
     public void handleStop(Operation delete) {
         this.executorService.shutdown();
-        awaitTermination(this, this.executorService);
+        AdapterUtils.awaitTermination(this.executorService);
         super.handleStop(delete);
     }
 

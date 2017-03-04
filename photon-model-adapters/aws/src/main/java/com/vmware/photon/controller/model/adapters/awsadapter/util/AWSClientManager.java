@@ -20,7 +20,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.THREAD_POOL_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths.AWS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.TILDA;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.awaitTermination;
 
 import java.net.URI;
 import java.util.concurrent.ExecutorService;
@@ -240,7 +239,7 @@ public class AWSClientManager {
             // executor pool.
             if (!executorService.isShutdown()) {
                 executorService.shutdown();
-                awaitTermination(logger, executorService);
+                AdapterUtils.awaitTermination(executorService);
             }
             this.executorCache.clear();
         }

@@ -26,6 +26,8 @@ import okhttp3.OkHttpClient;
 
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
+import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -36,7 +38,6 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AzureUtils {
 
-    private static final int EXECUTOR_SHUTDOWN_INTERVAL_MINUTES = 5;
     private static final Pattern RESOURCE_GROUP_NAME_PATTERN =
             Pattern.compile(".*/resourcegroups/([^/]*)", Pattern.CASE_INSENSITIVE);
     private static final Pattern VIRTUAL_NETWORK_GATEWAY_PATTERN =
@@ -121,25 +122,6 @@ public class AzureUtils {
     }
 
     /**
-     * Waits for termination of given executor service.
-     */
-    public static void awaitTermination(StatelessService service, ExecutorService executor) {
-        try {
-            if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_INTERVAL_MINUTES, TimeUnit.MINUTES)) {
-                service.logWarning(
-                        "Executor service can't be shutdown for Azure. Trying to shutdown now...");
-                executor.shutdownNow();
-            }
-            service.logFine(() -> "Executor service shutdown for Azure");
-        } catch (InterruptedException e) {
-            service.logSevere(e);
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            service.logSevere(e);
-        }
-    }
-
-    /**
      * Clean up Azure SDK HTTP client.
      */
     public static void cleanUpHttpClient(StatelessService service, OkHttpClient httpClient) {
@@ -151,7 +133,7 @@ public class AzureUtils {
         ExecutorService httpClientExecutor = httpClient.dispatcher().executorService();
         httpClientExecutor.shutdown();
 
-        awaitTermination(service, httpClientExecutor);
+        AdapterUtils.awaitTermination(httpClientExecutor);
         httpClient = null;
     }
 
