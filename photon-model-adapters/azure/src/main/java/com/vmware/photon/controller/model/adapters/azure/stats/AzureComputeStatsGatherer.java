@@ -426,8 +426,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
      * The Asynchronous handler that will be called.
      * @return
      */
-    public void getMetricStatisticsAsync(
-            final AzureMetricRequest request,
+    public void getMetricStatisticsAsync(final AzureMetricRequest request,
             final AsyncHandler<AzureMetricRequest, AzureMetricResponse> asyncHandler) {
         this.executorService.submit(new Runnable() {
             @Override

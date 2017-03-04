@@ -61,6 +61,7 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.credentials.AzureEnvironment;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.models.VirtualMachine;
 import com.microsoft.azure.management.network.NetworkManagementClient;
 import com.microsoft.azure.management.network.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
@@ -158,11 +159,10 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private static final int STALE_BLOBS_COUNT = 5;
     private static final int STALE_SECURITY_GROUPS_COUNT = 4;
 
-    // SHARED Compute Host / End-point between test runs. {{
+    // Shared Compute Host / End-point between test runs.
     private static ComputeState computeHost;
     private static String resourcePoolLink;
     private static String authLink;
-    // }}
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -382,7 +382,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         createAzureBlobs(STALE_BLOBS_COUNT);
         createAzureSecurityGroups(STALE_SECURITY_GROUPS_COUNT);
 
-        // {{ Add tags, that later should be discovered as part of first enumeration cycle.
+        // Add tags, that later should be discovered as part of first enumeration cycle.
 
         // tag v-Net
         VirtualNetwork vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient, this.azureVMName,
@@ -396,7 +396,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 DEFAULT_NIC_SPEC.network.name, vmNetwUpdate);
 
         // tag VM
-        com.microsoft.azure.management.compute.models.VirtualMachine vmUpdate = getAzureVirtualMachine(
+        VirtualMachine vmUpdate = getAzureVirtualMachine(
                 this.computeManagementClient, this.azureVMName, this.azureVMName);
 
         Map<String, String> vmTags = new HashMap<String, String>();
@@ -417,7 +417,6 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         updateAzureSecurityGroup(this.networkManagementClient, this.azureVMName,
                 AzureTestUtil.AZURE_SECURITY_GROUP_NAME, sgUpdate);
-        // }}
 
         // No need to create stale networks or subnets since createAzureVMResources will create
         // such for us.

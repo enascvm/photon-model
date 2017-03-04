@@ -38,7 +38,6 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 
-import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -56,7 +55,6 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.microsoft.azure.CloudException;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.storage.StorageManagementClient;
 import com.microsoft.azure.management.storage.StorageManagementClientImpl;
@@ -79,6 +77,7 @@ import retrofit2.Retrofit;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
@@ -99,6 +98,7 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
@@ -354,11 +354,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             deleteStorageDescription(context, StorageEnumStages.GET_STORAGE_CONTAINERS);
             break;
         case GET_STORAGE_CONTAINERS:
-            getStorageContainers(context, StorageEnumStages.GET_LOCAL_STORAGE_CONTAINERS);
+            getStorageContainersAsync(context, StorageEnumStages.GET_LOCAL_STORAGE_CONTAINERS);
             break;
         case GET_LOCAL_STORAGE_CONTAINERS:
-            getLocalStorageContainerStates(context,
-                    StorageEnumStages.UPDATE_RESOURCE_GROUP_STATES);
+            getLocalStorageContainerStates(context, StorageEnumStages.UPDATE_RESOURCE_GROUP_STATES);
             break;
         case UPDATE_RESOURCE_GROUP_STATES:
             updateResourceGroupStates(context, StorageEnumStages.CREATE_RESOURCE_GROUP_STATES);
@@ -370,7 +369,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             deleteResourceGroupStates(context, StorageEnumStages.GET_BLOBS);
             break;
         case GET_BLOBS:
-            getBlobs(context, StorageEnumStages.GET_LOCAL_STORAGE_DISKS);
+            getBlobsAsync(context, StorageEnumStages.GET_LOCAL_STORAGE_DISKS);
             break;
         case GET_LOCAL_STORAGE_DISKS:
             getLocalDiskStates(context, StorageEnumStages.UPDATE_DISK_STATES);
@@ -644,81 +643,90 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Collection<Operation> opCollection = new ArrayList<>();
         String resourceGroupName = getResourceGroupName(storageAccount.id);
 
-        try {
-            // Retrieve and store the list of access keys for the storage account
-            ServiceResponse<StorageAccountKeys> keys =
-                    getStorageManagementClient(context).getStorageAccountsOperations()
-                    .listKeys(resourceGroupName, storageAccount.name);
+        // Retrieve and store the list of access keys for the storage account
+        getStorageManagementClient(context).getStorageAccountsOperations()
+                .listKeysAsync(resourceGroupName, storageAccount.name,
+                        new AzureAsyncCallback<StorageAccountKeys>() {
 
-            AuthCredentialsService.AuthCredentialsServiceState storageAuth =
-                    new AuthCredentialsService.AuthCredentialsServiceState();
-            storageAuth.documentSelfLink = UUID.randomUUID().toString();
-            storageAuth.customProperties = new HashMap<>();
-            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, keys.getBody().getKey1());
-            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, keys.getBody().getKey2());
-            storageAuth.tenantLinks = context.parentCompute.tenantLinks;
-            if (context.request.endpointLink != null) {
-                storageAuth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
-                        context.request.endpointLink);
-            }
+                            @Override
+                            public void onError(Throwable e) {
+                                handleError(context, e);
+                            }
 
-            Operation storageAuthOp = Operation
-                    .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
-                    .setBody(storageAuth);
-            sendRequest(storageAuthOp);
+                            public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
+                                logFine(() -> String.format("Retrieved the storage account keys for"
+                                        + " storage account [%s].", storageAccount.name));
+                                StorageAccountKeys keys = result.getBody();
 
-            String connectionString = String.format(STORAGE_CONNECTION_STRING, storageAccount.name,
-                    keys.getBody().getKey1());
-            context.storageConnectionStrings.put(storageAccount.id, connectionString);
+                                AuthCredentialsService.AuthCredentialsServiceState storageAuth =
+                                        new AuthCredentialsService.AuthCredentialsServiceState();
+                                storageAuth.documentSelfLink = UUID.randomUUID().toString();
+                                storageAuth.customProperties = new HashMap<>();
+                                storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1,
+                                        keys.getKey1());
+                                storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2,
+                                        keys.getKey2());
+                                storageAuth.tenantLinks = context.parentCompute.tenantLinks;
+                                if (context.request.endpointLink != null) {
+                                    storageAuth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
+                                            context.request.endpointLink);
+                                }
 
-            String storageAuthLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
-                    storageAuth.documentSelfLink);
-            StorageDescription storageDescription = new StorageDescription();
-            storageDescription.id = storageAccount.id;
-            storageDescription.regionId = storageAccount.location;
-            storageDescription.name = storageAccount.name;
-            storageDescription.authCredentialsLink = storageAuthLink;
-            storageDescription.resourcePoolLink = context.request.resourcePoolLink;
-            storageDescription.documentSelfLink = UUID.randomUUID().toString();
-            storageDescription.endpointLink = context.request.endpointLink;
-            storageDescription.computeHostLink = context.parentCompute.documentSelfLink;
-            storageDescription.customProperties = new HashMap<>();
-            storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
-            storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI,
-                    storageAccount.properties.primaryEndpoints.blob);
-            storageDescription.tenantLinks = context.parentCompute.tenantLinks;
+                                Operation storageAuthOp = Operation
+                                        .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
+                                        .setBody(storageAuth);
+                                sendRequest(storageAuthOp);
 
-            Operation storageDescOp = Operation
-                    .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
-                    .setBody(storageDescription);
-            opCollection.add(storageDescOp);
-            OperationJoin.create(opCollection)
-                    .setCompletion((ops, exs) -> {
-                        if (exs != null) {
-                            exs.values().forEach(ex -> logWarning(() -> String.format("Error: %s",
-                                    ex.getMessage())));
-                        }
+                                String connectionString = String.format(STORAGE_CONNECTION_STRING,
+                                        storageAccount.name,
+                                        keys.getKey1());
+                                context.storageConnectionStrings.put(storageAccount.id, connectionString);
 
-                        if (context.enumNextPageLink != null) {
-                            context.subStage = StorageEnumStages.GET_STORAGE_ACCOUNTS;
-                            handleSubStage(context);
-                        }
+                                String storageAuthLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
+                                        storageAuth.documentSelfLink);
+                                StorageDescription storageDescription = new StorageDescription();
+                                storageDescription.id = storageAccount.id;
+                                storageDescription.regionId = storageAccount.location;
+                                storageDescription.name = storageAccount.name;
+                                storageDescription.authCredentialsLink = storageAuthLink;
+                                storageDescription.resourcePoolLink = context.request.resourcePoolLink;
+                                storageDescription.documentSelfLink = UUID.randomUUID().toString();
+                                storageDescription.endpointLink = context.request.endpointLink;
+                                storageDescription.computeHostLink = context.parentCompute.documentSelfLink;
+                                storageDescription.customProperties = new HashMap<>();
+                                storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
+                                storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI,
+                                        storageAccount.properties.primaryEndpoints.blob);
+                                storageDescription.tenantLinks = context.parentCompute.tenantLinks;
 
-                        if (size.decrementAndGet() == 0) {
-                            logFine(() -> "Finished creating storage descriptions");
-                            context.subStage = StorageEnumStages.DELETE_STORAGE_DESCRIPTIONS;
-                            handleSubStage(context);
-                        }
-                    })
-                    .sendWith(this);
-        } catch (CloudException e) {
-            handleError(context, e);
-            return;
-        } catch (IOException e) {
-            handleError(context, e);
-            return;
-        }
+                                Operation storageDescOp = Operation
+                                        .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
+                                        .setBody(storageDescription)
+                                        .setReferer(getUri());
+                                opCollection.add(storageDescOp);
+                                OperationJoin.create(opCollection)
+                                        .setCompletion((ops, exs) -> {
+                                            if (exs != null) {
+                                                exs.values().forEach(ex -> logWarning(() -> String.format("Error: %s",
+                                                        ex.getMessage())));
+                                            }
+
+                                            if (context.enumNextPageLink != null) {
+                                                context.subStage = StorageEnumStages.GET_STORAGE_ACCOUNTS;
+                                                handleSubStage(context);
+                                            }
+
+                                            if (size.decrementAndGet() == 0) {
+                                                logFine(() -> "Finished creating storage descriptions");
+                                                context.subStage = StorageEnumStages.DELETE_STORAGE_DESCRIPTIONS;
+                                                handleSubStage(context);
+                                            }
+                                        })
+                                        .sendWith(getHost());
+                            }
+                        });
     }
+
 
     /*
      * Delete local storage accounts and all resources inside them that no longer exist in Azure
@@ -831,41 +839,47 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
     /*
      * Get all Azure containers by storage account
      */
-    public void getStorageContainers(StorageEnumContext context, StorageEnumStages next) {
-        if (context.allStorageAccounts.size() == 0) {
-            logFine(() -> "No storage description available - clean up all resources");
-            context.subStage = StorageEnumStages.DELETE_RESOURCE_GROUP_STATES;
-            handleSubStage(context);
-            return;
-        }
-
-        for (Map.Entry<String, StorageAccount> account : context.allStorageAccounts.entrySet()) {
-            String storageConnectionString = context.storageConnectionStrings.get(account.getValue().id);
-            if (storageConnectionString == null) {
-                continue;
-            }
-
-            try {
-                CloudStorageAccount storageAccount = CloudStorageAccount
-                        .parse(storageConnectionString);
-                CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
-                Iterable<CloudBlobContainer> containerList = blobClient.listContainers();
-
-                for (CloudBlobContainer container : containerList) {
-                    String uri = container.getUri().toString();
-                    context.containerIds.add(uri);
-                    context.storageContainers.put(uri, container);
-                }
-                logFine(() -> String.format("Processing %d storage containers",
-                        context.containerIds.size()));
-            } catch (Exception e) {
-                handleError(context, e);
+    public void getStorageContainersAsync(StorageEnumContext context, StorageEnumStages next) {
+        OperationContext origContext = OperationContext.getOperationContext();
+        this.executorService.submit(() -> {
+            OperationContext.restoreOperationContext(origContext);
+            if (context.allStorageAccounts.size() == 0) {
+                logFine(() -> "No storage description available - clean up all resources");
+                context.subStage = StorageEnumStages.DELETE_RESOURCE_GROUP_STATES;
+                handleSubStage(context);
                 return;
             }
-        }
 
-        context.subStage = next;
-        handleSubStage(context);
+            for (Map.Entry<String, StorageAccount> account : context.allStorageAccounts
+                    .entrySet()) {
+                String storageConnectionString = context.storageConnectionStrings
+                        .get(account.getValue().id);
+                if (storageConnectionString == null) {
+                    continue;
+                }
+
+                try {
+                    CloudStorageAccount storageAccount = CloudStorageAccount
+                            .parse(storageConnectionString);
+                    CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
+                    Iterable<CloudBlobContainer> containerList = blobClient.listContainers();
+
+                    for (CloudBlobContainer container : containerList) {
+                        String uri = container.getUri().toString();
+                        context.containerIds.add(uri);
+                        context.storageContainers.put(uri, container);
+                    }
+                    logFine(() -> String.format("Processing %d storage containers",
+                            context.containerIds.size()));
+                } catch (Exception e) {
+                    handleError(context, e);
+                    return;
+                }
+            }
+
+            context.subStage = next;
+            handleSubStage(context);
+        });
     }
 
     /*
@@ -1229,57 +1243,66 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 .setCompletion(completionHandler));
     }
 
-    private void getBlobs(StorageEnumContext context, StorageEnumStages next) {
-        // If no storage accounts exist in Azure, no disks exist either
-        // Move on to disk deletion stage
-        if (context.storageAccountIds.size() == 0) {
-            logFine(() -> "No storage description available - clean up all local disks");
-            context.subStage = StorageEnumStages.DELETE_DISK_STATES;
-            handleSubStage(context);
-            return;
-        }
-
-        for (String storageAccountId: context.storageAccountIds) {
-
-            String storageConnectionString = context.storageConnectionStrings.get(
-                    storageAccountId);
-            if (storageConnectionString == null) {
-                continue;
-            }
-            try {
-                CloudStorageAccount storageAccount = CloudStorageAccount
-                        .parse(storageConnectionString);
-                CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
-                ResultContinuation nextContainerResults = null;
-                do {
-                    ResultSegment<CloudBlobContainer> contSegment =
-                            blobClient.listContainersSegmented(null, ContainerListingDetails.NONE,
-                                    getQueryResultLimit(), nextContainerResults, null, null);
-
-                    nextContainerResults = contSegment.getContinuationToken();
-                    for (CloudBlobContainer container : contSegment.getResults()) {
-                        ResultContinuation nextBlobResults = null;
-                        do {
-                            ResultSegment<ListBlobItem> blobsSegment = container.listBlobsSegmented(
-                                    null, false, EnumSet.noneOf(BlobListingDetails.class),
-                                    getQueryResultLimit(), nextBlobResults, null, null);
-                            nextBlobResults = blobsSegment.getContinuationToken();
-                            for (ListBlobItem blobItem : blobsSegment.getResults()) {
-                                String id = blobItem.getUri().toString();
-                                context.storageBlobs.put(id, blobItem);
-                                context.blobIds.add(id);
-                            }
-                        } while (nextBlobResults != null);
-                    }
-                } while (nextContainerResults != null);
-            } catch (Exception e) {
-                handleError(context, e);
+    private void getBlobsAsync(StorageEnumContext context, StorageEnumStages next) {
+        OperationContext origContext = OperationContext.getOperationContext();
+        this.executorService.submit(() -> {
+            OperationContext.restoreOperationContext(origContext);
+            // If no storage accounts exist in Azure, no disks exist either
+            // Move on to disk deletion stage
+            if (context.storageAccountIds.size() == 0) {
+                logFine(() -> "No storage description available - clean up all local disks");
+                context.subStage = StorageEnumStages.DELETE_DISK_STATES;
+                handleSubStage(context);
                 return;
             }
-        }
 
-        context.subStage = next;
-        handleSubStage(context);
+            for (String storageAccountId : context.storageAccountIds) {
+
+                String storageConnectionString = context.storageConnectionStrings.get(
+                        storageAccountId);
+                if (storageConnectionString == null) {
+                    continue;
+                }
+                try {
+                    CloudStorageAccount storageAccount = CloudStorageAccount
+                            .parse(storageConnectionString);
+                    CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
+                    ResultContinuation nextContainerResults = null;
+                    do {
+                        ResultSegment<CloudBlobContainer> contSegment =
+                                blobClient.listContainersSegmented(null,
+                                        ContainerListingDetails.NONE,
+                                        getQueryResultLimit(), nextContainerResults, null,
+                                        null);
+
+                        nextContainerResults = contSegment.getContinuationToken();
+                        for (CloudBlobContainer container : contSegment.getResults()) {
+                            ResultContinuation nextBlobResults = null;
+                            do {
+                                ResultSegment<ListBlobItem> blobsSegment = container
+                                        .listBlobsSegmented(
+                                                null, false,
+                                                EnumSet.noneOf(BlobListingDetails.class),
+                                                getQueryResultLimit(), nextBlobResults, null,
+                                                null);
+                                nextBlobResults = blobsSegment.getContinuationToken();
+                                for (ListBlobItem blobItem : blobsSegment.getResults()) {
+                                    String id = blobItem.getUri().toString();
+                                    context.storageBlobs.put(id, blobItem);
+                                    context.blobIds.add(id);
+                                }
+                            } while (nextBlobResults != null);
+                        }
+                    } while (nextContainerResults != null);
+                } catch (Exception e) {
+                    handleError(context, e);
+                    return;
+                }
+            }
+
+            context.subStage = next;
+            handleSubStage(context);
+        });
     }
 
     private void getLocalDiskStates(StorageEnumContext context, StorageEnumStages next) {

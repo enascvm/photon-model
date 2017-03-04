@@ -69,6 +69,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.StatelessService;
@@ -205,7 +206,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
             getStorageAccounts(dataHolder, StorageMetricsStages.CALCULATE_METRICS);
             break;
         case CALCULATE_METRICS:
-            getBlobUsedBytes(dataHolder, StorageMetricsStages.FINISHED);
+            getBlobUsedBytesAsync(dataHolder, StorageMetricsStages.FINISHED);
             break;
         case FINISHED:
             dataHolder.azureStorageStatsOperation.setBody(dataHolder.statsResponse);
@@ -306,118 +307,146 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
         sendRequest(operation);
     }
 
-    private void getBlobUsedBytes(AzureStorageStatsDataHolder statsData,
+    private void getBlobUsedBytesAsync(AzureStorageStatsDataHolder statsData,
             StorageMetricsStages next) {
-        String metricName = PhotonModelConstants.STORAGE_USED_BYTES;
-        List<ServiceStats.ServiceStat> statDatapoints = new ArrayList<>();
-        StorageManagementClient storageClient = getStorageManagementClient(statsData);
-        AtomicInteger accountsCount = new AtomicInteger(statsData.storageAccounts.size());
-        for (Map.Entry<String, StorageAccount> account : statsData.storageAccounts.entrySet()) {
-            String resourceGroupName = getResourceGroupName(account.getValue().id);
-            storageClient.getStorageAccountsOperations().listKeysAsync(resourceGroupName,
-                    account.getValue().name, new AzureAsyncCallback<StorageAccountKeys>() {
-                        @Override
-                        public void onError(Throwable e) {
-                            handleError(statsData, e);
-                        }
+        OperationContext origContext = OperationContext.getOperationContext();
+        this.executorService.submit(() -> {
+            OperationContext.restoreOperationContext(origContext);
+            String metricName = PhotonModelConstants.STORAGE_USED_BYTES;
+            List<ServiceStats.ServiceStat> statDatapoints = new ArrayList<>();
+            StorageManagementClient storageClient = getStorageManagementClient(statsData);
+            AtomicInteger accountsCount = new AtomicInteger(statsData.storageAccounts.size());
+            for (Map.Entry<String, StorageAccount> account : statsData.storageAccounts
+                    .entrySet()) {
+                String resourceGroupName = getResourceGroupName(account.getValue().id);
+                storageClient.getStorageAccountsOperations().listKeysAsync(resourceGroupName,
+                        account.getValue().name, new AzureAsyncCallback<StorageAccountKeys>() {
+                            @Override
+                            public void onError(Throwable e) {
+                                handleError(statsData, e);
+                            }
 
-                        public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
-                            logFine(() -> String.format("Retrieved the storage account keys for"
-                                            + " storage account [%s].", account.getValue().name));
-                            accountsCount.decrementAndGet();
-                            StorageAccountKeys keys = result.getBody();
-                            String storageConnectionString = String
-                                    .format(STORAGE_CONNECTION_STRING, account.getValue().name,
-                                            keys.getKey1());
+                            public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
+                                logFine(() -> String
+                                        .format("Retrieved the storage account keys for"
+                                                        + " storage account [%s].",
+                                                account.getValue().name));
+                                accountsCount.decrementAndGet();
+                                StorageAccountKeys keys = result.getBody();
+                                String storageConnectionString = String
+                                        .format(STORAGE_CONNECTION_STRING,
+                                                account.getValue().name,
+                                                keys.getKey1());
 
-                            try {
-                                CloudStorageAccount storageAccount = CloudStorageAccount
-                                        .parse(storageConnectionString);
-                                CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
-                                ResultContinuation nextContainerResults = null;
-                                do {
-                                    ResultSegment<CloudBlobContainer> contSegment =
-                                            blobClient.listContainersSegmented(null, ContainerListingDetails.NONE,
-                                                    QUERY_RESULT_LIMIT, nextContainerResults, null, null);
+                                try {
+                                    CloudStorageAccount storageAccount = CloudStorageAccount
+                                            .parse(storageConnectionString);
+                                    CloudBlobClient blobClient = storageAccount
+                                            .createCloudBlobClient();
+                                    ResultContinuation nextContainerResults = null;
+                                    do {
+                                        ResultSegment<CloudBlobContainer> contSegment =
+                                                blobClient.listContainersSegmented(null,
+                                                        ContainerListingDetails.NONE,
+                                                        QUERY_RESULT_LIMIT,
+                                                        nextContainerResults, null, null);
 
-                                    nextContainerResults = contSegment.getContinuationToken();
-                                    for (CloudBlobContainer container : contSegment.getResults()) {
-                                        ResultContinuation nextBlobResults = null;
-                                        do {
-                                            ResultSegment<ListBlobItem> blobsSegment = container.listBlobsSegmented(
-                                                    null, false, EnumSet.noneOf(
-                                                    BlobListingDetails.class),
-                                                    QUERY_RESULT_LIMIT, nextBlobResults, null, null);
-                                            nextBlobResults = blobsSegment.getContinuationToken();
-                                            for (ListBlobItem blobItem : blobsSegment.getResults()) {
-                                                if (blobItem instanceof CloudPageBlob) {
-                                                    CloudPageBlob pageBlob = (CloudPageBlob) blobItem;
-                                                    // Due to concurrency issues: We can only get the used bytes of a blob
-                                                    // only by creating a snapshot and getting the page ranges of the snapshot
-                                                    // TODO https://jira-hzn.eng.vmware.com/browse/VSYM-3445
-                                                    try {
-                                                        CloudBlob blobSnapshot = pageBlob.createSnapshot();
-                                                        statsData.snapshots.add(blobSnapshot);
-                                                        CloudPageBlob pageBlobSnapshot = (CloudPageBlob) blobSnapshot;
-                                                        ArrayList<PageRange> pages = pageBlobSnapshot.downloadPageRanges();
+                                        nextContainerResults = contSegment
+                                                .getContinuationToken();
+                                        for (CloudBlobContainer container : contSegment
+                                                .getResults()) {
+                                            ResultContinuation nextBlobResults = null;
+                                            do {
+                                                ResultSegment<ListBlobItem> blobsSegment = container
+                                                        .listBlobsSegmented(
+                                                                null, false, EnumSet.noneOf(
+                                                                        BlobListingDetails.class),
+                                                                QUERY_RESULT_LIMIT,
+                                                                nextBlobResults, null, null);
+                                                nextBlobResults = blobsSegment
+                                                        .getContinuationToken();
+                                                for (ListBlobItem blobItem : blobsSegment
+                                                        .getResults()) {
+                                                    if (blobItem instanceof CloudPageBlob) {
+                                                        CloudPageBlob pageBlob = (CloudPageBlob) blobItem;
+                                                        // Due to concurrency issues: We can only get the used bytes of a blob
+                                                        // only by creating a snapshot and getting the page ranges of the snapshot
+                                                        // TODO https://jira-hzn.eng.vmware.com/browse/VSYM-3445
+                                                        try {
+                                                            CloudBlob blobSnapshot = pageBlob
+                                                                    .createSnapshot();
+                                                            statsData.snapshots
+                                                                    .add(blobSnapshot);
+                                                            CloudPageBlob pageBlobSnapshot = (CloudPageBlob) blobSnapshot;
+                                                            ArrayList<PageRange> pages = pageBlobSnapshot
+                                                                    .downloadPageRanges();
 
-                                                        // TODO store disk utilized bytes more granularly
-                                                        // https://jira-hzn.eng.vmware.com/browse/VSYM-3355
-                                                        for (PageRange pageRange : pages) {
-                                                            statsData.utilizedBytes += pageRange.getEndOffset()
-                                                                    - pageRange.getStartOffset();
+                                                            // TODO store disk utilized bytes more granularly
+                                                            // https://jira-hzn.eng.vmware.com/browse/VSYM-3355
+                                                            for (PageRange pageRange : pages) {
+                                                                statsData.utilizedBytes +=
+                                                                        pageRange.getEndOffset()
+                                                                                - pageRange
+                                                                                .getStartOffset();
+                                                            }
+                                                        } catch (StorageException e) {
+                                                            logWarning(() -> String
+                                                                    .format("Error getting blob size: [%s]",
+                                                                            e.getMessage()));
+                                                            continue;
                                                         }
-                                                    } catch (StorageException e) {
-                                                        logWarning(() -> String.format("Error getting blob size: [%s]",
-                                                                e.getMessage()));
-                                                        continue;
                                                     }
                                                 }
-                                            }
-                                        } while (nextBlobResults != null);
-                                    }
-                                } while (nextContainerResults != null);
-                            } catch (Exception e) {
-                                handleError(statsData, e);
-                                return;
-                            } finally {
-                                // Delete snapshot - otherwise snapshot blobs will accumulate in the
-                                // Azure account
-                                if (statsData.snapshots.size() > 0) {
-                                    synchronized (statsData.snapshots) {
-                                        Iterator<CloudBlob> snapshotIterator = statsData.snapshots.iterator();
-                                        while (snapshotIterator.hasNext()) {
-                                            try {
-                                                CloudBlob snapshot = snapshotIterator.next();
-                                                snapshot.deleteIfExists();
-                                                snapshotIterator.remove();
-                                            } catch (StorageException e) {
-                                                handleError(statsData, e);
-                                                continue;
+                                            } while (nextBlobResults != null);
+                                        }
+                                    } while (nextContainerResults != null);
+                                } catch (Exception e) {
+                                    handleError(statsData, e);
+                                    return;
+                                } finally {
+                                    // Delete snapshot - otherwise snapshot blobs will accumulate in the
+                                    // Azure account
+                                    if (statsData.snapshots.size() > 0) {
+                                        synchronized (statsData.snapshots) {
+                                            Iterator<CloudBlob> snapshotIterator = statsData.snapshots
+                                                    .iterator();
+                                            while (snapshotIterator.hasNext()) {
+                                                try {
+                                                    CloudBlob snapshot = snapshotIterator
+                                                            .next();
+                                                    snapshot.deleteIfExists();
+                                                    snapshotIterator.remove();
+                                                } catch (StorageException e) {
+                                                    handleError(statsData, e);
+                                                    continue;
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            // if all storage accounts were processed, create ServiceStat and finish
-                            if (accountsCount.get() == 0) {
-                                if (statsData.utilizedBytes != 0) {
-                                    ServiceStats.ServiceStat stat = new ServiceStats.ServiceStat();
-                                    stat.latestValue = statsData.utilizedBytes;
-                                    stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(Utils.getNowMicrosUtc());
-                                    stat.unit = PhotonModelConstants.getUnitForMetric(metricName);
-                                    statDatapoints.add(stat);
+                                // if all storage accounts were processed, create ServiceStat and finish
+                                if (accountsCount.get() == 0) {
+                                    if (statsData.utilizedBytes != 0) {
+                                        ServiceStats.ServiceStat stat = new ServiceStats.ServiceStat();
+                                        stat.latestValue = statsData.utilizedBytes;
+                                        stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS
+                                                .toMicros(Utils.getNowMicrosUtc());
+                                        stat.unit = PhotonModelConstants
+                                                .getUnitForMetric(metricName);
+                                        statDatapoints.add(stat);
+                                    }
+                                    statsData.statsResponse.statValues
+                                            .put(metricName, statDatapoints);
+                                    if (statsData.statsResponse.statValues.size() == 1) {
+                                        statsData.statsResponse.computeLink = statsData.computeHostDesc.documentSelfLink;
+                                    }
+                                    statsData.stage = next;
+                                    handleStorageMetricDiscovery(statsData);
                                 }
-                                statsData.statsResponse.statValues.put(metricName, statDatapoints);
-                                if (statsData.statsResponse.statValues.size() == 1) {
-                                    statsData.statsResponse.computeLink = statsData.computeHostDesc.documentSelfLink;
-                                }
-                                statsData.stage = next;
-                                handleStorageMetricDiscovery(statsData);
                             }
-                        }
-                    });
-        }
+                        });
+            }
+        });
     }
 
     private StorageManagementClient getStorageManagementClient(AzureStorageStatsDataHolder dataholder) {
