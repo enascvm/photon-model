@@ -189,10 +189,6 @@ public class AWSUtils {
         }
 
         client.setRegion(Region.getRegion(Regions.fromName(region)));
-        // make a call to validate credentials
-        if (!isMockRequest) {
-            client.describeAlarms();
-        }
         return client;
     }
 
