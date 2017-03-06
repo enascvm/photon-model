@@ -18,8 +18,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.getVMCount;
 
@@ -35,6 +37,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -46,16 +49,24 @@ import java.util.stream.Collectors;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.AmazonEC2Client;
+import com.amazonaws.services.ec2.model.AttachInternetGatewayRequest;
 import com.amazonaws.services.ec2.model.AttachNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.AttachNetworkInterfaceResult;
 import com.amazonaws.services.ec2.model.CreateNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.CreateNetworkInterfaceResult;
+import com.amazonaws.services.ec2.model.CreateSubnetRequest;
+import com.amazonaws.services.ec2.model.CreateSubnetResult;
+import com.amazonaws.services.ec2.model.CreateVpcRequest;
+import com.amazonaws.services.ec2.model.DeleteInternetGatewayRequest;
 import com.amazonaws.services.ec2.model.DeleteNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
+import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
+import com.amazonaws.services.ec2.model.DeleteVpcRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
+import com.amazonaws.services.ec2.model.DetachInternetGatewayRequest;
 import com.amazonaws.services.ec2.model.DetachNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
@@ -71,6 +82,7 @@ import com.amazonaws.services.ec2.model.StopInstancesResult;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
 
+import com.amazonaws.services.ec2.model.Vpc;
 import org.joda.time.LocalDateTime;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -134,23 +146,29 @@ public class TestAWSSetupUtils {
     public static final String securityGroup = "aws-security-group";
     public static final String instanceType_t2_micro = "t2.micro";
     public static final String zoneId = "us-east-1";
+    public static final String avalabilityZoneIdentifier = "a";
     public static final String userData = null;
 
     // VPC/subnet details are copy-pasted from AWS, region N.Virginia, Availability Zone: us-east-1a
     // {{
     public static final String AWS_DEFAULT_VPC_ID = "vpc-95a29bf1";
-    private static final String AWS_DEFAULT_VPC_CIDR = "172.31.0.0/16";
+    public static final String AWS_DEFAULT_VPC_CIDR = "172.31.0.0/16";
 
     // Default Subnet; auto-assign public IP
     public static final String AWS_DEFAULT_SUBNET_ID = "subnet-ce01b5e4";
-    private static final String AWS_DEFAULT_SUBNET_NAME = "default";
-    private static final String AWS_DEFAULT_SUBNET_CIDR = "172.31.48.0/20";
+    public static final String AWS_DEFAULT_SUBNET_NAME = "default";
+    public static final String AWS_DEFAULT_SUBNET_CIDR = "172.31.48.0/20";
 
     // Non-default Subnet; auto-assign public IP = false
     private static final String AWS_SECONDARY_SUBNET_ID = "subnet-e91b87c4";
     private static final String AWS_SECONDARY_SUBNET_NAME = "secondary";
     private static final String AWS_SECONDARY_SUBNET_CIDR = "172.31.64.0/20";
     // }}
+
+    public static final String VPC_KEY = "vpc-id";
+    public static final String SUBNET_KEY = "subnet-id";
+    public static final String INTERNET_GATEWAY_KEY = "internet-gateway";
+    public static final String NIC_SPECS_KEY = "nicSpecs";
 
     /**
      * Return two-NIC spec where first NIC should be assigned to 'secondary' subnet and second NIC
@@ -199,13 +217,13 @@ public class TestAWSSetupUtils {
         subnets.add(new NetSpec(AWS_SECONDARY_SUBNET_ID,
                 AWS_SECONDARY_SUBNET_NAME,
                 AWS_SECONDARY_SUBNET_CIDR,
-                zoneId + "a"));
+                zoneId + avalabilityZoneIdentifier));
 
         // Random generated subnet with /28 mask to be created
         subnets.add(new NetSpec(null,
                 "third",
                 nextSubnetIp + "/28",
-                zoneId + "a"));
+                zoneId + avalabilityZoneIdentifier));
 
         return new AwsNicSpecs(network, subnets);
     }
@@ -226,7 +244,7 @@ public class TestAWSSetupUtils {
         subnets.add(new NetSpec(AWS_DEFAULT_SUBNET_ID,
                 AWS_DEFAULT_SUBNET_NAME,
                 AWS_DEFAULT_SUBNET_CIDR,
-                zoneId + "a"));
+                zoneId + avalabilityZoneIdentifier));
 
         SINGLE_NIC_SPEC = new AwsNicSpecs(network, subnets);
     }
@@ -264,6 +282,144 @@ public class TestAWSSetupUtils {
         public final int numberOfNics() {
             return this.subnets.size();
         }
+    }
+
+    public static void setUpTestVpc(AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock) {
+        awsTestContext.put(NIC_SPECS_KEY, SINGLE_NIC_SPEC);
+        awsTestContext.put(SUBNET_KEY, AWS_DEFAULT_SUBNET_ID);
+        // create new VPC, Subnet, InternetGateway if the default VPC doesn't exist
+        if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
+            String vpcId = createVPC(client, AWS_DEFAULT_VPC_CIDR);
+            awsTestContext.put(VPC_KEY, vpcId);
+            String subnetId = createSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId);
+            awsTestContext.put(SUBNET_KEY, subnetId);
+            String internetGatewayId = createInternetGateway(client);
+            awsTestContext.put(INTERNET_GATEWAY_KEY, internetGatewayId);
+            attachInternetGateway(client, vpcId, internetGatewayId);
+
+            NetSpec network = new NetSpec(vpcId, vpcId, AWS_DEFAULT_VPC_CIDR);
+
+            List<NetSpec> subnets = new ArrayList<>();
+
+            subnets.add(new NetSpec(subnetId,
+                    AWS_DEFAULT_SUBNET_NAME,
+                    AWS_DEFAULT_SUBNET_CIDR,
+                    zoneId + avalabilityZoneIdentifier));
+
+            awsTestContext.put(NIC_SPECS_KEY, new AwsNicSpecs(network, subnets));
+        }
+    }
+
+    public static void tearDownTestVpc(AmazonEC2AsyncClient client, VerificationHost host,
+                                       Map<String, Object> awsTestContext, boolean isMock) {
+        if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
+            final String vpcId = (String) awsTestContext.get(VPC_KEY);
+            final String subnetId = (String) awsTestContext.get(SUBNET_KEY);
+            final String internetGatewayId = (String) awsTestContext.get(INTERNET_GATEWAY_KEY);
+            // clean up VPC and all its dependencies if creating one at setUp
+            SecurityGroup securityGroup = getSecurityGroup(client, AWS_DEFAULT_GROUP_NAME, vpcId);
+            if (securityGroup != null) {
+                deleteSecurityGroupUsingEC2Client(client, host, securityGroup.getGroupId());
+            }
+            deleteSubnet(client, subnetId);
+            detachInternetGateway(client, vpcId, internetGatewayId);
+            deleteInternetGateway(client, internetGatewayId);
+            deleteVPC(client, vpcId);
+        }
+    }
+
+    /**
+     * Creates a VPC and returns the VPC id.
+     */
+    public static String createVPC(AmazonEC2AsyncClient client, String subnetCidr) {
+        return client.createVpc(new CreateVpcRequest().withCidrBlock(subnetCidr)).getVpc().getVpcId();
+    }
+
+    /**
+     * Delete a VPC
+     */
+    public static void deleteVPC(AmazonEC2AsyncClient client, String vpcId) {
+        client.deleteVpc(new DeleteVpcRequest().withVpcId(vpcId));
+    }
+
+    /**
+     * Return true if vpcId exists.
+     */
+    public static boolean vpcIdExists(AmazonEC2AsyncClient client, String vpcId) {
+        List<Vpc> vpcs = client.describeVpcs()
+                .getVpcs()
+                .stream()
+                .filter(vpc -> vpc.getVpcId().equals(vpcId))
+                .collect(Collectors.toList());
+        return vpcs != null && !vpcs.isEmpty();
+    }
+
+    /**
+     * Creates a Subnet and return the Subnet id.
+     */
+    public static String createSubnet(AmazonEC2AsyncClient client, String subnetCidr, String vpcId) {
+        CreateSubnetRequest req = new CreateSubnetRequest()
+                .withCidrBlock(subnetCidr)
+                .withVpcId(vpcId);
+        CreateSubnetResult res = client.createSubnet(req);
+        return res.getSubnet().getSubnetId();
+    }
+
+    /**
+     * Delete a Subnet
+     */
+    public static void deleteSubnet(AmazonEC2AsyncClient client, String subnetId) {
+        client.deleteSubnet(new DeleteSubnetRequest().withSubnetId(subnetId));
+    }
+
+    /**
+     * Creates an Internet Gateway and return the Internet Gateway id.
+     */
+    public static String createInternetGateway(AmazonEC2AsyncClient client) {
+        return client.createInternetGateway().getInternetGateway().getInternetGatewayId();
+    }
+
+    /**
+     * Attach an Internet Gateway to a VPC.
+     */
+    public static void attachInternetGateway(AmazonEC2AsyncClient client, String vpcId, String internetGatewayId) {
+        client.attachInternetGateway(
+                new AttachInternetGatewayRequest()
+                        .withVpcId(vpcId)
+                        .withInternetGatewayId(internetGatewayId));
+    }
+
+    /**
+     * Delete an Internet Gateway.
+     */
+    public static void deleteInternetGateway(AmazonEC2AsyncClient client, String internetGatewayId) {
+        client.deleteInternetGateway(new DeleteInternetGatewayRequest().withInternetGatewayId(internetGatewayId));
+    }
+
+    /**
+     * Detach an Internet Gateway to a VPC.
+     */
+    public static void detachInternetGateway(AmazonEC2AsyncClient client, String vpcId, String internetGatewayId) {
+        client.detachInternetGateway(new DetachInternetGatewayRequest()
+                .withVpcId(vpcId)
+                .withInternetGatewayId(internetGatewayId));
+    }
+
+    /**
+     * Get a list of all EC2 instance ids associated with a given VPC id.
+     */
+    public static List<String> getEC2InstanceIdsAssociatedWithVpcId(AmazonEC2AsyncClient client, String vpcId) {
+        DescribeInstancesRequest req = new DescribeInstancesRequest();
+        if (vpcId != null) {
+            req.withFilters(new Filter(AWS_VPC_ID_FILTER, Collections.singletonList(vpcId)));
+        }
+
+        DescribeInstancesResult instancesResult = client.describeInstances(req);
+        return instancesResult == null ? Collections.emptyList()
+                : instancesResult.getReservations().get(0).getInstances().stream()
+                .map(instance -> instance.getInstanceId())
+                .collect(Collectors.toList());
+
     }
 
     public static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
@@ -908,10 +1064,10 @@ public class TestAWSSetupUtils {
      * Create a new AWS NIC in the default subnet
      */
     public static String createNICDirectlyWithEC2Client (AmazonEC2Client client,
-            VerificationHost host) {
+            VerificationHost host, String subnetId) {
         // create the new AWS NIC
         CreateNetworkInterfaceRequest createNewNic = new CreateNetworkInterfaceRequest()
-                .withSubnetId(AWS_DEFAULT_SUBNET_ID);
+                .withSubnetId(subnetId);
         CreateNetworkInterfaceResult createNewNicResult = client
                 .createNetworkInterface(createNewNic);
 

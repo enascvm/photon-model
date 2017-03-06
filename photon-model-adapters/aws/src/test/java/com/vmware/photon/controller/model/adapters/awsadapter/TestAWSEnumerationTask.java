@@ -46,7 +46,9 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionMachine;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.stopVMsUsingEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
@@ -75,6 +77,7 @@ import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -150,6 +153,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     public boolean useAllRegions = false;
     public int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
 
+    private Map<String, Object> awsTestContext;
+    private String subnetId;
+    private AwsNicSpecs singleNicSpec;
+
     @Rule
     public TestName currentTestName = new TestName();
 
@@ -163,6 +170,12 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
         this.client = AWSUtils.getAsyncClient(creds, null, getExecutor());
+
+        this.awsTestContext = new HashMap<>();
+        setUpTestVpc(this.client, this.awsTestContext, this.isMock);
+        this.subnetId = (String) this.awsTestContext.get(TestAWSSetupUtils.SUBNET_KEY);
+        this.singleNicSpec = (AwsNicSpecs) this.awsTestContext.get(TestAWSSetupUtils.NIC_SPECS_KEY);
+
         try {
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
@@ -188,6 +201,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             return;
         }
         tearDownAwsVMs();
+        tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
         this.client.shutdown();
         setAwsClientMockInfo(false, null);
     }
@@ -200,7 +214,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
                 this.outPool.documentSelfLink, TestAWSSetupUtils.class,
-                zoneId, zoneId, null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                zoneId, zoneId, null, this.singleNicSpec);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
@@ -262,7 +276,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         validateVPCInformation(vpCId);
         // Count should be 1 NICs per discovered VM.
         int totalNetworkInterfaceStateCount = count6
-                * TestAWSSetupUtils.SINGLE_NIC_SPEC.numberOfNics();
+                * this.singleNicSpec.numberOfNics();
         validateNetworkInterfaceCount(totalNetworkInterfaceStateCount);
         // One VPC should be discovered in the test.
         queryDocumentsAndAssertExpectedCount(this.host, count1,
@@ -349,7 +363,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
                 this.outPool.documentSelfLink, TestAWSSetupUtils.class, zoneId, zoneId, null,
-                TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                this.singleNicSpec);
 
         this.host.setTimeoutSeconds(this.timeoutSeconds);
         // Overriding the page size to test the pagination logic with limited instances on AWS.
@@ -368,7 +382,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         int numberOfNICsBeforeAdding = vmState.networkInterfaceLinks.size();
 
-        String newNICId = createNICDirectlyWithEC2Client(this.client, this.host);
+        String newNICId = createNICDirectlyWithEC2Client(this.client, this.host, this.subnetId);
         this.nicToCleanUp = newNICId;
         String newAWSNicAttachmentId = addNICDirectlyWithEC2Client(vmState, this.client, this.host, newNICId);
 
@@ -410,7 +424,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         ComputeState vmState = createAWSVMResource(this.host, this.outComputeHost.documentSelfLink,
                 this.outPool.documentSelfLink, TestAWSSetupUtils.class, zoneId, zoneId,
-                null, TestAWSSetupUtils.SINGLE_NIC_SPEC);
+                null, this.singleNicSpec);
 
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
@@ -708,7 +722,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         assertEquals(taggedComputeState.descriptionLink, computeState.descriptionLink);
         assertTrue(taggedComputeState.networkInterfaceLinks != null);
-        assertEquals(TestAWSSetupUtils.SINGLE_NIC_SPEC.numberOfNics(),
+        assertEquals(this.singleNicSpec.numberOfNics(),
                 taggedComputeState.networkInterfaceLinks.size());
 
         List<URI> networkLinkURIs = new ArrayList<>();

@@ -19,14 +19,23 @@ import static org.junit.Assert.assertNotNull;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getEC2InstanceIdsAssociatedWithVpcId;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeStopped;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
+import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,6 +43,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
+import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -57,6 +67,7 @@ import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.common.test.VerificationHost;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 
@@ -69,11 +80,25 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
     private int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
     public boolean isMock = true;
 
+    private AmazonEC2AsyncClient client;
+    private Map<String, Object> awsTestContext;
+    private AwsNicSpecs singleNicSpec;
+
     private ArrayList<String> computesToRemove = new ArrayList<>();
 
     @Before
     public void setUp() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this);
+
+        // create credentials
+        AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
+        creds.privateKey = this.secretKey;
+        creds.privateKeyId = this.accessKey;
+        this.client = AWSUtils.getAsyncClient(creds, null, getExecutor());
+
+        this.awsTestContext = new HashMap<>();
+        setUpTestVpc(this.client, this.awsTestContext, this.isMock);
+        this.singleNicSpec = (AwsNicSpecs) this.awsTestContext.get(TestAWSSetupUtils.NIC_SPECS_KEY);
 
         try {
             PhotonModelServices.startServices(this.host);
@@ -109,6 +134,9 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
 
         this.host.waitForFinishedTask(ResourceRemovalTaskState.class,
                 removalTaskState.documentSelfLink);
+
+        tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
+        this.client.shutdown();
     }
 
     @Test
@@ -125,7 +153,7 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         boolean addNonExistingSecurityGroup = false;
         ComputeState cs = TestAWSSetupUtils.createAWSVMResource(this.host, endpoint.computeLink,
                 endpoint.resourcePoolLink, getClass(),
-                "trainingVM",zoneId, zoneId, null, TestAWSSetupUtils.SINGLE_NIC_SPEC, addNonExistingSecurityGroup);
+                "trainingVM",zoneId, zoneId, null, this.singleNicSpec, addNonExistingSecurityGroup);
 
         this.computesToRemove.add(cs.documentSelfLink);
         assertEquals(PowerState.UNKNOWN, cs.powerState);
@@ -143,9 +171,22 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         ComputeState compute = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, cs.documentSelfLink));
 
+        List<String> instanceIds = null;
+        if (!this.isMock) {
+            instanceIds = getEC2InstanceIdsAssociatedWithVpcId(this.client, (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY));
+        }
+
+
         changePowerState(cd, compute.documentSelfLink, PowerState.OFF);
+        if (!this.isMock) {
+            waitForInstancesToBeStopped(this.client, this.host, instanceIds);
+        }
 
         changePowerState(cd, compute.documentSelfLink, PowerState.ON);
+        if (!this.isMock) {
+            final int errorRate = 0;
+            waitForProvisioningToComplete(instanceIds,this.host, this.client, errorRate);
+        }
     }
 
     private void changePowerState(ComputeDescription cd, String computeLink,

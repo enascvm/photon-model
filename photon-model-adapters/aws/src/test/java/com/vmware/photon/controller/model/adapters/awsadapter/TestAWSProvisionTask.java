@@ -17,6 +17,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
@@ -26,12 +27,16 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getCompute;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getSecurityGroupsIdUsingEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.verifyRemovalOfResourceState;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.vpcIdExists;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +65,7 @@ import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
+import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -106,6 +112,9 @@ public class TestAWSProvisionTask {
     // the default collection period is 5 mins; set a value that spans 2 periods
     public int timeElapsedSinceLastCollectionInMinutes = 11;
 
+    private Map<String, Object> awsTestContext;
+    private AwsNicSpecs singleNicSpec;
+
     @Rule
     public TestName currentTestName = new TestName();
 
@@ -118,6 +127,11 @@ public class TestAWSProvisionTask {
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
         this.client = AWSUtils.getAsyncClient(creds, null, getExecutor());
+
+        this.awsTestContext = new HashMap<>();
+        setUpTestVpc(this.client, this.awsTestContext, this.isMock);
+        this.singleNicSpec = (AwsNicSpecs) this.awsTestContext.get(TestAWSSetupUtils.NIC_SPECS_KEY);
+
         this.host = VerificationHost.create(0);
         try {
             this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(250));
@@ -157,6 +171,7 @@ public class TestAWSProvisionTask {
         this.host.tearDown();
 
         setAwsClientMockInfo(false, null);
+        tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
     }
 
     // Creates a AWS instance via a provision task.
@@ -176,7 +191,7 @@ public class TestAWSProvisionTask {
         this.vmState = createAWSVMResource(this.host, outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(),
                 this.currentTestName.getMethodName() + "_vm1", zoneId, zoneId,
-                null /* tagLinks */, TestAWSSetupUtils.SINGLE_NIC_SPEC, addNonExistingSecurityGroup);
+                null /* tagLinks */, this.singleNicSpec, addNonExistingSecurityGroup);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskService.ProvisionComputeTaskState();
@@ -236,6 +251,14 @@ public class TestAWSProvisionTask {
         // delete vm
         TestAWSSetupUtils.deleteVMs(this.vmState.documentSelfLink, this.isMock, this.host);
 
+        if (!this.isMock && !vpcIdExists(this.client, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID)) {
+            SecurityGroup securityGroup = getSecurityGroup(this.client, TestAWSSetupUtils.AWS_DEFAULT_GROUP_NAME,
+                    (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY));
+            if (securityGroup != null) {
+                deleteSecurityGroupUsingEC2Client(this.client, this.host, securityGroup.getGroupId());
+            }
+        }
+
         // validates the local documents of network links and disk links have been removed
         verifyRemovalOfResourceState(this.host, resourcesToDelete);
 
@@ -254,7 +277,7 @@ public class TestAWSProvisionTask {
                 outPool.documentSelfLink, this.getClass(),
                 this.currentTestName.getMethodName() + "_vm2",
                 zoneId, zoneId,
-                tagLinks, TestAWSSetupUtils.SINGLE_NIC_SPEC, addNonExistingSecurityGroup);
+                tagLinks, this.singleNicSpec, addNonExistingSecurityGroup);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
 
