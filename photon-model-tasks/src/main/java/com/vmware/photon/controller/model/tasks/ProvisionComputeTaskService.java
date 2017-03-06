@@ -55,7 +55,7 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
             extends com.vmware.xenon.services.common.TaskService.TaskServiceState {
 
         public static final long DEFAULT_EXPIRATION_MICROS = TimeUnit.HOURS.toMicros(1);
-        public static final String FIELD_NAME_PARENT_TASK_LINK = "parentTaskReference";
+        public static final String FIELD_NAME_PARENT_TASK_LINK = "parentTaskLink";
 
         /**
          * SubStage.
@@ -127,9 +127,7 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
             URI computeHost = buildComputeHostUri(state);
             sendRequest(Operation.createGet(computeHost)
                     .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_QUEUE_FOR_SERVICE_AVAILABILITY)
-                    .setCompletion((o, e) -> {
-                        validateComputeHostAndStart(startPost, o, e, state);
-                    }));
+                    .setCompletion((o, e) -> validateComputeHostAndStart(startPost, o, e, state)));
         } catch (Throwable e) {
             logSevere(e);
             startPost.fail(e);
@@ -251,16 +249,22 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
         }
     }
 
-    private void notifyParentTask(ProvisionComputeTaskState clonedState) {
-        if (clonedState.parentTaskLink == null) {
+    private void notifyParentTask(ProvisionComputeTaskState currentState) {
+        if (currentState.parentTaskLink == null) {
             return;
         }
 
-        logFine(() -> String.format("Patching parent task %s", clonedState.parentTaskLink));
+        logFine(() -> String.format("Patching parent task %s", currentState.parentTaskLink));
         ProvisionComputeTaskState parentPatchBody = new ProvisionComputeTaskState();
-        parentPatchBody.taskInfo = clonedState.taskInfo;
-        sendRequest(Operation.createPatch(this, clonedState.parentTaskLink)
-                .setBody(parentPatchBody));
+        parentPatchBody.taskInfo = currentState.taskInfo;
+        sendRequest(Operation.createPatch(this, currentState.parentTaskLink)
+                .setBody(parentPatchBody)
+                .setCompletion((op, ex) -> {
+                    if (ex != null) {
+                        logSevere(() -> String.format("Patching parent task failed with %s",
+                                Utils.toJsonHtml(ex)));
+                    }
+                }));
     }
 
     private void processNextSubStage(ProvisionComputeTaskState updatedState) {

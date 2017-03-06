@@ -51,13 +51,12 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
         public InstanceRequestType requestType;
 
         /**
-         * The description of the network instance being realized. Required
+         * The description of the subnet instance being realized. Required
          */
         public String subnetDescriptionLink;
 
         /**
-         * Tracks the sub stage (creating network or firewall). Set by the
-         * run-time.
+         * Tracks the sub stage. Set by the run-time.
          */
         public SubStage taskSubStage;
 
@@ -70,6 +69,11 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
          * A list of tenant links which can access this task.
          */
         public List<String> tenantLinks;
+
+        /**
+         * Link that initiated this task.
+         */
+        public String parentTaskLink;
 
         public void validate() throws Exception {
             if (this.requestType == null) {
@@ -121,37 +125,39 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
             return;
         }
 
-        ProvisionSubnetTaskState currState = getState(patch);
+        ProvisionSubnetTaskState currentState = getState(patch);
         ProvisionSubnetTaskState patchState = patch
                 .getBody(ProvisionSubnetTaskState.class);
 
         if (TaskState.isFailed(patchState.taskInfo)) {
-            currState.taskInfo = patchState.taskInfo;
+            currentState.taskInfo = patchState.taskInfo;
         }
 
         switch (patchState.taskInfo.stage) {
         case CREATED:
-            currState.taskSubStage = nextStage(currState);
+            currentState.taskSubStage = nextStage(currentState);
 
-            handleSubStages(currState);
+            handleSubStages(currentState);
             logInfo(() -> String.format("%s %s on %s started", "Subnet",
-                    currState.requestType.toString(), currState.subnetDescriptionLink));
+                    currentState.requestType.toString(), currentState.subnetDescriptionLink));
             break;
         case STARTED:
-            currState.taskInfo.stage = TaskState.TaskStage.STARTED;
+            currentState.taskInfo.stage = TaskState.TaskStage.STARTED;
             break;
         case FINISHED:
-            SubStage nextStage = nextStage(currState);
+            SubStage nextStage = nextStage(currentState);
             if (nextStage == SubStage.FINISHED) {
-                currState.taskInfo.stage = TaskState.TaskStage.FINISHED;
+                currentState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 logInfo(() -> "Task is complete");
+                notifyParentTask(currentState);
             } else {
                 sendSelfPatch(TaskState.TaskStage.CREATED, null);
             }
             break;
         case FAILED:
             logWarning(() -> String.format("Task failed with %s",
-                    Utils.toJsonHtml(currState.taskInfo.failure)));
+                    Utils.toJsonHtml(currentState.taskInfo.failure)));
+            notifyParentTask(currentState);
             break;
         case CANCELLED:
             break;
@@ -265,5 +271,23 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
         }
 
         sendSelfPatch(body);
+    }
+
+    private void notifyParentTask(ProvisionSubnetTaskState currentState) {
+        if (currentState.parentTaskLink == null) {
+            return;
+        }
+
+        logFine(() -> String.format("Patching parent task %s", currentState.parentTaskLink));
+        ProvisionSubnetTaskState parentPatchBody = new ProvisionSubnetTaskState();
+        parentPatchBody.taskInfo = currentState.taskInfo;
+        sendRequest(Operation.createPatch(this, currentState.parentTaskLink)
+                .setBody(parentPatchBody)
+                .setCompletion((op, ex) -> {
+                    if (ex != null) {
+                        logSevere(() -> String.format("Patching parent task failed with %s",
+                                Utils.toJsonHtml(ex)));
+                    }
+                }));
     }
 }
