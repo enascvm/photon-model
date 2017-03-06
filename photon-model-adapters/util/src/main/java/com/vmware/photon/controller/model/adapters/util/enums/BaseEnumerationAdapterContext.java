@@ -298,7 +298,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * <li>Add {@code tenantLinks} and {@code endpointLink} criteria as defined by
      * {@code QueryTemplate}</li>
      * <li>Add descendant specific criteria as defined by
-     * {@link customizeLocalStatesQuery(qBuilder)}</li>
+     * {@link #customizeLocalStatesQuery(com.vmware.xenon.services.common.QueryTask.Query.Builder)}</li>
      * </ul>
      */
     protected DeferredResult<T> queryLocalStates(T context) {
@@ -424,7 +424,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * <li>Add {@code tenantLinks} and {@code endpointLink} criteria as defined by
      * {@code QueryTemplate}</li>
      * <li>Add descendant specific criteria as defined by
-     * {@link customizeLocalStatesQuery(qBuilder)}</li>
+     * {@link #customizeLocalStatesQuery(com.vmware.xenon.services.common.QueryTask.Query.Builder)}</li>
      * </ul>
      */
     protected DeferredResult<T> deleteLocalStates(T context) {

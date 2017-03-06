@@ -55,7 +55,12 @@ public class ComputeService extends StatefulService {
     }
 
     /**
-     * Resource Status.
+     * Resource lifecycle status.
+     * <p>
+     * This class is kept to keep the backward compatibility.
+     * Use {@link com.vmware.photon.controller.model.support.LifecycleState} when introducing
+     * lifecycle semantic to other resources.
+     * </p>
      */
     public enum LifecycleState {
         PROVISIONING,

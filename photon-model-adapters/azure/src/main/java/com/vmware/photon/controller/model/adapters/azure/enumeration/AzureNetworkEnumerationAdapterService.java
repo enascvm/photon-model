@@ -43,7 +43,6 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
-
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureNetworkEnumerationAdapterService.NetworkEnumContext.SubnetStateWithParentVNetId;
 import com.vmware.photon.controller.model.adapters.azure.model.network.AddressSpace;
@@ -63,6 +62,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
@@ -76,7 +76,9 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 
 /**
  * Enumeration adapter for data collection of Network related resources on Azure.
@@ -916,6 +918,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
     private void deleteSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
         Builder builder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
+                .addFieldClause(SubnetState.FIELD_NAME_LIFECYCLE_STATE, LifecycleState
+                        .PROVISIONING.name(), MatchType.TERM, Occurance.MUST_NOT_OCCUR)
                 .addRangeClause(SubnetState.FIELD_NAME_UPDATE_TIME_MICROS,
                         NumericRange.createLessThanRange(context.enumerationStartTimeInMicros));
 
@@ -950,9 +954,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
     /**
      * Get next page of query results and delete then.
-     *
-     * @param preDeleteProcessor an optional {@link Consumer} that will be called before deleting
-     *                           the matching resources.
      */
     private void handleDeleteQueryTaskResult(NetworkEnumContext context,
             NetworkEnumStages next) {

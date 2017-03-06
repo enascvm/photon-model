@@ -1,7 +1,8 @@
 # CHANGELOG
 
 ## 0.6.6-SNAPSHOT
-
+* Added SubnetState.instanceAdapterReference property.
+* Introduced LifecycleState enumeration and added it as SubnetState.lifecycleState property.
 
 ## 0.6.5
 

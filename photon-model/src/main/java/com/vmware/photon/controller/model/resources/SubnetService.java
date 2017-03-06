@@ -25,6 +25,7 @@ import org.apache.commons.net.util.SubnetUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -47,6 +48,7 @@ public class SubnetService extends StatefulService {
 
         public static final String FIELD_NAME_NETWORK_LINK = "networkLink";
         public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
+        public static final String FIELD_NAME_LIFECYCLE_STATE = "lifecycleState";
 
         /**
          * Link to the network this subnet is part of.
@@ -120,6 +122,13 @@ public class SubnetService extends StatefulService {
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_6)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI instanceAdapterReference;
+
+        /** Lifecycle state indicating runtime state of a resource instance. */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_6)
+        @Documentation(description = "Lifecycle state indicating runtime state of a resource instance.")
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public LifecycleState lifecycleState = LifecycleState.READY;
     }
 
     public SubnetService() {
