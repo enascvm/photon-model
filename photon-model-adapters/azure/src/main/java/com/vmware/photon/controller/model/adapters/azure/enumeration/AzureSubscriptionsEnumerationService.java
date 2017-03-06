@@ -25,10 +25,8 @@ import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
-import com.vmware.photon.controller.model.adapters.azure.enumeration
-        .AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest
-        .AzureSubscription;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
+import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 
@@ -73,17 +71,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
      * entities to be sent in the request.
      */
     public static class AzureSubscriptionsEnumerationRequest extends ResourceRequest {
-
         public Collection<AzureSubscription> azureSubscriptions;
-
-        /**
-         * This class will eventually be replaced by the models used for Azure
-         * cost collection.
-         */
-        public static class AzureSubscription {
-            public String accountId;
-            public String subscriptionId;
-        }
     }
 
     public AzureSubscriptionsEnumerationService() {
@@ -191,7 +179,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
     private void fetchExistingResources(AzureSubscriptionsEnumerationContext enumerationContext,
                                         AzureCostComputeEnumerationStages nextStage) {
         enumerationContext.idToSubscription = enumerationContext.resourceRequest.azureSubscriptions
-                .stream().collect(Collectors.toMap(subscription -> subscription.subscriptionId,
+                .stream().collect(Collectors.toMap(subscription -> subscription.entityId,
                         subscription -> subscription));
 
         Consumer<AzureSubscriptionsEnumerationContext> queryCompletionConsumer =
@@ -280,7 +268,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                         EndpointType.azure.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
+                        AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY,
                         enumerationContext.authCredentials.privateKeyId)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
                 .build();
@@ -305,7 +293,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                                     logSevere(
                                             () -> String.format("Compute description creation "
                                                             + " failed for azure subscription %s",
-                                                    subscription.subscriptionId ));
+                                                    subscription.entityId));
                                     return;
                                 }
                                 ComputeDescription cd = o.getBody(ComputeDescription.class);
@@ -369,9 +357,9 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                 .forEach(computeState -> {
                     if (computeState.customProperties != null
                             && computeState.customProperties
-                            .containsKey(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY)) {
+                            .containsKey(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY)) {
                         String subscriptionUuid = computeState.customProperties
-                                .get(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY);
+                                .get(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY);
                         enumerationContext.idToSubscription.remove(subscriptionUuid);
                     }
                 });
@@ -385,7 +373,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         cd.endpointLink = enumerationContext.computeDescription.endpointLink;
         cd.name = String.format(COMPUTES_NAME_FORMAT,
                 enumerationContext.computeDescription.description.name,
-                subscription.subscriptionId);
+                subscription.entityId);
         cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         cd.id = UUID.randomUUID().toString();
         Map<String, String> customProperties = new HashMap<>();
@@ -401,7 +389,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         ComputeState cs = new ComputeState();
         cs.id = UUID.randomUUID().toString();
         cs.name = String.format(COMPUTES_NAME_FORMAT,
-                enumerationContext.computeDescription.name, subscription.subscriptionId);
+                enumerationContext.computeDescription.name, subscription.entityId);
         cs.tenantLinks = enumerationContext.computeDescription.tenantLinks;
         cs.endpointLink = enumerationContext.computeDescription.endpointLink;
         cs.customProperties = getPropertiesMap(enumerationContext, subscription);
@@ -415,14 +403,12 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
             AzureSubscriptionsEnumerationContext enumerationContext,
             AzureSubscription subscription) {
         Map<String, String> properties = new HashMap<>();
-        properties.put(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY,
-                subscription.subscriptionId);
-        properties.put(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY,
+        properties.put(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY,
+                subscription.entityId);
+        properties.put(AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY,
                 enumerationContext.authCredentials.privateKeyId);
-        properties.put(AzureConstants.AZURE_ACCOUNT_ID,
-                subscription.accountId);
-        properties.put(AzureConstants.AZURE_ACCOUNT_ID,
-                subscription.accountId);
+        properties.put(AzureCostConstants.AZURE_ACCOUNT_ID,
+                subscription.parentEntityId);
         properties.put(EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                 EndpointType.azure.name());
         return properties;

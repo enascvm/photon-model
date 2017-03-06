@@ -133,4 +133,7 @@ public class PhotonModelConstants {
     }
 
     public static final String CUSTOM_PROP_CREDENTIALS_SCOPE = "scope";
+
+    public static final String CLOUD_ACCOUNT_COST_SYNC_MARKER_MILLIS = "CloudAccountCostSyncMarkerMillis";
+
 }

@@ -39,9 +39,10 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
-import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
-import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest.AzureSubscription;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
+import com.vmware.photon.controller.model.adapters.azure.enumeration
+        .AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
+import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -305,7 +306,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                         EndpointType.azure.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY, azureEnrollmentNumber)
+                        AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY, azureEnrollmentNumber)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
                 .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
@@ -323,11 +324,11 @@ public class AzureSubscriptionsEnumerationServiceTest {
                                                 List<String> expectedTenantLinks) {
         Assert.assertNotNull(cs.customProperties);
         Assert.assertEquals(expectedEnrollmentNumber,
-                cs.customProperties.get(AzureConstants.AZURE_ENROLLMENT_NUMBER_KEY));
+                cs.customProperties.get(AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY));
         Assert.assertEquals(expectedAccountId,
-                cs.customProperties.get(AzureConstants.AZURE_ACCOUNT_ID));
+                cs.customProperties.get(AzureCostConstants.AZURE_ACCOUNT_ID));
         Assert.assertEquals(expectedSubscriptionUuid,
-                cs.customProperties.get(AzureConstants.AZURE_SUBSCRIPTION_ID_KEY));
+                cs.customProperties.get(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY));
         Assert.assertEquals(expectedEndpointLink, cs.endpointLink);
         Assert.assertEquals(ComputeType.VM_HOST, cs.type);
         Assert.assertEquals(ComputeDescription.ENVIRONMENT_NAME_AZURE, cs.environmentName);
@@ -336,8 +337,8 @@ public class AzureSubscriptionsEnumerationServiceTest {
 
     private AzureSubscription getAzureSubscription(String subscriptionId, String accountId) {
         AzureSubscription subscription = new AzureSubscription();
-        subscription.subscriptionId = subscriptionId;
-        subscription.accountId = accountId;
+        subscription.entityId = subscriptionId;
+        subscription.parentEntityId = accountId;
         return subscription;
     }
 

@@ -36,6 +36,10 @@ import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 
+/**
+ * Service to gather Azure cost related stats. Currently collects cost stats only for
+ * Azure accounts which are NOT Enterprise Agreement (EA) Accounts.
+ */
 public class AzureStatsService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_STATS_ADAPTER;
 

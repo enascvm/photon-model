@@ -46,6 +46,7 @@ public class UriPaths {
         SECURITY_GROUP_ADAPTER("securityGroupAdapter", "security-group-adapter"),
         LOAD_BALANCER_ADAPTER("loadBalancerAdapter", "load-balancer-adapter"),
         STATS_ADAPTER("statsAdapter", "stats-adapter"),
+        COST_STATS_ADAPTER("costStatsAdapter", "cost-stats-adapter"),
         BOOT_ADAPTER("bootAdapter", "boot-adapter"),
         POWER_ADAPTER("powerAdapter", "power-adapter"),
         ENDPOINT_CONFIG_ADAPTER("endpointConfigAdapter", "endpoint-config-adapter"),

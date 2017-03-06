@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 
 public class AzureStatsNormalizer {
@@ -61,6 +62,10 @@ public class AzureStatsNormalizer {
                 PhotonModelConstants.DISK_READ_BYTES);
         statMap.put(AzureConstants.DISK_WRITE_BYTES_PER_SECOND,
                 PhotonModelConstants.DISK_WRITE_BYTES);
+        statMap.put(AzureCostConstants.COST, PhotonModelConstants.COST);
+        statMap.put(AzureCostConstants.SERVICE_RESOURCE_COST,
+                PhotonModelConstants.SERVICE_RESOURCE_COST);
+
         PHOTON_MODEL_STATS_MAP = Collections.unmodifiableMap(statMap);
     }
 
