@@ -235,7 +235,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     rulesList = holder.localState.ingress;
                 } else {
                     // egress rule.
-                    rule.ipRangeCidr = securityRule.properties.destinationPortRange;
+                    rule.ipRangeCidr = securityRule.properties.destinationAddressPrefix;
                     ports = securityRule.properties.destinationPortRange;
                     rulesList = holder.localState.egress;
                 }

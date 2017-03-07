@@ -324,16 +324,16 @@ public class SecurityGroupService extends StatefulService {
                     int iPort = Integer.parseInt(aPp);
                     if (iPort < 0 || iPort > 65535) {
                         throw new IllegalArgumentException(
-                                "allow rule port numbers must be between 0 and 65535");
+                                "allow rule port numbers must be between 0 and 65535 but was "
+                                        + iPort);
                     }
                     if (previousPort > 0 && previousPort > iPort) {
                         throw new IllegalArgumentException(
-                                "allow rule from port is greater than to port");
+                                "allow rule from port is greater than to port " + iPort);
                     }
                     previousPort = iPort;
                 } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException(
-                            "allow rule port numbers must be between 0 and 65535");
+                    throw new IllegalArgumentException("Not a valid port: " + aPp);
                 }
             }
         }
