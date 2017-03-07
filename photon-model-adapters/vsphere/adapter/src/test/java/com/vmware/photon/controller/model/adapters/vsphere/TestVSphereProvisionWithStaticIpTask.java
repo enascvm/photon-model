@@ -30,7 +30,6 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
-import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -42,8 +41,11 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
@@ -70,21 +72,11 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
 
     private ComputeState computeHost;
 
-    private NetworkState network;
-
     @Test
     public void deployByCloningWithCustomization() throws Throwable {
         this.nicDescription = new NetworkInterfaceDescription();
         this.nicDescription.assignment = IpAssignment.STATIC;
         this.nicDescription.address = "10.0.0.2";
-
-        this.subnet = new SubnetState();
-        this.subnet.dnsSearchDomains = Collections.singleton("local");
-        this.subnet.name = "my-subnet";
-        this.subnet.gatewayAddress = "10.0.0.1";
-        this.subnet.dnsServerAddresses = Collections.singleton("8.8.8.8");
-        this.subnet.domain = "local";
-        this.subnet.subnetCIDR = "10.0.0.0/24";
 
         // Create a resource pool where the VM will be housed
         this.resourcePool = createResourcePool();
@@ -101,7 +93,18 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         // template must have vm-tools and cloud-config installed
         ComputeState template = findTemplate();
 
-        this.network = fetchServiceState(NetworkState.class, findPortGroup(networkId));
+        this.subnet = fetchServiceState(SubnetState.class, findPortGroup(networkId));
+        this.subnet.dnsSearchDomains = Collections.singleton("local");
+        this.subnet.gatewayAddress = "10.0.0.1";
+        this.subnet.dnsServerAddresses = Collections.singleton("8.8.8.8");
+        this.subnet.domain = "local";
+        this.subnet.subnetCIDR = "10.0.0.0/24";
+
+        // modify the subnet
+        Operation patch = Operation.createPatch(this.host,this.subnet.documentSelfLink)
+                .setBody(this.subnet);
+        patch = this.host.waitForResponse(patch);
+        this.subnet = patch.getBody(SubnetState.class);
 
         // create instance by cloning
         ComputeDescription vmDescription = createVmDescription();
@@ -128,9 +131,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
 
     protected String findPortGroup(String name) throws Throwable {
         Query q = Query.Builder.create()
-                .addKindFieldClause(NetworkState.class)
-                .addCompositeFieldClause(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES, CustomProperties.TYPE,
-                        VimNames.TYPE_PORTGROUP)
+                .addKindFieldClause(SubnetState.class)
                 .addFieldClause(NetworkState.FIELD_NAME_NAME, name)
                 .build();
 
@@ -196,8 +197,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         computeState.parentLink = this.computeHost.documentSelfLink;
 
         computeState.networkInterfaceLinks = new ArrayList<>(1);
-        computeState.networkInterfaceLinks
-                .add(createNic("nic for " + this.networkId, this.network.documentSelfLink));
+        computeState.networkInterfaceLinks.add(createNic(subnet));
 
         computeState.diskLinks = new ArrayList<>(1);
 
@@ -212,6 +212,26 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
                 ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
+    }
+
+    private String createNic(SubnetState subnet) throws Throwable {
+        NetworkInterfaceState nic = new NetworkInterfaceState();
+        nic.name = "nic for " + subnet.networkLink;
+        nic.networkLink = subnet.networkLink;
+        nic.subnetLink = subnet.documentSelfLink;
+
+        if (this.nicDescription != null) {
+            this.nicDescription = TestUtils.doPost(this.host, this.nicDescription,
+                    NetworkInterfaceDescription.class,
+                    UriUtils.buildUri(this.host, NetworkInterfaceDescriptionService.FACTORY_LINK));
+            nic.networkInterfaceDescriptionLink = this.nicDescription.documentSelfLink;
+        }
+
+        nic = TestUtils.doPost(this.host, nic,
+                NetworkInterfaceState.class,
+                UriUtils.buildUri(this.host, NetworkInterfaceService.FACTORY_LINK));
+
+        return nic.documentSelfLink;
     }
 
     @SuppressWarnings("unused")
@@ -249,6 +269,9 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
+        computeDesc.cpuCount = 2;
+        // 1G
+        computeDesc.totalMemoryBytes = 1024 * 1024 * 1024;
 
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
