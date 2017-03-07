@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.7-SNAPSHOT
+
+
 ## 0.6.6
 
 * Add optional notification to the parent task to ProvisionSubnetTaskService.
