@@ -17,6 +17,7 @@ import static java.util.stream.Collector.Characteristics.IDENTITY_FINISH;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -27,6 +28,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -54,6 +56,8 @@ public class QueryUtils {
     public static final int DEFAULT_RESULT_LIMIT = Integer
             .getInteger(DEFAULT_RESULT_LIMIT_PROPERTY, 100);
 
+    public static final long MINUTE_IN_MICROS = TimeUnit.MINUTES.toMicros(1);
+
     /**
      * Executes the given query task.
      *
@@ -71,7 +75,6 @@ public class QueryUtils {
             queryTask.querySpec.options.add(QueryOption.TOP_RESULTS);
             queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
         }
-
         return service.sendWithDeferredResult(
                 Operation.createPost(service, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                         .setBody(queryTask)

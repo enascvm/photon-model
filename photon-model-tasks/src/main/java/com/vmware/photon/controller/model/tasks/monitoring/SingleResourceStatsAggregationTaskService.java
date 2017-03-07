@@ -37,6 +37,7 @@ import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricServ
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 
 import com.vmware.xenon.common.FactoryService;
@@ -447,19 +448,15 @@ public class SingleResourceStatsAggregationTaskService extends
                 .setQuery(currentState.query)
                 .setResultLimit(resultLimit)
                 .build();
-
-        sendRequest(Operation.createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTask)
-                .setConnectionSharing(true)
-                .setCompletion((queryOp, queryEx) -> {
+        QueryUtils.startQueryTask(this, queryTask)
+                .whenComplete((resultTask, queryEx) -> {
                     if (queryEx != null) {
                         sendSelfFailurePatch(currentState, queryEx.getMessage());
                         return;
                     }
 
-                    QueryTask rsp = queryOp.getBody(QueryTask.class);
                     SingleResourceStatsAggregationTaskState patchBody = new SingleResourceStatsAggregationTaskState();
-                    if (rsp.results.nextPageLink == null) {
+                    if (resultTask.results.nextPageLink == null) {
                         patchBody.hasResources = false;
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
                         patchBody.taskStage = StatsAggregationStage.PUBLISH_METRICS;
@@ -467,10 +464,10 @@ public class SingleResourceStatsAggregationTaskService extends
                         patchBody.hasResources = currentState.hasResources;
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
                         patchBody.taskStage = StatsAggregationStage.PROCESS_RESOURCES;
-                        patchBody.queryResultLink = rsp.results.nextPageLink;
+                        patchBody.queryResultLink = resultTask.results.nextPageLink;
                     }
                     sendSelfPatch(patchBody);
-                }));
+                });
     }
 
     /**
@@ -742,17 +739,15 @@ public class SingleResourceStatsAggregationTaskService extends
                 .orderDescending(ResourceMetrics.FIELD_NAME_TIMESTAMP, TypeName.LONG)
                 .setResultLimit(RAW_METRICS_LIMIT)
                 .setQuery(overallQueryBuilder.build()).build();
-        sendRequest(Operation
-                .createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(task)
-                .setConnectionSharing(true)
-                .setCompletion((queryOp, queryEx) -> {
+        task.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.MINUTE_IN_MICROS;
+
+        QueryUtils.startQueryTask(this, task)
+                .whenComplete((response, queryEx) -> {
                     if (queryEx != null) {
                         sendSelfFailurePatch(currentState, queryEx.getMessage());
                         return;
                     }
                     Map<String, List<ResourceMetrics>> rawMetricsForKey = new HashMap<>();
-                    QueryTask response = queryOp.getBody(QueryTask.class);
                     for (Object obj : response.results.documents.values()) {
                         ResourceMetrics rawMetric = Utils.fromJson(obj, ResourceMetrics.class);
                         for (RollupMetricHolder metric : rollupMetricHolder) {
@@ -776,7 +771,7 @@ public class SingleResourceStatsAggregationTaskService extends
                     }
                     aggregateMetrics(currentState, resourceQueryTask, rawMetricsForKey,
                             inMemoryStats);
-                }));
+                });
     }
 
     private void aggregateMetrics(SingleResourceStatsAggregationTaskState currentState,

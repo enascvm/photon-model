@@ -33,6 +33,7 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.Reso
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 
@@ -558,10 +559,8 @@ public class SingleResourceStatsCollectionTaskService
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(builder.build()).build();
         task.tenantLinks = tenantLinks;
-        Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(task)
-                .setConnectionSharing(true)
-                .setCompletion((o, e) -> {
+        QueryUtils.startQueryTask(this, task)
+                .whenComplete((responseTask, e) -> {
                     if (e != null) {
                         logSevere(
                                 "Could not get the last collection time from persisted metrics: %s",
@@ -575,7 +574,6 @@ public class SingleResourceStatsCollectionTaskService
                     // If the persisted metric can be found, use the value of the last successful
                     // collection time otherwise do not set any value for the last collection time
                     // while sending the request to the adapter.
-                    QueryTask responseTask = o.getBody(QueryTask.class);
                     if (responseTask.results.documentCount > 0) {
                         Object rawMetricObj = responseTask.results.documents
                                 .get(responseTask.results.documentLinks.get(0));
@@ -585,8 +583,7 @@ public class SingleResourceStatsCollectionTaskService
                                 rawMetrics.timestampMicrosUtc;
                     }
                     sendStatsRequestToAdapter(currentState, patchUri, computeStatsRequest);
-                })
-                .sendWith(this);
+                });
     }
 
     /**
