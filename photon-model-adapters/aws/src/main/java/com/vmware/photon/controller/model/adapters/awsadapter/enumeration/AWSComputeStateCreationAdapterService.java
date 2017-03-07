@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -534,10 +535,14 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
         // Collect all device indexes of local and remote NICs
         List<Integer> awsDeviceIndexes = instance.getNetworkInterfaces() != null ?
-                instance.getNetworkInterfaces().stream().map(
-                        awsNic -> awsNic.getAttachment().getDeviceIndex()).collect(Collectors.toList()) : Collections.emptyList();
+                instance.getNetworkInterfaces().stream()
+                        .map(awsNic -> awsNic.getAttachment().getDeviceIndex())
+                        .collect(Collectors.toList()) : Collections.emptyList();
         List<Integer> localNICsDeviceIndexes = existingNicStates != null ?
-                existingNicStates.stream().map(nicState -> nicState.deviceIndex).collect(Collectors.toList()) : Collections.emptyList();
+                existingNicStates.stream()
+                        .filter(Objects::nonNull)
+                        .map(nicState -> nicState.deviceIndex)
+                        .collect(Collectors.toList()) : Collections.emptyList();
 
         // Calculate delta lists {{
 
