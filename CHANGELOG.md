@@ -1,6 +1,19 @@
 # CHANGELOG
 
-## 0.6.6-SNAPSHOT
+## 0.6.6
+
+* Add optional notification to the parent task to ProvisionSubnetTaskService.
+* Set a default query task timeout of 1 minute
+* Remove call to validate cloudwatch creds
+* Convert synchronous Azure calls to async
+* Region made optional for vSphere enumeration
+* [vsphere] Build stable links based on endpoint
+* Add support for certificate validation when adding an endpoint
+* [AWS] Region Id should not be required during endpoint creation
+* [vsphere] Enable ResourcePools as placement targets
+* [Azure] Enumerate tags for VM, Network and SecurityGroup resources
+* [Azure] Create Public IP conditionally based on NICDesc.assignPublicIP property
+* [vsphere] Enumerate ResourcePools as Computes
 * Added SubnetState.instanceAdapterReference property.
 * Introduced LifecycleState enumeration and added it as SubnetState.lifecycleState property.
 
