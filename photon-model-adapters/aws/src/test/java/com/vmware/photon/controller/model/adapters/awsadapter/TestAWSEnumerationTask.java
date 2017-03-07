@@ -592,13 +592,13 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         List<Tag> vmTags = Arrays.asList(tag1, tag2, tag3);
         // SG tag
         List<Tag> sgTags = new ArrayList<>();
-        sgTags.add(new Tag("sgTagKey", "sgTagValue"));
+        sgTags.add(new Tag("initialSGTag", "initialSGTag"));
         // Network tag
         List<Tag> networkTags = new ArrayList<>();
-        networkTags.add(new Tag("netTagKey", "netTagValue"));
+        networkTags.add(new Tag("initialVPCTag", "initialVPCTag"));
         // Subnet tag
         List<Tag> subnetTags = new ArrayList<>();
-        subnetTags.add(new Tag("subNetTagKey", "subNetTagValue"));
+        subnetTags.add(new Tag("initialSubnetTag", "initialSubnetTag"));
 
         try {
             String linuxVMId1 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI, this.subnetId, this.securityGroupId);
@@ -609,13 +609,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             tagResourcesWithName(this.client, VM_NAME, linuxVMId1);
 
             List<Tag> linuxVMId1Tags = Arrays.asList(tag1, tag2);
-            // tag vm
+            // tag vm, default SG, VPC and Subnet
             tagResources(this.client, linuxVMId1Tags, linuxVMId1);
-            // tag default SG
             tagResources(this.client, sgTags, this.securityGroupId);
-            // tag default VPC
             tagResources(this.client, networkTags, this.vpcId);
-            // tag default Subnet
             tagResources(this.client, subnetTags, this.subnetId);
 
             enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
@@ -631,14 +628,26 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             List<Tag> linuxVMId2Tags = Arrays.asList(tag2, tag3);
             tagResources(this.client, linuxVMId2Tags, linuxVMId2);
 
-            // tag default SG again, so that there is a difference between local and remote tags
-            sgTags.remove(0);
-            //value is different with the same key, local state should be deleted and new one created
-            sgTags.add(0, new Tag("sgTagKey2", "newValueSGTag"));
-            //new key-value set remotely should result in a new tag state created locally
-            sgTags.add(new Tag("sgTagKey1", "valueSGTag1"));
+            // Un-tag the resources
+            unTagResources(this.client, sgTags, this.securityGroupId);
+            unTagResources(this.client, networkTags, this.vpcId);
+            unTagResources(this.client, subnetTags, this.subnetId);
 
+            // re-init tag arrays
+            sgTags = new ArrayList<>();
+            networkTags = new ArrayList<>();
+            subnetTags = new ArrayList<>();
+
+            //new key-value set remotely should result in a new tag state created locally
+            // and a new tag link added to the SecurityGroupState
+            sgTags.add(new Tag("secondarySGTag", "secondarySGTag"));
+            networkTags.add(new Tag("secondaryVPCTag", "secondaryVPCTag"));
+            subnetTags.add(new Tag("secondarySubnetTag", "secondarySubnetTag"));
+
+            // tag again default SG, VPC and Subnet
             tagResources(this.client, sgTags, this.securityGroupId);
+            tagResources(this.client, networkTags, this.vpcId);
+            tagResources(this.client, subnetTags, this.subnetId);
 
             enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
@@ -647,30 +656,48 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             validateComputeName(linuxVMId1, VM_NAME);
             validateComputeName(linuxVMId2, VM_UPDATED_NAME);
 
-            // There should be at least vmTags.size() + sgTags.size() +
-            // networkTags.size() + subnetTags.size() TagState documents
+            // Validate tag states number
             int allTagsNumber = vmTags.size() + sgTags.size() + networkTags.size() + subnetTags.size();
             ServiceDocumentQueryResult serviceDocumentQueryResult = queryDocumentsAndAssertExpectedCount(
                     this.host, allTagsNumber, TagService.FACTORY_LINK, false);
-
-            Map<Tag, String> vmTagLinks = new HashMap<>();
 
             Map<String, TagState> tagsMap = serviceDocumentQueryResult.documents.entrySet()
                     .stream().collect(
                             Collectors.toMap(entry -> entry.getKey(),
                                     entry -> Utils.fromJson(entry.getValue(), TagState.class)));
 
+            // validate security group tags
             Map<String, SecurityGroupState> allSecurityGroupStatesMap =
                     ProvisioningUtils.<SecurityGroupState> getResourceStates(this.host,
                             SecurityGroupService.FACTORY_LINK, SecurityGroupState.class);
+            SecurityGroupState defaultSgState = allSecurityGroupStatesMap.get(this.securityGroupId);
+            // ensure one link is deleted and one new is added to the sg state
+            assertEquals(1, defaultSgState.tagLinks.size());
+            assertNotNull(tagsMap.get("secondarySGTag")); //tag state should be created for the new tag
+            assertEquals(tagsMap.get("secondarySGTag").documentSelfLink, defaultSgState.tagLinks.iterator().next());
 
-            SecurityGroupState defaultSgState = allSecurityGroupStatesMap.get(TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
-            // ensure one link is deleted and two new are added to the sg state
-            assertEquals(2, defaultSgState.tagLinks);
+            // validate vpc tags
+            Map<String, NetworkState> allNetworkStatesMap =
+                    ProvisioningUtils.<NetworkState> getResourceStates(this.host,
+                            NetworkService.FACTORY_LINK, NetworkState.class);
+            NetworkState defaultNetworkState = allNetworkStatesMap.get(this.vpcId);
+            // ensure one link is deleted and one new is added to the network state
+            assertEquals(1, defaultNetworkState.tagLinks.size());
+            assertNotNull(tagsMap.get("secondaryVPCTag")); //tag state should be created for the new tag
+            assertEquals(tagsMap.get("secondaryVPCTag").documentSelfLink, defaultNetworkState.tagLinks.iterator().next());
 
-            // this tag should not be removed
-            assertTrue(tagsMap.get("sgTagKey").equals("sgTagValue"));
+            // validate subnet tags
+            Map<String, SubnetState> allSubnetStatesMap =
+                    ProvisioningUtils.<SubnetState> getResourceStates(this.host,
+                            NetworkService.FACTORY_LINK, SubnetState.class);
+            SubnetState defaultSubnetState = allSubnetStatesMap.get(this.subnetId);
+            // ensure one link is deleted and one new is added to the network state
+            assertEquals(1, defaultSubnetState.tagLinks.size());
+            assertNotNull(tagsMap.get("secondarySubnetTag")); //tag state should be created for the new tag
+            assertEquals(tagsMap.get("secondarySubnetTag").documentSelfLink, defaultSubnetState.tagLinks.iterator().next());
 
+            // validate vm tags
+            Map<Tag, String> vmTagLinks = new HashMap<>();
             for (Tag tag : vmTags) {
                 for (TagState tagState : tagsMap.values()) {
                     if (tagState.key.equals(tag.getKey())) {

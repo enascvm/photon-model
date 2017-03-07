@@ -395,7 +395,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
             if (currentState.tagLinks != null && !currentState.tagLinks.isEmpty()) {
                 // Update local tag states with the remote values
-                tagsDR = updateLocalTagStates(localStateHolder, currentState);
+                tagsDR = updateLocalTagStates(this.service, localStateHolder.remoteTags,
+                        currentState, this.request.original.endpointLink);
             } else {
                 // Create local tag states
                 tagsDR = createLocalTagStates(localStateHolder);
@@ -522,14 +523,18 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         return DeferredResult.allOf(localTagStatesDRs).thenApply(ignore -> (Void) null);
     }
 
-    private DeferredResult<Void> updateLocalTagStates(LocalStateHolder localStateHolder,
-            LOCAL_STATE currentState) {
-
-        Map<String, TagState> remoteTagStates = localStateHolder.remoteTags.entrySet().stream()
-                .map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(),
+    public static DeferredResult<Void> updateLocalTagStates(StatelessService service, Map<String, String> remoteTagsMap,
+            ResourceState currentState, String endpointLink) {
+        Map<String, TagState> remoteTagStates;
+        if (remoteTagsMap == null) {
+            remoteTagStates = new HashMap<>();
+        } else {
+            remoteTagStates = remoteTagsMap.entrySet().stream()
+                .<TagState>map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(),
                         currentState.tenantLinks))
                 .collect(Collectors.toMap(tagState -> tagState.documentSelfLink,
                         tagState -> tagState));
+        }
 
         final DeferredResult<List<TagState>> createAllLocalTagStatesDR;
         final Collection<String> tagLinksToAdd;
@@ -537,15 +542,18 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             // the remote tags which do not exist locally will be added to the computeState tagLinks
             // list
             tagLinksToAdd = new HashSet<>(remoteTagStates.keySet());
-            tagLinksToAdd.removeAll(currentState.tagLinks);
+            if (currentState.tagLinks != null) {
+                tagLinksToAdd.removeAll(currentState.tagLinks);
+            }
 
             // not existing locally tags should be created
             List<DeferredResult<TagState>> localTagStatesDRs = tagLinksToAdd.stream()
                     .map(tagLinkObj -> remoteTagStates.get(tagLinkObj))
                     .map(tagState -> Operation
-                            .createPost(this.service, TagService.FACTORY_LINK)
-                            .setBody(tagState))
-                    .map(tagOperation -> this.service.sendWithDeferredResult(tagOperation,
+                            .createPost(service, TagService.FACTORY_LINK)
+                            .setBody(tagState)
+                            .setReferer(service.getUri()))
+                    .<DeferredResult<TagState>>map(tagOperation -> service.sendWithDeferredResult(tagOperation,
                             TagState.class))
                     .collect(Collectors.toList());
 
@@ -556,45 +564,52 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         {
             // all local tag links which do not have remote correspondents and are external will be
             // removed from the currentState's tagLinks list
-            Set<String> tagLinksToRemove = new HashSet<>(currentState.tagLinks);
-            tagLinksToRemove.removeAll(remoteTagStates.keySet());
-
-            if (tagLinksToRemove.isEmpty()) {
-
+            Set<String> tagLinksToRemove = new HashSet<>();
+            if (currentState.tagLinks == null) {
                 removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
-
             } else {
-                // identify which of the local tag states to remove are external
-                Query.Builder qBuilder = Query.Builder.create()
-                        // Add documents' class
-                        .addKindFieldClause(TagState.class)
-                        // Add local tag links to remove
-                        .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, tagLinksToRemove)
-                        .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
+                tagLinksToRemove.addAll(currentState.tagLinks);
+                tagLinksToRemove.removeAll(remoteTagStates.keySet());
 
-                QueryStrategy<TagState> queryLocalStates = new QueryTop<>(
-                        this.service.getHost(),
-                        qBuilder.build(),
-                        TagState.class,
-                        currentState.tenantLinks,
-                        this.request.original.endpointLink)
-                        .setMaxResultsLimit(tagLinksToRemove.size());
+                if (tagLinksToRemove.isEmpty()) {
 
-                removeAllExternalTagLinksDR = queryLocalStates.collectLinks(Collectors
-                        .toCollection(HashSet::new));
+                    removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
+
+                } else {
+
+                    // identify which of the local tag states to remove are external
+                    Query.Builder qBuilder = Query.Builder.create()
+                            // Add documents' class
+                            .addKindFieldClause(TagState.class)
+                            // Add local tag links to remove
+                            .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, tagLinksToRemove)
+                            .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
+
+                    QueryStrategy<TagState> queryLocalStates = new QueryTop<>(
+                            service.getHost(),
+                            qBuilder.build(),
+                            TagState.class,
+                            currentState.tenantLinks,
+                            endpointLink)
+                            .setMaxResultsLimit(tagLinksToRemove.size());
+
+                    removeAllExternalTagLinksDR = queryLocalStates.collectLinks(Collectors
+                            .toCollection(HashSet::new));
+                }
             }
         }
 
         return createAllLocalTagStatesDR.thenCompose(ignore -> removeAllExternalTagLinksDR)
                 .thenCompose(
-                        removeAllExternalTagLinks -> updateResourceTagLinks(removeAllExternalTagLinks,
+                        removeAllExternalTagLinks -> updateResourceTagLinks(service, removeAllExternalTagLinks,
                                 tagLinksToAdd,
                                 currentState.documentSelfLink))
                 .thenAccept(ignore -> { });
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    private DeferredResult<Operation> updateResourceTagLinks(
+    private static DeferredResult<Operation> updateResourceTagLinks(
+            StatelessService service,
             Collection<String> tagLinksToDelete,
             Collection<String> tagLinksToAdd,
             String currentStateSelfLink) {
@@ -611,10 +626,10 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                         collectionsToAddMap,
                         collectionsToRemoveMap);
 
-        Operation createPatch = Operation.createPatch(this.service, currentStateSelfLink)
-                .setBody(updateTagLinksRequest);
+        Operation createPatch = Operation.createPatch(service, currentStateSelfLink)
+                .setBody(updateTagLinksRequest).setReferer(service.getUri());
 
-        return this.service.sendWithDeferredResult(createPatch);
+        return service.sendWithDeferredResult(createPatch);
     }
 
     public static void setTagLinksToResourceState(ResourceState resourceState,
@@ -635,6 +650,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         tagState.key = key == null ? "" : key;
         tagState.value = value == null ? "" : value;
         tagState.external = true;
+
         // add tenant
         tagState.tenantLinks = tenantLinks;
 

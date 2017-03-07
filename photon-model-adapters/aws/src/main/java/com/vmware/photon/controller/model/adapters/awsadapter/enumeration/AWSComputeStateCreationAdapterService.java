@@ -34,6 +34,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.model.GroupIdentifier;
@@ -51,6 +52,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumeratio
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -61,7 +63,7 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
-
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
@@ -105,6 +107,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         CREATE_COMPUTESTATES,
         SIGNAL_COMPLETION,
         CREATE_TAGS,
+        UPDATE_TAGS
     }
 
     public AWSComputeStateCreationAdapterService() {
@@ -210,7 +213,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             break;
         case CREATE_COMPUTESTATES_OPERATIONS:
             populateCreateOperations(context,
-                    AWSComputeStateCreationStage.UPDATE_COMPUTESTATES_OPERATIONS);
+                    AWSComputeStateCreationStage.UPDATE_TAGS);
+            break;
+        case UPDATE_TAGS:
+            updateTagLinks(context).whenComplete(thenComputeStateCreateOrUpdate(context, AWSComputeStateCreationStage.UPDATE_COMPUTESTATES_OPERATIONS));
             break;
         case UPDATE_COMPUTESTATES_OPERATIONS:
             populateUpdateOperations(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES);
@@ -230,22 +236,34 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         }
     }
 
+    /**
+     * {@code handleComputeStateCreateOrUpdate} version suitable for chaining to
+     * {@code DeferredResult.whenComplete}.
+     */
+    private BiConsumer<AWSComputeStateCreationContext, Throwable> thenComputeStateCreateOrUpdate(AWSComputeStateCreationContext context,
+            AWSComputeStateCreationStage next) {
+        // NOTE: In case of error 'ignoreCtx' is null so use passed context!
+        return (ignoreCtx, exc) -> {
+            if (exc != null) {
+                finishWithFailure(context, exc);
+                return;
+            }
+            context.creationStage = next;
+            handleComputeStateCreateOrUpdate(context);
+        };
+    }
+
     private void createTags(
             AWSComputeStateCreationContext context,
             AWSComputeStateCreationStage next) {
-        // Get all tags from the instances to be created and the instances to be updated
+        // Get all tags from the instances to be created
         Set<Tag> create = context.request.instancesToBeCreated.stream()
-                .flatMap(i -> i.getTags().stream())
-                .collect(Collectors.toSet());
-
-        Set<Tag> update = context.request.instancesToBeUpdated.values().stream()
                 .flatMap(i -> i.getTags().stream())
                 .collect(Collectors.toSet());
 
         // Put them in a set to remove the duplicates
         Set<Tag> allTags = new HashSet<>();
         allTags.addAll(create);
-        allTags.addAll(update);
 
         // POST each of the tags. If a tag exists it won't be created again. We don't want the name
         // tags, so filter them out
@@ -454,6 +472,30 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     .add(postNetworkInterfaceState);
         }
         return nicState;
+    }
+
+    private DeferredResult<AWSComputeStateCreationContext> updateTagLinks(AWSComputeStateCreationContext context) {
+        if (context.request.instancesToBeUpdated == null
+                || context.request.instancesToBeUpdated.size() == 0) {
+            logFine(() -> "No local compute states to be updated so there are no tags to update.");
+            return DeferredResult.completed(context);
+        } else {
+
+            List<DeferredResult<Void>> updateCSTagLinksOps = new ArrayList<>();
+
+            for (String instanceId : context.request.instancesToBeUpdated.keySet()) {
+                Instance instance = context.request.instancesToBeUpdated.get(instanceId);
+                ComputeState existingComputeState = context.request.computeStatesToBeUpdated.get(instanceId);
+                Map<String, String> remoteTags = new HashMap<>();
+                for (Tag awsInstanceTag : instance.getTags()) {
+                    if (!awsInstanceTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
+                        remoteTags.put(awsInstanceTag.getKey(), awsInstanceTag.getValue());
+                    }
+                }
+                updateCSTagLinksOps.add(BaseEnumerationAdapterContext.updateLocalTagStates(this, remoteTags, existingComputeState, context.request.endpointLink));
+            }
+            return DeferredResult.allOf(updateCSTagLinksOps).thenApply(gnore -> context);
+        }
     }
 
     private void populateUpdateOperations(AWSComputeStateCreationContext context,
