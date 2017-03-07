@@ -94,10 +94,13 @@ public class OvfParser {
     };
 
     /**
-     * Produces several descriptions based on the different hardware configuration defined in the OVF
-     * descriptor.
-     * @param doc OVF descriptor to parse
-     * @param template use as a basis of the ComputeDescription.
+     * Produces several descriptions based on the different hardware configuration defined in the
+     * OVF descriptor.
+     *
+     * @param doc
+     *            OVF descriptor to parse
+     * @param template
+     *            use as a basis of the ComputeDescription.
      * @return
      */
     public List<ComputeDescription> parse(Document doc, ComputeDescription template) {
@@ -119,11 +122,13 @@ public class OvfParser {
             cust.put(property(classId, key, instanceId), description);
         }
 
-        String productName = text(doc,
-                "/ovf:Envelope/ovf:VirtualSystem/ovf:ProductSection/ovf:Product/text()");
-        String productVersion = text(doc,
-                "/ovf:Envelope/ovf:VirtualSystem/ovf:ProductSection/ovf:Version/text()");
-        template.name = productName + " " + productVersion;
+        if (template.name == null) {
+            String productName = text(doc,
+                    "/ovf:Envelope/ovf:VirtualSystem/ovf:ProductSection/ovf:Product/text()");
+            String productVersion = text(doc,
+                    "/ovf:Envelope/ovf:VirtualSystem/ovf:ProductSection/ovf:Version/text()");
+            template.name = productName + " " + productVersion;
+        }
 
         NodeList hwItems = nodes(doc,
                 "/ovf:Envelope/ovf:VirtualSystem/ovf:VirtualHardwareSection/ovf:Item");
@@ -154,7 +159,7 @@ public class OvfParser {
             }
         }
 
-        for (Iterator<ComputeDescription> it = hwByConfigName.values().iterator(); it.hasNext(); ) {
+        for (Iterator<ComputeDescription> it = hwByConfigName.values().iterator(); it.hasNext();) {
             ComputeDescription desc = it.next();
             if (desc.cpuCount <= 0) {
                 it.remove();
@@ -166,13 +171,13 @@ public class OvfParser {
 
     /**
      * Extracts the logical names of the networks the ovf needs.
+     *
      * @param doc
      * @return
      */
     public List<String> extractNetworks(Document doc) {
         NodeList nodes = nodes(doc,
                 "/ovf:Envelope/ovf:NetworkSection/ovf:Network");
-
 
         List<String> res = new ArrayList<>(2);
         for (Element item : iterableElements(nodes)) {
@@ -184,6 +189,7 @@ public class OvfParser {
 
     /**
      * Convert a an AllocationUnit string to bytes multiplier, for example KB would produce 1024.
+     *
      * @param unit
      * @return
      */
@@ -198,8 +204,9 @@ public class OvfParser {
     }
 
     /**
-     * Extracts an attribute by name. Returns empty string if attribute was not found.
-     * If the attr name is prefixed and not found, an attempt is made to find it without prefix
+     * Extracts an attribute by name. Returns empty string if attribute was not found. If the attr
+     * name is prefixed and not found, an attempt is made to find it without prefix
+     *
      * @param name
      * @param element
      * @return
@@ -231,6 +238,7 @@ public class OvfParser {
 
     /**
      * Returns a single string matching the xpath expression
+     *
      * @param root
      * @param xpathExpr
      * @return
@@ -255,11 +263,11 @@ public class OvfParser {
     }
 
     /**
-     * Produces a string usable as key in customProperties.
-     * The pattern is: ovf.prop:$classId.$keyId.$instanceId.
-     * If a component is undefined it is not included in the key and also
-     * The pattern used by the ovftool is used.
-     * See https://www.mylesgray.com/virtualisation/deploying-ovaovf-remote-vcenter-using-ovftool/
+     * Produces a string usable as key in customProperties. The pattern is:
+     * ovf.prop:$classId.$keyId.$instanceId. If a component is undefined it is not included in the
+     * key and also The pattern used by the ovftool is used. See
+     * https://www.mylesgray.com/virtualisation/deploying-ovaovf-remote-vcenter-using-ovftool/
+     *
      * @param classId
      * @param key
      * @param instanceId
@@ -319,6 +327,7 @@ public class OvfParser {
 
     /**
      * Make a NodeList behave like Iterable<Element>.
+     *
      * @param n
      * @return
      */
