@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.util.enums;
 
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
@@ -36,7 +38,9 @@ import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask.Query;
 
 /**
@@ -178,8 +182,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     /**
      * Creates/updates a resource base on the remote resource.
      * <p>
-     * <b>Note</b>: Descendants are responsible to provide key-values map describing the tags for the
-     * remote resource, and are off-loaded from setting the following properties:
+     * <b>Note</b>: Descendants are responsible to provide key-values map describing the tags for
+     * the remote resource, and are off-loaded from setting the following properties:
      * <ul>
      * <li>{@code id} property should not be set since it is automatically set to the id of the
      * remote resource.</li>
@@ -195,19 +199,18 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * @param existingLocalResourceState
      *            The existing local resource state that matches the remote resource. null means
      *            there is no local resource state representing the remote resource.
-     * @return An instance of local state holder, consisting of the resource state (either existing or new)
-     * that describes the remote resource, and its tags placed in a map
+     * @return An instance of local state holder, consisting of the resource state (either existing
+     *         or new) that describes the remote resource, and its tags placed in a map
      */
     protected abstract DeferredResult<LocalStateHolder> buildLocalResourceState(
             REMOTE remoteResource, LOCAL_STATE existingLocalResourceState);
 
-    public  class LocalStateHolder {
+    public class LocalStateHolder {
 
         public LOCAL_STATE localState;
         /**
-         * From the key-value pairs, TagStates are created or updated.
-         * The localState's tagLinks list is updated with the new remote tags,
-         * and the local-only tags are perserved.
+         * From the key-value pairs, TagStates are created or updated. The localState's tagLinks
+         * list is updated with the new remote tags, and the local-only tags are perserved.
          */
         public Map<String, String> remoteTags = new HashMap<>();
     }
@@ -291,8 +294,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * <p>
      * Here is the list of criteria used to locate the local resources states:
      * <ul>
-     * <li>Add local documents' kind:
-     * {@code qBuilder.addKindFieldClause(context.localStateClass)}</li>
+     * <li>Add local documents' kind: {@code qBuilder.addKindFieldClause(context.localStateClass)}</li>
      * <li>Add remote resources ids:
      * {@code qBuilder.addInClause(ResourceState.FIELD_NAME_ID, remoteResourceIds)}</li>
      * <li>Add {@code tenantLinks} and {@code endpointLink} criteria as defined by
@@ -324,7 +326,7 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                 context.localStateClass,
                 context.request.parentCompute.tenantLinks,
                 context.request.original.endpointLink)
-                        .setMaxResultsLimit(remoteResourceIds.size());
+                .setMaxResultsLimit(remoteResourceIds.size());
 
         return queryLocalStates
                 .queryDocuments(doc -> context.localResourceStates.put(doc.id, doc))
@@ -337,7 +339,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      */
     protected DeferredResult<T> createUpdateLocalResourceStates(T context) {
 
-        context.service.logFine(() -> String.format("Create/Update local %ss to match remote resources.",
+        context.service.logFine(() -> String.format(
+                "Create/Update local %ss to match remote resources.",
                 context.localStateClass.getSimpleName()));
 
         if (context.remoteResources.isEmpty()) {
@@ -350,26 +353,27 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                     // First delegate to descendant to provide the local resource to create/update
                     return buildLocalResourceState(entry.getValue(),
                             context.localResourceStates.get(entry.getKey()))
-                                    .thenApply(stateHolder -> {
-                                        if (stateHolder.localState == context.SKIP) {
-                                            return stateHolder;
-                                        }
-                                        /*
-                                         * Explicitly set the local resource state id to be equal to
-                                         * the remote resource state id. This is important in the
-                                         * query for local states.
-                                         */
-                                        stateHolder.localState.id = entry.getKey();
-                                        return stateHolder;
-                                    })
-                                    // then update/create state
-                                    .thenCompose(this::createUpdateLocalResourceState);
+                            .thenApply(stateHolder -> {
+                                if (stateHolder.localState == context.SKIP) {
+                                    return stateHolder;
+                                }
+                                /*
+                                 * Explicitly set the local resource state id to be equal to the
+                                 * remote resource state id. This is important in the query for
+                                 * local states.
+                                 */
+                                stateHolder.localState.id = entry.getKey();
+                                return stateHolder;
+                            })
+                            // then update/create state
+                            .thenCompose(this::createUpdateLocalResourceState);
                 }).collect(Collectors.toList());
 
         return DeferredResult.allOf(drs).thenApply(ignore -> context);
     }
 
-    private DeferredResult<Operation> createUpdateLocalResourceState(LocalStateHolder localStateHolder) {
+    private DeferredResult<Operation> createUpdateLocalResourceState(
+            LocalStateHolder localStateHolder) {
         if (localStateHolder.localState == this.SKIP) {
             return DeferredResult.completed(null);
         }
@@ -381,10 +385,18 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         final Operation lsOp;
 
         // Create local tag states
-        DeferredResult<Void> tagsDR = createLocalTagStates(localStateHolder);
+        DeferredResult<Void> tagsDR = DeferredResult.completed((Void) null);
 
         if (currentState != null) {
             // Update case.
+
+            if (currentState.tagLinks != null && !currentState.tagLinks.isEmpty()) {
+                // Update local tag states with the remote values
+                tagsDR = updateLocalTagStates(localStateHolder, currentState);
+            } else {
+                // Create local tag states
+                tagsDR = createLocalTagStates(localStateHolder);
+            }
 
             lsOp = Operation.createPatch(this.service, currentState.documentSelfLink);
         } else {
@@ -394,7 +406,11 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             localStateHolder.localState.tenantLinks = this.request.parentCompute.tenantLinks;
 
             // By default populate ENDPOINT_ILNK
-            PhotonModelUtils.setEndpointLink(localStateHolder.localState, this.request.original.endpointLink);
+            PhotonModelUtils.setEndpointLink(localStateHolder.localState,
+                    this.request.original.endpointLink);
+
+            // Create local tag states
+            tagsDR = createLocalTagStates(localStateHolder);
 
             lsOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
         }
@@ -417,10 +433,10 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * <p>
      * Here is the list of criteria used to locate the stale local resources states:
      * <ul>
-     * <li>Add local documents' kind:
-     * {@code qBuilder.addKindFieldClause(context.localStateClass)}</li>
+     * <li>Add local documents' kind: {@code qBuilder.addKindFieldClause(context.localStateClass)}</li>
      * <li>Add time stamp older than current enumeration cycle:
-     * {@code qBuilder.addRangeClause(ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS, createLessThanRange(context.enumStartTimeInMicros))}</li>
+     * {@code qBuilder.addRangeClause(ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS, createLessThanRange(context.enumStartTimeInMicros))}
+     * </li>
      * <li>Add {@code tenantLinks} and {@code endpointLink} criteria as defined by
      * {@code QueryTemplate}</li>
      * <li>Add descendant specific criteria as defined by
@@ -429,7 +445,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      */
     protected DeferredResult<T> deleteLocalStates(T context) {
 
-        context.service.logFine(() -> String.format("Delete %ss that no longer exist in the endpoint.",
+        context.service.logFine(() -> String.format(
+                "Delete %ss that no longer exist in the endpoint.",
                 context.localStateClass.getSimpleName()));
 
         Query.Builder qBuilder = Query.Builder.create()
@@ -502,7 +519,108 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         return DeferredResult.allOf(localTagStatesDRs).thenApply(ignore -> (Void) null);
     }
 
-    public static void setTagLinksToResourceState(ResourceState resourceState, Map<String, String> tags) {
+    private DeferredResult<Void> updateLocalTagStates(LocalStateHolder localStateHolder,
+            LOCAL_STATE currentState) {
+
+        Map<String, TagState> remoteTagStates = localStateHolder.remoteTags.entrySet().stream()
+                .map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(),
+                        currentState.tenantLinks))
+                .collect(Collectors.toMap(tagState -> tagState.documentSelfLink,
+                        tagState -> tagState));
+
+        final DeferredResult<List<TagState>> createAllLocalTagStatesDR;
+        final Collection<String> tagLinksToAdd;
+        {
+            // the remote tags which do not exist locally will be added to the computeState tagLinks
+            // list
+            tagLinksToAdd = new HashSet<>(remoteTagStates.keySet());
+            tagLinksToAdd.removeAll(currentState.tagLinks);
+
+            // not existing locally tags should be created
+            List<DeferredResult<TagState>> localTagStatesDRs = tagLinksToAdd.stream()
+                    .map(tagLinkObj -> remoteTagStates.get(tagLinkObj))
+                    .map(tagState -> Operation
+                            .createPost(this.service, TagService.FACTORY_LINK)
+                            .setBody(tagState))
+                    .map(tagOperation -> this.service.sendWithDeferredResult(tagOperation,
+                            TagState.class))
+                    .collect(Collectors.toList());
+
+            createAllLocalTagStatesDR = DeferredResult.allOf(localTagStatesDRs);
+        }
+
+        final DeferredResult<Collection<String>> removeAllExternalTagLinksDR;
+        {
+            // all local tag links which do not have remote correspondents and are external will be
+            // removed from the currentState's tagLinks list
+            Set<String> tagLinksToRemove = new HashSet<>(currentState.tagLinks);
+            tagLinksToRemove.removeAll(remoteTagStates.keySet());
+
+            if (tagLinksToRemove.isEmpty()) {
+
+                removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
+
+            } else {
+                // identify which of the local tag states to remove are external
+                Query.Builder qBuilder = Query.Builder.create()
+                        // Add documents' class
+                        .addKindFieldClause(TagState.class)
+                        // Add local tag links to remove
+                        .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, tagLinksToRemove)
+                        .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
+
+                QueryStrategy<TagState> queryLocalStates = new QueryTop<>(
+                        this.service.getHost(),
+                        qBuilder.build(),
+                        TagState.class,
+                        currentState.tenantLinks,
+                        this.request.original.endpointLink)
+                        .setMaxResultsLimit(tagLinksToRemove.size());
+
+                removeAllExternalTagLinksDR = queryLocalStates.collectLinks(Collectors
+                        .toCollection(HashSet::new));
+            }
+        }
+
+        return createAllLocalTagStatesDR.thenCompose(ignore -> removeAllExternalTagLinksDR)
+                .thenCompose(
+                        removeAllExternalTagLinks -> updateResourceTagLinks(removeAllExternalTagLinks,
+                                tagLinksToAdd,
+                                currentState.documentSelfLink))
+                .thenAccept(ignore -> { });
+    }
+
+    public DeferredResult<Operation> updateResourceTagLinks(Collection<String> tagLinksToDelete,
+            Collection<String> tagLinksToAdd, String currentStateSelfLink) {
+        // cast Collection<String> to Collection<Object>
+        Collection<Object> tagLinksToDeleteObj = tagLinksToDelete.stream()
+                .map(tagLinkStr -> (Object) tagLinkStr).collect(Collectors.toSet());
+        Collection<Object> tagLinksToAddObj = tagLinksToAdd.stream()
+                .map(tagLinkStr -> (Object) tagLinkStr).collect(Collectors.toSet());
+
+        // create patch operation to update tag links of the current resource state
+        Map<String, Collection<Object>> collectionsToRemoveMap = new HashMap<String, Collection<Object>>();
+        collectionsToRemoveMap.put(ComputeState.FIELD_NAME_TAG_LINKS, tagLinksToDeleteObj);
+
+        Map<String, Collection<Object>> collectionsToAddMap = new HashMap<String, Collection<Object>>();
+        collectionsToAddMap.put(ComputeState.FIELD_NAME_TAG_LINKS, tagLinksToAddObj);
+
+        ServiceStateCollectionUpdateRequest updateResourceStateRequest =
+                ServiceStateCollectionUpdateRequest.create(collectionsToAddMap,
+                        collectionsToRemoveMap);
+
+        DeferredResult<Operation> postUpdateTagsListDR = this.service
+                .sendWithDeferredResult(Operation
+                        .createPatch(
+                                UriUtils.buildUri(this.service.getHost(),
+                                        currentStateSelfLink))
+                        .setBody(updateResourceStateRequest)
+                        .setReferer(this.service.getUri()));
+        return postUpdateTagsListDR;
+    }
+
+    public static void setTagLinksToResourceState(ResourceState resourceState,
+            Map<String, String> tags) {
         if (tags == null || tags.isEmpty()) {
             return;
         }
@@ -518,12 +636,12 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         TagState tagState = new TagState();
         tagState.key = key == null ? "" : key;
         tagState.value = value == null ? "" : value;
-
+        tagState.external = true;
         // add tenant
         tagState.tenantLinks = tenantLinks;
 
         tagState.documentSelfLink = TagFactoryService.generateSelfLink(tagState);
         return tagState;
     }
-   // }}
+    // }}
 }

@@ -34,12 +34,14 @@ public class TagService extends StatefulService {
 
     public static final String FACTORY_LINK = UriPaths.RESOURCES + "/tags";
 
-
     /**
      * This class represents the document state associated with a
      * {@link com.vmware.photon.controller.model.resources.TagService}.
      */
     public static class TagState extends ServiceDocument {
+
+        public static final String FIELD_NAME_EXTERNAL = "external";
+
         @Documentation(description = "Tag key")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)

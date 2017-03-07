@@ -24,11 +24,9 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.setQueryResultLimit;
-
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResources;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.unTagResources;
-
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_LINUX_AMI;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.EC2_WINDOWS_AMI;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.addNICDirectlyWithEC2Client;
@@ -96,7 +94,6 @@ import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
-
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -578,7 +575,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         List<Tag> vmTags = Arrays.asList(tag1, tag2, tag3);
         // SG tag
         List<Tag> sgTags = new ArrayList<>();
-        sgTags.add(new Tag("sgTagKey", "valueSGTag"));
+        sgTags.add(new Tag("sgTagKey", "sgTagValue"));
         // Network tag
         List<Tag> networkTags = new ArrayList<>();
         networkTags.add(new Tag("netTagKey", "netTagValue"));
@@ -621,9 +618,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             // tag default SG again, so that there is a difference between local and remote tags
             sgTags.remove(0);
             //value is different with the same key, local state should be deleted and new one created
-            sgTags.add(0, new Tag("sgTagKey", "newValueSGTag"));
+            sgTags.add(0, new Tag("sgTagKey2", "newValueSGTag"));
             //new key-value set remotely should result in a new tag state created locally
             sgTags.add(new Tag("sgTagKey1", "valueSGTag1"));
+
             tagResources(this.client, sgTags, TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
 
             enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
@@ -633,21 +631,34 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             validateComputeName(linuxVMId1, VM_NAME);
             validateComputeName(linuxVMId2, VM_UPDATED_NAME);
 
-            // There are a total of allTags.size() + instancesToCleanUp.size() + sgTags.size() tags.
-            // instancesToCleanUp.size() are name tags, which are skipped. This means we should have
-            // allTags.size() + sgTags.size() TagState documents
+            // There should be at least vmTags.size() + sgTags.size() +
+            // networkTags.size() + subnetTags.size() TagState documents
             int allTagsNumber = vmTags.size() + sgTags.size() + networkTags.size() + subnetTags.size();
             ServiceDocumentQueryResult serviceDocumentQueryResult = queryDocumentsAndAssertExpectedCount(
                     this.host, allTagsNumber, TagService.FACTORY_LINK, false);
 
-            Map<Tag, String> tagLinks = new HashMap<>();
+            Map<Tag, String> vmTagLinks = new HashMap<>();
+
+            Map<String, TagState> tagsMap = serviceDocumentQueryResult.documents.entrySet()
+                    .stream().collect(
+                            Collectors.toMap(entry -> entry.getKey(),
+                                    entry -> Utils.fromJson(entry.getValue(), TagState.class)));
+
+            Map<String, SecurityGroupState> allSecurityGroupStatesMap =
+                    ProvisioningUtils.<SecurityGroupState> getResourceStates(this.host,
+                            SecurityGroupService.FACTORY_LINK, SecurityGroupState.class);
+
+            SecurityGroupState defaultSgState = allSecurityGroupStatesMap.get(TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
+            // ensure one link is deleted and two new are added to the sg state
+            assertEquals(2, defaultSgState.tagLinks);
+
+            // this tag should not be removed
+            assertTrue(tagsMap.get("sgTagKey").equals("sgTagValue"));
 
             for (Tag tag : vmTags) {
-                for (Map.Entry<String, Object> entry : serviceDocumentQueryResult.documents
-                        .entrySet()) {
-                    TagState tagState = Utils.fromJson(entry.getValue(), TagState.class);
+                for (TagState tagState : tagsMap.values()) {
                     if (tagState.key.equals(tag.getKey())) {
-                        tagLinks.put(tag, entry.getKey());
+                        vmTagLinks.put(tag, tagState.key);
                         return;
                     }
                 }
@@ -656,13 +667,13 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             ComputeState linuxVMId1ComputeState = getComputeByAWSId(this.host, linuxVMId1);
             assertEquals(linuxVMId1Tags.size(), linuxVMId1ComputeState.tagLinks.size());
             for (Tag tag : linuxVMId1Tags) {
-                assertTrue(linuxVMId1ComputeState.tagLinks.contains(tagLinks.get(tag)));
+                assertTrue(linuxVMId1ComputeState.tagLinks.contains(vmTagLinks.get(tag)));
             }
 
             ComputeState linuxVMId2ComputeState = getComputeByAWSId(this.host, linuxVMId2);
             assertEquals(linuxVMId2Tags.size(), linuxVMId2ComputeState.tagLinks.size());
             for (Tag tag : linuxVMId2Tags) {
-                assertTrue(linuxVMId2ComputeState.tagLinks.contains(tagLinks.get(tag)));
+                assertTrue(linuxVMId2ComputeState.tagLinks.contains(vmTagLinks.get(tag)));
             }
         } catch (Throwable t) {
             this.host.log("Exception occured during test execution: %s", t.getMessage());
