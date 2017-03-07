@@ -17,35 +17,55 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DELETED_VM_COUNT;
+import static com.vmware.xenon.services.common.QueryTask.NumericRange.createDoubleRange;
+import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buildCompositeFieldName;
 
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.joda.time.DateTimeZone;
+import org.joda.time.LocalDate;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
 
-import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask;
 
-public class TestAWSCostAdapterService extends BasicTestCase {
+public class TestAWSCostAdapterService extends BaseModelTest {
 
     public static final String account1Id = "123456789";
     public static final String account2Id = "555555555";
@@ -54,42 +74,35 @@ public class TestAWSCostAdapterService extends BasicTestCase {
     public static final double account1TotalCost = 100.0;
     public static final double account2TotalCost = 50.0;
 
-    @Before
-    public void setUp() throws Exception {
+    public boolean isMock = true;
+    public String accessKey = "accessKey";
+    public String secretKey = "secretKey";
+
+    @Override
+    protected void startRequiredServices() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this);
-
-        try {
-            PhotonModelServices.startServices(this.host);
-            PhotonModelTaskServices.startServices(this.host);
-            AWSAdapters.startServices(this.host);
-
-            this.host.startService(
-                    Operation.createPost(
-                            UriUtils.buildUri(this.host, MockCostStatsAdapterService.class)),
-                    new MockCostStatsAdapterService());
-
-            this.host.setTimeoutSeconds(200);
-
-            this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(AWSAdapters.LINKS);
-            // We run tests against a dummy bill: This bill is re-generated every time for current month
+        super.startRequiredServices();
+        PhotonModelTaskServices.startServices(this.host);
+        AWSAdapters.startServices(this.host);
+        this.host.startService(
+                Operation.createPost(
+                        UriUtils.buildUri(this.host, MockCostStatsAdapterService.class)),
+                new MockCostStatsAdapterService());
+        this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+        this.host.waitForServiceAvailable(AWSAdapters.LINKS);
+        this.host.setTimeoutSeconds(900);
+        if (this.isMock) {
+            // We run mock-tests against a dummy bill.
+            // This bill is re-generated every time for current month
             TestUtils.generateCurrentMonthsBill();
-        } catch (Throwable e) {
-            this.host.log("Error starting up services for the test %s", e.getMessage());
-            throw new Exception(e);
         }
     }
 
     @After
     public void tearDown() throws Exception {
-        if (this.host == null) {
-            return;
+        if (this.isMock) {
+            TestUtils.deleteCurrentMonthsBill();
         }
-        TestUtils.deleteCurrentMonthsBill();
-        this.host.tearDownInProcessPeers();
-        this.host.toggleNegativeTestMode(false);
-        this.host.tearDown();
     }
 
     @Test
@@ -99,33 +112,108 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         issueStatsRequest(account);
     }
 
+    @Test
+    public void testAwsCostAdapterEndToEnd() throws Throwable {
+        if (this.isMock || new LocalDate(DateTimeZone.UTC).getDayOfMonth() == 1) {
+            return;
+        }
+        ResourcePoolState resourcePool = TestAWSSetupUtils.createAWSResourcePool(this.host);
+        EndpointState endpointState = new EndpointState();
+        endpointState.resourcePoolLink = resourcePool.documentSelfLink;
+        endpointState.endpointType = PhotonModelConstants.EndpointType.aws.name();
+        endpointState.name = "test-aws-endpoint";
+        endpointState.endpointProperties = new HashMap<>();
+        endpointState.endpointProperties.put(EndpointConfigRequest.PRIVATE_KEY_KEY, this.secretKey);
+        endpointState.endpointProperties
+                .put(EndpointConfigRequest.PRIVATE_KEYID_KEY, this.accessKey);
+        EndpointAllocationTaskState endpointAllocationTaskState =
+                new EndpointAllocationTaskState();
+        endpointAllocationTaskState.endpointState = endpointState;
+        EndpointAllocationTaskState returnState = postServiceSynchronously(
+                EndpointAllocationTaskService.FACTORY_LINK,
+                endpointAllocationTaskState,
+                EndpointAllocationTaskState.class);
+        EndpointAllocationTaskState completeState = this.waitForServiceState(
+                EndpointAllocationTaskState.class,
+                returnState.documentSelfLink,
+                state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                        .ordinal());
+
+        System.setProperty(AWSCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY, "1");
+
+        triggerStatsCollection(resourcePool);
+        verifyPersistedStats(completeState, AWSConstants.COST, 2);
+
+        //Check if second iteration of adapter succeeds.
+        triggerStatsCollection(resourcePool);
+        verifyPersistedStats(completeState, AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS, 2);
+
+        System.clearProperty(AWSCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
+    }
+
+    private void verifyPersistedStats(EndpointAllocationTaskState completeState, String metric,
+            int expectedCount) {
+        this.host.waitFor("Timeout waiting for stats", () -> {
+            QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
+            querySpec.query = QueryTask.Query.Builder.create()
+                    .addKindFieldClause(ResourceMetrics.class)
+                    .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                            UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK,
+                                    UriUtils.getLastPathSegment(
+                                            completeState.endpointState.computeLink)),
+                            QueryTask.QueryTerm.MatchType.PREFIX)
+                    .addRangeClause(buildCompositeFieldName(
+                            ResourceMetrics.FIELD_NAME_ENTRIES, metric),
+                            createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true))
+                    .build();
+            querySpec.options.add(QueryTask.QuerySpecification.QueryOption.EXPAND_CONTENT);
+            ServiceDocumentQueryResult result = this.host
+                    .createAndWaitSimpleDirectQuery(querySpec, expectedCount, expectedCount);
+            boolean statsCollected = true;
+            for (Object metrics : result.documents.values()) {
+                ResourceMetrics rawMetrics = Utils.fromJson(metrics, ResourceMetrics.class);
+                Double rawMetric = rawMetrics.entries.get(metric);
+                if (rawMetric != null) {
+                    continue;
+                }
+                statsCollected = false;
+            }
+            return statsCollected;
+        });
+    }
+
+    private void triggerStatsCollection(ResourcePoolState pool) {
+        StatsCollectionTaskState statCollectionState = new StatsCollectionTaskState();
+        statCollectionState.resourcePoolLink = pool.documentSelfLink;
+        statCollectionState.statsAdapterReference = UriUtils.buildUri(this.host,
+                AWSCostStatsService.SELF_LINK);
+        statCollectionState.documentSelfLink = "cost-stats-adapter";
+        statCollectionState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
+        statCollectionState.taskInfo = TaskState.createDirect();
+        Operation op = Operation.createPost(this.host, StatsCollectionTaskService.FACTORY_LINK)
+                .setBody(statCollectionState).setReferer(this.host.getReferer());
+        this.host.sendAndWaitExpectSuccess(op);
+    }
+
     private void issueStatsRequest(ComputeState account) throws Throwable {
         // spin up a stateless service that acts as the parent link to patch back to
         StatelessService parentService = new StatelessService() {
             @Override
             public void handleRequest(Operation op) {
                 if (op.getAction() == Action.PATCH) {
-
-                    SingleResourceStatsCollectionTaskState resp = op
-                            .getBody(SingleResourceStatsCollectionTaskState.class);
-                    if (resp.statsList.size() != 2) {
-                        // Only account cost will be stored for current month, hence only 2 stats will be stored.
-                        TestAWSCostAdapterService.this.host.failIteration(
-                                new IllegalStateException("response size was incorrect."));
-                        return;
+                    if (TestAWSCostAdapterService.this.isMock) {
+                        SingleResourceStatsCollectionTaskState resp = op
+                                .getBody(SingleResourceStatsCollectionTaskState.class);
+                        verifyCollectedStats(resp, account);
                     }
-                    if (!resp.statsList.get(0).computeLink.equals(account.documentSelfLink)) {
-                        TestAWSCostAdapterService.this.host
-                                .failIteration(new IllegalStateException(
-                                        "Incorrect resourceReference returned."));
-                        return;
-                    }
-                    verifyCollectedStats(resp);
                     TestAWSCostAdapterService.this.host.completeIteration();
-                    op.complete();
                 }
             }
         };
+        sendStatsRequest(account, parentService);
+    }
+
+    private void sendStatsRequest(ComputeState account, StatelessService parentService) {
         String servicePath = UUID.randomUUID().toString();
         Operation startOp = Operation.createPost(UriUtils.buildUri(this.host, servicePath));
         this.host.startService(startOp, parentService);
@@ -133,14 +221,31 @@ public class TestAWSCostAdapterService extends BasicTestCase {
         ComputeStatsRequest statsRequest = new ComputeStatsRequest();
         statsRequest.resourceReference = UriUtils.buildUri(this.host, account.documentSelfLink);
         statsRequest.taskReference = UriUtils.buildUri(this.host, servicePath);
-        statsRequest.nextStage = SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage.UPDATE_STATS.name();
-        this.host.sendAndWait(Operation.createPatch(UriUtils.buildUri(
-                this.host, MockCostStatsAdapterService.SELF_LINK))
+        statsRequest.isMockRequest = !this.isMock;
+        statsRequest.nextStage = SingleResourceStatsCollectionTaskService
+                .SingleResourceTaskCollectionStage.UPDATE_STATS.name();
+        this.host.sendAndWait(Operation
+                .createPatch(UriUtils.buildUri(this.host, MockCostStatsAdapterService.SELF_LINK))
                 .setBody(statsRequest)
                 .setReferer(this.host.getUri()));
     }
 
-    protected void verifyCollectedStats(SingleResourceStatsCollectionTaskState resp) {
+    protected void verifyCollectedStats(SingleResourceStatsCollectionTaskState resp,
+            ComputeState account) {
+
+        if (resp.statsList.size() != 2) {
+            // Only account cost will be stored for current month,hence only 2 stats will be stored.
+            TestAWSCostAdapterService.this.host.failIteration(
+                    new IllegalStateException("response size was incorrect."));
+            return;
+        }
+        if (!resp.statsList.get(0).computeLink.equals(account.documentSelfLink)) {
+            TestAWSCostAdapterService.this.host
+                    .failIteration(new IllegalStateException(
+                            "Incorrect resourceReference returned."));
+            return;
+        }
+
         Map<String, ComputeStats> computeStatsByLink = resp.statsList.stream()
                 .collect(Collectors.toMap(e -> e.computeLink, Function.identity()));
         ComputeStats computeStats = computeStatsByLink.get(account1SelfLink);
