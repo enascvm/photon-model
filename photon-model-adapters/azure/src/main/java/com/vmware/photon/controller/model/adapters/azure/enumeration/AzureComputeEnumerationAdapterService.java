@@ -64,6 +64,7 @@ import com.microsoft.azure.management.network.models.PublicIPAddress;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
@@ -93,7 +94,6 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -394,7 +394,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
                         ctx.request.resourceLink())
                 .addRangeClause(ComputeState.FIELD_NAME_UPDATE_TIME_MICROS,
-                        NumericRange.createLessThanRange(ctx.enumerationStartTimeInMicros));
+                        NumericRange.createLessThanRange(ctx.enumerationStartTimeInMicros))
+                .addInClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE,
+                        Arrays.asList(LifecycleState.PROVISIONING.toString(),
+                                LifecycleState.RETIRED.toString()),
+                        Occurance.MUST_NOT_OCCUR);
 
         addScopeCriteria(qBuilder, ComputeState.class, ctx);
 

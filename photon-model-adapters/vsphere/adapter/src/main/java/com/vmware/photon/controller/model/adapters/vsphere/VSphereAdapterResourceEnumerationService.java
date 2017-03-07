@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -540,8 +541,9 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, request.resourceLink())
                 .addFieldClause(enumerateByFieldName, request.taskLink(), Occurance.MUST_NOT_OCCUR)
                 .addFieldClause(enumerateByFieldName, "", MatchType.PREFIX)
-                .addFieldClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE,
-                        LifecycleState.RETIRED.toString(),
+                .addInClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE,
+                        Arrays.asList(LifecycleState.PROVISIONING.toString(),
+                                LifecycleState.RETIRED.toString()),
                         Occurance.MUST_NOT_OCCUR);
 
         QueryUtils.addEndpointLink(builder, ComputeState.class, request.endpointLink);

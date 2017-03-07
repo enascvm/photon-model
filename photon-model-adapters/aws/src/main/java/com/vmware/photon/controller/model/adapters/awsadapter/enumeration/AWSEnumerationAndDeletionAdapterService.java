@@ -18,6 +18,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +56,7 @@ import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 /**
@@ -287,7 +289,11 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
                         context.request.original.resourceLink())
                 .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
-                        context.request.original.resourcePoolLink);
+                        context.request.original.resourcePoolLink)
+                .addInClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE,
+                        Arrays.asList(LifecycleState.PROVISIONING.toString(),
+                                LifecycleState.RETIRED.toString()),
+                        Occurance.MUST_NOT_OCCUR);
 
         addScopeCriteria(qBuilder, ComputeState.class, context);
 
