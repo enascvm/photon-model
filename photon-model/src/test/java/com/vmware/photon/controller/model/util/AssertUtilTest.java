@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.util;
+package com.vmware.photon.controller.model.util;
 
 import org.junit.Assert;
 import org.junit.Test;

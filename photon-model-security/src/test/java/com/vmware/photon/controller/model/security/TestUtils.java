@@ -11,13 +11,10 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.util;
+package com.vmware.photon.controller.model.security;
 
-/**
- * This class assists in asserting arguments.
- * @deprecated
- */
-@Deprecated
-public class AssertUtil extends com.vmware.photon.controller.model.util.AssertUtil {
-
+public class TestUtils {
+    public static String switchToUnixLineEnds(String s) {
+        return s == null ? null : s.replaceAll("\r\n", "\n");
+    }
 }

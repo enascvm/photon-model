@@ -83,6 +83,7 @@
 
   <modules>
     <module>photon-model</module>
+    <module>photon-model-security</module>
     <module>photon-model-tasks</module>
     <module>photon-model-adapters-registry</module>
     <module>photon-model-adapters/util</module>

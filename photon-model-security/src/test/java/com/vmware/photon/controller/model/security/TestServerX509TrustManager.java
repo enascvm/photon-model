@@ -11,13 +11,19 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.util;
+package com.vmware.photon.controller.model.security;
 
-/**
- * This class assists in asserting arguments.
- * @deprecated
- */
-@Deprecated
-public class AssertUtil extends com.vmware.photon.controller.model.util.AssertUtil {
+import java.util.concurrent.TimeUnit;
 
+import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
+import com.vmware.xenon.common.ServiceHost;
+
+public class TestServerX509TrustManager extends ServerX509TrustManager {
+
+    public TestServerX509TrustManager(ServiceHost host, Long updateInterval) {
+        super(host);
+        this.maintenanceIntervalInitial = updateInterval;
+        //reload faster the first 1 minute
+        this.reloadCounterThreshold = (int) (TimeUnit.MINUTES.toMicros(1) / updateInterval);
+    }
 }

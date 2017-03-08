@@ -40,8 +40,8 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 
-import com.vmware.photon.controller.model.adapters.util.AssertUtil;
 import com.vmware.photon.controller.model.support.CertificateInfo;
+import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.Utils;
 
 /**
