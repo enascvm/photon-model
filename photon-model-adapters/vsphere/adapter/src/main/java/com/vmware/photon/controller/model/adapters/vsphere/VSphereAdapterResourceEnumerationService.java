@@ -706,6 +706,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     private void updateNetwork(NetworkState oldDocument, EnumerationContext enumerationContext, NetworkOverlay net) {
         NetworkState state = makeNetworkStateFromResults(enumerationContext, net);
         state.documentSelfLink = oldDocument.documentSelfLink;
+        state.resourcePoolLink = null;
+
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationContext.getTenantLinks();
         }
@@ -865,6 +867,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         StorageDescription desc = makeStorageFromResults(request, ds, regionId);
         desc.documentSelfLink = oldDocument.documentSelfLink;
+        desc.resourcePoolLink = null;
+
         if (oldDocument.tenantLinks == null) {
             desc.tenantLinks = enumerationContext.getTenantLinks();
         }
@@ -952,6 +956,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             EnumerationContext enumerationContext, ComputeResourceOverlay cr) {
         ComputeState state = makeComputeResourceFromResults(enumerationContext, cr);
         state.documentSelfLink = oldDocument.documentSelfLink;
+        state.resourcePoolLink = null;
+
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationContext.getTenantLinks();
         }
@@ -1182,6 +1188,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             HostSystemOverlay hs) {
         ComputeState state = makeHostSystemFromResults(enumerationContext, hs);
         state.documentSelfLink = oldDocument.documentSelfLink;
+        state.resourcePoolLink = null;
+
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationContext.getTenantLinks();
         }
@@ -1290,6 +1298,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             VmOverlay vm) {
         ComputeState state = makeVmFromResults(enumerationContext, vm);
         state.documentSelfLink = oldDocument.documentSelfLink;
+        state.resourcePoolLink = null;
+
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationContext.getTenantLinks();
         }
@@ -1392,6 +1402,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = makeResourcePoolFromResults(enumerationContext, rp, selfLink);
         state.name = rp.makeUserFriendlyName(ownerName);
         state.tenantLinks = enumerationContext.getTenantLinks();
+        state.resourcePoolLink = null;
 
         ComputeDescription desc = makeDescriptionForResourcePool(enumerationContext, rp, selfLink);
         state.descriptionLink = desc.documentSelfLink;
