@@ -555,11 +555,7 @@ public class AzureInstanceService extends StatelessService {
         ctx.storageAccountName = ctx.bootDisk.customProperties.get(AZURE_STORAGE_ACCOUNT_NAME);
 
         if (ctx.storageAccountName == null) {
-            if (ctx.vmName != null) {
-                ctx.storageAccountName = ctx.vmName.toLowerCase() + "st";
-            } else {
-                ctx.storageAccountName = String.valueOf(System.currentTimeMillis()) + "st";
-            }
+            ctx.storageAccountName = String.valueOf(System.currentTimeMillis()) + "st";
         }
 
         String accountType = ctx.bootDisk.customProperties
