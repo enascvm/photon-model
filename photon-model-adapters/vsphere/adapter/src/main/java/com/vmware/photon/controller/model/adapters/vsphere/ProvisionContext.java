@@ -229,11 +229,7 @@ public class ProvisionContext {
                                 SubnetState subnet = processor.selectedDocument(nic.subnetLink, SubnetState.class);
                                 nic.subnet = subnet;
                             }
-                            if (nic.subnet != null) {
-                                NetworkState network = processor.selectedDocument(
-                                        nic.subnet.networkLink, NetworkState.class);
-                                nic.network = network;
-                            } else if (nic.networkLink != null) {
+                            if (nic.networkLink != null) {
                                 NetworkState network = processor.selectedDocument(nic.networkLink, NetworkState.class);
                                 nic.network = network;
                             }

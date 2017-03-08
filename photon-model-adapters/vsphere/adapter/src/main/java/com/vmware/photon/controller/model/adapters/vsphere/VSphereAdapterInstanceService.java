@@ -34,9 +34,6 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.vim25.CustomizationSpec;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
@@ -46,8 +43,6 @@ import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VirtualDeviceFileBackingInfo;
 import com.vmware.vim25.VirtualDisk;
-import com.vmware.vim25.VirtualEthernetCard;
-import com.vmware.vim25.VirtualEthernetCardNetworkBackingInfo;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
@@ -56,10 +51,6 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  */
@@ -198,9 +189,6 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
 
                         if (ctx.templateMoRef != null) {
-                            // as we're cloning, networkInterfaces are ignored and
-                            // recreated based on the template
-                            addNetworkLinksAfterClone(state, vmOverlay.getNics(), ctx);
                             addDiskLinksAfterClone(state, vmOverlay.getDisks(), ctx);
                         }
 
@@ -314,79 +302,6 @@ public class VSphereAdapterInstanceService extends StatelessService {
     private void createDiskOnDemand(DiskState ds) {
         Operation.createPost(this, DiskService.FACTORY_LINK)
                 .setBody(ds)
-                .sendWith(this);
-    }
-
-    private void addNetworkLinksAfterClone(ComputeState state, List<VirtualEthernetCard> nics,
-            ProvisionContext ctx) {
-        if (state.networkInterfaceLinks == null) {
-            state.networkInterfaceLinks = new ArrayList<>(2);
-        } else {
-            // ignore network config from compute and store network config produced
-            // by vsphere after clone
-            state.networkInterfaceLinks.clear();
-        }
-
-        for (VirtualEthernetCard nic : nics) {
-            if (!(nic.getBacking() instanceof VirtualEthernetCardNetworkBackingInfo)) {
-                continue;
-            }
-            VirtualEthernetCardNetworkBackingInfo backing = (VirtualEthernetCardNetworkBackingInfo) nic
-                    .getBacking();
-
-            NetworkInterfaceState iface = new NetworkInterfaceState();
-            iface.documentSelfLink = UriUtils.buildUriPath(
-                    NetworkInterfaceService.FACTORY_LINK,
-                    Utils.buildUUID(getHost().getId()));
-            iface.name = nic.getDeviceInfo().getLabel();
-            createNetworkInterfaceOnDemand(iface, backing.getNetwork(),
-                    ctx.getAdapterManagementReference(),
-                    ctx.parent.description.regionId);
-            state.networkInterfaceLinks.add(iface.documentSelfLink);
-        }
-    }
-
-    private void createNetworkInterfaceOnDemand(
-            NetworkInterfaceState iface,
-            ManagedObjectReference network, URI adapterManagementReference, String regionId) {
-
-        Query query = Query.Builder.create()
-                .addFieldClause(ServiceDocument.FIELD_NAME_KIND,
-                        Utils.buildKind(NetworkState.class))
-                .addFieldClause(NetworkState.FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE,
-                        adapterManagementReference.toString())
-                .addFieldClause(NetworkState.FIELD_NAME_REGION_ID, regionId)
-                .addFieldClause(QuerySpecification
-                                .buildCompositeFieldName(NetworkState.FIELD_NAME_CUSTOM_PROPERTIES,
-                                        CustomProperties.MOREF),
-                        VimUtils.convertMoRefToString(network))
-                .build();
-
-        QueryTask qt = QueryTask.Builder.createDirectTask()
-                .setQuery(query)
-                .build();
-
-        Operation.createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(qt)
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        logWarning(() -> String.format("Error looking up network %s: %s", VimUtils
-                                .convertMoRefToString(network), e.getMessage()));
-                        return;
-                    }
-
-                    List<String> links = o.getBody(QueryTask.class).results.documentLinks;
-                    if (links.isEmpty()) {
-                        logWarning(() -> String.format("Could not locate network %s", VimUtils
-                                .convertMoRefToString(network)));
-                        return;
-                    }
-
-                    iface.networkLink = links.get(0);
-                    Operation.createPost(this, NetworkInterfaceService.FACTORY_LINK)
-                            .setBody(iface)
-                            .sendWith(this);
-                })
                 .sendWith(this);
     }
 

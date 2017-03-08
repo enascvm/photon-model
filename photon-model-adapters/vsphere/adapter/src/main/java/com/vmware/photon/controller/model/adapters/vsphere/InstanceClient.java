@@ -51,7 +51,6 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
@@ -186,12 +185,32 @@ public class InstanceClient extends BaseHelper {
             spec.setGuestId(gt);
         }
 
+
         spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
 
         // set ovf environment
         ArrayOfVAppPropertyInfo infos = this.get.entityProp(vm,
                 VimPath.vm_config_vAppConfig_property);
         populateCloudConfig(spec, infos);
+
+
+        // remove nics and attach to proper networks if nics are configured
+        if (this.nics != null && this.nics.size() > 0) {
+            ArrayOfVirtualDevice devices = this.get.entityProp(vm, VimPath.vm_config_hardware_device);
+            devices.getVirtualDevice().stream()
+                    .filter(d -> d instanceof VirtualEthernetCard)
+                    .forEach(nic -> {
+                        VirtualDeviceConfigSpec removeNicChange = new VirtualDeviceConfigSpec();
+                        removeNicChange.setOperation(VirtualDeviceConfigSpecOperation.REMOVE);
+                        removeNicChange.setDevice(nic);
+                        spec.getDeviceChange().add(removeNicChange);
+                    });
+
+            for (NetworkInterfaceStateWithDetails niState : this.nics) {
+                VirtualDevice nic = createNic(niState, null);
+                addDeviceToVm(spec, nic);
+            }
+        }
 
         ManagedObjectReference task = getVimPort().reconfigVMTask(vm, spec);
         TaskInfo info = waitTaskEnd(task);
@@ -600,8 +619,8 @@ public class InstanceClient extends BaseHelper {
 
         // configure network
         VirtualPCIController pci = getFirstPciController(devices);
-        for (NetworkInterfaceStateWithDetails ni : this.nics) {
-            VirtualDevice nic = createNic(ni.network, pci.getControllerKey());
+        for (NetworkInterfaceStateWithDetails nicWithDetails : this.nics) {
+            VirtualDevice nic = createNic(nicWithDetails, pci.getControllerKey());
             addDeviceToVm(spec, nic);
         }
 
@@ -1397,7 +1416,7 @@ public class InstanceClient extends BaseHelper {
         spec.setFiles(files);
 
         for (NetworkInterfaceStateWithDetails ni : this.nics) {
-            VirtualDevice nic = createNic(ni.network, null);
+            VirtualDevice nic = createNic(ni, null);
             addDeviceToVm(spec, nic);
         }
 
@@ -1430,38 +1449,38 @@ public class InstanceClient extends BaseHelper {
         return scsiCtrl;
     }
 
-    private VirtualEthernetCard createNic(NetworkState network, Integer controllerKey)
+    private VirtualEthernetCard createNic(NetworkInterfaceStateWithDetails nicWithDetails, Integer controllerKey)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         VirtualEthernetCard nic = new VirtualE1000();
         nic.setAddressType(VirtualEthernetCardMacType.GENERATED.value());
         nic.setKey(-1);
         nic.setControllerKey(controllerKey);
 
-        CustomProperties custProp = CustomProperties.of(network);
-        if (VimNames.TYPE_OPAQUE_NETWORK.equals(custProp.getString(CustomProperties.TYPE, null))) {
-            VirtualEthernetCardOpaqueNetworkBackingInfo backing = new VirtualEthernetCardOpaqueNetworkBackingInfo();
-            backing.setOpaqueNetworkId(custProp.getString(NsxProperties.OPAQUE_NET_ID));
-            backing.setOpaqueNetworkType(custProp.getString(NsxProperties.OPAQUE_NET_TYPE));
-            nic.setBacking(backing);
-        } else if (VimNames.TYPE_PORTGROUP
-                .equals(custProp.getString(CustomProperties.TYPE, null))) {
-            ManagedObjectReference moRef = custProp.getMoRef(CustomProperties.MOREF);
-            ManagedObjectReference dvs = this.get.entityProp(moRef,
-                    VimPath.pg_config_distributedVirtualSwitch);
-            String uuid = this.get.entityProp(dvs, VimPath.dvs_uuid);
-
+        if (nicWithDetails.subnet != null) {
+            // subnet means portgroup
             DistributedVirtualSwitchPortConnection port = new DistributedVirtualSwitchPortConnection();
-            port.setSwitchUuid(uuid);
-            port.setPortgroupKey(custProp.getString(DvsProperties.PORT_GROUP_KEY));
+            CustomProperties props = CustomProperties.of(nicWithDetails.subnet);
+            port.setSwitchUuid(props.getString(DvsProperties.DVS_UUID));
+            port.setPortgroupKey(props.getString(DvsProperties.PORT_GROUP_KEY));
 
             VirtualEthernetCardDistributedVirtualPortBackingInfo backing = new VirtualEthernetCardDistributedVirtualPortBackingInfo();
             backing.setPort(port);
             nic.setBacking(backing);
         } else {
-
-            VirtualEthernetCardNetworkBackingInfo backing = new VirtualEthernetCardNetworkBackingInfo();
-            backing.setDeviceName(network.name);
-            nic.setBacking(backing);
+            // either network or OpaqueNetwork
+            CustomProperties custProp = CustomProperties.of(nicWithDetails.network);
+            if (VimNames.TYPE_OPAQUE_NETWORK.equals(custProp.getString(CustomProperties.TYPE, null))) {
+                // opaque network
+                VirtualEthernetCardOpaqueNetworkBackingInfo backing = new VirtualEthernetCardOpaqueNetworkBackingInfo();
+                backing.setOpaqueNetworkId(custProp.getString(NsxProperties.OPAQUE_NET_ID));
+                backing.setOpaqueNetworkType(custProp.getString(NsxProperties.OPAQUE_NET_TYPE));
+                nic.setBacking(backing);
+            } else {
+                // network
+                VirtualEthernetCardNetworkBackingInfo backing = new VirtualEthernetCardNetworkBackingInfo();
+                backing.setDeviceName(nicWithDetails.network.name);
+                nic.setBacking(backing);
+            }
         }
 
         return nic;

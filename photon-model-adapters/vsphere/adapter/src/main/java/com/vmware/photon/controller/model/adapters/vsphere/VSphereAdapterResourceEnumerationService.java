@@ -361,7 +361,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
     private void refreshResourcesOnDatacenter(EnumerationClient client, EnumerationContext ctx,
             TaskManager mgr) throws ClientException {
-        List<NetworkOverlay> networks = new ArrayList<>();
+        MoRefKeyedMap<NetworkOverlay> networks = new MoRefKeyedMap<>();
         List<HostSystemOverlay> hosts = new ArrayList<>();
         List<DatastoreOverlay> datastores = new ArrayList<>();
         List<ComputeResourceOverlay> computeResources = new ArrayList<>();
@@ -379,7 +379,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         if (!net.getName().toLowerCase().contains("dvuplinks")) {
                             // skip uplinks altogether,
                             // TODO starting with 6.5 query the property config.uplink instead
-                            networks.add(net);
+                            networks.put(net.getId(), net);
                         }
                     } else if (VimUtils.isHost(cont.getObj())) {
                         // this includes all standalone and clustered hosts
@@ -420,8 +420,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         // process results in topological order
         ctx.expectNetworkCount(networks.size());
-        for (NetworkOverlay net : networks) {
-            processFoundNetwork(ctx, net);
+        for (NetworkOverlay net : networks.values()) {
+            processFoundNetwork(ctx, net, networks);
         }
 
         ctx.expectDatastoreCount(datastores.size());
@@ -612,13 +612,14 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         return URI.create(uri.toString().replace("/sdk", "/api"));
     }
 
-    private void processFoundNetwork(EnumerationContext enumerationContext, NetworkOverlay net) {
+    private void processFoundNetwork(EnumerationContext enumerationContext, NetworkOverlay net,
+            MoRefKeyedMap<NetworkOverlay> allNetworks) {
         if (net.getParentSwitch() != null) {
             // portgroup: create subnet
             QueryTask task = queryForSubnet(enumerationContext, net);
             withTaskResults(task, result -> {
                 if (result.documentLinks.isEmpty()) {
-                    createNewSubnet(enumerationContext, net);
+                    createNewSubnet(enumerationContext, net, allNetworks.get(net.getParentSwitch()));
                 } else {
                     SubnetState oldDocument = convertOnlyResultToDocument(result, SubnetState.class);
                     updateSubnet(oldDocument, enumerationContext, net);
@@ -652,8 +653,11 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .sendWith(this);
     }
 
-    private void createNewSubnet(EnumerationContext enumerationContext, NetworkOverlay net) {
+    private void createNewSubnet(EnumerationContext enumerationContext, NetworkOverlay net,
+            NetworkOverlay parentSwitch) {
         SubnetState state = makeSubnetStateFromResults(enumerationContext, net);
+        state.customProperties.put(DvsProperties.DVS_UUID, parentSwitch.getDvsUuid());
+
         state.tenantLinks = enumerationContext.getTenantLinks();
         Operation.createPost(this, SubnetService.FACTORY_LINK)
                 .setBody(state)
