@@ -121,7 +121,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
 
         // Storage account specific properties
         Map<String, StorageAccount> storageAccounts = new ConcurrentHashMap<>();
-        List<CloudBlob> snapshots = Collections.synchronizedList(new ArrayList<>());
+        final List<CloudBlob> snapshots = Collections.synchronizedList(new ArrayList<>());
 
         // Azure clients
         StorageManagementClient storageClient;
@@ -227,8 +227,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
 
     private void getComputeHost(AzureStorageStatsDataHolder statsData, StorageMetricsStages next) {
         Consumer<Operation> onSuccess = (op) -> {
-            ComputeService.ComputeStateWithDescription csd = op.getBody(ComputeService.ComputeStateWithDescription.class);
-            statsData.computeHostDesc = csd;
+            statsData.computeHostDesc = op.getBody(ComputeService.ComputeStateWithDescription.class);
             statsData.stage = next;
             handleStorageMetricDiscovery(statsData);
         };
@@ -316,6 +315,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
             List<ServiceStats.ServiceStat> statDatapoints = new ArrayList<>();
             StorageManagementClient storageClient = getStorageManagementClient(statsData);
             AtomicInteger accountsCount = new AtomicInteger(statsData.storageAccounts.size());
+            final List<Throwable> exs = new ArrayList<>();
             for (Map.Entry<String, StorageAccount> account : statsData.storageAccounts
                     .entrySet()) {
                 String resourceGroupName = getResourceGroupName(account.getValue().id);
@@ -393,7 +393,6 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                                             logWarning(() -> String
                                                                     .format("Error getting blob size: [%s]",
                                                                             e.getMessage()));
-                                                            continue;
                                                         }
                                                     }
                                                 }
@@ -401,11 +400,13 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                         }
                                     } while (nextContainerResults != null);
                                 } catch (Exception e) {
-                                    handleError(statsData, e);
-                                    return;
+                                    logWarning(() -> String
+                                            .format("Exception while getting blob used bytes: %s",
+                                                    Utils.toString(e)));
+                                    exs.add(e);
                                 } finally {
-                                    // Delete snapshot - otherwise snapshot blobs will accumulate in the
-                                    // Azure account
+                                    // Delete snapshot - otherwise snapshot blobs will accumulate
+                                    // in the Azure account
                                     if (statsData.snapshots.size() > 0) {
                                         synchronized (statsData.snapshots) {
                                             Iterator<CloudBlob> snapshotIterator = statsData.snapshots
@@ -417,15 +418,23 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                                     snapshot.deleteIfExists();
                                                     snapshotIterator.remove();
                                                 } catch (StorageException e) {
-                                                    handleError(statsData, e);
-                                                    continue;
+                                                    // Best effort to delete all the snapshots
+                                                    logWarning(() -> String
+                                                            .format("Exception while deleting snapshot: %s",
+                                                                    Utils.toString(e)));
                                                 }
                                             }
                                         }
                                     }
                                 }
+
                                 // if all storage accounts were processed, create ServiceStat and finish
                                 if (accountsCount.get() == 0) {
+                                    if (!exs.isEmpty()) {
+                                        handleError(statsData, exs.iterator().next());
+                                        return;
+                                    }
+
                                     if (statsData.utilizedBytes != 0) {
                                         ServiceStats.ServiceStat stat = new ServiceStats.ServiceStat();
                                         stat.latestValue = statsData.utilizedBytes;
