@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -56,6 +57,7 @@ import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
 import com.vmware.vim25.ArrayUpdateOperation;
 import com.vmware.vim25.DistributedVirtualSwitchPortConnection;
+import com.vmware.vim25.DuplicateName;
 import com.vmware.vim25.FileAlreadyExists;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
@@ -164,7 +166,9 @@ public class InstanceClient extends BaseHelper {
             this.finder = new Finder(connection, this.targetDatacenterPath);
         } catch (RuntimeFaultFaultMsg | InvalidPropertyFaultMsg e) {
             throw new ClientException(
-                    String.format("Error looking for datacenter for id '%s'", this.targetDatacenterPath), e);
+                    String.format("Error looking for datacenter for id '%s'",
+                            this.targetDatacenterPath),
+                    e);
         }
 
         this.get = new GetMoRef(this.connection);
@@ -185,7 +189,6 @@ public class InstanceClient extends BaseHelper {
             spec.setGuestId(gt);
         }
 
-
         spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
 
         // set ovf environment
@@ -193,10 +196,10 @@ public class InstanceClient extends BaseHelper {
                 VimPath.vm_config_vAppConfig_property);
         populateCloudConfig(spec, infos);
 
-
         // remove nics and attach to proper networks if nics are configured
         if (this.nics != null && this.nics.size() > 0) {
-            ArrayOfVirtualDevice devices = this.get.entityProp(vm, VimPath.vm_config_hardware_device);
+            ArrayOfVirtualDevice devices = this.get.entityProp(vm,
+                    VimPath.vm_config_hardware_device);
             devices.getVirtualDevice().stream()
                     .filter(d -> d instanceof VirtualEthernetCard)
                     .forEach(nic -> {
@@ -318,7 +321,8 @@ public class InstanceClient extends BaseHelper {
     public ComputeState createInstance() throws Exception {
         if (this.targetDatacenterPath == null || this.targetDatacenterPath.length() == 0) {
             throw new IllegalArgumentException(
-                    "Datacenter is required for provisioning " + this.state.description.documentSelfLink);
+                    "Datacenter is required for provisioning "
+                            + this.state.description.documentSelfLink);
         }
 
         ManagedObjectReference vm;
@@ -457,7 +461,6 @@ public class InstanceClient extends BaseHelper {
         VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
         cloneSpec.setLocation(spec);
         cloneSpec.setTemplate(false);
-
         ManagedObjectReference cloneTask = getVimPort()
                 .cloneVMTask(vm, vmFolder, replicatedName, cloneSpec);
 
@@ -465,7 +468,7 @@ public class InstanceClient extends BaseHelper {
 
         if (info.getState() == TaskInfoState.ERROR) {
             MethodFault fault = info.getError().getFault();
-            if (fault instanceof FileAlreadyExists) {
+            if (fault instanceof DuplicateName) {
                 logger.info(
                         "Template is being replicated by another thread, waiting for {} to be ready",
                         replicatedName);
@@ -474,16 +477,17 @@ public class InstanceClient extends BaseHelper {
                 return VimUtils.rethrow(info.getError());
             }
         }
+
         ManagedObjectReference rvm = (ManagedObjectReference) info.getResult();
         logger.info("Replicated {} ({}) to {} ({})", vmName, vm.getValue(), replicatedName,
                 rvm.getValue());
-
         logger.info("Creating initial snapshot for linked clones on {}", rvm.getValue());
         ManagedObjectReference snapshotTask = getVimPort().createSnapshotTask(rvm, "initial",
                 null, false, false);
         VimUtils.waitTaskEnd(this.connection, snapshotTask);
         logger.info("Created initial snapshot for linked clones on {}", rvm.getValue());
         return rvm;
+
     }
 
     private ManagedObjectReference awaitVM(String replicatedName, ManagedObjectReference vmFolder,
@@ -505,10 +509,25 @@ public class InstanceClient extends BaseHelper {
             path = path.substring("/Datacenters".length());
         }
 
+        logger.info("Searching for vm using InventoryPath {}", path);
         ManagedObjectReference reference = getVimPort()
                 .findByInventoryPath(getServiceContent().getSearchIndex(), path);
 
-        get.entityProp(reference, VimPath.vm_snapshot);
+        Object snapshot = get.entityProp(reference, VimPath.vm_snapshot);
+        if (snapshot == null) {
+            int retryCount = 30;
+            while (retryCount > 0) {
+                try {
+                    TimeUnit.SECONDS.sleep(10);
+                } catch (InterruptedException e) {
+                    return null;
+                }
+                snapshot = get.entityProp(reference, VimPath.vm_snapshot);
+                if (snapshot != null) {
+                    return reference;
+                }
+            }
+        }
 
         return reference;
     }
@@ -646,17 +665,8 @@ public class InstanceClient extends BaseHelper {
                 cloneSpec);
         TaskInfo info = waitTaskEnd(cloneTask);
 
-        // ManagedObjectReference reconfigureTask = getVimPort().reconfigVMTask(clonedVm, spec);
-        // TaskInfo info = waitTaskEnd(reconfigureTask);
-
         if (info.getState() == TaskInfoState.ERROR) {
-            MethodFault fault = info.getError().getFault();
-            if (fault instanceof FileAlreadyExists) {
-                // a .vmx file already exists, assume someone won the race to create the vm
-                return null;
-            } else {
-                return VimUtils.rethrow(info.getError());
-            }
+            return VimUtils.rethrow(info.getError());
         }
 
         return (ManagedObjectReference) info.getResult();
@@ -1449,7 +1459,8 @@ public class InstanceClient extends BaseHelper {
         return scsiCtrl;
     }
 
-    private VirtualEthernetCard createNic(NetworkInterfaceStateWithDetails nicWithDetails, Integer controllerKey)
+    private VirtualEthernetCard createNic(NetworkInterfaceStateWithDetails nicWithDetails,
+            Integer controllerKey)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         VirtualEthernetCard nic = new VirtualE1000();
         nic.setAddressType(VirtualEthernetCardMacType.GENERATED.value());
@@ -1469,7 +1480,8 @@ public class InstanceClient extends BaseHelper {
         } else {
             // either network or OpaqueNetwork
             CustomProperties custProp = CustomProperties.of(nicWithDetails.network);
-            if (VimNames.TYPE_OPAQUE_NETWORK.equals(custProp.getString(CustomProperties.TYPE, null))) {
+            if (VimNames.TYPE_OPAQUE_NETWORK
+                    .equals(custProp.getString(CustomProperties.TYPE, null))) {
                 // opaque network
                 VirtualEthernetCardOpaqueNetworkBackingInfo backing = new VirtualEthernetCardOpaqueNetworkBackingInfo();
                 backing.setOpaqueNetworkId(custProp.getString(NsxProperties.OPAQUE_NET_ID));
