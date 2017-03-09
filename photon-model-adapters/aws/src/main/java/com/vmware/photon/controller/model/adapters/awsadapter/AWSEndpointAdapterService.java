@@ -107,10 +107,9 @@ public class AWSEndpointAdapterService extends StatelessService {
                                     ServiceErrorResponse r = Utils.toServiceErrorResponse(e);
                                     r.statusCode = STATUS_CODE_UNAUTHORIZED;
                                     callback.accept(r, e);
+                                    return;
                                 }
-                                return;
                             }
-
                             callback.accept(null, e);
                         }
 
