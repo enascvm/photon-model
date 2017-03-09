@@ -140,7 +140,7 @@ public class AzureUtils {
      * Configures authentication credential for Azure.
      */
     public static ApplicationTokenCredentials getAzureConfig(
-            AuthCredentialsServiceState parentAuth) throws Exception {
+            AuthCredentialsServiceState parentAuth) {
 
         String clientId = parentAuth.privateKeyId;
         String clientKey = EncryptionUtils.decrypt(parentAuth.privateKey);

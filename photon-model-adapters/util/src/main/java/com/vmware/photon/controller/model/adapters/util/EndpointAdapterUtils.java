@@ -19,11 +19,14 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
@@ -46,13 +49,80 @@ public class EndpointAdapterUtils {
     public static final String ENDPOINT_REFERENCE_URI = "endpointReferenceUri";
 
     /**
-     * Register end-point config into Adapters Registry.
+     * Register end-point adapters into End-point Adapters Registry.
      *
-     * @param service
-     *            The end-point adapter service.
-     * @param serviceStartOp
-     *            The service start operation. It is completed upon completion of registration into
-     *            Adapters Registry.
+     * @param host
+     *            The host the end-point is running on.
+     * @param endpointType
+     *            The type of the end-point.
+     * @param startedAdapterLinks
+     *            The array of started adapter links.
+     * @param adapterLinksToRegister
+     *            Map of adapter links (to be registered) to their {@link AdapterTypePath adapter
+     *            type}.
+     *
+     * @see #handleEndpointRegistration(ServiceHost, String, Consumer)
+     */
+    public static void registerEndpointAdapters(
+            ServiceHost host,
+            String endpointType,
+            String[] startedAdapterLinks,
+            Map<String, AdapterTypePath> adapterLinksToRegister) {
+
+        // Count all adapters - both FAILED and STARTED
+        AtomicInteger adaptersCountDown = new AtomicInteger(startedAdapterLinks.length);
+
+        // Keep started adapters only...
+        // - key = adapter type (AdapterTypePath.key)
+        // - value = adapter URI
+        Map<String, String> startedAdapters = new ConcurrentHashMap<>();
+
+        // Wait for all adapter services to start
+        host.registerForServiceAvailability((op, ex) -> {
+
+            if (ex != null) {
+                String adapterPath = op.getUri().getPath();
+                host.log(Level.WARNING, "Starting '%s' adapter [%s]: FAILED - %s",
+                        endpointType, adapterPath, Utils.toString(ex));
+            } else {
+                String adapterPath = op.getUri().getPath();
+                host.log(Level.FINE, "Starting '%s' adapter [%s]: SUCCESS",
+                        endpointType, adapterPath);
+
+                AdapterTypePath adapterTypeToRegister = adapterLinksToRegister.get(adapterPath);
+
+                if (adapterTypeToRegister != null) {
+                    startedAdapters.put(
+                            adapterTypeToRegister.key,
+                            AdapterUriUtil.buildAdapterUri(host, adapterPath).toString());
+                }
+            }
+
+            if (adaptersCountDown.decrementAndGet() == 0) {
+                // Once ALL Adapters are started register them into End-point Adapters Registry
+
+                host.log(Level.INFO, "Starting %d '%s' adapters: SUCCESS",
+                        startedAdapters.size(), endpointType);
+
+                // Populate end-point config with started adapters
+                Consumer<PhotonModelAdapterConfig> endpointConfigEnhancer = ep -> ep.adapterEndpoints
+                        .putAll(startedAdapters);
+
+                // Delegate to core end-point config/registration logic
+                handleEndpointRegistration(
+                        host, endpointType, endpointConfigEnhancer);
+            }
+
+        }, startedAdapterLinks);
+
+    }
+
+    /**
+     * Enhance end-point config with all adapters that are to be published/registered to End-point
+     * Adapters Registry.
+     *
+     * @param host
+     *            The host the end-point is running on.
      * @param endpointType
      *            The type of the end-point.
      * @param endpointConfigEnhancer
@@ -80,6 +150,7 @@ public class EndpointAdapterUtils {
 
             PhotonModelAdapterConfig endpointConfig = new PhotonModelAdapterConfig();
 
+            // By contract the id MUST equal to endpointType
             endpointConfig.id = endpointType;
             endpointConfig.documentSelfLink = endpointConfig.id;
             endpointConfig.name = endpointType;
@@ -98,7 +169,8 @@ public class EndpointAdapterUtils {
                 if (e != null) {
                     host.log(Level.WARNING,
                             "Registering %d '%s' adapters into End-point Adapters Registry: FAILED - %s",
-                            endpointConfig.adapterEndpoints.size(), endpointType, Utils.toString(ex));
+                            endpointConfig.adapterEndpoints.size(), endpointType,
+                            Utils.toString(ex));
                 } else {
                     host.log(Level.INFO,
                             "Registering %d '%s' adapters into End-point Adapters Registry: SUCCESS",
@@ -223,7 +295,8 @@ public class EndpointAdapterUtils {
                 enhancer.accept(credentials, Retriever.of(body.endpointProperties));
 
                 BiConsumer<ServiceErrorResponse, Throwable> callback = (r, e) -> {
-                    service.logInfo("Finished validating credentials for operation: %d", op.getId());
+                    service.logInfo("Finished validating credentials for operation: %d",
+                            op.getId());
                     if (r == null && e == null) {
                         if (body.requestType == RequestType.VALIDATE) {
                             op.complete();

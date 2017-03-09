@@ -11,14 +11,13 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.awsadapter;
+package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -28,8 +27,7 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
-import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService.PartitionedIterator;
+import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
@@ -46,22 +44,26 @@ import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
-public class TestAWSImageEnumerationTask extends BaseModelTest {
+public class TestAzureImageEnumerationTask extends BaseModelTest {
 
     // Populated from command line props {{
-    public String accessKey = "accessKey";
-    public String secretKey = "secretKey";
+    public String clientID = "clientID";
+    public String clientKey = "clientKey";
+    public String subscriptionId = "subscriptionId";
+    public String tenantId = "tenantId";
     public boolean isMock = true;
 
     public boolean enableLongRunning = false;
     // }}
 
-    // As of now uniquely identify a SINGLE AWS image.
-    private static final String AMAZON_IMAGE_FILTER = "Amazon-Linux_WordPress";
+    // As of now uniquely identify a SINGLE Azure image (version is not specified).
+    private static final String AZURE_SINGLE_IMAGE_FILTER = "cognosys:secured-wordpress-on-windows-2012-r2:secured-wordpress-on-windows-enterprise-lic:";
+
+    // Format is 'publisher:offer:sku:version'
+    private static final String AZURE_MULTI_IMAGES_FILTER = "CoreOS:::";
 
     @Before
     public final void beforeTest() throws Throwable {
@@ -80,9 +82,9 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
         PhotonModelAdaptersRegistryAdapters.startServices(getHost());
 
-        AWSAdapters.startServices(getHost());
+        AzureAdapters.startServices(getHost());
 
-        getHost().waitForServiceAvailable(AWSAdapters.CONFIG_LINK);
+        getHost().waitForServiceAvailable(AzureAdapters.CONFIG_LINK);
     }
 
     @Test
@@ -98,11 +100,11 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
         {
             getHost().log(Level.INFO,
-                    "=== First enumeration should create a single '%s' image", AMAZON_IMAGE_FILTER);
+                    "=== First enumeration should create a single '%s' image", AZURE_SINGLE_IMAGE_FILTER);
 
             ImageState staleImageState = createImageState(endpointState);
 
-            kickOffImageEnumeration(endpointState, false /* all */);
+            kickOffImageEnumeration(endpointState, AZURE_SINGLE_IMAGE_FILTER);
 
             if (!this.isMock) {
                 // Validate 1 image state is CREATED
@@ -112,21 +114,22 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
                 // Validate 1 stale image state is DELETED
                 Assert.assertTrue("Dummy image should have been deleted.",
-                        !imagesAfterFirstEnum.documentLinks.contains(staleImageState.documentSelfLink));
+                        !imagesAfterFirstEnum.documentLinks
+                                .contains(staleImageState.documentSelfLink));
             }
         }
 
         {
             getHost().log(Level.INFO,
                     "=== Second enumeration should update the single '%s' image",
-                    AMAZON_IMAGE_FILTER);
+                    AZURE_SINGLE_IMAGE_FILTER);
 
             if (!this.isMock) {
                 // Update local image state
                 updateImageState(imagesAfterFirstEnum.documentLinks.get(0));
             }
 
-            kickOffImageEnumeration(endpointState, false /* all */);
+            kickOffImageEnumeration(endpointState, AZURE_SINGLE_IMAGE_FILTER);
 
             if (!this.isMock) {
                 // Validate 1 image state is UPDATED (and the local update above is overridden)
@@ -138,16 +141,48 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                         imagesAfterFirstEnum.documentLinks,
                         imagesAfterSecondEnum.documentLinks);
 
-                ImageState imageAfterFirstEnum = Utils.fromJson(imagesAfterFirstEnum.documents.values().iterator().next(), ImageState.class);
-                ImageState imageAfterSecondEnum = Utils.fromJson(imagesAfterSecondEnum.documents.values().iterator().next(), ImageState.class);
+                ImageState imageAfterFirstEnum = Utils.fromJson(
+                        imagesAfterFirstEnum.documents.values().iterator().next(),
+                        ImageState.class);
+                ImageState imageAfterSecondEnum = Utils.fromJson(
+                        imagesAfterSecondEnum.documents.values().iterator().next(),
+                        ImageState.class);
 
                 Assert.assertNotEquals("Images timestamp should differ after the two enums",
                         imageAfterFirstEnum.documentUpdateTimeMicros,
                         imageAfterSecondEnum.documentUpdateTimeMicros);
 
-                Assert.assertTrue("Image name is not updated correctly after second enum.", !imageAfterSecondEnum.name.contains("OVERRIDE"));
+                Assert.assertTrue("Image name is not updated correctly after second enum.",
+                        !imageAfterSecondEnum.name.contains("OVERRIDE"));
             }
         }
+    }
+
+    @Test
+    public void testImageEnumeration_multi() throws Throwable {
+
+        Assume.assumeFalse(this.isMock);
+
+        // This test takes about less than 2 mins!
+        getHost().setTimeoutSeconds((int) TimeUnit.MINUTES.toSeconds(2));
+
+        ImageEnumerationTaskState task = kickOffImageEnumeration(
+                createEndpointState(), AZURE_MULTI_IMAGES_FILTER);
+
+        // Validate at least 200+ image states are created.
+
+        QueryByPages<ImageState> queryAll = new QueryByPages<ImageState>(
+                getHost(),
+                Builder.create().addKindFieldClause(ImageState.class).build(),
+                ImageState.class,
+                task.tenantLinks);
+        queryAll.setMaxPageSize(QueryUtils.DEFAULT_MAX_RESULT_LIMIT);
+
+        Long imagesCount = QueryByPages.waitToComplete(
+                queryAll.collectLinks(Collectors.counting()));
+
+        Assert.assertTrue("Expected at least " + 200 + " images, but found only " + imagesCount,
+                imagesCount > 200);
     }
 
     @Test
@@ -156,77 +191,33 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         Assume.assumeFalse(this.isMock);
         Assume.assumeTrue(this.enableLongRunning);
 
-        getHost().setTimeoutSeconds((int) TimeUnit.MINUTES.toSeconds(5));
+        // This test takes about 30 mins!
+        getHost().setTimeoutSeconds((int) TimeUnit.MINUTES.toSeconds(40));
 
-        // Important: MUST share same Endpoint between the two enum runs.
-        final EndpointState endpointState = createEndpointState();
+        ImageEnumerationTaskState task = kickOffImageEnumeration(createEndpointState(), null);
 
-        kickOffImageEnumeration(endpointState, true /* all */);
-
-        // Validate at least 50K image states are created
-
-        // NOTE: do not use queryDocumentsAndAssertExpectedCount
-        // since it fails with 'Query returned large number of results'
+        // Validate at least 4.5K image states are created
 
         QueryByPages<ImageState> queryAll = new QueryByPages<ImageState>(
                 getHost(),
                 Builder.create().addKindFieldClause(ImageState.class).build(),
                 ImageState.class,
-                null);
+                task.tenantLinks);
         queryAll.setMaxPageSize(QueryUtils.DEFAULT_MAX_RESULT_LIMIT);
 
         Long imagesCount = QueryByPages.waitToComplete(
                 queryAll.collectLinks(Collectors.counting()));
 
-        Assert.assertTrue("Expected at least " + 58_000 + " images, but found only " + imagesCount,
-                imagesCount > 58_000);
-    }
-
-    @Test
-    public void testPartitionedIterator() {
-        {
-            List<String> original = Arrays.asList("1", "2", "3", "4");
-
-            PartitionedIterator<String> pIter = new PartitionedIterator<>(original, 3);
-
-            Assert.assertTrue(pIter.hasNext());
-
-            Assert.assertEquals(Arrays.asList("1", "2", "3"), pIter.next());
-
-            Assert.assertEquals(Arrays.asList("4"), pIter.next());
-
-            Assert.assertFalse(pIter.hasNext());
-        }
-
-        {
-            List<String> original = Arrays.asList("1", "2", "3", "4");
-
-            PartitionedIterator<String> pIter = new PartitionedIterator<>(original, 2);
-
-            Assert.assertTrue(pIter.hasNext());
-
-            Assert.assertEquals(Arrays.asList("1", "2"), pIter.next());
-
-            Assert.assertEquals(Arrays.asList("3", "4"), pIter.next());
-
-            Assert.assertFalse(pIter.hasNext());
-        }
-
-        {
-            List<String> original = Arrays.asList();
-
-            PartitionedIterator<String> pIter = new PartitionedIterator<>(original, 3);
-
-            Assert.assertFalse(pIter.hasNext());
-        }
+        Assert.assertTrue("Expected at least " + 4_500 + " images, but found only " + imagesCount,
+                imagesCount > 4_500);
     }
 
     private ImageEnumerationTaskState kickOffImageEnumeration(EndpointState endpointState,
-            boolean all) throws Throwable {
+            String filter) throws Throwable {
 
         ImageEnumerationTaskState taskState = new ImageEnumerationTaskState();
 
-        taskState.filter = all ? null : AMAZON_IMAGE_FILTER;
+        taskState.filter = filter;
         taskState.endpointLink = endpointState.documentSelfLink;
         taskState.tenantLinks = endpointState.tenantLinks;
         taskState.options = this.isMock
@@ -249,17 +240,16 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
         EndpointState endpoint = new EndpointState();
 
-        endpoint.endpointType = EndpointType.aws.name();
-        endpoint.id = EndpointType.aws.name() + "-id";
-        endpoint.name = EndpointType.aws.name() + "-name";
+        endpoint.endpointType = EndpointType.azure.name();
+        endpoint.id = EndpointType.azure.name() + "-id";
+        endpoint.name = EndpointType.azure.name() + "-name";
 
         endpoint.authCredentialsLink = createAuthCredentialsState().documentSelfLink;
 
-        // Passing non-existing region should fall back to default region
-        endpoint.endpointProperties = Collections.singletonMap(
-                EndpointConfigRequest.REGION_KEY, "non-existing");
+        // Skipping region (EndpointConfigRequest.REGION_KEY) should fall back to default region
+        endpoint.endpointProperties = Collections.emptyMap();
 
-        endpoint.tenantLinks = Collections.singletonList(EndpointType.aws.name() + "-tenant");
+        endpoint.tenantLinks = Collections.singletonList(EndpointType.azure.name() + "-tenant");
 
         return postServiceSynchronously(
                 EndpointService.FACTORY_LINK,
@@ -298,15 +288,12 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
     private AuthCredentialsServiceState createAuthCredentialsState() throws Throwable {
 
-        AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
-
-        creds.privateKey = this.secretKey;
-        creds.privateKeyId = this.accessKey;
-
-        return postServiceSynchronously(
-                AuthCredentialsService.FACTORY_LINK,
-                creds,
-                AuthCredentialsServiceState.class);
+        return createDefaultAuthCredentials(
+                this.host,
+                this.clientID,
+                this.clientKey,
+                this.subscriptionId,
+                this.tenantId);
     }
 
 }

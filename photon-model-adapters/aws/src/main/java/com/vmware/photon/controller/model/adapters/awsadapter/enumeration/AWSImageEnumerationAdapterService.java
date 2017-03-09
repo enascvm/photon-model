@@ -121,15 +121,14 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
         private AWSImageEnumerationContext getEndpointRegion(AWSImageEnumerationContext context) {
 
-            Regions awsRegion = Regions.DEFAULT_REGION;
+            String regionId = context.endpointState.endpointProperties.getOrDefault(
+                    REGION_KEY, Regions.DEFAULT_REGION.getName());
 
-            String regionId = context.endpointState.endpointProperties.get(REGION_KEY);
-
+            Regions awsRegion;
             try {
-                awsRegion = regionId == null
-                        ? Regions.DEFAULT_REGION
-                        : Regions.fromName(regionId);
+                awsRegion = Regions.fromName(regionId);
             } catch (IllegalArgumentException exc) {
+                awsRegion = Regions.DEFAULT_REGION;
 
                 context.service.logWarning("Unsupported AWS region: %s. Fallback to default: %s.",
                         regionId, awsRegion.getName());
@@ -169,7 +168,8 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(String nextPageLink) {
 
-            // AWS does not support pagination of images so we internally partition all results thus simulating paging
+            // AWS does not support pagination of images so we internally partition all results thus
+            // simulating paging
             return loadExternalResources().thenApply(imagesIterator -> {
 
                 RemoteResourcesPage page = new RemoteResourcesPage();
@@ -181,7 +181,12 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                 }
 
                 // Return a non-null nextPageLink to the parent so we are called back.
-                page.nextPageLink = imagesIterator.hasNext() ? "hasNext" : null;
+                if (imagesIterator.hasNext()) {
+                    page.nextPageLink = "awsImages_" + (imagesIterator.pageNumber() + 1);
+                } else {
+                    this.service.logFine(() -> "Enumerating AWS images: TOTAL number "
+                            + imagesIterator.totalNumber());
+                }
 
                 return page;
             });
@@ -300,29 +305,41 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
         // Immediately complete the Operation from calling task.
         op.complete();
 
-        ImageEnumerateRequest request = op.getBody(ImageEnumerateRequest.class);
+        AWSImageEnumerationContext ctx = new AWSImageEnumerationContext(
+                this, op.getBody(ImageEnumerateRequest.class));
 
-        if (request.isMockRequest) {
+        if (ctx.request.isMockRequest) {
             // Complete the task with FINISHED
-            sendPatchToTask(this, request.taskReference,
-                    ResourceOperationResponse.finish(request.resourceLink()));
+            completeWithSuccess(ctx);
             return;
         }
-
-        AWSImageEnumerationContext ctx = new AWSImageEnumerationContext(this, request);
 
         // Start enumeration process...
         ctx.enumerate()
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
-                        sendPatchToTask(this, request.taskReference,
-                                ResourceOperationResponse.finish(request.resourceLink()));
+                        completeWithSuccess(ctx);
                     } else {
-                        sendPatchToTask(this, request.taskReference,
-                                ResourceOperationResponse.fail(request.resourceLink(), e));
+                        completeWithFailure(ctx, e);
                     }
                 });
+    }
+
+    private void completeWithFailure(AWSImageEnumerationContext ctx, Throwable exc) {
+        if (ctx.request.taskReference != null) {
+            // Report the error back to the caller
+            sendPatchToTask(this, ctx.request.taskReference,
+                    ResourceOperationResponse.fail(ctx.request.resourceLink(), exc));
+        }
+    }
+
+    private void completeWithSuccess(AWSImageEnumerationContext ctx) {
+        if (ctx.request.taskReference != null) {
+            // Report the success back to the caller
+            sendPatchToTask(this, ctx.request.taskReference,
+                    ResourceOperationResponse.finish(ctx.request.resourceLink()));
+        }
     }
 
     /**
@@ -337,6 +354,10 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
         private final int partitionSize;
 
         private int lastIndex = 0;
+
+        private int pageNumber;
+
+        private int totalNumber;
 
         public PartitionedIterator(List<T> originalList, int partitionSize) {
             // we are tolerant to null values
@@ -363,7 +384,27 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
             this.lastIndex = Math.min(beginIndex + this.partitionSize, this.originalList.size());
 
-            return this.originalList.subList(beginIndex, this.lastIndex);
+            List<T> page = this.originalList.subList(beginIndex, this.lastIndex);
+
+            this.pageNumber++;
+            this.totalNumber += page.size();
+
+            return page;
         }
+
+        /**
+         * Return the number of pages returned by {@code next} so far.
+         */
+        public int pageNumber() {
+            return this.pageNumber;
+        }
+
+        /**
+         * Return the total number of elements returned by {@code next} so far.
+         */
+        public int totalNumber() {
+            return this.totalNumber;
+        }
+
     }
 }

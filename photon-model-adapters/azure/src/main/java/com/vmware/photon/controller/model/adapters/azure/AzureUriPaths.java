@@ -13,6 +13,10 @@
 
 package com.vmware.photon.controller.model.adapters.azure;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -54,4 +58,23 @@ public class AzureUriPaths {
 
     public static final String AZURE_FIREWALL_ADAPTER = AdapterTypePath.FIREWALL_ADAPTER
             .adapterLink(EndpointType.azure.name());
+
+    /**
+     * Map an adapter link to its {@link AdapterTypePath adapter type}.
+     */
+    public static final Map<String, AdapterTypePath> AZURE_ADAPTER_LINK_TYPES;
+
+    static {
+        Map<String, AdapterTypePath> adapterLinksByType = new HashMap<>();
+
+        adapterLinksByType.put(AZURE_INSTANCE_ADAPTER, AdapterTypePath.INSTANCE_ADAPTER);
+        adapterLinksByType.put(AZURE_STATS_ADAPTER, AdapterTypePath.STATS_ADAPTER);
+        adapterLinksByType.put(AZURE_ENUMERATION_ADAPTER, AdapterTypePath.ENUMERATION_ADAPTER);
+        adapterLinksByType.put(AZURE_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER);
+        adapterLinksByType.put(AZURE_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER);
+        adapterLinksByType.put(AZURE_FIREWALL_ADAPTER, AdapterTypePath.FIREWALL_ADAPTER);
+
+        AZURE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
+    }
+
 }

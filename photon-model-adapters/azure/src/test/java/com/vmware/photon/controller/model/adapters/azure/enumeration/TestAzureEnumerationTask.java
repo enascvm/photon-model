@@ -384,7 +384,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // Add tags, that later should be discovered as part of first enumeration cycle.
 
         // tag v-Net
-        VirtualNetwork vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient, this.azureVMName,
+        VirtualNetwork vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient,
+                this.azureVMName,
                 DEFAULT_NIC_SPEC.network.name);
 
         Map<String, String> vmNetwTags = new HashMap<String, String>();
@@ -459,7 +460,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.storageAcctCount,
                 StorageDescriptionService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.containerCount +
-                        resourceGroupsCount,
+                resourceGroupsCount,
                 ResourceGroupService.FACTORY_LINK, false);
         ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.blobCount,
                 DiskService.FACTORY_LINK, false);
@@ -498,7 +499,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             if (!document.documentSelfLink.equals(computeHost.documentSelfLink)
                     && !document.documentSelfLink.equals(this.vmState.documentSelfLink)
                     && document.id.toLowerCase()
-                    .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
+                            .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
                 this.enumeratedComputeLink = document.documentSelfLink;
                 break;
             }
@@ -552,10 +553,11 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     }
 
     /**
-     * Tests Azure virtual gateway enumeration using pre-created shared resource group with
-     * virtual network and gateway.
+     * Tests Azure virtual gateway enumeration using pre-created shared resource group with virtual
+     * network and gateway.
      *
-     * @throws Throwable throwable
+     * @throws Throwable
+     *             throwable
      */
     @Test
     public void testEnumerateNetworkWithGateway() throws Throwable {
@@ -563,8 +565,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // The test is only suitable for real (non-mocking env).
         Assume.assumeFalse(this.isMock);
 
-        createResourceGroupWithSharedNetwork(this
-                .resourceManagementClient, this.networkManagementClient);
+        createResourceGroupWithSharedNetwork(this.resourceManagementClient,
+                this.networkManagementClient);
 
         runEnumeration();
 
@@ -773,8 +775,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     }
 
     private int getAzureNetworkSecurityGroups() throws Exception {
-        ServiceResponse<List<NetworkSecurityGroup>> securityGroupsResponse = this
-                .networkManagementClient
+        ServiceResponse<List<NetworkSecurityGroup>> securityGroupsResponse = this.networkManagementClient
                 .getNetworkSecurityGroupsOperations().listAll();
         List<NetworkSecurityGroup> securityGroups = securityGroupsResponse.getBody();
         return securityGroups.size();
@@ -807,10 +808,9 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             return;
         }
 
-        //Query all network states in the system
-        Map<String, NetworkState> networkStatesMap =
-                ProvisioningUtils.getResourceStates(this.host, NetworkService
-                        .FACTORY_LINK, NetworkState.class);
+        // Query all network states in the system
+        Map<String, NetworkState> networkStatesMap = ProvisioningUtils.getResourceStates(this.host,
+                NetworkService.FACTORY_LINK, NetworkState.class);
 
         AtomicBoolean isGatewayFound = new AtomicBoolean(false);
 
@@ -829,7 +829,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                             assertNotNull("Custom properties are null.",
                                     networkState.customProperties);
                             assertNotNull("Virtual gateway property not found.",
-                                    networkState.customProperties.get(ComputeProperties.FIELD_VIRTUAL_GATEWAY));
+                                    networkState.customProperties
+                                            .get(ComputeProperties.FIELD_VIRTUAL_GATEWAY));
                             assertNotNull("SubnetState custom properties are null.",
                                     subnetState.customProperties);
                             assertEquals("Gateway SubnetState is not marked currectly with "
@@ -866,9 +867,10 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 networkState.tenantLinks,
                 networkState.endpointLink);
 
-        DeferredResult<List<SubnetState>> subnetDR =
-                querySubnetStatesReferrers.collectDocuments(Collectors.toList());
+        DeferredResult<List<SubnetState>> subnetDR = querySubnetStatesReferrers
+                .collectDocuments(Collectors.toList());
 
         return waitToComplete(subnetDR);
     }
+
 }
