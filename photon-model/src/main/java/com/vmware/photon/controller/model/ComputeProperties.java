@@ -84,6 +84,11 @@ public class ComputeProperties {
      */
     public static final String CERTIFICATE_PROP_NAME = "__certificate";
 
+    /**
+     * A key for a linked endpoint link, used to link two accounts.
+     */
+    public static final String LINKED_ENDPOINT_PROP_NAME = "linkedEndpointLink";
+
     public enum OSType {
         WINDOWS, LINUX;
     }

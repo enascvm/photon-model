@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.ComputeProperties.LINKED_ENDPOINT_PROP_NAME;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
@@ -70,6 +71,8 @@ public class VSphereEndpointAdapterService extends StatelessService {
             e.endpointProperties.put(PRIVATE_KEYID_KEY, r.getRequired(PRIVATE_KEYID_KEY));
             e.endpointProperties.put(HOST_NAME_KEY, r.getRequired(HOST_NAME_KEY));
 
+            r.get(LINKED_ENDPOINT_PROP_NAME)
+                    .ifPresent(rk -> e.endpointProperties.put(LINKED_ENDPOINT_PROP_NAME, rk));
             r.get(REGION_KEY).ifPresent(rk -> e.endpointProperties.put(REGION_KEY, rk));
             r.get(ZONE_KEY).ifPresent(zk -> e.endpointProperties.put(ZONE_KEY, zk));
         };
