@@ -19,6 +19,8 @@ public final class NsxProperties {
 
     public static final String OPAQUE_NET_TYPE = "__opaqueNetworkType";
 
+    public static final String NSX_LOGICAL_SWITCH = "nsx.LogicalSwitch";
+
     private NsxProperties() {
 
     }

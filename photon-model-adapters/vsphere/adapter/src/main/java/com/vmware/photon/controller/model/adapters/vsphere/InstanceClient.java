@@ -28,6 +28,8 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import io.netty.util.internal.StringUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -422,19 +424,33 @@ public class InstanceClient extends BaseHelper {
     }
 
     private List<OvfNetworkMapping> mapNetworks(List<String> ovfNetworkNames, Document ovfDoc,
-            List<NetworkInterfaceStateWithDetails> nics) {
+            List<NetworkInterfaceStateWithDetails> nics)
+            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         List<OvfNetworkMapping> networks = new ArrayList<>();
 
         if (ovfNetworkNames.isEmpty() || nics.isEmpty()) {
             return networks;
         }
 
+        CustomProperties custProp;
+        ManagedObjectReference moRef;
+        NetworkInterfaceStateWithDetails nic = nics.iterator().next();
+        if (nic.network != null) {
+            custProp = CustomProperties.of(nic.network);
+        } else {
+            custProp = CustomProperties.of(nic.subnet);
+        }
+        moRef = custProp.getMoRef(CustomProperties.MOREF);
+
+        if (moRef == null) {
+            moRef = this.finder.networkList("*").iterator().next().object;
+        }
+
+        final ManagedObjectReference finalMoRef = moRef;
         ovfNetworkNames.forEach(n -> {
-            CustomProperties custProp = CustomProperties.of(nics.iterator().next().network);
-            ManagedObjectReference moRef = custProp.getMoRef(CustomProperties.MOREF);
             OvfNetworkMapping nm = new OvfNetworkMapping();
             nm.setName(n);
-            nm.setNetwork(moRef);
+            nm.setNetwork(finalMoRef);
             networks.add(nm);
         });
         return networks;
@@ -1468,15 +1484,23 @@ public class InstanceClient extends BaseHelper {
         nic.setControllerKey(controllerKey);
 
         if (nicWithDetails.subnet != null) {
-            // subnet means portgroup
-            DistributedVirtualSwitchPortConnection port = new DistributedVirtualSwitchPortConnection();
+            // check if it is portgroup
             CustomProperties props = CustomProperties.of(nicWithDetails.subnet);
-            port.setSwitchUuid(props.getString(DvsProperties.DVS_UUID));
-            port.setPortgroupKey(props.getString(DvsProperties.PORT_GROUP_KEY));
+            if (!StringUtil.isNullOrEmpty(props.getString(DvsProperties.DVS_UUID))) {
+                DistributedVirtualSwitchPortConnection port = new DistributedVirtualSwitchPortConnection();
+                port.setSwitchUuid(props.getString(DvsProperties.DVS_UUID));
+                port.setPortgroupKey(props.getString(DvsProperties.PORT_GROUP_KEY));
 
-            VirtualEthernetCardDistributedVirtualPortBackingInfo backing = new VirtualEthernetCardDistributedVirtualPortBackingInfo();
-            backing.setPort(port);
-            nic.setBacking(backing);
+                VirtualEthernetCardDistributedVirtualPortBackingInfo backing = new VirtualEthernetCardDistributedVirtualPortBackingInfo();
+                backing.setPort(port);
+                nic.setBacking(backing);
+            } else {
+                // NSX-T logical switch
+                VirtualEthernetCardOpaqueNetworkBackingInfo backing = new VirtualEthernetCardOpaqueNetworkBackingInfo();
+                backing.setOpaqueNetworkId(nicWithDetails.subnet.id);
+                backing.setOpaqueNetworkType(NsxProperties.NSX_LOGICAL_SWITCH);
+                nic.setBacking(backing);
+            }
         } else {
             // either network or OpaqueNetwork
             CustomProperties custProp = CustomProperties.of(nicWithDetails.network);
