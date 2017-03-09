@@ -129,6 +129,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Securit
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.FileUtils;
 import com.vmware.xenon.common.Operation;
@@ -838,7 +839,7 @@ public class AzureInstanceService extends StatelessService {
         };
 
         azureClient.beginCreateOrUpdateAsync(
-                publicIPRGName, publicIPName, publicIPAddress,handler);
+                publicIPRGName, publicIPName, publicIPAddress, handler);
 
         handler.toDeferredResult()
                 .thenApply(ignore -> ctx)
@@ -1082,7 +1083,7 @@ public class AzureInstanceService extends StatelessService {
         osProfile.setComputerName(vmName);
         if (ctx.childAuth != null) {
             osProfile.setAdminUsername(ctx.childAuth.userEmail);
-            osProfile.setAdminPassword(ctx.childAuth.privateKey);
+            osProfile.setAdminPassword(EncryptionUtils.decrypt(ctx.childAuth.privateKey));
         }
         if (cloudConfig != null) {
             try {

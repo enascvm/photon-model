@@ -30,6 +30,7 @@ import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.common.test.VerificationHost;
@@ -58,6 +59,20 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
     public void setUp() throws Throwable {
         this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(250));
         startRequiredServices();
+    }
+
+    protected void waitForServiceAvailability(String... serviceLinks) throws Throwable {
+        waitForServiceAvailability(host, serviceLinks);
+    }
+
+    protected void waitForServiceAvailability(ServiceHost h, String... serviceLinks)
+            throws Throwable {
+        if (serviceLinks == null || serviceLinks.length == 0) {
+            throw new IllegalArgumentException("null or empty serviceLinks");
+        }
+        TestContext ctx = testCreate(serviceLinks.length);
+        h.registerForServiceAvailability(ctx.getCompletion(), serviceLinks);
+        ctx.await();
     }
 
     public <T extends ServiceDocument> T postServiceSynchronously(
@@ -129,7 +144,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
 
     public <T> T patchServiceSynchronously(
             String serviceUri, T patchBody, Class<T> type) throws Throwable {
-        final List<T> responseObj = Arrays.asList((T)null);
+        final List<T> responseObj = Arrays.asList((T) null);
         TestContext ctx = this.host.testCreate(1);
         Operation patchOperation = Operation
                 .createPatch(UriUtils.buildUri(this.host, serviceUri))

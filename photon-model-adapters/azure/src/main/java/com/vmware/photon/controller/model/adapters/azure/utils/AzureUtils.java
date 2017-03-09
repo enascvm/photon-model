@@ -27,10 +27,9 @@ import okhttp3.OkHttpClient;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
-
 
 
 /**
@@ -144,7 +143,7 @@ public class AzureUtils {
             AuthCredentialsServiceState parentAuth) throws Exception {
 
         String clientId = parentAuth.privateKeyId;
-        String clientKey = parentAuth.privateKey;
+        String clientKey = EncryptionUtils.decrypt(parentAuth.privateKey);
         String tenantId = parentAuth.customProperties.get(AzureConstants.AZURE_TENANT_ID);
 
         return new ApplicationTokenCredentials(clientId, tenantId, clientKey,

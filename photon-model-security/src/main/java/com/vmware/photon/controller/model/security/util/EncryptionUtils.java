@@ -86,10 +86,11 @@ public class EncryptionUtils {
      * @param input
      *            String (UTF-8 encoded) to be encrypted
      * @return The encrypted version of the input string, or directly the input string if no
-     *         encryption key is configured.
+     *         encryption key is configured or the string is already encrypted.
      */
     public static String encrypt(String input) {
-        if (encryptionService == null || input == null || input.length() == 0) {
+        if (encryptionService == null || input == null || input.length() == 0
+                || input.startsWith(ENCRYPTION_PREFIX)) {
             return input;
         }
         return ENCRYPTION_PREFIX + encryptionService.encrypt(input);

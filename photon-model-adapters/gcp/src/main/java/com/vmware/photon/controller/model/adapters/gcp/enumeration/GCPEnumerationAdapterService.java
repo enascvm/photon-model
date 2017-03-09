@@ -72,7 +72,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
-
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -890,7 +890,7 @@ public class GCPEnumerationAdapterService extends StatelessService {
             throw new IllegalArgumentException("privateKey is required");
         }
         ctx.userEmail = parentAuth.userEmail;
-        ctx.privateKey = parentAuth.privateKey;
+        ctx.privateKey = EncryptionUtils.decrypt(parentAuth.privateKey);
     }
 
     /**

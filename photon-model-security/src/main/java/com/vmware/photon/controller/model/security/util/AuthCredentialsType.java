@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2016 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -11,13 +11,15 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.util;
+package com.vmware.photon.controller.model.security.util;
 
 /**
- * This class assists in asserting arguments.
- * @deprecated
+ * values for the type property of AuthCredentialsServiceState
  */
-@Deprecated
-public class AssertUtil extends com.vmware.photon.controller.model.util.AssertUtil {
-
+public enum AuthCredentialsType {
+    // Credential types for configuration purposes (e.g. host configuration)
+    Public,
+    PublicKey,
+    Password,
+    PublicKeyCA
 }

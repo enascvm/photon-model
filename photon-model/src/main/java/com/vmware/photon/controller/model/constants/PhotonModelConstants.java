@@ -94,7 +94,7 @@ public class PhotonModelConstants {
         statMap.put(DISK_READ_TIME_SECONDS, UNIT_SECONDS);
         statMap.put(MEMORY_AVAILABLE_BYTES, UNIT_BYTES);
         statMap.put(MEMORY_USED_BYTES, UNIT_BYTES);
-        statMap.put(STORAGE_USED_BYTES , UNIT_BYTES);
+        statMap.put(STORAGE_USED_BYTES, UNIT_BYTES);
         METRIC_UNIT_MAP = Collections.unmodifiableMap(statMap);
     }
 
@@ -112,4 +112,12 @@ public class PhotonModelConstants {
     public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
 
     public static final String CUSTOM_PROP_ENDPOINT_LINK = "__endpointLink";
+
+    // Authentication specific constants
+
+    public static enum CredentialsScope {
+        SYSTEM
+    }
+
+    public static final String CUSTOM_PROP_CREDENTIALS_SCOPE = "scope";
 }

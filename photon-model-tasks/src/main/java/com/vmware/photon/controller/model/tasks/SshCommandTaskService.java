@@ -25,7 +25,7 @@ import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 
 import com.vmware.photon.controller.model.UriPaths;
-
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -259,8 +259,8 @@ public class SshCommandTaskService extends TaskService<SshCommandTaskService.Ssh
                 session = jsch.getSession(this.auth.userEmail, this.state.host,
                         this.state.port);
 
-                jsch.addIdentity("KeyPair", this.auth.privateKey.getBytes(), null,
-                        null);
+                jsch.addIdentity("KeyPair",
+                        EncryptionUtils.decrypt(this.auth.privateKey).getBytes(), null, null);
                 java.util.Properties config = new java.util.Properties();
                 config.put("StrictHostKeyChecking", "no");
                 session.setConfig(config);

@@ -42,6 +42,7 @@ import com.vmware.photon.controller.model.adapters.gcp.utils.JSONWebToken;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
@@ -439,7 +440,7 @@ public class GCPStatsService extends StatelessService {
         Consumer<Operation> onSuccess = (op) -> {
             statsData.parentAuth = op.getBody(AuthCredentialsServiceState.class);
             statsData.userEmail = statsData.parentAuth.userEmail;
-            statsData.privateKey = statsData.parentAuth.privateKey;
+            statsData.privateKey = EncryptionUtils.decrypt(statsData.parentAuth.privateKey);
             statsData.stage = nextStage;
             handleStatsRequest(statsData);
         };

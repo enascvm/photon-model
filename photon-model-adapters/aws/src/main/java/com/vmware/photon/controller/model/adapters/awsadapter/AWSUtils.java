@@ -85,6 +85,7 @@ import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterR
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -148,7 +149,7 @@ public class AWSUtils {
                 true));
         AmazonEC2AsyncClient ec2AsyncClient = new AmazonEC2AsyncClient(
                 new BasicAWSCredentials(credentials.privateKeyId,
-                        credentials.privateKey), configuration,
+                        EncryptionUtils.decrypt(credentials.privateKey)), configuration,
                 executorService);
 
         if (isAwsClientMock()) {
@@ -195,7 +196,7 @@ public class AWSUtils {
             ExecutorService executorService, boolean isMockRequest) {
         AmazonCloudWatchAsyncClient client = new AmazonCloudWatchAsyncClient(
                 new BasicAWSCredentials(credentials.privateKeyId,
-                        credentials.privateKey),
+                        EncryptionUtils.decrypt(credentials.privateKey)),
                 executorService);
 
         if (isAwsClientMock()) {
@@ -212,7 +213,8 @@ public class AWSUtils {
             ExecutorService executorService) {
         // Ignoring the region parameter for now.
         AmazonS3Client amazonS3Client = new AmazonS3Client(
-                new BasicAWSCredentials(credentials.privateKeyId, credentials.privateKey));
+                new BasicAWSCredentials(credentials.privateKeyId,
+                        EncryptionUtils.decrypt(credentials.privateKey)));
         return new TransferManager(amazonS3Client, executorService, false);
     }
 

@@ -24,6 +24,7 @@ import java.util.logging.Logger;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.ConnectionException;
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.Service;
@@ -139,7 +140,7 @@ public class VSphereIOThreadPool {
         connection.setIgnoreSslErrors(true);
 
         connection.setUsername(auth.privateKeyId);
-        connection.setPassword(auth.privateKey);
+        connection.setPassword(EncryptionUtils.decrypt(auth.privateKey));
 
         connection.setURI(adapterReference);
 

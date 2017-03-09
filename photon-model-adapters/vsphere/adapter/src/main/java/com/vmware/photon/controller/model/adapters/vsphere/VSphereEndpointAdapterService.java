@@ -37,6 +37,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
@@ -173,7 +174,7 @@ public class VSphereEndpointAdapterService extends StatelessService {
         connection.setIgnoreSslErrors(true);
 
         connection.setUsername(auth.privateKeyId);
-        connection.setPassword(auth.privateKey);
+        connection.setPassword(EncryptionUtils.decrypt(auth.privateKey));
 
         connection.setURI(adapterReference);
 

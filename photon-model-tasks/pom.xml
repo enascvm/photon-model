@@ -25,6 +25,11 @@
         </dependency>
         <dependency>
             <groupId>com.vmware.photon.controller</groupId>
+            <artifactId>photon-model-security</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.vmware.photon.controller</groupId>
             <artifactId>photon-model-adapters-registry</artifactId>
             <version>${project.version}</version>
         </dependency>
