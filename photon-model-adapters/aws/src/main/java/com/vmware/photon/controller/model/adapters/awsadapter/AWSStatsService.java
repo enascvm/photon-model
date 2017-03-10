@@ -100,6 +100,7 @@ public class AWSStatsService extends StatelessService {
     private static final String DIMENSION_CURRENCY_VALUE = "USD";
     private static final int COST_COLLECTION_WINDOW_IN_DAYS = 14;
     private static final int COST_COLLECTION_PERIOD_IN_SECONDS = 14400;
+    private static final int COST_COLLECTION_PERIOD_IN_HOURS = 4;
     // AWS stores all billing data in us-east-1 zone.
     private static final String COST_ZONE_ID = "us-east-1";
     private static final int NUM_OF_COST_DATAPOINTS_IN_A_DAY = 6;
@@ -260,13 +261,23 @@ public class AWSStatsService extends StatelessService {
         dimension.setName(DIMENSION_CURRENCY);
         dimension.setValue(DIMENSION_CURRENCY_VALUE);
         GetMetricStatisticsRequest request = new GetMetricStatisticsRequest();
-        // AWS pushes billing metrics every 4 hours.
-        // Get all 14 days worth of cost data.
-        long endTimeMicros = Utils.getNowMicrosUtc();
-        request.setEndTime(new Date(TimeUnit.MICROSECONDS.toMillis(endTimeMicros)));
-        request.setStartTime(new Date(
-                TimeUnit.MICROSECONDS.toMillis(endTimeMicros) -
-                        TimeUnit.DAYS.toMillis(COST_COLLECTION_WINDOW_IN_DAYS)));
+        // AWS pushes billing metrics every 4 hours. However the timeseries returned does not have
+        // static time stamps associated with the data points. The timestamps range from
+        // (currentTime - 4 hrs) and are spaced at 4 hrs.
+        // Get all 14 days worth of estimated charges data by default when last collection time is not set.
+        // Otherwise set the window to lastCollectionTime - 4 hrs.
+        Long lastCollectionTimeForEstimatedCharges = null;
+        if (statsData.statsRequest.lastCollectionTimeMicrosUtc != null) {
+            lastCollectionTimeForEstimatedCharges =
+                    statsData.statsRequest.lastCollectionTimeMicrosUtc
+                            - TimeUnit.HOURS.toMicros(COST_COLLECTION_PERIOD_IN_HOURS);
+
+        }
+        // defaulting to fetch 14 days of estimated charges data
+        setRequestCollectionWindow(
+                TimeUnit.DAYS.toMicros(COST_COLLECTION_WINDOW_IN_DAYS),
+                lastCollectionTimeForEstimatedCharges,
+                request);
         request.setPeriod(COST_COLLECTION_PERIOD_IN_SECONDS);
         request.setStatistics(Arrays.asList(STATISTICS));
         request.setNamespace(BILLING_NAMESPACE);
@@ -276,13 +287,13 @@ public class AWSStatsService extends StatelessService {
         logFine(() -> String.format("Retrieving %s metric from AWS",
                 AWSConstants.ESTIMATED_CHARGES));
         AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler = new AWSBillingStatsHandler(
-                this, statsData);
+                this, statsData, lastCollectionTimeForEstimatedCharges);
         statsData.billingClient.getMetricStatisticsAsync(request, resultHandler);
     }
 
     /**
      * Sets the window of time for the statistics collection. If the last collection time is passed in the compute stats request
-     * then that value is used for getting the stats data from the provider else the default configured window for cost stats
+     * then that value is used for getting the stats data from the provider else the default configured window for stats
      * collection is used.
      *
      * Also, if the last collection time is really a long time ago, then the maximum collection window is honored to collect
@@ -344,11 +355,14 @@ public class AWSStatsService extends StatelessService {
         private AWSStatsDataHolder statsData;
         private StatelessService service;
         private OperationContext opContext;
+        private Long lastCollectionTimeMicrosUtc;
 
-        public AWSBillingStatsHandler(StatelessService service, AWSStatsDataHolder statsData) {
+        public AWSBillingStatsHandler(StatelessService service, AWSStatsDataHolder statsData,
+                Long lastCollectionTimeMicrosUtc) {
             this.statsData = statsData;
             this.service = service;
             this.opContext = OperationContext.getOperationContext();
+            this.lastCollectionTimeMicrosUtc = lastCollectionTimeMicrosUtc;
         }
 
         @Override
@@ -372,10 +386,10 @@ public class AWSStatsService extends StatelessService {
                 if (dpList != null && dpList.size() != 0) {
                     for (Datapoint dp : dpList) {
                         // If the datapoint collected is older than the last collection time, skip it.
-                        if (this.statsData.statsRequest.lastCollectionTimeMicrosUtc != null &&
+                        if (this.lastCollectionTimeMicrosUtc != null &&
                                 TimeUnit.MILLISECONDS.toMicros(dp.getTimestamp()
                                         .getTime())
-                                        <= this.statsData.statsRequest.lastCollectionTimeMicrosUtc) {
+                                        <= this.lastCollectionTimeMicrosUtc) {
                             continue;
                         }
 
