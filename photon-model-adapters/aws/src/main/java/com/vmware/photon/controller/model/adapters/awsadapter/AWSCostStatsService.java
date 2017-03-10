@@ -446,6 +446,7 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     private void setCustomProperty(AWSCostStatsCreationContext context, String key, String value) {
+        context.computeDesc.customProperties.put(key, value);
         ComputeState accountState = new ComputeState();
         accountState.customProperties = new HashMap<>();
         accountState.customProperties.put(key, value);
