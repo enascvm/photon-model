@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.8-SNAPSHOT
+
+
 ## 0.6.7
 
 * Upgrading to xenon-1.4.0.
