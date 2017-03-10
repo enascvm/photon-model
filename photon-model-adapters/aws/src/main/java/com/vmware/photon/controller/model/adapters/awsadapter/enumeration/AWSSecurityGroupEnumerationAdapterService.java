@@ -36,7 +36,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
-import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext;
+import com.vmware.photon.controller.model.adapters.util.enums.BaseComputeEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
@@ -108,7 +108,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
     }
 
     private static class SecurityGroupEnumContext extends
-            BaseEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState, SecurityGroup> {
+            BaseComputeEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState, SecurityGroup> {
 
         private String regionId;
 

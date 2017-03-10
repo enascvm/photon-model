@@ -34,7 +34,7 @@ import com.vmware.photon.controller.model.adapters.azure.model.resourcegroup.Res
 import com.vmware.photon.controller.model.adapters.azure.model.resourcegroup.ResourceGroupListResult;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
-import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext;
+import com.vmware.photon.controller.model.adapters.util.enums.BaseComputeEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
@@ -54,7 +54,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
     public static final String SELF_LINK = AzureUriPaths.AZURE_RESOURCE_GROUP_ENUMERATION_ADAPTER;
 
     public static class ResourceGroupEnumContext extends
-            BaseEnumerationAdapterContext<ResourceGroupEnumContext, ResourceGroupState, ResourceGroup> {
+            BaseComputeEnumerationAdapterContext<ResourceGroupEnumContext, ResourceGroupState, ResourceGroup> {
 
         // Azure credentials.
         ApplicationTokenCredentials credentials;

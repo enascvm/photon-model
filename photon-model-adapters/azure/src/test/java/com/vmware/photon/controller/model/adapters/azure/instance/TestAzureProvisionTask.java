@@ -24,6 +24,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultEndpointState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
@@ -64,6 +65,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
@@ -85,8 +87,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
     // SHARED Compute Host / End-point between test runs. {{
     private static ComputeState computeHost;
-    private static String resourcePoolLink;
-    private static String authLink;
+    private static EndpointState endpointState;
     // Every test in addition might change it.
     private static String azureVMName = generateName("testProv-");
     // }}
@@ -132,8 +133,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 this.host.setTimeoutSeconds(1200);
 
                 // Create a resource pool where the VM will be housed
-                ResourcePoolState outPool = createDefaultResourcePool(this.host);
-                resourcePoolLink = outPool.documentSelfLink;
+                ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
 
                 AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
                         this.host,
@@ -141,10 +141,13 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                         this.clientKey,
                         this.subscriptionId,
                         this.tenantId);
-                authLink = authCredentials.documentSelfLink;
+
+                endpointState = createDefaultEndpointState(
+                        this.host, authCredentials.documentSelfLink);
 
                 // create a compute host for the Azure
-                computeHost = createDefaultComputeHost(this.host, resourcePoolLink, authLink);
+                computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
+                        endpointState);
             }
 
             if (!this.isMock) {
@@ -197,8 +200,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
         // create a Azure VM compute resource.
         this.vmState = createDefaultVMResource(this.host, azureVMName,
-                computeHost.documentSelfLink,
-                resourcePoolLink, authLink, DEFAULT_NIC_SPEC);
+                computeHost, endpointState, DEFAULT_NIC_SPEC);
 
         kickOffProvisionTask();
 
@@ -232,8 +234,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
         // create a Azure VM compute resource.
         this.vmState = createDefaultVMResource(this.host, azureVMName,
-                computeHost.documentSelfLink,
-                resourcePoolLink, authLink, NO_PUBLIC_IP_NIC_SPEC);
+                computeHost, endpointState, NO_PUBLIC_IP_NIC_SPEC);
 
         kickOffProvisionTask();
 
@@ -271,7 +272,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
         // Create corresponding ResourceGroupState
         ResourceGroupState sharedNetworkRGState = createDefaultResourceGroupState(
-                this.host, sharedNetworkRG.getName(), computeHost.documentSelfLink,
+                this.host, sharedNetworkRG.getName(), computeHost, endpointState,
                 ResourceGroupStateType.AzureResourceGroup);
 
         // END of prepare phase.
@@ -281,8 +282,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
 
         // create a Azure VM compute resource
         this.vmState = createDefaultVMResource(this.host, vmName,
-                computeHost.documentSelfLink,
-                resourcePoolLink, authLink,
+                computeHost, endpointState,
                 DEFAULT_NIC_SPEC,
                 // In addition to standard provisioning pass the RG of the shared network
                 sharedNetworkRGState.documentSelfLink);

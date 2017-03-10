@@ -268,6 +268,7 @@ public class QueryUtils {
                     .build();
             queryTask.tenantLinks = this.tenantLinks;
             queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+
             return queryImpl(queryTask, documentConsumer);
         }
 
@@ -284,6 +285,7 @@ public class QueryUtils {
             QueryTask queryTask = newQueryTaskBuilder().build();
             queryTask.tenantLinks = this.tenantLinks;
             queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+
             return queryImpl(queryTask, linkConsumer);
         }
 
@@ -345,13 +347,11 @@ public class QueryUtils {
 
             Operation createQueryTaskOp = Operation
                     .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                    .setReferer(getClass().getSimpleName())
+                    .setReferer(this.host.getUri())
                     .setBody(queryTask);
 
-            this.host.log(this.level, this.msg + ": STARTED");
-            if (queryTask.documentExpirationTimeMicros == 0) {
-                queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
-            }
+            this.host.log(this.level, this.msg + ": STARTED with QT = " + Utils.toJsonHtml(queryTask));
+
             return this.host.sendWithDeferredResult(createQueryTaskOp, QueryTask.class)
                     // Delegate to descendant to actually do QT processing
                     .thenCompose(qt -> handleQueryTask(qt, resultConsumer));
@@ -525,7 +525,7 @@ public class QueryUtils {
 
             Operation getQueryTaskOp = Operation
                     .createGet(this.host, pageLink)
-                    .setReferer(getClass().getSimpleName());
+                    .setReferer(this.host.getUri());
 
             return this.host.sendWithDeferredResult(getQueryTaskOp, QueryTask.class)
                     // Handle current page of results

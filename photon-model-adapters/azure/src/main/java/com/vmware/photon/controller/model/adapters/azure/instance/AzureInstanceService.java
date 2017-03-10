@@ -498,7 +498,7 @@ public class AzureInstanceService extends StatelessService {
 
         String rgName = ctx.resourceGroup.getName();
 
-        String msg = "Rollback provisioning for [" + ctx.vmName + "] Azure VM: %s";
+        String msg = "Rollback provisioning for [" + ctx.vmName + "] Azure VM";
 
         ResourceGroupsOperations azureClient = getResourceManagementClient(ctx)
                 .getResourceGroupsOperations();
@@ -513,8 +513,8 @@ public class AzureInstanceService extends StatelessService {
 
             @Override
             protected Throwable consumeError(Throwable e) {
-                String rollbackError = String.format(msg + ". Details: %s", "FAILED",
-                        e.getMessage());
+                String rollbackError = String.format(msg + ": FAILED. Details: %s",
+                        Utils.toString(e));
 
                 // Wrap original ctx.error with rollback error details.
                 ctx.error = new IllegalStateException(rollbackError, ctx.error);

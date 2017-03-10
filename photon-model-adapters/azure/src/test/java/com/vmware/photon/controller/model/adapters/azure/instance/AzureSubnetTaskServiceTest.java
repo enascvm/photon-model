@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
-import static java.util.Collections.singletonList;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -24,7 +22,10 @@ import static org.junit.Assert.fail;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STATUS_SUBNET_NOT_VALID;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultEndpointState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
 import java.util.Collections;
@@ -46,7 +47,9 @@ import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
 import com.microsoft.azure.management.resources.models.ResourceGroup;
 import com.microsoft.rest.ServiceResponse;
+
 import io.netty.handler.codec.http.HttpResponseStatus;
+
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.After;
 import org.junit.Assume;
@@ -58,13 +61,13 @@ import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest.Insta
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.support.LifecycleState;
@@ -93,25 +96,26 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
     public String tenantId = "tenantId";
     public String regionId = AZURE_RESOURCE_GROUP_LOCATION;
 
-    private static String authLink;
+    private static ComputeState computeHost;
+    private static EndpointState endpointState;
 
     private String azurePrefix = generateName("subnettest-");
     private String rgName = this.azurePrefix + "-rg";
     private String vNetName = this.azurePrefix + "-vNet";
     private String subnetName = this.azurePrefix + "-subnet";
 
-    private EndpointState endpointState;
     private NetworkState networkState;
 
     private VirtualNetworksOperations vNetClient;
     private ResourceGroupsOperations rgOpsClient;
     private SubnetsOperations subnetsClient;
 
+    @Override
     @Before
     public void setUp() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this);
 
-        if (authLink == null) {
+        if (computeHost == null) {
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             AzureAdapters.startServices(this.host);
@@ -123,18 +127,22 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
             // TODO: VSYM-992 - improve test/fix arbitrary timeout
             this.host.setTimeoutSeconds(600);
 
+            ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
+
             AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
                     this.host,
                     this.clientID,
                     this.clientKey,
                     this.subscriptionId,
                     this.tenantId);
-            authLink = authCredentials.documentSelfLink;
-        }
 
-        this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-        this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-        this.host.waitForServiceAvailable(AzureAdapters.LINKS);
+            endpointState = createDefaultEndpointState(
+                    this.host, authCredentials.documentSelfLink);
+
+            // create a compute host for the Azure
+            computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
+                    endpointState);
+        }
 
         if (!this.isMock) {
             ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
@@ -168,12 +176,10 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
             this.vNetClient.createOrUpdate(this.rgName, this.vNetName, vNet);
         }
 
-        this.endpointState = createEndpointState();
-
         ResourceGroupState rgState = createDefaultResourceGroupState(
                 this.host,
                 this.rgName,
-                null,
+                computeHost, endpointState,
                 ResourceGroupStateType.AzureResourceGroup);
 
         this.networkState = createNetworkState(rgState.documentSelfLink);
@@ -292,27 +298,11 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
         subnetState.networkLink = this.networkState.documentSelfLink;
         subnetState.instanceAdapterReference = UriUtils.buildUri(this.host,
                 AzureSubnetService.SELF_LINK);
-        subnetState.endpointLink = this.endpointState.documentSelfLink;
+        subnetState.endpointLink = endpointState.documentSelfLink;
+        subnetState.tenantLinks = endpointState.tenantLinks;
 
         return postServiceSynchronously(
                 SubnetService.FACTORY_LINK, subnetState, SubnetState.class);
-    }
-
-    private EndpointState createEndpointState() throws Throwable {
-
-        EndpointState endpoint = new EndpointState();
-
-        String endpointType = EndpointType.aws.name();
-        endpoint.id = endpointType + "Id";
-        endpoint.name = endpointType + "Name";
-        endpoint.endpointType = endpointType;
-        endpoint.tenantLinks = singletonList(endpointType + "Tenant");
-        endpoint.authCredentialsLink = authLink;
-
-        return postServiceSynchronously(
-                EndpointService.FACTORY_LINK,
-                endpoint,
-                EndpointState.class);
     }
 
     private NetworkState createNetworkState(String resourceGroupLink) throws Throwable {
@@ -320,7 +310,8 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
         networkState.id = this.vNetName;
         networkState.name = this.vNetName;
         networkState.subnetCIDR = AZURE_DEFAULT_VPC_CIDR;
-        networkState.endpointLink = this.endpointState.documentSelfLink;
+        networkState.tenantLinks = endpointState.tenantLinks;
+        networkState.endpointLink = endpointState.documentSelfLink;
         networkState.resourcePoolLink = "dummyResourcePoolLink";
         networkState.groupLinks = Collections.singleton(resourceGroupLink);
         networkState.regionId = this.regionId;

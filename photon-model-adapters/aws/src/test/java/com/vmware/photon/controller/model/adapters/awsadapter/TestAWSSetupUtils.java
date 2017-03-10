@@ -94,8 +94,8 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSCom
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndDeletionAdapterService;
-
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -104,6 +104,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
@@ -119,7 +121,6 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Securit
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
@@ -129,12 +130,10 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService.StatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -143,7 +142,6 @@ import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
-
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
@@ -495,58 +493,63 @@ public class TestAWSSetupUtils {
         }
     }
 
-    /**
-     * Create a compute host description for an AWS instance
-     */
-    public static ComputeService.ComputeState createAWSComputeHost(VerificationHost host,
-            String resourcePoolLink, String zoneId, String regionId,
-            String accessKey, String secretKey, boolean isAwsClientMock,
-            String awsMockEndpointReference, Set<String> tagLinks)
-            throws Throwable {
+
+    public static AuthCredentialsServiceState createAWSAuthentication(VerificationHost host, String accessKey, String secretKey) throws Throwable {
 
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
         auth.type = DEFAULT_AUTH_TYPE;
         auth.privateKeyId = accessKey;
         auth.privateKey = secretKey;
-        auth.documentSelfLink = UUID.randomUUID().toString();
-        TestUtils.doPost(host, auth, AuthCredentialsService.AuthCredentialsServiceState.class,
+
+        return TestUtils.doPost(host, auth, AuthCredentialsService.AuthCredentialsServiceState.class,
                 UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
-        String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
-                auth.documentSelfLink);
+    }
 
-        ComputeDescriptionService.ComputeDescription awshostDescription = new ComputeDescriptionService.ComputeDescription();
+    /**
+     * Create a compute host description for an AWS instance
+     */
+    public static ComputeState createAWSComputeHost(VerificationHost host,
+            EndpointState endpointState, String zoneId, String regionId,
+            boolean isAwsClientMock,
+            String awsMockEndpointReference, Set<String> tagLinks)
+            throws Throwable {
 
-        awshostDescription.id = UUID.randomUUID().toString();
-        awshostDescription.name = ComputeDescription.ENVIRONMENT_NAME_AWS;
-        awshostDescription.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
-        awshostDescription.documentSelfLink = awshostDescription.id;
-        awshostDescription.supportedChildren = new ArrayList<String>();
-        awshostDescription.supportedChildren.add(ComputeType.VM_GUEST.name());
-        awshostDescription.instanceAdapterReference = UriUtils.buildUri(host,
+        ComputeDescription awsComputeHostDesc = new ComputeDescription();
+
+        awsComputeHostDesc.id = UUID.randomUUID().toString();
+        awsComputeHostDesc.documentSelfLink = awsComputeHostDesc.id;
+        awsComputeHostDesc.name = ComputeDescription.ENVIRONMENT_NAME_AWS;
+        awsComputeHostDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
+        awsComputeHostDesc.supportedChildren = new ArrayList<String>();
+        awsComputeHostDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
+        awsComputeHostDesc.instanceAdapterReference = UriUtils.buildUri(host,
                 AWSUriPaths.AWS_INSTANCE_ADAPTER);
-        awshostDescription.enumerationAdapterReference = UriUtils.buildUri(host,
+        awsComputeHostDesc.enumerationAdapterReference = UriUtils.buildUri(host,
                 AWSUriPaths.AWS_ENUMERATION_ADAPTER);
-        awshostDescription.statsAdapterReference = UriUtils.buildUri(host,
+        awsComputeHostDesc.statsAdapterReference = UriUtils.buildUri(host,
                 AWSUriPaths.AWS_STATS_ADAPTER);
 
-        awshostDescription.zoneId = zoneId;
-        awshostDescription.regionId = regionId;
-        awshostDescription.authCredentialsLink = authLink;
-        TestUtils.doPost(host, awshostDescription,
+        awsComputeHostDesc.zoneId = zoneId;
+        awsComputeHostDesc.regionId = regionId;
+        awsComputeHostDesc.authCredentialsLink = endpointState.authCredentialsLink;
+        awsComputeHostDesc.tenantLinks = endpointState.tenantLinks;
+
+        awsComputeHostDesc = TestUtils.doPost(host, awsComputeHostDesc,
                 ComputeDescriptionService.ComputeDescription.class,
                 UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
 
-        ComputeService.ComputeState awsComputeHost = new ComputeService.ComputeState();
+        ComputeState awsComputeHost = new ComputeState();
 
         awsComputeHost.id = UUID.randomUUID().toString();
-        awsComputeHost.name = awshostDescription.name;
+        awsComputeHost.documentSelfLink = awsComputeHost.id;
+        awsComputeHost.name = awsComputeHostDesc.name;
         awsComputeHost.type = ComputeType.VM_HOST;
         awsComputeHost.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
-        awsComputeHost.documentSelfLink = awsComputeHost.id;
-        awsComputeHost.descriptionLink = UriUtils.buildUriPath(
-                ComputeDescriptionService.FACTORY_LINK, awshostDescription.id);
-        awsComputeHost.resourcePoolLink = resourcePoolLink;
+        awsComputeHost.descriptionLink = awsComputeHostDesc.documentSelfLink;
         awsComputeHost.tagLinks = tagLinks;
+        awsComputeHost.resourcePoolLink = endpointState.resourcePoolLink;
+        awsComputeHost.endpointLink = endpointState.documentSelfLink;
+        awsComputeHost.tenantLinks = endpointState.tenantLinks;
 
         if (isAwsClientMock) {
             awsComputeHost.adapterManagementReference = UriUtils.buildUri(awsMockEndpointReference);
@@ -554,11 +557,32 @@ public class TestAWSSetupUtils {
             awsComputeHost.adapterManagementReference = UriUtils.buildUri(awsEndpointReference);
         }
 
-        ComputeService.ComputeState returnState = TestUtils.doPost(host, awsComputeHost,
+        return TestUtils.doPost(host, awsComputeHost,
                 ComputeService.ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
-        return returnState;
     }
+
+    public static EndpointState createAWSEndpointState(VerificationHost host, String authLink, String resPoolLink)
+            throws Throwable {
+
+        EndpointState endpoint = new EndpointState();
+
+        endpoint.endpointType = EndpointType.aws.name();
+        endpoint.id = EndpointType.aws.name() + "-id";
+        endpoint.name = EndpointType.aws.name() + "-name";
+
+        endpoint.authCredentialsLink = authLink;
+
+        endpoint.endpointProperties = Collections.emptyMap();
+
+        endpoint.tenantLinks = Collections.singletonList(EndpointType.aws.name() + "-tenant");
+
+        endpoint.resourcePoolLink = resPoolLink;
+
+        return TestUtils.doPost(host, endpoint, EndpointState.class,
+                UriUtils.buildUri(host, EndpointService.FACTORY_LINK));
+    }
+
 
     public static ResourcePoolState createAWSResourcePool(VerificationHost host)
             throws Throwable {
@@ -579,11 +603,11 @@ public class TestAWSSetupUtils {
      * Create a compute resource for an AWS instance
      */
     public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
-            String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
+            ComputeState computeHost, EndpointState endpointState, @SuppressWarnings("rawtypes") Class clazz,
             String zoneId, String regionId,
             Set<String> tagLinks, AwsNicSpecs nicSpec)
             throws Throwable {
-        return createAWSVMResource(host, parentLink, resourcePoolLink, clazz,
+        return createAWSVMResource(host, computeHost, endpointState, clazz,
                 instanceType_t2_micro, zoneId, regionId,
                 tagLinks, nicSpec, /* add new security group */ false);
     }
@@ -592,7 +616,8 @@ public class TestAWSSetupUtils {
      * Create a compute resource for an AWS instance
      */
     public static ComputeService.ComputeState createAWSVMResource(VerificationHost host,
-            String parentLink, String resourcePoolLink, @SuppressWarnings("rawtypes") Class clazz,
+            ComputeState computeHost, EndpointState endpointState,
+            @SuppressWarnings("rawtypes") Class clazz,
             String vmName, String zoneId, String regionId,
             Set<String> tagLinks,
             AwsNicSpecs nicSpecs,
@@ -603,16 +628,13 @@ public class TestAWSSetupUtils {
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
         auth.type = DEFAULT_AUTH_TYPE;
         auth.userEmail = DEFAULT_COREOS_USER;
-        auth.privateKey = TestUtils.loadTestResource(clazz,
-                DEFAULT_COREOS_PRIVATE_KEY_FILE);
-        auth.documentSelfLink = UUID.randomUUID().toString();
-        TestUtils.doPost(host, auth, AuthCredentialsService.AuthCredentialsServiceState.class,
+        auth.privateKey = TestUtils.loadTestResource(clazz, DEFAULT_COREOS_PRIVATE_KEY_FILE);
+
+        auth = TestUtils.doPost(host, auth, AuthCredentialsServiceState.class,
                 UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
-        String authCredentialsLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
-                auth.documentSelfLink);
 
         // Step 2: Create a VM desc
-        ComputeDescriptionService.ComputeDescription awsVMDesc = new ComputeDescriptionService.ComputeDescription();
+        ComputeDescription awsVMDesc = new ComputeDescription();
 
         awsVMDesc.id = instanceType_t2_micro;
         awsVMDesc.name = vmName;
@@ -623,14 +645,15 @@ public class TestAWSSetupUtils {
         awsVMDesc.supportedChildren.add(ComputeType.DOCKER_CONTAINER.name());
 
         awsVMDesc.customProperties = new HashMap<>();
-        awsVMDesc.customProperties
-                .put(AWSConstants.AWS_SECURITY_GROUP, securityGroup);
+        awsVMDesc.customProperties.put(AWSConstants.AWS_SECURITY_GROUP, securityGroup);
 
         // set zone to east
         awsVMDesc.zoneId = zoneId;
         awsVMDesc.regionId = regionId;
 
-        awsVMDesc.authCredentialsLink = authCredentialsLink;
+        awsVMDesc.authCredentialsLink = auth.documentSelfLink;
+        awsVMDesc.tenantLinks = endpointState.tenantLinks;
+        awsVMDesc.endpointLink = endpointState.documentSelfLink;
 
         // set the create service to the aws instance service
         awsVMDesc.instanceAdapterReference = UriUtils.buildUri(host,
@@ -638,12 +661,14 @@ public class TestAWSSetupUtils {
         awsVMDesc.statsAdapterReference = UriUtils.buildUri(host,
                 AWSUriPaths.AWS_STATS_ADAPTER);
 
-        ComputeDescriptionService.ComputeDescription vmComputeDesc = TestUtils.doPost(host,
+        awsVMDesc = TestUtils.doPost(host,
                 awsVMDesc,
-                ComputeDescriptionService.ComputeDescription.class,
+                ComputeDescription.class,
                 UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
+
         // Step 3: create boot disk
         List<String> vmDisks = new ArrayList<>();
+
         DiskState rootDisk = new DiskState();
         rootDisk.id = UUID.randomUUID().toString();
         rootDisk.documentSelfLink = rootDisk.id;
@@ -658,38 +683,44 @@ public class TestAWSSetupUtils {
         rootDisk.bootConfig.files = new DiskState.BootConfig.FileEntry[] { file };
         rootDisk.capacityMBytes = BOOT_DISK_SIZE_IN_MEBI_BYTES;
 
-        TestUtils.doPost(host, rootDisk,
+        rootDisk.tenantLinks = endpointState.tenantLinks;
+        rootDisk.endpointLink = endpointState.documentSelfLink;
+
+        rootDisk = TestUtils.doPost(host, rootDisk,
                 DiskService.DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
-        vmDisks.add(UriUtils.buildUriPath(DiskService.FACTORY_LINK, rootDisk.id));
+
+        vmDisks.add(rootDisk.documentSelfLink);
 
         // Create NIC States
         List<String> nicLinks = createAWSNicStates(
-                host, resourcePoolLink, awsVMDesc.authCredentialsLink, awsVMDesc.name, nicSpecs, addNewSecurityGroup)
+                host, computeHost, endpointState, awsVMDesc.name, nicSpecs, addNewSecurityGroup)
                         .stream()
                         .map(nic -> nic.documentSelfLink)
                         .collect(Collectors.toList());
 
         // Create compute state
-        ComputeService.ComputeState resource;
+        ComputeState resource;
         {
-            resource = new ComputeService.ComputeState();
+            resource = new ComputeState();
             resource.id = UUID.randomUUID().toString();
             resource.name = awsVMDesc.name;
             resource.type = ComputeType.VM_GUEST;
             resource.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
-            resource.parentLink = parentLink;
-            resource.descriptionLink = vmComputeDesc.documentSelfLink;
-            resource.resourcePoolLink = resourcePoolLink;
+            resource.descriptionLink = awsVMDesc.documentSelfLink;
+            resource.parentLink = computeHost.documentSelfLink;
+            resource.resourcePoolLink = computeHost.resourcePoolLink;
             resource.networkInterfaceLinks = nicLinks;
             resource.diskLinks = vmDisks;
             resource.tagLinks = tagLinks;
+
+            resource.tenantLinks = endpointState.tenantLinks;
+            resource.endpointLink = endpointState.documentSelfLink;
         }
 
-        ComputeService.ComputeState vmComputeState = TestUtils.doPost(host, resource,
+        return TestUtils.doPost(host, resource,
                 ComputeService.ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
-        return vmComputeState;
     }
 
     /*
@@ -698,8 +729,8 @@ public class TestAWSSetupUtils {
      */
     public static List<NetworkInterfaceState> createAWSNicStates(
             VerificationHost host,
-            String resourcePoolLink,
-            String authCredentialsLink,
+            ComputeState computeHost,
+            EndpointState endpointState,
             String vmName,
             AwsNicSpecs nicSpecs,
             boolean addNewSecurityGroup) throws Throwable {
@@ -712,8 +743,10 @@ public class TestAWSSetupUtils {
             networkState.name = nicSpecs.network.name;
             networkState.subnetCIDR = nicSpecs.network.cidr;
 
-            networkState.authCredentialsLink = authCredentialsLink;
-            networkState.resourcePoolLink = resourcePoolLink;
+            networkState.authCredentialsLink = endpointState.authCredentialsLink;
+            networkState.tenantLinks = endpointState.tenantLinks;
+            networkState.endpointLink = endpointState.documentSelfLink;
+            networkState.resourcePoolLink = computeHost.resourcePoolLink;
             networkState.regionId = regionId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
                     AWSUriPaths.AWS_NETWORK_ADAPTER);
@@ -740,6 +773,9 @@ public class TestAWSSetupUtils {
                 subnetState.zoneId = nicSpecs.subnets.get(i).zoneId;
                 subnetState.networkLink = networkState.documentSelfLink;
 
+                subnetState.tenantLinks = endpointState.tenantLinks;
+                subnetState.endpointLink = endpointState.documentSelfLink;
+
                 subnetState = TestUtils.doPost(host, subnetState,
                         SubnetState.class,
                         UriUtils.buildUri(host, SubnetService.FACTORY_LINK));
@@ -755,6 +791,9 @@ public class TestAWSSetupUtils {
                 nicDescription.deviceIndex = i;
                 nicDescription.assignment = IpAssignment.DYNAMIC;
 
+                nicDescription.tenantLinks = endpointState.tenantLinks;
+                nicDescription.endpointLink = endpointState.documentSelfLink;
+
                 nicDescription = TestUtils.doPost(host, nicDescription,
                         NetworkInterfaceDescription.class,
                         UriUtils.buildUri(host, NetworkInterfaceDescriptionService.FACTORY_LINK));
@@ -762,7 +801,7 @@ public class TestAWSSetupUtils {
 
             // Create security group state for an existing security group
             SecurityGroupState existingSecurityGroupState = createSecurityGroupState(host,
-                    authCredentialsLink, true);
+                    computeHost, endpointState, true);
 
             NetworkInterfaceState nicState = new NetworkInterfaceState();
 
@@ -774,13 +813,16 @@ public class TestAWSSetupUtils {
             nicState.subnetLink = subnetState.documentSelfLink;
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
 
+            nicState.tenantLinks = endpointState.tenantLinks;
+            nicState.endpointLink = endpointState.documentSelfLink;
+
             nicState.securityGroupLinks = new ArrayList<>();
             nicState.securityGroupLinks.add(existingSecurityGroupState.documentSelfLink);
 
             if (addNewSecurityGroup) {
                 // Create security group state for a new security group
                 SecurityGroupState newSecurityGroupState = createSecurityGroupState(host,
-                        authCredentialsLink, false);
+                        computeHost, endpointState, false);
                 nicState.securityGroupLinks.add(newSecurityGroupState.documentSelfLink);
             }
 
@@ -795,49 +837,48 @@ public class TestAWSSetupUtils {
     }
 
     public static SecurityGroupState createSecurityGroupState(VerificationHost host,
-            String authCredentialsLink, boolean existing) throws Throwable {
-        SecurityGroupState securityGroupState;
-        {
-            securityGroupState = new SecurityGroupState();
-            if (existing) {
-                securityGroupState.id = AWS_DEFAULT_GROUP_ID;
-                securityGroupState.name = AWS_DEFAULT_GROUP_NAME;
-            } else {
-                securityGroupState.id = "sg-" + UUID.randomUUID().toString().substring(0, 8);
-                securityGroupState.name = AWS_NEW_GROUP_PREFIX + securityGroupState.id;
-            }
-            securityGroupState.authCredentialsLink = authCredentialsLink;
-            securityGroupState.tenantLinks = new ArrayList<>();
-            securityGroupState.tenantLinks.add("tenant-linkA");
+            ComputeState computeHost,
+            EndpointState endpointState, boolean existing) throws Throwable {
 
-            Rule ssh = new Rule();
-            ssh.name = "ssh";
-            ssh.protocol = "tcp";
-            ssh.ipRangeCidr = "0.0.0.0/0";
-            ssh.ports = "22";
+        SecurityGroupState securityGroupState = new SecurityGroupState();
 
-            securityGroupState.ingress = new ArrayList<>();
-            securityGroupState.ingress.add(ssh);
-
-            Rule out = new Rule();
-            out.name = "out";
-            out.protocol = "tcp";
-            out.ipRangeCidr = "0.0.0.0/0";
-            out.ports = "1-65535";
-
-            securityGroupState.egress = new ArrayList<>();
-            securityGroupState.egress.add(out);
-
-            securityGroupState.regionId = "regionId";
-            securityGroupState.resourcePoolLink = "/link/to/rp";
-            securityGroupState.instanceAdapterReference = new URI(
-                    "http://instanceAdapterReference");
-
-            securityGroupState = TestUtils.doPost(host, securityGroupState,
-                    SecurityGroupState.class,
-                    UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK));
+        if (existing) {
+            securityGroupState.id = AWS_DEFAULT_GROUP_ID;
+            securityGroupState.name = AWS_DEFAULT_GROUP_NAME;
+        } else {
+            securityGroupState.id = "sg-" + UUID.randomUUID().toString().substring(0, 8);
+            securityGroupState.name = AWS_NEW_GROUP_PREFIX + securityGroupState.id;
         }
-        return securityGroupState;
+        securityGroupState.authCredentialsLink = endpointState.authCredentialsLink;
+        securityGroupState.tenantLinks = endpointState.tenantLinks;
+        securityGroupState.endpointLink = endpointState.documentSelfLink;
+
+        Rule ssh = new Rule();
+        ssh.name = "ssh";
+        ssh.protocol = "tcp";
+        ssh.ipRangeCidr = "0.0.0.0/0";
+        ssh.ports = "22";
+
+        securityGroupState.ingress = new ArrayList<>();
+        securityGroupState.ingress.add(ssh);
+
+        Rule out = new Rule();
+        out.name = "out";
+        out.protocol = "tcp";
+        out.ipRangeCidr = "0.0.0.0/0";
+        out.ports = "1-65535";
+
+        securityGroupState.egress = new ArrayList<>();
+        securityGroupState.egress.add(out);
+
+        securityGroupState.regionId = "regionId";
+        securityGroupState.resourcePoolLink = "/link/to/rp";
+        securityGroupState.instanceAdapterReference = new URI(
+                "http://instanceAdapterReference");
+
+        return TestUtils.doPost(host, securityGroupState,
+                SecurityGroupState.class,
+                UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK));
     }
 
     /**
@@ -1376,46 +1417,38 @@ public class TestAWSSetupUtils {
     /**
      * Enumerates resources on the AWS endpoint.
      */
-    public static void enumerateResourcesPreserveMissing(VerificationHost host, boolean isMock,
-            String resourcePoolLink, String computeHostLinkDescription, String computeHostLink,
+    public static void enumerateResourcesPreserveMissing(VerificationHost host, ComputeState computeHost, EndpointState endpointState, boolean isMock,
             String testCase) throws Throwable {
         EnumSet<TaskOption> options = EnumSet.of(TaskOption.PRESERVE_MISSING_RESOUCES);
         if (isMock) {
             options.add(TaskOption.IS_MOCK);
         }
-        enumerateResources(host, null, options, resourcePoolLink,
-                computeHostLinkDescription,
-                computeHostLink, testCase, null);
+        enumerateResources(host, computeHost, endpointState, null, options, testCase);
     }
 
     /**
      * Enumerates resources on the AWS endpoint.
      */
-    public static void enumerateResources(VerificationHost host, boolean isMock,
-            String resourcePoolLink, String computeHostLinkDescription, String computeHostLink,
+    public static void enumerateResources(VerificationHost host, ComputeState computeHost, EndpointState endpointState, boolean isMock,
             String testCase) throws Throwable {
-        enumerateResources(host, null, isMock ? EnumSet.of(TaskOption.IS_MOCK) : null,
-                resourcePoolLink,
-                computeHostLinkDescription,
-                computeHostLink, testCase, null);
+
+        enumerateResources(host, computeHost, endpointState, null, isMock ? EnumSet.of(TaskOption.IS_MOCK) : null,
+                testCase);
     }
 
     /**
      * Enumerates resources on the AWS endpoint. Expects a peerURI and the tenantLinks to be set.
      */
-    public static void enumerateResources(VerificationHost host, URI peerURI,
-            EnumSet<TaskOption> options, String resourcePoolLink,
-            String computeHostLinkDescription,
-            String computeHostLink,
-            String testCase, List<String> tenantLinks) throws Throwable {
+    public static void enumerateResources(VerificationHost host,
+            ComputeState computeHost, EndpointState endpointState,
+            URI peerURI,
+            EnumSet<TaskOption> options,
+            String testCase) throws Throwable {
         // Perform resource enumeration on the AWS end point. Pass the references to the AWS compute
         // host.
         host.log("Performing resource enumeration");
         ResourceEnumerationTaskService.ResourceEnumerationTaskState enumTask = performResourceEnumeration(
-                host, peerURI, options, resourcePoolLink,
-                computeHostLinkDescription,
-                computeHostLink,
-                tenantLinks);
+                host, computeHost, endpointState, peerURI, options);
         // Wait for the enumeration task to be completed.
         host.waitForFinishedTask(ResourceEnumerationTaskState.class,
                 createServiceURI(host, peerURI, enumTask.documentSelfLink));
@@ -1469,32 +1502,29 @@ public class TestAWSSetupUtils {
      * @return
      * @throws Throwable
      */
-    public static ResourceEnumerationTaskService.ResourceEnumerationTaskState performResourceEnumeration(
-            VerificationHost host, URI peerURI, EnumSet<TaskOption> options,
-            String resourcePoolLink, String computeDescriptionLink, String parentComputeLink,
-            List<String> tenantLinks) throws Throwable {
+    public static ResourceEnumerationTaskState performResourceEnumeration(
+            VerificationHost host, ComputeState computeHost, EndpointState endpointState, URI peerURI, EnumSet<TaskOption> options) throws Throwable {
         // Kick of a Resource Enumeration task to enumerate the instances on the AWS endpoint
-        ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskService.ResourceEnumerationTaskState();
+        ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
 
-        enumerationTaskState.parentComputeLink = parentComputeLink;
+        enumerationTaskState.parentComputeLink = computeHost.documentSelfLink;
         enumerationTaskState.enumerationAction = EnumerationAction.START;
         enumerationTaskState.adapterManagementReference = UriUtils
                 .buildUri(AWSEnumerationAdapterService.SELF_LINK);
 
-        enumerationTaskState.resourcePoolLink = resourcePoolLink;
-        enumerationTaskState.options = EnumSet.noneOf(TaskOption.class);
+        enumerationTaskState.resourcePoolLink = computeHost.resourcePoolLink;
         if (options != null) {
             enumerationTaskState.options = options;
+        } else {
+            enumerationTaskState.options = EnumSet.noneOf(TaskOption.class);
         }
+        enumerationTaskState.tenantLinks = endpointState.tenantLinks;
+        enumerationTaskState.endpointLink = endpointState.documentSelfLink;
 
-        if (tenantLinks != null) {
-            enumerationTaskState.tenantLinks = tenantLinks;
-        }
         URI uri = createServiceURI(host, peerURI, ResourceEnumerationTaskService.FACTORY_LINK);
-        ResourceEnumerationTaskService.ResourceEnumerationTaskState enumTask = TestUtils.doPost(
-                host, enumerationTaskState, ResourceEnumerationTaskState.class, uri);
-        return enumTask;
 
+        return TestUtils.doPost(
+                host, enumerationTaskState, ResourceEnumerationTaskState.class, uri);
     }
 
     /**

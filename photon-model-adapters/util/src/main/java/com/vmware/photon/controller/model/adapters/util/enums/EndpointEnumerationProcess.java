@@ -26,8 +26,10 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -65,7 +67,6 @@ import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
  * @param <REMOTE>
  *            The class representing the remote resource.
  */
-// NOTE: FOR INTERNAL PURPOSE ONLY. WILL BE PROMOTED TO PUBLIC IN A NEXT CL.
 public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationProcess<T, LOCAL_STATE, REMOTE>, LOCAL_STATE extends ResourceState, REMOTE> {
 
     private static final int MAX_RESOURCES_TO_QUERY_ON_DELETE = Integer
@@ -83,8 +84,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
     public final URI endpointReference;
 
     // Extracted from endpointReference {{
-    protected EndpointState endpointState;
-    protected AuthCredentialsServiceState endpointAuthState;
+    public EndpointState endpointState;
+    public AuthCredentialsServiceState endpointAuthState;
     // }}
 
     protected final Class<LOCAL_STATE> localStateClass;
@@ -94,7 +95,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
     /**
      * Flag controlling whether infra fields (such as tenantLinks and endpointLink) should be
-     * applied (for example set or populated). Default value is {#code true}.
+     * applied (for example set or populated). Default value is {@code true}.
      *
      * @see #createUpdateLocalResourceState(LocalStateHolder)
      */
@@ -204,9 +205,23 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
         return DeferredResult.completed(self())
                 .thenCompose(this::getEndpointState)
+                .thenApply(log("getEndpointState"))
                 .thenCompose(this::getEndpointAuthState)
+                .thenApply(log("getEndpointAuthState"))
                 .thenCompose(this::enumeratePageByPage)
-                .thenCompose(this::deleteLocalResourceStates);
+                .thenApply(log("enumeratePageByPage"))
+                .thenCompose(this::deleteLocalResourceStates)
+                .thenApply(log("deleteLocalResourceStates"));
+    }
+
+    /**
+     * Use this to log success after completing async execution stage.
+     */
+    protected Function<? super T, ? extends T> log(String stage) {
+        return (ctx) -> {
+            ctx.service.log(Level.FINE, "%s.%s: SUCCESS", this.getClass().getSimpleName(), stage);
+            return ctx;
+        };
     }
 
     /**
@@ -254,8 +269,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      * @param qBuilder
      *            The builder used to express the query criteria.
      *
-     * @see {@link #queryLocalResourceStates(EndpointEnumerationProcess)} for details about the GET
-     *      criteria being pre-set/used by this enumeration logic.
+     * @see {@link #queryLocalStates(EndpointEnumerationProcess)} for details about the GET criteria
+     *      being pre-set/used by this enumeration logic.
      * @see {@link #deleteLocalResourceStates(EndpointEnumerationProcess)} for details about the
      *      DELETE criteria being pre-set/used by this enumeration logic.
      */
@@ -341,7 +356,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
         return DeferredResult.completed(context)
                 .thenCompose(this::getRemoteResources)
-                .thenCompose(this::queryLocalResourceStates)
+                .thenCompose(this::queryLocalStates)
                 .thenCompose(this::createUpdateLocalResourceStates)
                 .thenCompose(ctx -> ctx.enumExternalResourcesNextPageLink != null
                         ? enumeratePageByPage(ctx)
@@ -364,7 +379,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      * {@link customizeLocalStatesQuery(qBuilder)}</li>
      * </ul>
      */
-    protected DeferredResult<T> queryLocalResourceStates(T context) {
+    protected DeferredResult<T> queryLocalStates(T context) {
 
         String msg = "Query local %ss to match %d remote resources";
 
@@ -458,11 +473,11 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
         return DeferredResult.allOf(drs).thenApply(ops -> {
 
-            this.service.logFine(
-                    () -> String.format(msg,
-                            context.localStateClass.getSimpleName(),
-                            context.remoteResources.size(),
-                            ops.stream().collect(groupingBy(Operation::getAction, counting()))));
+            this.service.logFine(() -> String.format(msg,
+                    context.localStateClass.getSimpleName(),
+                    context.remoteResources.size(),
+                    ops.stream().filter(Objects::nonNull)
+                            .collect(groupingBy(Operation::getAction, counting()))));
 
             return context;
         });
@@ -479,12 +494,17 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
         final LOCAL_STATE currentState = this.localResourceStates.get(localState.id);
 
-        // POST or PATCH local state
-        final Operation lsOp;
-
-        // Create or update local tag states
+        // NOTE: It's important to call this prior calling localStateOp.setBody(localState) so
+        // localState.tagLinks is populated.
+        // NEXT: rework.
         DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(
-                this.service, localState, currentState, localStateHolder.remoteTags);
+                this.service,
+                localState,
+                currentState,
+                localStateHolder.remoteTags);
+
+        // POST or PATCH local state
+        final Operation localStateOp;
 
         if (currentState == null) {
             // Create case
@@ -497,29 +517,28 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 setEndpointLink(localState, this.endpointState.documentSelfLink);
             }
 
-            lsOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
+            localStateOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
         } else {
             // Update case
-
-            lsOp = Operation.createPatch(this.service, currentState.documentSelfLink);
+            localStateOp = Operation.createPatch(this.service, currentState.documentSelfLink);
         }
 
-        lsOp.setBody(localState);
+        localStateOp.setBody(localState);
 
-        return tagsDR.thenCompose(ignore -> this.service.sendWithDeferredResult(lsOp)
+        return tagsDR.thenCompose(ignore -> this.service.sendWithDeferredResult(localStateOp)
                 .whenComplete((ignoreOp, exc) -> {
                     String msg = "%s local %s(id=%s) to match remote resources";
                     if (exc != null) {
                         this.service.logWarning(
                                 () -> String.format(msg + ": ERROR - %s",
-                                        lsOp.getAction(),
+                                        localStateOp.getAction(),
                                         localState.getClass().getSimpleName(),
                                         localState.id,
                                         Utils.toString(exc)));
                     } else {
                         this.service.log(Level.FINEST,
                                 () -> String.format(msg + ": SUCCESS",
-                                        lsOp.getAction(),
+                                        localStateOp.getAction(),
                                         localState.getClass().getSimpleName(),
                                         localState.id));
                     }
@@ -545,9 +564,10 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      */
     protected DeferredResult<T> deleteLocalResourceStates(T context) {
 
-        context.service
-                .logFine(() -> String.format("Delete %ss that no longer exist in the endpoint.",
-                        context.localStateClass.getSimpleName()));
+        final String msg = "Delete %ss that no longer exist in the endpoint: %s";
+
+        context.service.logFine(
+                () -> String.format(msg, context.localStateClass.getSimpleName(), "STARTING"));
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(context.localStateClass)
@@ -558,7 +578,9 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         if (!this.enumExternalResourcesIds.isEmpty() &&
                 this.enumExternalResourcesIds.size() <= MAX_RESOURCES_TO_QUERY_ON_DELETE) {
             // do not load resources from enumExternalResourcesIds
-            qBuilder.addInClause(ResourceState.FIELD_NAME_ID, this.enumExternalResourcesIds,
+            qBuilder.addInClause(
+                    ResourceState.FIELD_NAME_ID,
+                    this.enumExternalResourcesIds,
                     Occurance.MUST_NOT_OCCUR);
         }
 
@@ -584,13 +606,13 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
             DeferredResult<Operation> dr = context.service.sendWithDeferredResult(dOp)
                     .whenComplete((o, e) -> {
-                        final String msg = "Delete stale %s state";
+                        final String message = "Delete stale %s state";
                         if (e != null) {
-                            context.service.logWarning(msg + ": ERROR - %s",
+                            context.service.logWarning(message + ": ERROR - %s",
                                     ls.documentSelfLink, Utils.toString(e));
                         } else {
-                            context.service.log(Level.FINEST,
-                                    msg + ": SUCCESS", ls.documentSelfLink);
+                            context.service.log(Level.FINEST, message + ": SUCCESS",
+                                    ls.documentSelfLink);
                         }
                     });
 
@@ -598,6 +620,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .thenApply(r -> context);
+
     }
 
     /**

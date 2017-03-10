@@ -18,6 +18,7 @@ import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultEndpointState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
@@ -43,6 +44,7 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.Reso
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
@@ -96,14 +98,14 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
     // object counts
     public int vmCount = 0;
 
+    private static ComputeState computeHost;
+    private static EndpointState endpointState;
+
     private ResourceMetrics resourceMetric;
-    private ComputeState computeHost;
     private Level loggingLevelForMemory;
     private URI nodeStatsUri;
-    private String resourcePoolLink;
     // This is for GUEST_VM link
     private String enumeratedComputeLink;
-    private String authLink;
     private double previousRunLastSuccessfulCollectionTimeInMicrosForVM = 0;
     private double currentRunLastSuccessfulCollectionTimeInMicrosForVM = 0;
     private double previousRunLastSuccessfulCollectionTimeInMicrosForHost = 0;
@@ -118,7 +120,7 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
     @Before
     public void setUp() throws Exception {
         try {
-            if (this.computeHost == null) {
+            if (computeHost == null) {
                 PhotonModelServices.startServices(this.host);
                 PhotonModelMetricServices.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
@@ -132,8 +134,7 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
                 this.host.setTimeoutSeconds(600);
 
                 // Create a resource pool where the VMs will be housed
-                ResourcePoolState outPool = createDefaultResourcePool(this.host);
-                this.resourcePoolLink = outPool.documentSelfLink;
+                ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
 
                 AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
                         this.host,
@@ -141,10 +142,13 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
                         this.clientKey,
                         this.subscriptionId,
                         this.tenantId);
-                this.authLink = authCredentials.documentSelfLink;
+
+                endpointState = createDefaultEndpointState(
+                        this.host, authCredentials.documentSelfLink);
 
                 // create a compute host for the Azure
-                this.computeHost = createDefaultComputeHost(this.host, this.resourcePoolLink, this.authLink);
+                computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
+                        endpointState);
             }
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
@@ -182,7 +186,7 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
          */
         for (Entry<String, Object> key : result.documents.entrySet()) {
             ComputeState document = Utils.fromJson(key.getValue(), ComputeState.class);
-            if (!document.documentSelfLink.equals(this.computeHost.documentSelfLink)
+            if (!document.documentSelfLink.equals(computeHost.documentSelfLink)
                     && document.id.toLowerCase()
                     .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
                 this.enumeratedComputeLink = document.documentSelfLink;
@@ -213,11 +217,13 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
     private void runEnumeration() throws Throwable {
         ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
 
-        enumerationTaskState.parentComputeLink = this.computeHost.documentSelfLink;
+        enumerationTaskState.endpointLink = endpointState.documentSelfLink;
+        enumerationTaskState.tenantLinks = endpointState.tenantLinks;
+        enumerationTaskState.parentComputeLink = computeHost.documentSelfLink;
         enumerationTaskState.enumerationAction = EnumerationAction.START;
         enumerationTaskState.adapterManagementReference = UriUtils
                 .buildUri(AzureEnumerationAdapterService.SELF_LINK);
-        enumerationTaskState.resourcePoolLink = this.resourcePoolLink;
+        enumerationTaskState.resourcePoolLink = computeHost.resourcePoolLink;
         if (this.isMock) {
             enumerationTaskState.options = EnumSet.of(TaskOption.IS_MOCK);
         }
@@ -255,7 +261,7 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
                                 this.isMock ? EnumSet.of(TaskOption.IS_MOCK) : null);
                         logNodeStats(this.host.getServiceStats(this.nodeStatsUri));
                         verifyStatsCollection(this.enumeratedComputeLink);
-                        verifyStatsCollection(this.computeHost.documentSelfLink);
+                        verifyStatsCollection(computeHost.documentSelfLink);
                         return true;
                     });
                 }
@@ -322,7 +328,7 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
         StatsCollectionTaskState statsCollectionTaskState =
                 new StatsCollectionTaskState();
 
-        statsCollectionTaskState.resourcePoolLink = this.resourcePoolLink;
+        statsCollectionTaskState.resourcePoolLink = computeHost.resourcePoolLink;
         statsCollectionTaskState.options = EnumSet.noneOf(TaskOption.class);
 
         if (options != null) {

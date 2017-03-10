@@ -13,11 +13,15 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -34,16 +38,16 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
-import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService.PartitionedIterator;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -51,11 +55,12 @@ import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate;
 import com.vmware.photon.controller.model.tasks.TaskOption;
+import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.TaskState;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 public class TestAWSImageEnumerationTask extends BaseModelTest {
@@ -65,7 +70,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
     public String secretKey = "secretKey";
     public boolean isMock = true;
 
-    public boolean enableLongRunning = true;
+    public boolean enableLongRunning = false;
     // }}
 
     private static final String AMAZON_PRIVATE_IMAGE_FILTER = null;
@@ -163,6 +168,11 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 endpointState.documentSelfLink, image.endpointLink);
         Assert.assertEquals("Private image must have tenantLinks set.",
                 endpointState.tenantLinks, image.tenantLinks);
+
+        Assert.assertEquals("Private image id is incorrect.",
+                "ami-2929923f", image.id);
+        Assert.assertEquals("Private image name is incorrect.",
+                "alexs-test", image.name);
 
         Assert.assertEquals("Private image 'Name' tag is missing.", 1, image.tagLinks.size());
 
@@ -354,33 +364,6 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 taskState.documentSelfLink);
     }
 
-    private EndpointState createEndpointState() throws Throwable {
-
-        String testSpecificStr = EndpointType.aws.name() + "-"
-                + this.currentTestName.getMethodName();
-
-        final EndpointState endpoint = new EndpointState();
-
-        endpoint.documentSelfLink = this.currentTestName.getMethodName();
-
-        endpoint.endpointType = EndpointType.aws.name();
-        endpoint.id = testSpecificStr + "-id";
-        endpoint.name = testSpecificStr + "-name";
-
-        endpoint.authCredentialsLink = createAuthCredentialsState().documentSelfLink;
-
-        // IMPORTANT: Private image enum does exist only in US_EAST_1!
-        endpoint.endpointProperties = Collections.singletonMap(
-                EndpointConfigRequest.REGION_KEY, Regions.US_EAST_1.getName());
-
-        endpoint.tenantLinks = Collections.singletonList(testSpecificStr + "-tenant");
-
-        return postServiceSynchronously(
-                EndpointService.FACTORY_LINK,
-                endpoint,
-                EndpointState.class);
-    }
-
     private ImageState createImageState(EndpointState endpoint, boolean isPublic) throws Throwable {
 
         ImageState image = new ImageState();
@@ -415,17 +398,37 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         return toUpdate;
     }
 
-    private AuthCredentialsServiceState createAuthCredentialsState() throws Throwable {
+    private EndpointState createEndpointState() throws Throwable {
 
-        AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
+        final EndpointState endpoint;
+        {
+            endpoint = new EndpointState();
 
-        creds.privateKey = this.secretKey;
-        creds.privateKeyId = this.accessKey;
+            endpoint.endpointType = EndpointType.aws.name();
+            endpoint.id = EndpointType.aws.name() + "-id";
+            endpoint.name = EndpointType.aws.name() + "-name";
 
-        return postServiceSynchronously(
-                AuthCredentialsService.FACTORY_LINK,
-                creds,
-                AuthCredentialsServiceState.class);
+            endpoint.tenantLinks = new ArrayList<>();
+            endpoint.tenantLinks.add(EndpointType.aws.name() + "-tenant");
+
+            endpoint.endpointProperties = new HashMap<>();
+            endpoint.endpointProperties.put(PRIVATE_KEY_KEY, this.secretKey);
+            endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, this.accessKey);
+            // IMPORTANT: Private image enum does exist/work only in US_EAST_1!
+            endpoint.endpointProperties.put(REGION_KEY, Regions.US_EAST_1.getName());
+        }
+
+        EndpointAllocationTaskState allocateEndpoint = new EndpointAllocationTaskState();
+        allocateEndpoint.endpointState = endpoint;
+        allocateEndpoint.options = this.isMock ? EnumSet.of(TaskOption.IS_MOCK) : null;
+        allocateEndpoint.taskInfo = new TaskState();
+        allocateEndpoint.taskInfo.isDirect = true;
+
+        allocateEndpoint = TestUtils.doPost(this.host, allocateEndpoint,
+                EndpointAllocationTaskState.class,
+                UriUtils.buildUri(this.host, EndpointAllocationTaskService.FACTORY_LINK));
+
+        return allocateEndpoint.endpointState;
     }
 
 }

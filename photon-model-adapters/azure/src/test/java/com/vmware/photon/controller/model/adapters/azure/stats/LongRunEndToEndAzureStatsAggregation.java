@@ -19,6 +19,7 @@ import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultEndpointState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getResourceMetrics;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.resourceStatsAggregation;
@@ -49,6 +50,7 @@ import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricServ
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 
@@ -101,15 +103,14 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
     public static final int MEMORY_SEVERE_THRESHOLD = 60;
     public static final int MEMORY_WARNING_THRESHOLD = 40;
 
-    private String authLink;
-
     private double cpuUsagePercentage;
     private double availableMemoryMb;
     private double maxMemoryInMb;
 
-    private ComputeState computeHost;
+    private static ComputeState computeHost;
+    private static EndpointState endpointState;
+
     private URI nodeStatsUri;
-    private String resourcePoolLink;
 
     @Rule
     public TestName currentTestName = new TestName();
@@ -117,7 +118,7 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
     @Before
     public void setUp() throws Exception {
         try {
-            if (this.computeHost == null) {
+            if (computeHost == null) {
                 PhotonModelServices.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
                 PhotonModelMetricServices.startServices(this.host);
@@ -129,26 +130,22 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
                 this.host.waitForServiceAvailable(AzureAdapters.LINKS);
                 this.host.setTimeoutSeconds(600);
 
+                ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
+
                 AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
                         this.host,
                         this.clientID,
                         this.clientKey,
                         this.subscriptionId,
                         this.tenantId);
-                this.authLink = authCredentials.documentSelfLink;
 
-                // create a resource pool for Azure
-                ResourcePoolState outPool = createDefaultResourcePool(this.host);
-                this.resourcePoolLink = outPool.documentSelfLink;
+                endpointState = createDefaultEndpointState(
+                        this.host, authCredentials.documentSelfLink);
 
-                // create a compute host for Azure
-                this.computeHost = createDefaultComputeHost(this.host, outPool.documentSelfLink, this.authLink);
-
+                // create a compute host for the Azure
+                computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
+                        endpointState);
             }
-
-            this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
             this.nodeStatsUri = UriUtils.buildUri(this.host.getUri(), ServiceUriPaths.CORE_MANAGEMENT);
             this.maxMemoryInMb = this.host.getState().systemInfo.maxMemoryByteCount / BYTES_TO_MB;
@@ -176,13 +173,13 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
 
         // perform stats aggregation before stats collection takes place.
         // As no stats collection is performed yet, ResourceAggregateMetric document count will be 0.
-        resourceStatsAggregation(this.host, this.resourcePoolLink);
+        resourceStatsAggregation(this.host, computeHost.resourcePoolLink);
         ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
                 ResourceAggregateMetricService.FACTORY_LINK));
         assertEquals(0, aggrRes.documentLinks.size());
 
         // perform enumeration on given Azure endpoint.
-        runEnumeration(this.host, this.computeHost.documentSelfLink, this.resourcePoolLink, this.isMock);
+        runEnumeration(this.host, computeHost.documentSelfLink, computeHost.resourcePoolLink, this.isMock);
 
         // periodically perform stats collection and aggregation on given Azure endpoint
         runStatsCollectionAndAggregationLogNodeStatsPeriodically();
@@ -203,13 +200,13 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
             try {
                 this.host.log(Level.INFO, "Running azure stats collection...");
                 // perform stats collection on given Azure endpoint.
-                resourceStatsCollection(this.host, this.isMock, this.resourcePoolLink);
+                resourceStatsCollection(this.host, this.isMock, computeHost.resourcePoolLink);
                 ServiceDocumentQueryResult res = this.host
                         .getFactoryState(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(this.host,
                                 ComputeService.FACTORY_LINK)));
 
                 this.host.log(Level.INFO, "Running azure stats aggregation...");
-                resourceStatsAggregation(this.host, this.resourcePoolLink);
+                resourceStatsAggregation(this.host, computeHost.resourcePoolLink);
 
                 logNodeStats(this.host.getServiceStats(this.nodeStatsUri));
 

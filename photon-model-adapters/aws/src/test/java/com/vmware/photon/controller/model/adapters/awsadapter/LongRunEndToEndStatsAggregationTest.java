@@ -18,6 +18,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
@@ -55,9 +56,9 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
-import com.vmware.photon.controller.model.resources.ResourcePoolService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocument;
@@ -67,7 +68,6 @@ import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
@@ -91,8 +91,8 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
 
     private static final int DEFAULT_RETENTION_LIMIT_DAYS = 56;
 
-    private ResourcePoolService.ResourcePoolState outPool;
-    private ComputeService.ComputeState outComputeHost;
+    private ComputeState computeHost;
+    private EndpointState endpointState;
 
     // Time in minutes for stats availability for a EC2 instance when newly created.
     private static final int initTimeForStatsAvailInMin = 8;
@@ -192,14 +192,13 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
 
         // perform stats aggregation before stats collection takes place.
         // As no stats collection is performed yet, ResourceAggregateMetric document count will be 0.
-        resourceStatsAggregation(this.host, this.outPool.documentSelfLink);
+        resourceStatsAggregation(this.host, this.computeHost.resourcePoolLink);
         ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
                 ResourceAggregateMetricService.FACTORY_LINK));
         assertEquals(0, aggrRes.documentLinks.size());
 
         // perform enumeration on given AWS endpoint.
-        enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+        enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_INITIAL);
 
         // periodically perform stats aggregation on given AWS endpoint
@@ -221,13 +220,13 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
             try {
                 this.host.log(Level.INFO, "Running stats collection...");
                 // perform stats collection on given AWS endpoint.
-                resourceStatsCollection(this.host, this.isMock, this.outPool.documentSelfLink);
+                resourceStatsCollection(this.host, this.isMock, this.computeHost.resourcePoolLink);
                 ServiceDocumentQueryResult res = this.host
                         .getFactoryState(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(this.host,
                                 ComputeService.FACTORY_LINK)));
 
                 this.host.log(Level.INFO, "Running stats aggregation...");
-                resourceStatsAggregation(this.host, this.outPool.documentSelfLink);
+                resourceStatsAggregation(this.host, this.computeHost.resourcePoolLink);
 
                 logNodeStats(this.host.getServiceStats(this.nodeStatsUri));
 
@@ -457,16 +456,22 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
 
     /**
      * Creates the state associated with the resource pool, compute host and the VM to be created.
+     *
+     * @throws Throwable
      */
     private void initResourcePoolAndComputeHost() throws Throwable {
-        // Create a resource pool where the VM will be staged
-        this.outPool = createAWSResourcePool(this.host);
+        // Create a resource pool where the VM will be housed
+        ResourcePoolState resourcePool = createAWSResourcePool(this.host);
+
+        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey, this.secretKey);
+
+        this.endpointState = TestAWSSetupUtils.createAWSEndpointState(this.host, auth.documentSelfLink, resourcePool.documentSelfLink);
 
         // create a compute host for the AWS EC2 VM
-        this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
-                null, this.useAllRegions ? null : regionId,
-                this.accessKey, this.secretKey, this.isAwsClientMock,
-                this.awsMockEndpointReference, null);
-
+        this.computeHost = createAWSComputeHost(this.host,
+                this.endpointState,
+                null /*zoneId*/, this.useAllRegions ? null : regionId,
+                this.isAwsClientMock,
+                this.awsMockEndpointReference, null /*tags*/);
     }
 }

@@ -18,12 +18,13 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.enumerateResources;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.resourceStatsCollection;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
 
@@ -33,7 +34,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-
 import com.google.gson.JsonObject;
 
 import org.junit.After;
@@ -50,10 +50,10 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.Reso
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService;
-
 import com.vmware.xenon.common.BasicTestCase;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocument;
@@ -63,7 +63,6 @@ import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
@@ -94,8 +93,8 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
     public static final int MEMORY_SEVERE_THRESHOLD = 60;
     public static final int MEMORY_WARNING_THRESHOLD = 40;
 
-    private ResourcePoolState outPool;
-    private ComputeState outComputeHost;
+    private ComputeState computeHost;
+    private EndpointState endpointState;
 
     private AmazonEC2AsyncClient client;
     public boolean isAwsClientMock = false;
@@ -211,7 +210,7 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
                 .getLastCollectionMetricKeyForAdapterLink(statsLink, true);
 
         // perform resource stats collection before enumeration takes place on given AWS endpoint
-        resourceStatsCollection(this.host, this.isMock, this.outPool.documentSelfLink);
+        resourceStatsCollection(this.host, this.isMock, this.computeHost.resourcePoolLink);
         // will try to fetch the compute state resources
         ServiceDocumentQueryResult result = this.host
                 .getFactoryState(UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(this.host,
@@ -223,8 +222,7 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
         assertEquals(ComputeType.VM_HOST.toString(), jsonObject.get("type").getAsString());
 
         // perform resource enumeration on given AWS endpoint
-        enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+        enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_RUN);
 
         // periodically perform stats collection on given AWS endpoint
@@ -451,15 +449,19 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
      * @throws Throwable
      */
     private void initResourcePoolAndComputeHost() throws Throwable {
-        // Create a resource pool where the VM will be staged
-        this.outPool = createAWSResourcePool(this.host);
+        // Create a resource pool where the VM will be housed
+        ResourcePoolState resourcePool = createAWSResourcePool(this.host);
+
+        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey, this.secretKey);
+
+        this.endpointState = TestAWSSetupUtils.createAWSEndpointState(this.host, auth.documentSelfLink, resourcePool.documentSelfLink);
 
         // create a compute host for the AWS EC2 VM
-        this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
-                null, this.useAllRegions ? null : zoneId,
-                this.accessKey, this.secretKey, this.isAwsClientMock,
-                this.awsMockEndpointReference, null);
-
+        this.computeHost = createAWSComputeHost(this.host,
+                this.endpointState,
+                null /*zoneId*/, this.useAllRegions ? null : regionId,
+                this.isAwsClientMock,
+                this.awsMockEndpointReference, null /*tags*/);
     }
 
     /**
@@ -469,7 +471,7 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
         this.host.getScheduledExecutor().scheduleAtFixedRate(() -> {
             try {
                 this.host.log(Level.INFO, "Running stats collection...");
-                resourceStatsCollection(this.host, this.isMock, this.outPool.documentSelfLink);
+                resourceStatsCollection(this.host, this.isMock, this.computeHost.resourcePoolLink);
 
                 logNodeStats(this.host.getServiceStats(this.nodeStatsUri));
             } catch (Throwable e) {

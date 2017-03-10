@@ -45,7 +45,7 @@ import com.vmware.photon.controller.model.adapters.azure.model.network.NetworkSe
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
-import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext;
+import com.vmware.photon.controller.model.adapters.util.enums.BaseComputeEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -71,7 +71,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
     public static final String SELF_LINK = AzureUriPaths.AZURE_FIREWALL_ENUMERATION_ADAPTER;
 
     public static class SecurityGroupEnumContext extends
-            BaseEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState, NetworkSecurityGroup> {
+            BaseComputeEnumerationAdapterContext<SecurityGroupEnumContext, SecurityGroupState, NetworkSecurityGroup> {
 
         // Azure credentials.
         ApplicationTokenCredentials credentials;

@@ -19,6 +19,7 @@ import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSVMResource;
@@ -75,6 +76,7 @@ import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -105,7 +107,12 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 public class TestAWSProvisionTask {
 
     private static final String INSTANCEID_PREFIX = "i-";
+
     private VerificationHost host;
+
+    private ComputeState computeHost;
+    private EndpointState endpointState;
+
     // fields that are used across method calls, stash them as private fields
     private ComputeService.ComputeState vmState;
     private String sgToCleanUp = null;
@@ -181,22 +188,37 @@ public class TestAWSProvisionTask {
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
     }
 
+    /**
+     * Creates the state associated with the resource pool, compute host and the VM to be created.
+     *
+     * @throws Throwable
+     */
+    private void initResourcePoolAndComputeHost() throws Throwable {
+        // Create a resource pool where the VM will be housed
+        ResourcePoolState resourcePool = createAWSResourcePool(this.host);
+
+        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey, this.secretKey);
+
+        this.endpointState = TestAWSSetupUtils.createAWSEndpointState(this.host, auth.documentSelfLink, resourcePool.documentSelfLink);
+
+        // create a compute host for the AWS EC2 VM
+        this.computeHost = createAWSComputeHost(this.host,
+                this.endpointState,
+                zoneId, regionId,
+                this.isAwsClientMock,
+                this.awsMockEndpointReference, null /*tags*/);
+    }
+
     // Creates a AWS instance via a provision task.
     @Test
     public void testProvision() throws Throwable {
 
-        // Create a resource pool where the VM will be housed
-        ResourcePoolState outPool = createAWSResourcePool(this.host);
-
-        // create a compute host for the AWS EC2 VM
-        ComputeService.ComputeState outComputeHost = createAWSComputeHost(this.host,
-                outPool.documentSelfLink, zoneId, regionId, this.accessKey, this.secretKey,
-                this.isAwsClientMock, this.awsMockEndpointReference, null);
+        initResourcePoolAndComputeHost();
 
         // create a AWS VM compute resoruce
         boolean addNonExistingSecurityGroup = true;
-        this.vmState = createAWSVMResource(this.host, outComputeHost.documentSelfLink,
-                outPool.documentSelfLink, this.getClass(),
+        this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
+                this.getClass(),
                 this.currentTestName.getMethodName() + "_vm1", zoneId, regionId,
                 null /* tagLinks */, this.singleNicSpec, addNonExistingSecurityGroup);
 
@@ -210,6 +232,8 @@ public class TestAWSProvisionTask {
         // reporting failure to the parent task.
         provisionTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc()
                 + TimeUnit.MINUTES.toMicros(AWS_VM_REQUEST_TIMEOUT_MINUTES);
+
+        provisionTask.tenantLinks = this.endpointState.tenantLinks;
 
         provisionTask = TestUtils.doPost(this.host,
                 provisionTask,
@@ -280,12 +304,11 @@ public class TestAWSProvisionTask {
 
         Set<String> tagLinks = tags.stream().map(t -> t.documentSelfLink)
                 .collect(Collectors.toSet());
+
         addNonExistingSecurityGroup = false;
-        this.vmState = TestAWSSetupUtils.createAWSVMResource(this.host,
-                outComputeHost.documentSelfLink,
-                outPool.documentSelfLink, this.getClass(),
-                this.currentTestName.getMethodName() + "_vm2",
-                zoneId, regionId,
+        this.vmState = createAWSVMResource(this.host, this.computeHost, this.endpointState,
+                this.getClass(),
+                this.currentTestName.getMethodName() + "_vm2", zoneId, regionId,
                 tagLinks, this.singleNicSpec, addNonExistingSecurityGroup);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
@@ -607,6 +630,6 @@ public class TestAWSProvisionTask {
 
         assertEquals("Boot Disk size in the local system is not matching the boot disk size of "
                         + "compute provisioned in aws", diskState.capacityMBytes,
-                (long) (describeVolumesResult.getVolumes().get(0).getSize() * 1024));
+                describeVolumesResult.getVolumes().get(0).getSize() * 1024);
     }
 }

@@ -33,6 +33,10 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_SERVICE_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_DISK_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CPU_UTILIZATION_PERCENT;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.MEMORY_USED_PERCENT;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 
 import java.io.IOException;
 import java.net.URI;
@@ -67,7 +71,6 @@ import com.microsoft.azure.management.resources.models.ResourceGroup;
 import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
-
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -77,7 +80,7 @@ import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureComput
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.GatewaySpec;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -88,6 +91,8 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
@@ -166,7 +171,7 @@ public class AzureTestUtil {
     public static final AzureNicSpecs SHARED_NETWORK_NIC_SPEC;
     public static final AzureNicSpecs NO_PUBLIC_IP_NIC_SPEC;
 
-    public static final long AZURE_CUSTOM_OSDISK_SIZE = 1024 * 32; //32 GBs. We can only increase
+    public static final long AZURE_CUSTOM_OSDISK_SIZE = 1024 * 32; // 32 GBs. We can only increase
     // size of OS Disk. The Image used already has 30 GB size.
 
     private static final String AZURE_NETWORK_NAME = "test-vNet";
@@ -174,7 +179,7 @@ public class AzureTestUtil {
     private static final String AZURE_SUBNET_NAME = "test-subnet";
 
     // The number of subnet CIDRs drives the number of nics created.
-    private static final String[] AZURE_SUBNET_CIDR = {"172.16.0.0/18", "172.16.64.0/18"};
+    private static final String[] AZURE_SUBNET_CIDR = { "172.16.0.0/18", "172.16.64.0/18" };
 
     private static final String AZURE_GATEWAY_NAME = "gateway";
     private static final String AZURE_GATEWAY_CIDR = "172.16.128.0/18";
@@ -190,7 +195,7 @@ public class AzureTestUtil {
                 true /* assignPublicIpAddress */);
 
         NO_PUBLIC_IP_NIC_SPEC = initializeNicSpecs(null /* prefix */ , false /* assignGateway */,
-        false /* assignPublicIpAddress */);
+                false /* assignPublicIpAddress */);
 
         SHARED_NETWORK_NIC_SPEC = initializeNicSpecs(null /* prefix */ , true /* assignGateway */,
                 true /* assignPublicIpAddress */);
@@ -244,8 +249,8 @@ public class AzureTestUtil {
         public final GatewaySpec gateway;
         public final boolean assignPublicIpAddress;
 
-        public AzureNicSpecs(NetSpec network, List<NetSpec> subnets, GatewaySpec gateway, boolean
-                assignPublicIpAddress) {
+        public AzureNicSpecs(NetSpec network, List<NetSpec> subnets, GatewaySpec gateway,
+                boolean assignPublicIpAddress) {
             this.network = network;
             this.subnets = subnets;
             this.gateway = gateway;
@@ -253,8 +258,8 @@ public class AzureTestUtil {
         }
     }
 
-    public static AzureNicSpecs initializeNicSpecs(String prefix, boolean assignGateway, boolean
-            assignPublicIpAddress) {
+    public static AzureNicSpecs initializeNicSpecs(String prefix, boolean assignGateway,
+            boolean assignPublicIpAddress) {
         String networkName = (prefix != null ? prefix + "-" : "") + AZURE_NETWORK_NAME;
         NetSpec network = new NetSpec(
                 networkName,
@@ -298,14 +303,17 @@ public class AzureTestUtil {
         return returnPool;
     }
 
-    public static VirtualNetwork getAzureVirtualNetwork(NetworkManagementClient networkManagementClient, String resourceGroupName, String virtualNetworkName) throws Exception {
+    public static VirtualNetwork getAzureVirtualNetwork(
+            NetworkManagementClient networkManagementClient, String resourceGroupName,
+            String virtualNetworkName) throws Exception {
         ServiceResponse<VirtualNetwork> response = networkManagementClient
                 .getVirtualNetworksOperations().get(resourceGroupName, virtualNetworkName, null);
 
         return response.getBody();
     }
 
-    public static VirtualMachine getAzureVirtualMachine(ComputeManagementClient computeManagementClient,
+    public static VirtualMachine getAzureVirtualMachine(
+            ComputeManagementClient computeManagementClient,
             String resourceGroupName, String vmName) throws Exception {
         ServiceResponse<VirtualMachine> response = computeManagementClient
                 .getVirtualMachinesOperations().get(resourceGroupName, vmName, null);
@@ -313,34 +321,42 @@ public class AzureTestUtil {
         return response.getBody();
     }
 
-    public static NetworkSecurityGroup getAzureSecurityGroup(NetworkManagementClient networkManagementClient, String resourceGroupName,
+    public static NetworkSecurityGroup getAzureSecurityGroup(
+            NetworkManagementClient networkManagementClient, String resourceGroupName,
             String securityGroupName) throws Exception {
         ServiceResponse<NetworkSecurityGroup> response = networkManagementClient
-                .getNetworkSecurityGroupsOperations().get(resourceGroupName, securityGroupName, null);
+                .getNetworkSecurityGroupsOperations()
+                .get(resourceGroupName, securityGroupName, null);
 
         return response.getBody();
     }
 
-    public static VirtualNetwork updateAzureVirtualNetwork(NetworkManagementClient networkManagementClient, String resourceGroupName,
+    public static VirtualNetwork updateAzureVirtualNetwork(
+            NetworkManagementClient networkManagementClient, String resourceGroupName,
             String virtualNetworkName, VirtualNetwork parameters) throws Exception {
         ServiceResponse<VirtualNetwork> response = networkManagementClient
-                .getVirtualNetworksOperations().createOrUpdate(resourceGroupName, virtualNetworkName, parameters);
+                .getVirtualNetworksOperations()
+                .createOrUpdate(resourceGroupName, virtualNetworkName, parameters);
 
         return response.getBody();
     }
 
-    public static NetworkSecurityGroup updateAzureSecurityGroup(NetworkManagementClient networkManagementClient, String resourceGroupName,
+    public static NetworkSecurityGroup updateAzureSecurityGroup(
+            NetworkManagementClient networkManagementClient, String resourceGroupName,
             String networkSecurityGroupName, NetworkSecurityGroup parameters) throws Exception {
         ServiceResponse<NetworkSecurityGroup> response = networkManagementClient
-                .getNetworkSecurityGroupsOperations().createOrUpdate(resourceGroupName, networkSecurityGroupName, parameters);
+                .getNetworkSecurityGroupsOperations()
+                .createOrUpdate(resourceGroupName, networkSecurityGroupName, parameters);
 
         return response.getBody();
     }
 
-    public static VirtualMachine updateAzureVirtualMachine(ComputeManagementClient computeManagementClient, String resourceGroupName,
+    public static VirtualMachine updateAzureVirtualMachine(
+            ComputeManagementClient computeManagementClient, String resourceGroupName,
             String vmName, VirtualMachine parameters) throws Exception {
         ServiceResponse<VirtualMachine> response = computeManagementClient
-                .getVirtualMachinesOperations().createOrUpdate(resourceGroupName, vmName, parameters);
+                .getVirtualMachinesOperations()
+                .createOrUpdate(resourceGroupName, vmName, parameters);
 
         return response.getBody();
     }
@@ -406,7 +422,7 @@ public class AzureTestUtil {
      * Create a compute host description for an Azure instance
      */
     public static ComputeState createDefaultComputeHost(
-            VerificationHost host, String resourcePoolLink, String authLink) throws Throwable {
+            VerificationHost host, String resourcePoolLink, EndpointState endpointState) throws Throwable {
 
         ComputeDescription azureHostDescription = new ComputeDescription();
         azureHostDescription.id = UUID.randomUUID().toString();
@@ -422,25 +438,47 @@ public class AzureTestUtil {
                 AzureUriPaths.AZURE_ENUMERATION_ADAPTER);
         azureHostDescription.statsAdapterReference = UriUtils.buildUri(host,
                 AzureUriPaths.AZURE_STATS_ADAPTER);
-        azureHostDescription.authCredentialsLink = authLink;
+        azureHostDescription.authCredentialsLink = endpointState.authCredentialsLink;
+        azureHostDescription.endpointLink = endpointState.documentSelfLink;
+        azureHostDescription.tenantLinks = endpointState.tenantLinks;
 
-        TestUtils.doPost(host, azureHostDescription,
+        azureHostDescription = TestUtils.doPost(host, azureHostDescription,
                 ComputeDescription.class,
                 UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
 
         ComputeState azureComputeHost = new ComputeState();
         azureComputeHost.id = UUID.randomUUID().toString();
+        azureComputeHost.documentSelfLink = azureComputeHost.id;
         azureComputeHost.type = ComputeType.VM_HOST;
         azureComputeHost.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureComputeHost.name = azureHostDescription.name;
-        azureComputeHost.documentSelfLink = azureComputeHost.id;
-        azureComputeHost.descriptionLink = UriUtils.buildUriPath(
-                ComputeDescriptionService.FACTORY_LINK, azureHostDescription.id);
+        azureComputeHost.descriptionLink = azureHostDescription.documentSelfLink;
         azureComputeHost.resourcePoolLink = resourcePoolLink;
+        azureComputeHost.endpointLink = endpointState.documentSelfLink;
+        azureComputeHost.tenantLinks = endpointState.tenantLinks;
 
-        ComputeState returnState = TestUtils.doPost(host, azureComputeHost, ComputeState.class,
+        return TestUtils.doPost(host, azureComputeHost, ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
-        return returnState;
+    }
+
+    public static EndpointState createDefaultEndpointState(VerificationHost host, String authLink)
+            throws Throwable {
+
+        EndpointState endpoint = new EndpointState();
+
+        endpoint.endpointType = EndpointType.azure.name();
+        endpoint.id = EndpointType.azure.name() + "-id";
+        endpoint.name = EndpointType.azure.name() + "-name";
+
+        endpoint.authCredentialsLink = authLink;
+
+        // Skipping region (EndpointConfigRequest.REGION_KEY) should fall back to default region
+        endpoint.endpointProperties = Collections.emptyMap();
+
+        endpoint.tenantLinks = Collections.singletonList(EndpointType.azure.name() + "-tenant");
+
+        return TestUtils.doPost(host, endpoint, EndpointState.class,
+                UriUtils.buildUri(host, EndpointService.FACTORY_LINK));
     }
 
     /**
@@ -460,20 +498,19 @@ public class AzureTestUtil {
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
-            String parentLink, String resourcePoolLink, String computeHostAuthLink,
+            ComputeState computeHost, EndpointState endpointState,
             AzureNicSpecs nicSpecs) throws Throwable {
 
-        return createDefaultVMResource(host, azureVMName, parentLink, resourcePoolLink,
-                computeHostAuthLink, nicSpecs, null /* networkRGLink */);
+        return createDefaultVMResource(host, azureVMName, computeHost, endpointState, nicSpecs, null /* networkRGLink */);
     }
 
     public static ComputeState createDefaultVMResource(VerificationHost host, String azureVMName,
-            String parentLink, String resourcePoolLink, String computeHostAuthLink,
+            ComputeState computeHost, EndpointState endpointState,
             AzureNicSpecs nicSpecs, String networkRGLink)
             throws Throwable {
 
         ResourceGroupState vmRG = createDefaultResourceGroupState(
-                host, azureVMName, parentLink, ResourceGroupStateType.AzureResourceGroup);
+                host, azureVMName, computeHost, endpointState, ResourceGroupStateType.AzureResourceGroup);
 
         String resourceGroupLink = vmRG.documentSelfLink;
 
@@ -482,23 +519,21 @@ public class AzureTestUtil {
             networkRGLink = resourceGroupLink;
         }
 
-        AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
-        auth.userEmail = AZURE_ADMIN_USERNAME;
-        auth.privateKey = AZURE_ADMIN_PASSWORD;
-        auth.documentSelfLink = UUID.randomUUID().toString();
-
-        TestUtils.doPost(host, auth, AuthCredentialsServiceState.class,
+        AuthCredentialsServiceState azureVMAuth = new AuthCredentialsServiceState();
+        azureVMAuth.userEmail = AZURE_ADMIN_USERNAME;
+        azureVMAuth.privateKey = AZURE_ADMIN_PASSWORD;
+        azureVMAuth = TestUtils.doPost(host, azureVMAuth, AuthCredentialsServiceState.class,
                 UriUtils.buildUri(host, AuthCredentialsService.FACTORY_LINK));
-        String authLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
-                auth.documentSelfLink);
 
         // Create a VM desc
         ComputeDescription azureVMDesc = new ComputeDescription();
         azureVMDesc.id = UUID.randomUUID().toString();
+        azureVMDesc.documentSelfLink = azureVMDesc.id;
         azureVMDesc.name = azureVMDesc.id;
         azureVMDesc.regionId = AZURE_RESOURCE_GROUP_LOCATION;
-        azureVMDesc.authCredentialsLink = authLink;
-        azureVMDesc.documentSelfLink = azureVMDesc.id;
+        azureVMDesc.authCredentialsLink = azureVMAuth.documentSelfLink;
+        azureVMDesc.tenantLinks = endpointState.tenantLinks;
+        azureVMDesc.endpointLink = endpointState.documentSelfLink;
         azureVMDesc.instanceType = AZURE_VM_SIZE;
         azureVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureVMDesc.customProperties = new HashMap<>();
@@ -507,20 +542,23 @@ public class AzureTestUtil {
         azureVMDesc.instanceAdapterReference = UriUtils.buildUri(host,
                 AzureUriPaths.AZURE_INSTANCE_ADAPTER);
 
-        ComputeDescription vmComputeDesc = TestUtils
-                .doPost(host, azureVMDesc, ComputeDescription.class,
+        azureVMDesc = TestUtils.doPost(host, azureVMDesc, ComputeDescription.class,
                         UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
 
         List<String> vmDisks = new ArrayList<>();
+
         DiskState rootDisk = new DiskState();
         rootDisk.name = azureVMName + "-boot-disk";
         rootDisk.id = UUID.randomUUID().toString();
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.type = DiskType.HDD;
-        rootDisk.capacityMBytes = AZURE_CUSTOM_OSDISK_SIZE; //Custom OSDisk size of 32 GBs
+        rootDisk.capacityMBytes = AZURE_CUSTOM_OSDISK_SIZE; // Custom OSDisk size of 32 GBs
         rootDisk.sourceImageReference = URI.create(IMAGE_REFERENCE);
         rootDisk.bootOrder = 1;
-        rootDisk.documentSelfLink = rootDisk.id;
+
+        rootDisk.endpointLink = endpointState.documentSelfLink;
+        rootDisk.tenantLinks = endpointState.tenantLinks;
+
         rootDisk.customProperties = new HashMap<>();
         rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING);
 
@@ -531,14 +569,14 @@ public class AzureTestUtil {
         rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
                 AZURE_STORAGE_ACCOUNT_TYPE);
 
-
-        TestUtils.doPost(host, rootDisk, DiskState.class,
+        rootDisk = TestUtils.doPost(host, rootDisk, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
-        vmDisks.add(UriUtils.buildUriPath(DiskService.FACTORY_LINK, rootDisk.id));
+
+        vmDisks.add(rootDisk.documentSelfLink);
 
         // Create NICs
         List<String> nicLinks = createDefaultNicStates(
-                host, resourcePoolLink, computeHostAuthLink, networkRGLink, nicSpecs)
+                host, computeHost, endpointState, networkRGLink, nicSpecs)
                         .stream()
                         .map(nic -> nic.documentSelfLink)
                         .collect(Collectors.toList());
@@ -547,22 +585,22 @@ public class AzureTestUtil {
         ComputeState computeState = new ComputeState();
         computeState.id = UUID.randomUUID().toString();
         computeState.name = azureVMName;
-        computeState.parentLink = parentLink;
+        computeState.parentLink = computeHost.documentSelfLink;
         computeState.type = ComputeType.VM_GUEST;
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
-        computeState.descriptionLink = vmComputeDesc.documentSelfLink;
-        computeState.resourcePoolLink = resourcePoolLink;
+        computeState.descriptionLink = azureVMDesc.documentSelfLink;
+        computeState.resourcePoolLink = computeHost.resourcePoolLink;
         computeState.diskLinks = vmDisks;
         computeState.networkInterfaceLinks = nicLinks;
         computeState.customProperties = new HashMap<>();
         computeState.customProperties.put(RESOURCE_GROUP_NAME, azureVMName);
         computeState.groupLinks = new HashSet<>();
         computeState.groupLinks.add(resourceGroupLink);
+        computeState.endpointLink = endpointState.documentSelfLink;
+        computeState.tenantLinks = endpointState.tenantLinks;
 
-        computeState = TestUtils.doPost(host, computeState, ComputeState.class,
+        return TestUtils.doPost(host, computeState, ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
-
-        return computeState;
     }
 
     public static void deleteServiceDocument(VerificationHost host, String documentSelfLink)
@@ -575,7 +613,8 @@ public class AzureTestUtil {
 
     public static StorageDescription createDefaultStorageAccountDescription(VerificationHost host,
             String storageAccountName,
-            String parentLink, String resourcePoolLink) throws Throwable {
+            ComputeState computeHost, EndpointState endpointState) throws Throwable {
+
         AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
         auth.customProperties = new HashMap<>();
         auth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, randomString(15));
@@ -592,19 +631,22 @@ public class AzureTestUtil {
         storageDesc.id = "testStorAcct-" + randomString(4);
         storageDesc.name = storageAccountName;
         storageDesc.regionId = AZURE_RESOURCE_GROUP_LOCATION;
-        storageDesc.computeHostLink = parentLink;
+        storageDesc.computeHostLink = computeHost.documentSelfLink;
         storageDesc.authCredentialsLink = authLink;
-        storageDesc.resourcePoolLink = resourcePoolLink;
-        storageDesc.documentSelfLink = UUID.randomUUID().toString();
+        storageDesc.resourcePoolLink = computeHost.resourcePoolLink;
+
+        storageDesc.tenantLinks = endpointState.tenantLinks;
+        storageDesc.endpointLink = endpointState.documentSelfLink;
+
         storageDesc.customProperties = new HashMap<>();
         storageDesc.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
-        StorageDescription sDesc = TestUtils.doPost(host, storageDesc, StorageDescription.class,
+
+        return TestUtils.doPost(host, storageDesc, StorageDescription.class,
                 UriUtils.buildUri(host, StorageDescriptionService.FACTORY_LINK));
-        return sDesc;
     }
 
     public static ResourceGroupState createDefaultResourceGroupState(VerificationHost host,
-            String resourceGroupName, String parentLink, ResourceGroupStateType resourceGroupType)
+            String resourceGroupName, ComputeState computeHost, EndpointState endpointState, ResourceGroupStateType resourceGroupType)
             throws Throwable {
 
         ResourceGroupState rGroupState = new ResourceGroupState();
@@ -615,8 +657,11 @@ public class AzureTestUtil {
         rGroupState.groupLinks = new HashSet<>();
         rGroupState.groupLinks.add("testResGroup-" + randomString(4));
 
+        rGroupState.tenantLinks = endpointState.tenantLinks;
+
         rGroupState.customProperties = new HashMap<>();
-        rGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME, parentLink);
+        rGroupState.customProperties.put(COMPUTE_HOST_LINK_PROP_NAME, computeHost.documentSelfLink);
+        rGroupState.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK, endpointState.documentSelfLink);
         rGroupState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_CONTAINERS);
         rGroupState.customProperties.put(AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED,
                 randomString(10));
@@ -627,35 +672,38 @@ public class AzureTestUtil {
         rGroupState.customProperties.put(ComputeProperties.RESOURCE_TYPE_KEY,
                 resourceGroupType.name());
 
-        ResourceGroupState rGroup = TestUtils.doPost(host, rGroupState,
+        return TestUtils.doPost(host, rGroupState,
                 ResourceGroupState.class,
                 UriUtils.buildUri(host, ResourceGroupService.FACTORY_LINK));
-
-        return rGroup;
     }
 
     /**
      * Create a disk state
      */
     public static DiskState createDefaultDiskState(VerificationHost host, String diskName,
-            String storageContainerLink, String resourcePoolLink, String computeHostLink) throws
-            Throwable {
+            String storageContainerLink, ComputeState computeHost, EndpointState endpointState)
+            throws Throwable {
 
         DiskState diskState = new DiskState();
+
         diskState.id = UUID.randomUUID().toString();
+        diskState.documentSelfLink = diskState.id;
         diskState.name = diskName;
-        diskState.computeHostLink = computeHostLink;
-        diskState.resourcePoolLink = resourcePoolLink;
+        diskState.computeHostLink = computeHost.documentSelfLink;
+        diskState.resourcePoolLink = computeHost.resourcePoolLink;
+
+        diskState.tenantLinks = endpointState.tenantLinks;
+        diskState.endpointLink = endpointState.documentSelfLink;
+
         diskState.storageDescriptionLink = storageContainerLink;
         diskState.type = DEFAULT_DISK_TYPE;
         diskState.capacityMBytes = DEFAULT_DISK_CAPACITY;
         diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);
-        diskState.documentSelfLink = diskState.id;
         diskState.customProperties = new HashMap<>();
         diskState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_BLOBS);
-        DiskState dState = TestUtils.doPost(host, diskState, DiskState.class,
+
+        return TestUtils.doPost(host, diskState, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
-        return dState;
     }
 
     /*
@@ -664,8 +712,7 @@ public class AzureTestUtil {
      */
     public static List<NetworkInterfaceState> createDefaultNicStates(
             VerificationHost host,
-            String resourcePoolLink,
-            String authCredentialsLink,
+            ComputeState computeHost, EndpointState endpointSate,
             String networkRGLink,
             AzureNicSpecs nicSpecs) throws Throwable {
 
@@ -676,8 +723,10 @@ public class AzureTestUtil {
             networkState.id = nicSpecs.network.name;
             networkState.name = nicSpecs.network.name;
             networkState.subnetCIDR = nicSpecs.network.cidr;
-            networkState.authCredentialsLink = authCredentialsLink;
-            networkState.resourcePoolLink = resourcePoolLink;
+            networkState.authCredentialsLink = endpointSate.authCredentialsLink;
+            networkState.endpointLink = endpointSate.documentSelfLink;
+            networkState.tenantLinks = endpointSate.tenantLinks;
+            networkState.resourcePoolLink = computeHost.resourcePoolLink;
             networkState.groupLinks = Collections.singleton(networkRGLink);
             networkState.regionId = nicSpecs.network.zoneId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
@@ -703,6 +752,8 @@ public class AzureTestUtil {
                 subnetState.subnetCIDR = nicSpecs.subnets.get(i).cidr;
                 subnetState.zoneId = nicSpecs.subnets.get(i).zoneId;
                 subnetState.networkLink = networkState.documentSelfLink;
+                subnetState.endpointLink = endpointSate.documentSelfLink;
+                subnetState.tenantLinks = endpointSate.tenantLinks;
 
                 subnetState = TestUtils.doPost(host, subnetState,
                         SubnetState.class,
@@ -713,11 +764,10 @@ public class AzureTestUtil {
             SecurityGroupState securityGroupState;
             {
                 securityGroupState = new SecurityGroupState();
-                securityGroupState.authCredentialsLink = authCredentialsLink;
-                securityGroupState.documentSelfLink = securityGroupState.id;
                 securityGroupState.name = AZURE_SECURITY_GROUP_NAME;
-                securityGroupState.tenantLinks = new ArrayList<>();
-                securityGroupState.tenantLinks.add("tenant-linkA");
+                securityGroupState.authCredentialsLink = endpointSate.authCredentialsLink;
+                securityGroupState.endpointLink = endpointSate.documentSelfLink;
+                securityGroupState.tenantLinks = endpointSate.tenantLinks;
                 securityGroupState.groupLinks = Collections.singleton(networkRGLink);
                 ArrayList<Rule> ingressRules = new ArrayList<>();
 
@@ -759,6 +809,9 @@ public class AzureTestUtil {
                 nicDescription.assignment = IpAssignment.DYNAMIC;
                 nicDescription.assignPublicIpAddress = nicSpecs.assignPublicIpAddress;
 
+                nicDescription.tenantLinks = endpointSate.tenantLinks;
+                nicDescription.endpointLink = endpointSate.documentSelfLink;
+
                 nicDescription = TestUtils.doPost(host, nicDescription,
                         NetworkInterfaceDescription.class,
                         UriUtils.buildUri(host, NetworkInterfaceDescriptionService.FACTORY_LINK));
@@ -779,6 +832,8 @@ public class AzureTestUtil {
             nicState.networkInterfaceDescriptionLink = nicDescription.documentSelfLink;
             nicState.subnetLink = subnetState.documentSelfLink;
             nicState.networkLink = subnetState.networkLink;
+            nicState.tenantLinks = endpointSate.tenantLinks;
+            nicState.endpointLink = endpointSate.documentSelfLink;
 
             nicState = TestUtils.doPost(host, nicState,
                     NetworkInterfaceState.class,
@@ -960,9 +1015,13 @@ public class AzureTestUtil {
 
     /**
      * Assert that a resource with the provided name exist in the document store.
-     * @param factoryLink Factory link to the stateful service which states to check.
-     * @param name name of the resource to assert if exists.
-     * @param shouldExists whether to assert if a resource exists or not.
+     *
+     * @param factoryLink
+     *            Factory link to the stateful service which states to check.
+     * @param name
+     *            name of the resource to assert if exists.
+     * @param shouldExists
+     *            whether to assert if a resource exists or not.
      */
     public static void assertResourceExists(VerificationHost host, String factoryLink,
             String name, boolean shouldExists) {
@@ -985,9 +1044,13 @@ public class AzureTestUtil {
 
     /**
      * Query to get ResourceMetrics document for a specific resource containing a specific metric.
-     * @param host host against which query is triggered
-     * @param resourceLink Link to the resource on which stats are being collected.
-     * @param metricKey Metric name.
+     *
+     * @param host
+     *            host against which query is triggered
+     * @param resourceLink
+     *            Link to the resource on which stats are being collected.
+     * @param metricKey
+     *            Metric name.
      * @return ResourceMetrics document.
      */
     public static ResourceMetrics getResourceMetrics(VerificationHost host, String resourceLink,
@@ -1005,13 +1068,14 @@ public class AzureTestUtil {
                                         UriUtils.getLastPathSegment(resourceLink)),
                                 QueryTerm.MatchType.PREFIX)
                         .addRangeClause(QuerySpecification
-                                        .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES,
-                                                metricKey),
+                                .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES,
+                                        metricKey),
                                 QueryTask.NumericRange
                                         .createDoubleRange(0.0, Double.MAX_VALUE, true, true))
                         .build())
                 .build();
-        Operation op = Operation.createPost(UriUtils.buildUri(host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+        Operation op = Operation
+                .createPost(UriUtils.buildUri(host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setReferer(host.getUri()).setBody(qt).setCompletion((o, e) -> {
                     if (e != null) {
                         host.log(Level.INFO, e.toString());
@@ -1065,6 +1129,7 @@ public class AzureTestUtil {
 
     /**
      * Helper for running stats collection task.
+     *
      * @param host
      * @param isMock
      * @throws Throwable
@@ -1077,6 +1142,7 @@ public class AzureTestUtil {
 
     /**
      * Waits for stats collection task to be finished.
+     *
      * @param host
      * @param peerURI
      * @param options
@@ -1099,8 +1165,7 @@ public class AzureTestUtil {
             VerificationHost host, EnumSet<TaskOption> options, String resourcePoolLink)
             throws Throwable {
 
-        StatsCollectionTaskState statsCollectionTaskState =
-                new StatsCollectionTaskState();
+        StatsCollectionTaskState statsCollectionTaskState = new StatsCollectionTaskState();
 
         statsCollectionTaskState.resourcePoolLink = resourcePoolLink;
         statsCollectionTaskState.options = EnumSet.noneOf(TaskOption.class);
@@ -1125,8 +1190,9 @@ public class AzureTestUtil {
         StatsAggregationTaskState statsAggregationTaskState = new StatsAggregationTaskState();
         QueryTask.Query taskQuery = QueryTask.Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK, resourcePoolLink).build();
-        statsAggregationTaskState.query =  taskQuery;
+                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK, resourcePoolLink)
+                .build();
+        statsAggregationTaskState.query = taskQuery;
         statsAggregationTaskState.taskInfo = TaskState.createDirect();
         statsAggregationTaskState.metricNames = getMetricNames();
 
@@ -1145,13 +1211,13 @@ public class AzureTestUtil {
     public static Set<String> getMetricNames() {
         Set<String> metricNames = new HashSet<>();
         // CPU
-        metricNames.add(PhotonModelConstants.CPU_UTILIZATION_PERCENT);
+        metricNames.add(CPU_UTILIZATION_PERCENT);
 
         // Memory
-        metricNames.add(PhotonModelConstants.MEMORY_USED_PERCENT);
+        metricNames.add(MEMORY_USED_PERCENT);
 
         // Storage
-        metricNames.add(PhotonModelConstants.STORAGE_USED_BYTES);
+        metricNames.add(STORAGE_USED_BYTES);
 
         return metricNames;
     }

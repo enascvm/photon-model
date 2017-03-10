@@ -147,14 +147,18 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
 
         assertNotNull(endpoint.resourcePoolLink);
 
-        ComputeDescription cd = this.host.getServiceState(null, ComputeDescription.class,
+        ComputeState computeHost = this.host.getServiceState(null, ComputeState.class,
+                UriUtils.buildUri(this.host, endpoint.computeLink));
+        assertNotNull(computeHost);
+
+        ComputeDescription computeHostDesc = this.host.getServiceState(null, ComputeDescription.class,
                 UriUtils.buildUri(this.host, endpoint.computeDescriptionLink));
-        assertNotNull(cd);
-        assertNotNull("Power addpter must be configured", cd.powerAdapterReference);
+        assertNotNull(computeHostDesc);
+
+        assertNotNull("Power addpter must be configured", computeHostDesc.powerAdapterReference);
 
         boolean addNonExistingSecurityGroup = false;
-        ComputeState cs = TestAWSSetupUtils.createAWSVMResource(this.host, endpoint.computeLink,
-                endpoint.resourcePoolLink, getClass(),
+        ComputeState cs = TestAWSSetupUtils.createAWSVMResource(this.host, computeHost, endpoint, getClass(),
                 "trainingVM", zoneId, this.regionId, null, this.singleNicSpec, addNonExistingSecurityGroup);
 
         this.computesToRemove.add(cs.documentSelfLink);
@@ -179,12 +183,12 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         }
 
 
-        changePowerState(cd, compute.documentSelfLink, PowerState.OFF);
+        changePowerState(computeHostDesc, compute.documentSelfLink, PowerState.OFF);
         if (!this.isMock) {
             waitForInstancesToBeStopped(this.client, this.host, instanceIds);
         }
 
-        changePowerState(cd, compute.documentSelfLink, PowerState.ON);
+        changePowerState(computeHostDesc, compute.documentSelfLink, PowerState.ON);
         if (!this.isMock) {
             final int errorRate = 0;
             waitForProvisioningToComplete(instanceIds,this.host, this.client, errorRate);

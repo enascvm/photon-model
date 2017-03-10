@@ -68,12 +68,18 @@ public class TagsUtil {
 
     /**
      * For a newly created local ResourceState, create tag states and add them to the tag states
-     * links
+     * links.
      */
     public static DeferredResult<Void> createLocalTagStates(
             StatelessService service,
             ResourceState localState,
             Map<String, String> remoteTagsMap) {
+
+        String msg = "Create local TagStates (for %s.name=%s) to match %d remote tags: %s";
+
+        service.logFine(
+                () -> String.format(msg, localState.getClass().getSimpleName(), localState.name,
+                        remoteTagsMap.size(), "STARTING"));
 
         if (remoteTagsMap == null || remoteTagsMap.isEmpty()) {
             return DeferredResult.completed((Void) null);
@@ -92,11 +98,14 @@ public class TagsUtil {
                 .map(tagState -> Operation
                         .createPost(service, TagService.FACTORY_LINK)
                         .setBody(tagState))
-                .map(tagOperation -> service.sendWithDeferredResult(tagOperation,
-                        TagState.class))
+                .map(tagOp -> service.sendWithDeferredResult(tagOp, TagState.class))
                 .collect(Collectors.toList());
 
-        return DeferredResult.allOf(localTagStatesDRs).thenApply(ignore -> (Void) null);
+        return DeferredResult.allOf(localTagStatesDRs).thenAccept(ignore -> {
+            service.logFine(
+                    () -> String.format(msg, localState.getClass().getSimpleName(), localState.name,
+                            remoteTagsMap.size(), "COMPLETED"));
+        });
     }
 
     /**
@@ -139,8 +148,7 @@ public class TagsUtil {
                     .map(tagLinkObj -> remoteTagStates.get(tagLinkObj))
                     .map(tagState -> Operation
                             .createPost(service, TagService.FACTORY_LINK)
-                            .setBody(tagState)
-                            .setReferer(service.getUri()))
+                            .setBody(tagState))
                     .map(tagOperation -> service.sendWithDeferredResult(
                             tagOperation,
                             TagState.class))

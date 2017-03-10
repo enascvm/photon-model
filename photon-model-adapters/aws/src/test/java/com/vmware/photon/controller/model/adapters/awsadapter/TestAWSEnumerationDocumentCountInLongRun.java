@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteNICDirectlyWithEC2Client;
@@ -26,7 +27,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.net.URI;
@@ -51,6 +51,7 @@ import org.junit.rules.TestName;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
@@ -111,8 +112,9 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     private Set<String> networkInterfaceDescriptionIds;
     private Set<String> subnetIds;
 
-    private ResourcePoolState outPool;
-    private ComputeState outComputeHost;
+    private ComputeState computeHost;
+    private EndpointState endpointState;
+
     private Level loggingLevelForMemory;
     private double availableMemoryPercentage;
     private double maxMemoryInMb;
@@ -224,8 +226,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         if (this.isMock) {
             // Just make a call to the enumeration service and make sure that the adapter patches
             // the parent with completion.
-            enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                    this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+            enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                     TEST_CASE_MOCK_MODE);
             return;
         }
@@ -259,8 +260,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         deleteVMsUsingEC2Client(this.client, this.host, this.instanceIds);
 
         // Run enumeration after deleting instances
-        enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+        enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                 TEST_CASE_DELETE_VM);
 
         // Clear the document links and ids stored previously
@@ -282,8 +282,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         this.host.getScheduledExecutor().scheduleAtFixedRate(() -> {
             try {
                 this.host.log(Level.INFO, "Running enumeration...");
-                enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                        this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+                enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                         TEST_CASE_INITIAL);
 
                 // Print node CPU Utilization and Memory usages
@@ -553,14 +552,18 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
      */
     private void initResourcePoolAndComputeHost() throws Throwable {
         // Create a resource pool where the VM will be housed
-        this.outPool = createAWSResourcePool(this.host);
+        ResourcePoolState resourcePool = createAWSResourcePool(this.host);
+
+        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey, this.secretKey);
+
+        this.endpointState = TestAWSSetupUtils.createAWSEndpointState(this.host, auth.documentSelfLink, resourcePool.documentSelfLink);
 
         // create a compute host for the AWS EC2 VM
-        this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
-                null, this.useAllRegions ? null : zoneId,
-                this.accessKey, this.secretKey, this.isAwsClientMock,
-                this.awsMockEndpointReference, null);
-
+        this.computeHost = createAWSComputeHost(this.host,
+                this.endpointState,
+                null /*zoneId*/, this.useAllRegions ? null : regionId,
+                this.isAwsClientMock,
+                this.awsMockEndpointReference, null /*tags*/);
     }
 
     /**
@@ -573,7 +576,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                     this.instancesToCleanUp.size());
             if (this.instancesToCleanUp.size() >= 0) {
                 deleteVMsOnThisEndpoint(this.host, this.isMock,
-                        this.outComputeHost.documentSelfLink, this.instancesToCleanUp);
+                        this.computeHost.documentSelfLink, this.instancesToCleanUp);
                 // Check that all the instances that are required to be deleted are in
                 // terminated state on AWS
                 waitForInstancesToBeTerminated(this.client, this.host, this.instancesToCleanUp);

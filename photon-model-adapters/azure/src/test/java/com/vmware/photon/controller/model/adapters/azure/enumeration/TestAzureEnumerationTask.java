@@ -24,6 +24,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultDiskState;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultEndpointState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultStorageAccountDescription;
@@ -98,6 +99,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
@@ -172,8 +174,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
     // Shared Compute Host / End-point between test runs.
     private static ComputeState computeHost;
-    private static String resourcePoolLink;
-    private static String authLink;
+    private static EndpointState endpointState;
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -216,7 +217,6 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     @Before
     public void setUp() throws Exception {
         try {
-
             /*
              * Init Class-specific (shared between test runs) vars.
              *
@@ -237,8 +237,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 this.host.setTimeoutSeconds(600);
 
                 // Create a resource pool where the VMs will be housed
-                ResourcePoolState outPool = createDefaultResourcePool(this.host);
-                resourcePoolLink = outPool.documentSelfLink;
+                ResourcePoolState resourcePool = createDefaultResourcePool(this.host);
 
                 AuthCredentialsServiceState authCredentials = createDefaultAuthCredentials(
                         this.host,
@@ -246,11 +245,22 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                         this.clientKey,
                         this.subscriptionId,
                         this.tenantId);
-                authLink = authCredentials.documentSelfLink;
+
+                endpointState = createDefaultEndpointState(
+                        this.host, authCredentials.documentSelfLink);
 
                 // create a compute host for the Azure
-                computeHost = createDefaultComputeHost(this.host, resourcePoolLink, authLink);
+                computeHost = createDefaultComputeHost(this.host, resourcePool.documentSelfLink,
+                        endpointState);
             }
+
+            azureVMName = azureVMName == null
+                    ? generateName(azureVMNamePrefix)
+                    : azureVMName;
+
+            this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
+            this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
             if (!this.isMock) {
                 ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
@@ -321,19 +331,18 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     public void testEnumeration() throws Throwable {
 
         this.storageDescription = createDefaultStorageAccountDescription(this.host,
-                this.mockedStorageAccountName, computeHost.documentSelfLink,
-                resourcePoolLink);
+                this.mockedStorageAccountName, computeHost, endpointState);
 
         this.resourceGroupState = createDefaultResourceGroupState(this.host,
-                this.mockedStorageAccountName, computeHost.documentSelfLink,
+                this.mockedStorageAccountName, computeHost, endpointState,
                 ResourceGroupStateType.AzureResourceGroup);
 
         this.diskState = createDefaultDiskState(this.host, this.mockedStorageAccountName,
-                this.mockedStorageAccountName, resourcePoolLink, computeHost.documentSelfLink);
+                this.mockedStorageAccountName, computeHost, endpointState);
 
         // create an Azure VM compute resource (this also creates a disk and a storage account)
         this.vmState = createDefaultVMResource(this.host, azureVMName,
-                computeHost.documentSelfLink, resourcePoolLink, authLink, NIC_SPEC);
+                computeHost, endpointState, NIC_SPEC);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();
@@ -535,6 +544,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     // create stale resource states for deletion
     // these should be deleted as part of first enumeration cycle.
     private void createStaleResource() throws Throwable {
+
         createAzureResourceGroups(STALE_RG_COUNT);
         // No need to create stale networks or subnets since createAzureVMResources will create
         // such for us.
@@ -586,10 +596,10 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 qBuilder.build(),
                 TagState.class,
                 null)
-                .setMaxResultsLimit(expectedTags.size() + 1);
+                        .setMaxResultsLimit(expectedTags.size() + 1);
 
-        List<TagState> tagStates =
-                waitToComplete(queryLocalTags.collectDocuments(Collectors.toList()));
+        List<TagState> tagStates = waitToComplete(
+                queryLocalTags.collectDocuments(Collectors.toList()));
 
         assertEquals("TagStates were not discovered.", expectedTags.size(), tagStates.size());
         for (TagState tag : tagStates) {
@@ -652,8 +662,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // The test is only suitable for real (non-mocking env).
         Assume.assumeFalse(this.isMock);
 
-        createResourceGroupWithSharedNetwork(this
-                .resourceManagementClient, this.networkManagementClient, SHARED_NETWORK_NIC_SPEC);
+        createResourceGroupWithSharedNetwork(this.resourceManagementClient,
+                this.networkManagementClient, SHARED_NETWORK_NIC_SPEC);
 
         runEnumeration();
 
@@ -665,7 +675,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         for (int i = 0; i < numOfResourceGroups; i++) {
             String staleResourceGroupName = STALE_RG_NAME_PREFIX + i;
             createDefaultResourceGroupState(this.host, staleResourceGroupName,
-                    computeHost.documentSelfLink,
+                    computeHost, endpointState,
                     ResourceGroupStateType.AzureResourceGroup);
         }
     }
@@ -673,19 +683,20 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private void createAzureVMResources(int numOfVMs) throws Throwable {
         for (int i = 0; i < numOfVMs; i++) {
             String staleVMName = STALE_VM_NAME_PREFIX + i;
-            createDefaultVMResource(this.host, staleVMName, computeHost.documentSelfLink,
-                    resourcePoolLink, authLink, NIC_SPEC);
+            createDefaultVMResource(this.host, staleVMName, computeHost, endpointState, NIC_SPEC);
         }
     }
 
     private void runEnumeration() throws Throwable {
         ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
 
+        enumerationTaskState.endpointLink = endpointState.documentSelfLink;
+        enumerationTaskState.tenantLinks = endpointState.tenantLinks;
         enumerationTaskState.parentComputeLink = computeHost.documentSelfLink;
         enumerationTaskState.enumerationAction = EnumerationAction.START;
         enumerationTaskState.adapterManagementReference = UriUtils
                 .buildUri(AzureEnumerationAdapterService.SELF_LINK);
-        enumerationTaskState.resourcePoolLink = resourcePoolLink;
+        enumerationTaskState.resourcePoolLink = computeHost.resourcePoolLink;
         if (this.isMock) {
             enumerationTaskState.options = EnumSet.of(TaskOption.IS_MOCK);
         }
@@ -794,7 +805,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         for (int i = 0; i < numOfAccts; i++) {
             String staleAcctName = STALE_SA_NAME_PREFIX + i;
             createDefaultStorageAccountDescription(this.host, staleAcctName,
-                    computeHost.documentSelfLink, resourcePoolLink);
+                    computeHost, endpointState);
         }
     }
 
@@ -802,7 +813,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         for (int i = 0; i < numOfCont; i++) {
             String staleContName = STALE_CONTAINER_NAME_PREFIX + i;
             createDefaultResourceGroupState(this.host, staleContName,
-                    computeHost.documentSelfLink,
+                    computeHost, endpointState,
                     ResourceGroupStateType.AzureStorageContainer);
         }
     }
@@ -811,7 +822,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         for (int i = 0; i < numOfBlobs; i++) {
             String staleBlobName = STALE_BLOB_NAME_PREFIX + i;
             createDefaultDiskState(this.host, staleBlobName, computeHost.documentSelfLink,
-                    resourcePoolLink, computeHost.documentSelfLink);
+                    computeHost, endpointState);
         }
     }
 
@@ -819,7 +830,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         for (int i = 0; i < numOfSecurityGroups; i++) {
             String staleSecurityGroupName = STALE_SG_NAME_PREFIX + i;
             createSecurityGroup(this.host, staleSecurityGroupName,
-                    resourcePoolLink, authLink, computeHost.documentSelfLink);
+                    computeHost, endpointState);
         }
     }
 
@@ -858,7 +869,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                             assertNotNull("SubnetState custom properties are null.",
                                     subnetState.customProperties);
                             assertEquals("Gateway SubnetState is not marked currectly with "
-                                            + "infrastructure use custom property.",
+                                    + "infrastructure use custom property.",
                                     Boolean.TRUE.toString(),
                                     subnetState.customProperties.get(
                                             ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME));

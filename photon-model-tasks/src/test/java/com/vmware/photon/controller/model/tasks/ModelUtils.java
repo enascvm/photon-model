@@ -23,9 +23,11 @@ import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionServiceTest;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
@@ -162,18 +164,19 @@ public class ModelUtils {
 
 
     public static SecurityGroupState createSecurityGroup(VerificationHost host,
-            String securityGroupName, String resourcePoolLink, String computeHostAuthLink,
-            String computeHostLink)
+            String securityGroupName, ComputeState computeHost, EndpointState endpointState)
             throws Throwable {
 
         SecurityGroupState securityGroupState = new SecurityGroupState();
-        securityGroupState.id = UUID.randomUUID().toString();
         securityGroupState.name = securityGroupName;
-        securityGroupState.authCredentialsLink = computeHostAuthLink;
-        securityGroupState.resourcePoolLink = resourcePoolLink;
+        securityGroupState.authCredentialsLink = endpointState.authCredentialsLink;
+        securityGroupState.tenantLinks = endpointState.tenantLinks;
+        securityGroupState.endpointLink = endpointState.documentSelfLink;
+        securityGroupState.resourcePoolLink = computeHost.resourcePoolLink;
+
         securityGroupState.customProperties = new HashMap<>();
         securityGroupState.customProperties.put(ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
-                computeHostLink);
+                computeHost.documentSelfLink);
 
         Rule ssh = new Rule();
         ssh.name = "ssh";
@@ -182,7 +185,6 @@ public class ModelUtils {
         ssh.ports = "22";
         securityGroupState.ingress = new ArrayList<>();
         securityGroupState.ingress.add(ssh);
-
 
         Rule out = new Rule();
         out.name = "out";
@@ -197,9 +199,7 @@ public class ModelUtils {
         securityGroupState.instanceAdapterReference = new URI(
                 "http://instanceAdapterReference");
 
-        securityGroupState = TestUtils.doPost(host, securityGroupState, SecurityGroupState.class,
+        return TestUtils.doPost(host, securityGroupState, SecurityGroupState.class,
                 UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK));
-
-        return securityGroupState;
     }
 }

@@ -24,6 +24,7 @@ import com.microsoft.rest.ServiceResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.Utils;
 
 /**
  * Azure {@link com.microsoft.rest.ServiceCallback} that bridges to a {@link DeferredResult}.
@@ -105,7 +106,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
         } catch (Throwable t) {
             if (this.service != null) {
                 this.service.logWarning(() -> String
-                        .format(" %s : FAILED. Details: %s", this.message, t.getMessage()));
+                        .format("%s: FAILED. Details: %s", this.message, Utils.toString(t)));
             }
             toDeferredResult().fail(t);
             return;
@@ -117,14 +118,14 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
             // The code has recovered from exception
             if (this.service != null) {
                 this.service.logFine(() -> String.format("%s: SUCCESS with error. Details: %s",
-                        this.message, exc.getMessage()));
+                        this.message, Utils.toString(exc)));
             }
             toDeferredResult().complete(null);
         } else {
             if (this.service != null) {
                 this.service.logWarning(() -> String
-                        .format(" %s : FAILED. Details: %s", this.message,
-                                consumedError.getMessage()));
+                        .format("%s: FAILED. Details: %s", this.message,
+                                Utils.toString(consumedError)));
             }
             toDeferredResult().fail(consumedError);
         }
@@ -134,7 +135,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     protected final void onSuccess(ServiceResponse<RES> result) {
         DeferredResult<RES> consumeSuccess;
         if (this.service != null) {
-            this.service.logFine(() -> String.format(" %s : SUCCESS", this.message));
+            this.service.logFine(() -> String.format("%s : SUCCESS", this.message));
         }
         try {
             // First delegate to descendants to process result

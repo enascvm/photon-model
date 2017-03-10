@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.tagResourcesWithName;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSComputeHost;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSResourcePool;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.deleteVMsOnThisEndpoint;
@@ -53,6 +54,8 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.BaseLineState;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
@@ -74,25 +77,31 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
     private static final float HUNDERED = 100.0f;
     private static final int MOCK_STATS_SIZE = 4;
+
     public ComputeService.ComputeState vmState;
-    public ResourcePoolState outPool;
-    public ComputeService.ComputeState outComputeHost;
+
+    public ComputeState computeHost;
+    public EndpointState endpointState;
+
     public AuthCredentialsServiceState creds;
+
     public static final String EC2_IMAGEID = "ami-0d4cfd66";
     public static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
     public static final String DEFAULT_SECURITY_GROUP_NAME = "cell-manager-security-group";
-    public static List<String> instancesToCleanUp = new ArrayList<String>();
-    public static List<String> instanceIds = new ArrayList<String>();
-    public List<String> instanceIdsToDelete = new ArrayList<String>();
-    public AmazonEC2AsyncClient client;
-    public static List<Boolean> provisioningFlags;
-    public static List<Boolean> deletionFlags = new ArrayList<Boolean>();
-    public BaseLineState baseLineState;
     public static final String SCALE_VM_NAME = "scale-test-vm";
     public static final String TEST_CASE_BASELINE_VMs = "Baseline VMs on AWS ";
     public static final String TEST_CASE_INITIAL_RUN_AT_SCALE = "Initial Run at Scale ";
     public static final String TEST_CASE_DISCOVER_UPDATES_AT_SCALE = "Discover Updates at Scale ";
     public static final String TEST_CASE_DISCOVER_DELETES_AT_SCALE = "Discover Deletes at Scale ";
+
+    public static List<String> instancesToCleanUp = new ArrayList<String>();
+    public static List<String> instanceIds = new ArrayList<String>();
+    public static List<Boolean> provisioningFlags;
+    public static List<Boolean> deletionFlags = new ArrayList<Boolean>();
+
+    public List<String> instanceIdsToDelete = new ArrayList<String>();
+    public AmazonEC2AsyncClient client;
+    public BaseLineState baseLineState;
     public boolean isMock = true;
     public boolean isAwsClientMock = false;
     public String awsMockEndpointReference = null;
@@ -103,6 +112,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
     public int errorRate = 5;
     public int modifyRate = 10;
     public int awsAccountLimit = 1000;
+
     public static List<String> testComputeDescriptions = new ArrayList<String>(
             Arrays.asList(zoneId + "~" + T2_NANO_INSTANCE_TYPE,
                     zoneId + "~" + instanceType_t2_micro));
@@ -146,7 +156,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
             this.host.setTimeoutSeconds(200);
 
             // create the compute host, resource pool and the VM state to be used in the test.
-            createResourcePoolComputeHost();
+            initResourcePoolAndComputeHost();
         } catch (Throwable e) {
             this.host.log("Error starting up services for the test %s", e.getMessage());
             throw new Exception(e);
@@ -180,7 +190,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     oldIndex = totalDeletedInstances;
                     this.host.log("Deleting %d instances", instanceBatchToDelete.size());
                     deleteVMsOnThisEndpoint(this.host, this.isMock,
-                            this.outComputeHost.documentSelfLink,
+                            this.computeHost.documentSelfLink,
                             instanceBatchToDelete);
                     // Check that all the instances that are required to be deleted are in
                     // terminated state on AWS
@@ -211,8 +221,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
             this.baseLineState = getBaseLineInstanceCount(this.host, this.client, testComputeDescriptions);
             // Run data collection when there are no resources on the AWS endpoint. Ensure that
             // there are no failures if the number of discovered instances is 0.
-            enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                    this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+            enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                     TEST_CASE_BASELINE_VMs);
             // Check if the requested number of instances are under the set account limits
             if ((this.baseLineState.baselineVMCount + this.instanceCountAtScale) >= this.awsAccountLimit) {
@@ -239,8 +248,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                 waitForProvisioningToComplete(instanceIds, this.host, this.client, this.errorRate);
                 this.host.log("Instances have turned on");
             }
-            enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                    this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+            enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                     TEST_CASE_INITIAL_RUN_AT_SCALE);
 
             this.vmState = getComputeByAWSId(this.host, instanceIds.get(0));
@@ -259,7 +267,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
 
                 this.host.waitFor("Error waiting for host stats", () -> {
                     try {
-                        issueMockStatsRequest(this.outComputeHost);
+                        issueMockStatsRequest(this.computeHost);
                     } catch (Throwable t) {
                         return false;
                     }
@@ -277,16 +285,14 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     instanceIdsToTag.toArray(new String[0]));
 
             // Record the time taken to discover updates to a subset of the instances.
-            enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                    this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+            enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                     TEST_CASE_DISCOVER_UPDATES_AT_SCALE);
 
             // DELETE some percent of the instances
             this.host.log("Deleting %d instances", instancesToTagCount);
             deleteVMsUsingEC2Client(this.client, this.host, instanceIdsToTag);
             // Record time spent in enumeration to discover the deleted instances and delete them.
-            enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
-                    this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
+            enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                     TEST_CASE_DISCOVER_DELETES_AT_SCALE);
         } else {
             // Do nothing. Basic enumeration logic tested in functional test.
@@ -360,13 +366,20 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
      * Creates the state associated with the resource pool, compute host and the VM to be created.
      * @throws Throwable
      */
-    public void createResourcePoolComputeHost() throws Throwable {
+    public void initResourcePoolAndComputeHost() throws Throwable {
         // Create a resource pool where the VM will be housed
-        this.outPool = createAWSResourcePool(this.host);
+        ResourcePoolState resourcePool = createAWSResourcePool(this.host);
+
+        AuthCredentialsServiceState auth = createAWSAuthentication(this.host, this.accessKey, this.secretKey);
+
+        this.endpointState = TestAWSSetupUtils.createAWSEndpointState(this.host, auth.documentSelfLink, resourcePool.documentSelfLink);
 
         // create a compute host for the AWS EC2 VM
-        this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
-                zoneId, regionId, this.accessKey,
-                this.secretKey, this.isAwsClientMock, this.awsMockEndpointReference, null);
+        this.computeHost = createAWSComputeHost(this.host,
+                this.endpointState,
+                zoneId, regionId,
+                this.isAwsClientMock,
+                this.awsMockEndpointReference, null /*tags*/);
     }
+
 }

@@ -14,10 +14,10 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultEndpointState;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -40,9 +40,7 @@ import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
@@ -372,28 +370,7 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
     private EndpointState createEndpointState() throws Throwable {
 
-        String testSpecificStr = EndpointType.azure.name() + "-"
-                + this.currentTestName.getMethodName();
-
-        final EndpointState endpoint = new EndpointState();
-
-        endpoint.documentSelfLink = this.currentTestName.getMethodName();
-
-        endpoint.endpointType = EndpointType.azure.name();
-        endpoint.id = testSpecificStr + "-id";
-        endpoint.name = testSpecificStr + "-name";
-
-        endpoint.authCredentialsLink = createAuthCredentialsState().documentSelfLink;
-
-        // Skipping region (EndpointConfigRequest.REGION_KEY) should fall back to default region
-        endpoint.endpointProperties = Collections.emptyMap();
-
-        endpoint.tenantLinks = Collections.singletonList(testSpecificStr + "-tenant");
-
-        return postServiceSynchronously(
-                EndpointService.FACTORY_LINK,
-                endpoint,
-                EndpointState.class);
+        return createDefaultEndpointState(host, createAuthCredentialsState().documentSelfLink);
     }
 
     private ImageState createPublicImageState(EndpointState endpoint) throws Throwable {
