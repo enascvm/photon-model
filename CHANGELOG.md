@@ -1,7 +1,16 @@
 # CHANGELOG
 
-## 0.6.7-SNAPSHOT
+## 0.6.7
 
+* Upgrading to xenon-1.4.0.
+* Allow auto-merge link fields to be cleared by a PATCH request
+* Implement AWS image enumeration adapter
+* Add linked endpoint property to the vSphere endpoint.
+* Reconfigure NICs after clone
+* [Azure] Fix provisioning without specified storage account name
+* [PhM] Enable tag state links deletion in the BaseEnumeration Context
+* [vsphere] Set resourcePool only on initial discovery
+* [AWS] Optimizations in AWS photon model cost adapter
 
 ## 0.6.6
 
