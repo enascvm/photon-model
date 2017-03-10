@@ -323,12 +323,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        VapiConnection vapiConnection = new VapiConnection(getVapiUri(connection.getURI()));
-        vapiConnection.setUsername(connection.getUsername());
-        vapiConnection.setPassword(connection.getPassword());
-
-        // TODO manage trust store globally
-        vapiConnection.setClient(VapiConnection.newUnsecureClient());
+        VapiConnection vapiConnection = VapiConnection.createFromVimConnection(connection);
 
         try {
             vapiConnection.login();
@@ -605,11 +600,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         String msg = "Enumeration thread was interrupted";
         logWarning(msg);
         mgr.patchTaskToFailure(msg, e);
-    }
-
-    private URI getVapiUri(URI uri) {
-        // TODO use lookup service
-        return URI.create(uri.toString().replace("/sdk", "/api"));
     }
 
     private void processFoundNetwork(EnumerationContext enumerationContext, NetworkOverlay net,

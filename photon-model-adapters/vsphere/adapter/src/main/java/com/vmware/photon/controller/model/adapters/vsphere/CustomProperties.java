@@ -67,6 +67,10 @@ public class CustomProperties {
      */
     public static final String ENUMERATED_BY_TASK_LINK = "__enumTaskLink";
 
+    public static final String IMAGE_SIZE = "__imageSize";
+
+    public static final String IMAGE_LIBRARY_ID = "__libraryId";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

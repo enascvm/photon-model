@@ -13,10 +13,19 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.HashMap;
+import java.util.function.Consumer;
+
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
+import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
 import com.vmware.photon.controller.model.adapters.vsphere.stats.VSphereAdapterStatsService;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * Facade for starting all vSphere adapters on a host.
@@ -33,6 +42,8 @@ public class VSphereAdapters {
             DatacenterEnumeratorService.SELF_LINK,
             VSphereEndpointAdapterService.SELF_LINK,
             DvsNetworkService.SELF_LINK,
+            VSphereAdapterImageEnumerationService.SELF_LINK,
+            PhotonModelAdaptersRegistryService.FACTORY_LINK + "/" + EndpointType.vsphere.name(),
     };
 
     public static void startServices(ServiceHost host) throws Throwable {
@@ -45,5 +56,22 @@ public class VSphereAdapters {
         host.startService(new DatacenterEnumeratorService());
         host.startService(new VSphereEndpointAdapterService());
         host.startService(new DvsNetworkService());
+        host.startService(new VSphereAdapterImageEnumerationService());
+
+        registerEndpointAdapters(host);
+    }
+
+    private static void registerEndpointAdapters(ServiceHost host) {
+        Consumer<PhotonModelAdapterConfig> endpointConfigEnhancer = (cfg) -> {
+            if (cfg.adapterEndpoints == null) {
+                cfg.adapterEndpoints = new HashMap<>();
+            }
+
+            cfg.adapterEndpoints.put(AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key,
+                    UriUtils.buildUri(host, VSphereAdapterImageEnumerationService.SELF_LINK).toString());
+        };
+
+        EndpointAdapterUtils.handleEndpointRegistration(
+                host, EndpointType.vsphere.name(), endpointConfigEnhancer);
     }
 }

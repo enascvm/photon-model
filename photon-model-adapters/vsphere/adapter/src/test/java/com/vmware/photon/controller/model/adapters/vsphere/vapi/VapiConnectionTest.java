@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere.vapi;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 
 import org.codehaus.jackson.node.ObjectNode;
 import org.junit.Ignore;
@@ -34,7 +35,7 @@ public class VapiConnectionTest {
         VapiConnection conn = new VapiConnection(URI.create(url));
         conn.setUsername(username);
         conn.setPassword(password);
-        conn.setClient(VapiConnection.newUnsecureClient());
+        conn.setClient(VapiConnection.newUnsecureHttpClient());
 
         conn.login();
 
@@ -50,6 +51,16 @@ public class VapiConnectionTest {
             ObjectNode model = client.getTagModel(tid);
             System.out.println(model);
             System.out.println(client.getCategoryName(model.get("category_id").asText()));
+        }
+
+        LibraryClient libraryClient = conn.newLibraryClient();
+        List<String> libs = libraryClient.listLibs();
+        for (String lib : libs) {
+            System.out.println(libraryClient.loadLib(lib));
+            List<String> items = libraryClient.listItemsInLib(lib);
+            for (String it : items) {
+                System.out.println(libraryClient.loadItem(it));
+            }
         }
         conn.close();
     }

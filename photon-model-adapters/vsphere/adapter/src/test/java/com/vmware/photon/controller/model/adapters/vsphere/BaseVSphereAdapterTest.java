@@ -35,6 +35,7 @@ import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
@@ -117,6 +118,7 @@ public class BaseVSphereAdapterTest {
         this.host.setTimeoutSeconds(15 * 60);
 
         try {
+            PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             VSphereAdapters.startServices(this.host);
@@ -124,6 +126,7 @@ public class BaseVSphereAdapterTest {
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
             this.host.waitForServiceAvailable(VSphereAdapters.LINKS);
+            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
         } catch (Throwable e) {
             this.host.log("Error starting up services for the test %s", e.getMessage());
             throw new Exception(e);
@@ -217,7 +220,7 @@ public class BaseVSphereAdapterTest {
     protected ResourcePoolState createResourcePool()
             throws Throwable {
         ResourcePoolState inPool = new ResourcePoolState();
-        inPool.name = "resourcePool-" + UUID.randomUUID().toString();
+        inPool.name = nextName("rp");
         inPool.id = inPool.name;
 
         inPool.minCpuCount = 1L;

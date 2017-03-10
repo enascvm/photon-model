@@ -15,13 +15,9 @@ package com.vmware.photon.controller.model.adapters.vsphere.vapi;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import org.apache.http.client.HttpClient;
-import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.node.ObjectNode;
 
 import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
@@ -31,6 +27,7 @@ import com.vmware.vim25.ManagedObjectReference;
  * Talks to tagging service.
  */
 public class TaggingClient extends VapiClient {
+
     private final String sessionId;
 
     TaggingClient(URI uri, HttpClient client, String sessionId) {
@@ -45,24 +42,14 @@ public class TaggingClient extends VapiClient {
 
         call.params.input = newNode();
         call.params.input
-                .putObject("STRUCTURE")
-                .putObject("operation-input")
+                .putObject(K_STRUCTURE)
+                .putObject(K_OPERATION_INPUT)
                 .put("object_id", newDynamicId(ref));
 
         RpcResponse resp = rpc(call);
         throwIfError("Cannot get tags for object " + VimUtils.convertMoRefToString(ref), resp);
 
-        ObjectNode result = resp.result;
-        if (result == null) {
-            return Collections.emptyList();
-        }
-        JsonNode jsonNode = result.get("output");
-        if (jsonNode == null) {
-            return Collections.emptyList();
-        }
-        return StreamSupport.stream(jsonNode.spliterator(), false)
-                .map(JsonNode::asText)
-                .collect(Collectors.toList());
+        return toStringList(resp.result);
     }
 
     public ObjectNode getTagModel(String tagId) throws IOException, RpcException {
@@ -71,16 +58,16 @@ public class TaggingClient extends VapiClient {
 
         call.params.input = newNode();
         call.params.input
-                .putObject("STRUCTURE")
-                .putObject("operation-input")
+                .putObject(K_STRUCTURE)
+                .putObject(K_OPERATION_INPUT)
                 .put("tag_id", tagId);
 
         RpcResponse resp = rpc(call);
         throwIfError("Cannot get model for tag " + tagId, resp);
 
         return (ObjectNode) resp.result
-                .get("output")
-                .get("STRUCTURE")
+                .get(K_OUTPUT)
+                .get(K_STRUCTURE)
                 .get("com.vmware.cis.tagging.tag_model");
     }
 
@@ -90,16 +77,16 @@ public class TaggingClient extends VapiClient {
 
         call.params.input = newNode();
         call.params.input
-                .putObject("STRUCTURE")
-                .putObject("operation-input")
+                .putObject(K_STRUCTURE)
+                .putObject(K_OPERATION_INPUT)
                 .put("category_id", catId);
 
         RpcResponse resp = rpc(call);
         throwIfError("Cannot get model for category " + catId, resp);
 
         return resp.result
-                .get("output")
-                .get("STRUCTURE")
+                .get(K_OUTPUT)
+                .get(K_STRUCTURE)
                 .get("com.vmware.cis.tagging.category_model")
                 .get("name")
                 .asText();

@@ -16,7 +16,11 @@ package com.vmware.photon.controller.model.adapters.vsphere.vapi;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
@@ -24,6 +28,7 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.util.EntityUtils;
+import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.map.DeserializationConfig.Feature;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.map.SerializationConfig;
@@ -42,6 +47,10 @@ import com.vmware.vim25.ManagedObjectReference;
  */
 public abstract class VapiClient {
     public static final ObjectMapper MAPPER = new ObjectMapper();
+    public static final String K_STRUCTURE = "STRUCTURE";
+    public static final String K_OUTPUT = "output";
+    public static final String K_OPTIONAL = "OPTIONAL";
+    public static final String K_OPERATION_INPUT = "operation-input";
 
     static {
         MAPPER.enable(SerializationConfig.Feature.INDENT_OUTPUT);
@@ -109,7 +118,7 @@ public abstract class VapiClient {
 
     protected ObjectNode newEmptyInput() {
         ObjectNode in = newNode();
-        in.putObject("STRUCTURE").put("operation-input", newNode());
+        in.putObject(K_STRUCTURE).put(K_OPERATION_INPUT, newNode());
 
         return in;
     }
@@ -124,7 +133,7 @@ public abstract class VapiClient {
         ObjectNode res = newNode();
 
         ObjectNode obj = res
-                .putObject("STRUCTURE")
+                .putObject(K_STRUCTURE)
                 .putObject("com.vmware.vapi.std.dynamic_ID");
 
         obj.put("id", ref.getValue());
@@ -137,7 +146,32 @@ public abstract class VapiClient {
         return UUID.randomUUID().toString();
     }
 
+    protected List<String> toStringList(ObjectNode result) {
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        JsonNode jsonNode = result.get(K_OUTPUT);
+        if (jsonNode == null) {
+            return Collections.emptyList();
+        }
+        return StreamSupport.stream(jsonNode.spliterator(), false)
+                .map(JsonNode::asText)
+                .collect(Collectors.toList());
+    }
+
     public static String toJsonString(Object obj) throws IOException {
         return MAPPER.writeValueAsString(obj);
+    }
+
+    public static String getString(ObjectNode obj, String... path) {
+        JsonNode res = obj;
+        for (String key : path) {
+            res = res.get(key);
+            if (res == null) {
+                return null;
+            }
+        }
+
+        return res.asText();
     }
 }

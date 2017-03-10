@@ -20,6 +20,8 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.conn.ssl.AllowAllHostnameVerifier;
 import org.apache.http.impl.client.HttpClientBuilder;
 
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.IgnoreSslErrors;
 
 /**
@@ -74,11 +76,17 @@ public class VapiConnection {
         return this.uri;
     }
 
-    public static HttpClient newUnsecureClient() {
+    public static HttpClient newUnsecureHttpClient() {
         return HttpClientBuilder
                 .create()
                 .setSslcontext(IgnoreSslErrors.newInsecureSslContext("TLS"))
                 .setHostnameVerifier(new AllowAllHostnameVerifier())
+                .build();
+    }
+
+    public static HttpClient newDefaultHttpClient() {
+        return HttpClientBuilder
+                .create()
                 .build();
     }
 
@@ -88,5 +96,28 @@ public class VapiConnection {
 
     public TaggingClient newTaggingClient() {
         return new TaggingClient(getURI(), getClient(), getSessionId());
+    }
+
+    public LibraryClient newLibraryClient() {
+        return new LibraryClient(getURI(), getClient(), getSessionId());
+    }
+
+    private static URI getVapiUri(URI uri) {
+        return URI.create(uri.toString().replace("/sdk", "/api"));
+    }
+
+    public static VapiConnection createFromVimConnection(Connection connection) {
+        VapiConnection vapiConnection = new VapiConnection(getVapiUri(connection.getURI()));
+        vapiConnection.setUsername(connection.getUsername());
+        vapiConnection.setPassword(connection.getPassword());
+
+        if (connection instanceof BasicConnection) {
+            if (((BasicConnection) connection).isIgnoreSslErrors()) {
+                vapiConnection.setClient(VapiConnection.newUnsecureHttpClient());
+            } else {
+                vapiConnection.setClient(VapiConnection.newDefaultHttpClient());
+            }
+        }
+        return vapiConnection;
     }
 }

@@ -51,6 +51,7 @@ public final class VimUtils {
 
     private static final String DELIMITER = ":";
     public static final String EXCEPTION_SUFFIX = "FaultMsg";
+    private static final byte[] HASH_DELIMITER = new byte[] { ':' };
 
     private VimUtils() {
 
@@ -334,25 +335,43 @@ public final class VimUtils {
      * @return
      */
     public static String buildStableManagedObjectId(ManagedObjectReference ref, String... markers) {
+        return buildStableId(VimUtils.convertMoRefToString(ref), markers);
+    }
+
+    /**
+     * Builds a stable link from a managed object and a set of string that differentiate
+     * @param first
+     * @param rest
+     * @return
+     */
+    public static String buildStableId(String first, String... rest) {
         MessageDigest md;
         try {
             md = MessageDigest.getInstance("SHA-1");
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
         }
-        try {
-            md.update(convertMoRefToString(ref).getBytes(Utils.CHARSET));
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
+
+        if (first != null) {
+            try {
+                md.update(first.getBytes(Utils.CHARSET));
+            } catch (UnsupportedEncodingException e) {
+                throw new RuntimeException(e);
+            }
         }
 
-        if (markers != null) {
-            for (String s : markers) {
-                try {
-                    md.update(s.getBytes(Utils.CHARSET));
-                } catch (UnsupportedEncodingException e) {
-                    throw new RuntimeException(e);
+        md.update(HASH_DELIMITER);
+
+        if (rest != null) {
+            for (String s : rest) {
+                if (s != null) {
+                    try {
+                        md.update(s.getBytes(Utils.CHARSET));
+                    } catch (UnsupportedEncodingException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
+                md.update(HASH_DELIMITER);
             }
         }
 
