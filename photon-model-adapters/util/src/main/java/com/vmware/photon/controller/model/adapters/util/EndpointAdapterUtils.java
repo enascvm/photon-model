@@ -223,6 +223,7 @@ public class EndpointAdapterUtils {
                 enhancer.accept(credentials, Retriever.of(body.endpointProperties));
 
                 BiConsumer<ServiceErrorResponse, Throwable> callback = (r, e) -> {
+                    service.logInfo("Finished validating credentials for operation: %d", op.getId());
                     if (r == null && e == null) {
                         if (body.requestType == RequestType.VALIDATE) {
                             op.complete();
@@ -231,7 +232,7 @@ public class EndpointAdapterUtils {
                         op.fail(e, r);
                     }
                 };
-
+                service.logInfo("Validating credentials for operation: %d", op.getId());
                 validator.accept(credentials, callback);
             } catch (Throwable e) {
                 op.fail(e);

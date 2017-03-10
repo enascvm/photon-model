@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_BACKOFF_STRATEGY;
+import static com.amazonaws.retry.PredefinedRetryPolicies.DEFAULT_MAX_ERROR_RETRY;
+
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GROUP_NAME_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
@@ -24,6 +27,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.INSTANCE_STATE_STOPPING;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -35,11 +39,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.AmazonWebServiceRequest;
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.retry.RetryPolicy;
+import com.amazonaws.retry.RetryUtils;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
@@ -78,6 +87,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -131,9 +141,14 @@ public class AWSUtils {
     public static AmazonEC2AsyncClient getAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService) {
+        ClientConfiguration configuration = new ClientConfiguration();
+        configuration.withRetryPolicy(new RetryPolicy(new CustomRetryCondition(),
+                DEFAULT_BACKOFF_STRATEGY,
+                DEFAULT_MAX_ERROR_RETRY,
+                true));
         AmazonEC2AsyncClient ec2AsyncClient = new AmazonEC2AsyncClient(
                 new BasicAWSCredentials(credentials.privateKeyId,
-                        credentials.privateKey),
+                        credentials.privateKey), configuration,
                 executorService);
 
         if (isAwsClientMock()) {
@@ -691,5 +706,60 @@ public class AWSUtils {
             }
         }
         return null;
+    }
+
+    /**
+     * Custom retry condition with exception logs.
+     */
+    public static class CustomRetryCondition implements RetryPolicy.RetryCondition {
+
+        @Override
+        public boolean shouldRetry(AmazonWebServiceRequest originalRequest,
+                AmazonClientException exception,
+                int retriesAttempted) {
+            Utils.logWarning("Encountered exception %s for request %s, retries attempted: %d",
+                    Utils.toString(exception), originalRequest, retriesAttempted);
+
+            // Always retry on client exceptions caused by IOException
+            if (exception.getCause() instanceof IOException) {
+                return true;
+            }
+
+            // Only retry on a subset of service exceptions
+            if (exception instanceof AmazonServiceException) {
+                AmazonServiceException ase = (AmazonServiceException) exception;
+
+                /*
+                 * For 500 internal server errors and 503 service
+                 * unavailable errors, we want to retry, but we need to use
+                 * an exponential back-off strategy so that we don't overload
+                 * a server with a flood of retries.
+                 */
+                if (RetryUtils.isRetryableServiceException(ase)) {
+                    return true;
+                }
+
+                /*
+                 * Throttling is reported as a 400 error from newer services. To try
+                 * and smooth out an occasional throttling error, we'll pause and
+                 * retry, hoping that the pause is long enough for the request to
+                 * get through the next time.
+                 */
+                if (RetryUtils.isThrottlingException(ase)) {
+                    return true;
+                }
+
+                /*
+                 * Clock skew exception. If it is then we will get the time offset
+                 * between the device time and the server time to set the clock skew
+                 * and then retry the request.
+                 */
+                if (RetryUtils.isClockSkewError(ase)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

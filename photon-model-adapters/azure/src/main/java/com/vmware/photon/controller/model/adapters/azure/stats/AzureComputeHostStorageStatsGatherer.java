@@ -331,7 +331,6 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                         .format("Retrieved the storage account keys for"
                                                         + " storage account [%s].",
                                                 account.getValue().name));
-                                accountsCount.decrementAndGet();
                                 StorageAccountKeys keys = result.getBody();
                                 String storageConnectionString = String
                                         .format(STORAGE_CONNECTION_STRING,
@@ -429,7 +428,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                 }
 
                                 // if all storage accounts were processed, create ServiceStat and finish
-                                if (accountsCount.get() == 0) {
+                                if (accountsCount.decrementAndGet() == 0) {
                                     if (!exs.isEmpty()) {
                                         handleError(statsData, exs.iterator().next());
                                         return;
