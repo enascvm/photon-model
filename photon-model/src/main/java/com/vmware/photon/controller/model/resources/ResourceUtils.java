@@ -17,10 +17,24 @@ import java.util.EnumSet;
 import java.util.function.Function;
 
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ReflectionUtils;
 import com.vmware.xenon.common.ServiceDocumentDescription;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyDescription;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.Utils;
 
 public class ResourceUtils {
+
+    /**
+     * Optional link fields in resources cannot be cleared with a regular PATCH request because the
+     * automatic merge just ignores {@code null} fields from the PATCH body, for optimization
+     * purposes.
+     *
+     * This constant can be used instead of a {@code null} value. It is applicable only for
+     * {@link PropertyUsageOption.LINK} fields that are marked with
+     * {@link PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL} flag in the resource state document.
+     */
+    public static final String NULL_LINK_VALUE = "__noLink";
 
     /**
      * This method handles merging of state for patch requests. It first checks to see if the
@@ -50,11 +64,14 @@ public class ResourceUtils {
             hasStateChanged = mergeResult.contains(Utils.MergeResult.STATE_CHANGED);
 
             if (!mergeResult.contains(Utils.MergeResult.SPECIAL_MERGE)) {
-                // apply ResourceState-specific merging
                 T patchBody = op.getBody(stateClass);
+
+                // apply ResourceState-specific merging
                 hasStateChanged |= ResourceUtils.mergeResourceStateWithPatch(currentState,
                         patchBody);
 
+                // handle NULL_LINK_VALUE links
+                hasStateChanged |= nullifyLinkFields(description, currentState, patchBody);
             }
 
             // apply custom patch handler, if any
@@ -102,5 +119,26 @@ public class ResourceUtils {
         }
 
         return isChanged;
+    }
+
+    /**
+     * Nullifies link fields if the patch body contains NULL_LINK_VALUE links.
+     */
+    private static <T extends ResourceState> boolean nullifyLinkFields(
+            ServiceDocumentDescription desc, T currentState, T patchBody) {
+        boolean modified = false;
+        for (PropertyDescription prop : desc.propertyDescriptions.values()) {
+            if (prop.usageOptions != null &&
+                    prop.usageOptions.contains(PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL) &&
+                    prop.usageOptions.contains(PropertyUsageOption.LINK)) {
+                Object patchValue = ReflectionUtils.getPropertyValue(prop, patchBody);
+                if (NULL_LINK_VALUE.equals(patchValue)) {
+                    Object currentValue = ReflectionUtils.getPropertyValue(prop, currentState);
+                    modified |= currentValue != null;
+                    ReflectionUtils.setPropertyValue(prop, currentState, null);
+                }
+            }
+        }
+        return modified;
     }
 }

@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.resources;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -26,12 +27,20 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.UriUtils;
 
 /**
  * Tests for the {@link ResourceUtils} class.
  */
 public class ResourceUtilsTest extends BaseModelTest {
+
+    public static class ResourceStateWithLinks extends ResourceState {
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String optionalLink;
+
+        public String noAutoMergeLink;
+    }
 
     @Test
     public void testMergeWithNewValues() {
@@ -128,15 +137,45 @@ public class ResourceUtilsTest extends BaseModelTest {
         assertEquals(current.tagLinks, returnedState.tagLinks);
     }
 
+    @Test
+    public void testNullifyOptionalLink() {
+        ResourceStateWithLinks current = new ResourceStateWithLinks();
+        current.optionalLink = "/some/link";
+
+        ResourceStateWithLinks patch = new ResourceStateWithLinks();
+        Operation patchOperation = handlePatch(current, patch, ResourceStateWithLinks.class);
+        assertEquals(Operation.STATUS_CODE_NOT_MODIFIED, patchOperation.getStatusCode());
+
+        patch.optionalLink = "/some/other";
+        patch.noAutoMergeLink = "/link";
+        patchOperation = handlePatch(current, patch, ResourceStateWithLinks.class);
+        assertEquals(Operation.STATUS_CODE_OK, patchOperation.getStatusCode());
+        assertEquals(patch.optionalLink, current.optionalLink);
+        assertNull(current.noAutoMergeLink);
+
+        patch.optionalLink = ResourceUtils.NULL_LINK_VALUE;
+        patchOperation = handlePatch(current, patch, ResourceStateWithLinks.class);
+        assertEquals(Operation.STATUS_CODE_OK, patchOperation.getStatusCode());
+        assertEquals(null, current.optionalLink);
+
+        patchOperation = handlePatch(current, patch, ResourceStateWithLinks.class);
+        assertEquals(Operation.STATUS_CODE_OK, patchOperation.getStatusCode());
+        assertEquals(null, current.optionalLink);
+    }
+
     private Operation handlePatch(ResourceState currentState, ResourceState patchState) {
+        return handlePatch(currentState, patchState, ResourceState.class);
+    }
+
+    private <T extends ResourceState> Operation handlePatch(T currentState, T patchState, Class<T> type) {
         Operation patchOperation = Operation
                 .createPatch(UriUtils.buildUri(this.host, "/resource"))
                 .setBody(patchState);
 
         ServiceDocumentDescription desc = ServiceDocumentDescription.Builder.create()
-                .buildDescription(ResourceState.class);
+                .buildDescription(type);
 
-        ResourceUtils.handlePatch(patchOperation, currentState, desc, ResourceState.class, null);
+        ResourceUtils.handlePatch(patchOperation, currentState, desc, type, null);
 
         return patchOperation;
     }
