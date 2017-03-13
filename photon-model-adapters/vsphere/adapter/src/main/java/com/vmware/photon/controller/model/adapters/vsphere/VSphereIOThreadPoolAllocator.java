@@ -27,7 +27,7 @@ import com.vmware.xenon.common.Utils;
  * to host many ServiceHosts.
  */
 public class VSphereIOThreadPoolAllocator {
-    public static final int DEFAULT_THREAD_POOL_SIZE = Utils.DEFAULT_THREAD_COUNT;
+    public static final int DEFAULT_THREAD_POOL_SIZE = Utils.DEFAULT_THREAD_COUNT * 2;
 
     private static Map<URI, VSphereIOThreadPool> poolsPerHost = new ConcurrentHashMap<>();
 

@@ -21,8 +21,6 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.xenon.common.Operation.STATUS_CODE_BAD_REQUEST;
 
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.BiConsumer;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -34,7 +32,6 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Conne
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
@@ -136,11 +133,6 @@ public class VSphereEndpointAdapterService extends StatelessService {
             cd.zoneId = r.get(ZONE_KEY).orElse(null);
 
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-
-            List<String> children = new ArrayList<>();
-            children.add(ComputeType.VM_HOST.toString());
-            children.add(ComputeType.ZONE.toString());
-            cd.supportedChildren = children;
 
             cd.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.getHost(),
                     VSphereUriPaths.INSTANCE_SERVICE);
