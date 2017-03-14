@@ -14,43 +14,19 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MAIN_ROUTE_ASSOCIATION;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 
-import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
-import com.amazonaws.services.ec2.model.AttachInternetGatewayRequest;
-import com.amazonaws.services.ec2.model.CreateInternetGatewayResult;
-import com.amazonaws.services.ec2.model.CreateRouteRequest;
-import com.amazonaws.services.ec2.model.CreateSubnetRequest;
-import com.amazonaws.services.ec2.model.CreateSubnetResult;
-import com.amazonaws.services.ec2.model.CreateVpcRequest;
-import com.amazonaws.services.ec2.model.CreateVpcResult;
-import com.amazonaws.services.ec2.model.DeleteInternetGatewayRequest;
-import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
-import com.amazonaws.services.ec2.model.DeleteVpcRequest;
-import com.amazonaws.services.ec2.model.DescribeInternetGatewaysRequest;
-import com.amazonaws.services.ec2.model.DescribeInternetGatewaysResult;
-import com.amazonaws.services.ec2.model.DescribeRouteTablesRequest;
-import com.amazonaws.services.ec2.model.DescribeRouteTablesResult;
-import com.amazonaws.services.ec2.model.DescribeSubnetsRequest;
-import com.amazonaws.services.ec2.model.DescribeSubnetsResult;
-import com.amazonaws.services.ec2.model.DescribeVpcsRequest;
-import com.amazonaws.services.ec2.model.DescribeVpcsResult;
-import com.amazonaws.services.ec2.model.DetachInternetGatewayRequest;
-import com.amazonaws.services.ec2.model.Filter;
-import com.amazonaws.services.ec2.model.InternetGateway;
+import com.amazonaws.services.ec2.model.AmazonEC2Exception;
 import com.amazonaws.services.ec2.model.RouteTable;
 import com.amazonaws.services.ec2.model.Subnet;
-import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -349,148 +325,6 @@ public class AWSNetworkService extends StatelessService {
     }
 
     /**
-     * This client abstracts the communication with Amazon Network service.
-     */
-    public static class AWSNetworkClient {
-
-        private final AmazonEC2AsyncClient client;
-
-        public AWSNetworkClient(AmazonEC2AsyncClient client) {
-            this.client = client;
-        }
-
-        public Vpc getVPC(String vpcId) {
-            DescribeVpcsRequest req = new DescribeVpcsRequest().withVpcIds(vpcId);
-            DescribeVpcsResult result = this.client.describeVpcs(req);
-            List<Vpc> vpcs = result.getVpcs();
-            if (vpcs != null && vpcs.size() == 1) {
-                return vpcs.get(0);
-            }
-            return null;
-        }
-
-        /**
-         * Get the default VPC - return null if no default specified
-         */
-        public Vpc getDefaultVPC() {
-            DescribeVpcsRequest req = new DescribeVpcsRequest();
-            DescribeVpcsResult result = this.client.describeVpcs(req);
-            List<Vpc> vpcs = result.getVpcs();
-            for (Vpc vpc : vpcs) {
-                if (vpc.isDefault()) {
-                    return vpc;
-                }
-            }
-            return null;
-        }
-
-        /**
-         * Creates the VPC and returns the VPC id
-         */
-        public String createVPC(String subnetCidr) {
-            CreateVpcRequest req = new CreateVpcRequest().withCidrBlock(subnetCidr);
-            CreateVpcResult vpc = this.client.createVpc(req);
-
-            return vpc.getVpc().getVpcId();
-        }
-
-        /**
-         * Delete the specified VPC
-         */
-        public void deleteVPC(String vpcId) {
-            DeleteVpcRequest req = new DeleteVpcRequest().withVpcId(vpcId);
-            this.client.deleteVpc(req);
-        }
-
-        public Subnet getSubnet(String subnetId) {
-            DescribeSubnetsRequest req = new DescribeSubnetsRequest()
-                    .withSubnetIds(subnetId);
-            DescribeSubnetsResult subnetResult = this.client.describeSubnets(req);
-            List<Subnet> subnets = subnetResult.getSubnets();
-            return subnets.isEmpty() ? null : subnets.get(0);
-        }
-
-        /**
-         * Creates the subnet and return it
-         */
-        public Subnet createSubnet(String subnetCidr, String vpcId) {
-            CreateSubnetRequest req = new CreateSubnetRequest()
-                    .withCidrBlock(subnetCidr)
-                    .withVpcId(vpcId);
-            CreateSubnetResult res = this.client.createSubnet(req);
-            return res.getSubnet();
-        }
-
-        /**
-         * Delete the specified subnet
-         */
-        public void deleteSubnet(String subnetId) {
-            DeleteSubnetRequest req = new DeleteSubnetRequest().withSubnetId(subnetId);
-            this.client.deleteSubnet(req);
-        }
-
-        public String createInternetGateway() {
-            CreateInternetGatewayResult res = this.client.createInternetGateway();
-            return res.getInternetGateway().getInternetGatewayId();
-        }
-
-        public InternetGateway getInternetGateway(String resourceId) {
-            DescribeInternetGatewaysRequest req = new DescribeInternetGatewaysRequest()
-                    .withInternetGatewayIds(resourceId);
-            DescribeInternetGatewaysResult res = this.client.describeInternetGateways(req);
-            List<InternetGateway> internetGateways = res.getInternetGateways();
-            return internetGateways.isEmpty() ? null : internetGateways.get(0);
-        }
-
-        public void deleteInternetGateway(String resourceID) {
-            DeleteInternetGatewayRequest req = new DeleteInternetGatewayRequest()
-                    .withInternetGatewayId(resourceID);
-            this.client.deleteInternetGateway(req);
-        }
-
-        public void attachInternetGateway(String vpcId, String gatewayId) {
-            AttachInternetGatewayRequest req = new AttachInternetGatewayRequest()
-                    .withVpcId(vpcId)
-                    .withInternetGatewayId(gatewayId);
-            this.client.attachInternetGateway(req);
-        }
-
-        public void detachInternetGateway(String vpcId, String gatewayId) {
-            DetachInternetGatewayRequest req = new DetachInternetGatewayRequest()
-                    .withVpcId(vpcId)
-                    .withInternetGatewayId(gatewayId);
-            this.client.detachInternetGateway(req);
-        }
-
-        /**
-         * Get the main route table for a given VPC
-         */
-        public RouteTable getMainRouteTable(String vpcId) {
-            // build filter list
-            List<Filter> filters = new ArrayList<>();
-            filters.add(AWSUtils.getFilter(AWSUtils.AWS_FILTER_VPC_ID, vpcId));
-            filters.add(AWSUtils.getFilter(AWS_MAIN_ROUTE_ASSOCIATION, "true"));
-
-            DescribeRouteTablesRequest req = new DescribeRouteTablesRequest()
-                    .withFilters(filters);
-            DescribeRouteTablesResult res = this.client.describeRouteTables(req);
-            List<RouteTable> routeTables = res.getRouteTables();
-            return routeTables.isEmpty() ? null : routeTables.get(0);
-        }
-
-        /**
-         * Create a route from a specified CIDR Subnet to a specific GW / Route Table
-         */
-        public void createInternetRoute(String gatewayId, String routeTableId, String subnetCidr) {
-            CreateRouteRequest req = new CreateRouteRequest()
-                    .withGatewayId(gatewayId)
-                    .withRouteTableId(routeTableId)
-                    .withDestinationCidrBlock(subnetCidr);
-            this.client.createRoute(req);
-        }
-    }
-
-    /**
      * Delete all subnet states that refer the NetworkState we are about to delete.
      */
     private void deleteSubnetStates(AWSNetworkContext context, AWSNetworkStage next) {
@@ -509,7 +343,17 @@ public class AWSNetworkService extends StatelessService {
 
         DeferredResult<Void> query = subnetStates.queryDocuments(subnetState -> {
             // First delete Subnet in AWS
-            context.client.deleteSubnet(subnetState.id);
+            try {
+                context.client.deleteSubnet(subnetState.id);
+            } catch (AmazonEC2Exception ex) {
+                if (AWSNetworkClient.STATUS_CODE_SUBNET_NOT_FOUND.equals(ex.getErrorCode())) {
+                    // Ignore exception if the subnet is no longer available in AWS.
+                    this.logWarning(() -> "Unable to delete the subnet in AWS. Reason: "
+                            + ex.getMessage());
+                } else {
+                    throw ex;
+                }
+            }
             // Then delete tracking SubnetState
             Operation.createDelete(this, subnetState.documentSelfLink).sendWith(this);
         });

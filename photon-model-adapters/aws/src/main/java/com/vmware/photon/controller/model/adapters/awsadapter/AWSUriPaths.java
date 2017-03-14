@@ -33,6 +33,8 @@ public class AWSUriPaths {
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_NETWORK_ADAPTER = AdapterTypePath.NETWORK_ADAPTER
             .adapterLink(EndpointType.aws.name());
+    public static final String AWS_SUBNET_ADAPTER = AdapterTypePath.SUBNET_ADAPTER
+            .adapterLink(EndpointType.aws.name());
     public static final String AWS_FIREWALL_ADAPTER = AdapterTypePath.FIREWALL_ADAPTER
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_STATS_ADAPTER = AdapterTypePath.STATS_ADAPTER
@@ -73,6 +75,7 @@ public class AWSUriPaths {
 
         adapterLinksByType.put(AWS_INSTANCE_ADAPTER, AdapterTypePath.INSTANCE_ADAPTER);
         adapterLinksByType.put(AWS_NETWORK_ADAPTER, AdapterTypePath.NETWORK_ADAPTER);
+        adapterLinksByType.put(AWS_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER);
         adapterLinksByType.put(AWS_FIREWALL_ADAPTER, AdapterTypePath.FIREWALL_ADAPTER);
         adapterLinksByType.put(AWS_STATS_ADAPTER, AdapterTypePath.STATS_ADAPTER);
         adapterLinksByType.put(AWS_ENUMERATION_ADAPTER, AdapterTypePath.ENUMERATION_ADAPTER);

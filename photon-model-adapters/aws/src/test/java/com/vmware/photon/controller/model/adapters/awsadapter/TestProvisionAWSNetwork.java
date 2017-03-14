@@ -35,7 +35,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
-import com.vmware.photon.controller.model.adapters.awsadapter.AWSNetworkService.AWSNetworkClient;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
@@ -197,7 +197,7 @@ public class TestProvisionAWSNetwork {
         NetworkState net = getNetworkState(networkDescriptionLink);
 
         AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(creds, this.region, getExecutor());
-        AWSNetworkClient netSVC = new AWSNetworkService.AWSNetworkClient(client);
+        AWSNetworkClient netSVC = new AWSNetworkClient(client);
         // if any artifact is not present then an error will be thrown
         assertNotNull(netSVC.getVPC(net.customProperties.get(AWS_VPC_ID)));
         assertNotNull(netSVC.getInternetGateway(net.customProperties.get(AWS_GATEWAY_ID)));

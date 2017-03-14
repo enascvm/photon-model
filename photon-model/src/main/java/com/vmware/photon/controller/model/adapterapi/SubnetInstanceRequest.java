@@ -15,6 +15,9 @@ package com.vmware.photon.controller.model.adapterapi;
 
 /**
  * Request to create/destroy a subnet instance on a given compute.
+ * <p>
+ * Reference to the subnet state describing the subnet to be provisioned should be provided in
+ * {@link ResourceRequest#resourceReference}.
  */
 public class SubnetInstanceRequest extends ResourceRequest {
 

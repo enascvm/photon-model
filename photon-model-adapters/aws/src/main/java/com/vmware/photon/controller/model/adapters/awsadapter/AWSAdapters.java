@@ -38,6 +38,7 @@ public class AWSAdapters {
     public static final String[] LINKS = {
             AWSInstanceService.SELF_LINK,
             AWSNetworkService.SELF_LINK,
+            AWSSubnetService.SELF_LINK,
             AWSStatsService.SELF_LINK,
             AWSCostStatsService.SELF_LINK,
             AWSEnumerationAdapterService.SELF_LINK,
@@ -54,6 +55,7 @@ public class AWSAdapters {
         try {
             host.startService(new AWSInstanceService());
             host.startService(new AWSNetworkService());
+            host.startService(new AWSSubnetService());
             host.startService(new AWSStatsService());
             host.startService(new AWSCostStatsService());
             host.startService(new AWSEnumerationAdapterService());

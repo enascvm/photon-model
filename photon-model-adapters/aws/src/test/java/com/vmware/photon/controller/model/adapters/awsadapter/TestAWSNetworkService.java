@@ -30,6 +30,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.xenon.common.CommandLineArgumentParser;
@@ -56,7 +57,7 @@ public class TestAWSNetworkService {
 
     VerificationHost host;
 
-    AWSNetworkService.AWSNetworkClient netClient;
+    AWSNetworkClient netClient;
 
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
@@ -80,7 +81,7 @@ public class TestAWSNetworkService {
                             AWSNetworkService.class)),
                     netSvc);
 
-            this.netClient = new AWSNetworkService.AWSNetworkClient(
+            this.netClient = new AWSNetworkClient(
                     TestUtils.getClient(this.privateKeyId, this.privateKey, this.region, false));
         } catch (Throwable e) {
             throw new Exception(e);

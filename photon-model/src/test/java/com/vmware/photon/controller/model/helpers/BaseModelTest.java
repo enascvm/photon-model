@@ -258,6 +258,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
                 .setCompletion((operation, throwable) -> {
                     if (throwable != null) {
                         ctx.failIteration(throwable);
+                        return;
                     }
 
                     responseBody.add(operation.getBody(type));

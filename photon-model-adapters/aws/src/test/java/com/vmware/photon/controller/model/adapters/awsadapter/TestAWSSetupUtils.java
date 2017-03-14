@@ -165,6 +165,9 @@ public class TestAWSSetupUtils {
     private static final String AWS_SECONDARY_SUBNET_CIDR = "172.31.64.0/20";
     // }}
 
+    public static final String AWS_NON_EXISTING_SUBNET_CIDR = "172.31.80.0/20";
+    public static final String AWS_NON_EXISTING_SUBNET_NAME = "nonexisting";
+
     public static final String VPC_KEY = "vpc-id";
     public static final String SUBNET_KEY = "subnet-id";
     public static final String INTERNET_GATEWAY_KEY = "internet-gateway";

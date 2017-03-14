@@ -102,6 +102,12 @@ public class AdapterUtils {
 
     public static void sendPatchToTask(StatelessService service, URI taskReference,
             ResourceOperationResponse response) {
+
+        if (taskReference == null) {
+            // Do nothing.
+            return;
+        }
+
         service.sendRequest(Operation.createPatch(taskReference).setBody(
                 response));
     }
