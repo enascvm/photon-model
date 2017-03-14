@@ -17,6 +17,7 @@ import java.util.List;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
@@ -138,6 +139,7 @@ public class TagService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument td = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(td);
         TagState template = (TagState) td;
         template.key = "key-1";
         template.value = "value-1";

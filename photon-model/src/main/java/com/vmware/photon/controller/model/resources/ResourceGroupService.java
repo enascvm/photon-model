@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.resources;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -98,6 +99,7 @@ public class ResourceGroupService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument td = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(td);
         ResourceGroupState template = (ResourceGroupState) td;
         template.name = "resource-group-1";
         return template;

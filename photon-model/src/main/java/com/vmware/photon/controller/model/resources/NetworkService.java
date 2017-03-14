@@ -20,6 +20,7 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import org.apache.commons.net.util.SubnetUtils;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
@@ -148,6 +149,7 @@ public class NetworkService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument td = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(td);
         NetworkState template = (NetworkState) td;
 
         template.id = UUID.randomUUID().toString();

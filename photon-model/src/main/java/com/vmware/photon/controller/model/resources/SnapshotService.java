@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.resources;
 
 import java.util.UUID;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -99,6 +100,7 @@ public class SnapshotService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument td = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(td);
         SnapshotState template = (SnapshotState) td;
 
         template.id = UUID.randomUUID().toString();

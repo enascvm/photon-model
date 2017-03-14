@@ -21,6 +21,7 @@ import java.util.function.Function;
 
 import org.apache.commons.net.util.SubnetUtils;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -296,6 +297,7 @@ public class FirewallService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument td = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(td);
         FirewallState template = (FirewallState) td;
         template.id = UUID.randomUUID().toString();
         template.name = "firewall-one";

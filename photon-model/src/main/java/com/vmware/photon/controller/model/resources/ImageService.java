@@ -18,6 +18,7 @@ import static java.util.Collections.singletonList;
 
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.xenon.common.Operation;
@@ -125,6 +126,7 @@ public class ImageService extends StatefulService {
     public ImageState getDocumentTemplate() {
 
         ImageState image = (ImageState) super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(image);
 
         image.id = "endpoint-specific-image-id";
         image.name = "endpoint-specific-image-name";

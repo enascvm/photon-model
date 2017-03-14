@@ -21,6 +21,7 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
+import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.Operation;
@@ -167,6 +168,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
     @Override
     public ServiceDocument getDocumentTemplate() {
         ServiceDocument td = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(td);
         NetworkInterfaceDescription template = (NetworkInterfaceDescription) td;
 
         template.id = UUID.randomUUID().toString();
