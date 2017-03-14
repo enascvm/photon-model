@@ -114,10 +114,6 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 Assert.assertTrue("Dummy image should have been deleted.",
                         !imagesAfterFirstEnum.documentLinks.contains(staleImageState.documentSelfLink));
             }
-
-            queryDocumentsAndAssertExpectedCount(getHost(), 1,
-                    ImageEnumerationTaskService.FACTORY_LINK,
-                    EXACT_COUNT);
         }
 
         {
@@ -151,10 +147,6 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
                 Assert.assertTrue("Image name is not updated correctly after second enum.", !imageAfterSecondEnum.name.contains("OVERRIDE"));
             }
-
-            queryDocumentsAndAssertExpectedCount(getHost(), 2,
-                    ImageEnumerationTaskService.FACTORY_LINK,
-                    EXACT_COUNT);
         }
     }
 

@@ -135,7 +135,7 @@ public class ProvisioningUtils {
                 ComputeState.FIELD_NAME_TYPE).setTermMatchValue(type);
         kindClause.occurance = Occurance.MUST_OCCUR;
 
-        QueryTask.QuerySpecification querySpec  = new QueryTask.QuerySpecification();
+        QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
         querySpec.query.addBooleanClause(kindClause);
         querySpec.query.addBooleanClause(typeClause);
 
@@ -188,8 +188,13 @@ public class ProvisioningUtils {
     public static ServiceDocumentQueryResult queryDocumentsAndAssertExpectedCount(
             VerificationHost host, URI peerURI,
             int desiredCount, String factoryLink, boolean exactCountFlag) throws Throwable {
-        ServiceDocumentQueryResult res = host.getFactoryState(
-                UriUtils.buildExpandLinksQueryUri(createServiceURI(host, peerURI, factoryLink)));
+        URI queryUri = UriUtils.buildExpandLinksQueryUri(
+                createServiceURI(host, peerURI, factoryLink));
+
+        // add limit, otherwise the query will not return if there are too many docs or versions
+        queryUri = UriUtils.extendUriWithQuery(queryUri,
+                UriUtils.URI_PARAM_ODATA_LIMIT, String.valueOf(desiredCount * 2));
+        ServiceDocumentQueryResult res = host.getFactoryState(queryUri);
         if (exactCountFlag) {
             if (res.documents.size() == desiredCount) {
                 return res;
