@@ -251,6 +251,14 @@ public class ComputeService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        logInfo("Deleting Compute, Path: %s, Operation ID: %d, Referrer: %s",
+                delete.getUri().getPath(), delete.getId(),
+                delete.getRefererAsString());
+        super.handleDelete(delete);
+    }
+
+    @Override
     public void handleGet(Operation get) {
         ComputeState currentState = getState(get);
         boolean doExpand = get.getUri().getQuery() != null &&

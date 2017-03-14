@@ -220,6 +220,14 @@ public class DiskService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        logInfo("Deleting Disk, Path: %s, Operation ID: %d, Referrer: %s",
+                delete.getUri().getPath(), delete.getId(),
+                delete.getRefererAsString());
+        super.handleDelete(delete);
+    }
+
+    @Override
     public void handleStart(Operation start) {
         try {
             processInput(start);
