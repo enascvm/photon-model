@@ -146,6 +146,7 @@ public class TestAWSSetupUtils {
     public static final String imageId = "ami-0d4cfd66";
     public static final String securityGroup = "aws-security-group";
     public static final String instanceType_t2_micro = "t2.micro";
+    public static final String regionId = "us-east-1";
     public static final String zoneId = "us-east-1";
     public static final String avalabilityZoneIdentifier = "a";
     public static final String userData = null;
@@ -702,11 +703,11 @@ public class TestAWSSetupUtils {
 
             networkState.authCredentialsLink = authCredentialsLink;
             networkState.resourcePoolLink = resourcePoolLink;
-            networkState.regionId = zoneId;
+            networkState.regionId = regionId;
             networkState.instanceAdapterReference = UriUtils.buildUri(host,
                     AWSUriPaths.AWS_NETWORK_ADAPTER);
             networkState.customProperties = new HashMap<>();
-            networkState.customProperties.put(REGION_ID, zoneId);
+            networkState.customProperties.put(REGION_ID, regionId);
             networkState = TestUtils.doPost(host, networkState,
                     NetworkState.class,
                     UriUtils.buildUri(host, NetworkService.FACTORY_LINK));

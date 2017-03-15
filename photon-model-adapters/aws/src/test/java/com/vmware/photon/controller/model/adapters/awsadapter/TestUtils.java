@@ -15,7 +15,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_ALLOWED_NETWORK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_PROTOCOL;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.io.FileInputStream;
@@ -174,7 +174,7 @@ public class TestUtils {
         URI tenantFactoryURI = UriUtils.buildFactoryUri(host, TenantService.class);
 
         NetworkState network = new NetworkState();
-        network.regionId = zoneId;
+        network.regionId = regionId;
         network.id = UUID.randomUUID().toString();
         network.subnetCIDR = "10.1.0.0/16";
         network.tenantLinks = new ArrayList<>();

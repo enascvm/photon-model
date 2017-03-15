@@ -74,7 +74,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
 
     public String secretKey = "test123";
     public String accessKey = "blas123";
-    private String regionId = TestAWSSetupUtils.zoneId;
+    private String regionId = TestAWSSetupUtils.regionId;
     private int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
     public boolean isMock = true;
     private AmazonEC2AsyncClient client;
@@ -94,7 +94,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
             AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
             creds.privateKey = this.secretKey;
             creds.privateKeyId = this.accessKey;
-            this.client = AWSUtils.getAsyncClient(creds, null, getExecutor());
+            this.client = AWSUtils.getAsyncClient(creds, this.regionId, getExecutor());
 
             this.host.setTimeoutSeconds(this.timeoutSeconds);
 

@@ -252,8 +252,9 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     rule.ports = ipPermission.getToPort().toString();
                 }
             }
-            rule.ipRangeCidr = ipPermission.getIpRanges().size() > 0
-                    ? ipPermission.getIpRanges().get(0) : SecurityGroupService.ANY;
+
+            rule.ipRangeCidr = ipPermission.getIpv4Ranges().size() > 0
+                    ? ipPermission.getIpv4Ranges().get(0).getCidrIp() : SecurityGroupService.ANY;
             return rule;
         }
 

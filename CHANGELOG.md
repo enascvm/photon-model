@@ -2,6 +2,7 @@
 
 ## 0.6.11-SNAPSHOT
 
+* Upgrading to AWS SDK v1.11.105.
 
 ## 0.6.10
 

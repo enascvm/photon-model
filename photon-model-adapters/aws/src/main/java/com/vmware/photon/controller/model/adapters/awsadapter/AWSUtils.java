@@ -44,15 +44,19 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.ClientConfiguration;
+import com.amazonaws.SdkBaseException;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.handlers.AsyncHandler;
-import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.retry.RetryUtils;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClientBuilder;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.AmazonEC2AsyncClientBuilder;
 import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
@@ -69,15 +73,17 @@ import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceState;
 import com.amazonaws.services.ec2.model.IpPermission;
+import com.amazonaws.services.ec2.model.IpRange;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagDescription;
 import com.amazonaws.services.ec2.model.Vpc;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.transfer.TransferManager;
+import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
@@ -147,20 +153,31 @@ public class AWSUtils {
                 DEFAULT_BACKOFF_STRATEGY,
                 DEFAULT_MAX_ERROR_RETRY,
                 true));
-        AmazonEC2AsyncClient ec2AsyncClient = new AmazonEC2AsyncClient(
-                new BasicAWSCredentials(credentials.privateKeyId,
-                        EncryptionUtils.decrypt(credentials.privateKey)), configuration,
-                executorService);
+
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
+                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
+                        EncryptionUtils.decrypt(credentials.privateKey)));
+
+        AmazonEC2AsyncClientBuilder ec2AsyncClientBuilder =
+                AmazonEC2AsyncClientBuilder.standard()
+                        .withCredentials(awsStaticCredentialsProvider)
+                        .withClientConfiguration(configuration)
+                        .withExecutorFactory(() -> executorService);
+
+        if (region == null) {
+            region = Regions.DEFAULT_REGION.getName();
+        }
 
         if (isAwsClientMock()) {
-            ec2AsyncClient.setEndpoint(getAWSMockHost() + AWS_EC2_ENDPOINT);
-            return ec2AsyncClient;
+            AwsClientBuilder.EndpointConfiguration endpointConfiguration =
+                    new AwsClientBuilder.EndpointConfiguration(
+                            getAWSMockHost() + AWS_EC2_ENDPOINT, region);
+            ec2AsyncClientBuilder.setEndpointConfiguration(endpointConfiguration);
+        } else {
+            ec2AsyncClientBuilder.setRegion(region);
         }
-        if (region != null) {
-            ec2AsyncClient.setRegion(Region.getRegion(Regions.fromName(region)));
-        }
-        return ec2AsyncClient;
 
+        return (AmazonEC2AsyncClient) ec2AsyncClientBuilder.build();
     }
 
     public static void validateCredentials(AmazonEC2AsyncClient ec2Client,
@@ -194,28 +211,55 @@ public class AWSUtils {
     public static AmazonCloudWatchAsyncClient getStatsAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService, boolean isMockRequest) {
-        AmazonCloudWatchAsyncClient client = new AmazonCloudWatchAsyncClient(
-                new BasicAWSCredentials(credentials.privateKeyId,
-                        EncryptionUtils.decrypt(credentials.privateKey)),
-                executorService);
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
+                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
+                        EncryptionUtils.decrypt(credentials.privateKey)));
 
-        if (isAwsClientMock()) {
-            client.setEndpoint(getAWSMockHost() + AWS_CLOUDWATCH_ENDPOINT);
-            return client;
+        AmazonCloudWatchAsyncClientBuilder amazonCloudWatchAsyncClientBuilder =
+                AmazonCloudWatchAsyncClientBuilder.standard()
+                        .withCredentials(awsStaticCredentialsProvider)
+                        .withExecutorFactory(() -> executorService);
+
+        if (region == null) {
+            region = Regions.DEFAULT_REGION.getName();
         }
 
-        client.setRegion(Region.getRegion(Regions.fromName(region)));
-        return client;
+        if (isAwsClientMock()) {
+            AwsClientBuilder.EndpointConfiguration endpointConfiguration =
+                    new AwsClientBuilder.EndpointConfiguration(
+                            getAWSMockHost() + AWS_EC2_ENDPOINT, region);
+            amazonCloudWatchAsyncClientBuilder.setEndpointConfiguration(endpointConfiguration);
+        } else {
+            amazonCloudWatchAsyncClientBuilder.setRegion(region);
+        }
+
+        return (AmazonCloudWatchAsyncClient) amazonCloudWatchAsyncClientBuilder.build();
     }
 
     public static TransferManager getS3AsyncClient(AuthCredentialsServiceState credentials,
-            String region,
-            ExecutorService executorService) {
-        // Ignoring the region parameter for now.
-        AmazonS3Client amazonS3Client = new AmazonS3Client(
-                new BasicAWSCredentials(credentials.privateKeyId,
+            String region, ExecutorService executorService) {
+
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
+                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
                         EncryptionUtils.decrypt(credentials.privateKey)));
-        return new TransferManager(amazonS3Client, executorService, false);
+
+        AmazonS3ClientBuilder amazonS3ClientBuilder = AmazonS3ClientBuilder.standard()
+                .withCredentials(awsStaticCredentialsProvider)
+                .withForceGlobalBucketAccessEnabled(true);
+
+        if (region == null) {
+            region = Regions.DEFAULT_REGION.getName();
+        }
+
+        amazonS3ClientBuilder.setRegion(region);
+
+        TransferManagerBuilder transferManagerBuilder =
+                TransferManagerBuilder.standard()
+                        .withS3Client(amazonS3ClientBuilder.build())
+                        .withExecutorFactory(() -> executorService)
+                        .withShutDownThreadPools(false);
+
+        return transferManagerBuilder.build();
     }
 
     /**
@@ -574,8 +618,13 @@ public class AWSUtils {
     public static IpPermission createRule(int fromPort, int toPort, String subnet,
             String protocol) {
 
-        return new IpPermission().withIpProtocol(protocol)
-                .withFromPort(fromPort).withToPort(toPort).withIpRanges(subnet);
+        IpRange ipRange = new IpRange().withCidrIp(subnet);
+
+        return new IpPermission()
+                .withIpProtocol(protocol)
+                .withFromPort(fromPort)
+                .withToPort(toPort)
+                .withIpv4Ranges(ipRange);
     }
 
     /**
@@ -739,7 +788,7 @@ public class AWSUtils {
                  * an exponential back-off strategy so that we don't overload
                  * a server with a flood of retries.
                  */
-                if (RetryUtils.isRetryableServiceException(ase)) {
+                if (RetryUtils.isRetryableServiceException(new SdkBaseException(ase))) {
                     return true;
                 }
 
@@ -749,7 +798,7 @@ public class AWSUtils {
                  * retry, hoping that the pause is long enough for the request to
                  * get through the next time.
                  */
-                if (RetryUtils.isThrottlingException(ase)) {
+                if (RetryUtils.isThrottlingException(new SdkBaseException(ase))) {
                     return true;
                 }
 
@@ -758,7 +807,7 @@ public class AWSUtils {
                  * between the device time and the server time to set the clock skew
                  * and then retry the request.
                  */
-                if (RetryUtils.isClockSkewError(ase)) {
+                if (RetryUtils.isClockSkewError(new SdkBaseException(ase))) {
                     return true;
                 }
             }

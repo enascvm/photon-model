@@ -34,6 +34,7 @@ import java.util.List;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.IpPermission;
+import com.amazonaws.services.ec2.model.IpRange;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 
 import org.junit.After;
@@ -194,11 +195,12 @@ public class TestAWSFirewallService {
                 DEFAULT_SECURITY_GROUP_NAME, DEFAULT_SECURITY_GROUP_DESC, null);
 
         List<IpPermission> rules = new ArrayList<>();
+        IpRange ipRange = new IpRange().withCidrIp(DEFAULT_ALLOWED_NETWORK);
         rules.add(new IpPermission()
                 .withIpProtocol(DEFAULT_PROTOCOL)
                 .withFromPort(22)
                 .withToPort(22)
-                .withIpRanges(DEFAULT_ALLOWED_NETWORK));
+                .withIpv4Ranges(ipRange));
         updateIngressRules(this.client, groupId, rules);
         getOrCreateSecurityGroups(this.aws);
         SecurityGroup updatedGroup = getSecurityGroup(this.client, DEFAULT_SECURITY_GROUP_NAME);
@@ -245,7 +247,7 @@ public class TestAWSFirewallService {
 
     private void assertDefaultRules(IpPermission rule) {
         assertTrue(rule.getIpProtocol().equalsIgnoreCase(DEFAULT_PROTOCOL));
-        assertTrue(rule.getIpRanges().get(0).equalsIgnoreCase(DEFAULT_ALLOWED_NETWORK));
+        assertTrue(rule.getIpv4Ranges().get(0).getCidrIp().equalsIgnoreCase(DEFAULT_ALLOWED_NETWORK));
         assertTrue(rule.getFromPort() == 22 || rule.getFromPort() == 80 || rule.getFromPort() == 41000);
         assertTrue(rule.getToPort() == 22 || rule.getToPort() == 80 || rule.getToPort() == 42000);
     }
@@ -259,11 +261,11 @@ public class TestAWSFirewallService {
         for (IpPermission rule : rules) {
             assertTrue(rule.getIpProtocol().equalsIgnoreCase(DEFAULT_PROTOCOL));
             if (rule.getFromPort() == 1) {
-                assertTrue(rule.getIpRanges().get(0)
+                assertTrue(rule.getIpv4Ranges().get(0).getCidrIp()
                         .equalsIgnoreCase(this.subnet));
                 assertTrue(rule.getToPort() == 65535);
             } else {
-                assertTrue(rule.getIpRanges().get(0)
+                assertTrue(rule.getIpv4Ranges().get(0).getCidrIp()
                         .equalsIgnoreCase(DEFAULT_ALLOWED_NETWORK));
                 assertEquals(rule.getFromPort(), rule.getToPort());
                 assertTrue(ports.contains(rule.getToPort()));

@@ -26,6 +26,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getAwsInstancesByIds;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getCompute;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getSecurityGroupsIdUsingEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
@@ -130,7 +131,7 @@ public class TestAWSProvisionTask {
         AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
-        this.client = AWSUtils.getAsyncClient(creds, null, getExecutor());
+        this.client = AWSUtils.getAsyncClient(creds, TestAWSSetupUtils.regionId, getExecutor());
 
         this.awsTestContext = new HashMap<>();
         setUpTestVpc(this.client, this.awsTestContext, this.isMock);
@@ -187,14 +188,14 @@ public class TestAWSProvisionTask {
 
         // create a compute host for the AWS EC2 VM
         ComputeService.ComputeState outComputeHost = createAWSComputeHost(this.host,
-                outPool.documentSelfLink, zoneId, zoneId, this.accessKey, this.secretKey,
+                outPool.documentSelfLink, zoneId, regionId, this.accessKey, this.secretKey,
                 this.isAwsClientMock, this.awsMockEndpointReference, null);
 
         // create a AWS VM compute resoruce
         boolean addNonExistingSecurityGroup = true;
         this.vmState = createAWSVMResource(this.host, outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(),
-                this.currentTestName.getMethodName() + "_vm1", zoneId, zoneId,
+                this.currentTestName.getMethodName() + "_vm1", zoneId, regionId,
                 null /* tagLinks */, this.singleNicSpec, addNonExistingSecurityGroup);
 
         // kick off a provision task to do the actual VM creation
@@ -282,7 +283,7 @@ public class TestAWSProvisionTask {
                 outComputeHost.documentSelfLink,
                 outPool.documentSelfLink, this.getClass(),
                 this.currentTestName.getMethodName() + "_vm2",
-                zoneId, zoneId,
+                zoneId, regionId,
                 tagLinks, this.singleNicSpec, addNonExistingSecurityGroup);
 
         TestAWSSetupUtils.provisionMachine(this.host, this.vmState, this.isMock, instanceIdList);
@@ -429,9 +430,9 @@ public class TestAWSProvisionTask {
                 assertNotNull(awsIngressRule);
                 assertNotNull(awsEgressRule);
                 assertEquals("Error in created ingress rule", awsIngressRule.getIpProtocol(), currentSGState.ingress.get(0).protocol);
-                assertEquals("Error in created ingress rule", awsIngressRule.getIpRanges().get(0), currentSGState.ingress.get(0).ipRangeCidr);
+                assertEquals("Error in created ingress rule", awsIngressRule.getIpv4Ranges().get(0).getCidrIp(), currentSGState.ingress.get(0).ipRangeCidr);
                 assertEquals("Error in created egress rule", awsEgressRule.getIpProtocol(), currentSGState.egress.get(0).protocol);
-                assertEquals("Error in created egress rule", awsEgressRule.getIpRanges().get(0), currentSGState.egress.get(0).ipRangeCidr);
+                assertEquals("Error in created egress rule", awsEgressRule.getIpv4Ranges().get(0).getCidrIp(), currentSGState.egress.get(0).ipRangeCidr);
             }
         }
     }

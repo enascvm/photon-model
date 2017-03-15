@@ -23,6 +23,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
@@ -118,7 +119,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
         this.creds = new AuthCredentialsServiceState();
         this.creds.privateKey = this.secretKey;
         this.creds.privateKeyId = this.accessKey;
-        this.client = AWSUtils.getAsyncClient(this.creds, TestAWSSetupUtils.zoneId, getExecutor());
+        this.client = AWSUtils.getAsyncClient(this.creds, TestAWSSetupUtils.regionId, getExecutor());
 
         this.awsTestContext = new HashMap<>();
         setUpTestVpc(this.client, this.awsTestContext, this.isMock);
@@ -198,7 +199,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
      */
     private void bounceAWSClient() {
         this.client.shutdown();
-        this.client = AWSUtils.getAsyncClient(this.creds, TestAWSSetupUtils.zoneId, getExecutor());
+        this.client = AWSUtils.getAsyncClient(this.creds, TestAWSSetupUtils.regionId, getExecutor());
     }
 
     @Test
@@ -363,7 +364,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
 
         // create a compute host for the AWS EC2 VM
         this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
-                zoneId, zoneId, this.accessKey,
+                zoneId, regionId, this.accessKey,
                 this.secretKey, this.isAwsClientMock, this.awsMockEndpointReference, null);
     }
 }

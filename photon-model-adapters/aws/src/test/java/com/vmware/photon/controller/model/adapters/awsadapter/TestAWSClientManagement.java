@@ -110,7 +110,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         this.creds.privateKey = this.accessKey;
         this.creds.privateKeyId = this.secretKey;
 
-        this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.zoneId,
+        this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.regionId,
                 this.instanceService, t -> {
                     throw new RuntimeException(t);
                 });
@@ -118,7 +118,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
 
         // Requesting another AWS client with the same set of credentials will not
         // create a new entry in the cache
-        this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.zoneId,
+        this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.regionId,
                 this.instanceService, t -> {
                     throw new RuntimeException(t);
                 });

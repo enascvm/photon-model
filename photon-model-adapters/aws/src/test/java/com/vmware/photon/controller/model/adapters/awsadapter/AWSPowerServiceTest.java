@@ -94,7 +94,7 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
-        this.client = AWSUtils.getAsyncClient(creds, null, getExecutor());
+        this.client = AWSUtils.getAsyncClient(creds, this.regionId, getExecutor());
 
         this.awsTestContext = new HashMap<>();
         setUpTestVpc(this.client, this.awsTestContext, this.isMock);
@@ -153,7 +153,7 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         boolean addNonExistingSecurityGroup = false;
         ComputeState cs = TestAWSSetupUtils.createAWSVMResource(this.host, endpoint.computeLink,
                 endpoint.resourcePoolLink, getClass(),
-                "trainingVM",zoneId, zoneId, null, this.singleNicSpec, addNonExistingSecurityGroup);
+                "trainingVM", zoneId, this.regionId, null, this.singleNicSpec, addNonExistingSecurityGroup);
 
         this.computesToRemove.add(cs.documentSelfLink);
         assertEquals(PowerState.UNKNOWN, cs.powerState);

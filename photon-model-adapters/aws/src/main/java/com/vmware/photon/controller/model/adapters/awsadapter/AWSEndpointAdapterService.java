@@ -28,6 +28,7 @@ import java.util.function.BiConsumer;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.regions.Regions;
@@ -35,6 +36,7 @@ import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClient;
+import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClientBuilder;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -231,8 +233,18 @@ public class AWSEndpointAdapterService extends StatelessService {
      */
     private String getAccountId(String privateKeyId, String privateKey) {
         AWSCredentials awsCredentials = new BasicAWSCredentials(privateKeyId, privateKey);
-        AmazonIdentityManagementClient iamClient = new AmazonIdentityManagementClient(
-                awsCredentials);
+
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
+                new AWSStaticCredentialsProvider(awsCredentials);
+
+        AmazonIdentityManagementClientBuilder amazonIdentityManagementClientBuilder =
+                AmazonIdentityManagementClientBuilder.standard()
+                        .withCredentials(awsStaticCredentialsProvider)
+                        .withRegion(Regions.DEFAULT_REGION);
+
+        AmazonIdentityManagementClient iamClient = (AmazonIdentityManagementClient)
+                amazonIdentityManagementClientBuilder.build();
+
         String userId = null;
         try {
             if ((iamClient.getUser() != null) && (iamClient.getUser().getUser() != null)
