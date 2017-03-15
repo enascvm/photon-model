@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -29,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import io.netty.util.internal.StringUtil;
-
+import org.codehaus.jackson.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -48,12 +49,16 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMo
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Element;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.Finder;
 import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderException;
+import com.vmware.photon.controller.model.adapters.vsphere.vapi.LibraryClient;
+import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiClient;
+import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
@@ -180,6 +185,24 @@ public class InstanceClient extends BaseHelper {
             throws Exception {
         ManagedObjectReference vm = cloneVm(template);
 
+        if (vm == null) {
+            // vm was created by someone else
+            return null;
+        }
+
+        customizeAfterClone(vm);
+
+        // store reference to created vm for further processing
+        this.vm = vm;
+
+        ComputeState state = new ComputeState();
+        state.resourcePoolLink = VimUtils
+                .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
+
+        return state;
+    }
+
+    private void customizeAfterClone(ManagedObjectReference vm) throws Exception {
         VirtualMachineConfigSpec spec = new VirtualMachineConfigSpec();
 
         // even though this is a clone, hw config from the compute resource
@@ -221,22 +244,8 @@ public class InstanceClient extends BaseHelper {
         TaskInfo info = waitTaskEnd(task);
 
         if (info.getState() == TaskInfoState.ERROR) {
-            return VimUtils.rethrow(info.getError());
+            VimUtils.rethrow(info.getError());
         }
-
-        if (vm == null) {
-            // vm was created by someone else
-            return null;
-        }
-
-        // store reference to created vm for further processing
-        this.vm = vm;
-
-        ComputeState state = new ComputeState();
-        state.resourcePoolLink = VimUtils
-                .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
-
-        return state;
     }
 
     private ManagedObjectReference cloneVm(ManagedObjectReference template) throws Exception {
@@ -321,12 +330,6 @@ public class InstanceClient extends BaseHelper {
      * @return
      */
     public ComputeState createInstance() throws Exception {
-        if (this.targetDatacenterPath == null || this.targetDatacenterPath.length() == 0) {
-            throw new IllegalArgumentException(
-                    "Datacenter is required for provisioning "
-                            + this.state.description.documentSelfLink);
-        }
-
         ManagedObjectReference vm;
 
         if (isOvfDeploy()) {
@@ -1613,6 +1616,39 @@ public class InstanceClient extends BaseHelper {
 
     public ManagedObjectReference getVm() {
         return this.vm;
+    }
+
+    public ComputeState createInstanceFromLibraryItem(ImageState image) throws Exception {
+        VapiConnection vapi = VapiConnection.createFromVimConnection(this.connection);
+        vapi.login();
+        LibraryClient client = vapi.newLibraryClient();
+
+        Map<String, String> mapping = new HashMap<>();
+        ObjectNode result = client.deployOvfLibItem(image.id, this.state.name,
+                getVmFolder(), getDatastore(), getResourcePool(), mapping);
+
+        if (!result.get("succeeded").asBoolean()) {
+            throw new Exception("error deploying from library");
+        }
+
+        ManagedObjectReference ref = new ManagedObjectReference();
+        ref.setType(VimNames.TYPE_VM);
+        ref.setValue(VapiClient.getString(result,
+                "resource_id",
+                VapiClient.K_OPTIONAL,
+                VapiClient.K_STRUCTURE,
+                "com.vmware.vcenter.ovf.library_item.deployable_identity",
+                "id"));
+
+        this.vm = ref;
+
+        customizeAfterClone(ref);
+
+        ComputeState state = new ComputeState();
+        state.resourcePoolLink = VimUtils
+                .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
+
+        return state;
     }
 
     public static class ClientException extends Exception {

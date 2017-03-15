@@ -29,6 +29,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
@@ -58,6 +59,7 @@ public class ProvisionContext {
     public ComputeStateWithDescription parent;
     public ComputeStateWithDescription child;
 
+    public ImageState image;
     public ManagedObjectReference templateMoRef;
     public ManagedObjectReference computeMoRef;
     public String datacenterPath; // target datacenter resolved from the target placement
@@ -117,7 +119,7 @@ public class ProvisionContext {
             return;
         }
 
-        String templateLink = VimUtils.<String>firstNonNull(
+        String templateLink = VimUtils.firstNonNull(
                 CustomProperties.of(ctx.child).getString(CustomProperties.TEMPLATE_LINK),
                 CustomProperties.of(ctx.child.description).getString(CustomProperties.TEMPLATE_LINK)
         );
@@ -328,6 +330,21 @@ public class ProvisionContext {
                     });
 
             join.sendWith(service);
+            return;
+        }
+
+        String libraryItemLink = VimUtils.firstNonNull(
+                CustomProperties.of(ctx.child).getString(CustomProperties.LIBRARY_ITEM_LINK),
+                CustomProperties.of(ctx.child.description).getString(CustomProperties.LIBRARY_ITEM_LINK)
+        );
+        if (libraryItemLink != null && ctx.image == null && ctx.instanceRequestType == InstanceRequestType.CREATE) {
+            URI libraryUri = UriUtils.buildUri(service.getHost(), libraryItemLink);
+
+            AdapterUtils.getServiceState(service, libraryUri, op -> {
+                ImageState body = op.getBody(ImageState.class);
+                ctx.image = body;
+                populateContextThen(service, ctx, onSuccess);
+            }, ctx.errorHandler);
             return;
         }
 

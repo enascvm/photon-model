@@ -41,6 +41,12 @@ public class CustomProperties {
     public static final String TEMPLATE_LINK = "__templateComputeLink";
 
     /**
+     * When part of computeDescription, causes a vm to be created from an the
+     * library item found at this link.
+     */
+    public static final String LIBRARY_ITEM_LINK = "__libraryItemLink";
+
+    /**
      * If true, the ComputeState represents a VM template.
      */
     public static final String TEMPLATE_FLAG = "__isTemplate";

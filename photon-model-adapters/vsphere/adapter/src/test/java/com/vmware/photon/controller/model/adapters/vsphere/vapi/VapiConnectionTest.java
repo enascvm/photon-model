@@ -15,12 +15,14 @@ package com.vmware.photon.controller.model.adapters.vsphere.vapi;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
 
 import org.codehaus.jackson.node.ObjectNode;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.adapters.vsphere.VimUtils;
 import com.vmware.vim25.ManagedObjectReference;
 
 @Ignore
@@ -62,6 +64,13 @@ public class VapiConnectionTest {
                 System.out.println(libraryClient.loadItem(it));
             }
         }
-        conn.close();
+
+        ManagedObjectReference folder = VimUtils.convertStringToMoRef("Folder:group-v3");
+        ManagedObjectReference ds = VimUtils.convertStringToMoRef("Datastore:datastore-4125");
+        ManagedObjectReference rp = VimUtils.convertStringToMoRef("ResourcePool:resgroup-18");
+        ObjectNode result = libraryClient
+                .deployOvfLibItem("f2de22cb-ac8e-4fa8-933e-1caa70bed721", "test", folder, ds, rp, new HashMap<>());
+
+        System.out.println(result);
     }
 }
