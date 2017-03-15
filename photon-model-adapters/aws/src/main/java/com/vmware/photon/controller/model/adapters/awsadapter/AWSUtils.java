@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.amazonaws.AmazonClientException;
@@ -719,8 +720,10 @@ public class AWSUtils {
         public boolean shouldRetry(AmazonWebServiceRequest originalRequest,
                 AmazonClientException exception,
                 int retriesAttempted) {
-            Utils.logWarning("Encountered exception %s for request %s, retries attempted: %d",
-                    Utils.toString(exception), originalRequest, retriesAttempted);
+            Utils.log(CustomRetryCondition.class, CustomRetryCondition.class.getSimpleName(),
+                    Level.FINE, () -> String
+                            .format("Encountered exception %s for request %s, retries attempted: %d",
+                                    Utils.toString(exception), originalRequest, retriesAttempted));
 
             // Always retry on client exceptions caused by IOException
             if (exception.getCause() instanceof IOException) {
