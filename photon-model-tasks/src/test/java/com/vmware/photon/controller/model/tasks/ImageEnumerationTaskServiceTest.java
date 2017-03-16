@@ -44,7 +44,6 @@ import com.vmware.photon.controller.model.tasks.MockAdapter.MockFailOperationIma
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockFailureImageEnumerationAdapter;
 import com.vmware.photon.controller.model.tasks.MockAdapter.MockSuccessImageEnumerationAdapter;
 import com.vmware.xenon.common.Service;
-import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -197,6 +196,7 @@ public class ImageEnumerationTaskServiceTest extends Suite {
         }
 
         private EndpointState endpointState;
+        private int tasksCountBeforeRun;
 
         @Before
         public void beforeTest() throws Throwable {
@@ -204,6 +204,9 @@ public class ImageEnumerationTaskServiceTest extends Suite {
             this.endpointState = createEndpointState(this.endpointType);
 
             registerEndpointConfig();
+
+            // Get BEFORE tasks count
+            this.tasksCountBeforeRun = countServiceDocuments();
         }
 
         private void registerEndpointConfig() throws Throwable {
@@ -268,15 +271,12 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                     ImageEnumerationTaskState.class,
                     startedState.documentSelfLink,
                     liveState -> this.expectedCompletedStage == liveState.taskInfo.stage);
+
+            Assert.assertEquals(this.tasksCountBeforeRun + 1,  countServiceDocuments());
         }
 
         @Test
         public void testCompleteTaskAndSelfDelete() throws Throwable {
-
-            // Get BEFORE tasks count
-            ServiceDocumentQueryResult taskCount = getHost().getFactoryState(
-                    UriUtils.buildUri(getHost(), ImageEnumerationTaskService.FACTORY_LINK));
-
             ImageEnumerationTaskState adapterReq = newImageEnumerationRequest(this.endpointState);
             adapterReq.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
 
@@ -285,14 +285,13 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                     adapterReq,
                     ImageEnumerationTaskState.class);
 
-            getHost().waitFor("Timeout waiting for image enum task to self-delete", () -> {
+            getHost().waitFor("Timeout waiting for image enum task to self-delete", () ->
+                    this.tasksCountBeforeRun == countServiceDocuments());
+        }
 
-                // Get CURRENT tasks count
-                ServiceDocumentQueryResult liveTaskCount = getHost().getFactoryState(
-                        UriUtils.buildUri(getHost(), ImageEnumerationTaskService.FACTORY_LINK));
-
-                return taskCount.documentCount == liveTaskCount.documentCount;
-            });
+        private int countServiceDocuments() {
+            return getHost().getFactoryState(UriUtils.buildFactoryUri(getHost(),
+                    ImageEnumerationTaskService.class)).documentLinks.size();
         }
     }
 }
