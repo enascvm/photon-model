@@ -42,6 +42,7 @@ import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.support.CertificateInfo;
 import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTaskState;
@@ -113,6 +114,12 @@ public class EndpointAllocationTaskService
         @Documentation(description = "Describes a service task sub stage.")
         @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
         public SubStage taskSubStage;
+
+        @Documentation(description = "Certificate info populated in case of failure "
+                + "when validate the endpoint.")
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
+        public CertificateInfo certificateInfo;
+
     }
 
     public static class ResourceEnumerationRequest {
@@ -518,6 +525,9 @@ public class EndpointAllocationTaskService
                                 errorResponse.documentKind)) {
                             st.taskInfo.failure = errorResponse;
                             st.taskInfo.stage = TaskStage.FAILED;
+                            if (errorResponse.certificateInfo != null) {
+                                st.certificateInfo = errorResponse.certificateInfo;
+                            }
                         }
                     }
                     sendSelfPatch(st);

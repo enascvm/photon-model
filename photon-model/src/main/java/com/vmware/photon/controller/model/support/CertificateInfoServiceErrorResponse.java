@@ -40,7 +40,7 @@ public class CertificateInfoServiceErrorResponse extends ServiceErrorResponse {
     public CertificateInfo certificateInfo;
 
     private CertificateInfoServiceErrorResponse(CertificateInfo certificateInfo,
-            int statusCode, int errorCode, Throwable e) {
+            int statusCode, int errorCode, String message) {
         if (certificateInfo == null) {
             throw new IllegalArgumentException("'certificateInfo' must be set.");
         }
@@ -48,14 +48,19 @@ public class CertificateInfoServiceErrorResponse extends ServiceErrorResponse {
         this.certificateInfo = certificateInfo;
         this.statusCode = statusCode;
         this.errorCode = errorCode;
-        if (e != null) {
-            this.message = e.getMessage();
-        }
+        this.message = message;
+    }
+
+    public static CertificateInfoServiceErrorResponse create(
+            CertificateInfo certificateInfo,
+            int statusCode, int errorCode, String message) {
+        return new CertificateInfoServiceErrorResponse(
+                certificateInfo, statusCode, errorCode, message);
     }
 
     public static CertificateInfoServiceErrorResponse create(
             CertificateInfo certificateInfo,
             int statusCode, int errorCode, Throwable e) {
-        return new CertificateInfoServiceErrorResponse(certificateInfo, statusCode, errorCode, e);
+        return create(certificateInfo, statusCode, errorCode, e != null ? e.getMessage() : null);
     }
 }
