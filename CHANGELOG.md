@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.9-SNAPSHOT
+
+
 ## 0.6.8
 
 * Upgrading to xenon-1.4.1.
