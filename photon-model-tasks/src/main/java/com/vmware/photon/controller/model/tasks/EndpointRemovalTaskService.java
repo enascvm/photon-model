@@ -20,6 +20,8 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -76,7 +78,7 @@ public class EndpointRemovalTaskService
     public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";
     public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
 
-    public static final String[] RESOURCE_TYPES_TO_DELETE = {
+    public static final Collection<String> RESOURCE_TYPES_TO_DELETE = Arrays.asList(
             Utils.buildKind(AuthCredentialsServiceState.class),
             Utils.buildKind(DiskState.class),
             Utils.buildKind(ComputeState.class),
@@ -88,9 +90,8 @@ public class EndpointRemovalTaskService
             Utils.buildKind(SecurityGroupState.class),
             Utils.buildKind(SubnetState.class),
             Utils.buildKind(StorageDescription.class),
-            Utils.buildKind(ResourceGroupState.class),
-            Utils.buildKind(ResourcePoolState.class)
-    };
+            Utils.buildKind(ResourceGroupState.class)
+    );
 
     /**
      * SubStage.
@@ -119,9 +120,16 @@ public class EndpointRemovalTaskService
 
         /**
          * Delete any additional resources which refer this endpoint through custom property
-         * {@link ComputeProperties#ENDPOINT_LINK_PROP_NAME}
+         * {@link ComputeProperties#ENDPOINT_LINK_PROP_NAME}, except for resource pools (they cannot
+         * be deleted before resources which use them are deleted first)
          */
         DELETE_RELATED_RESOURCES,
+
+        /**
+         * Delete associated resource pools
+         */
+        DELETE_RELATED_RESOURCE_POOLS,
+
         FINISHED,
         FAILED
     }
@@ -234,7 +242,10 @@ public class EndpointRemovalTaskService
             doInstanceDeletes(currentState, SubStage.DELETE_RELATED_RESOURCES);
             break;
         case DELETE_RELATED_RESOURCES:
-            deleteAssociatedDocuments(currentState, SubStage.FINISHED);
+            deleteAssociatedDocuments(currentState, RESOURCE_TYPES_TO_DELETE, SubStage.DELETE_RELATED_RESOURCE_POOLS);
+            break;
+        case DELETE_RELATED_RESOURCE_POOLS:
+            deleteAssociatedDocuments(currentState, Arrays.asList(Utils.buildKind(ResourcePoolState.class)), SubStage.FINISHED);
             break;
         case FAILED:
             break;
@@ -287,8 +298,9 @@ public class EndpointRemovalTaskService
     /**
      * Delete associated resource, e.g. enumeration task if started.
      */
-    private void deleteAssociatedDocuments(EndpointRemovalTaskState state, SubStage next) {
-        Query resourceQuery = getAssociatedDocumentsQuery(state);
+    private void deleteAssociatedDocuments(EndpointRemovalTaskState state,
+            Collection<String> documentKinds, SubStage next) {
+        Query resourceQuery = getAssociatedDocumentsQuery(state, documentKinds);
         QueryTask resourceQueryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(resourceQuery)
                 .setResultLimit(QueryUtils.DEFAULT_RESULT_LIMIT)
@@ -359,40 +371,20 @@ public class EndpointRemovalTaskService
                 .setCompletion(completionHandler));
     }
 
-    private Query getAssociatedDocumentsQuery(EndpointRemovalTaskState state) {
-        Query resourceQuery = Query.Builder.create().build();
+    private Query getAssociatedDocumentsQuery(EndpointRemovalTaskState state,
+            Collection<String> documentKinds) {
+        Query resourceQuery = Query.Builder.create()
+                .addInClause(ServiceDocument.FIELD_NAME_KIND, documentKinds)
+                .addClause(Query.Builder.create()
+                        .addFieldClause(FIELD_NAME_ENDPOINT_LINK, state.endpoint.documentSelfLink,
+                                QueryTask.Query.Occurance.SHOULD_OCCUR)
+                        .addCompositeFieldClause(FIELD_NAME_CUSTOM_PROPERTIES,
+                                ComputeProperties.ENDPOINT_LINK_PROP_NAME,
+                                state.endpoint.documentSelfLink,
+                                QueryTask.Query.Occurance.SHOULD_OCCUR)
+                        .build())
+                .build();
 
-        Query documentKindFilter = new QueryTask.Query();
-        documentKindFilter.occurance = QueryTask.Query.Occurance.MUST_OCCUR;
-        for (String documentKind : RESOURCE_TYPES_TO_DELETE) {
-            QueryTask.Query kindFilter = new QueryTask.Query()
-                    .setTermPropertyName(ServiceDocument.FIELD_NAME_KIND)
-                    .setTermMatchValue(documentKind);
-            kindFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
-            documentKindFilter.addBooleanClause(kindFilter);
-        }
-        resourceQuery.addBooleanClause(documentKindFilter);
-
-        Query endpointFilter = new QueryTask.Query();
-        endpointFilter.occurance = QueryTask.Query.Occurance.MUST_OCCUR;
-        //query for document that have the endpointLink field as a primary property
-        Query endpointLinkFilter = new QueryTask.Query()
-                .setTermPropertyName(FIELD_NAME_ENDPOINT_LINK)
-                .setTermMatchValue(state.endpoint.documentSelfLink);
-        endpointLinkFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
-        endpointFilter.addBooleanClause(endpointLinkFilter);
-
-        // query for document that have the endpointLink field as a custom property
-        String endpointLinkCompositeField = QueryTask.QuerySpecification
-                .buildCompositeFieldName(FIELD_NAME_CUSTOM_PROPERTIES,
-                        ComputeProperties.ENDPOINT_LINK_PROP_NAME);
-        Query customEndpointLinkFilter = new QueryTask.Query()
-                .setTermPropertyName(endpointLinkCompositeField)
-                .setTermMatchValue(state.endpoint.documentSelfLink);
-        customEndpointLinkFilter.occurance = QueryTask.Query.Occurance.SHOULD_OCCUR;
-        endpointFilter.addBooleanClause(customEndpointLinkFilter);
-
-        resourceQuery.addBooleanClause(endpointFilter);
         return resourceQuery;
     }
 
