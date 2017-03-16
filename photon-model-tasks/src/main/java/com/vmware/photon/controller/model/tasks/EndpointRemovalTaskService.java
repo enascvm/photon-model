@@ -287,6 +287,14 @@ public class EndpointRemovalTaskService
 
         OperationJoin.create(crdOp, cdsOp, csOp, epOp).setCompletion((ops, exc) -> {
             if (exc != null) {
+                // failing to delete the endpoint itself is considered a critical error
+                Throwable endpointRemovalException = exc.get(epOp.getId());
+                if (endpointRemovalException != null) {
+                    sendFailureSelfPatch(endpointRemovalException);
+                    return;
+                }
+
+                // other removal exceptions are just warnings
                 logFine(() -> String.format("Failed delete some of the associated resources,"
                                 + " reason %s", Utils.toString(exc)));
             }
