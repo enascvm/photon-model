@@ -423,7 +423,7 @@ public class TestAWSSetupUtils {
     }
 
     public static final String AWS_DEFAULT_GROUP_NAME = "cell-manager-security-group";
-    public static final String AWS_DEFAULT_GROUP_ID = "sg-d46efeac";
+    public static final String AWS_DEFAULT_GROUP_ID = "sg-2616c559";
     public static final String AWS_NEW_GROUP_PREFIX = "test-new-";
 
     public static final String DEFAULT_AUTH_TYPE = "PublicKey";
