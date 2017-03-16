@@ -1,7 +1,14 @@
 # CHANGELOG
 
-## 0.6.8-SNAPSHOT
+## 0.6.8
 
+* Upgrading to xenon-1.4.1.
+* Paginate querying instances in Aws Cost adapter
+* Update JaCoCo plugin.
+* Update context so that we don't auto-discover bill bucket each month during first data-collection.
+* Adding logger statements to identify who/what deleted the resources.
+* Fix issue with error after restarting, vSphere endpoint computeDescription is not valid.
+* Update estimated charges metric.
 
 ## 0.6.7
 
