@@ -19,6 +19,8 @@ import static java.util.stream.Collectors.groupingBy;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -521,25 +523,30 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 context.endpointState.tenantLinks,
                 context.endpointState.documentSelfLink);
 
-        // Delete stale resources but do NOT wait the deletion to complete
-        // nor fail if individual deletion has failed.
+        List<DeferredResult<Operation>> ops = Collections.synchronizedList(new ArrayList<DeferredResult<Operation>>());
+
+        // Delete stale resources.
         return queryLocalStates.queryDocuments(ls -> {
-
             if (shouldDelete(ls)) {
-
                 Operation dOp = Operation.createDelete(context.service, ls.documentSelfLink);
 
-                context.service.sendWithDeferredResult(dOp).whenComplete((o, e) -> {
-                    final String msg = "Delete stale %s state";
-                    if (e != null) {
-                        context.service.logWarning(msg + ": ERROR - %s",
-                                ls.documentSelfLink, Utils.toString(e));
-                    } else {
-                        context.service.log(Level.FINEST, msg + ": SUCCESS", ls.documentSelfLink);
-                    }
-                });
+                DeferredResult<Operation> dr = context.service.sendWithDeferredResult(dOp)
+                        .whenComplete((o, e) -> {
+                            final String msg = "Delete stale %s state";
+                            if (e != null) {
+                                context.service.logWarning(msg + ": ERROR - %s",
+                                        ls.documentSelfLink, Utils.toString(e));
+                            } else {
+                                context.service
+                                        .log(Level.FINEST, msg + ": SUCCESS", ls.documentSelfLink);
+                            }
+                        });
+
+                ops.add(dr);
             }
-        }).thenApply(ignore -> context);
+        })
+                .thenCompose(r -> DeferredResult.allOf(ops))
+                .thenApply(r -> context);
     }
 
     /**
