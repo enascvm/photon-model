@@ -64,6 +64,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
@@ -86,7 +87,6 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 /**
  * Service to gather AWS Cost related stats
@@ -317,12 +317,11 @@ public class AWSCostStatsService extends StatelessService {
                         PhotonModelConstants.EndpointType.aws.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AWSConstants.AWS_ACCOUNT_ID_KEY, accountId)
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK, "*", QueryTask.QueryTerm.MatchType.WILDCARD,
-                        QueryTask.Query.Occurance.MUST_NOT_OCCUR)
-                .addFieldClause(ComputeState.FIELD_NAME_ENDPOINT_LINK, "*", MatchType.WILDCARD, Occurance.MUST_OCCUR)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_GUEST)
                 .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT).setQuery(awsAccountsQuery).build();
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .setQuery(awsAccountsQuery).build();
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeDesc.tenantLinks;
         return Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)

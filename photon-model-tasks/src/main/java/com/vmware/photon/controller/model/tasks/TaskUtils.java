@@ -24,7 +24,6 @@ import java.util.function.Consumer;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.xenon.common.Claims;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Operation.AuthorizationContext;
 import com.vmware.xenon.common.Service.Action;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceHost;
@@ -365,21 +364,13 @@ public class TaskUtils {
      * @param userServicePath user document link
      * @throws GeneralSecurityException any generic security exception
      */
-    public static AuthorizationContext assumeIdentity(StatefulService service, Operation op,
+    public static void assumeIdentity(StatefulService service, Operation op,
             String userServicePath)
             throws GeneralSecurityException {
         Claims.Builder builder = new Claims.Builder();
         builder.setSubject(userServicePath);
         Claims claims = builder.getResult();
         String token = service.getTokenSigner().sign(claims);
-
-        AuthorizationContext.Builder ab = AuthorizationContext.Builder.create();
-        ab.setClaims(claims);
-        ab.setToken(token);
-
-        // Associate resulting authorization context with this thread
-        AuthorizationContext authContext = ab.getResult();
-        service.setAuthorizationContext(op, authContext);
-        return authContext;
+        op.addRequestHeader(Operation.REQUEST_AUTH_TOKEN_HEADER, token);
     }
 }

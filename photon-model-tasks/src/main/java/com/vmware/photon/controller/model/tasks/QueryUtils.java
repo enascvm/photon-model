@@ -57,6 +57,7 @@ public class QueryUtils {
 
     public static final long MINUTE_IN_MICROS = TimeUnit.MINUTES.toMicros(1);
 
+
     /**
      * Executes the given query task.
      *
@@ -310,6 +311,7 @@ public class QueryUtils {
          * Descendants might override this method to customize the default query task build logic.
          * For example add option such as {@link QueryOption#TOP_RESULTS}.
          */
+
         protected QueryTask.Builder newQueryTaskBuilder() {
             return QueryTask.Builder.createDirectTask()
                     .setQuery(this.query)

@@ -71,20 +71,10 @@ public class AWSStatsService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_STATS_ADAPTER;
 
-    public static final String[] METRIC_NAMES = { AWSConstants.CPU_UTILIZATION,
-            AWSConstants.DISK_READ_BYTES, AWSConstants.DISK_WRITE_BYTES,
-            AWSConstants.NETWORK_IN, AWSConstants.NETWORK_OUT,
-            AWSConstants.CPU_CREDIT_USAGE, AWSConstants.CPU_CREDIT_BALANCE,
-            AWSConstants.DISK_READ_OPS, AWSConstants.DISK_WRITE_OPS,
-            AWSConstants.NETWORK_PACKETS_IN, AWSConstants.NETWORK_PACKETS_OUT,
-            AWSConstants.STATUS_CHECK_FAILED, AWSConstants.STATUS_CHECK_FAILED_INSTANCE,
-            AWSConstants.STATUS_CHECK_FAILED_SYSTEM };
+    public static final String[] METRIC_NAMES = { AWSConstants.CPU_UTILIZATION };
 
     public static final String[] AGGREGATE_METRIC_NAMES_ACROSS_INSTANCES = {
-            AWSConstants.CPU_UTILIZATION, AWSConstants.DISK_READ_BYTES,
-            AWSConstants.DISK_READ_OPS, AWSConstants.DISK_WRITE_BYTES,
-            AWSConstants.DISK_WRITE_OPS, AWSConstants.NETWORK_IN,
-            AWSConstants.NETWORK_OUT };
+            AWSConstants.CPU_UTILIZATION};
 
     private static final String[] STATISTICS = { "Average", "SampleCount" };
     private static final String NAMESPACE = "AWS/EC2";
