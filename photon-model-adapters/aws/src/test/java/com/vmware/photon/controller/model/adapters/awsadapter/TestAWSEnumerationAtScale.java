@@ -24,6 +24,8 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
@@ -31,7 +33,9 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.g
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -101,6 +105,10 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
             Arrays.asList(zoneId + "~" + T2_NANO_INSTANCE_TYPE,
                     zoneId + "~" + instanceType_t2_micro));
 
+    private Map<String, Object> awsTestContext;
+    private String subnetId;
+    private String securityGroupId;
+
     @Before
     public void setUp() throws Exception {
         CommandLineArgumentParser.parseFromProperties(this);
@@ -111,6 +119,12 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
         this.creds.privateKey = this.secretKey;
         this.creds.privateKeyId = this.accessKey;
         this.client = AWSUtils.getAsyncClient(this.creds, TestAWSSetupUtils.zoneId, getExecutor());
+
+        this.awsTestContext = new HashMap<>();
+        setUpTestVpc(this.client, this.awsTestContext, this.isMock);
+        this.subnetId = (String) this.awsTestContext.get(TestAWSSetupUtils.SUBNET_KEY);
+        this.securityGroupId = (String) this.awsTestContext.get(TestAWSSetupUtils.SECURITY_GROUP_KEY);
+
         try {
             PhotonModelServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
@@ -170,6 +184,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     waitForInstancesToBeTerminated(this.client, this.host, instanceBatchToDelete);
                 }
             }
+            tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
             this.client.shutdown();
             setAwsClientMockInfo(false, null);
         } catch (Throwable deleteEx) {
@@ -215,7 +230,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
                     firstSpawnCycle = false;
                 }
                 instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, instancesToSpawn,
-                        instanceType_t2_micro);
+                        instanceType_t2_micro, this.subnetId, this.securityGroupId);
                 instancesToCleanUp.addAll(instanceIds);
                 this.host.log("Instances to cleanup is %d", instancesToCleanUp.size());
                 waitForProvisioningToComplete(instanceIds, this.host, this.client, this.errorRate);

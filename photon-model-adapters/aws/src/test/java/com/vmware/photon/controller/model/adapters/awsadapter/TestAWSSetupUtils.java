@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
@@ -172,6 +173,7 @@ public class TestAWSSetupUtils {
     public static final String SUBNET_KEY = "subnet-id";
     public static final String INTERNET_GATEWAY_KEY = "internet-gateway";
     public static final String NIC_SPECS_KEY = "nicSpecs";
+    public static final String SECURITY_GROUP_KEY = "security-group";
 
     /**
      * Return two-NIC spec where first NIC should be assigned to 'secondary' subnet and second NIC
@@ -288,8 +290,10 @@ public class TestAWSSetupUtils {
     }
 
     public static void setUpTestVpc(AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock) {
+        awsTestContext.put(VPC_KEY, AWS_DEFAULT_VPC_ID);
         awsTestContext.put(NIC_SPECS_KEY, SINGLE_NIC_SPEC);
         awsTestContext.put(SUBNET_KEY, AWS_DEFAULT_SUBNET_ID);
+        awsTestContext.put(SECURITY_GROUP_KEY, AWS_DEFAULT_GROUP_ID);
         // create new VPC, Subnet, InternetGateway if the default VPC doesn't exist
         if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
             String vpcId = createVPC(client, AWS_DEFAULT_VPC_CIDR);
@@ -299,6 +303,7 @@ public class TestAWSSetupUtils {
             String internetGatewayId = createInternetGateway(client);
             awsTestContext.put(INTERNET_GATEWAY_KEY, internetGatewayId);
             attachInternetGateway(client, vpcId, internetGatewayId);
+            awsTestContext.put(SECURITY_GROUP_KEY, createSecurityGroup(client, vpcId));
 
             NetSpec network = new NetSpec(vpcId, vpcId, AWS_DEFAULT_VPC_CIDR);
 
@@ -313,13 +318,16 @@ public class TestAWSSetupUtils {
         }
     }
 
-    public static void tearDownTestVpc(AmazonEC2AsyncClient client, VerificationHost host,
-                                       Map<String, Object> awsTestContext, boolean isMock) {
+    public static void tearDownTestVpc(
+            AmazonEC2AsyncClient client, VerificationHost host,
+            Map<String, Object> awsTestContext, boolean isMock) {
         if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
             final String vpcId = (String) awsTestContext.get(VPC_KEY);
             final String subnetId = (String) awsTestContext.get(SUBNET_KEY);
             final String internetGatewayId = (String) awsTestContext.get(INTERNET_GATEWAY_KEY);
+            final String securityGroupId = (String) awsTestContext.get(SECURITY_GROUP_KEY);
             // clean up VPC and all its dependencies if creating one at setUp
+            deleteSecurityGroupUsingEC2Client(client, host, securityGroupId);
             SecurityGroup securityGroup = getSecurityGroup(client, AWS_DEFAULT_GROUP_NAME, vpcId);
             if (securityGroup != null) {
                 deleteSecurityGroupUsingEC2Client(client, host, securityGroup.getGroupId());
@@ -1041,15 +1049,16 @@ public class TestAWSSetupUtils {
      * @throws Throwable
      */
     public static List<String> provisionAWSVMWithEC2Client(AmazonEC2AsyncClient client,
-            VerificationHost host, int numberOfInstance, String instanceType)
-            throws Throwable {
+            VerificationHost host, int numberOfInstance, String instanceType, String subnetId,
+            String securityGroupId) throws Throwable {
         host.log("Provisioning %d instances on the AWS endpoint using the EC2 client.",
                 numberOfInstance);
 
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
+                .withSubnetId(subnetId)
                 .withImageId(EC2_LINUX_AMI).withInstanceType(instanceType)
                 .withMinCount(numberOfInstance).withMaxCount(numberOfInstance)
-                .withSecurityGroupIds(AWS_DEFAULT_GROUP_NAME);
+                .withSecurityGroupIds(securityGroupId);
 
         // handler invoked once the EC2 runInstancesAsync commands completes
         AWSRunInstancesAsyncHandler creationHandler = new AWSRunInstancesAsyncHandler(
@@ -1176,13 +1185,14 @@ public class TestAWSSetupUtils {
     }
 
     public static String provisionAWSVMWithEC2Client(VerificationHost host, AmazonEC2Client client,
-            String ami) {
+            String ami, String subnetId, String securityGroupId) {
 
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
+                .withSubnetId(subnetId)
                 .withImageId(ami)
                 .withInstanceType(instanceType_t2_micro)
                 .withMinCount(1).withMaxCount(1)
-                .withSecurityGroupIds(AWS_DEFAULT_GROUP_NAME);
+                .withSecurityGroupIds(securityGroupId);
 
         // handler invoked once the EC2 runInstancesAsync commands completes
         RunInstancesResult result = null;

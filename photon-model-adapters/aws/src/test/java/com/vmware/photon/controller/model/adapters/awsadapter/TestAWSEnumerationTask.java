@@ -154,7 +154,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     public int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
 
     private Map<String, Object> awsTestContext;
+    private String vpcId;
     private String subnetId;
+    private String securityGroupId;
     private AwsNicSpecs singleNicSpec;
 
     @Rule
@@ -173,7 +175,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         this.awsTestContext = new HashMap<>();
         setUpTestVpc(this.client, this.awsTestContext, this.isMock);
+        this.vpcId = (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY);
         this.subnetId = (String) this.awsTestContext.get(TestAWSSetupUtils.SUBNET_KEY);
+        this.securityGroupId = (String) this.awsTestContext.get(TestAWSSetupUtils.SECURITY_GROUP_KEY);
         this.singleNicSpec = (AwsNicSpecs) this.awsTestContext.get(TestAWSSetupUtils.NIC_SPECS_KEY);
 
         try {
@@ -240,9 +244,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         // CREATION directly on AWS
         List<String> instanceIdsToDeleteFirstTime = provisionAWSVMWithEC2Client(this.client,
-                this.host, count4, T2_NANO_INSTANCE_TYPE);
+                this.host, count4, T2_NANO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
         List<String> instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, count1,
-                instanceType_t2_micro);
+                instanceType_t2_micro, this.subnetId, this.securityGroupId);
         instanceIdsToDeleteFirstTime.addAll(instanceIds);
         this.instancesToCleanUp.addAll(instanceIdsToDeleteFirstTime);
         waitForProvisioningToComplete(instanceIdsToDeleteFirstTime, this.host, this.client, ZERO);
@@ -308,8 +312,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Provision an additional VM with a different instance type. It should re-use the
         // existing compute description created by the enumeration task above.
         List<String> instanceIdsToDeleteSecondTime = provisionAWSVMWithEC2Client(this.client,
-                this.host,
-                count1, TestAWSSetupUtils.instanceType_t2_micro);
+                this.host, count1, TestAWSSetupUtils.instanceType_t2_micro, this.subnetId, this.securityGroupId);
         this.instancesToCleanUp.addAll(instanceIdsToDeleteSecondTime);
         waitForProvisioningToComplete(instanceIdsToDeleteSecondTime, this.host, this.client,
                 ZERO);
@@ -451,9 +454,9 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         // CREATION directly on AWS
         List<String> instanceIdsToDelete = provisionAWSVMWithEC2Client(this.client,
-                this.host, count4, T2_NANO_INSTANCE_TYPE);
+                this.host, count4, T2_NANO_INSTANCE_TYPE, this.subnetId, this.securityGroupId);
         List<String> instanceIds = provisionAWSVMWithEC2Client(this.client, this.host, count1,
-                instanceType_t2_micro);
+                instanceType_t2_micro, this.subnetId, this.securityGroupId);
         instanceIdsToDelete.addAll(instanceIds);
         this.instancesToCleanUp.addAll(instanceIdsToDelete);
         waitForProvisioningToComplete(instanceIdsToDelete, this.host, this.client, ZERO);
@@ -504,10 +507,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         this.host.log("Running test: " + this.currentTestName);
 
-        String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
+        String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI, this.subnetId, this.securityGroupId);
         this.instancesToCleanUp.add(linuxVMId);
 
-        String windowsVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_WINDOWS_AMI);
+        String windowsVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_WINDOWS_AMI, this.subnetId, this.securityGroupId);
         this.instancesToCleanUp.add(windowsVMId);
 
         waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
@@ -543,7 +546,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         this.host.log("Running test: " + this.currentTestName);
 
-        String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
+        String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI, this.subnetId, this.securityGroupId);
         this.instancesToCleanUp.add(linuxVMId);
 
         waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
@@ -598,7 +601,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         subnetTags.add(new Tag("subNetTagKey", "subNetTagValue"));
 
         try {
-            String linuxVMId1 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
+            String linuxVMId1 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI, this.subnetId, this.securityGroupId);
             this.instancesToCleanUp.add(linuxVMId1);
             waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
 
@@ -609,19 +612,18 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             // tag vm
             tagResources(this.client, linuxVMId1Tags, linuxVMId1);
             // tag default SG
-            tagResources(this.client, sgTags, TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
+            tagResources(this.client, sgTags, this.securityGroupId);
             // tag default VPC
-            tagResources(this.client, networkTags, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID);
+            tagResources(this.client, networkTags, this.vpcId);
             // tag default Subnet
-            tagResources(this.client, subnetTags, TestAWSSetupUtils.AWS_DEFAULT_SUBNET_ID);
+            tagResources(this.client, subnetTags, this.subnetId);
 
             enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
                     TEST_CASE_INITIAL);
 
-            String linuxVMId2 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI);
+            String linuxVMId2 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI, this.subnetId, this.securityGroupId);
             this.instancesToCleanUp.add(linuxVMId2);
-
             waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
 
             // Name the second VM and add some tags
@@ -636,7 +638,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             //new key-value set remotely should result in a new tag state created locally
             sgTags.add(new Tag("sgTagKey1", "valueSGTag1"));
 
-            tagResources(this.client, sgTags, TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
+            tagResources(this.client, sgTags, this.securityGroupId);
 
             enumerateResources(this.host, this.isMock, this.outPool.documentSelfLink,
                     this.outComputeHost.descriptionLink, this.outComputeHost.documentSelfLink,
@@ -693,11 +695,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             this.host.log("Exception occured during test execution: %s", t.getMessage());
         } finally {
             // un-tag default SG
-            unTagResources(this.client, sgTags, TestAWSSetupUtils.AWS_DEFAULT_GROUP_ID);
+            unTagResources(this.client, sgTags, this.securityGroupId);
             // un-tag default VPC
-            unTagResources(this.client, networkTags, TestAWSSetupUtils.AWS_DEFAULT_VPC_ID);
+            unTagResources(this.client, networkTags, this.vpcId);
             // un-tag default Subnet
-            unTagResources(this.client, subnetTags, TestAWSSetupUtils.AWS_DEFAULT_SUBNET_ID);
+            unTagResources(this.client, subnetTags, this.subnetId);
         }
     }
 
