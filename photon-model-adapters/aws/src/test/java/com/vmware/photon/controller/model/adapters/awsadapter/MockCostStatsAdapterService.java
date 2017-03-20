@@ -38,6 +38,9 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     public static final String SELF_LINK = AWSUriPaths.PROVISIONING_AWS
             + "/mock-costs-stats-adapter";
 
+    public static final String INSTANCE_1_SELF_LINK = "instanceSelfLink1";
+    public static final String INSTANCE_2_SELF_LINK = "instanceSelfLink2";
+
     public static final Long billProcessedTimeMillis =
             com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getDateTimeToday()
                     .withDayOfMonth(1).toDateTime(DateTimeZone.UTC).withTimeAtStartOfDay().getMillis();
@@ -122,11 +125,11 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
             AWSCostStatsCreationStages next) {
         //inserting all mock data required
         ComputeState instance1 = new ComputeState();
-        instance1.documentSelfLink = "instanceSelfLink1";
+        instance1.documentSelfLink = INSTANCE_1_SELF_LINK;
         statsData.awsInstancesById.put("i-2320dc97", Collections.singletonList(instance1));
 
         ComputeState instance2 = new ComputeState();
-        instance2.documentSelfLink = "instanceSelfLink2";
+        instance2.documentSelfLink = INSTANCE_2_SELF_LINK;
         statsData.awsInstancesById.put("i-69d52add", Collections.singletonList(instance2));
 
         statsData.computeDesc = new ComputeStateWithDescription();

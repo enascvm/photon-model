@@ -235,7 +235,7 @@ public class AWSCsvBillParser {
         serviceDetail.addToDirectCosts(millisForBillHour, resourceCost);
 
         DateTime firstDayOfCurrentMonth = LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1).toDateTimeAtStartOfDay(DateTimeZone.UTC);
-        if (firstDayOfCurrentMonth.toLocalDateTime().isBefore(usageStartTimeFromCsv)) {
+        if (!firstDayOfCurrentMonth.toLocalDateTime().isAfter(usageStartTimeFromCsv)) {
             // Populate resource stats only for current month since resource stats are not needed
             // for previous months.
             AwsResourceDetailDto resourceDetail = createOrGetResourceDetailObject(rowMap,

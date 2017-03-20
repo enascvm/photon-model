@@ -16,6 +16,8 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.MockCostStatsAdapterService.INSTANCE_1_SELF_LINK;
+import static com.vmware.photon.controller.model.adapters.awsadapter.MockCostStatsAdapterService.INSTANCE_2_SELF_LINK;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DELETED_VM_COUNT;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createDoubleRange;
 import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buildCompositeFieldName;
@@ -73,6 +75,8 @@ public class TestAWSCostAdapterService extends BaseModelTest {
     public static final String account2SelfLink = "account2SelfLink";
     public static final double account1TotalCost = 100.0;
     public static final double account2TotalCost = 50.0;
+    public static final double instance1TotalCost = 0.0;
+    public static final double instance2TotalCost = 0.00000001;
 
     public boolean isMock = true;
     public String accessKey = "accessKey";
@@ -233,7 +237,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
     protected void verifyCollectedStats(SingleResourceStatsCollectionTaskState resp,
             ComputeState account) {
 
-        if (resp.statsList.size() != 2) {
+        if (resp.statsList.size() != 4) {
             // Only account cost will be stored for current month,hence only 2 stats will be stored.
             TestAWSCostAdapterService.this.host.failIteration(
                     new IllegalStateException("response size was incorrect."));
@@ -248,40 +252,47 @@ public class TestAWSCostAdapterService extends BaseModelTest {
 
         Map<String, ComputeStats> computeStatsByLink = resp.statsList.stream()
                 .collect(Collectors.toMap(e -> e.computeLink, Function.identity()));
-        ComputeStats computeStats = computeStatsByLink.get(account1SelfLink);
+        ComputeStats account1Stats = computeStatsByLink.get(account1SelfLink);
         ComputeStats account2Stats = computeStatsByLink.get(account2SelfLink);
+
+        ComputeStats instance1Stats = computeStatsByLink.get(INSTANCE_1_SELF_LINK);
+        ComputeStats instance2Stats = computeStatsByLink.get(INSTANCE_2_SELF_LINK);
 
         //check total account cost
         String normalizedStatKeyValue = AWSStatsNormalizer
                 .getNormalizedStatKeyValue(AWSConstants.COST);
-        assertTrue(computeStats.statValues.get(normalizedStatKeyValue)
+        assertTrue(account1Stats.statValues.get(normalizedStatKeyValue)
                 .get(0).latestValue == account1TotalCost);
 
         // check VM count stats
-        assertEquals(0, computeStats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
+        assertEquals(0, account1Stats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
         assertEquals(0, account2Stats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
 
         // check that service level stats exist
         String serviceCode = AWSCsvBillParser.AwsServices.ec2.getName().replaceAll(" ", "");
         String serviceResourceCostMetric = String
                 .format(AWSConstants.SERVICE_RESOURCE_COST, serviceCode);
-        assertTrue(!computeStats.statValues.get(serviceResourceCostMetric).isEmpty());
+        assertTrue(!account1Stats.statValues.get(serviceResourceCostMetric).isEmpty());
 
         String serviceOtherCostMetric = String
                 .format(AWSConstants.SERVICE_OTHER_COST, serviceCode);
-        assertTrue(!computeStats.statValues.get(serviceOtherCostMetric).isEmpty());
+        assertTrue(!account1Stats.statValues.get(serviceOtherCostMetric).isEmpty());
 
         String serviceMonthlyOtherCostMetric = String
                 .format(AWSConstants.SERVICE_MONTHLY_OTHER_COST, serviceCode);
-        assertTrue(!computeStats.statValues.get(serviceMonthlyOtherCostMetric).isEmpty());
+        assertTrue(!account1Stats.statValues.get(serviceMonthlyOtherCostMetric).isEmpty());
 
         String serviceReservedRecurringCostMetric = String
                 .format(AWSConstants.SERVICE_RESERVED_RECURRING_COST, serviceCode);
-        assertTrue(!computeStats.statValues.get(serviceReservedRecurringCostMetric).isEmpty());
+        assertTrue(!account1Stats.statValues.get(serviceReservedRecurringCostMetric).isEmpty());
 
+        assertEquals(instance1TotalCost,
+                instance1Stats.statValues.get(normalizedStatKeyValue).get(0).latestValue, 0);
+        assertEquals(instance2TotalCost,
+                instance2Stats.statValues.get(normalizedStatKeyValue).get(0).latestValue, 0);
         // Check that stat values are accompanied with Units.
-        for (String key : computeStats.statValues.keySet()) {
-            List<ServiceStat> stats = computeStats.statValues.get(key);
+        for (String key : account1Stats.statValues.keySet()) {
+            List<ServiceStat> stats = account1Stats.statValues.get(key);
             for (ServiceStat stat : stats) {
                 assertTrue("Unit is empty", !stat.unit.isEmpty());
             }
