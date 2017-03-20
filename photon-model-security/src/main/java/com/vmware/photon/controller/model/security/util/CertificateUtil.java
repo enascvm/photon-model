@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.math.BigInteger;
+import java.net.InetSocketAddress;
+import java.net.URI;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyManagementException;
@@ -30,6 +32,7 @@ import java.security.Principal;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.security.SignatureException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateEncodingException;
@@ -43,6 +46,7 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
@@ -50,6 +54,9 @@ import javax.naming.ldap.Rdn;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 
@@ -77,6 +84,7 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
+import com.vmware.photon.controller.model.security.ssl.X509TrustManagerResolver;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Utils;
@@ -84,11 +92,16 @@ import com.vmware.xenon.common.Utils;
 /**
  * Utility class that provides useful functions for certificate's data retrieval and manipulation.
  */
-@SuppressWarnings("deprecation")
 public class CertificateUtil {
+    private static final Logger logger = Logger.getLogger(CertificateUtil.class.getName());
+
+    private static final int DEFAULT_SECURE_CONNECTION_PORT = 443;
+    private static final long DEFAULT_CONNECTION_TIMEOUT_MILLIS = Long.getLong(
+            "ssl.resolver.import.timeout.millis", TimeUnit.SECONDS.toMillis(30));
+
     private static final char[] EMPTY = new char[0];
     private static final String SIGNING_ALGORITHM = "SHA1withRSA";
-    protected static final long CERTIFICATE_TOLERANCE_OFFSET = TimeUnit.DAYS.toMillis(1L);
+    private static final long CERTIFICATE_TOLERANCE_OFFSET = TimeUnit.DAYS.toMillis(1L);
     private static final Provider PROVIDER = new BouncyCastleProvider();
     private static final long DEFAULT_VALIDITY = TimeUnit.DAYS.toMillis(Long.getLong(
             "default.selfSignedCertificate.validity.day", 365 * 2));
@@ -395,6 +408,56 @@ public class CertificateUtil {
         return sw.toString();
     }
 
+    public static X509TrustManagerResolver resolveCertificate(URI uri, long timeout) {
+        String hostAddress = uri.getHost();
+        int port = uri.getPort() == -1 ? DEFAULT_SECURE_CONNECTION_PORT : uri.getPort();
+        int tout = (int) (timeout == -1 ? DEFAULT_CONNECTION_TIMEOUT_MILLIS : timeout);
+        logger.entering(logger.getName(), "connect");
+        // create a SocketFactory without TrustManager (well with one that accepts anything)
+        X509TrustManagerResolver trustManagerResolver = new X509TrustManagerResolver();
+        TrustManager[] trustAllCerts = new TrustManager[] { trustManagerResolver };
+
+        SSLContext sslContext;
+        try {
+            sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new SecureRandom());
+        } catch (KeyManagementException | NoSuchAlgorithmException e) {
+            logger.throwing(logger.getName(), "connect", e);
+            throw new LocalizableValidationException(e, "Failed to initialize SSL context.",
+                    "common.ssh.context.init");
+        }
+
+        SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
+
+        try (SSLSocket sslSocket = (SSLSocket) sslSocketFactory.createSocket()) {
+            sslSocket.connect(new InetSocketAddress(hostAddress, port), tout);
+            SSLSession session = sslSocket.getSession();
+            session.invalidate();
+
+        } catch (IOException e) {
+            if (trustManagerResolver.isCertsTrusted()
+                    || trustManagerResolver.getCertificateChain().length == 0) {
+                Utils.logWarning(
+                        "Exception while resolving certificate for host: [%s]. Error: %s ",
+                        uri.toASCIIString(), e.getMessage());
+            } else {
+                logger.throwing(logger.getName(), "connect", e);
+                throw new IllegalArgumentException(e.getMessage(), e);
+            }
+        }
+
+        if (trustManagerResolver.getCertificateChain().length == 0) {
+            LocalizableValidationException e = new LocalizableValidationException(
+                    "Importing ssl certificate failed for server: " + uri.toASCIIString(),
+                    "common.certificate.import.failed", uri.toASCIIString());
+
+            logger.throwing(logger.getName(), "connect", e);
+            throw e;
+        }
+        logger.exiting(logger.getName(), "connect");
+        return trustManagerResolver;
+    }
+
     public static void validateCertificateChain(X509Certificate[] certificateChain)
             throws Exception {
         List<X509Certificate> certificates = Arrays.asList(certificateChain);
@@ -449,7 +512,9 @@ public class CertificateUtil {
      * @param cert
      *         certificate
      * @return the thumbprint corresponding to the certificate; {@code not-null} value
-     * @throws CertificateEncodingException
+     * @throws IllegalStateException
+     *         if an error occur while getting the encoded form of the certificates
+     * @throws IllegalArgumentException
      *         if an error occur while getting the encoded form of the certificates
      */
     public static String computeCertificateThumbprint(X509Certificate cert) {
@@ -464,7 +529,9 @@ public class CertificateUtil {
      * @param thumbprintAlgorithm
      *         the type of {@link ThumbprintAlgorithm}
      * @return the thumbprint corresponding to the certificate; {@code not-null} value
-     * @throws CertificateEncodingException
+     * @throws IllegalStateException
+     *         if an error occur while getting the encoded form of the certificates
+     * @throws IllegalArgumentException
      *         if an error occur while getting the encoded form of the certificates
      */
     public static String computeCertificateThumbprint(X509Certificate cert,
@@ -673,7 +740,7 @@ public class CertificateUtil {
         return extensions;
     }
 
-    public static enum ThumbprintAlgorithm {
+    public enum ThumbprintAlgorithm {
         SHA_1("SHA-1", "[a-fA-F0-9:]{59}"),
         SHA_256("SHA-256", "[a-fA-F0-9:]{95}");
 

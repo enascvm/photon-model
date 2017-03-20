@@ -25,22 +25,32 @@ import static com.vmware.photon.controller.model.security.TestUtils.switchToUnix
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.security.KeyPair;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Properties;
 import java.util.Scanner;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
+import com.vmware.photon.controller.model.security.ssl.X509TrustManagerResolver;
 import com.vmware.photon.controller.model.security.util.CertificateUtil.CertChainKeyPair;
 import com.vmware.photon.controller.model.security.util.CertificateUtil.ThumbprintAlgorithm;
+import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.VerificationHost;
 
 /**
  * Test CertificateUtil methods
  */
 public class CertificateUtilTest {
+    private static final Logger logger = Logger.getLogger(CertificateUtilTest.class.getName());
+
     private static final String PROPERTIES_FILE_NAME = "CertificateUtilTest.properties";
     private static final String VALID_CERT_PROP_NAME = "cert.valid";
     private static final String INVALID_CERT_PROP_NAME = "cert.invalid";
@@ -243,6 +253,62 @@ public class CertificateUtilTest {
         assertNotNull(s);
         assertNotEquals(0, s.length());
         assertTrue(s.matches("[0-9a-f]+"));
+    }
+
+    private void assertUntrustedCert(String uri) {
+        X509TrustManagerResolver trustManagerResolver = CertificateUtil.resolveCertificate(
+                URI.create(uri), -1);
+        assertFalse(trustManagerResolver.isCertsTrusted());
+        assertNotNull(trustManagerResolver.getCertificate());
+        CertificateException certException = trustManagerResolver.getCertificateException();
+        assertNotNull(certException);
+        logger.info(
+                "verify:" + uri
+                + ", error: " + certException.getMessage()
+                + ", cause: " + certException.getCause().getMessage());
+    }
+
+    @Test
+    public void testResolveCertificates() throws Throwable {
+
+        VerificationHost HOST = VerificationHost.create(Integer.valueOf(0));
+        HOST.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(250L));
+        CommandLineArgumentParser.parseFromProperties(HOST);
+        HOST.setStressTest(HOST.isStressTest);
+
+        HOST.start();
+
+        ServerX509TrustManager.init(HOST);
+        try {
+
+            X509TrustManagerResolver trustManagerResolver = CertificateUtil.resolveCertificate(
+                    URI.create("https://mail.google.com"), -1);
+            assertTrue(trustManagerResolver.isCertsTrusted());
+            assertNotNull(trustManagerResolver.getCertificate());
+            assertNull(trustManagerResolver.getCertificateException());
+
+            // expired cert - should not be trusted
+            assertUntrustedCert("https://expired.badssl.com/");
+
+            // wrong host - should not be trusted
+            assertUntrustedCert("https://wrong.host.badssl.com/");
+
+            // self-signed cert - should not be trusted
+            assertUntrustedCert("https://self-signed.badssl.com/");
+
+            // untrusted root - should not be trusted
+            assertUntrustedCert("https://untrusted-root.badssl.com/");
+
+            // revoked cert - should not be trusted
+            assertUntrustedCert("https://revoked.badssl.com/");
+
+            // pinned cert - should not be trusted
+            assertUntrustedCert("https://pinning-test.badssl.com/");
+        } finally {
+            HOST.tearDownInProcessPeers();
+            HOST.tearDown();
+            Utils.setTimeDriftThreshold(Utils.DEFAULT_TIME_DRIFT_THRESHOLD_MICROS);
+        }
     }
 
     private static String loadPemFileContent(String pemFile) {
