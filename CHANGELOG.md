@@ -2,6 +2,7 @@
 
 ## 0.6.9-SNAPSHOT
 
+* Upgrading to com.jcraft.jsch-0.1.54 to address CVS-2016-5725.
 
 ## 0.6.8
 
