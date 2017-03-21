@@ -25,8 +25,9 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNet
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkUtils.mapVPCToNetworkState;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.newTagState;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.setTagLinksToResourceState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -65,7 +66,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -596,7 +596,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         // tags, so filter them out
         List<Operation> operations = allNetworkAndSubnetsTags.stream()
                 .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                .map(t -> newTagState(t.getKey(), t.getValue(), context.request.tenantLinks))
+                .map(t -> newExternalTagState(t.getKey(), t.getValue(), context.request.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
                         .setBody(tagState))
                 .collect(Collectors.toList());
@@ -638,7 +638,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         remoteTags.put(awsVpcTag.getKey(), awsVpcTag.getValue());
                     }
                 }
-                updateNetwOrSubnTagLinksOps.add(BaseEnumerationAdapterContext.updateLocalTagStates(this, remoteTags, existingNetworkState, context.request.request.endpointLink));
+                updateNetwOrSubnTagLinksOps.add(updateLocalTagStates(this, existingNetworkState, remoteTags, context.request.request.endpointLink));
             }
             // update tag links for the existing SubnetStates
             for (String subnetId : context.awsSubnets.keySet()) {
@@ -653,7 +653,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         remoteTags.put(awsSubnetTag.getKey(), awsSubnetTag.getValue());
                     }
                 }
-                updateNetwOrSubnTagLinksOps.add(BaseEnumerationAdapterContext.updateLocalTagStates(this, remoteTags, existingSubnetState, context.request.request.endpointLink));
+                updateNetwOrSubnTagLinksOps.add(updateLocalTagStates(this, existingSubnetState, remoteTags, context.request.request.endpointLink));
             }
 
             return DeferredResult.allOf(updateNetwOrSubnTagLinksOps).thenApply(gnore -> context);

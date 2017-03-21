@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.util.enums;
 
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -26,11 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.resources.ResourceState;
-import com.vmware.photon.controller.model.resources.TagFactoryService;
-import com.vmware.photon.controller.model.resources.TagService;
-import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.QueryStrategy;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
@@ -38,7 +34,6 @@ import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
-import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -387,21 +382,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
         final Operation lsOp;
 
-        // Create local tag states
-        DeferredResult<Void> tagsDR = DeferredResult.completed((Void) null);
-
         if (currentState != null) {
             // Update case.
-
-            if (currentState.tagLinks != null && !currentState.tagLinks.isEmpty()) {
-                // Update local tag states with the remote values
-                tagsDR = updateLocalTagStates(this.service, localStateHolder.remoteTags,
-                        currentState, this.request.original.endpointLink);
-            } else {
-                // Create local tag states
-                tagsDR = createLocalTagStates(localStateHolder);
-            }
-
             lsOp = Operation.createPatch(this.service, currentState.documentSelfLink);
         } else {
             // Create case.
@@ -413,13 +395,14 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
             PhotonModelUtils.setEndpointLink(localStateHolder.localState,
                     this.request.original.endpointLink);
 
-            // Create local tag states
-            tagsDR = createLocalTagStates(localStateHolder);
-
             lsOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
         }
 
         lsOp.setBody(localStateHolder.localState);
+
+        // Create or update local tag states
+        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(this.service, localState, currentState,
+                localStateHolder.remoteTags, this.request.original.endpointLink);
 
         return tagsDR.thenCompose(ignore -> this.service.sendWithDeferredResult(lsOp)
                 .exceptionally(ex -> {
@@ -493,169 +476,4 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
     protected boolean shouldDelete(LOCAL_STATE localState) {
         return true;
     }
-
-    // Tag Utility methods {{
-    private DeferredResult<Void> createLocalTagStates(LocalStateHolder localStateHolder) {
-
-        if (localStateHolder.remoteTags == null || localStateHolder.remoteTags.isEmpty()) {
-            return DeferredResult.completed((Void) null);
-        }
-
-        localStateHolder.localState.tagLinks = new HashSet<>();
-
-        List<DeferredResult<TagState>> localTagStatesDRs = localStateHolder.remoteTags
-                .entrySet()
-                .stream()
-                .map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(),
-                        this.request.parentCompute.tenantLinks))
-                .map(tagState -> {
-                    // add the link of the new tag in to the tagLinks list
-                    localStateHolder.localState.tagLinks.add(tagState.documentSelfLink);
-                    return tagState;
-                })
-                .map(tagState -> Operation
-                        .createPost(this.service, TagService.FACTORY_LINK)
-                        .setBody(tagState))
-                .map(tagOperation -> this.service.sendWithDeferredResult(tagOperation,
-                        TagState.class))
-                .collect(Collectors.toList());
-
-        return DeferredResult.allOf(localTagStatesDRs).thenApply(ignore -> (Void) null);
-    }
-
-    public static DeferredResult<Void> updateLocalTagStates(StatelessService service, Map<String, String> remoteTagsMap,
-            ResourceState currentState, String endpointLink) {
-        Map<String, TagState> remoteTagStates;
-        if (remoteTagsMap == null) {
-            remoteTagStates = new HashMap<>();
-        } else {
-            remoteTagStates = remoteTagsMap.entrySet().stream()
-                .<TagState>map(tagEntry -> newTagState(tagEntry.getKey(), tagEntry.getValue(),
-                        currentState.tenantLinks))
-                .collect(Collectors.toMap(tagState -> tagState.documentSelfLink,
-                        tagState -> tagState));
-        }
-
-        final DeferredResult<List<TagState>> createAllLocalTagStatesDR;
-        final Collection<String> tagLinksToAdd;
-        {
-            // the remote tags which do not exist locally will be added to the computeState tagLinks
-            // list
-            tagLinksToAdd = new HashSet<>(remoteTagStates.keySet());
-            if (currentState.tagLinks != null) {
-                tagLinksToAdd.removeAll(currentState.tagLinks);
-            }
-
-            // not existing locally tags should be created
-            List<DeferredResult<TagState>> localTagStatesDRs = tagLinksToAdd.stream()
-                    .map(tagLinkObj -> remoteTagStates.get(tagLinkObj))
-                    .map(tagState -> Operation
-                            .createPost(service, TagService.FACTORY_LINK)
-                            .setBody(tagState)
-                            .setReferer(service.getUri()))
-                    .<DeferredResult<TagState>>map(tagOperation -> service.sendWithDeferredResult(tagOperation,
-                            TagState.class))
-                    .collect(Collectors.toList());
-
-            createAllLocalTagStatesDR = DeferredResult.allOf(localTagStatesDRs);
-        }
-
-        final DeferredResult<Collection<String>> removeAllExternalTagLinksDR;
-        {
-            // all local tag links which do not have remote correspondents and are external will be
-            // removed from the currentState's tagLinks list
-            Set<String> tagLinksToRemove = new HashSet<>();
-            if (currentState.tagLinks == null) {
-                removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
-            } else {
-                tagLinksToRemove.addAll(currentState.tagLinks);
-                tagLinksToRemove.removeAll(remoteTagStates.keySet());
-
-                if (tagLinksToRemove.isEmpty()) {
-
-                    removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
-
-                } else {
-
-                    // identify which of the local tag states to remove are external
-                    Query.Builder qBuilder = Query.Builder.create()
-                            // Add documents' class
-                            .addKindFieldClause(TagState.class)
-                            // Add local tag links to remove
-                            .addInClause(ServiceDocument.FIELD_NAME_SELF_LINK, tagLinksToRemove)
-                            .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
-
-                    QueryStrategy<TagState> queryLocalStates = new QueryTop<>(
-                            service.getHost(),
-                            qBuilder.build(),
-                            TagState.class,
-                            currentState.tenantLinks,
-                            endpointLink)
-                            .setMaxResultsLimit(tagLinksToRemove.size());
-
-                    removeAllExternalTagLinksDR = queryLocalStates.collectLinks(Collectors
-                            .toCollection(HashSet::new));
-                }
-            }
-        }
-
-        return createAllLocalTagStatesDR.thenCompose(ignore -> removeAllExternalTagLinksDR)
-                .thenCompose(
-                        removeAllExternalTagLinks -> updateResourceTagLinks(service, removeAllExternalTagLinks,
-                                tagLinksToAdd,
-                                currentState.documentSelfLink))
-                .thenAccept(ignore -> { });
-    }
-
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    private static DeferredResult<Operation> updateResourceTagLinks(
-            StatelessService service,
-            Collection<String> tagLinksToDelete,
-            Collection<String> tagLinksToAdd,
-            String currentStateSelfLink) {
-
-        // create patch operation to update tag links of the current resource state
-        Map<String, Collection<Object>> collectionsToRemoveMap = new HashMap<>();
-        collectionsToRemoveMap.put(ComputeState.FIELD_NAME_TAG_LINKS, (Collection) tagLinksToDelete);
-
-        Map<String, Collection<Object>> collectionsToAddMap = new HashMap<>();
-        collectionsToAddMap.put(ComputeState.FIELD_NAME_TAG_LINKS, (Collection) tagLinksToAdd);
-
-        ServiceStateCollectionUpdateRequest updateTagLinksRequest =
-                ServiceStateCollectionUpdateRequest.create(
-                        collectionsToAddMap,
-                        collectionsToRemoveMap);
-
-        Operation createPatch = Operation.createPatch(service, currentStateSelfLink)
-                .setBody(updateTagLinksRequest).setReferer(service.getUri());
-
-        return service.sendWithDeferredResult(createPatch);
-    }
-
-    public static void setTagLinksToResourceState(ResourceState resourceState,
-            Map<String, String> tags) {
-        if (tags == null || tags.isEmpty()) {
-            return;
-        }
-
-        // we have already made sure that the tags exist and we can build their links ourselves
-        resourceState.tagLinks = tags.entrySet().stream()
-                .map(t -> newTagState(t.getKey(), t.getValue(), resourceState.tenantLinks))
-                .map(TagFactoryService::generateSelfLink)
-                .collect(Collectors.toSet());
-    }
-
-    public static TagState newTagState(String key, String value, List<String> tenantLinks) {
-        TagState tagState = new TagState();
-        tagState.key = key == null ? "" : key;
-        tagState.value = value == null ? "" : value;
-        tagState.external = true;
-
-        // add tenant
-        tagState.tenantLinks = tenantLinks;
-
-        tagState.documentSelfLink = TagFactoryService.generateSelfLink(tagState);
-        return tagState;
-    }
-    // }}
 }

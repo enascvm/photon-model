@@ -20,7 +20,8 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnu
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createDeleteOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.newTagState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -52,7 +53,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumeratio
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -269,7 +269,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // tags, so filter them out
         List<Operation> operations = allTags.stream()
                 .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                .map(t -> newTagState(t.getKey(), t.getValue(), context.request.tenantLinks))
+                .map(t -> newExternalTagState(t.getKey(), t.getValue(), context.request.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
                         .setBody(tagState))
                 .collect(Collectors.toList());
@@ -492,7 +492,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         remoteTags.put(awsInstanceTag.getKey(), awsInstanceTag.getValue());
                     }
                 }
-                updateCSTagLinksOps.add(BaseEnumerationAdapterContext.updateLocalTagStates(this, remoteTags, existingComputeState, context.request.endpointLink));
+                updateCSTagLinksOps.add(updateLocalTagStates(this, existingComputeState, remoteTags, context.request.endpointLink));
             }
             return DeferredResult.allOf(updateCSTagLinksOps).thenApply(gnore -> context);
         }

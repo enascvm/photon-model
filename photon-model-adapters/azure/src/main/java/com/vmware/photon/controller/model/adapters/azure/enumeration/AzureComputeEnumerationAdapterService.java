@@ -28,8 +28,9 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.newTagState;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.setTagLinksToResourceState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 import static com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
@@ -49,6 +50,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -64,7 +66,6 @@ import com.microsoft.azure.management.network.models.PublicIPAddress;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
-
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
@@ -94,6 +95,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -133,6 +135,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         GET_COMPUTE_STATES,
         CREATE_TAG_STATES,
         UPDATE_COMPUTE_STATES,
+        UPDATE_TAG_LINKS,
         GET_DISK_STATES,
         GET_STORAGE_DESCRIPTIONS,
         CREATE_COMPUTE_DESCRIPTIONS,
@@ -183,6 +186,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Map<String, String> computeDescriptionIds = new ConcurrentHashMap<>();
         // Compute States for patching additional fields.
         Map<String, ComputeState> computeStatesForPatching = new ConcurrentHashMap<>();
+        Map<String, VirtualMachine> vmsToUpdate = new ConcurrentHashMap<>();
+
         List<String> vmIds = new ArrayList<>();
 
         // Stored operation to signal completion to the Azure storage enumeration once all the
@@ -338,6 +343,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         case UPDATE_COMPUTE_STATES:
             updateComputeStates(ctx);
             break;
+        case UPDATE_TAG_LINKS:
+            updateTagLinks(ctx).whenComplete(thenHandleSubStage(ctx, ComputeEnumerationSubStages.GET_DISK_STATES));
+            break;
         case GET_DISK_STATES:
             queryForDiskStates(ctx);
             break;
@@ -374,6 +382,55 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             handleEnumeration(ctx);
             break;
         }
+    }
+
+    private DeferredResult<EnumerationContext> updateTagLinks(EnumerationContext context) {
+        logFine(() -> "Create or update Network States' tags with the actual tags in Azure.");
+
+        if (context.vmsToUpdate.size() == 0) {
+            logFine(() -> "No local networks or subnets to be updated so there are no tags to update.");
+            return DeferredResult.completed(context);
+        } else {
+
+            List<DeferredResult<Void>> updateTagLinksOps = new ArrayList<>();
+            // update tag links for the existing NetworkStates
+            for (String vmId : context.computeStatesForPatching.keySet()) {
+                VirtualMachine vm = context.vmsToUpdate.get(vmId);
+                ComputeState existingComputeState = context.computeStatesForPatching.get(vmId);
+                Map<String, String> remoteTags = new HashMap<>();
+                if (vm.tags != null && !vm.tags.isEmpty()) {
+                    for (Entry<String, String> vmTagEntry : vm.tags.entrySet()) {
+                        remoteTags.put(vmTagEntry.getKey(), vmTagEntry.getValue());
+                    }
+                }
+                updateTagLinksOps.add(updateLocalTagStates(this, existingComputeState, remoteTags,
+                        context.request.endpointLink));
+                // clean up the working copy of existing compute state tag links, so that they are not overwritten
+                // with the updated ones in the subsequent state machine steps
+                existingComputeState.tagLinks = null;
+                context.computeStatesForPatching.put(vmId, existingComputeState);
+            }
+
+            return DeferredResult.allOf(updateTagLinksOps).thenApply(gnore -> context);
+        }
+    }
+
+    /**
+     * {@code handleSubStage} version suitable for chaining to
+     * {@code DeferredResult.whenComplete}.
+     */
+    private BiConsumer<EnumerationContext, Throwable> thenHandleSubStage(EnumerationContext context,
+            ComputeEnumerationSubStages next) {
+        // NOTE: In case of error 'ignoreCtx' is null so use passed context!
+        return (ignoreCtx, exc) -> {
+            if (exc != null) {
+                context.stage = EnumerationStages.ERROR;
+                handleEnumeration(context);
+                return;
+            }
+            context.subStage = next;
+            handleSubStage(context);
+        };
     }
 
     /**
@@ -658,7 +715,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         List<Operation> operations = context.virtualMachines.values()
                 .stream().filter(vm -> vm.tags != null && !vm.tags.isEmpty())
                 .flatMap(vm -> vm.tags.entrySet().stream())
-                .map(entry -> newTagState(entry.getKey(), entry.getValue(), context.parentCompute.tenantLinks))
+                .map(entry -> newExternalTagState(entry.getKey(), entry.getValue(), context.parentCompute.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
                         .setBody(tagState))
                 .collect(Collectors.toList());
@@ -686,7 +743,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void updateComputeStates(EnumerationContext ctx) {
         if (ctx.computeStates.size() == 0) {
             logFine(() -> "No compute states found to be updated.");
-            ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
+            ctx.subStage = ComputeEnumerationSubStages.UPDATE_TAG_LINKS;
             handleSubStage(ctx);
             return;
         }
@@ -696,15 +753,16 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         AtomicInteger numOfUpdates = new AtomicInteger(ctx.computeStates.size());
         while (iterator.hasNext()) {
             Entry<String, ComputeState> csEntry = iterator.next();
+            // Get the local state and its corresponding remote VM
             ComputeState computeState = csEntry.getValue();
-            ctx.computeStatesForPatching.put(csEntry.getKey(), computeState);
             VirtualMachine virtualMachine = ctx.virtualMachines.get(csEntry.getKey());
 
-            // add tag links
-            setTagLinksToResourceState(computeState, virtualMachine.tags);
+            // Store them in a separate structure for the update algorithm
+            ctx.computeStatesForPatching.put(csEntry.getKey(), computeState);
+            ctx.vmsToUpdate.put(csEntry.getKey(), virtualMachine);
 
+            // Remove the processed compute state and vm from the all elements' maps
             iterator.remove();
-            // Remove processed virtual machine from the map
             ctx.virtualMachines.remove(computeState.id);
 
             if (computeState.diskLinks == null || computeState.diskLinks.size() != 1) {
@@ -713,7 +771,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
                 if (ctx.computeStates.size() == 0) {
                     logFine(() -> "Finished updating compute states.");
-                    ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
+                    ctx.subStage = ComputeEnumerationSubStages.UPDATE_TAG_LINKS;
                     handleSubStage(ctx);
                 }
 
@@ -738,7 +796,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
                         if (numOfUpdates.decrementAndGet() == 0) {
                             logFine(() -> "Finished updating compute states.");
-                            ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
+                            ctx.subStage = ComputeEnumerationSubStages.UPDATE_TAG_LINKS;
                             handleSubStage(ctx);
                         }
                     })

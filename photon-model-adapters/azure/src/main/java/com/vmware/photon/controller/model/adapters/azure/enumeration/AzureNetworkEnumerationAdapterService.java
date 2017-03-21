@@ -20,8 +20,9 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.newTagState;
-import static com.vmware.photon.controller.model.adapters.util.enums.BaseEnumerationAdapterContext.setTagLinksToResourceState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.setTagLinksToResourceState;
+import static com.vmware.photon.controller.model.adapters.util.TagsUtil.updateLocalTagStates;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -30,9 +31,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -64,6 +67,7 @@ import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.support.LifecycleState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationJoin;
@@ -202,6 +206,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         QUERY_SUBNET_STATES,
         CREATE_TAG_STATES,
         CREATE_UPDATE_NETWORK_STATES,
+        UPDATE_TAG_LINKS,
         CREATE_UPDATE_SUBNET_STATES,
         DELETE_NETWORK_STATES,
         DELETE_SUBNET_STATES,
@@ -340,7 +345,10 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             createNetworkTagStates(context, NetworkEnumStages.CREATE_UPDATE_NETWORK_STATES);
             break;
         case CREATE_UPDATE_NETWORK_STATES:
-            createUpdateNetworkStates(context, NetworkEnumStages.CREATE_UPDATE_SUBNET_STATES);
+            createUpdateNetworkStates(context, NetworkEnumStages.UPDATE_TAG_LINKS);
+            break;
+        case UPDATE_TAG_LINKS:
+            updateNetworkTagLinks(context).whenComplete(thenHandleSubStage(context, NetworkEnumStages.CREATE_UPDATE_SUBNET_STATES));
             break;
         case CREATE_UPDATE_SUBNET_STATES:
             createUpdateSubnetStates(context, NetworkEnumStages.DELETE_NETWORK_STATES);
@@ -358,6 +366,23 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         default:
             break;
         }
+    }
+
+    /**
+     * {@code handleSubStage} version suitable for chaining to
+     * {@code DeferredResult.whenComplete}.
+     */
+    private BiConsumer<NetworkEnumContext, Throwable> thenHandleSubStage(NetworkEnumContext context,
+            NetworkEnumStages next) {
+        // NOTE: In case of error 'ignoreCtx' is null so use passed context!
+        return (ignoreCtx, exc) -> {
+            if (exc != null) {
+                context.stage = EnumerationStages.ERROR;
+                handleEnumeration(context);
+                return;
+            }
+            handleSubStage(context, next);
+        };
     }
 
     /**
@@ -653,7 +678,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         logFine("Create or update Tag States for discovered Networks with the actual state in Azure.");
 
         if (context.virtualNetworks.size() == 0 && context.subnets.size() == 0) {
-            logFine("No tags found to create/update.");
+            logFine("No tags found to create.");
             handleSubStage(context, next);
             return;
         }
@@ -663,7 +688,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         List<Operation> operations = context.virtualNetworks.values()
                 .stream().filter(vm -> vm.tags != null && !vm.tags.isEmpty())
                 .flatMap(vm -> vm.tags.entrySet().stream())
-                .map(entry -> newTagState(entry.getKey(), entry.getValue(), context.parentCompute.tenantLinks))
+                .map(entry -> newExternalTagState(entry.getKey(), entry.getValue(), context.parentCompute.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
                         .setBody(tagState))
                 .collect(Collectors.toList());
@@ -746,9 +771,38 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         }).sendWith(this);
     }
 
+    private DeferredResult<NetworkEnumContext> updateNetworkTagLinks(NetworkEnumContext context) {
+        logFine(() -> "Create or update Network States' tags with the actual tags in Azure.");
+
+        if (context.virtualNetworks.size() == 0) {
+            logFine(() -> "No local networks to be updated so there are no tags to update.");
+            return DeferredResult.completed(context);
+        } else {
+
+            List<DeferredResult<Void>> updateNetwLinksOps = new ArrayList<>();
+            // update tag links for the existing NetworkStates
+            for (String vnetId : context.networkStates.keySet()) {
+                if (!context.virtualNetworks.containsKey(vnetId)) {
+                    continue; // this is not a network to update
+                }
+                VirtualNetwork vNet = context.virtualNetworks.get(vnetId);
+                NetworkState existingNetworkState = context.networkStates.get(vnetId);
+                Map<String, String> remoteTags = new HashMap<>();
+                if (vNet.tags != null && !vNet.tags.isEmpty()) {
+                    for (Entry<String, String> vNetTagEntry : vNet.tags.entrySet()) {
+                        remoteTags.put(vNetTagEntry.getKey(), vNetTagEntry.getValue());
+                    }
+                }
+                updateNetwLinksOps.add(updateLocalTagStates(this, existingNetworkState,
+                        remoteTags, context.request.endpointLink));
+            }
+
+            return DeferredResult.allOf(updateNetwLinksOps).thenApply(gnore -> context);
+        }
+    }
+
     /**
-     * Create new subnet states or updates matching subnet states with the actual state in
-     * Azure.
+     * Create new subnet states or updates matching subnet states with the actual state in Azure.
      */
     private void createUpdateSubnetStates(NetworkEnumContext context, NetworkEnumStages next) {
         if (context.subnets.size() == 0) {
