@@ -25,15 +25,20 @@ import java.net.URI;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-import java.util.logging.Logger;
+import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
+import com.amazonaws.services.cloudwatch.model.DescribeAlarmsRequest;
+import com.amazonaws.services.cloudwatch.model.DescribeAlarmsResult;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.s3.transfer.TransferManager;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.LRUCache;
+
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -44,13 +49,18 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AWSClientManager {
 
-    private static final Logger logger = Logger.getLogger(AWSClientManager.class.getName());
     // Flag for determining the type of AWS client managed by this client manager.
     private AwsClientType awsClientType;
     private LRUCache<String, AmazonEC2AsyncClient> ec2ClientCache;
     private LRUCache<String, AmazonCloudWatchAsyncClient> cloudWatchClientCache;
     private LRUCache<String, TransferManager> s3ClientCache;
     private LRUCache<URI, ExecutorService> executorCache;
+
+    private LRUCache<String, Long> invalidcloudWatchClients;
+    public static final String AWS_RETRY_AFTER_INTERVAL_MINUTES = UriPaths.PROPERTY_PREFIX + "AWSClientManager.retryInterval";
+    private static final int DEFAULT_RETRY_AFTER_INTERVAL_MINUTES = 60;
+    private static final int RETRY_AFTER_INTERVAL_MINUTES =
+            Integer.getInteger(AWS_RETRY_AFTER_INTERVAL_MINUTES, DEFAULT_RETRY_AFTER_INTERVAL_MINUTES);
 
     public AWSClientManager() {
         this(AwsClientType.EC2);
@@ -64,6 +74,8 @@ public class AWSClientManager {
             return;
         case CLOUD_WATCH:
             this.cloudWatchClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
+                    CLIENT_CACHE_MAX_SIZE);
+            this.invalidcloudWatchClients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
                     CLIENT_CACHE_MAX_SIZE);
             return;
         case S3:
@@ -131,6 +143,16 @@ public class AWSClientManager {
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
         String cacheKey = credentials.documentSelfLink + TILDA + regionId;
+        Long entryTimestamp = this.invalidcloudWatchClients.get(cacheKey);
+        if (entryTimestamp != null ) {
+            if ((entryTimestamp + TimeUnit.MINUTES.toMicros(RETRY_AFTER_INTERVAL_MINUTES)) < Utils.getNowMicrosUtc()) {
+                this.invalidcloudWatchClients.remove(cacheKey);
+            } else {
+                AdapterUtils.sendFailurePatchToProvisioningTask(service,
+                        parentTaskLink, new IllegalStateException("Invalid cloud watch client for key: " + cacheKey));
+                return null;
+            }
+        }
         AmazonCloudWatchAsyncClient amazonCloudWatchClient = null;
         if (this.cloudWatchClientCache.containsKey(cacheKey)) {
             return this.cloudWatchClientCache.get(cacheKey);
@@ -138,6 +160,18 @@ public class AWSClientManager {
         try {
             amazonCloudWatchClient = AWSUtils.getStatsAsyncClient(credentials,
                     regionId, getExecutor(service.getHost()), isMock);
+            amazonCloudWatchClient.describeAlarmsAsync(
+                    new AsyncHandler<DescribeAlarmsRequest, DescribeAlarmsResult>() {
+                        @Override
+                        public void onError(Exception exception) {
+                            markCloudWatchClientInvalid(service, cacheKey);
+                        }
+
+                        @Override
+                        public void onSuccess(DescribeAlarmsRequest request, DescribeAlarmsResult result) {
+                            //noop
+                        }
+                    });
             this.cloudWatchClientCache.put(cacheKey, amazonCloudWatchClient);
         } catch (Throwable e) {
             service.logSevere(e);
@@ -145,6 +179,12 @@ public class AWSClientManager {
                     parentTaskLink, e);
         }
         return amazonCloudWatchClient;
+    }
+
+    public synchronized void markCloudWatchClientInvalid(StatelessService service, String cacheKey) {
+        service.logWarning("Marking cloudwatch client cache entry invalid for key: " + cacheKey);
+        this.invalidcloudWatchClients.put(cacheKey, Utils.getNowMicrosUtc());
+        this.cloudWatchClientCache.remove(cacheKey);
     }
 
     public synchronized TransferManager getOrCreateS3AsyncClient(

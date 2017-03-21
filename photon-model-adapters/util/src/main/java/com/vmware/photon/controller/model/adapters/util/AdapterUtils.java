@@ -61,7 +61,8 @@ public class AdapterUtils {
 
     public static void sendFailurePatchToProvisioningTask(StatelessService service,
             URI taskLink, Throwable t) {
-        service.logWarning(Utils.toString(t));
+        service.logWarning("Patching task to failure: %s", t.getMessage());
+        service.logFine(Utils.toString(t));
         sendPatchToProvisioningTask(service, taskLink, t);
     }
 
@@ -76,7 +77,8 @@ public class AdapterUtils {
      */
     public static void sendFailurePatchToProvisioningTask(StatelessService service,
             ServiceHost host, String path, Throwable t) {
-        service.logWarning(Utils.toString(t));
+        service.logWarning("Patching task to failure: %s", t.getMessage());
+        service.logFine(Utils.toString(t));
         URI taskLink = UriUtils.buildUri(host, path);
         sendPatchToProvisioningTask(service, taskLink, t);
     }

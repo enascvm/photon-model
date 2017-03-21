@@ -212,7 +212,9 @@ public class AWSStatsService extends StatelessService {
      */
     private void getEC2Stats(AWSStatsDataHolder statsData, String[] metricNames,
             boolean isAggregateStats) {
-        getAWSAsyncStatsClient(statsData);
+        if (getAWSAsyncStatsClient(statsData) == null) {
+            return;
+        }
         int collectionPeriod = Integer.getInteger(AWS_COLLECTION_PERIOD_SECONDS, DEFAULT_AWS_COLLECTION_PERIOD_SECONDS);
         for (String metricName : metricNames) {
             GetMetricStatisticsRequest metricRequest = new GetMetricStatisticsRequest();
@@ -246,7 +248,9 @@ public class AWSStatsService extends StatelessService {
     }
 
     private void getBillingStats(AWSStatsDataHolder statsData) {
-        getAWSAsyncBillingClient(statsData);
+        if (getAWSAsyncBillingClient(statsData) == null) {
+            return;
+        }
         Dimension dimension = new Dimension();
         dimension.setName(DIMENSION_CURRENCY);
         dimension.setValue(DIMENSION_CURRENCY_VALUE);
@@ -321,19 +325,21 @@ public class AWSStatsService extends StatelessService {
         }
     }
 
-    private void getAWSAsyncStatsClient(AWSStatsDataHolder statsData) {
+    private AmazonCloudWatchAsyncClient getAWSAsyncStatsClient(AWSStatsDataHolder statsData) {
         URI parentURI = statsData.statsRequest.taskReference;
         statsData.statsClient = this.clientManager.getOrCreateCloudWatchClient(statsData.parentAuth,
                 statsData.computeDesc.description.regionId, this, parentURI,
                 statsData.statsRequest.isMockRequest);
+        return statsData.statsClient;
     }
 
-    private void getAWSAsyncBillingClient(AWSStatsDataHolder statsData) {
+    private AmazonCloudWatchAsyncClient getAWSAsyncBillingClient(AWSStatsDataHolder statsData) {
         URI parentURI = statsData.statsRequest.taskReference;
         statsData.billingClient = this.clientManager.getOrCreateCloudWatchClient(
                 statsData.parentAuth,
                 COST_ZONE_ID, this, parentURI,
                 statsData.statsRequest.isMockRequest);
+        return statsData.billingClient;
     }
 
     /**
