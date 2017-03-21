@@ -59,6 +59,8 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  */
 public class AWSEnumerationUtils {
 
+    private static final String EMPTY_STRING = "";
+
     /**
      * Gets the key to uniquely represent a compute description that needs to be created in the system.
      * Currently uses regionId and instanceType and is represented as below:
@@ -200,7 +202,7 @@ public class AWSEnumerationUtils {
 
             // The name of the compute state is the value of the AWS_TAG_NAME tag
             String nameTag = getTagValue(instance.getTags(), AWS_TAG_NAME);
-            if (nameTag != null) {
+            if (nameTag != null && !nameTag.equals(EMPTY_STRING)) {
                 computeState.name = nameTag;
             }
         }
