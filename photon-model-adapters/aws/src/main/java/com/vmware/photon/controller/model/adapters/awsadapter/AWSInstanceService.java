@@ -247,7 +247,12 @@ public class AWSInstanceService extends StatelessService {
     }
 
     private void finishExceptionally(AWSInstanceContext context) {
+        String errorMessage = context.error != null ? context.error.getMessage() : "no error set";
+        this.logWarning(() -> "[AWSInstanceService] finished exceptionally. " + errorMessage);
+
         if (context.computeRequest.taskReference != null) {
+            this.logInfo(() -> "[AWSInstanceService] Send failure notification to the parent task: "
+                    + context.computeRequest.taskReference);
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     context.computeRequest.taskReference, context.error);
         }
@@ -345,6 +350,11 @@ public class AWSInstanceService extends StatelessService {
             }
         }
 
+        String message =
+                "[AWSInstanceService] Sending run instance request for instance id: " + imageId
+                + ", instance type: " + instanceType
+                + ", parent task id: " + aws.computeRequest.taskReference;
+        this.logInfo(() -> message);
         // handler invoked once the EC2 runInstancesAsync commands completes
         AsyncHandler<RunInstancesRequest, RunInstancesResult> creationHandler = new AWSCreationHandler(
                 this, aws);
@@ -371,6 +381,10 @@ public class AWSInstanceService extends StatelessService {
         @Override
         protected void handleSuccess(RunInstancesRequest request, RunInstancesResult result) {
 
+            String message = "[AWSInstanceService] Successfully provisioned AWS instance for "
+                    + "task reference: " + this.context.computeRequest.taskReference;
+            this.service.logInfo(() -> message);
+
             // consumer to be invoked once a VM is in the running state
             Consumer<Instance> consumer = instance -> {
                 List<Operation> patchOperations = new ArrayList<Operation>();
@@ -388,7 +402,7 @@ public class AWSInstanceService extends StatelessService {
                 cs.address = instance.getPublicIpAddress();
                 cs.powerState = AWSUtils.mapToPowerState(instance.getState());
                 if (this.context.child.customProperties == null) {
-                    cs.customProperties = new HashMap<String, String>();
+                    cs.customProperties = new HashMap<>();
                 } else {
                     cs.customProperties = this.context.child.customProperties;
                 }
@@ -488,6 +502,7 @@ public class AWSInstanceService extends StatelessService {
                     AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
                             this.context.computeRequest.taskReference,
                             exs.values().iterator().next());
+                    return;
                 }
 
                 tagsToCreate.addAll(ops.values().stream()
