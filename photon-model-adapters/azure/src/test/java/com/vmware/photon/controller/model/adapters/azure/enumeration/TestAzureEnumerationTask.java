@@ -113,7 +113,6 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
-import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -474,16 +473,8 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // There are a total of sgTags.size() + vmNetwTags.size() + vmTags.size() tags
         // This means we should have the same number of TagState documents
         int allTagsNumber = sgTags.size() + vmNetwTags.size() + vmTags.size();
-        ServiceDocumentQueryResult serviceDocumentQueryResult = host.getFactoryState(
-                UriUtils.buildExpandLinksQueryUri(UriUtils.buildUri(host, TagService.FACTORY_LINK)));
-        if (allTagsNumber > serviceDocumentQueryResult.documents.size()) {
-            host.log(Level.INFO, "Tags documents count is %s, expected at least %s", serviceDocumentQueryResult.documents.size(), allTagsNumber);
-        }
-        for (Map.Entry<String, Object> entry : serviceDocumentQueryResult.documents
-                .entrySet()) {
-            TagState tagState = Utils.fromJson(entry.getValue(), TagState.class);
-            host.log(Level.INFO, "Tag key: %s value: %s", tagState.key, tagState.value);
-        }
+        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, allTagsNumber,
+                TagService.FACTORY_LINK, false);
 
         // VM count + 1 compute host instance
         this.vmCount = this.vmCount + 1;
