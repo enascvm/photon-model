@@ -13,8 +13,6 @@
 
 package com.vmware.photon.controller.model.resources;
 
-import java.util.List;
-
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -49,18 +47,6 @@ public class ResourceDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public String computeDescriptionLink;
-
-        /**
-         * The disk descriptions used as a templates to create a disk per
-         * resource.
-         */
-        public List<String> diskDescriptionLinks;
-
-        /**
-         * The network descriptions used to associate network resources with
-         * compute resources.
-         */
-        public List<String> networkInterfaceLinks;
     }
 
     public ResourceDescriptionService() {

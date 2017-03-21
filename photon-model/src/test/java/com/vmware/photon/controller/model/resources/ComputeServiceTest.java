@@ -77,11 +77,16 @@ public class ComputeServiceTest extends Suite {
         cs.descriptionLink = cd.documentSelfLink;
         cs.resourcePoolLink = null;
         cs.address = "10.0.0.1";
-        cs.name = "testVM";
-        cs.type = ComputeType.VM_GUEST;
-        cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         cs.primaryMAC = "01:23:45:67:89:ab";
         cs.powerState = ComputeService.PowerState.ON;
+        cs.name = "testVM";
+        cs.type = ComputeType.VM_GUEST;
+        cs.cpuMhzPerCore = 1000L;
+        cs.cpuCount = 2L;
+        cs.gpuCount = 1L;
+        cs.totalMemoryBytes = new Long(Integer.MAX_VALUE);
+        cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
+
         cs.adapterManagementReference = URI
                 .create("https://esxhost-01:443/sdk");
         cs.diskLinks = new ArrayList<>();
@@ -301,9 +306,9 @@ public class ComputeServiceTest extends Suite {
             patchBody.resourcePoolLink = "http://newResourcePool";
             patchBody.adapterManagementReference = URI
                     .create("http://newAdapterManagementReference");
-            patchBody.tenantLinks = new ArrayList<String>();
+            patchBody.tenantLinks = new ArrayList<>();
             patchBody.tenantLinks.add("tenant1");
-            patchBody.groupLinks = new HashSet<String>();
+            patchBody.groupLinks = new HashSet<>();
             patchBody.groupLinks.add("group1");
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchBody);
@@ -442,9 +447,9 @@ public class ComputeServiceTest extends Suite {
             newState.resourcePoolLink = "http://newResourcePool";
             newState.adapterManagementReference = URI
                     .create("http://newAdapterManagementReference");
-            newState.tenantLinks = new ArrayList<String>();
+            newState.tenantLinks = new ArrayList<>();
             newState.tenantLinks.add("tenant1");
-            newState.groupLinks = new HashSet<String>();
+            newState.groupLinks = new HashSet<>();
             newState.groupLinks.add("group1");
             newState.diskLinks = new ArrayList<>();
             newState.diskLinks.add("http://disk1");

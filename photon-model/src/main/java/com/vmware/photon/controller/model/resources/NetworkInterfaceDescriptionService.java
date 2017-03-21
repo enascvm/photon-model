@@ -65,7 +65,7 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
         /**
          * IP assignment type the use. By default dynamic s used.
          */
-        public IpAssignment assignment = IpAssignment.DYNAMIC;
+        public IpAssignment assignment;
 
         /**
          * Holds the device index of this network interface.
@@ -150,6 +150,10 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
     }
 
     private void validateState(NetworkInterfaceDescription state) {
+        if (state.assignment == null) {
+            state.assignment = IpAssignment.DYNAMIC;
+        }
+
         Utils.validateState(getStateDescription(), state);
 
         if (state.address != null) {

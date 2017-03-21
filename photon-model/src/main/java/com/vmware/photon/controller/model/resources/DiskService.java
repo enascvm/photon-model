@@ -72,6 +72,14 @@ public class DiskService extends StatefulService {
         public String regionId;
 
         /**
+         * URI reference to corresponding DiskDescription.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        public String descriptionLink;
+
+        /**
          * Link to the Storage description associated with the disk.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
@@ -105,7 +113,7 @@ public class DiskService extends StatefulService {
          * Status of this disk service instance.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public DiskStatus status = DiskStatus.DETACHED;
+        public DiskStatus status;
 
         /**
          * Capacity (in MB) of this disk service instance.

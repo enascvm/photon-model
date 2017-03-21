@@ -28,6 +28,7 @@ import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -90,28 +91,10 @@ public class ComputeDescriptionService extends StatefulService {
         public String zoneId;
 
         /**
-         * The type of the compute instance, as understood by the provider. E.g. the type of
-         * instance determines your instance’s CPU capacity, memory, and storage.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String instanceType;
-
-        /**
-         * Environment/ Platform name this compute host is provisioned on.
+         * Environment/ Platform name this compute is provisioned on.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String environmentName;
-
-        /**
-         * Identifier of the data store associated with this compute host.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String dataStoreId;
-
-        /**
-         * Self-link to the AuthCredentialsService used to access this compute host.
-         */
-        public String authCredentialsLink;
 
         /**
          * List of compute types this host supports actuating.
@@ -128,43 +111,59 @@ public class ComputeDescriptionService extends StatefulService {
         public List<String> networkInterfaceDescLinks;
 
         /**
-         * Number of CPU cores in this compute. {@code 0} when not applicable.
+         * Disks descrptions associated with this compute instance.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public List<String> diskDescLinks;
+
+        /**
+         * Self-link to the AuthCredentialsService used to access this compute host.
+         */
+        public String authCredentialsLink;
+
+        /**
+         * The type of the compute instance, as understood by the provider. E.g. the type of
+         * instance determines your instance’s CPU capacity, memory, and storage.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String instanceType;
+
+        /**
+         * Desired number of CPU cores in this compute. {@code 0} when not applicable.
          */
         public long cpuCount;
 
         /**
-         * Clock speed (in MHz) per CPU core. {@code 0} when not applicable.
+         * Desired clock speed (in MHz) per CPU core. {@code 0} when not applicable.
          */
         public long cpuMhzPerCore;
 
         /**
-         * Number of GPU cores in this compute. {@code 0} when not applicable.
+         * Desired number of GPU cores in this compute. {@code 0} when not applicable.
          */
         public long gpuCount;
 
         /**
-         * Total amount of memory (in bytes) available on this compute. {@code 0} when not
+         * Desired total amount of memory (in bytes) available on this compute. {@code 0} when not
          * applicable.
          */
         public long totalMemoryBytes;
 
         /**
-         * Pricing associated with this host (measured per minute).
+         * Desired power state of this compute instance.
          */
-        @Deprecated
-        public double costPerMinute;
-
-        /**
-         * Currency unit used for pricing.
-         */
-        @Deprecated
-        public String currencyUnit;
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        public PowerState powerState;
 
         /**
          * Constraints of this compute resource to other resources. Different services can specify
          * their specific constraints by using different keys in the map, so that multiple
-         * constraints are supported for different purposes - e.g. placement constraints,
-         * grouping constraints, etc.
+         * constraints are supported for different purposes - e.g. placement constraints, grouping
+         * constraints, etc.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @Since(ReleaseConstants.RELEASE_VERSION_0_6_1)
@@ -215,6 +214,25 @@ public class ComputeDescriptionService extends StatefulService {
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
         public String endpointLink;
+
+        /**
+         * Pricing associated with this host (measured per minute).
+         */
+        @Deprecated
+        public double costPerMinute;
+
+        /**
+         * Currency unit used for pricing.
+         */
+        @Deprecated
+        public String currencyUnit;
+
+        /**
+         * Identifier of the data store associated with this compute host. This field will be
+         * deprecated
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String dataStoreId;
     }
 
     public ComputeDescriptionService() {
@@ -268,6 +286,9 @@ public class ComputeDescriptionService extends StatefulService {
 
         if (state.environmentName == null) {
             state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
+        }
+        if (state.powerState == null) {
+            state.powerState = PowerState.UNKNOWN;
         }
 
         validateBootAdapterReference(state);

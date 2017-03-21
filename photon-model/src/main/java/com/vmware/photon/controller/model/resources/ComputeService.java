@@ -58,9 +58,9 @@ public class ComputeService extends StatefulService {
     /**
      * Resource lifecycle status.
      * <p>
-     * This class is kept to keep the backward compatibility.
-     * Use {@link com.vmware.photon.controller.model.support.LifecycleState} when introducing
-     * lifecycle semantic to other resources.
+     * This class is kept to keep the backward compatibility. Use
+     * {@link com.vmware.photon.controller.model.support.LifecycleState} when introducing lifecycle
+     * semantic to other resources.
      * </p>
      */
     public enum LifecycleState {
@@ -151,9 +151,63 @@ public class ComputeService extends StatefulService {
         public String primaryMAC;
 
         /**
+         * The type of the compute instance, as understood by the provider. E.g. the type of
+         * instance determines your instance’s CPU capacity, memory, and storage.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        public String instanceType;
+
+        /**
+         * Actual number of CPU cores in this compute. {@code 0} when not applicable.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        public Long cpuCount;
+
+        /**
+         * Actual clock speed (in MHz) per CPU core. {@code 0} when not applicable.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        public Long cpuMhzPerCore;
+
+        /**
+         * Actual number of GPU cores in this compute. {@code 0} when not applicable.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        public Long gpuCount;
+
+        /**
+         * Actual total amount of memory (in bytes) available on this compute. {@code 0} when not
+         * applicable.
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        public Long totalMemoryBytes;
+
+        /**
          * Power state of this compute instance.
          */
-        public PowerState powerState = PowerState.UNKNOWN;
+        public PowerState powerState;
+
+        /**
+         * Region identifier of this compute instance.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        public String regionId;
+
+        /**
+         * Identifier of the zone associated with this compute instance.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
+        public String zoneId;
 
         /** Lifecycle state indicating runtime state of a resource instance. */
         @Documentation(description = "Lifecycle state indicating runtime state of a resource instance.")
@@ -236,7 +290,14 @@ public class ComputeService extends StatefulService {
             chsWithDesc.creationTimeMicros = currentState.creationTimeMicros;
             chsWithDesc.description = desc;
             chsWithDesc.descriptionLink = desc.documentSelfLink;
+            chsWithDesc.regionId = currentState.regionId;
+            chsWithDesc.zoneId = currentState.zoneId;
             chsWithDesc.hostName = currentState.hostName;
+            chsWithDesc.instanceType = currentState.instanceType;
+            chsWithDesc.cpuCount = currentState.cpuCount;
+            chsWithDesc.cpuMhzPerCore = currentState.cpuMhzPerCore;
+            chsWithDesc.gpuCount = currentState.gpuCount;
+            chsWithDesc.totalMemoryBytes = currentState.totalMemoryBytes;
             chsWithDesc.endpointLink = currentState.endpointLink;
 
             return chsWithDesc;
@@ -323,7 +384,12 @@ public class ComputeService extends StatefulService {
             state.lifecycleState = LifecycleState.READY;
         }
 
+        if (state.powerState == null) {
+            state.powerState = PowerState.UNKNOWN;
+        }
+
         Utils.validateState(getStateDescription(), state);
+
         return state;
     }
 

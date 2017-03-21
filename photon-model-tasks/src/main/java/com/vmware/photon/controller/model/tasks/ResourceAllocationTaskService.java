@@ -17,11 +17,13 @@ import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_DISPLA
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -29,12 +31,13 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourceDescriptionService;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
@@ -104,11 +107,6 @@ public class ResourceAllocationTaskService
          * The compute description that defines the resource instances.
          */
         public String computeDescriptionLink;
-
-        /**
-         * The disk descriptions used as a templates to create a disk per resource.
-         */
-        public List<String> diskDescriptionLinks;
 
         /**
          * Custom properties passes in for the resources to be provisioned.
@@ -196,7 +194,6 @@ public class ResourceAllocationTaskService
     public void copyResourceDescription(Operation start) {
         ResourceAllocationTaskState state = getBody(start);
         if (state.computeType != null || state.computeDescriptionLink != null
-                || state.diskDescriptionLinks != null
                 || state.customProperties != null) {
             start.fail(new IllegalArgumentException(
                     "ResourceDescription overrides ResourceAllocationTaskState"));
@@ -216,7 +213,6 @@ public class ResourceAllocationTaskService
 
                             state.computeType = resourceDesc.computeType;
                             state.computeDescriptionLink = resourceDesc.computeDescriptionLink;
-                            state.diskDescriptionLinks = resourceDesc.diskDescriptionLinks;
                             state.customProperties = resourceDesc.customProperties;
 
                             validateAndCompleteStart(start, state);
@@ -516,17 +512,8 @@ public class ResourceAllocationTaskService
             // empty array is passed to jump out of the create calls.
             String computeName = currentState.resourceCount > 1 ? name + i : name;
 
-            createComputeResource(
-                    currentState,
-                    desc,
-                    parentIterator.next(),
-                    computeResourceId, computeName,
-                    currentState.diskDescriptionLinks == null
-                            || currentState.diskDescriptionLinks.isEmpty() ? new ArrayList<>()
-                                    : null,
-                    desc.networkInterfaceDescLinks == null
-                            || desc.networkInterfaceDescLinks.isEmpty() ? new ArrayList<>()
-                                    : null);
+            createComputeResource(currentState, desc, parentIterator.next(), computeResourceId,
+                    computeName, null, null);
 
             // as long as you can predict the document self link of a service,
             // you can start services that depend on each other in parallel!
@@ -573,7 +560,7 @@ public class ResourceAllocationTaskService
         ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
         callback.onSuccessFinishTask();
 
-        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
+        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<>();
         subTaskInitState.errorThreshold = currentState.errorThreshold;
         // tell the sub task with what to patch us, on completion
         subTaskInitState.serviceTaskCallback = callback;
@@ -668,127 +655,110 @@ public class ResourceAllocationTaskService
             String parentLink, String computeResourceId, String name,
             List<String> networkLinks) {
 
-        List<String> diskLinks = new ArrayList<>();
-        CompletionHandler diskCreateCompletion = (o, e) -> {
+        if (cd.diskDescLinks == null || cd.diskDescLinks.isEmpty()) {
+            createComputeResource(currentState, cd, parentLink, computeResourceId, name,
+                    new ArrayList<>(), networkLinks);
+            return;
+        }
+
+        DeferredResult<List<String>> result = DeferredResult.allOf(
+                cd.diskDescLinks.stream()
+                        .map(link -> {
+                            Operation op = Operation.createGet(this, link);
+                            return this.sendWithDeferredResult(op, DiskState.class);
+                        })
+                        .map(dr -> dr.thenCompose(d -> {
+                            String link = d.documentSelfLink;
+                            // create a new disk based off the template but use a
+                            // unique ID
+                            d.id = UUID.randomUUID().toString();
+                            d.documentSelfLink = null;
+                            d.tenantLinks = currentState.tenantLinks;
+                            if (d.customProperties == null) {
+                                d.customProperties = new HashMap<>();
+                            }
+                            d.descriptionLink = link;
+
+                            return this.sendWithDeferredResult(
+                                    Operation.createPost(this, DiskService.FACTORY_LINK).setBody(d),
+                                    DiskState.class);
+                        }))
+                        .map(dsr -> dsr
+                                .thenCompose(ds -> DeferredResult.completed(ds.documentSelfLink)))
+                        .collect(Collectors.toList()));
+
+        result.whenComplete((diskLinks, e) -> {
             if (e != null) {
                 logWarning(() -> String.format("Failure creating disk: %s", e.toString()));
                 this.sendFailureSelfPatch(e);
                 return;
             }
-
-            DiskService.DiskState newDiskState = o
-                    .getBody(DiskService.DiskState.class);
-            synchronized (diskLinks) {
-                diskLinks.add(newDiskState.documentSelfLink);
-                if (diskLinks.size() != currentState.diskDescriptionLinks
-                        .size()) {
-                    return;
-                }
-            }
-
             // we have created all the disks. Now create the compute host
             // resource
             createComputeResource(currentState, cd, parentLink, computeResourceId, name,
                     diskLinks, networkLinks);
-        };
-
-        // get all disk descriptions first, then create new disk using the
-        // description/template
-        for (String diskLink : currentState.diskDescriptionLinks) {
-            sendRequest(Operation.createGet(this, diskLink).setCompletion(
-                    (o, e) -> {
-                        if (e != null) {
-                            logWarning(() -> String.format("Failure getting disk description %s: %s",
-                                    diskLink, e.toString()));
-                            this.sendFailureSelfPatch(e);
-                            return;
-                        }
-
-                        DiskService.DiskState templateDisk = o
-                                .getBody(DiskService.DiskState.class);
-                        // create a new disk based off the template but use a
-                        // unique ID
-                        templateDisk.id = UUID.randomUUID().toString();
-                        templateDisk.documentSelfLink = templateDisk.id;
-                        templateDisk.tenantLinks = currentState.tenantLinks;
-                        sendRequest(Operation
-                                .createPost(this, DiskService.FACTORY_LINK)
-                                .setBody(templateDisk)
-                                .setCompletion(diskCreateCompletion));
-                    }));
-        }
+        });
     }
 
     private void createNetworkResources(ResourceAllocationTaskState currentState,
             ComputeDescription cd, String parentLink,
             String computeResourceId, String name, List<String> diskLinks) {
-        List<String> networkLinks = new ArrayList<>();
-        CompletionHandler networkInterfaceCreateCompletion = (o, e) -> {
+        if (cd.networkInterfaceDescLinks == null
+                || cd.networkInterfaceDescLinks.isEmpty()) {
+            createComputeResource(currentState, cd, parentLink, computeResourceId, name,
+                    diskLinks, new ArrayList<>());
+            return;
+        }
+
+        // get all network descriptions first, then create new network interfaces using the
+        // description/template
+        List<DeferredResult<String>> drs = cd.networkInterfaceDescLinks.stream()
+                .map(nicDescLink -> sendWithDeferredResult(Operation.createGet(this, nicDescLink),
+                        NetworkInterfaceDescription.class)
+                                .thenCompose(nid -> createNicState(currentState, nid))
+                                .thenCompose(nic -> sendWithDeferredResult(
+                                        Operation
+                                                .createPost(this,
+                                                        NetworkInterfaceService.FACTORY_LINK)
+                                                .setBody(nic),
+                                        NetworkInterfaceState.class))
+                                .thenCompose(nis -> DeferredResult.completed(nis.documentSelfLink)))
+                .collect(Collectors.toList());
+
+        DeferredResult.allOf(drs).whenComplete((all, e) -> {
             if (e != null) {
                 logWarning(() -> String.format("Failure creating network interfaces: %s",
                         e.toString()));
                 this.sendFailureSelfPatch(e);
                 return;
             }
-
-            NetworkInterfaceService.NetworkInterfaceState newInterfaceState = o
-                    .getBody(NetworkInterfaceService.NetworkInterfaceState.class);
-            synchronized (networkLinks) {
-                networkLinks.add(newInterfaceState.documentSelfLink);
-                if (networkLinks.size() != cd.networkInterfaceDescLinks
-                        .size()) {
-                    return;
-                }
-            }
-
             // we have created all the networks. Now create the compute host
             // resource
             createComputeResource(currentState, cd, parentLink, computeResourceId, name,
-                    diskLinks, networkLinks);
-        };
+                    diskLinks, all);
+        });
 
-        // get all network descriptions first, then create new network
-        // interfaces using the
-        // description/template
-        for (String networkDescLink : cd.networkInterfaceDescLinks) {
-            sendRequest(Operation
-                    .createGet(this, networkDescLink)
-                    .setCompletion(
-                            (o, e) -> {
-                                if (e != null) {
-                                    logWarning(() -> String.format("Failure getting network"
-                                                    + " description %s: %s", networkDescLink,
-                                            e.toString()));
-                                    this.sendFailureSelfPatch(e);
-                                    return;
-                                }
+    }
 
-                                NetworkInterfaceDescription nid = o
-                                        .getBody(NetworkInterfaceDescription.class);
-                                NetworkInterfaceState nic = new NetworkInterfaceState();
-                                nic.id = UUID.randomUUID().toString();
-                                nic.documentSelfLink = nic.id;
-                                nic.customProperties = nid.customProperties;
-                                nic.securityGroupLinks = nid.securityGroupLinks;
-                                nic.groupLinks = nid.groupLinks;
-                                nic.name = nid.name;
-                                nic.networkInterfaceDescriptionLink = nid.documentSelfLink;
-                                nic.networkLink = nid.networkLink;
-                                nic.subnetLink = nid.subnetLink;
-                                nic.tagLinks = nid.tagLinks;
-                                nic.tenantLinks = currentState.tenantLinks;
-                                nic.endpointLink = nid.endpointLink;
-                                // create a new network based off the template
-                                // but use a unique ID
-                                sendRequest(Operation
-                                        .createPost(
-                                                this,
-                                                NetworkInterfaceService.FACTORY_LINK)
-                                        .setBody(nic)
-                                        .setCompletion(
-                                                networkInterfaceCreateCompletion));
-                            }));
-        }
+    private DeferredResult<NetworkInterfaceState> createNicState(ResourceAllocationTaskState state,
+            NetworkInterfaceDescription nid) {
+        NetworkInterfaceState nic = new NetworkInterfaceState();
+        nic.id = UUID.randomUUID().toString();
+        nic.documentSelfLink = nic.id;
+        nic.name = nid.name;
+        nic.deviceIndex = nid.deviceIndex;
+        nic.address = nid.address;
+        nic.networkLink = nid.networkLink;
+        nic.subnetLink = nid.subnetLink;
+        nic.networkInterfaceDescriptionLink = nid.documentSelfLink;
+        nic.securityGroupLinks = nid.securityGroupLinks;
+        nic.groupLinks = nid.groupLinks;
+        nic.tagLinks = nid.tagLinks;
+        nic.tenantLinks = state.tenantLinks;
+        nic.endpointLink = nid.endpointLink;
+        nic.customProperties = nid.customProperties;
+
+        return DeferredResult.completed(nic);
     }
 
     @Override
