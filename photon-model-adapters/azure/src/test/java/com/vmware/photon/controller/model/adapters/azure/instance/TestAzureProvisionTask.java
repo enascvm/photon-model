@@ -18,7 +18,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.NIC_SPEC_NO_PUBLIC_IP;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.NO_PUBLIC_IP_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourceGroupState;
@@ -216,7 +217,7 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
         // create a Azure VM compute resource.
         this.vmState = createDefaultVMResource(this.host, azureVMName,
                 computeHost.documentSelfLink,
-                resourcePoolLink, authLink, NIC_SPEC_NO_PUBLIC_IP);
+                resourcePoolLink, authLink, NO_PUBLIC_IP_NIC_SPEC);
 
         kickOffProvisionTask();
 
@@ -249,7 +250,8 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
          * being used by standard provisioning!
          */
         final ResourceGroup sharedNetworkRG = AzureTestUtil.createResourceGroupWithSharedNetwork
-                (this.resourceManagementClient, this.networkManagementClient);
+                (this.resourceManagementClient, this.networkManagementClient,
+                        SHARED_NETWORK_NIC_SPEC);
 
         // Create corresponding ResourceGroupState
         ResourceGroupState sharedNetworkRGState = createDefaultResourceGroupState(

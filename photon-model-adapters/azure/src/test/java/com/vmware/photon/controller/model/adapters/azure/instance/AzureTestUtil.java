@@ -13,12 +13,15 @@
 
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
+import static org.junit.Assert.assertEquals;
+
 import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_BLOBS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINERS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_STATE;
@@ -88,6 +91,7 @@ import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
@@ -102,7 +106,9 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.Resou
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -119,7 +125,6 @@ public class AzureTestUtil {
 
     public static final String AZURE_RESOURCE_GROUP_LOCATION = "westus";
 
-    public static final String AZURE_STORAGE_ACCOUNT_NAME = "storage";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "Standard_RAGRS";
 
     /*
@@ -137,53 +142,34 @@ public class AzureTestUtil {
     public static final String AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME = "test-sharedNetworkRG";
 
     public static final AzureNicSpecs DEFAULT_NIC_SPEC;
-    public static final AzureNicSpecs NIC_SPEC_NO_PUBLIC_IP;
+    public static final AzureNicSpecs SHARED_NETWORK_NIC_SPEC;
+    public static final AzureNicSpecs NO_PUBLIC_IP_NIC_SPEC;
+
+    private static final String AZURE_NETWORK_NAME = "test-vNet";
+    private static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
+    private static final String AZURE_SUBNET_NAME = "test-subnet";
+
+    // The number of subnet CIDRs drives the number of nics created.
+    private static final String[] AZURE_SUBNET_CIDR = {"172.16.0.0/18", "172.16.64.0/18"};
+
+    private static final String AZURE_GATEWAY_NAME = "gateway";
+    private static final String AZURE_GATEWAY_CIDR = "172.16.128.0/18";
+    private static final String AZURE_GATEWAY_IP_CONFIGURATION_NAME = "gateway-ipconfig";
+    private static final String AZURE_GATEWAY_PUBLIC_IP_NAME = "gateway-pip";
+    private static final String AZURE_GATEWAY_IP_ALLOCATION_METHOD = "Dynamic";
+    private static final String AZURE_GATEWAY_SKU = "Standard";
+    private static final String AZURE_GATEWAY_TYPE = "Vpn";
+    private static final String AZURE_GATEWAY_VPN_TYPE = "RouteBased";
 
     static {
-        String AZURE_NETWORK_NAME = "test-vNet";
-        String AZURE_NETWORK_CIDR = "172.16.0.0/16";
-        String AZURE_SUBNET_NAME = "test-subnet";
+        DEFAULT_NIC_SPEC = initializeNicSpecs(null /* prefix */ , false /* assignGateway */,
+                true /* assignPublicIpAddress */);
 
-        // The number of subnet CIDRs drives the number of nics created.
-        String[] AZURE_SUBNET_CIDR = {"172.16.0.0/18", "172.16.64.0/18"};
+        NO_PUBLIC_IP_NIC_SPEC = initializeNicSpecs(null /* prefix */ , false /* assignGateway */,
+        false /* assignPublicIpAddress */);
 
-        String AZURE_GATEWAY_NAME = "gateway";
-        String AZURE_GATEWAY_CIDR = "172.16.128.0/18";
-        String AZURE_GATEWAY_IP_CONFIGURATION_NAME = "gateway-ipconfig";
-        String AZURE_GATEWAY_PUBLIC_IP_NAME = "gateway-pip";
-        String AZURE_GATEWAY_IP_ALLOCATION_METHOD = "Dynamic";
-        String AZURE_GATEWAY_SKU = "Standard";
-        String AZURE_GATEWAY_TYPE = "Vpn";
-        String AZURE_GATEWAY_VPN_TYPE = "RouteBased";
-
-        NetSpec network = new NetSpec(
-                AZURE_NETWORK_NAME,
-                AZURE_NETWORK_CIDR,
-                AZURE_RESOURCE_GROUP_LOCATION);
-
-        List<NetSpec> subnets = new ArrayList<>();
-        for (int i = 0; i < AZURE_SUBNET_CIDR.length; i++) {
-
-            subnets.add(new NetSpec(AZURE_SUBNET_NAME + i,
-                    AZURE_SUBNET_CIDR[i],
-                    AZURE_RESOURCE_GROUP_LOCATION));
-        }
-
-        GatewaySpec gateway = new GatewaySpec(AZURE_GATEWAY_NAME,
-                AZURE_GATEWAY_CIDR,
-                AZURE_RESOURCE_GROUP_LOCATION,
-                AZURE_GATEWAY_IP_CONFIGURATION_NAME,
-                AZURE_GATEWAY_PUBLIC_IP_NAME,
-                AZURE_GATEWAY_IP_ALLOCATION_METHOD,
-                AZURE_GATEWAY_SKU,
-                AZURE_GATEWAY_TYPE,
-                AZURE_GATEWAY_VPN_TYPE);
-
-        DEFAULT_NIC_SPEC = new AzureNicSpecs(network, subnets, gateway, true /*
-        assignPublicIpAddress */);
-
-        NIC_SPEC_NO_PUBLIC_IP = new AzureNicSpecs(network, subnets, gateway, false /*
-        assignPublicIpAddress */);
+        SHARED_NETWORK_NIC_SPEC = initializeNicSpecs(null /* prefix */ , true /* assignGateway */,
+                true /* assignPublicIpAddress */);
     }
 
     public static final String DEFAULT_OS_DISK_CACHING = "None";
@@ -241,6 +227,35 @@ public class AzureTestUtil {
             this.gateway = gateway;
             this.assignPublicIpAddress = assignPublicIpAddress;
         }
+    }
+
+    public static AzureNicSpecs initializeNicSpecs(String prefix, boolean assignGateway, boolean
+            assignPublicIpAddress) {
+        String networkName = (prefix != null ? prefix + "-" : "") + AZURE_NETWORK_NAME;
+        NetSpec network = new NetSpec(
+                networkName,
+                AZURE_NETWORK_CIDR,
+                AZURE_RESOURCE_GROUP_LOCATION);
+
+        List<NetSpec> subnets = new ArrayList<>();
+        for (int i = 0; i < AZURE_SUBNET_CIDR.length; i++) {
+            String subnetName = (prefix != null ? prefix + "-" : "") + AZURE_SUBNET_NAME + i;
+
+            subnets.add(new NetSpec(subnetName,
+                    AZURE_SUBNET_CIDR[i],
+                    AZURE_RESOURCE_GROUP_LOCATION));
+        }
+        GatewaySpec gateway = assignGateway ? new GatewaySpec(AZURE_GATEWAY_NAME,
+                AZURE_GATEWAY_CIDR,
+                AZURE_RESOURCE_GROUP_LOCATION,
+                AZURE_GATEWAY_IP_CONFIGURATION_NAME,
+                AZURE_GATEWAY_PUBLIC_IP_NAME,
+                AZURE_GATEWAY_IP_ALLOCATION_METHOD,
+                AZURE_GATEWAY_SKU,
+                AZURE_GATEWAY_TYPE,
+                AZURE_GATEWAY_VPN_TYPE) : null;
+
+        return new AzureNicSpecs(network, subnets, gateway, assignPublicIpAddress);
     }
 
     public static ResourcePoolState createDefaultResourcePool(
@@ -481,8 +496,9 @@ public class AzureTestUtil {
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.customProperties = new HashMap<>();
         rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING);
+
         rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
-                generateName(AZURE_STORAGE_ACCOUNT_NAME));
+                (azureVMName + "sa").replace("-", "").toLowerCase());
         rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
                 AZURE_STORAGE_ACCOUNT_TYPE);
 
@@ -592,17 +608,21 @@ public class AzureTestUtil {
      * Create a disk state
      */
     public static DiskState createDefaultDiskState(VerificationHost host, String diskName,
-            String storageContainerLink, String resourcePoolLink) throws Throwable {
+            String storageContainerLink, String resourcePoolLink, String computeHostLink) throws
+            Throwable {
 
         DiskState diskState = new DiskState();
         diskState.id = UUID.randomUUID().toString();
         diskState.name = diskName;
+        diskState.computeHostLink = computeHostLink;
         diskState.resourcePoolLink = resourcePoolLink;
         diskState.storageDescriptionLink = storageContainerLink;
         diskState.type = DEFAULT_DISK_TYPE;
         diskState.capacityMBytes = DEFAULT_DISK_CAPACITY;
         diskState.sourceImageReference = URI.create(DEFAULT_DISK_SERVICE_REFERENCE);
         diskState.documentSelfLink = diskState.id;
+        diskState.customProperties = new HashMap<>();
+        diskState.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_BLOBS);
         DiskState dState = TestUtils.doPost(host, diskState, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
         return dState;
@@ -750,7 +770,8 @@ public class AzureTestUtil {
      */
     public static ResourceGroup createResourceGroupWithSharedNetwork(
             ResourceManagementClient resourceManagementClient,
-            NetworkManagementClient networkManagementClient) throws Throwable {
+            NetworkManagementClient networkManagementClient,
+            AzureNicSpecs nicSpecs) throws Throwable {
 
         // Create the shared RG itself
         ResourceGroup sharedNetworkRGParams = new ResourceGroup();
@@ -761,7 +782,7 @@ public class AzureTestUtil {
                 .createOrUpdate(sharedNetworkRGParams.getName(), sharedNetworkRGParams).getBody();
 
         // Create shared vNet-Subnet-Gateway under shared RG
-        createAzureVirtualNetwork(sharedNetworkRG.getName(), DEFAULT_NIC_SPEC,
+        createAzureVirtualNetwork(sharedNetworkRG.getName(), nicSpecs,
                 networkManagementClient);
 
         // Create shared NSG under shared RG
@@ -896,7 +917,7 @@ public class AzureTestUtil {
                     @Override
                     public void failure(Throwable throwable) {
                         throw new RuntimeException(
-                                "Error creating Azure Virtual Network Gateway.");
+                                "Error creating Azure Virtual Network Gateway.", throwable);
                     }
 
                     @Override
@@ -905,5 +926,30 @@ public class AzureTestUtil {
 
                     }
                 });
+    }
+
+    /**
+     * Assert that a resource with the provided name exist in the document store.
+     * @param factoryLink Factory link to the stateful service which states to check.
+     * @param name name of the resource to assert if exists.
+     * @param shouldExists whether to assert if a resource exists or not.
+     */
+    public static void assertResourceExists(VerificationHost host, String factoryLink,
+            String name, boolean shouldExists) {
+
+        ServiceDocumentQueryResult result = host.getExpandedFactoryState(
+                UriUtils.buildUri(host, factoryLink));
+
+        boolean exists = false;
+        for (Object document : result.documents.values()) {
+            ResourceState state = Utils.fromJson(document, ResourceState.class);
+
+            if (name.equals(state.name)) {
+                exists = true;
+                break;
+            }
+        }
+
+        assertEquals("Expected: " + shouldExists + ", but was: " + exists, shouldExists, exists);
     }
 }

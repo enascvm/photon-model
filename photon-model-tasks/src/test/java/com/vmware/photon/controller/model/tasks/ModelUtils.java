@@ -162,7 +162,8 @@ public class ModelUtils {
 
 
     public static SecurityGroupState createSecurityGroup(VerificationHost host,
-            String securityGroupName, String resourcePoolLink, String computeHostAuthLink)
+            String securityGroupName, String resourcePoolLink, String computeHostAuthLink,
+            String computeHostLink)
             throws Throwable {
 
         SecurityGroupState securityGroupState = new SecurityGroupState();
@@ -170,6 +171,9 @@ public class ModelUtils {
         securityGroupState.name = securityGroupName;
         securityGroupState.authCredentialsLink = computeHostAuthLink;
         securityGroupState.resourcePoolLink = resourcePoolLink;
+        securityGroupState.customProperties = new HashMap<>();
+        securityGroupState.customProperties.put(ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
+                computeHostLink);
 
         Rule ssh = new Rule();
         ssh.name = "ssh";

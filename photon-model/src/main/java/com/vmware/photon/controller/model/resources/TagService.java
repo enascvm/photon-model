@@ -41,6 +41,7 @@ public class TagService extends StatefulService {
      */
     public static class TagState extends ServiceDocument {
 
+        public static final String FIELD_NAME_KEY = "key";
         public static final String FIELD_NAME_EXTERNAL = "external";
 
         @Documentation(description = "Tag key")

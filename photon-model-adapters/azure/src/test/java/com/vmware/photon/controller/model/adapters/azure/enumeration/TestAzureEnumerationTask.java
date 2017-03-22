@@ -18,8 +18,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_CONNECTION_STRING;
-import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceExists;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultDiskState;
@@ -35,11 +36,11 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getAzureVMCount;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getAzureVirtualMachine;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getAzureVirtualNetwork;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.initializeNicSpecs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.randomString;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualMachine;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualNetwork;
-import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
 import static com.vmware.photon.controller.model.tasks.ModelUtils.createSecurityGroup;
 import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
@@ -67,22 +68,14 @@ import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
 import com.microsoft.azure.management.network.models.VirtualNetwork;
 import com.microsoft.azure.management.resources.ResourceManagementClient;
 import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
-import com.microsoft.azure.management.resources.models.ResourceGroup;
-import com.microsoft.azure.management.storage.StorageAccountsOperations;
 import com.microsoft.azure.management.storage.StorageManagementClient;
 import com.microsoft.azure.management.storage.StorageManagementClientImpl;
-import com.microsoft.azure.management.storage.models.StorageAccount;
-import com.microsoft.azure.management.storage.models.StorageAccountKeys;
-import com.microsoft.azure.storage.CloudStorageAccount;
-import com.microsoft.azure.storage.blob.CloudBlobClient;
-import com.microsoft.azure.storage.blob.CloudBlobContainer;
-import com.microsoft.azure.storage.blob.ListBlobItem;
-import com.microsoft.rest.ServiceResponse;
 
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -95,6 +88,8 @@ import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -112,14 +107,16 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.photon.controller.model.resources.TagService;
+import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+import com.vmware.photon.controller.model.tasks.QueryStrategy;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
@@ -151,12 +148,26 @@ import com.vmware.xenon.services.common.QueryTask.Query;
  * canonical:UbuntuServer:12.04.3-LTS:12.04.201401270 azureuser Pa$$word% -z Standard_A0; done
  */
 public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
+    public static final String STALE_RG_NAME_PREFIX = "stalerg-";
+    public static final String STALE_VM_NAME_PREFIX = "stalevm-";
+    public static final String STALE_SA_NAME_PREFIX = "stalesa-";
+    public static final String STALE_CONTAINER_NAME_PREFIX = "stalecontainer-";
+    public static final String STALE_BLOB_NAME_PREFIX = "staleblob-";
+    public static final String STALE_SG_NAME_PREFIX = "stalesg-";
+
     private static final int STALE_RG_COUNT = 3;
     private static final int STALE_VM_RESOURCES_COUNT = 100;
     private static final int STALE_STORAGE_ACCOUNTS_COUNT = 5;
     private static final int STALE_CONTAINERS_COUNT = 5;
     private static final int STALE_BLOBS_COUNT = 5;
     private static final int STALE_SECURITY_GROUPS_COUNT = 4;
+
+    private static final String NETWORK_TAG_KEY_PREFIX = "vNetTagKey";
+    private static final String NETWORK_TAG_VALUE = "vNetTagValue";
+    private static final String VM_TAG_KEY_PREFIX = "VMTagKey";
+    private static final String VM_TAG_VALUE = "VMTagValue";
+    private static final String SG_TAG_KEY_PREFIX = "SGTagKey";
+    private static final String SG_TAG_VALUE = "SGTagValue";
 
     // Shared Compute Host / End-point between test runs.
     private static ComputeState computeHost;
@@ -168,17 +179,14 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     public String subscriptionId = "subscriptionId";
     public String tenantId = "tenantId";
 
-    public String azureVMNamePrefix = "enumtest-";
-    public String azureVMName;
+    public static String azureVMNamePrefix = "enumtest-";
+    public static String azureVMName;
     public boolean isMock = true;
     public String mockedStorageAccountName = randomString(15);
 
     // object counts
     public int vmCount = 0;
     public int numberOfVMsToDelete = 0;
-    public int storageAcctCount = 0;
-    public int containerCount = 0;
-    public int blobCount = 0;
 
     // fields that are used across method calls, stash them as private fields
     private ComputeState vmState;
@@ -194,6 +202,15 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private String enumeratedComputeLink;
 
     private static final String CUSTOM_DIAGNOSTIC_ENABLED_VM = "EnumTestVM-DoNotDelete";
+
+    private static AzureNicSpecs NIC_SPEC;
+
+    @BeforeClass
+    public static void setupClass() {
+        azureVMName = generateName(azureVMNamePrefix);
+
+        NIC_SPEC = initializeNicSpecs(azureVMName, false, true);
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -232,9 +249,6 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 // create a compute host for the Azure
                 computeHost = createDefaultComputeHost(this.host, resourcePoolLink, authLink);
             }
-
-            this.azureVMName = this.azureVMName == null ? generateName(this.azureVMNamePrefix)
-                    : this.azureVMName;
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
@@ -317,10 +331,11 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 ResourceGroupStateType.AzureResourceGroup);
 
         this.diskState = createDefaultDiskState(this.host, this.mockedStorageAccountName,
-                this.mockedStorageAccountName, resourcePoolLink);
+                this.mockedStorageAccountName, resourcePoolLink, computeHost.documentSelfLink);
+
         // create an Azure VM compute resource (this also creates a disk and a storage account)
-        this.vmState = createDefaultVMResource(this.host, this.azureVMName,
-                computeHost.documentSelfLink, resourcePoolLink, authLink, DEFAULT_NIC_SPEC);
+        this.vmState = createDefaultVMResource(this.host, azureVMName,
+                computeHost.documentSelfLink, resourcePoolLink, authLink, NIC_SPEC);
 
         // kick off a provision task to do the actual VM creation
         ProvisionComputeTaskState provisionTask = new ProvisionComputeTaskState();
@@ -372,54 +387,9 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
             return;
         }
 
-        // create stale resource states for deletion
-        // these should be deleted as part of first enumeration cycle.
-        createAzureResourceGroups(STALE_RG_COUNT);
-        createAzureVMResources(STALE_VM_RESOURCES_COUNT);
-        createAzureStorageAccounts(STALE_STORAGE_ACCOUNTS_COUNT);
-        createAzureStorageContainers(STALE_CONTAINERS_COUNT);
-        createAzureBlobs(STALE_BLOBS_COUNT);
-        createAzureSecurityGroups(STALE_SECURITY_GROUPS_COUNT);
+        createStaleResource();
 
-        // Add tags, that later should be discovered as part of first enumeration cycle.
-
-        // tag v-Net
-        VirtualNetwork vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient,
-                this.azureVMName,
-                DEFAULT_NIC_SPEC.network.name);
-
-        Map<String, String> vmNetwTags = new HashMap<String, String>();
-        vmNetwTags.put("testvNetTag", "vNetTagValue");
-        vmNetwUpdate.setTags(vmNetwTags);
-
-        updateAzureVirtualNetwork(this.networkManagementClient, this.azureVMName,
-                DEFAULT_NIC_SPEC.network.name, vmNetwUpdate);
-
-        // tag VM
-        VirtualMachine vmUpdate = getAzureVirtualMachine(
-                this.computeManagementClient, this.azureVMName, this.azureVMName);
-
-        Map<String, String> vmTags = new HashMap<String, String>();
-        vmTags.put("testVMTag", "VMTagValue");
-        vmUpdate.setTags(vmTags);
-
-        updateAzureVirtualMachine(this.computeManagementClient, this.azureVMName,
-                this.azureVMName, vmUpdate);
-
-        // tag Security Group
-        NetworkSecurityGroup sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
-                this.azureVMName, AzureTestUtil.AZURE_SECURITY_GROUP_NAME);
-
-        Map<String, String> sgTags = new HashMap<String, String>();
-        sgTags.put("testSGTag", "SGTagValue");
-        sgUpdate.setTags(sgTags);
-        sgUpdate.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
-
-        updateAzureSecurityGroup(this.networkManagementClient, this.azureVMName,
-                AzureTestUtil.AZURE_SECURITY_GROUP_NAME, sgUpdate);
-
-        // No need to create stale networks or subnets since createAzureVMResources will create
-        // such for us.
+        tagAzureResources();
 
         // stale resources + 1 compute host instance + 1 vm compute state
         ProvisioningUtils
@@ -447,35 +417,11 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         this.vmCount = getAzureVMCount(this.computeManagementClient);
         this.host.log(Level.INFO, "Initial VM Count: %d", this.vmCount);
-        getAzureStorageResourcesCount();
-
-        int networksCount = getAzureNetworksCount();
-        int subnetsCount = getAzureSubnetCount();
-        int resourceGroupsCount = getAzureResourceGroupCount();
-        int securityGroupsCount = getAzureNetworkSecurityGroups();
 
         runEnumeration();
 
-        // expect to find as many local accounts, containers, and blobs as there are on Azure
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.storageAcctCount,
-                StorageDescriptionService.FACTORY_LINK, false);
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.containerCount +
-                resourceGroupsCount,
-                ResourceGroupService.FACTORY_LINK, false);
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.blobCount,
-                DiskService.FACTORY_LINK, false);
-
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, networksCount,
-                NetworkService.FACTORY_LINK, false);
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, subnetsCount,
-                SubnetService.FACTORY_LINK, false);
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, securityGroupsCount,
-                SecurityGroupService.FACTORY_LINK, false);
-        // There are a total of sgTags.size() + vmNetwTags.size() + vmTags.size() tags
-        // This means we should have the same number of TagState documents
-        int allTagsNumber = sgTags.size() + vmNetwTags.size() + vmTags.size();
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, allTagsNumber,
-                TagService.FACTORY_LINK, false);
+        assertRemoteResources();
+        assertStaleResources();
 
         // VM count + 1 compute host instance
         this.vmCount = this.vmCount + 1;
@@ -538,18 +484,161 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
         // delete vm directly on azure
         this.computeManagementClient.getVirtualMachinesOperations()
-                .beginDelete(this.azureVMName, this.azureVMName);
+                .beginDelete(azureVMName, azureVMName);
 
         runEnumeration();
 
-        // after data collection the deleted vm should go away
-        this.vmCount = this.vmCount - this.numberOfVMsToDelete;
-        ProvisioningUtils.queryDocumentsAndAssertExpectedCount(this.host, this.vmCount,
-                ComputeService.FACTORY_LINK, true);
+        assertResourceExists(this.host, ComputeService.FACTORY_LINK, azureVMName, false);
 
         // clean up
         this.vmState = null;
-        this.resourceManagementClient.getResourceGroupsOperations().beginDelete(this.azureVMName);
+        this.resourceManagementClient.getResourceGroupsOperations().beginDelete(azureVMName);
+    }
+
+    // Add tags, that later should be discovered as part of first enumeration cycle.
+    private void tagAzureResources() throws Exception {
+
+        // tag v-Net
+        VirtualNetwork vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient,
+                azureVMName,
+                NIC_SPEC.network.name);
+
+        Map<String, String> vmNetwTags = new HashMap<>();
+        vmNetwTags.put(NETWORK_TAG_KEY_PREFIX + azureVMName, NETWORK_TAG_VALUE);
+        vmNetwUpdate.setTags(vmNetwTags);
+
+        updateAzureVirtualNetwork(this.networkManagementClient, azureVMName,
+                NIC_SPEC.network.name, vmNetwUpdate);
+
+        // tag VM
+        VirtualMachine vmUpdate = getAzureVirtualMachine(
+                this.computeManagementClient, azureVMName, azureVMName);
+
+        Map<String, String> vmTags = new HashMap<>();
+        vmTags.put(VM_TAG_KEY_PREFIX + azureVMName, VM_TAG_VALUE);
+        vmUpdate.setTags(vmTags);
+
+        updateAzureVirtualMachine(this.computeManagementClient, azureVMName,
+                azureVMName, vmUpdate);
+
+        // tag Security Group
+        NetworkSecurityGroup sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
+                azureVMName, AZURE_SECURITY_GROUP_NAME);
+
+        Map<String, String> sgTags = new HashMap<>();
+        sgTags.put(SG_TAG_KEY_PREFIX + azureVMName, SG_TAG_VALUE);
+        sgUpdate.setTags(sgTags);
+        sgUpdate.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+
+        updateAzureSecurityGroup(this.networkManagementClient, azureVMName,
+                AZURE_SECURITY_GROUP_NAME, sgUpdate);
+    }
+
+    // create stale resource states for deletion
+    // these should be deleted as part of first enumeration cycle.
+    private void createStaleResource() throws Throwable {
+        createAzureResourceGroups(STALE_RG_COUNT);
+        // No need to create stale networks or subnets since createAzureVMResources will create
+        // such for us.
+        createAzureVMResources(STALE_VM_RESOURCES_COUNT);
+        createAzureStorageAccounts(STALE_STORAGE_ACCOUNTS_COUNT);
+        createAzureStorageContainers(STALE_CONTAINERS_COUNT);
+        createAzureBlobs(STALE_BLOBS_COUNT);
+        createAzureSecurityGroups(STALE_SECURITY_GROUPS_COUNT);
+
+    }
+
+    // Assert that remote resources are enumerated and exists locally.
+    private void assertRemoteResources() {
+        assertResourceExists(this.host, NetworkService.FACTORY_LINK, NIC_SPEC.network.name,
+                true);
+
+        for (NetSpec subnet : NIC_SPEC.subnets) {
+            assertResourceExists(this.host, SubnetService.FACTORY_LINK, subnet.name, true);
+        }
+
+        assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK, azureVMName, true);
+
+        assertResourceExists(this.host, SecurityGroupService.FACTORY_LINK,
+                AZURE_SECURITY_GROUP_NAME, true);
+
+        assertResourceExists(this.host, StorageDescriptionService.FACTORY_LINK, (azureVMName +
+                "sa").replace("-", ""), true);
+
+        assertResourceExists(this.host, DiskService.FACTORY_LINK, azureVMName + "-boot-disk",
+                true);
+
+        // Tags
+        final Map<String, String> expectedTags = new HashMap<>();
+        expectedTags.put(NETWORK_TAG_KEY_PREFIX + azureVMName, NETWORK_TAG_VALUE);
+        expectedTags.put(VM_TAG_KEY_PREFIX + azureVMName, VM_TAG_VALUE);
+        expectedTags.put(SG_TAG_KEY_PREFIX + azureVMName, SG_TAG_VALUE);
+
+        final List<String> keysToLowerCase = expectedTags.keySet().stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toList());
+
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(TagState.class)
+                .addInClause(TagState.FIELD_NAME_KEY, keysToLowerCase)
+                .addFieldClause(TagState.FIELD_NAME_EXTERNAL, Boolean.TRUE.toString());
+
+        QueryStrategy<TagState> queryLocalTags = new QueryTop<>(
+                this.host,
+                qBuilder.build(),
+                TagState.class,
+                null)
+                .setMaxResultsLimit(expectedTags.size() + 1);
+
+        List<TagState> tagStates =
+                waitToComplete(queryLocalTags.collectDocuments(Collectors.toList()));
+
+        assertEquals("TagStates were not discovered.", expectedTags.size(), tagStates.size());
+        for (TagState tag : tagStates) {
+            assertEquals(expectedTags.get(tag.key), tag.value);
+        }
+    }
+
+    // Assert that stale resources were cleaned up.
+    private void assertStaleResources() {
+        // Resource groups.
+        for (int i = 0; i < STALE_RG_COUNT; i++) {
+            assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK,
+                    STALE_RG_NAME_PREFIX + i,
+                    false);
+        }
+
+        // VMs
+        for (int i = 0; i < STALE_VM_RESOURCES_COUNT; i++) {
+            assertResourceExists(this.host, ComputeService.FACTORY_LINK, STALE_VM_NAME_PREFIX + i,
+                    false);
+        }
+
+        // Storage accounts
+        for (int i = 0; i < STALE_STORAGE_ACCOUNTS_COUNT; i++) {
+            assertResourceExists(this.host, StorageDescriptionService.FACTORY_LINK,
+                    STALE_SA_NAME_PREFIX
+                            + i,
+                    false);
+        }
+
+        // Storage containers
+        for (int i = 0; i < STALE_CONTAINERS_COUNT; i++) {
+            assertResourceExists(this.host, ResourceGroupService.FACTORY_LINK,
+                    STALE_CONTAINER_NAME_PREFIX + i, false);
+        }
+
+        // Blobs
+        for (int i = 0; i < STALE_BLOBS_COUNT; i++) {
+            assertResourceExists(this.host, DiskService.FACTORY_LINK,
+                    STALE_BLOB_NAME_PREFIX + i, false);
+        }
+
+        // Security Groups
+        for (int i = 0; i < STALE_SECURITY_GROUPS_COUNT; i++) {
+            assertResourceExists(this.host, SecurityGroupService.FACTORY_LINK,
+                    STALE_SG_NAME_PREFIX + i, false);
+        }
     }
 
     /**
@@ -565,18 +654,18 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         // The test is only suitable for real (non-mocking env).
         Assume.assumeFalse(this.isMock);
 
-        createResourceGroupWithSharedNetwork(this.resourceManagementClient,
-                this.networkManagementClient);
+        createResourceGroupWithSharedNetwork(this
+                .resourceManagementClient, this.networkManagementClient, SHARED_NETWORK_NIC_SPEC);
 
         runEnumeration();
 
         // Post enumeration validate Gateway information is attached in NetworkState custom property
-        validateVirtualNetworkGateways();
+        validateVirtualNetworkGateways(SHARED_NETWORK_NIC_SPEC);
     }
 
     private void createAzureResourceGroups(int numOfResourceGroups) throws Throwable {
         for (int i = 0; i < numOfResourceGroups; i++) {
-            String staleResourceGroupName = "stalerg-" + i;
+            String staleResourceGroupName = STALE_RG_NAME_PREFIX + i;
             createDefaultResourceGroupState(this.host, staleResourceGroupName,
                     computeHost.documentSelfLink,
                     ResourceGroupStateType.AzureResourceGroup);
@@ -585,9 +674,9 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
     private void createAzureVMResources(int numOfVMs) throws Throwable {
         for (int i = 0; i < numOfVMs; i++) {
-            String staleVMName = "stalevm-" + i;
+            String staleVMName = STALE_VM_NAME_PREFIX + i;
             createDefaultVMResource(this.host, staleVMName, computeHost.documentSelfLink,
-                    resourcePoolLink, authLink, DEFAULT_NIC_SPEC);
+                    resourcePoolLink, authLink, NIC_SPEC);
         }
     }
 
@@ -705,7 +794,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
     private void createAzureStorageAccounts(int numOfAccts) throws Throwable {
         for (int i = 0; i < numOfAccts; i++) {
-            String staleAcctName = "staleAcct-" + i;
+            String staleAcctName = STALE_SA_NAME_PREFIX + i;
             createDefaultStorageAccountDescription(this.host, staleAcctName,
                     computeHost.documentSelfLink, resourcePoolLink);
         }
@@ -713,7 +802,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
     private void createAzureStorageContainers(int numOfCont) throws Throwable {
         for (int i = 0; i < numOfCont; i++) {
-            String staleContName = "staleCont-" + i;
+            String staleContName = STALE_CONTAINER_NAME_PREFIX + i;
             createDefaultResourceGroupState(this.host, staleContName,
                     computeHost.documentSelfLink,
                     ResourceGroupStateType.AzureStorageContainer);
@@ -722,88 +811,25 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
 
     private void createAzureBlobs(int numOfBlobs) throws Throwable {
         for (int i = 0; i < numOfBlobs; i++) {
-            String staleBlobName = "staleBlob-" + i;
+            String staleBlobName = STALE_BLOB_NAME_PREFIX + i;
             createDefaultDiskState(this.host, staleBlobName, computeHost.documentSelfLink,
-                    resourcePoolLink);
+                    resourcePoolLink, computeHost.documentSelfLink);
         }
     }
 
     private void createAzureSecurityGroups(int numOfSecurityGroups) throws Throwable {
         for (int i = 0; i < numOfSecurityGroups; i++) {
-            String staleSecurityGroupName = "staleSecurityGroup-" + i;
+            String staleSecurityGroupName = STALE_SG_NAME_PREFIX + i;
             createSecurityGroup(this.host, staleSecurityGroupName,
-                    resourcePoolLink, authLink);
+                    resourcePoolLink, authLink, computeHost.documentSelfLink);
         }
-    }
-
-    private int getAzureResourceGroupCount() throws Exception {
-        ServiceResponse<List<ResourceGroup>> resourceGroupsResponse = this.resourceManagementClient
-                .getResourceGroupsOperations().list(null, null);
-        List<ResourceGroup> resourceGroups = resourceGroupsResponse.getBody();
-        return resourceGroups.size();
-    }
-
-    @SuppressWarnings("unused")
-    private void getAzureStorageResourcesCount() throws Exception {
-        StorageAccountsOperations storageAccountsOperations = this.storageManagementClient
-                .getStorageAccountsOperations();
-        ServiceResponse<List<StorageAccount>> response = storageAccountsOperations.list();
-        List<StorageAccount> storageAccounts = response.getBody();
-        this.storageAcctCount = storageAccounts.size();
-        this.host.log("Storage account count in Azure: %d", this.storageAcctCount);
-
-        for (StorageAccount storageAcct : storageAccounts) {
-            String resourceGroupName = getResourceGroupName(storageAcct.getId());
-            ServiceResponse<StorageAccountKeys> keys = storageAccountsOperations
-                    .listKeys(resourceGroupName, storageAcct.getName());
-
-            String connectionString = String.format(STORAGE_CONNECTION_STRING,
-                    storageAcct.getName(), keys.getBody().getKey1());
-            CloudStorageAccount storageAccount = CloudStorageAccount.parse(connectionString);
-            CloudBlobClient blobClient = storageAccount.createCloudBlobClient();
-            Iterable<CloudBlobContainer> containerList = blobClient.listContainers();
-            for (CloudBlobContainer container : containerList) {
-                this.containerCount++;
-                for (ListBlobItem blobItem : container.listBlobs()) {
-                    this.blobCount++;
-                }
-            }
-        }
-
-        this.host.log("Container count in Azure: %d", this.containerCount);
-        this.host.log("Blob count in Azure: %d", this.blobCount);
-    }
-
-    private int getAzureNetworkSecurityGroups() throws Exception {
-        ServiceResponse<List<NetworkSecurityGroup>> securityGroupsResponse = this.networkManagementClient
-                .getNetworkSecurityGroupsOperations().listAll();
-        List<NetworkSecurityGroup> securityGroups = securityGroupsResponse.getBody();
-        return securityGroups.size();
-    }
-
-    private int getAzureNetworksCount() throws Exception {
-        ServiceResponse<List<VirtualNetwork>> networksResponse = this.networkManagementClient
-                .getVirtualNetworksOperations().listAll();
-        List<VirtualNetwork> networks = networksResponse.getBody();
-        return networks.size();
-    }
-
-    private int getAzureSubnetCount() throws Exception {
-        ServiceResponse<List<VirtualNetwork>> networksResponse = this.networkManagementClient
-                .getVirtualNetworksOperations().listAll();
-        List<VirtualNetwork> networks = networksResponse.getBody();
-
-        final int[] subnetCount = { 0 };
-        networks.forEach(virtualNetwork -> subnetCount[0] += virtualNetwork.getSubnets().size());
-
-        return subnetCount[0];
     }
 
     /**
      * Validates that the Gateway information discovered from Azure has been propagated to the
      * NetworkState custom properties.
      */
-    private void validateVirtualNetworkGateways() throws Throwable {
+    private void validateVirtualNetworkGateways(AzureNicSpecs nicSpecs) throws Throwable {
         if (this.isMock) {
             return;
         }
@@ -815,7 +841,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
         AtomicBoolean isGatewayFound = new AtomicBoolean(false);
 
         networkStatesMap.values().forEach(networkState -> {
-            if (networkState.name.contains(DEFAULT_NIC_SPEC.network.name)) {
+            if (networkState.name.contains(nicSpecs.network.name)) {
 
                 List<SubnetState> subnetStates = getSubnetStates(this.host, networkState);
                 assertFalse(subnetStates.isEmpty());
@@ -834,7 +860,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                             assertNotNull("SubnetState custom properties are null.",
                                     subnetState.customProperties);
                             assertEquals("Gateway SubnetState is not marked currectly with "
-                                    + "infrastructure use custom property.",
+                                            + "infrastructure use custom property.",
                                     Boolean.TRUE.toString(),
                                     subnetState.customProperties.get(
                                             ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME));
