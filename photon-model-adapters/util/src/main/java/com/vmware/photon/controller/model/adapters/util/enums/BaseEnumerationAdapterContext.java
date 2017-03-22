@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -37,6 +38,7 @@ import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 
 /**
  * Base class for context used by enumeration adapters. It loads resources from the remote system.
@@ -52,6 +54,10 @@ import com.vmware.xenon.services.common.QueryTask.Query;
  *            The class representing the remote resource.
  */
 public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAdapterContext<T, LOCAL_STATE, REMOTE>, LOCAL_STATE extends ResourceState, REMOTE> {
+
+    private static final int MAX_RESOURCES_TO_QUERY_ON_DELETE =
+            Integer.getInteger(UriPaths.PROPERTY_PREFIX
+                    + "enum.max.resources.query.on.delete", 950);
 
     protected final LOCAL_STATE SKIP = null;
 
@@ -442,6 +448,12 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
                         ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
                         createLessThanRange(context.enumStartTimeInMicros));
 
+        if (this.enumExternalResourcesIds.size() <= MAX_RESOURCES_TO_QUERY_ON_DELETE) {
+            // do not check resources from enumExternalResourcesIds
+            qBuilder.addInClause(ResourceState.FIELD_NAME_ID, this.enumExternalResourcesIds,
+                    Occurance.MUST_NOT_OCCUR);
+        }
+
         // Delegate to descendants to any doc specific criteria
         customizeLocalStatesQuery(qBuilder);
 
@@ -474,6 +486,6 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
      * Checks whether the local state should be deleted.
      */
     protected boolean shouldDelete(LOCAL_STATE localState) {
-        return true;
+        return !this.enumExternalResourcesIds.contains(localState.id);
     }
 }

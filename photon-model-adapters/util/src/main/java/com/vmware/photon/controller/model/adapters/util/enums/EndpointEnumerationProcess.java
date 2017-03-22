@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -45,6 +46,7 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 
 /**
  * The class abstracts the core enumeration logic per end-point. It consists of the following steps:
@@ -66,6 +68,10 @@ import com.vmware.xenon.services.common.QueryTask.Query;
  */
 // NOTE: FOR INTERNAL PURPOSE ONLY. WILL BE PROMOTED TO PUBLIC IN A NEXT CL.
 public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationProcess<T, LOCAL_STATE, REMOTE>, LOCAL_STATE extends ResourceState, REMOTE> {
+
+    private static final int MAX_RESOURCES_TO_QUERY_ON_DELETE =
+            Integer.getInteger(UriPaths.PROPERTY_PREFIX
+                    + "enum.max.resources.query.on.delete", 950);
 
     /**
      * The service that is creating and initiating this enumeration process.
@@ -511,6 +517,12 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 .addRangeClause(
                         ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
                         createLessThanRange(context.enumStartTimeInMicros));
+
+        if (this.enumExternalResourcesIds.size() <= MAX_RESOURCES_TO_QUERY_ON_DELETE) {
+            // do not check resources from enumExternalResourcesIds
+            qBuilder.addInClause(ResourceState.FIELD_NAME_ID, this.enumExternalResourcesIds,
+                    Occurance.MUST_NOT_OCCUR);
+        }
 
         // Delegate to descendants to any doc specific criteria
         customizeLocalStatesQuery(qBuilder);

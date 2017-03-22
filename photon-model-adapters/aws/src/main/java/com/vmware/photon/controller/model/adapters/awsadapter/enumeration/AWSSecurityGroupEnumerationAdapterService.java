@@ -216,11 +216,6 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             return DeferredResult.completed(stateHolder);
         }
 
-        @Override
-        protected boolean shouldDelete(SecurityGroupState sg) {
-            return !this.enumExternalResourcesIds.contains(sg.id);
-        }
-
         /**
          * Returns Rule based on a provided Amazon IpPermission
          */

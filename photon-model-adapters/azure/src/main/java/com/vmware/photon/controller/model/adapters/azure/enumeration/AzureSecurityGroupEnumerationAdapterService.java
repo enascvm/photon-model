@@ -155,11 +155,6 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
         }
 
         @Override
-        protected boolean shouldDelete(SecurityGroupState sg) {
-            return !this.enumExternalResourcesIds.contains(sg.id);
-        }
-
-        @Override
         protected DeferredResult<LocalStateHolder> buildLocalResourceState(
                 NetworkSecurityGroup networkSecurityGroup,
                 SecurityGroupState localSecurityGroupState) {

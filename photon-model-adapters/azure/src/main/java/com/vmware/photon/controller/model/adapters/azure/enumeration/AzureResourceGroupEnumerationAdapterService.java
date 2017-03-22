@@ -109,11 +109,6 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
         }
 
         @Override
-        protected boolean shouldDelete(ResourceGroupState rg) {
-            return !this.enumExternalResourcesIds.contains(rg.id);
-        }
-
-        @Override
         protected void customizeLocalStatesQuery(Query.Builder qBuilder) {
 
             qBuilder.addCompositeFieldClause(
