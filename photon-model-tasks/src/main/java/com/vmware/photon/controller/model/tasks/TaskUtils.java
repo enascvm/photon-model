@@ -371,6 +371,9 @@ public class TaskUtils {
         builder.setSubject(userServicePath);
         Claims claims = builder.getResult();
         String token = service.getTokenSigner().sign(claims);
+
+        // Setting the AuthContext to null, so that xenon uses the token instead.
+        service.setAuthorizationContext(op, null);
         op.addRequestHeader(Operation.REQUEST_AUTH_TOKEN_HEADER, token);
     }
 }

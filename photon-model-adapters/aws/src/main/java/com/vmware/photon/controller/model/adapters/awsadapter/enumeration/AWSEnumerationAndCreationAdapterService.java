@@ -110,7 +110,8 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         ZONES,
         VCP,
         SECURITY_GROUP,
-        COMPUTE
+        COMPUTE,
+        ERROR
     }
 
     public AWSEnumerationAndCreationAdapterService() {
@@ -315,10 +316,14 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             aws.amazonEC2Client.describeInstancesAsync(aws.describeInstancesRequest,
                     aws.resultHandler);
             break;
+        case ERROR:
+            AdapterUtils.sendFailurePatchToEnumerationTask(this,
+                    aws.request.original.taskReference, aws.error);
+            break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
                     aws.refreshSubStage.toString()));
-            aws.error = new Exception("Unknown AWS enumeration stage %s");
+            aws.error = new Exception("Unknown AWS enumeration stage");
             AdapterUtils.sendFailurePatchToEnumerationTask(this,
                     aws.request.original.taskReference, aws.error);
             break;
@@ -378,6 +383,16 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     aws.enumeratedSecurityGroups = securityGroupEnumerationResponse;
                     aws.refreshSubStage = next;
                     processRefreshSubStages(aws);
+                })
+                .exceptionally(throwable -> {
+                    if (throwable != null) {
+                        logWarning(() -> String.format("Failed to enumerate security groups: %s ",
+                                throwable.getLocalizedMessage()));
+                        aws.error = throwable;
+                        aws.refreshSubStage = AWSEnumerationRefreshSubStage.ERROR;
+                        processRefreshSubStages(aws);
+                    }
+                    return null;
                 });
     }
 
@@ -403,6 +418,16 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     aws.enumeratedNetworks = networkResponse;
                     aws.refreshSubStage = next;
                     processRefreshSubStages(aws);
+                })
+                .exceptionally(throwable -> {
+                    if (throwable != null) {
+                        logWarning(() -> String.format("Failed to enumerate subnets: %s ",
+                                throwable.getLocalizedMessage()));
+                        aws.error = throwable;
+                        aws.refreshSubStage = AWSEnumerationRefreshSubStage.ERROR;
+                        processRefreshSubStages(aws);
+                    }
+                    return null;
                 });
     }
 
