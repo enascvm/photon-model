@@ -23,12 +23,14 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
@@ -80,6 +82,7 @@ public class EndpointAllocationTaskService
         CREATE_UPDATE_ENDPOINT,
         INVOKE_ADAPTER,
         TRIGGER_ENUMERATION,
+        ROLLBACK_CREATION,
         COMPLETED,
         FAILED
     }
@@ -110,6 +113,11 @@ public class EndpointAllocationTaskService
         @Documentation(description = "If specified a Resource enumeration will be scheduled.")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, OPTIONAL }, indexing = STORE_ONLY)
         public ResourceEnumerationRequest enumerationRequest;
+
+        @Documentation(description = "Links to the created documents; "
+                + "used internally if a rollback is needed in case of an adapter failure.")
+        @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
+        public List<String> createdDocumentLinks;
 
         @Documentation(description = "Describes a service task sub stage.")
         @PropertyOptions(usage = { SERVICE_USE }, indexing = STORE_ONLY)
@@ -217,6 +225,9 @@ public class EndpointAllocationTaskService
         case TRIGGER_ENUMERATION:
             triggerEnumeration(currentState, SubStage.COMPLETED);
             break;
+        case ROLLBACK_CREATION:
+            rollbackEndpoint(currentState);
+            break;
         case FAILED:
             break;
         case COMPLETED:
@@ -280,6 +291,7 @@ public class EndpointAllocationTaskService
 
     private void createEndpoint(EndpointAllocationTaskState currentState) {
 
+        List<String> createdDocumentLinks = new ArrayList<>();
         EndpointState es = currentState.endpointState;
 
         Map<String, String> endpointProperties = currentState.endpointState.endpointProperties;
@@ -352,6 +364,7 @@ public class EndpointAllocationTaskService
 
                     Operation o = ops.get(cdOp.getId());
                     ComputeDescription desc = o.getBody(ComputeDescription.class);
+                    createdDocumentLinks.add(desc.documentSelfLink);
                     computeState.descriptionLink = desc.documentSelfLink;
                     es.computeDescriptionLink = desc.documentSelfLink;
                 });
@@ -371,6 +384,7 @@ public class EndpointAllocationTaskService
                         }
                         Operation o = ops.get(poolOp.getId());
                         ResourcePoolState poolState = o.getBody(ResourcePoolState.class);
+                        createdDocumentLinks.add(poolState.documentSelfLink);
                         es.resourcePoolLink = poolState.documentSelfLink;
                         computeState.resourcePoolLink = es.resourcePoolLink;
 
@@ -420,6 +434,7 @@ public class EndpointAllocationTaskService
                             }
                             Operation csOp = ops.get(compOp.getId());
                             ComputeState c = csOp.getBody(ComputeState.class);
+                            createdDocumentLinks.add(c.documentSelfLink);
                             es.computeLink = c.documentSelfLink;
                             endpointOp.setBody(es);
                         })
@@ -435,11 +450,13 @@ public class EndpointAllocationTaskService
                     }
                     Operation esOp = ops.get(endpointOp.getId());
                     EndpointState endpoint = esOp.getBody(EndpointState.class);
+                    createdDocumentLinks.add(endpoint.documentSelfLink);
                     // propagate the endpoint properties to the next stage
                     endpoint.endpointProperties = endpointProperties;
                     EndpointAllocationTaskState state = createUpdateSubStageTask(
                             SubStage.INVOKE_ADAPTER);
                     state.endpointState = endpoint;
+                    state.createdDocumentLinks = createdDocumentLinks;
                     sendSelfPatch(state);
                 }).sendWith(this);
     }
@@ -494,6 +511,35 @@ public class EndpointAllocationTaskService
                     sendSelfPatch(state);
                 }).sendWith(this);
 
+    }
+
+    private void rollbackEndpoint(EndpointAllocationTaskState currentState) {
+        Runnable completionHandler = () -> {
+            sendSelfPatch(createUpdateSubStageTask(TaskStage.FAILED, SubStage.FAILED));
+        };
+
+        if (currentState.createdDocumentLinks == null || currentState.createdDocumentLinks.isEmpty()) {
+            completionHandler.run();
+        } else {
+            List<Operation> deleteOps = currentState.createdDocumentLinks.stream()
+                    .map(link -> Operation.createDelete(this, link))
+                    .collect(Collectors.toList());
+
+            // execute the delete ops in a reverse order because of possible dependencies
+            OperationSequence opSequence =
+                    OperationSequence.create(deleteOps.get(deleteOps.size() - 1));
+            for (int i = deleteOps.size() - 2; i >= 0; i--) {
+                opSequence = opSequence.next(deleteOps.get(i));
+            }
+
+            opSequence.setCompletion((ops, exs) -> {
+                if (exs != null) {
+                    logWarning(() -> "Error during rollback of created endpoint documents: "
+                            + Utils.toString(exs));
+                }
+                completionHandler.run();
+            }).sendWith(this);
+        }
     }
 
     private void validateCredentials(EndpointAllocationTaskState currentState, SubStage next) {
@@ -684,6 +730,11 @@ public class EndpointAllocationTaskService
             isUpdate = true;
         }
 
+        if (body.createdDocumentLinks != null) {
+            currentState.createdDocumentLinks = body.createdDocumentLinks;
+            isUpdate = true;
+        }
+
         if (body.adapterReference != null) {
             currentState.adapterReference = body.adapterReference;
             isUpdate = true;
@@ -719,12 +770,18 @@ public class EndpointAllocationTaskService
         }
 
         if (body.taskInfo.failure != null) {
-            logWarning(() -> String.format("Referer %s is patching us to failure: %s",
-                    patch.getReferer(), Utils.toJsonHtml(body.taskInfo.failure)));
+            logWarning(() -> String.format(
+                    "Referer %s is patching us to failure during subStage %s: %s",
+                    patch.getReferer(), currentState.taskSubStage,
+                    Utils.toJsonHtml(body.taskInfo.failure)));
 
             currentState.taskInfo.failure = body.taskInfo.failure;
-            currentState.taskInfo.stage = body.taskInfo.stage;
-            currentState.taskSubStage = SubStage.FAILED;
+            if (SubStage.INVOKE_ADAPTER.equals(currentState.taskSubStage)) {
+                currentState.taskSubStage = SubStage.ROLLBACK_CREATION;
+            } else {
+                currentState.taskInfo.stage = body.taskInfo.stage;
+                currentState.taskSubStage = SubStage.FAILED;
+            }
             return false;
         }
 
