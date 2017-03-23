@@ -1,8 +1,17 @@
 # CHANGELOG
 
-## 0.6.9-SNAPSHOT
+## 0.6.9
 
+* Bug fixes.
+* [Azure] Delete tag links for vNet and Virtual Machine
+* Rollback of endpoint creation if adapter configuration fails.
+* Correcting check for adding current month's resource stats
+* Optimize cloud watch client usage
 * Upgrading to com.jcraft.jsch-0.1.54 to address CVS-2016-5725.
+* Added AWSSubnetService.
+* Reduce the number of metrics collected from AWS and Azure
+* Fail endpoint removal task if endpoint state removal fails.
+* Add e2e test case for AWSCostStatsService
 
 ## 0.6.8
 
