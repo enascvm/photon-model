@@ -22,10 +22,12 @@ import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
@@ -52,6 +54,7 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
         /**
          * Interval for task execution
          */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Long intervalMicros;
 
         @Documentation(description = "The user in whose context the task will be executed")
@@ -77,6 +80,13 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public Long delayMicros;
+
+        /**
+         * Flag to disable a scheduled task
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_10)
+        public Boolean enabled = Boolean.TRUE;
     }
 
     public ScheduledTaskService() {
@@ -143,7 +153,29 @@ public class ScheduledTaskService extends TaskService<ScheduledTaskService.Sched
                 }));
     }
 
+    @Override
+    public void handlePatch(Operation patch) {
+        try {
+            ScheduledTaskState patchBody = getBody(patch);
+            Utils.validateState(getStateDescription(), patchBody);
+            ScheduledTaskState currentState = getState(patch);
+            boolean hasStateChanged = Utils.mergeWithState(getStateDescription(),
+                    currentState, patchBody);
+            if (!hasStateChanged) {
+                patch.setStatusCode(Operation.STATUS_CODE_NOT_MODIFIED);
+            } else {
+                patch.setBody(currentState);
+            }
+            patch.complete();
+        } catch (Throwable e) {
+            patch.fail(e);
+        }
+    }
+
     private void invokeTask(ScheduledTaskState state) {
+        if (!state.enabled) {
+            return;
+        }
         getHost().schedule(() -> {
             Operation op = Operation.createPost(this, state.factoryLink);
             if (getHost().isAuthorizationEnabled() && state.userLink != null) {

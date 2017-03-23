@@ -38,11 +38,11 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -60,7 +60,7 @@ public class AWSStatsService extends StatelessService {
     private AWSClientManager clientManager;
 
     public static final String AWS_COLLECTION_PERIOD_SECONDS = UriPaths.PROPERTY_PREFIX + "AWSStatsService.collectionPeriod";
-    private static final int DEFAULT_AWS_COLLECTION_PERIOD_SECONDS = 300;
+    private static final long DEFAULT_AWS_COLLECTION_PERIOD_SECONDS = TimeUnit.HOURS.toSeconds(1);
 
     public AWSStatsService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -80,8 +80,8 @@ public class AWSStatsService extends StatelessService {
     private static final String DIMENSION_INSTANCE_ID = "InstanceId";
     // This is the maximum window size for which stats should be collected in case the last
     // collection time is not specified.
-    // Defaulting to 1 hr.
-    private static final int MAX_METRIC_COLLECTION_WINDOW_IN_MINUTES = 60;
+    // Defaulting to 6 hrs.
+    private static final long MAX_METRIC_COLLECTION_WINDOW_IN_MINUTES = TimeUnit.HOURS.toMinutes(6);
 
     // Cost
     private static final String BILLING_NAMESPACE = "AWS/Billing";
@@ -214,15 +214,22 @@ public class AWSStatsService extends StatelessService {
         if (getAWSAsyncStatsClient(statsData) == null) {
             return;
         }
-        int collectionPeriod = Integer.getInteger(AWS_COLLECTION_PERIOD_SECONDS, DEFAULT_AWS_COLLECTION_PERIOD_SECONDS);
+        Long collectionPeriod = Long.getLong(AWS_COLLECTION_PERIOD_SECONDS, DEFAULT_AWS_COLLECTION_PERIOD_SECONDS);
         for (String metricName : metricNames) {
             GetMetricStatisticsRequest metricRequest = new GetMetricStatisticsRequest();
             // get datapoint for the for the passed in time window.
-            setRequestCollectionWindow(
-                    TimeUnit.MINUTES.toMicros(MAX_METRIC_COLLECTION_WINDOW_IN_MINUTES),
-                    statsData.statsRequest.lastCollectionTimeMicrosUtc,
-                    metricRequest);
-            metricRequest.setPeriod(collectionPeriod);
+            try {
+                setRequestCollectionWindow(
+                        TimeUnit.MINUTES.toMicros(MAX_METRIC_COLLECTION_WINDOW_IN_MINUTES),
+                        statsData.statsRequest.lastCollectionTimeMicrosUtc,
+                        collectionPeriod,
+                        metricRequest);
+            } catch (IllegalStateException e) {
+                // no data to process. notify parent
+                AdapterUtils.sendPatchToProvisioningTask(this, statsData.statsRequest.taskReference);
+                return;
+            }
+            metricRequest.setPeriod(collectionPeriod.intValue());
             metricRequest.setStatistics(Arrays.asList(STATISTICS));
             metricRequest.setNamespace(NAMESPACE);
 
@@ -260,17 +267,27 @@ public class AWSStatsService extends StatelessService {
         // Get all 14 days worth of estimated charges data by default when last collection time is not set.
         // Otherwise set the window to lastCollectionTime - 4 hrs.
         Long lastCollectionTimeForEstimatedCharges = null;
+        Long collectionPeriod = Long.getLong(AWS_COLLECTION_PERIOD_SECONDS, DEFAULT_AWS_COLLECTION_PERIOD_SECONDS);
         if (statsData.statsRequest.lastCollectionTimeMicrosUtc != null) {
             lastCollectionTimeForEstimatedCharges =
                     statsData.statsRequest.lastCollectionTimeMicrosUtc
                             - TimeUnit.HOURS.toMicros(COST_COLLECTION_PERIOD_IN_HOURS);
 
         }
+
         // defaulting to fetch 14 days of estimated charges data
-        setRequestCollectionWindow(
-                TimeUnit.DAYS.toMicros(COST_COLLECTION_WINDOW_IN_DAYS),
-                lastCollectionTimeForEstimatedCharges,
-                request);
+        try {
+            setRequestCollectionWindow(
+                    TimeUnit.DAYS.toMicros(COST_COLLECTION_WINDOW_IN_DAYS),
+                    lastCollectionTimeForEstimatedCharges,
+                    collectionPeriod,
+                    request);
+        } catch (IllegalStateException e) {
+            // no data to process. notify parent
+            AdapterUtils.sendPatchToProvisioningTask(this, statsData.statsRequest.taskReference);
+            return;
+        }
+
         request.setPeriod(COST_COLLECTION_PERIOD_IN_SECONDS);
         request.setStatistics(Arrays.asList(STATISTICS));
         request.setNamespace(BILLING_NAMESPACE);
@@ -294,8 +311,10 @@ public class AWSStatsService extends StatelessService {
      */
     private void setRequestCollectionWindow(Long defaultStartWindowMicros,
             Long lastCollectionTimeMicros,
+            Long collectionPeriodInSeconds,
             GetMetricStatisticsRequest request) {
-        long endTimeMicros = Utils.getNowMicrosUtc();
+        long endTimeMicros = StatsUtil.computeIntervalBeginMicros(Utils.getNowMicrosUtc(),
+                TimeUnit.SECONDS.toMillis(collectionPeriodInSeconds));
         request.setEndTime(new Date(TimeUnit.MICROSECONDS.toMillis(endTimeMicros)));
         Long maxCollectionWindowStartTime = TimeUnit.MICROSECONDS.toMillis(endTimeMicros) -
                 TimeUnit.MICROSECONDS.toMillis(defaultStartWindowMicros);
@@ -308,7 +327,7 @@ public class AWSStatsService extends StatelessService {
         }
         if (lastCollectionTimeMicros != 0) {
             if (lastCollectionTimeMicros > endTimeMicros) {
-                throw new IllegalArgumentException(
+                throw new IllegalStateException(
                         "The last stats collection time cannot be in the future.");
                 // Check if the last collection time calls for collection to earlier than the
                 // maximum defined windows size.
@@ -318,9 +337,10 @@ public class AWSStatsService extends StatelessService {
                 request.setStartTime(new Date(maxCollectionWindowStartTime));
                 return;
             }
+            long beginMicros = StatsUtil.computeIntervalBeginMicros(lastCollectionTimeMicros,
+                    TimeUnit.SECONDS.toMillis(collectionPeriodInSeconds));
             request.setStartTime(new Date(
-                    TimeUnit.MICROSECONDS.toMillis(lastCollectionTimeMicros)));
-
+                    TimeUnit.MICROSECONDS.toMillis(beginMicros)));
         }
     }
 
@@ -496,14 +516,6 @@ public class AWSStatsService extends StatelessService {
     }
 
     private void sendStats(AWSStatsDataHolder statsData) {
-        // Put the number of API requests as a stat
-        ServiceStat apiCallCountStat = new ServiceStat();
-        apiCallCountStat.latestValue = statsData.statsResponse.statValues.size();
-        apiCallCountStat.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
-        apiCallCountStat.unit = PhotonModelConstants.UNIT_COUNT;
-        statsData.statsResponse.statValues.put(PhotonModelConstants.API_CALL_COUNT,
-                Collections.singletonList(apiCallCountStat));
-
         SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
         statsData.statsResponse.computeLink = statsData.computeDesc.documentSelfLink;
         respBody.taskStage = SingleResourceTaskCollectionStage

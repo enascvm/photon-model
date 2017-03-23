@@ -110,6 +110,43 @@ public class TestUtils {
     }
 
     /**
+     * Generic doPatch.
+     *
+     * @param host VerificationHost
+     * @param state Body to PATCH
+     * @param type Body type to return
+     * @param uri URI to post to
+     * @param <T> type
+     * @return State of service after PATCH
+     * @throws Throwable
+     */
+    public static <T extends ServiceDocument, B extends ServiceDocument> B doPatch(
+            VerificationHost host, T state, Class<B> type, URI uri) throws Throwable {
+        final ServiceDocument[] doc = { null };
+        host.testStart(1);
+        Operation patch = Operation
+                .createPatch(uri)
+                .setBody(state).setCompletion(
+                        (o, e) -> {
+                            if (e != null) {
+                                host.failIteration(e);
+                                return;
+                            }
+                            doc[0] = o.getBody(ServiceDocument.class);
+                            host.completeIteration();
+                        });
+        host.send(patch);
+        host.testWait();
+        host.logThroughput();
+
+        B outState = host.getServiceState(null,
+                type,
+                UriUtils.buildUri(uri.getHost(), uri.getPort(), doc[0].documentSelfLink, null));
+
+        return outState;
+    }
+
+    /**
      * Load a file
      * @param file
      * @return

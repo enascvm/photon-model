@@ -910,8 +910,6 @@ public class AWSCostStatsService extends StatelessService {
             Long usageStartTime = cost.getKey();
             if (usageStartTime.compareTo(billProcessedTimeMillis) > 0) {
                 ServiceStat resourceStat = new ServiceStat();
-                resourceStat.serviceReference = UriUtils
-                        .buildUri(this.getHost(), resourceComputeLink);
                 resourceStat.latestValue = cost.getValue();
                 resourceStat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(usageStartTime);
                 resourceStat.unit = AWSStatsNormalizer
@@ -936,7 +934,6 @@ public class AWSCostStatsService extends StatelessService {
 
         // Account cost
         ServiceStat costStat = new ServiceStat();
-        costStat.serviceReference = accountUri;
         costStat.latestValue = awsAccountDetailDto.cost;
         costStat.sourceTimeMicrosUtc = currentBillProcessedTime - AWSConstants.AGGREGATION_WINDOW_ALIGNMENT_TIME;
         costStat.unit = AWSStatsNormalizer.getNormalizedUnitValue(DIMENSION_CURRENCY_VALUE);
@@ -945,7 +942,6 @@ public class AWSCostStatsService extends StatelessService {
 
         // Account deleted VM count
         ServiceStat deletedVmCountStat = new ServiceStat();
-        deletedVmCountStat.serviceReference = accountUri;
         deletedVmCountStat.latestValue = awsAccountDetailDto.deletedVmCount;
         deletedVmCountStat.sourceTimeMicrosUtc = currentBillProcessedTime - AWSConstants.AGGREGATION_WINDOW_ALIGNMENT_TIME;
         deletedVmCountStat.unit = PhotonModelConstants.UNIT_COST;
@@ -1055,8 +1051,6 @@ public class AWSCostStatsService extends StatelessService {
 
         if (accountId != null) {
 
-            billProcessedTimeStat.serviceReference = UriUtils.buildUri(this.getHost(),
-                    accountComputeState.documentSelfLink);
             billProcessedTimeStat.latestValue = statsData.accountsHistoricalDetailsMap
                     .get(currentMonth)
                     .get(accountId).billProcessedTimeMillis;
@@ -1080,7 +1074,6 @@ public class AWSCostStatsService extends StatelessService {
             String serviceResourceCostMetric, Long timestamp, Double cost) {
 
         ServiceStat stat = new ServiceStat();
-        stat.serviceReference = accountUri;
         stat.latestValue = cost;
         stat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(timestamp);
         stat.unit = currencyUnit;
@@ -1116,19 +1109,20 @@ public class AWSCostStatsService extends StatelessService {
                                 AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS),
                 QueryTask.NumericRange
                         .createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
-
+        QueryTask qTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.SORT)
+                .addOption(QueryOption.TOP_RESULTS)
+                // No-op in photon-model. Required for special handling of immutable documents.
+                // This will prevent Lucene from holding the full result set in memory.
+                .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
+                        ServiceDocumentDescription.TypeName.STRING)
+                .setResultLimit(1)
+                .setQuery(builder.build()).build();
+        qTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
         return Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(QueryTask.Builder.createDirectTask()
-                        .addOption(QueryOption.SORT)
-                        .addOption(QueryOption.TOP_RESULTS)
-                        // No-op in photon-model. Required for special handling of immutable documents.
-                        // This will prevent Lucene from holding the full result set in memory.
-                        .addOption(QueryOption.INCLUDE_ALL_VERSIONS)
-                        .addOption(QueryOption.EXPAND_CONTENT)
-                        .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
-                                ServiceDocumentDescription.TypeName.STRING)
-                        .setResultLimit(1)
-                        .setQuery(builder.build()).build())
+                .setBody(qTask)
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
                         logWarning(() -> String.format("Failed to get bill processed time for"

@@ -328,7 +328,18 @@ public class SingleResourceStatsCollectionTaskService
             throw new IllegalStateException("stats adapter reference should not be null");
         }
 
+        if (currentState.statsList.size() == 0) {
+            // If there are no stats reported, just finish the task.
+            SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
+            nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+            TaskUtils.sendPatch(this, nextStatePatch);
+            return;
+        }
+
         long expirationTime = Utils.getNowMicrosUtc() + TimeUnit.HOURS.toMicros(EXPIRATION_INTERVAL);
+        List<Operation> operations = new ArrayList<>();
+        List<ResourceMetrics> metricsList = new ArrayList<>();
+        List<InMemoryResourceMetric> inMemoryMetricsList = new ArrayList<>();
 
         // Push the last collection metric to the in memory stats available at the
         // compute-link/stats URI.
@@ -338,16 +349,12 @@ public class SingleResourceStatsCollectionTaskService
         minuteStats.latestValue = Utils.getNowMicrosUtc();
         minuteStats.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
         minuteStats.unit = PhotonModelConstants.UNIT_MICROSECONDS;
-
-        List<Operation> operations = new ArrayList<>();
         URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.computeLink);
         operations.add(Operation.createPost(inMemoryStatsUri).setBody(minuteStats));
-        List<ResourceMetrics> metricsList = new ArrayList<>();
         populateResourceMetrics(metricsList,
                 getLastCollectionMetricKeyForAdapterLink(statsLink, false),
                 minuteStats, currentState.computeLink, expirationTime);
 
-        List<InMemoryResourceMetric> inMemoryMetricsList = new ArrayList<>();
         for (ComputeStats stats : currentState.statsList) {
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-330
 
@@ -357,12 +364,7 @@ public class SingleResourceStatsCollectionTaskService
             hourlyMemoryState.timeSeriesStats = new HashMap<>();
             hourlyMemoryState.documentSelfLink = computeId.concat(StatsConstants.HOUR_SUFFIX);
 
-            InMemoryResourceMetric dailyMemoryState = new InMemoryResourceMetric();
-            dailyMemoryState.timeSeriesStats = new HashMap<>();
-            dailyMemoryState.documentSelfLink = computeId.concat(StatsConstants.DAILY_SUFFIX);
-
             inMemoryMetricsList.add(hourlyMemoryState);
-            inMemoryMetricsList.add(dailyMemoryState);
 
             for (Entry<String, List<ServiceStat>> entries : stats.statValues.entrySet()) {
                 // sort stats by source time
@@ -377,9 +379,6 @@ public class SingleResourceStatsCollectionTaskService
                     // update in-memory stats
                     updateInMemoryStats(hourlyMemoryState, entries.getKey(), serviceStat,
                             StatsConstants.BUCKET_SIZE_HOURS_IN_MILLIS);
-                    updateInMemoryStats(dailyMemoryState, entries.getKey(), serviceStat,
-                            StatsConstants.BUCKET_SIZE_DAYS_IN_MILLIS);
-
                     populateResourceMetrics(metricsList, entries.getKey(),
                             serviceStat, computeLink, expirationTime);
                 }
@@ -393,15 +392,6 @@ public class SingleResourceStatsCollectionTaskService
             operations.add(Operation.createPost(getHost(), InMemoryResourceMetricService.FACTORY_LINK)
                     .setBodyNoCloning(metric));
         }
-
-        // If there are no stats reported, just finish the task.
-        if (operations.size() == 0) {
-            SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
-            nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-            TaskUtils.sendPatch(this, nextStatePatch);
-            return;
-        }
-
         // Save each data point sequentially to create time based monotonically increasing sequence.
         batchPersistStats(operations, 0);
     }

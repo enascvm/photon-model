@@ -21,6 +21,7 @@ import java.util.UUID;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.tasks.SubTaskService;
@@ -28,6 +29,7 @@ import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -248,27 +250,22 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
                 .setQuery(resourcePoolStateQuery)
                 .setResultLimit(resultLimit);
-
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTaskBuilder.build())
-                .setCompletion((queryOp, queryEx) -> {
-                    if (queryEx != null) {
-                        TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), queryEx);
-                        return;
-                    }
-                    QueryTask rsp = queryOp.getBody(QueryTask.class);
-                    StatsCollectionTaskState patchBody = new StatsCollectionTaskState();
-                    if (rsp.results.nextPageLink == null) {
-                        patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-                    } else {
-                        patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-                        patchBody.taskSubStage = StatsCollectionStage.GET_RESOURCES;
-                        patchBody.nextPageLink = rsp.results.nextPageLink;
-                    }
-                    TaskUtils.sendPatch(this, patchBody);
-                }));
-
+        QueryTask qTask = queryTaskBuilder.build();
+        QueryUtils.startQueryTask(this, qTask).whenComplete((queryRsp, queryEx) -> {
+            if (queryEx != null) {
+                TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), queryEx);
+                return;
+            }
+            StatsCollectionTaskState patchBody = new StatsCollectionTaskState();
+            if (queryRsp.results.nextPageLink == null) {
+                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+            } else {
+                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+                patchBody.taskSubStage = StatsCollectionStage.GET_RESOURCES;
+                patchBody.nextPageLink = queryRsp.results.nextPageLink;
+            }
+            TaskUtils.sendPatch(this, patchBody);
+        });
     }
 
     private void getResources(Operation op, StatsCollectionTaskState currentState) {

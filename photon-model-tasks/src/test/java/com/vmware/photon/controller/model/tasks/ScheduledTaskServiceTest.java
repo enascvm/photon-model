@@ -229,8 +229,6 @@ public class ScheduledTaskServiceTest extends Suite {
                         ctx.completeIteration();
                     }));
             this.host.testWait(ctx);
-            // verify that the periodic maintenance handler is invoked for
-            // scheduled task
             enumTaskState.documentSelfLink = UUID.randomUUID().toString();
             enumTaskState.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
 
@@ -238,22 +236,56 @@ public class ScheduledTaskServiceTest extends Suite {
             periodicTaskState.factoryLink = ResourceEnumerationTaskService.FACTORY_LINK;
             periodicTaskState.initialStateJson = Utils.toJson(enumTaskState);
             periodicTaskState.intervalMicros = TimeUnit.MILLISECONDS.toMicros(250);
+            periodicTaskState.enabled = Boolean.FALSE;
             periodicTaskState.documentSelfLink = UUID.randomUUID().toString();
             TestUtils.doPost(this.host, periodicTaskState,
                     ScheduledTaskState.class,
-                    UriUtils.buildUri(this.host, ScheduledTaskService.FACTORY_LINK));
+                    UriUtils.buildUri(this.host,
+                            ScheduledTaskService.FACTORY_LINK));
+            int retryCount = 5;
+            // get stats for 5 times with a delay of intervalMicros giving the task
+            // enough chance to run
+            TestContext postContext = this.host.testCreate(retryCount);
+            for (int i = 0; i < retryCount; i++) {
+                this.host.schedule(() -> {
+                    try {
+                        ServiceStats taskStats = this.getServiceSynchronously(UriUtils
+                                .buildUriPath(
+                                    ScheduledTaskService.FACTORY_LINK,
+                                    periodicTaskState.documentSelfLink,
+                                    ServiceHost.SERVICE_URI_SUFFIX_STATS),
+                                    ServiceStats.class);
+                        if (!taskStats.entries.containsKey((ScheduledTaskService.INVOCATION_COUNT))) {
+                            postContext.completeIteration();
+                            return;
+                        }
+                        postContext.failIteration(new IllegalStateException("Incorrect invocation count"));
+                    } catch (Throwable e) {
+                        postContext.failIteration(e);
+                    }
+                }, periodicTaskState.intervalMicros, TimeUnit.MICROSECONDS);
+            }
+            this.host.testWait(postContext);
+            // verify that the periodic maintenance handler is invoked for
+            // scheduled task after enabling it
+            periodicTaskState.enabled = Boolean.TRUE;
+            TestUtils.doPatch(this.host, periodicTaskState,
+                    ScheduledTaskState.class,
+                    UriUtils.buildUri(this.host,
+                            UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK,
+                                    periodicTaskState.documentSelfLink)));
             int expectedInvocations = 5;
             this.host.waitFor(
                     "Timeout waiting for enum task execution",
                     () -> {
-                        ServiceStats taskStats = this.getServiceSynchronously(UriUtils
+                        ServiceStats stats = this.getServiceSynchronously(UriUtils
                                 .buildUriPath(
                                         ScheduledTaskService.FACTORY_LINK,
                                         periodicTaskState.documentSelfLink,
                                         ServiceHost.SERVICE_URI_SUFFIX_STATS),
                                         ServiceStats.class);
-                        if (taskStats.entries.containsKey((ScheduledTaskService.INVOCATION_COUNT))) {
-                            if (taskStats.entries.get(ScheduledTaskService.INVOCATION_COUNT).latestValue >= expectedInvocations) {
+                        if (stats.entries.containsKey((ScheduledTaskService.INVOCATION_COUNT))) {
+                            if (stats.entries.get(ScheduledTaskService.INVOCATION_COUNT).latestValue >= expectedInvocations) {
                                 return true;
                             }
                         }

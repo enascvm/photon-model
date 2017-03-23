@@ -28,6 +28,7 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -56,6 +57,7 @@ public class QueryUtils {
             .getInteger(DEFAULT_RESULT_LIMIT_PROPERTY, 100);
 
     public static final long MINUTE_IN_MICROS = TimeUnit.MINUTES.toMicros(1);
+    public static final long TEN_MINUTES_IN_MICROS = TimeUnit.MINUTES.toMicros(10);
 
 
     /**
@@ -75,6 +77,10 @@ public class QueryUtils {
             queryTask.querySpec.options.add(QueryOption.TOP_RESULTS);
             queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
         }
+        if (queryTask.documentExpirationTimeMicros == 0) {
+            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+        }
+
         return service.sendWithDeferredResult(
                 Operation.createPost(service, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
                         .setBody(queryTask)
@@ -245,7 +251,7 @@ public class QueryUtils {
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .build();
             queryTask.tenantLinks = this.tenantLinks;
-
+            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
             return queryImpl(queryTask, documentConsumer);
         }
 
@@ -261,7 +267,7 @@ public class QueryUtils {
 
             QueryTask queryTask = newQueryTaskBuilder().build();
             queryTask.tenantLinks = this.tenantLinks;
-
+            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
             return queryImpl(queryTask, linkConsumer);
         }
 
@@ -327,7 +333,9 @@ public class QueryUtils {
                     .setBody(queryTask);
 
             this.host.log(this.level, this.msg + ": STARTED");
-
+            if (queryTask.documentExpirationTimeMicros == 0) {
+                queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+            }
             return this.host.sendWithDeferredResult(createQueryTaskOp, QueryTask.class)
                     // Delegate to descendant to actually do QT processing
                     .thenCompose(qt -> handleQueryTask(qt, resultConsumer));

@@ -20,11 +20,13 @@ import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.tasks.SubTaskService;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsAggregationTaskService.SingleResourceStatsAggregationTaskState;
+
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -174,27 +176,23 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         int resultLimit = Integer.getInteger(STATS_QUERY_RESULT_LIMIT, DEFAULT_QUERY_RESULT_LIMIT);
         QueryTask.Builder queryTaskBuilder = QueryTask.Builder.createDirectTask()
                 .setQuery(currentState.query).setResultLimit(resultLimit);
-        sendRequest(Operation
-                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                .setBody(queryTaskBuilder.build())
-                .setConnectionSharing(true)
-                .setCompletion((queryOp, queryEx) -> {
+        QueryTask qTask = queryTaskBuilder.build();
+        QueryUtils.startQueryTask(this, qTask)
+                .whenComplete((queryRsp, queryEx) -> {
                     if (queryEx != null) {
                         sendSelfFailurePatch(currentState, queryEx.getMessage());
                         return;
                     }
-                    QueryTask rsp = queryOp.getBody(QueryTask.class);
                     StatsAggregationTaskState patchBody = new StatsAggregationTaskState();
-                    if (rsp.results.nextPageLink == null) {
+                    if (queryRsp.results.nextPageLink == null) {
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
                     } else {
                         patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
                         patchBody.taskSubStage = StatsAggregationStage.GET_RESOURCES;
-                        patchBody.queryResultLink = rsp.results.nextPageLink;
+                        patchBody.queryResultLink = queryRsp.results.nextPageLink;
                     }
                     sendSelfPatch(patchBody);
-                }));
-
+                });
     }
 
     private void getResources(StatsAggregationTaskState currentState) {

@@ -525,8 +525,6 @@ public class TestAWSProvisionTask {
     private void verifyCollectedStats(ComputeStatsResponse response, Long lastCollectionTime) {
         ComputeStats computeStats = response.statsList.get(0);
         assertTrue("Compute Link is empty", !computeStats.computeLink.isEmpty());
-        assertTrue("APICallCount is not present", computeStats.statValues.keySet()
-                .contains(PhotonModelConstants.API_CALL_COUNT));
         // Check that stat values are accompanied with Units.
         for (String key : computeStats.statValues.keySet()) {
             List<ServiceStat> stats = computeStats.statValues.get(key);

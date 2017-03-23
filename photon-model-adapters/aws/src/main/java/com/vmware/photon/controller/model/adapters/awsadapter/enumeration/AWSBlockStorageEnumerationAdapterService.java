@@ -655,7 +655,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .setResultLimit(getQueryResultLimit())
                     .build();
             q.tenantLinks = this.context.parentCompute.tenantLinks;
-
+            q.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
             this.service.logFine(() -> "Querying disks for deletion");
             QueryUtils.startQueryTask(this.service, q)
                     .whenComplete((queryTask, e) -> {
