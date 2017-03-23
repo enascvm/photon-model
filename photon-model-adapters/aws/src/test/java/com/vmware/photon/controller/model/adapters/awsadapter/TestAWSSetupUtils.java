@@ -82,8 +82,8 @@ import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesResult;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
-
 import com.amazonaws.services.ec2.model.Vpc;
+
 import org.joda.time.LocalDateTime;
 
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -94,6 +94,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSCom
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndDeletionAdapterService;
+
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -117,6 +118,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Securit
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
@@ -126,6 +128,9 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -133,6 +138,7 @@ import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
+
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
@@ -1915,4 +1921,44 @@ public class TestAWSSetupUtils {
 
     }
 
+    public static void resourceStatsCollection(VerificationHost host,
+            boolean isMock, String resourcePoolLink) throws Throwable {
+        resourceStatsCollection(host, null,
+                isMock ? EnumSet.of(TaskOption.IS_MOCK) : null, resourcePoolLink);
+    }
+
+    public static void resourceStatsCollection(VerificationHost host, URI peerURI,
+            EnumSet<TaskOption> options, String resourcePoolLink) throws Throwable {
+        StatsCollectionTaskState statsTask = performResourceStatsCollection(
+                host, options, resourcePoolLink);
+
+        // Wait for the stats collection task to be completed.
+        host.waitForFinishedTask(StatsCollectionTaskState.class,
+                createServiceURI(host, peerURI, statsTask.documentSelfLink));
+    }
+
+    /**
+     * Performs stats collection for given resourcePoolLink
+     *
+     */
+    public static StatsCollectionTaskState performResourceStatsCollection(
+            VerificationHost host, EnumSet<TaskOption> options, String resourcePoolLink)
+            throws Throwable {
+
+        StatsCollectionTaskState statsCollectionTaskState =
+                new StatsCollectionTaskState();
+
+        statsCollectionTaskState.resourcePoolLink = resourcePoolLink;
+        statsCollectionTaskState.options = EnumSet.noneOf(TaskOption.class);
+        if (options != null) {
+            statsCollectionTaskState.options = options;
+        }
+
+        URI uri = UriUtils.buildUri(host, StatsCollectionTaskService.FACTORY_LINK);
+        StatsCollectionTaskState statsTask = TestUtils.doPost(
+                host, statsCollectionTaskState,
+                StatsCollectionTaskState.class, uri);
+
+        return statsTask;
+    }
 }
