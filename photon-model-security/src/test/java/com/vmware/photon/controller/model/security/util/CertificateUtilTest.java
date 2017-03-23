@@ -29,6 +29,7 @@ import java.net.URI;
 import java.security.KeyPair;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
@@ -106,6 +107,20 @@ public class CertificateUtilTest {
     }
 
     @Test
+    public void testGetCertificateInfoProperties() throws Exception {
+        X509Certificate cert = createValidCertificate();
+        Map<String, String> props = CertificateUtil.getCertificateInfoProperties(cert);
+        assertNotNull(props);
+        assertEquals("client", props.get(CertificateUtil.COMMON_NAME_KEY));
+        assertEquals(1453814195000L, Long.parseLong(props.get(CertificateUtil.VALID_SINCE_KEY)));
+        assertEquals(1706274995000L, Long.parseLong(props.get(CertificateUtil.VALID_TO_KEY)));
+        assertEquals("1453814169", props.get(CertificateUtil.SERIAL_KEY));
+        assertEquals("localhost", props.get(CertificateUtil.ISSUER_NAME_KEY));
+        assertEquals("05:49:2E:BC:8F:47:A9:0A:C3:FA:8C:D6:9F:2D:83:A1:EE:3E:AE:A2",
+                props.get(CertificateUtil.FINGERPRINT_KEY));
+    }
+
+    @Test
     public void testGetAttributeFromDN() throws Exception {
         String subjectDN = "CN=vcac.eng.vmware.com, OU=R&D, O=VMware,C=US";
 
@@ -115,6 +130,7 @@ public class CertificateUtilTest {
         assertEquals("US", CertificateUtil.getAttributeFromDN(subjectDN, "C"));
     }
 
+    @Test
     public void testGetAttributeFromDNWithInvalidAttr() {
         String subjectDN = "CN=vcac.eng.vmware.com, OU=R&D, O=VMware,C=US";
 

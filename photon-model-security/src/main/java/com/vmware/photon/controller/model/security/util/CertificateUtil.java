@@ -43,8 +43,10 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
@@ -95,6 +97,13 @@ import com.vmware.xenon.common.Utils;
 public class CertificateUtil {
     private static final Logger logger = Logger.getLogger(CertificateUtil.class.getName());
 
+    public static final String COMMON_NAME_KEY = "commonName";
+    public static final String ISSUER_NAME_KEY = "issuerName";
+    public static final String SERIAL_KEY = "serial";
+    public static final String FINGERPRINT_KEY = "fingerprint";
+    public static final String VALID_SINCE_KEY = "validSince";
+    public static final String VALID_TO_KEY = "validTo";
+
     private static final int DEFAULT_SECURE_CONNECTION_PORT = 443;
     private static final long DEFAULT_CONNECTION_TIMEOUT_MILLIS = Long.getLong(
             "ssl.resolver.import.timeout.millis", TimeUnit.SECONDS.toMillis(30));
@@ -105,6 +114,8 @@ public class CertificateUtil {
     private static final Provider PROVIDER = new BouncyCastleProvider();
     private static final long DEFAULT_VALIDITY = TimeUnit.DAYS.toMillis(Long.getLong(
             "default.selfSignedCertificate.validity.day", 365 * 2));
+
+    private static final String HEX = "0123456789ABCDEF";
 
     /**
      * Utility method to decode a certificate chain PEM encoded string value to an array of
@@ -562,7 +573,22 @@ public class CertificateUtil {
         return thumbprint.toString();
     }
 
-    private static final String HEX = "0123456789ABCDEF";
+    /**
+     * Extracts {@link X509Certificate} properties from the given {@code cert}
+     * @param cert
+     *         the x509 certificate
+     * @return x509 certificate related properties as map
+     */
+    public static Map<String, String> getCertificateInfoProperties(X509Certificate cert) {
+        Map<String, String> certificateInfo = new HashMap<>();
+        certificateInfo.put(COMMON_NAME_KEY, CertificateUtil.getCommonName(cert.getSubjectDN()));
+        certificateInfo.put(ISSUER_NAME_KEY, CertificateUtil.getCommonName(cert.getIssuerDN()));
+        certificateInfo.put(SERIAL_KEY, getSerialNumber(cert));
+        certificateInfo.put(FINGERPRINT_KEY, CertificateUtil.computeCertificateThumbprint(cert));
+        certificateInfo.put(VALID_SINCE_KEY, Long.toString(cert.getNotBefore().getTime()));
+        certificateInfo.put(VALID_TO_KEY, Long.toString(cert.getNotAfter().getTime()));
+        return certificateInfo;
+    }
 
     /**
      * Generates a signed certificate and a private key for client auth.
@@ -738,6 +764,10 @@ public class CertificateUtil {
                 authorityKeyExtension.isCritical(), authorityKeyExtension.getParsedValue()));
 
         return extensions;
+    }
+
+    private static String getSerialNumber(X509Certificate cert) {
+        return cert.getSerialNumber() == null ? null : cert.getSerialNumber().toString();
     }
 
     public enum ThumbprintAlgorithm {
