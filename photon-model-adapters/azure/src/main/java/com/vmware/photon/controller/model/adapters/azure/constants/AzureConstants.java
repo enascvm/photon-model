@@ -44,6 +44,7 @@ public class AzureConstants {
     // Azure error code
     public static final String MISSING_SUBSCRIPTION_CODE = "MissingSubscriptionRegistration";
     public static final String RESOURCE_NOT_FOUND = "ResourceNotFound";
+    public static final String INVALID_PARAMETER = "InvalidParameter";
 
     // Azure constants
     public static final String AZURE_VM_POWER_STATE_RUNNING = "PowerState/running";

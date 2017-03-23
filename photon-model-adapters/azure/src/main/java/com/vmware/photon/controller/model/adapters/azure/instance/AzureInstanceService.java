@@ -22,6 +22,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAMESPACE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.MISSING_SUBSCRIPTION_CODE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REGISTRED_STATE;
@@ -245,7 +246,7 @@ public class AzureInstanceService extends StatelessService {
             // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             if (exc != null) {
                 if (namespace != null) {
-                    handleSubscriptionError(ctx, namespace, exc);
+                    handleCloudError(ctx, namespace, exc);
                 } else {
                     handleError(ctx, exc);
                 }
@@ -1142,7 +1143,7 @@ public class AzureInstanceService extends StatelessService {
                 new AzureAsyncCallback<VirtualMachine>() {
                     @Override
                     public void onError(Throwable e) {
-                        handleSubscriptionError(ctx, COMPUTE_NAMESPACE, e);
+                        handleCloudError(ctx, COMPUTE_NAMESPACE, e);
                     }
 
                     @Override
@@ -1337,10 +1338,13 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * This method tries to detect a subscription registration error and register subscription for
-     * given namespace. Otherwise the fallback is to transition to error state.
+     * This method tries to detect specific CloudErrors by their code and apply some additional handling.
+     * In case a subscription registration error is detected the method register subscription for
+     * given namespace.
+     * In case invalid parameter error is detected, the error message is made better human-readable.
+     * Otherwise the fallback is to transition to error state through next specific error handler.
      */
-    private void handleSubscriptionError(AzureInstanceContext ctx, String namespace,
+    private void handleCloudError(AzureInstanceContext ctx, String namespace,
             Throwable e) {
         if (e instanceof CloudException) {
             CloudException ce = (CloudException) e;
@@ -1350,6 +1354,13 @@ public class AzureInstanceService extends StatelessService {
                 if (MISSING_SUBSCRIPTION_CODE.equals(code)) {
                     registerSubscription(ctx, namespace);
                     return;
+                } else if (INVALID_PARAMETER.equals(code)) {
+                    String invalidParameterMsg = String.format("Provisioning for [%s] "
+                            + "Azure VM: %s. Details: Invalid parameter. %s", ctx.vmName, "FAILED",
+                            body.getMessage());
+
+                    e = new IllegalStateException(invalidParameterMsg, ctx.error);
+                    handleError(ctx, e);
                 }
             }
         }
