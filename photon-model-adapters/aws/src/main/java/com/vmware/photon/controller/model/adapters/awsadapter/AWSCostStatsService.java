@@ -317,7 +317,7 @@ public class AWSCostStatsService extends StatelessService {
                         PhotonModelConstants.EndpointType.aws.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AWSConstants.AWS_ACCOUNT_ID_KEY, accountId)
-                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_GUEST)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
                 .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
@@ -335,6 +335,7 @@ public class AWSCostStatsService extends StatelessService {
                     List<ComputeState> accountComputeStates = responseTask.results.documents
                             .values().stream()
                             .map(s -> Utils.fromJson(s, ComputeState.class))
+                            .filter(cs -> cs.endpointLink != null)
                             .collect(Collectors.toList());
                     queryResultConsumer.accept(accountComputeStates);
                 });
