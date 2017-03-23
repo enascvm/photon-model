@@ -518,8 +518,9 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                         ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS,
                         createLessThanRange(context.enumStartTimeInMicros));
 
-        if (this.enumExternalResourcesIds.size() <= MAX_RESOURCES_TO_QUERY_ON_DELETE) {
-            // do not check resources from enumExternalResourcesIds
+        if (!this.enumExternalResourcesIds.isEmpty() &&
+                this.enumExternalResourcesIds.size() <= MAX_RESOURCES_TO_QUERY_ON_DELETE) {
+            // do not load resources from enumExternalResourcesIds
             qBuilder.addInClause(ResourceState.FIELD_NAME_ID, this.enumExternalResourcesIds,
                     Occurance.MUST_NOT_OCCUR);
         }
