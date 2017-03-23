@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.10-SNAPSHOT
+
+
 ## 0.6.9
 
 * Bug fixes.
