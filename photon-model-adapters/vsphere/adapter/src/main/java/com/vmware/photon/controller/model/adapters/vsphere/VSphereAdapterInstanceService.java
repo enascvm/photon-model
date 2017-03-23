@@ -131,7 +131,15 @@ public class VSphereAdapterInstanceService extends StatelessService {
                         if (ctx.templateMoRef != null) {
                             state = client.createInstanceFromTemplate(ctx.templateMoRef);
                         } else if (ctx.image != null) {
-                            state =  client.createInstanceFromLibraryItem(ctx.image);
+                            ManagedObjectReference moRef = CustomProperties.of(ctx.image)
+                                    .getMoRef(CustomProperties.MOREF);
+                            if (moRef != null) {
+                                // the image is backed by a template VM
+                                state = client.createInstanceFromTemplate(moRef);
+                            } else {
+                                // library item
+                                state =  client.createInstanceFromLibraryItem(ctx.image);
+                            }
                         } else {
                             state = client.createInstance();
                             // attach disks, collecting side effects
@@ -190,7 +198,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
 
 
-                        if (ctx.templateMoRef != null) {
+                        if (ctx.templateMoRef != null || ctx.image != null) {
                             addDiskLinksAfterClone(state, vmOverlay.getDisks(), ctx);
                         }
 

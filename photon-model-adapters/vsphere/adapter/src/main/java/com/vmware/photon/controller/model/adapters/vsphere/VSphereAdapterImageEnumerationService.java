@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 import java.util.concurrent.Phaser;
 
 import org.codehaus.jackson.node.ObjectNode;
@@ -22,6 +23,7 @@ import org.codehaus.jackson.node.ObjectNode;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.LibraryClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
@@ -33,6 +35,9 @@ import com.vmware.photon.controller.model.resources.EndpointService.EndpointStat
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+import com.vmware.vim25.ObjectContent;
+import com.vmware.vim25.PropertyFilterSpec;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
@@ -101,7 +106,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                         mgr.patchTaskToFailure(msg, e);
                     } else {
                         if (request.enumerationAction == EnumerationAction.REFRESH) {
-                            refreshResourcesOnce(request, connection, mgr);
+                            refreshResourcesOnce(request, parent, connection, mgr);
                         } else {
                             mgr.patchTaskToFailure(new IllegalArgumentException("Only REFRESH supported"));
                         }
@@ -110,8 +115,17 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
     }
 
     private void refreshResourcesOnce(ImageEnumerateRequest request,
+            ComputeStateWithDescription parent,
             Connection connection,
             TaskManager mgr) {
+
+        try {
+            EnumerationClient client = new EnumerationClient(connection, parent);
+            processAllTemplates(request.resourceLink(), request.taskLink(), client, parent.description.regionId);
+        } catch (Throwable e) {
+            mgr.patchTaskToFailure("Error processing library items", e);
+            return;
+        }
 
         try {
             VapiConnection vapi = VapiConnection.createFromVimConnection(connection);
@@ -119,12 +133,58 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
             LibraryClient libraryClient = vapi.newLibraryClient();
             processAllLibraries(request.resourceLink(), request.taskLink(), libraryClient);
 
-            // garbage collection runs async
-            garbageCollectImages(request);
             mgr.patchTask(TaskStage.FINISHED);
         } catch (Throwable t) {
             mgr.patchTaskToFailure("Error processing library items", t);
+            return;
         }
+
+        // garbage collection runs async
+        garbageCollectImages(request);
+    }
+
+    private void processAllTemplates(String endpointLink, String taskLink, EnumerationClient client,
+            String datacenterId) throws ClientException, RuntimeFaultFaultMsg {
+        PropertyFilterSpec spec = client.createVmFilterSpec(datacenterId);
+        for (List<ObjectContent> page : client.retrieveObjects(spec)) {
+            Phaser phaser = new Phaser(1);
+            for (ObjectContent oc : page) {
+                if (!VimUtils.isVirtualMachine(oc.getObj())) {
+                    continue;
+                }
+
+                VmOverlay vm = new VmOverlay(oc);
+                if (!vm.isTemplate()) {
+                    continue;
+                }
+
+                ImageState state = makeImageFromTemplate(vm);
+                state.documentSelfLink = buildStableImageLink(endpointLink, state.id);
+                CustomProperties.of(state)
+                        .put(CustomProperties.ENUMERATED_BY_TASK_LINK, taskLink);
+
+                phaser.register();
+                Operation.createPost(this, ImageService.FACTORY_LINK)
+                        .setBody(state)
+                        .setCompletion((o, e) -> phaser.arrive())
+                        .sendWith(this);
+            }
+
+            phaser.arriveAndAwaitAdvance();
+        }
+    }
+
+    private ImageState makeImageFromTemplate(VmOverlay vm) {
+        ImageState res = new ImageState();
+
+        res.name = "Template: " + vm.getName();
+        res.description = vm.getName();
+        res.id = vm.getInstanceUuid();
+
+        CustomProperties.of(res)
+                .put(CustomProperties.MOREF, vm.getId());
+
+        return res;
     }
 
     private void garbageCollectImages(ImageEnumerateRequest req) {

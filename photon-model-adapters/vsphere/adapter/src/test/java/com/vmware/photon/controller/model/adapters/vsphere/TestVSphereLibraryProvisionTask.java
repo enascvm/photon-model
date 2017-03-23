@@ -127,7 +127,7 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
     }
 
     private String selectPlacement() {
-        Query q =  Query.Builder.create()
+        Query q = Query.Builder.create()
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_NAME, this.placementClusterName.toLowerCase())
                 .build();

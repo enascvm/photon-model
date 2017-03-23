@@ -482,6 +482,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         continue;
                     }
                     VmOverlay vm = new VmOverlay(cont);
+                    if (!vm.isTemplate()) {
+                        // templats are enumerated as "images"
+                        continue;
+                    }
                     if (vm.getInstanceUuid() == null) {
                         logWarning(() -> String.format("Cannot process a VM without"
                                         + " instanceUuid: %s",
@@ -1482,7 +1486,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeState state = new ComputeState();
         state.type = ComputeType.VM_GUEST;
         state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-        state.endpointLink = enumerationContext.getRequest().endpointLink;
+        state.endpointLink = request.endpointLink;
         state.adapterManagementReference = request.adapterManagementReference;
         state.parentLink = request.resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;
@@ -1497,9 +1501,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, vm.getId())
-                .put(CustomProperties.TEMPLATE_FLAG, vm.isTemplate())
-                .put(CustomProperties.ENUMERATED_BY_TASK_LINK,
-                        enumerationContext.getRequest().taskLink())
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, request.taskLink())
                 .put(CustomProperties.TYPE, VimNames.TYPE_VM);
         return state;
     }

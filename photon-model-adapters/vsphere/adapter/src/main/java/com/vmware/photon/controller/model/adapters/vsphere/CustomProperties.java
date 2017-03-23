@@ -47,11 +47,6 @@ public class CustomProperties {
     public static final String LIBRARY_ITEM_LINK = "__libraryItemLink";
 
     /**
-     * If true, the ComputeState represents a VM template.
-     */
-    public static final String TEMPLATE_FLAG = "__isTemplate";
-
-    /**
      * Stores the VIM type of the vSphere entity.
      */
     public static final String TYPE = "__computeType";
@@ -72,8 +67,6 @@ public class CustomProperties {
      * During enumeration, this custom property is set to point to the enumeration Task.
      */
     public static final String ENUMERATED_BY_TASK_LINK = "__enumTaskLink";
-
-    public static final String IMAGE_SIZE = "__imageSize";
 
     public static final String IMAGE_LIBRARY_ID = "__libraryId";
 
