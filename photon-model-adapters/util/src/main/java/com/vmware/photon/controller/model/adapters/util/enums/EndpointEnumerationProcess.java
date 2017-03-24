@@ -456,6 +456,10 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         // POST or PATCH local state
         final Operation lsOp;
 
+        // Create or update local tag states
+        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(this.service, localState,
+                currentState, localStateHolder.remoteTags, this.endpointState.documentSelfLink);
+
         if (currentState == null) {
             // Create case
 
@@ -473,10 +477,6 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         }
 
         lsOp.setBody(localState);
-
-        // Create or update local tag states
-        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(this.service, localState,
-                currentState, localStateHolder.remoteTags, this.endpointState.documentSelfLink);
 
         return tagsDR.thenCompose(ignore -> this.service.sendWithDeferredResult(lsOp)
                 .exceptionally(ex -> {

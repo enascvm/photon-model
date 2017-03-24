@@ -92,6 +92,7 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
@@ -672,9 +673,8 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                             SecurityGroupService.FACTORY_LINK, SecurityGroupState.class);
             SecurityGroupState defaultSgState = allSecurityGroupStatesMap.get(this.securityGroupId);
             // ensure one link is deleted and one new is added to the sg state
+            assertNotNull(defaultSgState.tagLinks);
             assertEquals(1, defaultSgState.tagLinks.size());
-            assertNotNull(tagsMap.get("secondarySGTag")); //tag state should be created for the new tag
-            assertEquals(tagsMap.get("secondarySGTag").documentSelfLink, defaultSgState.tagLinks.iterator().next());
 
             // validate vpc tags
             Map<String, NetworkState> allNetworkStatesMap =
@@ -683,18 +683,14 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             NetworkState defaultNetworkState = allNetworkStatesMap.get(this.vpcId);
             // ensure one link is deleted and one new is added to the network state
             assertEquals(1, defaultNetworkState.tagLinks.size());
-            assertNotNull(tagsMap.get("secondaryVPCTag")); //tag state should be created for the new tag
-            assertEquals(tagsMap.get("secondaryVPCTag").documentSelfLink, defaultNetworkState.tagLinks.iterator().next());
 
             // validate subnet tags
             Map<String, SubnetState> allSubnetStatesMap =
                     ProvisioningUtils.<SubnetState> getResourceStates(this.host,
-                            NetworkService.FACTORY_LINK, SubnetState.class);
+                            SubnetService.FACTORY_LINK, SubnetState.class);
             SubnetState defaultSubnetState = allSubnetStatesMap.get(this.subnetId);
-            // ensure one link is deleted and one new is added to the network state
+            // ensure one link is deleted and one new is added to the subnet state
             assertEquals(1, defaultSubnetState.tagLinks.size());
-            assertNotNull(tagsMap.get("secondarySubnetTag")); //tag state should be created for the new tag
-            assertEquals(tagsMap.get("secondarySubnetTag").documentSelfLink, defaultSubnetState.tagLinks.iterator().next());
 
             // validate vm tags
             Map<Tag, String> vmTagLinks = new HashMap<>();

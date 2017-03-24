@@ -50,7 +50,7 @@ public class TagsUtil {
             ResourceState localState, ResourceState currentState, Map<String, String> remoteTagsMap,
             String endpointLink) {
         DeferredResult<Void> tagsDR;
-        if (currentState == null) {
+        if (currentState == null || currentState.tagLinks == null || currentState.tagLinks.isEmpty()) {
             tagsDR = createLocalTagStates(service, localState, remoteTagsMap);
         } else {
             tagsDR = updateLocalTagStates(service, currentState, remoteTagsMap,
@@ -173,8 +173,7 @@ public class TagsUtil {
                 .thenCompose(
                         removeAllExternalTagLinks -> updateResourceTagLinks(service, removeAllExternalTagLinks,
                                 tagLinksToAdd,
-                                localState.documentSelfLink))
-                .thenAccept(ignore -> { });
+                                localState.documentSelfLink));
     }
 
     /**
@@ -220,12 +219,15 @@ public class TagsUtil {
      * remove to the specified resource state (specified by its document self link).
      */
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    private static DeferredResult<Operation> updateResourceTagLinks(
+    private static DeferredResult<Void> updateResourceTagLinks(
             StatelessService service,
             Collection<String> tagLinksToDelete,
             Collection<String> tagLinksToAdd,
             String currentStateSelfLink) {
-
+        // nothing to add/update
+        if (tagLinksToDelete.isEmpty() && tagLinksToAdd.isEmpty()) {
+            return DeferredResult.completed((Void) null);
+        }
         // create patch operation to update tag links of the current resource state
         Map<String, Collection<Object>> collectionsToRemoveMap = new HashMap<>();
         collectionsToRemoveMap.put(ComputeState.FIELD_NAME_TAG_LINKS, (Collection) tagLinksToDelete);
@@ -241,7 +243,7 @@ public class TagsUtil {
         Operation createPatch = Operation.createPatch(service, currentStateSelfLink)
                 .setBody(updateTagLinksRequest).setReferer(service.getUri());
 
-        return service.sendWithDeferredResult(createPatch);
+        return service.sendWithDeferredResult(createPatch).thenAccept(ignore -> { });
     }
 
 }

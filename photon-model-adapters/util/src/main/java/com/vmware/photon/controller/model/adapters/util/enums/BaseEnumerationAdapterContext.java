@@ -388,6 +388,10 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
 
         final Operation lsOp;
 
+        // Create or update local tag states
+        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(this.service, localState, currentState,
+                localStateHolder.remoteTags, this.request.original.endpointLink);
+
         if (currentState != null) {
             // Update case.
             lsOp = Operation.createPatch(this.service, currentState.documentSelfLink);
@@ -405,10 +409,6 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         }
 
         lsOp.setBody(localStateHolder.localState);
-
-        // Create or update local tag states
-        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(this.service, localState, currentState,
-                localStateHolder.remoteTags, this.request.original.endpointLink);
 
         return tagsDR.thenCompose(ignore -> this.service.sendWithDeferredResult(lsOp)
                 .exceptionally(ex -> {

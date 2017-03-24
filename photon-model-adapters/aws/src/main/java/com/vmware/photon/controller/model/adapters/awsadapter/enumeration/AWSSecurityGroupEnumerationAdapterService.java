@@ -209,7 +209,9 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             if (remoteResource.getTags() != null) {
 
                 for (Tag awsSGTag : remoteResource.getTags()) {
-                    stateHolder.remoteTags.put(awsSGTag.getKey(), awsSGTag.getValue());
+                    if (!awsSGTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
+                        stateHolder.remoteTags.put(awsSGTag.getKey(), awsSGTag.getValue());
+                    }
                 }
             }
 
