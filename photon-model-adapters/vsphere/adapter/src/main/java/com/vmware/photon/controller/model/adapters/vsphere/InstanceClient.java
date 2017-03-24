@@ -1255,6 +1255,7 @@ public class InstanceClient extends BaseHelper {
                     .mapToInt(VAppPropertyInfo::getKey)
                     .max()
                     .orElse(1);
+            nextKey++;
         }
 
         VmConfigSpec configSpec = new VmConfigSpec();
