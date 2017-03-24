@@ -1,7 +1,11 @@
 # CHANGELOG
 
-## 0.6.10-SNAPSHOT
+## 0.6.10
 
+* Change default collection interval for AWS to 1 hour.
+* Implement Azure image enumeration adapter.
+* [vsphere] Enumerate template VMs as images.
+* Do no add NOT_OCCUR if externalResource is empty.
 
 ## 0.6.9
 
