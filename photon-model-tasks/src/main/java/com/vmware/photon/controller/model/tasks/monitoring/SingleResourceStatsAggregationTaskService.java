@@ -39,6 +39,8 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.Reso
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
@@ -372,7 +374,9 @@ public class SingleResourceStatsAggregationTaskService extends
                                 StatsUtil.getMetricKeyPrefix(currentState.resourceLink, rollupKey)),
                         MatchType.PREFIX);
 
-                Operation op = Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+                Operation op = Operation.createPost(UriUtils.buildUri(
+                        ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
+                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                         .setBody(Builder.createDirectTask()
                                 .addOption(QueryOption.SORT)
                                 .addOption(QueryOption.TOP_RESULTS)
@@ -739,9 +743,10 @@ public class SingleResourceStatsAggregationTaskService extends
                 .orderDescending(ResourceMetrics.FIELD_NAME_TIMESTAMP, TypeName.LONG)
                 .setResultLimit(RAW_METRICS_LIMIT)
                 .setQuery(overallQueryBuilder.build()).build();
+
         task.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.MINUTE_IN_MICROS;
 
-        QueryUtils.startQueryTask(this, task)
+        QueryUtils.startQueryTask(this, task, ServiceTypeCluster.METRIC_SERVICE)
                 .whenComplete((response, queryEx) -> {
                     if (queryEx != null) {
                         sendSelfFailurePatch(currentState, queryEx.getMessage());
@@ -1015,8 +1020,11 @@ public class SingleResourceStatsAggregationTaskService extends
                                 .getMetricKey(currentState.resourceLink,
                                         aggregateEntries.getKey(), Utils.getNowMicrosUtc());
                         aggrMetric.documentExpirationTimeMicros = expirationTime;
-                        operations.add(Operation
-                                .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
+
+                        operations.add(Operation.createPost(UriUtils.buildUri(
+                                        ClusterUtil.getClusterUri(getHost(),
+                                                ServiceTypeCluster.METRIC_SERVICE),
+                                        ResourceAggregateMetricService.FACTORY_LINK))
                                 .setBody(aggrMetric));
                         publishedKeys.add(aggregateEntries.getKey());
                         latestTimeKey = timeKey;
@@ -1071,7 +1079,10 @@ public class SingleResourceStatsAggregationTaskService extends
                     aggregateEntries.getKey(), Utils.getNowMicrosUtc());
 
             operations.add(Operation
-                    .createPost(getHost(), ResourceAggregateMetricService.FACTORY_LINK)
+                    .createPost(UriUtils.buildUri(
+                            ClusterUtil.getClusterUri(getHost(),
+                                    ServiceTypeCluster.METRIC_SERVICE),
+                            ResourceAggregateMetricService.FACTORY_LINK))
                     .setBody(aggrMetric));
             publishedKeys.add(aggregateEntries.getKey());
 

@@ -34,6 +34,9 @@ import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.Reso
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
@@ -232,10 +235,12 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
                 .build();
         queryTask.tenantLinks = statsData.computeHost.tenantLinks;
 
-        Operation queryOp = Operation
-                .createPost(this, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+        return Operation
+                .createPost(UriUtils.buildUri(
+                        ClusterUtil.getClusterUri(this.getHost(),
+                                ServiceTypeCluster.METRIC_SERVICE),
+                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(queryTask);
-        return queryOp;
     }
 
     /**

@@ -36,6 +36,8 @@ import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
@@ -385,12 +387,13 @@ public class SingleResourceStatsCollectionTaskService
             }
         }
         for (ResourceMetrics metrics : metricsList) {
-            operations.add(Operation.createPost(getHost(), ResourceMetricsService.FACTORY_LINK)
-                    .setBodyNoCloning(metrics));
+            operations.add(Operation.createPost(UriUtils.buildUri(
+                    ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
+                    ResourceMetricsService.FACTORY_LINK)).setBodyNoCloning(metrics));
         }
         for (InMemoryResourceMetric metric : inMemoryMetricsList) {
             operations.add(Operation.createPost(getHost(), InMemoryResourceMetricService.FACTORY_LINK)
-                    .setBodyNoCloning(metric));
+                            .setBodyNoCloning(metric));
         }
         // Save each data point sequentially to create time based monotonically increasing sequence.
         batchPersistStats(operations, 0);
@@ -549,7 +552,7 @@ public class SingleResourceStatsCollectionTaskService
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(builder.build()).build();
         task.tenantLinks = tenantLinks;
-        QueryUtils.startQueryTask(this, task)
+        QueryUtils.startQueryTask(this, task, ServiceTypeCluster.METRIC_SERVICE)
                 .whenComplete((responseTask, e) -> {
                     if (e != null) {
                         logSevere(

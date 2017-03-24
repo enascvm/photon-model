@@ -28,12 +28,15 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -59,16 +62,17 @@ public class QueryUtils {
     public static final long MINUTE_IN_MICROS = TimeUnit.MINUTES.toMicros(1);
     public static final long TEN_MINUTES_IN_MICROS = TimeUnit.MINUTES.toMicros(10);
 
-
     /**
-     * Executes the given query task.
+     * Executes the given query task on a Cluster.
      *
      * @param service
      *            The service executing the query task.
      * @param queryTask
      *            The query task.
+     * @param cluster
+     *            The cluster, the query runs against.
      */
-    public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask) {
+    public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask, ServiceTypeCluster cluster) {
         // We don't want any unbounded queries. By default, we cap the query results to 10000.
         if (queryTask.querySpec.resultLimit == null) {
             service.getHost().log(Level.WARNING,
@@ -81,11 +85,23 @@ public class QueryUtils {
             queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
         }
 
-        return service.sendWithDeferredResult(
-                Operation.createPost(service, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                        .setBody(queryTask)
-                        .setConnectionSharing(true),
-                QueryTask.class);
+        return service.sendWithDeferredResult(Operation
+                .createPost(UriUtils.buildUri(
+                        ClusterUtil.getClusterUri(service.getHost(), cluster),
+                        ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+                .setBody(queryTask).setConnectionSharing(true), QueryTask.class);
+    }
+
+    /**
+     * Executes the given query task.
+     *
+     * @param service
+     *            The service executing the query task.
+     * @param queryTask
+     *            The query task.
+     */
+    public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask) {
+        return startQueryTask(service, queryTask, null);
     }
 
     /**

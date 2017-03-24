@@ -19,6 +19,7 @@ import java.util.List;
 
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -30,11 +31,13 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService.Resource
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService.StatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.QueryTask.Query;
 
 public class StatsAggregationTaskServiceTest extends BaseModelTest {
@@ -56,8 +59,41 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
         this.host.waitForServiceAvailable(MockStatsAdapter.SELF_LINK);
     }
 
+    private VerificationHost setupMetricHost() throws Throwable {
+        // Start a metric Host separately.
+        VerificationHost metricHost = VerificationHost.create(0);
+        metricHost.start();
+
+        ServiceTypeCluster.METRIC_SERVICE.setUri(metricHost.getUri().toString());
+        PhotonModelMetricServices.startServices(metricHost);
+        return metricHost;
+    }
+
+    private void cleanUpMetricHost(VerificationHost metricHost) {
+        ServiceTypeCluster.METRIC_SERVICE.setUri(null);
+        if (metricHost == null) {
+            return;
+        }
+        metricHost.tearDownInProcessPeers();
+        metricHost.toggleNegativeTestMode(false);
+        metricHost.tearDown();
+    }
+
     @Test
-    public void testStatsAggregation() throws Throwable {
+    public void verifyStatsAggregation() throws Throwable {
+        this.testStatsAggregation(false);
+        this.testStatsAggregation(true);
+    }
+
+    private void testStatsAggregation(boolean testOnCluster) throws Throwable {
+        VerificationHost metricHost = null;
+        if (testOnCluster) {
+            metricHost = this.setupMetricHost();
+        }
+
+        // Use this.host if metricHost is null.
+        VerificationHost verificationHost = (metricHost == null ? this.host : metricHost);
+
         // create a resource pool
         ResourcePoolState rpState = new ResourcePoolState();
         rpState.name = "testName";
@@ -92,7 +128,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
                 StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
                 StatsAggregationTaskState.class);
         this.host.waitFor("Error waiting for stats", () -> {
-            ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
+            ServiceDocumentQueryResult aggrRes = verificationHost.getFactoryState(UriUtils.buildUri(verificationHost,
                         ResourceAggregateMetricService.FACTORY_LINK));
             // Expect 0 stats because they're not collected yet
             if (aggrRes.documentCount == 0) {
@@ -116,7 +152,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
         postServiceSynchronously(StatsAggregationTaskService.FACTORY_LINK, aggregationTaskState,
                 StatsAggregationTaskState.class);
         this.host.waitFor("Error waiting for stats", () -> {
-            ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
+            ServiceDocumentQueryResult aggrRes = verificationHost.getFactoryState(UriUtils.buildUri(verificationHost,
                         ResourceAggregateMetricService.FACTORY_LINK));
             if (aggrRes.documentCount ==  this.numResources) {
                 return true;
@@ -134,5 +170,8 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
             }
             return false;
         });
+        if (testOnCluster) {
+            this.cleanUpMetricHost(metricHost);
+        }
     }
 }

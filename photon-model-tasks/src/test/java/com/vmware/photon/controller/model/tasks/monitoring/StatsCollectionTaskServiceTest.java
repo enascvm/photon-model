@@ -32,6 +32,7 @@ import java.util.logging.Level;
 
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -53,6 +54,7 @@ import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -65,6 +67,7 @@ import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -95,8 +98,41 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         this.host.waitForServiceAvailable(CustomStatsAdapter.SELF_LINK);
     }
 
+    private VerificationHost setupMetricHost() throws Throwable {
+        // Start a metric Host separately.
+        VerificationHost metricHost = VerificationHost.create(0);
+        metricHost.start();
+
+        ServiceTypeCluster.METRIC_SERVICE.setUri(metricHost.getUri().toString());
+        PhotonModelMetricServices.startServices(metricHost);
+        return metricHost;
+    }
+
+    private void cleanUpMetricHost(VerificationHost metricHost) {
+        ServiceTypeCluster.METRIC_SERVICE.setUri(null);
+        if (metricHost == null) {
+            return;
+        }
+        metricHost.tearDownInProcessPeers();
+        metricHost.toggleNegativeTestMode(false);
+        metricHost.tearDown();
+    }
+
     @Test
-    public void testStatsCollectorCreation() throws Throwable {
+    public void verifyStatsCollection() throws Throwable {
+        this.testStatsCollection(false);
+        this.testStatsCollection(true);
+    }
+
+    private void testStatsCollection(boolean testOnCluster) throws Throwable {
+        VerificationHost metricHost = null;
+        if (testOnCluster) {
+            metricHost = this.setupMetricHost();
+        }
+
+        // Use this.host if metricHost is null.
+        VerificationHost verificationHost = (metricHost == null ? this.host : metricHost);
+        // create a metric host
         // create a compute description for all the computes
         ComputeDescription cDesc = new ComputeDescription();
         cDesc.name = UUID.randomUUID().toString();
@@ -165,17 +201,17 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         // check that all the stats retuned from the mock stats adapter are
         // persisted at a per metric level along with the last collection run time
         for (String computeLink : computeLinks) {
-            ResourceMetrics metric = getResourceMetrics(computeLink, MockStatsAdapter.KEY_1);
+            ResourceMetrics metric = getResourceMetrics(verificationHost, computeLink, MockStatsAdapter.KEY_1);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_1 +
                     " should not be null ", metric);
 
-            ResourceMetrics metric2 = getResourceMetrics(computeLink, MockStatsAdapter.KEY_2);
+            ResourceMetrics metric2 = getResourceMetrics(verificationHost, computeLink, MockStatsAdapter.KEY_2);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_2 +
                     "should not be null ", metric2);
             assertEquals(metric2.entries.size(), 2);
             String lastSuccessfulRunMetricKey = StatsUtil.getMetricKeyPrefix(MockStatsAdapter.SELF_LINK,
                     PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME);
-            ResourceMetrics metricLastRun = getResourceMetrics(computeLink, lastSuccessfulRunMetricKey);
+            ResourceMetrics metricLastRun = getResourceMetrics(verificationHost, computeLink, lastSuccessfulRunMetricKey);
             assertNotNull("The resource metric for" + lastSuccessfulRunMetricKey
                     + " should not be null ", metricLastRun);
 
@@ -200,7 +236,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                                     MockStatsAdapter.KEY_1),
                                 NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true))
                                     .build()).build();
-            this.host.createQueryTaskService(qt, false, true, qt, null);
+            verificationHost.createQueryTaskService(qt, false, true, qt, null);
 
             ResourceMetrics prevMetric = null;
             for (String documentLink : qt.results.documentLinks) {
@@ -227,6 +263,9 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
             }
             return false;
         });
+        if (testOnCluster) {
+            this.cleanUpMetricHost(metricHost);
+        }
     }
 
     @Test
@@ -344,7 +383,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
      * Sorts the documents by documentSelfLink.
      * Returns the first document.
      */
-    private ResourceMetrics getResourceMetrics(String resourceLink, String metricKey) {
+    private ResourceMetrics getResourceMetrics(VerificationHost host, String resourceLink, String metricKey) {
         QueryTask qt = QueryTask.Builder
                 .createDirectTask()
                 .addOption(QueryOption.TOP_RESULTS)
@@ -364,7 +403,7 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                                 NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true))
                         .build())
                 .build();
-        this.host.createQueryTaskService(qt, false, true, qt, null);
+        host.createQueryTaskService(qt, false, true, qt, null);
         String documentLink = qt.results.documentLinks.get(0);
         ResourceMetrics resourceMetric = Utils.fromJson(qt.results.documents.get(documentLink),
                 ResourceMetrics.class);
@@ -553,6 +592,5 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 super.handleRequest(op);
             }
         }
-
     }
 }
