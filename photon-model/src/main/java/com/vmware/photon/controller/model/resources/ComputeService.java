@@ -159,7 +159,7 @@ public class ComputeService extends StatefulService {
         @Documentation(description = "Lifecycle state indicating runtime state of a resource instance.")
         @UsageOption(option = PropertyUsageOption.OPTIONAL)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public LifecycleState lifecycleState = LifecycleState.READY;
+        public LifecycleState lifecycleState;
 
         /**
          * URI reference to parent compute instance.
@@ -317,6 +317,10 @@ public class ComputeService extends StatefulService {
         ComputeState state = op.getBody(ComputeState.class);
         if (state.creationTimeMicros == null) {
             state.creationTimeMicros = Utils.getNowMicrosUtc();
+        }
+
+        if (state.lifecycleState == null) {
+            state.lifecycleState = LifecycleState.READY;
         }
 
         Utils.validateState(getStateDescription(), state);
