@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.11-SNAPSHOT
+
+
 ## 0.6.10
 
 * Change default collection interval for AWS to 1 hour.
