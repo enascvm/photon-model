@@ -38,6 +38,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.amazonaws.event.ProgressEvent;
@@ -47,7 +48,6 @@ import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.transfer.Download;
 import com.amazonaws.services.s3.transfer.TransferManager;
-
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
@@ -110,7 +110,7 @@ public class AWSCostStatsService extends StatelessService {
 
     protected enum AWSCostStatsCreationStages {
         ACCOUNT_DETAILS, DOWNLOAD_AND_PARSE, QUERY_LOCAL_RESOURCES, QUERY_LINKED_ACCOUNTS,
-        QUERY_BILL_PROCESSED_TIME, CREATE_STATS
+        QUERY_BILL_PROCESSED_TIME, CREATE_STATS, RESERVED_INSTANCES_PLANS_COLLECTION
     }
 
     public AWSCostStatsService() {
@@ -196,7 +196,11 @@ public class AWSCostStatsService extends StatelessService {
         try {
             switch (statsData.stage) {
             case ACCOUNT_DETAILS:
-                getAccountDescription(statsData, AWSCostStatsCreationStages.QUERY_LINKED_ACCOUNTS);
+                getAccountDescription(statsData, AWSCostStatsCreationStages.RESERVED_INSTANCES_PLANS_COLLECTION);
+                break;
+            case RESERVED_INSTANCES_PLANS_COLLECTION:
+                startReservedInstancesPlansCollection(statsData,
+                        AWSCostStatsCreationStages.QUERY_LINKED_ACCOUNTS);
                 break;
             case QUERY_LINKED_ACCOUNTS:
                 queryLinkedAccounts(statsData,
@@ -225,6 +229,24 @@ public class AWSCostStatsService extends StatelessService {
             getFailureConsumer(statsData).accept(e);
             return;
         }
+    }
+
+    protected void startReservedInstancesPlansCollection(AWSCostStatsCreationContext statsData,
+            AWSCostStatsCreationStages next) {
+
+        Operation op = Operation.createPost(
+                UriUtils.buildUri(getHost(), AWSReservedInstancePlanService.SELF_LINK))
+                .setBody(statsData.computeDesc.documentSelfLink)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        log(Level.SEVERE,
+                                "Error while requesting reserved instances plans collection for compute "
+                                        + statsData.computeDesc.documentSelfLink);
+                    }
+                });
+        sendRequest(op);
+        statsData.stage = next;
+        handleCostStatsCreationRequest(statsData);
     }
 
     protected void getAccountDescription(AWSCostStatsCreationContext statsData,
@@ -905,6 +927,26 @@ public class AWSCostStatsService extends StatelessService {
             }
         }
         resourceStats.statValues.put(normalizedStatKeyValue, resourceServiceStats);
+
+        // Create a stat to represent how many hours a resource ran as reserve instance
+        String normalizedReservedInstanceStatKey = AWSStatsNormalizer
+                .getNormalizedStatKeyValue(AWSConstants.RESERVED_INSTANCE_DURATION);
+        List<ServiceStat> reservedInstanceStats = new ArrayList<>();
+        for (Entry<Long, Double> entry : resourceDetails.hoursAsReservedPerDay.entrySet()) {
+            Long usageStartTime = entry.getKey();
+            if (usageStartTime.compareTo(billProcessedTimeMillis) > 0) {
+                ServiceStat resourceStat = new ServiceStat();
+                resourceStat.latestValue = entry.getValue();
+                resourceStat.sourceTimeMicrosUtc = TimeUnit.MILLISECONDS.toMicros(usageStartTime);
+                resourceStat.unit = AWSStatsNormalizer
+                        .getNormalizedUnitValue(AWSConstants.UNIT_HOURS);
+                resourceStat.name = normalizedReservedInstanceStatKey;
+                reservedInstanceStats.add(resourceStat);
+            }
+        }
+        log(Level.FINE, "Reserved Instances stats count for " + resourceComputeLink + " is " + reservedInstanceStats.size());
+        resourceStats.statValues.put(normalizedReservedInstanceStatKey, reservedInstanceStats);
+
         return resourceStats;
     }
 

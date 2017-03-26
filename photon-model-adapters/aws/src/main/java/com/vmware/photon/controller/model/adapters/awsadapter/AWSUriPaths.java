@@ -41,6 +41,8 @@ public class AWSUriPaths {
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_COST_STATS_ADAPTER = PROVISIONING_AWS
             + "/cost-stats-adapter";
+    public static final String AWS_RESERVED_INSTANCE_PLANS_ADAPTER = PROVISIONING_AWS
+            + "/reserved-instance-plans-enumeration-adapter";
     public static final String AWS_ENUMERATION_ADAPTER = AdapterTypePath.ENUMERATION_ADAPTER
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_IMAGE_ENUMERATION_ADAPTER = AdapterTypePath.IMAGE_ENUMERATION_ADAPTER

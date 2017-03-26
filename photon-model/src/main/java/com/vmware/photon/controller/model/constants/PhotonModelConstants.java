@@ -38,6 +38,7 @@ public class PhotonModelConstants {
     public static final String CURRENT_BURN_RATE_PER_HOUR = "CurrentBurnRatePerHour";
     public static final String AVERAGE_BURN_RATE_PER_HOUR = "AverageBurnRatePerHour";
     public static final String COST = "Cost";
+    public static final String RESERVED_INSTANCE_DURATION = "ReservedInstanceDuration";
 
     public static final String DISK_WRITE_TIME_SECONDS = "DiskWriteTimeSeconds";
     public static final String DISK_READ_TIME_SECONDS = "DiskReadTimeSeconds";
@@ -57,6 +58,7 @@ public class PhotonModelConstants {
     public static final String UNIT_SECONDS = "Seconds";
     public static final String UNIT_MILLISECONDS = "MilliSeconds";
     public static final String UNIT_MICROSECONDS = "MicroSeconds";
+    public static final String UNIT_HOURS = "Hours";
     public static final String UNIT_COST = "USD";
 
     // Photon-Model specific constants

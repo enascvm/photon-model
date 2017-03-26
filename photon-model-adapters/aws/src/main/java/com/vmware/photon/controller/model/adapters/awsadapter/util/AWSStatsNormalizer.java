@@ -35,6 +35,8 @@ public class AWSStatsNormalizer {
                 PhotonModelConstants.UNIT_COUNT);
         unitMap.put(AWSConstants.UNIT_PERCENT,
                 PhotonModelConstants.UNIT_PERCENT);
+        unitMap.put(AWSConstants.UNIT_HOURS,
+                PhotonModelConstants.UNIT_HOURS);
         PHOTON_MODEL_UNIT_MAP = Collections.unmodifiableMap(unitMap);
 
         // Map of AWS-specific stat keys to Photon-Model stat keys
@@ -76,6 +78,7 @@ public class AWSStatsNormalizer {
         statMap.put(AWSConstants.COST, PhotonModelConstants.COST);
         statMap.put(AWSConstants.SERVICE_RESOURCE_COST, PhotonModelConstants.SERVICE_RESOURCE_COST);
         statMap.put(AWSConstants.SERVICE_OTHER_COST, PhotonModelConstants.SERVICE_OTHER_COST);
+        statMap.put(AWSConstants.RESERVED_INSTANCE_DURATION, PhotonModelConstants.RESERVED_INSTANCE_DURATION);
         PHOTON_MODEL_STATS_MAP = Collections.unmodifiableMap(statMap);
     }
 

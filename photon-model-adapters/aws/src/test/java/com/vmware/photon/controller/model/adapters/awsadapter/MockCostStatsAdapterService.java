@@ -70,6 +70,13 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     }
 
     @Override
+    protected void startReservedInstancesPlansCollection(AWSCostStatsCreationContext context,
+            AWSCostStatsCreationStages next) {
+        context.stage = next;
+        handleCostStatsCreationRequest(context);
+    }
+
+    @Override
     protected void scheduleDownload(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
 

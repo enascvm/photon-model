@@ -238,7 +238,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
             ComputeState account) {
 
         if (resp.statsList.size() != 4) {
-            // Only account cost will be stored for current month,hence only 2 stats will be stored.
+            // 2 account + 2 instance stats
             TestAWSCostAdapterService.this.host.failIteration(
                     new IllegalStateException("response size was incorrect."));
             return;
@@ -261,6 +261,8 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         //check total account cost
         String normalizedStatKeyValue = AWSStatsNormalizer
                 .getNormalizedStatKeyValue(AWSConstants.COST);
+        String normalizedReservedInstanceStatKeyValue = AWSStatsNormalizer
+                .getNormalizedStatKeyValue(AWSConstants.RESERVED_INSTANCE_DURATION);
         assertTrue(account1Stats.statValues.get(normalizedStatKeyValue)
                 .get(0).latestValue == account1TotalCost);
 
@@ -288,8 +290,10 @@ public class TestAWSCostAdapterService extends BaseModelTest {
 
         assertEquals(instance1TotalCost,
                 instance1Stats.statValues.get(normalizedStatKeyValue).get(0).latestValue, 0);
+        assertEquals(1.0, instance1Stats.statValues.get(normalizedReservedInstanceStatKeyValue).get(0).latestValue, 0);
         assertEquals(instance2TotalCost,
                 instance2Stats.statValues.get(normalizedStatKeyValue).get(0).latestValue, 0);
+        assertEquals(1.0, instance1Stats.statValues.get(normalizedReservedInstanceStatKeyValue).get(0).latestValue, 0);
         // Check that stat values are accompanied with Units.
         for (String key : account1Stats.statValues.keySet()) {
             List<ServiceStat> stats = account1Stats.statValues.get(key);

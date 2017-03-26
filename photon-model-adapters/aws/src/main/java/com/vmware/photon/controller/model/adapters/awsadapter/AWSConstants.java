@@ -110,6 +110,8 @@ public class AWSConstants {
     public static final String CURRENT_BURN_RATE = "CurrentBurnRatePerHour";
     public static final String AVERAGE_BURN_RATE = "AverageBurnRatePerHour";
     public static final String COST = "Cost";
+    public static final String RESERVED_INSTANCE_PLAN_DETAILS = "ReservedInstancePlanDetails";
+    public static final String RESERVED_INSTANCE_DURATION = "ReservedInstanceDuration";
     public static final String SERVICE_RESOURCE_COST = "Service.%s.ResourceCost";
     public static final String SERVICE_OTHER_COST = "Service.%s.OtherCost";
     public static final String SERVICE_MONTHLY_OTHER_COST = "Service.%s.MonthlyOtherCost";
@@ -120,6 +122,7 @@ public class AWSConstants {
     public static final String UNIT_BYTES = "Bytes";
     public static final String UNIT_PERCENT = "Percent";
     public static final String UNIT_COST = "USD";
+    public static final String UNIT_HOURS = "Hours";
 
     public static final String WINDOWS_PLATFORM = "windows";
 
