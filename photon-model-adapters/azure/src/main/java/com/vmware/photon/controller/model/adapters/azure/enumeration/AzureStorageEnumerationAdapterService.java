@@ -70,7 +70,6 @@ import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.ContainerListingDetails;
 import com.microsoft.azure.storage.blob.ListBlobItem;
 import com.microsoft.rest.ServiceResponse;
-
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
@@ -87,6 +86,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -96,7 +96,7 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
-
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -108,6 +108,7 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Enumeration adapter for data collection of storage artifacts in Azure.
@@ -1670,7 +1671,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
             context.deletionNextPageLink = queryTask.results.nextPageLink;
 
-            List<Operation> operations = new ArrayList<>();
+            List<DeferredResult<Operation>> operations = new ArrayList<>();
             for (Object s : queryTask.results.documents.values()) {
                 DiskState diskState = Utils.fromJson(s, DiskState.class);
                 String diskStateId =  diskState.id;
@@ -1680,8 +1681,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 if (context.blobIds.contains(diskStateId)) {
                     continue;
                 }
-
-                operations.add(Operation.createDelete(this, diskState.documentSelfLink));
+                operations.add(deleteIfNotAttachedToCompute(diskState));
                 logFine(() -> String.format("Deleting disk state %s", diskState.documentSelfLink));
             }
 
@@ -1691,24 +1691,50 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            OperationJoin.create(operations)
-                    .setCompletion((ops, exs) -> {
-                        if (exs != null) {
+            DeferredResult.allOf(operations)
+                    .whenComplete((op, ex) -> {
+                        if (ex != null) {
                             // We don't want to fail the whole data collection if some of the
                             // operation fails.
-                            exs.values().forEach(
-                                    ex -> logWarning(() -> String.format("Error: %s",
-                                            ex.getMessage())));
+                            logWarning(() -> String.format("Error: %s", ex.getMessage()));
                         }
 
                         deleteDisksHelper(context);
-                    })
-                    .sendWith(this);
+                    });
         };
         logFine(() -> String.format("Querying page [%s] for resources to be deleted",
                 context.deletionNextPageLink));
         sendRequest(Operation.createGet(this, context.deletionNextPageLink)
                 .setCompletion(completionHandler));
+    }
+
+    private DeferredResult<Operation> deleteIfNotAttachedToCompute(DiskState diskState) {
+        Query query = Query.Builder.create()
+                .addKindFieldClause(ComputeService.ComputeState.class)
+                .addCollectionItemClause(ComputeService.ComputeState.FIELD_NAME_DISK_LINKS,
+                        diskState.documentSelfLink).build();
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryOption.COUNT)
+                .setQuery(query)
+                .build();
+
+        if (queryTask.documentExpirationTimeMicros == 0) {
+            queryTask.documentExpirationTimeMicros =
+                    Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+        }
+
+        return sendWithDeferredResult(
+                Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+                        .setBody(queryTask), QueryTask.class)
+                .thenCompose(result -> {
+                    if (result.results != null && result.results.documentCount != 0) {
+                        return DeferredResult.completed(new Operation());
+                    }
+
+                    return sendWithDeferredResult(
+                            Operation.createDelete(getHost(), diskState.documentSelfLink));
+                });
     }
 
     private StorageManagementClient getStorageManagementClient(StorageEnumContext context) {
