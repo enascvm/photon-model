@@ -295,8 +295,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
             DiskState ds = new DiskState();
             ds.documentSelfLink = UriUtils.buildUriPath(
-                    DiskService.FACTORY_LINK,
-                    Utils.buildUUID(getHost().nextUUID()));
+                    DiskService.FACTORY_LINK, getHost().nextUUID());
 
             ds.name = disk.getDeviceInfo().getLabel();
             ds.creationTimeMicros = Utils.getNowMicrosUtc();

@@ -91,13 +91,13 @@ public class VimUtilsTest {
 
     @Test
     public void uriToDatastoreManySlashes() {
-        String s = VimUtils.uriToDatastorePath(URI.create("datastore:////ds1/folder/vm.vmx"));
+        String s = VimUtils.uriToDatastorePath(URI.create("vc:///datastore/ds1/folder/vm.vmx"));
         assertEquals("[ds1] folder/vm.vmx", s);
     }
 
     @Test
     public void uriToDatastore() {
-        String s = VimUtils.uriToDatastorePath(URI.create("datastore:///ds_test/folder/vm.vmx"));
+        String s = VimUtils.uriToDatastorePath(URI.create("vc:///datastore/ds_test/folder/vm.vmx"));
         assertEquals("[ds_test] folder/vm.vmx", s);
     }
 
@@ -109,7 +109,7 @@ public class VimUtilsTest {
 
     @Test
     public void uriToDatastoreRelativeWithUnderscore() {
-        String s = VimUtils.uriToDatastorePath(URI.create("datastore://ds_test/folder/vm.vmx"));
+        String s = VimUtils.uriToDatastorePath(URI.create("vc://datastore/ds_test/folder/vm.vmx"));
         assertEquals("[ds_test] folder/vm.vmx", s);
     }
 
@@ -121,7 +121,15 @@ public class VimUtilsTest {
     @Test
     public void datastorePathToUri() {
         URI uri = VimUtils.datastorePathToUri("[ds_test] folder/vm.vmx");
-        assertEquals(URI.create("datastore://ds_test/folder/vm.vmx"), uri);
+        assertEquals(URI.create("vc://datastore/ds_test/folder/vm.vmx"), uri);
+    }
+
+    @Test
+    public void datastoreWithSpaces() {
+        String path = "[Local Disk esxcomp-02a] my vm/ubuntu-mcm302-38483282422.vmdk";
+        URI uri = VimUtils.datastorePathToUri(path);
+        assertEquals(URI.create("vc://datastore/Local+Disk+esxcomp-02a/my+vm/ubuntu-mcm302-38483282422.vmdk"), uri);
+        assertEquals(path, VimUtils.uriToDatastorePath(uri));
     }
 
     @Test

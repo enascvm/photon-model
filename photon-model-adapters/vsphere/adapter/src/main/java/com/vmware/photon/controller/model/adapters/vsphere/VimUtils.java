@@ -18,6 +18,8 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.GregorianCalendar;
@@ -47,7 +49,7 @@ import com.vmware.xenon.common.Utils;
  */
 public final class VimUtils {
 
-    public static final String SCHEME_DATASTORE = "datastore";
+    private static final String SCHEME_VSPHERE = "vc";
 
     private static final String DELIMITER = ":";
     public static final String EXCEPTION_SUFFIX = "FaultMsg";
@@ -94,24 +96,31 @@ public final class VimUtils {
             return null;
         }
 
-        if (!SCHEME_DATASTORE.equals(uri.getScheme())) {
-            throw new IllegalArgumentException("Expected datastore scheme, found" + uri);
+        if (!SCHEME_VSPHERE.equals(uri.getScheme())) {
+            throw new IllegalArgumentException("Expected vc:// scheme, found " + uri);
         }
 
         String path = uri.getSchemeSpecificPart();
         path = stripLeadingSlashes(path);
         int i;
 
-        // separator between datastore and path
+        // strip the /datastore/ prefix
         i = path.indexOf('/');
         if (i <= 0) {
             throw new IllegalArgumentException("Path to datastore not found:" + uri);
         }
 
+        path = path.substring(i + 1);
+        i = path.indexOf('/');
+        if (i <= 0) {
+            throw new IllegalArgumentException("Path to datastore not found:" + uri);
+        }
+
+
         String ds = path.substring(0, i);
         path = path.substring(i + 1);
 
-        return String.format("[%s] %s", ds, path);
+        return String.format("[%s] %s", decode(ds), decode(path));
     }
 
     protected static String stripLeadingSlashes(String path) {
@@ -141,7 +150,23 @@ public final class VimUtils {
         }
         String dsName = path.substring(1, i);
         String pathOnly = path.substring(i + 2);
-        return URI.create(SCHEME_DATASTORE + "://" + dsName + "/" + stripLeadingSlashes(pathOnly));
+        return URI.create(SCHEME_VSPHERE + "://datastore/" + encode(dsName) + "/" + encode(stripLeadingSlashes(pathOnly)));
+    }
+
+    private static String encode(String s) {
+        try {
+            return URLEncoder.encode(s, Utils.CHARSET).replace("%2F", "/");
+        } catch (UnsupportedEncodingException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    private static String decode(String s) {
+        try {
+            return URLDecoder.decode(s, Utils.CHARSET);
+        } catch (UnsupportedEncodingException e) {
+            throw new AssertionError(e);
+        }
     }
 
     /**
