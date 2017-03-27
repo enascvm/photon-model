@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.nio.file.Path;
 import java.util.Collections;
@@ -24,6 +23,7 @@ import java.util.Map;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 
+import com.vmware.photon.controller.model.adapters.aws.dto.AwsAccountDetailDto;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -59,10 +59,8 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     }
 
     @Override
-    protected void getAWSAsyncCostingClient(AWSCostStatsCreationContext statsData,
-            AWSCostStatsCreationStages next) {
-        statsData.stage = next;
-        handleCostStatsCreationRequest(statsData);
+    protected void getAWSAsyncCostingClient(AWSCostStatsCreationContext statsData) {
+        return;
     }
 
     @Override
@@ -72,6 +70,7 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         handleCostStatsCreationRequest(context);
     }
 
+    @Override
     protected void scheduleDownload(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
 
@@ -83,10 +82,13 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         try {
             csvBillZipFilePath = TestUtils.getTestResourcePath(TestAWSCostAdapterService.class,
                     TestAWSSetupUtils.getCurrentMonthsSampleBillFilePath().toString());
-
-            statsData.accountsHistoricalDetailsMap.put(monthDate, parser
-                    .parseDetailedCsvBill(statsData.ignorableInvoiceCharge, csvBillZipFilePath
-                    ));
+            Map<String, Long> accountMarkers = new HashMap<>();
+            accountMarkers.put(TestAWSCostAdapterService.account1Id, 0L);
+            accountMarkers.put(TestAWSCostAdapterService.account2Id, 0L);
+            Map<String, AwsAccountDetailDto> accountDetails = parser
+                    .parseDetailedCsvBill(statsData.ignorableInvoiceCharge, csvBillZipFilePath,
+                            accountMarkers);
+            statsData.accountsHistoricalDetailsMap.put(monthDate, accountDetails);
         } catch (Throwable e) {
             AdapterUtils.sendFailurePatchToProvisioningTask(this,
                     statsData.statsRequest.taskReference, new RuntimeException(e));
@@ -121,16 +123,19 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
         statsData.accountIdToBillProcessedTime = accountIdToBillProcessedTimeBackup;
     }
 
+    @Override
     protected void queryInstances(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
         //inserting all mock data required
         ComputeState instance1 = new ComputeState();
         instance1.documentSelfLink = INSTANCE_1_SELF_LINK;
-        statsData.awsInstancesById.put("i-2320dc97", Collections.singletonList(instance1));
+        statsData.awsInstanceLinksById
+                .put("i-2320dc97", Collections.singletonList(INSTANCE_1_SELF_LINK));
 
         ComputeState instance2 = new ComputeState();
         instance2.documentSelfLink = INSTANCE_2_SELF_LINK;
-        statsData.awsInstancesById.put("i-69d52add", Collections.singletonList(instance2));
+        statsData.awsInstanceLinksById
+                .put("i-69d52add", Collections.singletonList(INSTANCE_2_SELF_LINK));
 
         statsData.computeDesc = new ComputeStateWithDescription();
         statsData.computeDesc.documentSelfLink = "accountSelfLink";
@@ -170,18 +175,17 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
 
     @Override
     protected ServiceStats.ServiceStat createBillProcessedTimeStat(
-            AWSCostStatsCreationContext statsData, ComputeState accountComputeState) {
+            AwsAccountDetailDto awsAccountDetailDto) {
         ServiceStats.ServiceStat billProcessedTimeStat = new ServiceStats.ServiceStat();
         billProcessedTimeStat.name = AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS;
         billProcessedTimeStat.unit = PhotonModelConstants.UNIT_MILLISECONDS;
-
-        assertTrue("Last bill processed time is not correct. " +
-                        "Expected: " + billProcessedTimeMillis.toString() + " Got: "
-                        + statsData.accountsHistoricalDetailsMap.values().iterator().next().values()
-                        .iterator().next().billProcessedTimeMillis,
-                statsData.accountsHistoricalDetailsMap.values().iterator().next().values()
-                        .iterator().next().billProcessedTimeMillis == billProcessedTimeMillis);
-
+        billProcessedTimeStat.latestValue = billProcessedTimeMillis;
+        billProcessedTimeStat.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
         return billProcessedTimeStat;
+    }
+
+    @Override
+    protected void setLinkedAccountIds(AWSCostStatsCreationContext context) {
+        return;
     }
 }
