@@ -150,6 +150,8 @@ public class TestAWSSetupUtils {
     public static final String avalabilityZoneIdentifier = "a";
     public static final String userData = null;
 
+    public static final long BOOT_DISK_SIZE_IN_MEBI_BYTES = 16 * 1024L;
+
     // VPC/subnet details are copy-pasted from AWS, region N.Virginia, Availability Zone: us-east-1a
     // {{
     public static final String AWS_DEFAULT_VPC_ID = "vpc-95a29bf1";
@@ -642,6 +644,7 @@ public class TestAWSSetupUtils {
         file.path = DEFAULT_CONFIG_PATH;
         file.contents = TestUtils.loadTestResource(clazz, DEFAULT_USER_DATA_FILE);
         rootDisk.bootConfig.files = new DiskState.BootConfig.FileEntry[] { file };
+        rootDisk.capacityMBytes = BOOT_DISK_SIZE_IN_MEBI_BYTES;
 
         TestUtils.doPost(host, rootDisk,
                 DiskService.DiskState.class,

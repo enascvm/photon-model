@@ -34,10 +34,14 @@ import java.util.stream.Stream;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.ec2.model.AmazonEC2Exception;
+import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
 import com.amazonaws.services.ec2.model.DeleteSubnetResult;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
+import com.amazonaws.services.ec2.model.DescribeImagesRequest;
+import com.amazonaws.services.ec2.model.DescribeImagesResult;
+import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
@@ -332,6 +336,37 @@ public class AWSInstanceService extends StatelessService {
                 .withImageId(imageId.toString()).withInstanceType(instanceType)
                 .withMinCount(1).withMaxCount(1)
                 .withMonitoring(true);
+
+        //If specified, honour the specified boot disk size.
+        if (bootDisk.capacityMBytes > 0) {
+            DescribeImagesRequest imagesDescriptionRequest = new DescribeImagesRequest();
+            imagesDescriptionRequest.withImageIds(imageId.toString());
+            DescribeImagesResult imagesDescriptionResult = aws.amazonEC2Client
+                    .describeImages(imagesDescriptionRequest);
+
+            if (imagesDescriptionResult.getImages().size() != 1) {
+                handleError(aws, new IllegalStateException("AWS ImageId is not available"));
+                return;
+            }
+
+            Image image = imagesDescriptionResult.getImages().get(0);
+            List<BlockDeviceMapping> blockDeviceMappings = image.getBlockDeviceMappings();
+            BlockDeviceMapping rootDeviceMapping = blockDeviceMappings.stream()
+                    .filter(blockDeviceMapping ->
+                            blockDeviceMapping.getDeviceName().equals(image.getRootDeviceName()))
+                    .findAny()
+                    .orElse(null);
+
+            if (rootDeviceMapping.getEbs() != null) {
+                rootDeviceMapping.getEbs().setVolumeSize((int) bootDisk.capacityMBytes / 1024);
+                rootDeviceMapping.getEbs().setEncrypted(null);
+                runInstancesRequest.withBlockDeviceMappings(blockDeviceMappings);
+            } else {
+                handleError(aws,
+                        new IllegalStateException("Size of non ebs boot disk cannot be modified"));
+                return;
+            }
+        }
 
         AWSNicContext primaryNic = aws.getPrimaryNic();
         if (primaryNic != null && primaryNic.nicSpec != null) {

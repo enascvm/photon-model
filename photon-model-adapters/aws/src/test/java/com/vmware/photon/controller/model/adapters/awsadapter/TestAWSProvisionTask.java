@@ -48,8 +48,11 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.DescribeVolumesRequest;
+import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.GroupIdentifier;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.InstanceBlockDeviceMapping;
 import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
@@ -69,6 +72,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
@@ -225,6 +229,8 @@ public class TestAWSProvisionTask {
             assertTags(Collections.emptySet(), instance, this.vmState.name);
 
             assertVmNetworksConfiguration(instance);
+
+            assertBootDiskConfiguration(this.client, instance);
         }
 
         this.host.setTimeoutSeconds(600);
@@ -290,6 +296,8 @@ public class TestAWSProvisionTask {
 
             assertVmNetworksConfiguration(instances.get(0));
 
+            assertBootDiskConfiguration(this.client, instances.get(0));
+
             // reach out to AWS and get the current state
             TestAWSSetupUtils
                     .getBaseLineInstanceCount(this.host, this.client, null);
@@ -310,8 +318,6 @@ public class TestAWSProvisionTask {
         this.vmState = null;
         this.sgToCleanUp = null;
     }
-
-
 
     private void assertVmNetworksConfiguration(Instance awsInstance) throws Throwable {
 
@@ -561,5 +567,43 @@ public class TestAWSProvisionTask {
                 }
             }
         }
+    }
+
+    private void assertBootDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance)
+            throws Throwable {
+        // This assert is only suitable for real (non-mock) environment.
+        if (this.isMock) {
+            return;
+        }
+
+        this.host.log(Level.INFO, "%s: Assert boot disk size for [%s] VM",
+                this.currentTestName.getMethodName(), this.vmState.name);
+
+        ComputeState vm = this.host.getServiceState(null,
+                ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+
+        //For now there is only one boot disk attached to the compute
+        String diskLink = vm.diskLinks.get(0);
+        DiskState diskState = this.host.getServiceState(null, DiskState.class,
+                UriUtils.buildUri(this.host, diskLink));
+
+        InstanceBlockDeviceMapping bootDiskMapping = awsInstance.getBlockDeviceMappings().stream()
+                .filter(blockDeviceMapping ->
+                        blockDeviceMapping.getDeviceName().equals(awsInstance.getRootDeviceName()))
+                .findAny()
+                .orElse(null);
+
+        //The ami used in this test is an ebs-backed AMI
+        assertNotNull("Boot device type should be ebs type", bootDiskMapping.getEbs());
+
+        String bootVolumeId = bootDiskMapping.getEbs().getVolumeId();
+        DescribeVolumesRequest describeVolumesRequest = new DescribeVolumesRequest()
+                .withVolumeIds(bootVolumeId);
+        DescribeVolumesResult describeVolumesResult = client
+                .describeVolumes(describeVolumesRequest);
+
+        assertEquals("Boot Disk size in the local system is not matching the boot disk size of "
+                        + "compute provisioned in aws", diskState.capacityMBytes,
+                (long) (describeVolumesResult.getVolumes().get(0).getSize() * 1024));
     }
 }
