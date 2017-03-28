@@ -224,7 +224,8 @@ public class ServerX509TrustManager implements X509TrustManager, Closeable {
     }
 
     private void certificateChanged(Operation operation) {
-        operation.complete();
+        Utils.log(getClass(), getClass().getName(), Level.WARNING,
+                "process certificate changed for operation %s", operation.toLogString());
         QueryTask queryTask = operation.getBody(QueryTask.class);
         if (queryTask.results != null && queryTask.results.documentLinks != null
                 && !queryTask.results.documentLinks.isEmpty()) {
@@ -237,7 +238,11 @@ public class ServerX509TrustManager implements X509TrustManager, Closeable {
                     registerCertificate(cert);
                 }
             });
+        } else {
+            Utils.log(getClass(), getClass().getName(), Level.WARNING,
+                    "No document links for operation %s", operation.toLogString());
         }
+        operation.complete();
     }
 
     private void registerCertificate(SslTrustCertificateState sslTrustCert) {
