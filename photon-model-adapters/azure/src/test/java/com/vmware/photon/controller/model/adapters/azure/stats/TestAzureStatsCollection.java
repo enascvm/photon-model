@@ -84,8 +84,8 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
     private static final String SEPARATOR = ": ";
     private static final String STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT = "MemoryAvailablePercent";
     private static final double BYTES_TO_MB = 1024 * 1024;
-    private static final int MEMORY_THRESHOLD_SEVERE = 60;
-    private static final int MEMORY_THRESHOLD_WARNING = 40;
+    private static final int MEMORY_THRESHOLD_SEVERE = 40;
+    private static final int MEMORY_THRESHOLD_WARNING = 60;
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -280,13 +280,13 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
                 ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR)
                 .latestValue / BYTES_TO_MB) / this.maxMemoryInMb * 100;
 
-        this.loggingLevelForMemory = Level.INFO;
-
         // Increase logging level if available Memory is less than expected.
-        if (this.availableMemoryPercentage > MEMORY_THRESHOLD_SEVERE) {
-            this.loggingLevelForMemory = Level.SEVERE;
-        } else if (this.availableMemoryPercentage > MEMORY_THRESHOLD_WARNING) {
+        if (this.availableMemoryPercentage > MEMORY_THRESHOLD_WARNING) {
+            this.loggingLevelForMemory = Level.INFO;
+        } else if (this.availableMemoryPercentage > MEMORY_THRESHOLD_SEVERE) {
             this.loggingLevelForMemory = Level.WARNING;
+        } else {
+            this.loggingLevelForMemory = Level.SEVERE;
         }
 
         this.host.log(this.loggingLevelForMemory, STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT
@@ -362,11 +362,11 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
         // Verify stats collection based on VM type.
         if (computeState.type == ComputeType.VM_HOST) {
             this.resourceMetric = getResourceMetrics(selfLink, PhotonModelConstants.STORAGE_USED_BYTES);
-            assertNotNull("No StorageUsedBytes metric present for VM", this.resourceMetric);
+            assertNotNull("No StorageUsedBytes metric present for host", this.resourceMetric);
             this.resourceMetric = getResourceMetrics(selfLink, PhotonModelConstants.MEMORY_USED_PERCENT);
-            assertNotNull("No MemoryUsedPercent metric present for VM", this.resourceMetric);
+            assertNotNull("No MemoryUsedPercent metric present for host", this.resourceMetric);
             this.resourceMetric = getResourceMetrics(selfLink, PhotonModelConstants.CPU_UTILIZATION_PERCENT);
-            assertNotNull("No CpuUtilizationPercent metric present for VM", this.resourceMetric);
+            assertNotNull("No CpuUtilizationPercent metric present for host", this.resourceMetric);
             this.resourceMetric = getResourceMetrics(selfLink, LAST_COLLECTION_TIME_KEY_FOR_HOST);
             this.currentRunLastSuccessfulCollectionTimeInMicrosForHost =
                     this.resourceMetric.entries.get(LAST_COLLECTION_TIME_KEY_FOR_HOST);
@@ -374,9 +374,9 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
                     this.previousRunLastSuccessfulCollectionTimeInMicrosForHost);
         } else if (computeState.type == ComputeType.VM_GUEST) {
             this.resourceMetric = getResourceMetrics(selfLink, PhotonModelConstants.MEMORY_USED_PERCENT);
-            assertNotNull("No MemoryUsedPercent metric present for host", this.resourceMetric);
+            assertNotNull("No MemoryUsedPercent metric present for VM", this.resourceMetric);
             this.resourceMetric = getResourceMetrics(selfLink, PhotonModelConstants.CPU_UTILIZATION_PERCENT);
-            assertNotNull("No CpuUtilizationPercent metric present for host", this.resourceMetric);
+            assertNotNull("No CpuUtilizationPercent metric present for VM", this.resourceMetric);
             this.resourceMetric = getResourceMetrics(selfLink, LAST_COLLECTION_TIME_KEY_FOR_VM);
             this.currentRunLastSuccessfulCollectionTimeInMicrosForVM =
                     this.resourceMetric.entries.get(LAST_COLLECTION_TIME_KEY_FOR_VM);
