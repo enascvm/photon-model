@@ -633,8 +633,9 @@ public class ResourceAllocationTaskService
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
-                                logSevere(() -> String.format("Failure creating compute resource: %s",
-                                        Utils.toString(e)));
+                                logSevere(
+                                        () -> String.format("Failure creating compute resource: %s",
+                                                Utils.toString(e)));
                                 sendFailureSelfPatch(e);
                                 return;
                             }
@@ -684,7 +685,7 @@ public class ResourceAllocationTaskService
                                     DiskState.class);
                         }))
                         .map(dsr -> dsr
-                                .thenCompose(ds -> DeferredResult.completed(ds.documentSelfLink)))
+                                .thenApply(ds -> ds.documentSelfLink))
                         .collect(Collectors.toList()));
 
         result.whenComplete((diskLinks, e) -> {
@@ -715,14 +716,11 @@ public class ResourceAllocationTaskService
         List<DeferredResult<String>> drs = cd.networkInterfaceDescLinks.stream()
                 .map(nicDescLink -> sendWithDeferredResult(Operation.createGet(this, nicDescLink),
                         NetworkInterfaceDescription.class)
-                                .thenCompose(nid -> createNicState(currentState, nid))
-                                .thenCompose(nic -> sendWithDeferredResult(
-                                        Operation
-                                                .createPost(this,
-                                                        NetworkInterfaceService.FACTORY_LINK)
-                                                .setBody(nic),
-                                        NetworkInterfaceState.class))
-                                .thenCompose(nis -> DeferredResult.completed(nis.documentSelfLink)))
+                                .thenApply(nid -> newNicStateFromDescription(currentState, nid))
+                                .thenCompose(nic -> sendWithDeferredResult(Operation
+                                        .createPost(this, NetworkInterfaceService.FACTORY_LINK)
+                                        .setBody(nic), NetworkInterfaceState.class))
+                                .thenApply(nic -> nic.documentSelfLink))
                 .collect(Collectors.toList());
 
         DeferredResult.allOf(drs).whenComplete((all, e) -> {
@@ -740,7 +738,8 @@ public class ResourceAllocationTaskService
 
     }
 
-    private DeferredResult<NetworkInterfaceState> createNicState(ResourceAllocationTaskState state,
+    private NetworkInterfaceState newNicStateFromDescription(
+            ResourceAllocationTaskState state,
             NetworkInterfaceDescription nid) {
         NetworkInterfaceState nic = new NetworkInterfaceState();
         nic.id = UUID.randomUUID().toString();
@@ -758,7 +757,7 @@ public class ResourceAllocationTaskService
         nic.endpointLink = nid.endpointLink;
         nic.customProperties = nid.customProperties;
 
-        return DeferredResult.completed(nic);
+        return nic;
     }
 
     @Override
