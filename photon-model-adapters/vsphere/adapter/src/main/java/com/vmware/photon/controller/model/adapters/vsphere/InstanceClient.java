@@ -846,14 +846,14 @@ public class InstanceClient extends BaseHelper {
             return VimUtils.rethrow(taskInfo.getError());
         }
 
-        VirtualDisk disk = new VirtualDisk();
-
         VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
         backing.setDiskMode(VirtualDiskMode.PERSISTENT.value());
         backing.setThinProvisioned(true);
         backing.setFileName(destName);
         backing.setDatastore(getDatastore());
 
+        VirtualDisk disk = new VirtualDisk();
+        disk.setCapacityInKB(toKb(ds.capacityMBytes));
         disk.setBacking(backing);
         disk.setControllerKey(scsiController.getKey());
         disk.setUnitNumber(unitNumber);
@@ -1187,6 +1187,7 @@ public class InstanceClient extends BaseHelper {
                     .mapToInt(VAppPropertyInfo::getKey)
                     .max()
                     .orElse(1);
+            nextKey++;
         }
 
         String ovfEnv = getFileItemByPath(bootDisk, OVF_PROPERTY_ENV);
