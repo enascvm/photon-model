@@ -25,6 +25,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Collection;
 
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -79,6 +80,15 @@ public class ServerX509TrustManagerTest {
             fail("Should not trust untrusted certificate");
         } catch (CertificateException ignored) {
         }
+    }
+
+    @Test
+    public void testInvalidate() {
+        ServerX509TrustManager instance = ServerX509TrustManager.getInstance();
+        Assert.assertNotNull(instance);
+        ServerX509TrustManager.invalidate();
+        instance = ServerX509TrustManager.getInstance();
+        Assert.assertNull(instance);
     }
 
     private static X509Certificate[] getCertificates(String filename) throws Exception {

@@ -106,9 +106,10 @@ class SslTrustCertificateServiceUtils {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setQuery(query).build();
 
-        Operation queryOp = Operation.createPost(host, ServiceUriPaths.CORE_QUERY_TASKS)
+        Operation.createPost(host, ServiceUriPaths.CORE_QUERY_TASKS)
                 .setReferer(SslTrustCertificateServiceUtils.class.getSimpleName())
-                .setBody(queryTask).setCompletion((o, err) -> {
+                .setBody(queryTask)
+                .setCompletion((o, err) -> {
                     if (err != null) {
                         host.log(Level.WARNING, "Error when get ssl trust documents. "
                                 + Utils.toString(err));
@@ -130,6 +131,6 @@ class SslTrustCertificateServiceUtils {
                             }
                         });
                     }
-                });
+                }).sendWith(host);
     }
 }

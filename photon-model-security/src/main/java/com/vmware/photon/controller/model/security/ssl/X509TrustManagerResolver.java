@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.security.ssl;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -47,9 +48,7 @@ public class X509TrustManagerResolver implements X509TrustManager {
         this.certificateException = validateIfTrusted(certs, authType);
         this.certsTrusted = this.certificateException == null;
 
-        for (X509Certificate certificate : certs) {
-            this.connectionCertificates.add(certificate);
-        }
+        Collections.addAll(this.connectionCertificates, certs);
     }
 
     public boolean isCertsTrusted() {
@@ -68,7 +67,6 @@ public class X509TrustManagerResolver implements X509TrustManager {
     }
 
     /**
-     *
      * @return {@link CertificateException} in case the certificate is not trusted
      */
     public CertificateException getCertificateException() {
@@ -87,9 +85,15 @@ public class X509TrustManagerResolver implements X509TrustManager {
         return certificateChain;
     }
 
-    private CertificateException validateIfTrusted(X509Certificate[] certificates, String authType) {
+    private CertificateException validateIfTrusted(X509Certificate[] certificates,
+            String authType) {
         if (trustManager == null) {
-            trustManager = ServerX509TrustManager.init(null);
+            trustManager = ServerX509TrustManager.getInstance();
+            if (trustManager == null) {
+                return new CertificateException(
+                        "Cannot validate certificate chain.",
+                        new IllegalStateException("ServerX509TrustManager not initialized."));
+            }
         }
 
         try {

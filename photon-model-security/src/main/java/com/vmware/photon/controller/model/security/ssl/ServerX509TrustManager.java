@@ -64,6 +64,13 @@ public class ServerX509TrustManager implements X509TrustManager, Closeable {
     private final DelegatingX509TrustManager delegatingTrustManager;
     private final ServiceHost host;
 
+    /**
+     * This method initializes if not already initialized and start the instance (load
+     * certificates and subscribes for certificate changes)
+     * @param host
+     *         cannot be null
+     * @return the instance
+     */
     public static synchronized ServerX509TrustManager create(ServiceHost host) {
         if (INSTANCE == null) {
             INSTANCE = new ServerX509TrustManager(host);
@@ -81,6 +88,20 @@ public class ServerX509TrustManager implements X509TrustManager, Closeable {
             INSTANCE = new ServerX509TrustManager(host);
         }
         return INSTANCE;
+    }
+
+    /**
+     * @return instance if created/initialized beforehand or {@code null}
+     */
+    public static ServerX509TrustManager getInstance() {
+        return INSTANCE;
+    }
+
+    /**
+     * Invalidate the instance, if created/initialized
+     */
+    public static synchronized void invalidate() {
+        INSTANCE = null;
     }
 
     protected ServerX509TrustManager(ServiceHost host) {
@@ -230,7 +251,7 @@ public class ServerX509TrustManager implements X509TrustManager, Closeable {
         if (queryTask.results != null && queryTask.results.documentLinks != null
                 && !queryTask.results.documentLinks.isEmpty()) {
 
-            queryTask.results.documents.values().stream().forEach(doc -> {
+            queryTask.results.documents.values().forEach(doc -> {
                 SslTrustCertificateState cert = Utils.fromJson(doc, SslTrustCertificateState.class);
                 if (Action.DELETE.toString().equals(cert.documentUpdateAction)) {
                     deleteCertificate(cert.getAlias());
