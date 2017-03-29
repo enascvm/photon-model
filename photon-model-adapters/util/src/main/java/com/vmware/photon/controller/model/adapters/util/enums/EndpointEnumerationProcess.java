@@ -16,11 +16,11 @@ package com.vmware.photon.controller.model.adapters.util.enums;
 import static java.util.stream.Collectors.counting;
 import static java.util.stream.Collectors.groupingBy;
 
+import static com.vmware.photon.controller.model.resources.util.PhotonModelUtils.setEndpointLink;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createLessThanRange;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -35,7 +35,6 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
-import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.QueryStrategy;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
@@ -69,8 +68,8 @@ import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
 // NOTE: FOR INTERNAL PURPOSE ONLY. WILL BE PROMOTED TO PUBLIC IN A NEXT CL.
 public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationProcess<T, LOCAL_STATE, REMOTE>, LOCAL_STATE extends ResourceState, REMOTE> {
 
-    private static final int MAX_RESOURCES_TO_QUERY_ON_DELETE =
-            Integer.getInteger(UriPaths.PROPERTY_PREFIX
+    private static final int MAX_RESOURCES_TO_QUERY_ON_DELETE = Integer
+            .getInteger(UriPaths.PROPERTY_PREFIX
                     + "enum.max.resources.query.on.delete", 950);
 
     /**
@@ -92,6 +91,14 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
     protected final String localStateServiceFactoryLink;
 
     protected final LOCAL_STATE SKIP = null;
+
+    /**
+     * Flag controlling whether infra fields (such as tenantLinks and endpointLink) should be
+     * applied (for example set or populated). Default value is {#code true}.
+     *
+     * @see #createUpdateLocalResourceState(LocalStateHolder)
+     */
+    private boolean applyInfraFields = true;
 
     /**
      * Represents a single page of remote resources.
@@ -177,6 +184,14 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         this.endpointReference = endpointReference;
         this.localStateClass = localStateClass;
         this.localStateServiceFactoryLink = localStateServiceFactoryLink;
+    }
+
+    public boolean isApplyInfraFields() {
+        return this.applyInfraFields;
+    }
+
+    public void setApplyInfraFields(boolean applyInfraFields) {
+        this.applyInfraFields = applyInfraFields;
     }
 
     /**
@@ -375,8 +390,8 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 context.service.getHost(),
                 qBuilder.build(),
                 context.localStateClass,
-                context.endpointState.tenantLinks,
-                context.endpointState.documentSelfLink);
+                isApplyInfraFields() ? context.endpointState.tenantLinks : null,
+                isApplyInfraFields() ? context.endpointState.documentSelfLink : null);
         queryLocalStates.setMaxResultsLimit(remoteIds.size());
 
         return queryLocalStates
@@ -457,17 +472,19 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         final Operation lsOp;
 
         // Create or update local tag states
-        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(this.service, localState,
-                currentState, localStateHolder.remoteTags, this.endpointState.documentSelfLink);
+        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(
+                this.service, localState, currentState, localStateHolder.remoteTags);
 
         if (currentState == null) {
             // Create case
 
-            // By default populate TENANT_LINKS
-            localState.tenantLinks = this.endpointState.tenantLinks;
+            if (isApplyInfraFields()) {
+                // By default populate TENANT_LINKS
+                localState.tenantLinks = this.endpointState.tenantLinks;
 
-            // By default populate ENDPOINT_ILNK
-            PhotonModelUtils.setEndpointLink(localState, this.endpointState.documentSelfLink);
+                // By default populate ENDPOINT_ILNK
+                setEndpointLink(localState, this.endpointState.documentSelfLink);
+            }
 
             lsOp = Operation.createPost(this.service, this.localStateServiceFactoryLink);
         } else {
@@ -532,30 +549,32 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 context.service.getHost(),
                 qBuilder.build(),
                 context.localStateClass,
-                context.endpointState.tenantLinks,
-                context.endpointState.documentSelfLink);
+                isApplyInfraFields() ? context.endpointState.tenantLinks : null,
+                isApplyInfraFields() ? context.endpointState.documentSelfLink : null);
 
-        List<DeferredResult<Operation>> ops = Collections.synchronizedList(new ArrayList<DeferredResult<Operation>>());
+        List<DeferredResult<Operation>> ops = new ArrayList<>();
 
         // Delete stale resources.
         return queryLocalStates.queryDocuments(ls -> {
-            if (shouldDelete(ls)) {
-                Operation dOp = Operation.createDelete(context.service, ls.documentSelfLink);
-
-                DeferredResult<Operation> dr = context.service.sendWithDeferredResult(dOp)
-                        .whenComplete((o, e) -> {
-                            final String msg = "Delete stale %s state";
-                            if (e != null) {
-                                context.service.logWarning(msg + ": ERROR - %s",
-                                        ls.documentSelfLink, Utils.toString(e));
-                            } else {
-                                context.service
-                                        .log(Level.FINEST, msg + ": SUCCESS", ls.documentSelfLink);
-                            }
-                        });
-
-                ops.add(dr);
+            if (!shouldDelete(ls)) {
+                return;
             }
+
+            Operation dOp = Operation.createDelete(context.service, ls.documentSelfLink);
+
+            DeferredResult<Operation> dr = context.service.sendWithDeferredResult(dOp)
+                    .whenComplete((o, e) -> {
+                        final String msg = "Delete stale %s state";
+                        if (e != null) {
+                            context.service.logWarning(msg + ": ERROR - %s",
+                                    ls.documentSelfLink, Utils.toString(e));
+                        } else {
+                            context.service.log(Level.FINEST,
+                                    msg + ": SUCCESS", ls.documentSelfLink);
+                        }
+                    });
+
+            ops.add(dr);
         })
                 .thenCompose(r -> DeferredResult.allOf(ops))
                 .thenApply(r -> context);

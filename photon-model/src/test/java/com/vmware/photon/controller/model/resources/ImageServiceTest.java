@@ -100,7 +100,7 @@ public class ImageServiceTest extends Suite {
      */
     public static class HandleStartTest extends BaseModelTest {
 
-        private ImageState startState = buildValidStartState();
+        private final ImageState startState = buildValidStartState();
 
         @Test
         public void testValidStartState() throws Throwable {
@@ -116,12 +116,39 @@ public class ImageServiceTest extends Suite {
             assertEquals(this.startState.regionId, returnState.regionId);
             assertEquals(this.startState.osFamily, returnState.osFamily);
             assertEquals(this.startState.description, returnState.description);
+            assertEquals(this.startState.endpointLink, returnState.endpointLink);
+            assertEquals(this.startState.endpointType, null);
 
             assertEquals(this.startState.tenantLinks, returnState.tenantLinks);
         }
 
         @Test
-        public void testDuplicatePost() throws Throwable {
+        public void testInvalidStartState() throws Throwable {
+
+            ImageState invalidState = this.startState;
+
+            {
+                // Both cannot be set
+                invalidState.endpointLink = buildUriPath(EndpointService.FACTORY_LINK, "endpointLink");
+                invalidState.endpointType = "someEndpointType";
+
+                postServiceSynchronously(
+                        ImageService.FACTORY_LINK,
+                        invalidState, ImageState.class, IllegalArgumentException.class);
+            }
+            {
+                // Either should be set
+                invalidState.endpointLink = null;
+                invalidState.endpointType = null;
+
+                postServiceSynchronously(
+                        ImageService.FACTORY_LINK,
+                        invalidState, ImageState.class, IllegalArgumentException.class);
+            }
+        }
+
+        @Test
+        public void testDuplicatePostWithChange() throws Throwable {
 
             ImageState returnState = postServiceSynchronously(
                     ImageService.FACTORY_LINK,
@@ -136,6 +163,22 @@ public class ImageServiceTest extends Suite {
 
             assertEquals(this.startState.name, returnState.name);
         }
+
+        @Test
+        public void testDuplicatePostWithNoChange() throws Throwable {
+
+            ImageState returnState = postServiceSynchronously(
+                    ImageService.FACTORY_LINK,
+                    this.startState, ImageState.class);
+
+            assertNotNull(returnState);
+
+            returnState = postServiceSynchronously(ImageService.FACTORY_LINK,
+                    returnState, ImageState.class);
+
+            assertNotNull(returnState);
+        }
+
     }
 
     /**
@@ -143,7 +186,7 @@ public class ImageServiceTest extends Suite {
      */
     public static class HandlePatchTest extends BaseModelTest {
 
-        private ImageState startState = buildValidStartState();
+        private final ImageState startState = buildValidStartState();
 
         @Test
         public void testPatch() throws Throwable {

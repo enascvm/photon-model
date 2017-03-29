@@ -13,12 +13,14 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsNetworkService;
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.OvfImporterService;
 import com.vmware.photon.controller.model.adapters.vsphere.stats.VSphereAdapterStatsService;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.UriUtils;
 
 /**
  * Facade for starting all vSphere adapters on a host.
@@ -38,6 +40,14 @@ public class VSphereAdapters {
             VSphereAdapterImageEnumerationService.SELF_LINK
     };
 
+    /**
+     * The link of vSphere configuration registered in {@link PhotonModelAdaptersRegistryService
+     * End-point Adapters Registry}.
+     */
+    public static String CONFIG_LINK = UriUtils.buildUriPath(
+            PhotonModelAdaptersRegistryService.FACTORY_LINK,
+            EndpointType.vsphere.name());
+
     public static void startServices(ServiceHost host) throws Throwable {
         host.startService(new VSphereAdapterInstanceService());
         host.startService(new VSphereAdapterPowerService());
@@ -51,7 +61,9 @@ public class VSphereAdapters {
         host.startService(new VSphereAdapterImageEnumerationService());
 
         EndpointAdapterUtils.registerEndpointAdapters(
-                host, EndpointType.vsphere.name(), LINKS,
+                host,
+                EndpointType.vsphere.name(),
+                LINKS,
                 VSphereUriPaths.VSPHERE_ADAPTER_LINK_TYPES);
     }
 }

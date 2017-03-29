@@ -19,19 +19,32 @@ import com.vmware.photon.controller.model.UriPaths;
 
 
 public class AWSConstants {
+
     public static final String AWS_INSTANCE_ID_PREFIX = "i-";
+
     public static final String AWS_SECURITY_GROUP = "awsSecurityGroup";
     public static final String AWS_SECURITY_GROUP_ID = "awsSecurityGroupId";
+
     public static final String AWS_TAG_NAME = "Name";
+
     public static final String AWS_VPC_ID = "awsVpcId";
     public static final String AWS_VPC_ID_FILTER = "vpc-id";
+
     public static final String AWS_SUBNET_ID_FILTER = "subnet-id";
     public static final String AWS_SUBNET_CIDR_FILTER = "cidrBlock";
+
     public static final String AWS_GROUP_ID_FILTER = "group-id";
     public static final String AWS_GROUP_NAME_FILTER = "group-name";
+
     public static final String AWS_GATEWAY_ID = "awsGatewayID";
     public static final String AWS_VPC_ROUTE_TABLE_ID = "awsMainRouteTableID";
     public static final String AWS_MAIN_ROUTE_ASSOCIATION = "association.main";
+
+    public static final String AWS_IMAGE_NAME_FILTER = "name";
+    public static final String AWS_IMAGE_STATE_FILTER = "state";
+    public static final String AWS_IMAGE_STATE_AVAILABLE = "available";
+    public static final String AWS_IMAGE_IS_PUBLIC_FILTER = "is-public";
+
     public static final String INSTANCE_STATE = "instance-state-name";
     public static final String INSTANCE_STATE_RUNNING = "running";
     public static final String INSTANCE_STATE_PENDING = "pending";

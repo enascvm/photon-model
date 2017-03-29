@@ -491,7 +491,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         remoteTags.put(awsInstanceTag.getKey(), awsInstanceTag.getValue());
                     }
                 }
-                updateCSTagLinksOps.add(updateLocalTagStates(this, existingComputeState, remoteTags, context.request.endpointLink));
+                updateCSTagLinksOps.add(updateLocalTagStates(this, existingComputeState, remoteTags));
             }
             return DeferredResult.allOf(updateCSTagLinksOps).thenApply(gnore -> context);
         }

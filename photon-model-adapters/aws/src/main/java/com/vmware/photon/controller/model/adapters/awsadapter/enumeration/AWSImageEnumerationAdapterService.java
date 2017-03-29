@@ -30,6 +30,7 @@ import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Tag;
 
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
+import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest.ImageEnumerateRequestType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
@@ -84,6 +85,11 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
             super(service, request.resourceReference, ImageState.class, ImageService.FACTORY_LINK);
 
+            if (request.requestType == ImageEnumerateRequestType.PUBLIC) {
+                // Public/Shared images should NOT consider tenantLinks and endpointLink
+                setApplyInfraFields(false);
+            }
+
             this.request = request;
             this.taskManager = new TaskManager(this.service, request.taskReference,
                     request.resourceLink());
@@ -133,7 +139,7 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             } catch (IllegalArgumentException exc) {
                 awsRegion = Regions.DEFAULT_REGION;
 
-                context.service.logWarning("Unsupported AWS region: %s. Fallback to default: %s.",
+                context.service.logWarning("Unsupported AWS region: %s. Fallback to default: %s",
                         regionId, awsRegion.getName());
             }
 
@@ -202,13 +208,19 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                 return DeferredResult.completed(this.awsImages);
             }
 
-            DescribeImagesRequest request = new DescribeImagesRequest();
+            DescribeImagesRequest request = new DescribeImagesRequest()
+                    .withFilters(new Filter(AWSConstants.AWS_IMAGE_STATE_FILTER)
+                            .withValues(AWSConstants.AWS_IMAGE_STATE_AVAILABLE))
+                    .withFilters(new Filter(AWSConstants.AWS_IMAGE_IS_PUBLIC_FILTER)
+                            .withValues(Boolean.toString(
+                                    this.request.requestType == ImageEnumerateRequestType.PUBLIC)));
 
             if (this.imageEnumTaskState.filter != null
                     && !this.imageEnumTaskState.filter.isEmpty()) {
                 // Apply filtering to AWS images
                 request.withFilters(
-                        new Filter("name").withValues("*" + this.imageEnumTaskState.filter + "*"));
+                        new Filter(AWSConstants.AWS_IMAGE_NAME_FILTER)
+                                .withValues("*" + this.imageEnumTaskState.filter + "*"));
             }
 
             String msg = "Enumerating AWS images by " + request;
@@ -246,6 +258,10 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             if (existingImageState == null) {
                 // Create flow
                 holder.localState.regionId = this.regionId;
+
+                if (this.request.requestType == ImageEnumerateRequestType.PUBLIC) {
+                    holder.localState.endpointType = this.endpointState.endpointType;
+                }
             } else {
                 // Update flow: do nothing
             }
@@ -318,14 +334,17 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             return;
         }
 
+        logFine(() -> ctx.request.requestType + " image enumeration: STARTED");
         // Start enumeration process...
         ctx.enumerate()
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
                         completeWithSuccess(ctx);
+                        logFine(() -> ctx.request.requestType + " image enumeration: COMPLETED");
                     } else {
                         completeWithFailure(ctx, e);
+                        logFine(() -> ctx.request.requestType + " image enumeration: FAILED");
                     }
                 });
     }

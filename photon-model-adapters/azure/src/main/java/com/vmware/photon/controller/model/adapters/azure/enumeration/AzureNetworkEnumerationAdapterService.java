@@ -793,8 +793,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         remoteTags.put(vNetTagEntry.getKey(), vNetTagEntry.getValue());
                     }
                 }
-                updateNetwLinksOps.add(updateLocalTagStates(this, existingNetworkState,
-                        remoteTags, context.request.endpointLink));
+                updateNetwLinksOps.add(updateLocalTagStates(this, existingNetworkState, remoteTags));
             }
 
             return DeferredResult.allOf(updateNetwLinksOps).thenApply(gnore -> context);

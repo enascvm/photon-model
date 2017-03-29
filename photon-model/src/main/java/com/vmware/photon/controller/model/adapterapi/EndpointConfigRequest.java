@@ -23,6 +23,7 @@ import java.util.Map;
  * {@link ResourceRequest#resourceReference} won't be set.
  */
 public class EndpointConfigRequest extends ResourceRequest {
+
     public static final String USER_LINK_KEY = "userLink";
     public static final String USER_EMAIL_KEY = "userEmail";
     public static final String PRIVATE_KEY_KEY = "privateKey";
@@ -42,6 +43,11 @@ public class EndpointConfigRequest extends ResourceRequest {
      * not the certificate (if self-signed) for the endpoint
      */
     public static final String ACCEPT_SELFSIGNED_CERTIFICATE = "acceptSelfSignedCertificate";
+
+    /**
+     * Set this property to true if the end-point support public/global images enumeration.
+     */
+    public static final String SUPPORT_PUBLIC_IMAGES = "supportPublicImages";
 
     /**
      * Endpoint request type.

@@ -17,8 +17,12 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
+import static com.vmware.xenon.common.UriUtils.buildUriPath;
+
+import java.net.URI;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.concurrent.TimeUnit;
 
@@ -32,6 +36,7 @@ import org.junit.runners.Suite.SuiteClasses;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
@@ -84,18 +89,6 @@ public class ImageEnumerationTaskServiceTest extends Suite {
      */
     static class BaseModelTest extends com.vmware.photon.controller.model.helpers.BaseModelTest {
 
-        static ImageEnumerationTaskState newImageEnumerationRequest(EndpointState endpointState) {
-
-            ImageEnumerationTaskState taskState = new ImageEnumerationTaskState();
-
-            if (endpointState != null) {
-                taskState.endpointLink = endpointState.documentSelfLink;
-                taskState.tenantLinks = endpointState.tenantLinks;
-            }
-
-            return taskState;
-        }
-
         @Override
         protected final void startRequiredServices() throws Throwable {
 
@@ -121,16 +114,31 @@ public class ImageEnumerationTaskServiceTest extends Suite {
          */
         @Test
         public void testValidation() throws Throwable {
+            // Either should be set
+            {
+                ImageEnumerationTaskState invalidState = new ImageEnumerationTaskState();
 
-            // Create task state with missing required 'endpoinLink'.
-            ImageEnumerationTaskState taskState = newImageEnumerationRequest(null);
+                postServiceSynchronously(
+                        ImageEnumerationTaskService.FACTORY_LINK,
+                        invalidState,
+                        ImageEnumerationTaskState.class,
+                        IllegalArgumentException.class);
+            }
 
-            postServiceSynchronously(
-                    ImageEnumerationTaskService.FACTORY_LINK,
-                    taskState,
-                    ImageEnumerationTaskState.class,
-                    IllegalArgumentException.class);
+            // Both cannot be set
+            {
+                ImageEnumerationTaskState invalidState = new ImageEnumerationTaskState();
+                invalidState.endpointLink = "someEndpointLink";
+                invalidState.endpointType = "someEndpointType";
+
+                postServiceSynchronously(
+                        ImageEnumerationTaskService.FACTORY_LINK,
+                        invalidState,
+                        ImageEnumerationTaskState.class,
+                        IllegalArgumentException.class);
+            }
         }
+
     }
 
     /**
@@ -139,10 +147,14 @@ public class ImageEnumerationTaskServiceTest extends Suite {
     @RunWith(Parameterized.class)
     public static class EndToEndTest extends BaseModelTest {
 
-        // Run the same test using different COMPLETE adapters
-        @Parameterized.Parameters
+        // Run the same test using different Configurations
+        @Parameterized.Parameters(name = "{2}")
         public static Collection<Object[]> parameters() {
+
             return Arrays.asList(new Object[][] {
+
+                    // PRIVATE/End-point-specific image enumeration
+
                     { MockSuccessImageEnumerationAdapter.class,
                             MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
                             EndpointType.aws.name() },
@@ -156,19 +168,104 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                             TaskStage.FAILED,
                             EndpointType.gpc.name() },
 
-                    { null /* no adapter at all */, TaskStage.FAILED,
+                    { NO_ADAPTER /* no adapter at all */,
+                            TaskStage.FAILED,
                             EP_WITH_CONFIG_AND_NO_ADAPTER },
-                    { null /* does not matter */, TaskStage.FAILED, EP_WITHOUT_CONFIG }
+                    { NO_ADAPTER /* does not matter */,
+                            TaskStage.FAILED,
+                            EP_WITHOUT_CONFIG },
+                    { NO_ADAPTER /* no adapter at all, since no EP */,
+                            TaskStage.FAILED,
+                            EP_NONE },
+
+                    // PUBLIC/End-point agnostic image enumeration
+
+                    { NO_ADAPTER /* no adapter at all */,
+                            TaskStage.FINISHED,
+                            EPT_NONE_EP },
+                    { MockSuccessImageEnumerationAdapter.class,
+                            MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
+                            EPT_SINGLE_EP },
+
+                    // Tests covering Region handling
+
+                    // Regions match -> should go to the adapter
+                    { MockSuccessImageEnumerationAdapter.class,
+                            MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
+                            EPT_EP_WITH_REGION_REQ_WITH_REGION },
+                    // Regions do not match -> should not go to the adapter
+                    { MockFailOperationImageEnumerationAdapter.class,
+                            TaskStage.FINISHED,
+                            EPT_EP_WITH_REGION_REQ_WITH_REGION1 },
+                    // Request does not provide Region -> adapter with region is a match
+                    { MockSuccessImageEnumerationAdapter.class,
+                            MockSuccessImageEnumerationAdapter.COMPLETE_STATE.stage,
+                            EPT_EP_WITH_REGION_REQ_WITHOUT_REGION },
+                    // Request does provide Region -> adapter without a region is not a match
+                    { MockFailOperationImageEnumerationAdapter.class,
+                            TaskStage.FINISHED,
+                            EPT_EP_WITHOUT_REGION_REQ_WITH_REGION }
             });
         }
 
+        // Instruct PRIVATE/End-point-specific image enumeration {{
+        // No end-point at all
+        static final String EP_NONE = "EP_NONE";
+        // End-point wit NO config
         static final String EP_WITHOUT_CONFIG = "EP_WITHOUT_CONFIG";
+        // End-point with config and NO adapter
         static final String EP_WITH_CONFIG_AND_NO_ADAPTER = "EP_WITH_CONFIG_AND_NO_ADAPTER";
+        // }}
+
+        // Instruct PUBLIC/End-point-agnostic image enumeration {{
+        // No end-point for End-point type
+        static final String EPT_NONE_EP = "EPT_NONE_EP";
+        // Single end-point for End-point type
+        static final String EPT_SINGLE_EP = "EPT_SINGLE_EP";
+
+        // End-point with region AND request with same region
+        static final String EPT_EP_WITH_REGION_REQ_WITH_REGION = RegionTestConfig.EPT_EP_WITH_REGION_REQ_WITH_REGION
+                .name();
+        // End-point with region AND request with different region
+        static final String EPT_EP_WITH_REGION_REQ_WITH_REGION1 = RegionTestConfig.EPT_EP_WITH_REGION_REQ_WITH_REGION1
+                .name();
+        // End-point with region AND request with no region
+        static final String EPT_EP_WITH_REGION_REQ_WITHOUT_REGION = RegionTestConfig.EPT_EP_WITH_REGION_REQ_WITHOUT_REGION
+                .name();
+        // End-point with no region AND request with region
+        static final String EPT_EP_WITHOUT_REGION_REQ_WITH_REGION = RegionTestConfig.EPT_EP_WITHOUT_REGION_REQ_WITH_REGION
+                .name();
+        // }}
+
+        static boolean isPublicImageEnumeration(String endpoinType) {
+            return endpoinType.startsWith("EPT_");
+        }
+
+        private enum RegionTestConfig {
+
+            EPT_EP_WITH_REGION_REQ_WITH_REGION("REGION", "REGION"),
+            EPT_EP_WITH_REGION_REQ_WITH_REGION1("REGION", "REGION_1"),
+            EPT_EP_WITH_REGION_REQ_WITHOUT_REGION("REGION", null),
+            EPT_EP_WITHOUT_REGION_REQ_WITH_REGION(null, "REGION");
+
+            public final String epRegion;
+            public final String requestRegion;
+
+            private RegionTestConfig(String epRegion, String requestRegion) {
+                this.epRegion = epRegion;
+                this.requestRegion = requestRegion;
+            }
+        }
+
         static final Class<? extends Service> NO_ADAPTER = null;
 
+        // The adapter that should respond to task requests
         private final Class<? extends Service> adapterClass;
+        // The expected stage of the image-enum task
         private final TaskStage expectedCompletedStage;
         private final String endpointType;
+
+        private RegionTestConfig regionConfig;
 
         public EndToEndTest(
                 Class<? extends Service> adapterClass,
@@ -178,21 +275,11 @@ public class ImageEnumerationTaskServiceTest extends Suite {
             this.adapterClass = adapterClass;
             this.expectedCompletedStage = expectedCompletedStage;
             this.endpointType = endpointType;
-        }
 
-        private EndpointState createEndpointState(String endpointType) throws Throwable {
-
-            EndpointState endpoint = new EndpointState();
-
-            endpoint.id = endpointType + "Id";
-            endpoint.name = endpointType + "Name";
-            endpoint.endpointType = endpointType;
-            endpoint.tenantLinks = singletonList(endpointType + "Tenant");
-
-            return postServiceSynchronously(
-                    EndpointService.FACTORY_LINK,
-                    endpoint,
-                    EndpointState.class);
+            try {
+                this.regionConfig = RegionTestConfig.valueOf(endpointType);
+            } catch (IllegalArgumentException e) {
+            }
         }
 
         private EndpointState endpointState;
@@ -201,17 +288,42 @@ public class ImageEnumerationTaskServiceTest extends Suite {
         @Before
         public void beforeTest() throws Throwable {
 
-            this.endpointState = createEndpointState(this.endpointType);
+            createEndpointState();
 
             registerEndpointConfig();
 
             // Get BEFORE tasks count
-            this.tasksCountBeforeRun = countServiceDocuments();
+            this.tasksCountBeforeRun = countImageEnumerationTaskDocuments();
+        }
+
+        private void createEndpointState() throws Throwable {
+
+            if (this.endpointType == EP_NONE || this.endpointType == EPT_NONE_EP) {
+                // No end-point registered at all.
+                return;
+            }
+
+            final EndpointState endpointToCreate = new EndpointState();
+
+            endpointToCreate.id = this.endpointType + "-id";
+            endpointToCreate.name = this.endpointType + "-name";
+            endpointToCreate.endpointType = this.endpointType;
+            endpointToCreate.tenantLinks = singletonList(this.endpointType + "-tenant");
+
+            if (this.regionConfig != null && this.regionConfig.epRegion != null) {
+                endpointToCreate.endpointProperties = Collections.singletonMap(
+                        EndpointConfigRequest.REGION_KEY, this.regionConfig.epRegion);
+            }
+
+            this.endpointState = postServiceSynchronously(
+                    EndpointService.FACTORY_LINK,
+                    endpointToCreate,
+                    EndpointState.class);
         }
 
         private void registerEndpointConfig() throws Throwable {
 
-            if (this.endpointType == EP_WITHOUT_CONFIG) {
+            if (this.endpointState == null || this.endpointType == EP_WITHOUT_CONFIG) {
                 // No end-point config registration at all.
                 return;
             }
@@ -235,6 +347,35 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                     PhotonModelAdapterConfig.class);
         }
 
+        private ImageEnumerationTaskState newImageEnumerationRequest() {
+
+            final ImageEnumerationTaskState taskState = new ImageEnumerationTaskState();
+
+            if (isPublicImageEnumeration(this.endpointType)) {
+
+                taskState.endpointType = this.endpointType;
+
+            } else if (this.endpointState != null) {
+
+                // Private image-enum
+
+                taskState.endpointLink = this.endpointState.documentSelfLink;
+
+                taskState.tenantLinks = this.endpointState.tenantLinks;
+
+            } else if (this.endpointType == EP_NONE) {
+
+                // No EP created at all; Request/Refer non-existing EP.
+                taskState.endpointLink = buildUriPath(EndpointService.FACTORY_LINK, EP_NONE);
+            }
+
+            if (this.regionConfig != null && this.regionConfig.requestRegion != null) {
+                taskState.regionId = this.regionConfig.requestRegion;
+            }
+
+            return taskState;
+        }
+
         /**
          * @see ImageEnumerationTaskService#handleStart(com.vmware.xenon.common.Operation)
          * @see ImageEnumerationTaskService#handlePatch(com.vmware.xenon.common.Operation)
@@ -244,7 +385,7 @@ public class ImageEnumerationTaskServiceTest extends Suite {
 
             ImageEnumerationTaskState startedState = postServiceSynchronously(
                     ImageEnumerationTaskService.FACTORY_LINK,
-                    newImageEnumerationRequest(this.endpointState),
+                    newImageEnumerationRequest(),
                     ImageEnumerationTaskState.class);
 
             // Verify ImageEnumerationTaskService.initializeState (part of handleStart)
@@ -272,12 +413,13 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                     startedState.documentSelfLink,
                     liveState -> this.expectedCompletedStage == liveState.taskInfo.stage);
 
-            Assert.assertEquals(this.tasksCountBeforeRun + 1,  countServiceDocuments());
+            Assert.assertEquals(this.tasksCountBeforeRun + 1, countImageEnumerationTaskDocuments());
         }
 
         @Test
         public void testCompleteTaskAndSelfDelete() throws Throwable {
-            ImageEnumerationTaskState adapterReq = newImageEnumerationRequest(this.endpointState);
+
+            ImageEnumerationTaskState adapterReq = newImageEnumerationRequest();
             adapterReq.options = EnumSet.of(TaskOption.SELF_DELETE_ON_COMPLETION);
 
             postServiceSynchronously(
@@ -285,13 +427,14 @@ public class ImageEnumerationTaskServiceTest extends Suite {
                     adapterReq,
                     ImageEnumerationTaskState.class);
 
-            getHost().waitFor("Timeout waiting for image enum task to self-delete", () ->
-                    this.tasksCountBeforeRun == countServiceDocuments());
+            getHost().waitFor("Timeout waiting for image enum task to self-delete",
+                    () -> this.tasksCountBeforeRun == countImageEnumerationTaskDocuments());
         }
 
-        private int countServiceDocuments() {
-            return getHost().getFactoryState(UriUtils.buildFactoryUri(getHost(),
-                    ImageEnumerationTaskService.class)).documentLinks.size();
+        private int countImageEnumerationTaskDocuments() {
+            URI uri = UriUtils.buildFactoryUri(getHost(), ImageEnumerationTaskService.class);
+
+            return getHost().getFactoryState(uri).documentLinks.size();
         }
     }
 }

@@ -403,8 +403,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         remoteTags.put(vmTagEntry.getKey(), vmTagEntry.getValue());
                     }
                 }
-                updateTagLinksOps.add(updateLocalTagStates(this, existingComputeState, remoteTags,
-                        context.request.endpointLink));
+                updateTagLinksOps.add(updateLocalTagStates(this, existingComputeState, remoteTags));
                 // clean up the working copy of existing compute state tag links, so that they are not overwritten
                 // with the updated ones in the subsequent state machine steps
                 existingComputeState.tagLinks = null;

@@ -41,8 +41,13 @@ public class AWSAdapters {
             AWSPowerService.SELF_LINK,
             AWSFirewallService.SELF_LINK };
 
-    public static String CONFIG_LINK = UriUtils
-            .buildUriPath(PhotonModelAdaptersRegistryService.FACTORY_LINK, EndpointType.aws.name());
+    /**
+     * The link of AWS configuration registered in {@link PhotonModelAdaptersRegistryService
+     * End-point Adapters Registry}.
+     */
+    public static String CONFIG_LINK = UriUtils.buildUriPath(
+            PhotonModelAdaptersRegistryService.FACTORY_LINK,
+            EndpointType.aws.name());
 
     public static void startServices(ServiceHost host) throws Throwable {
         try {

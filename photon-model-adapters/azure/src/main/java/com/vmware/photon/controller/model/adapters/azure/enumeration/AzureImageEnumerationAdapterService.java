@@ -35,6 +35,7 @@ import com.microsoft.azure.management.compute.models.VirtualMachineImageResource
 import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
+import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest.ImageEnumerateRequestType;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
@@ -60,8 +61,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
      * {@link EndpointEnumerationProcess} specialization that loads Azure
      * {@link VirtualMachineImage}s into {@link ImageState} store.
      */
-    private static class AzureImageEnumerationContext
-            extends
+    private static class AzureImageEnumerationContext extends
             EndpointEnumerationProcess<AzureImageEnumerationContext, ImageState, VirtualMachineImage> {
 
         /**
@@ -93,9 +93,15 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 ImageEnumerateRequest request) {
 
             super(service, request.resourceReference, ImageState.class, ImageService.FACTORY_LINK);
+
             this.taskManager = new TaskManager(this.service, request.taskReference,
                     request.resourceLink());
             this.request = request;
+
+            if (request.requestType == ImageEnumerateRequestType.PUBLIC) {
+                // Public/Shared images should NOT consider tenantLinks and endpointLink
+                setApplyInfraFields(false);
+            }
         }
 
         /**
@@ -183,7 +189,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             if (this.azureImages.hasNext()) {
                 for (VirtualMachineImage image : this.azureImages.next()) {
-                    page.resourcesPage.put(image.getId(), image);
+                    page.resourcesPage.put(toImageReference(image), image);
                 }
             }
 
@@ -209,20 +215,20 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             if (existingImageState == null) {
                 // Create flow
                 holder.localState.regionId = this.regionId;
+
+                if (this.request.requestType == ImageEnumerateRequestType.PUBLIC) {
+                    holder.localState.endpointType = this.endpointState.endpointType;
+                }
             } else {
                 // Update flow: do nothing
             }
 
             // Both flows - populate from remote Image
 
-            final PurchasePlan plan = remoteImage.getPlan();
-
             // publisher:offer:sku:version
-            holder.localState.name = plan.getPublisher()
-                    + ":" + plan.getProduct()
-                    + ":" + plan.getName()
-                    + ":" + remoteImage.getName();
-            holder.localState.description = holder.localState.name;
+            holder.localState.name = toImageReference(remoteImage);
+            holder.localState.description = toImageReference(remoteImage);
+
             if (remoteImage.getOsDiskImage() != null) {
                 holder.localState.osFamily = remoteImage.getOsDiskImage().getOperatingSystem();
             }
@@ -246,12 +252,12 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             if (filter != null && !filter.isEmpty()) {
                 String[] tokens = StringUtils.splitPreserveAllTokens(filter, ":");
-                if (tokens.length == 4) {
+                if (tokens.length == strFilters.length) {
                     strFilters = tokens;
                 }
             }
 
-            VirtualMachineImageResource[] posv = new VirtualMachineImageResource[4];
+            VirtualMachineImageResource[] posv = new VirtualMachineImageResource[strFilters.length];
 
             for (int i = 0; i < strFilters.length; i++) {
                 // Create dummy VirtualMachineImageResource with just name being set.
@@ -260,6 +266,18 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             }
 
             return posv;
+        }
+
+        static String toImageReference(VirtualMachineImage azureImage) {
+
+            final PurchasePlan plan = azureImage.getPlan();
+
+            return toImageReference(
+                    plan.getPublisher(), plan.getProduct(), plan.getName(), azureImage.getName());
+        }
+
+        static String toImageReference(String publisher, String offer, String sku, String version) {
+            return publisher + ":" + offer + ":" + sku + ":" + version;
         }
     }
 
@@ -304,14 +322,25 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        // Start enumeration process...
+        if (ctx.request.requestType == ImageEnumerateRequestType.PRIVATE) {
+            // So far PRIVATE image enumeration is not supported.
+            // Complete the task with FINISHED
+            logFine(() -> "Private image enumeration: SKIPPED");
+            completeWithSuccess(ctx);
+            return;
+        }
+
+        logFine(() -> "Public image enumeration: STARTED");
+        // Start PUBLIC image enumeration process...
         ctx.enumerate()
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
                         completeWithSuccess(ctx);
+                        logFine(() -> "Public image enumeration: COMPLETED");
                     } else {
                         completeWithFailure(ctx, e);
+                        logFine(() -> "Public image enumeration: FAILED");
                     }
                 });
     }

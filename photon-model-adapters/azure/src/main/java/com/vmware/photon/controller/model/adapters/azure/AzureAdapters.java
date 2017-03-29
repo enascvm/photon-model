@@ -45,6 +45,10 @@ public class AzureAdapters {
             AzureComputeHostStorageStatsGatherer.SELF_LINK,
             AzureEndpointAdapterService.SELF_LINK };
 
+    /**
+     * The link of Azure configuration registered in {@link PhotonModelAdaptersRegistryService
+     * End-point Adapters Registry}.
+     */
     public static String CONFIG_LINK = UriUtils.buildUriPath(
             PhotonModelAdaptersRegistryService.FACTORY_LINK,
             EndpointType.azure.name());

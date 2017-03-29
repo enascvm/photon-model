@@ -18,6 +18,8 @@ import static java.util.Collections.singletonList;
 
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
+import io.netty.util.internal.StringUtil;
+
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -44,6 +46,7 @@ public class ImageService extends StatefulService {
         public static final String FIELD_NAME_REGION_ID = "regionId";
         public static final String FIELD_NAME_OS_FAMILY = "osFamily";
         public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
+        public static final String FIELD_NAME_ENDPOINT_TYPE = "endpointType";
 
         /**
          * User-friendly description of the image.
@@ -67,12 +70,34 @@ public class ImageService extends StatefulService {
 
         /**
          * Optional link to the {@code EndpointState} the image belongs to. Leave blank to indicate
-         * the image is public/shared or provide an end-point link to indicate it is private
-         * (requires explicit launch permissions).
+         * the image is public/global for all end-points of the same type. Either this property or
+         * {@code #endpointType} property should be set.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @UsageOption(option = PropertyUsageOption.LINK)
         public String endpointLink;
+
+        /**
+         * Optional type of the end-points the image is publicly/globally available. Leave blank to
+         * indicate the image is private/specific for this end-point. Either this property or
+         * {@code #endpointLink} property should be set.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public String endpointType;
+
+        /**
+         * Non-empty {@code #endpointType} indicates Public image.
+         */
+        public final boolean isPublicImage() {
+            return !StringUtil.isNullOrEmpty(this.endpointType);
+        }
+
+        /**
+         * Non-empty {@code #endpointLink} indicates Private image.
+         */
+        public final boolean isPrivateImage() {
+            return !StringUtil.isNullOrEmpty(this.endpointLink);
+        }
     }
 
     public ImageService() {
@@ -112,8 +137,29 @@ public class ImageService extends StatefulService {
     private boolean checkForValid(Operation op) {
         if (checkForBody(op)) {
             try {
-                Utils.validateState(getStateDescription(), op.getBody(ImageState.class));
+                ImageState imageState = op.getBody(ImageState.class);
+
+                Utils.validateState(getStateDescription(), imageState);
+
+                if (!imageState.isPrivateImage() && !imageState.isPublicImage()) {
+                    throw new IllegalArgumentException(
+                            "Either " + ImageState.class.getSimpleName()
+                                    + "." + ImageState.FIELD_NAME_ENDPOINT_TYPE +
+                                    " or " + ImageState.class.getSimpleName()
+                                    + "." + ImageState.FIELD_NAME_ENDPOINT_LINK +
+                                    " must be set.");
+                }
+                if (imageState.isPrivateImage() && imageState.isPublicImage()) {
+                    throw new IllegalArgumentException(
+                            "Both " + ImageState.class.getSimpleName()
+                                    + "." + ImageState.FIELD_NAME_ENDPOINT_TYPE +
+                                    " and " + ImageState.class.getSimpleName()
+                                    + "." + ImageState.FIELD_NAME_ENDPOINT_LINK +
+                                    " cannot be set.");
+                }
+
                 return true;
+
             } catch (Throwable t) {
                 op.fail(t);
                 return false;

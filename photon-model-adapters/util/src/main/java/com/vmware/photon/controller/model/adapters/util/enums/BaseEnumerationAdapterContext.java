@@ -389,8 +389,8 @@ public abstract class BaseEnumerationAdapterContext<T extends BaseEnumerationAda
         final Operation lsOp;
 
         // Create or update local tag states
-        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(this.service, localState, currentState,
-                localStateHolder.remoteTags, this.request.original.endpointLink);
+        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(
+                this.service, localState, currentState, localStateHolder.remoteTags);
 
         if (currentState != null) {
             // Update case.

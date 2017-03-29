@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.endpoint;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
+import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SUPPORT_PUBLIC_IMAGES;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
@@ -37,7 +38,6 @@ import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
-
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -61,6 +61,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  *
  */
 public class AzureEndpointAdapterService extends StatelessService {
+
     public static final String SELF_LINK = AzureUriPaths.AZURE_ENDPOINT_CONFIG_ADAPTER;
 
     private ExecutorService executorService;
@@ -92,6 +93,9 @@ public class AzureEndpointAdapterService extends StatelessService {
 
             r.get(REGION_KEY).ifPresent(rk -> e.endpointProperties.put(REGION_KEY, rk));
             r.get(ZONE_KEY).ifPresent(zk -> e.endpointProperties.put(ZONE_KEY, zk));
+
+            // Azure end-point does support public images enumeration
+            e.endpointProperties.put(SUPPORT_PUBLIC_IMAGES, Boolean.TRUE.toString());
         };
     }
 

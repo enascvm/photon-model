@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.util;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -42,27 +43,36 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 public class TagsUtil {
 
     /**
-     * Create or update the tag links of the provided ResourceState.
-     * In case there is an existing state (currentState), update its links, otherwise update the links
-     * of the state currently in process of creation (localState).
+     * Create or update the tag links of the provided ResourceState. In case there is an existing
+     * state (currentState), update its links, otherwise update the links of the state currently in
+     * process of creation (localState).
      */
-    public static DeferredResult<Void> createOrUpdateTagStates(StatelessService service,
-            ResourceState localState, ResourceState currentState, Map<String, String> remoteTagsMap,
-            String endpointLink) {
-        DeferredResult<Void> tagsDR;
-        if (currentState == null || currentState.tagLinks == null || currentState.tagLinks.isEmpty()) {
+    public static DeferredResult<Void> createOrUpdateTagStates(
+            StatelessService service,
+            ResourceState localState,
+            ResourceState currentState,
+            Map<String, String> remoteTagsMap) {
+
+        final DeferredResult<Void> tagsDR;
+
+        if (currentState == null
+                || currentState.tagLinks == null
+                || currentState.tagLinks.isEmpty()) {
             tagsDR = createLocalTagStates(service, localState, remoteTagsMap);
         } else {
-            tagsDR = updateLocalTagStates(service, currentState, remoteTagsMap,
-                        endpointLink);
+            tagsDR = updateLocalTagStates(service, currentState, remoteTagsMap);
         }
+
         return tagsDR;
     }
 
     /**
-     * For a newly created local ResourceState, create tag states and add them to the tag states links
+     * For a newly created local ResourceState, create tag states and add them to the tag states
+     * links
      */
-    public static DeferredResult<Void> createLocalTagStates(StatelessService service, ResourceState localState,
+    public static DeferredResult<Void> createLocalTagStates(
+            StatelessService service,
+            ResourceState localState,
             Map<String, String> remoteTagsMap) {
 
         if (remoteTagsMap == null || remoteTagsMap.isEmpty()) {
@@ -72,7 +82,8 @@ public class TagsUtil {
         localState.tagLinks = new HashSet<>();
 
         List<DeferredResult<TagState>> localTagStatesDRs = remoteTagsMap.entrySet().stream()
-                .map(tagEntry -> newExternalTagState(tagEntry.getKey(), tagEntry.getValue(), localState.tenantLinks))
+                .map(tagEntry -> newExternalTagState(tagEntry.getKey(), tagEntry.getValue(),
+                        localState.tenantLinks))
                 .map(tagState -> {
                     // add the link of the new tag in to the tagLinks list
                     localState.tagLinks.add(tagState.documentSelfLink);
@@ -89,21 +100,28 @@ public class TagsUtil {
     }
 
     /**
-     * Compare local with remote tags and identify which local tag links to remove and which to add to the
-     * resource state's list, in order the resource state to contain exactly the tag states, corresponding
-     * to the remote tags.
+     * Compare local with remote tags and identify which local tag links to remove and which to add
+     * to the resource state's list, in order the resource state to contain exactly the tag states,
+     * corresponding to the remote tags.
      */
-    public static DeferredResult<Void> updateLocalTagStates(StatelessService service, ResourceState localState,
-            Map<String, String> remoteTagsMap, String endpointLink) {
+    public static DeferredResult<Void> updateLocalTagStates(
+            StatelessService service,
+            ResourceState localState,
+            Map<String, String> remoteTagsMap) {
+
         Map<String, TagState> remoteTagStates;
+
         if (remoteTagsMap == null) {
             remoteTagStates = new HashMap<>();
         } else {
             remoteTagStates = remoteTagsMap.entrySet().stream()
-                .<TagState>map(tagEntry -> newExternalTagState(tagEntry.getKey(), tagEntry.getValue(),
-                        localState.tenantLinks))
-                .collect(Collectors.toMap(tagState -> tagState.documentSelfLink,
-                        tagState -> tagState));
+                    .map(tagEntry -> newExternalTagState(
+                            tagEntry.getKey(),
+                            tagEntry.getValue(),
+                            localState.tenantLinks))
+                    .collect(Collectors.toMap(
+                            tagState -> tagState.documentSelfLink,
+                            tagState -> tagState));
         }
 
         final DeferredResult<List<TagState>> createAllLocalTagStatesDR;
@@ -123,7 +141,8 @@ public class TagsUtil {
                             .createPost(service, TagService.FACTORY_LINK)
                             .setBody(tagState)
                             .setReferer(service.getUri()))
-                    .<DeferredResult<TagState>>map(tagOperation -> service.sendWithDeferredResult(tagOperation,
+                    .map(tagOperation -> service.sendWithDeferredResult(
+                            tagOperation,
                             TagState.class))
                     .collect(Collectors.toList());
 
@@ -159,30 +178,32 @@ public class TagsUtil {
                             service.getHost(),
                             qBuilder.build(),
                             TagState.class,
-                            localState.tenantLinks,
-                            endpointLink)
-                            .setMaxResultsLimit(tagLinksToRemove.size());
+                            localState.tenantLinks)
+                                    .setMaxResultsLimit(tagLinksToRemove.size());
 
-                    removeAllExternalTagLinksDR = queryLocalStates.collectLinks(Collectors
-                            .toCollection(HashSet::new));
+                    removeAllExternalTagLinksDR = queryLocalStates.collectLinks(
+                            Collectors.toCollection(HashSet::new));
                 }
             }
         }
 
-        return createAllLocalTagStatesDR.thenCompose(ignore -> removeAllExternalTagLinksDR)
-                .thenCompose(
-                        removeAllExternalTagLinks -> updateResourceTagLinks(service, removeAllExternalTagLinks,
-                                tagLinksToAdd,
-                                localState.documentSelfLink));
+        return createAllLocalTagStatesDR
+                .thenCompose(ignore -> removeAllExternalTagLinksDR)
+                .thenCompose(removeAllExternalTagLinks -> updateResourceTagLinks(
+                        service,
+                        removeAllExternalTagLinks,
+                        tagLinksToAdd,
+                        localState.documentSelfLink));
     }
 
     /**
-     * Add the identified tags to the local ResourceState.
-     * This method creates tag states in order to generate their unique
-     * document self link and adds a list of links to the provided state.
+     * Add the identified tags to the local ResourceState. This method creates tag states in order
+     * to generate their unique document self link and adds a list of links to the provided state.
      */
-    public static void setTagLinksToResourceState(ResourceState resourceState,
+    public static void setTagLinksToResourceState(
+            ResourceState resourceState,
             Map<String, String> tags) {
+
         if (tags == null || tags.isEmpty()) {
             return;
         }
@@ -195,22 +216,24 @@ public class TagsUtil {
     }
 
     /**
-     * Generate a new external TagState from provided key and value. TagStates, marked as
-     * "external" identify tags which exist on the remote cloud. They will be removed from the
-     * local resource's state, in case the corresponding tags is removed from the remote resource.
-     * Tags, identified as "local" are not maintained in sync with the tags on the cloud. They are
-     * used by the local user to mark local resource states.
+     * Generate a new external TagState from provided key and value. TagStates, marked as "external"
+     * identify tags which exist on the remote cloud. They will be removed from the local resource's
+     * state, in case the corresponding tags is removed from the remote resource. Tags, identified
+     * as "local" are not maintained in sync with the tags on the cloud. They are used by the local
+     * user to mark local resource states.
      */
     public static TagState newExternalTagState(String key, String value, List<String> tenantLinks) {
-        TagState tagState = new TagState();
+
+        final TagState tagState = new TagState();
+
         tagState.key = key == null ? "" : key;
         tagState.value = value == null ? "" : value;
         tagState.external = true;
 
-        // add tenant
         tagState.tenantLinks = tenantLinks;
 
         tagState.documentSelfLink = TagFactoryService.generateSelfLink(tagState);
+
         return tagState;
     }
 
@@ -224,26 +247,27 @@ public class TagsUtil {
             Collection<String> tagLinksToDelete,
             Collection<String> tagLinksToAdd,
             String currentStateSelfLink) {
+
         // nothing to add/update
         if (tagLinksToDelete.isEmpty() && tagLinksToAdd.isEmpty()) {
             return DeferredResult.completed((Void) null);
         }
+
         // create patch operation to update tag links of the current resource state
-        Map<String, Collection<Object>> collectionsToRemoveMap = new HashMap<>();
-        collectionsToRemoveMap.put(ComputeState.FIELD_NAME_TAG_LINKS, (Collection) tagLinksToDelete);
+        Map<String, Collection<Object>> collectionsToRemoveMap = Collections.singletonMap(
+                ComputeState.FIELD_NAME_TAG_LINKS, (Collection) tagLinksToDelete);
 
-        Map<String, Collection<Object>> collectionsToAddMap = new HashMap<>();
-        collectionsToAddMap.put(ComputeState.FIELD_NAME_TAG_LINKS, (Collection) tagLinksToAdd);
+        Map<String, Collection<Object>> collectionsToAddMap = Collections.singletonMap(
+                ComputeState.FIELD_NAME_TAG_LINKS, (Collection) tagLinksToAdd);
 
-        ServiceStateCollectionUpdateRequest updateTagLinksRequest =
-                ServiceStateCollectionUpdateRequest.create(
-                        collectionsToAddMap,
-                        collectionsToRemoveMap);
+        ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
+                .create(collectionsToAddMap, collectionsToRemoveMap);
 
         Operation createPatch = Operation.createPatch(service, currentStateSelfLink)
-                .setBody(updateTagLinksRequest).setReferer(service.getUri());
+                .setBody(updateTagLinksRequest)
+                .setReferer(service.getUri());
 
-        return service.sendWithDeferredResult(createPatch).thenAccept(ignore -> { });
+        return service.sendWithDeferredResult(createPatch).thenApply(ignore -> (Void) null);
     }
 
 }

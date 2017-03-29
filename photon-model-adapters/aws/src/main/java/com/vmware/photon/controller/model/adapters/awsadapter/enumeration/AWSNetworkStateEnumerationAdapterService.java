@@ -638,7 +638,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         remoteTags.put(awsVpcTag.getKey(), awsVpcTag.getValue());
                     }
                 }
-                updateNetwOrSubnTagLinksOps.add(updateLocalTagStates(this, existingNetworkState, remoteTags, context.request.request.endpointLink));
+                updateNetwOrSubnTagLinksOps.add(updateLocalTagStates(this, existingNetworkState, remoteTags));
             }
             // update tag links for the existing SubnetStates
             for (String subnetId : context.awsSubnets.keySet()) {
@@ -653,7 +653,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         remoteTags.put(awsSubnetTag.getKey(), awsSubnetTag.getValue());
                     }
                 }
-                updateNetwOrSubnTagLinksOps.add(updateLocalTagStates(this, existingSubnetState, remoteTags, context.request.request.endpointLink));
+                updateNetwOrSubnTagLinksOps.add(updateLocalTagStates(this, existingSubnetState, remoteTags));
             }
 
             return DeferredResult.allOf(updateNetwOrSubnTagLinksOps).thenApply(gnore -> context);

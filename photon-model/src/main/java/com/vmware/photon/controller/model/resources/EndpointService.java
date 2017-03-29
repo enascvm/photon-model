@@ -41,6 +41,9 @@ public class EndpointService extends StatefulService {
      */
     public static class EndpointState extends ResourceState {
 
+        public static final String FIELD_NAME_ENDPOINT_TYPE = "endpointType";
+        public static final String FIELD_NAME_ENDPOINT_PROPERTIES = "endpointProperties";
+
         @Documentation(description = "Endpoint type of the endpoint instance,e.g. aws,azure,...")
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, REQUIRED }, indexing = PropertyIndexingOption.CASE_INSENSITIVE)
         public String endpointType;
@@ -105,7 +108,6 @@ public class EndpointService extends StatefulService {
     public void handlePut(Operation put) {
         put.fail(new UnsupportedOperationException(
                 "PUT operation not supported on the Endpoint Service API."));
-
     }
 
     @Override

@@ -214,6 +214,10 @@ public class AWSEndpointAdapterService extends StatelessService {
                     r.get(REGION_KEY).orElse(null));
             e.endpointProperties.put(EndpointConfigRequest.PRIVATE_KEYID_KEY,
                     r.getRequired(PRIVATE_KEYID_KEY));
+
+            // AWS end-point does support public images enumeration
+            e.endpointProperties.put(EndpointConfigRequest.SUPPORT_PUBLIC_IMAGES,
+                    Boolean.TRUE.toString());
         };
     }
 

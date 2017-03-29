@@ -167,6 +167,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
 
                 ImageState state = makeImageFromTemplate(vm);
                 state.documentSelfLink = buildStableImageLink(endpointLink, state.id);
+                state.endpointLink = endpointLink;
                 CustomProperties.of(state)
                         .put(CustomProperties.ENUMERATED_BY_TASK_LINK, taskLink);
 
@@ -248,6 +249,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
 
                 ImageState state = makeImageFromItem(libModel, itemModel);
                 state.documentSelfLink = buildStableImageLink(endpointLink, state.id);
+                state.endpointLink = endpointLink;
                 CustomProperties.of(state)
                         .put(CustomProperties.ENUMERATED_BY_TASK_LINK, taskLink);
 

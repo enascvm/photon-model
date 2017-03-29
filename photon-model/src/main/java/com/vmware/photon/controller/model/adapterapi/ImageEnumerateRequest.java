@@ -20,7 +20,27 @@ package com.vmware.photon.controller.model.adapterapi;
 public class ImageEnumerateRequest extends ResourceRequest {
 
     /**
-     * Enumeration Action Start, stop, refresh.
+     * Image enumeration request type.
+     */
+    public enum ImageEnumerateRequestType {
+        /**
+         * Instruct the adapter to enumerate images that are public/global for all end-points of
+         * passed end-point type.
+         */
+        PUBLIC,
+        /**
+         * Instruct the adapter to enumerate images that are private/specific for passed end-point.
+         */
+        PRIVATE
+    }
+
+    /**
+     * Image enumeration request type.
+     */
+    public ImageEnumerateRequestType requestType;
+
+    /**
+     * Image enumeration action type.
      */
     public EnumerationAction enumerationAction;
 

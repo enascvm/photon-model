@@ -13,11 +13,13 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static io.netty.util.internal.StringUtil.isNullOrEmpty;
+
+import static com.vmware.photon.controller.model.util.AssertUtil.assertTrue;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINK;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINKS;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
-import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.REQUIRED;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.SINGLE_ASSIGNMENT;
 import static com.vmware.xenon.common.UriUtils.buildUri;
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
@@ -25,16 +27,22 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
+import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
+import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest.ImageEnumerateRequestType;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
@@ -42,6 +50,9 @@ import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 import com.vmware.xenon.services.common.TaskFactoryService;
 import com.vmware.xenon.services.common.TaskService;
@@ -71,16 +82,32 @@ public class ImageEnumerationTaskService
      */
     public static class ImageEnumerationTaskState extends TaskService.TaskServiceState {
 
-        @Documentation(description = "Link to the end-point for which the enumeration"
-                + " should be triggered.")
-        @PropertyOptions(usage = { REQUIRED, SINGLE_ASSIGNMENT, LINK }, indexing = STORE_ONLY)
+        public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
+        public static final String FIELD_NAME_ENDPOINT_TYPE = "endpointType";
+        public static final String FIELD_NAME_REGION_ID = "regionId";
+
+        @Documentation(description = "Optional type of the end-points for which public"
+                + " (global for all endpoints of this type) images enumeration"
+                + " should be triggered. Set either this property or endpointLink.")
+        @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
+        public String endpointType;
+
+        @Documentation(description = "Optional identifier of the region for which public images"
+                + " enumeration should be triggered. Only applicable with endpointType property.")
+        @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
+        public String regionId;
+
+        @Documentation(description = "Optional link of the end-point for which private"
+                + " (specific just for this endpoint) images enumeration"
+                + " should be triggered. Set either this property or endpointType.")
+        @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT, LINK }, indexing = STORE_ONLY)
         public String endpointLink;
 
-        @Documentation(description = "The type of image enumeration: start, stop, refresh.")
+        @Documentation(description = "Optional type of image enumeration: start, stop, refresh.")
         @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
         public EnumerationAction enumerationAction;
 
-        @Documentation(description = "List of tenants that can access this task.")
+        @Documentation(description = "Optional list of tenants that can access this task.")
         @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT, LINKS }, indexing = STORE_ONLY)
         public List<String> tenantLinks;
 
@@ -98,6 +125,20 @@ public class ImageEnumerationTaskService
          */
         @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
         public String filter;
+
+        /**
+         * Setting {@code #endpointType} indicates Public images enumeration.
+         */
+        public final boolean enumeratePublicImages() {
+            return !isNullOrEmpty(this.endpointType);
+        }
+
+        /**
+         * Setting {@code #endpointLink} indicates Private images enumeration.
+         */
+        public final boolean enumeratePrivateImages() {
+            return !isNullOrEmpty(this.endpointLink);
+        }
     }
 
     /**
@@ -149,7 +190,36 @@ public class ImageEnumerationTaskService
         // Do annotation based validation
         if (taskState != null) {
             try {
+                // Default validation
                 Utils.validateState(getStateDescription(), taskState);
+
+                if (!taskState.enumeratePrivateImages() && !taskState.enumeratePublicImages()) {
+                    throw new IllegalArgumentException(
+                            "Either " + ImageEnumerationTaskState.class.getSimpleName()
+                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_TYPE +
+                                    " or " + ImageEnumerationTaskState.class.getSimpleName()
+                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_LINK +
+                                    " must be set.");
+                }
+                if (taskState.enumeratePrivateImages() && taskState.enumeratePublicImages()) {
+                    throw new IllegalArgumentException(
+                            "Both " + ImageEnumerationTaskState.class.getSimpleName()
+                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_TYPE +
+                                    " and " + ImageEnumerationTaskState.class.getSimpleName()
+                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_LINK +
+                                    " cannot be set.");
+                }
+
+                if (!isNullOrEmpty(taskState.regionId)) {
+                    assertTrue(
+                            taskState.enumeratePublicImages(),
+                            ImageEnumerationTaskState.class.getSimpleName()
+                                    + "." + ImageEnumerationTaskState.FIELD_NAME_REGION_ID +
+                                    " must be used in conjunction with "
+                                    + ImageEnumerationTaskState.class.getSimpleName()
+                                    + "." + ImageEnumerationTaskState.FIELD_NAME_ENDPOINT_TYPE
+                                    + ".");
+                }
             } catch (Throwable t) {
                 startOp.fail(t);
                 taskState = null;
@@ -303,12 +373,17 @@ public class ImageEnumerationTaskService
                 .thenCompose(this::callImageEnumerationAdapter)
                 .whenComplete((op, exc) -> {
                     if (exc != null) {
-                        // If any of above steps failed sendSelfFailurePatch
-                        logFine(() -> String.format(
-                                "FAILED: sendImageEnumerationAdapterRequest - %s",
-                                Utils.toString(exc)));
+                        if (exc.getCause() instanceof EndpointStatesNotFound) {
+                            logFine("SUCCESS: NO endpoints found so skip the enumeration");
+                            sendSelfFinishedPatch(taskState);
+                        } else {
+                            // If any of above steps failed sendSelfFailurePatch
+                            logFine(() -> String.format(
+                                    "FAILED: sendImageEnumerationAdapterRequest - %s",
+                                    Utils.toString(exc.getCause())));
 
-                        sendSelfFailurePatch(taskState, exc.getMessage());
+                            sendSelfFailurePatch(taskState, exc.getCause().getMessage());
+                        }
                     } else {
                         logFine("SUCCESS: sendImageEnumerationAdapterRequest");
                     }
@@ -316,9 +391,29 @@ public class ImageEnumerationTaskService
     }
 
     /**
-     * Get the {@link EndpointState} from {@link ImageEnumerationTaskState#endpointLink}.
+     * Get the {@link EndpointState} either by type or by link.
      */
     private DeferredResult<SendImageEnumerationAdapterContext> getEndpointState(
+            SendImageEnumerationAdapterContext ctx) {
+
+        if (ctx.taskState.enumeratePrivateImages()) {
+
+            return getEndpointStateByLink(ctx);
+        }
+
+        if (ctx.taskState.enumeratePublicImages()) {
+
+            return getEndpointStateByType(ctx);
+        }
+
+        // This MUST not happen due to task-state validation.
+        return null;
+    }
+
+    /**
+     * Resolve specific End-point by link.
+     */
+    private DeferredResult<SendImageEnumerationAdapterContext> getEndpointStateByLink(
             SendImageEnumerationAdapterContext ctx) {
 
         Operation op = Operation.createGet(this, ctx.taskState.endpointLink);
@@ -327,11 +422,79 @@ public class ImageEnumerationTaskService
 
             ctx.endpointState = epState;
 
-            logFine(() -> String.format("SUCCESS: getEndpointState [%s]",
+            logFine(() -> String.format(
+                    "SUCCESS: '%s' EndpointState of '%s' type",
+                    ctx.endpointState.name,
                     ctx.endpointState.endpointType));
 
             return ctx;
         });
+    }
+
+    /**
+     * Pick arbitrary End-point of passed end-point type and optionally region.
+     */
+    private DeferredResult<SendImageEnumerationAdapterContext> getEndpointStateByType(
+            SendImageEnumerationAdapterContext ctx) {
+
+        Query.Builder endpointsByTypeQuery = Query.Builder.create()
+                .addKindFieldClause(EndpointState.class)
+                .addCaseInsensitiveFieldClause(
+                        EndpointState.FIELD_NAME_ENDPOINT_TYPE,
+                        ctx.taskState.endpointType,
+                        MatchType.TERM,
+                        Occurance.MUST_OCCUR);
+
+        if (!isNullOrEmpty(ctx.taskState.regionId)) {
+            endpointsByTypeQuery.addCompositeFieldClause(
+                    EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
+                    EndpointConfigRequest.REGION_KEY,
+                    ctx.taskState.regionId);
+        }
+
+        QueryStrategy<EndpointState> queryEndpointsByType = new QueryTop<>(
+                getHost(),
+                endpointsByTypeQuery.build(),
+                EndpointState.class,
+                null).setMaxResultsLimit(1);
+
+        return queryEndpointsByType.collectDocuments(Collectors.toList()).thenApply(epStates -> {
+
+            final String regionStr = isNullOrEmpty(ctx.taskState.regionId)
+                    ? "n/a"
+                    : ctx.taskState.regionId;
+
+            Optional<EndpointState> epState = epStates.stream().findFirst();
+
+            if (epState.isPresent()) {
+                ctx.endpointState = epState.get();
+
+                logFine(() -> String.format(
+                        "SUCCESS: '%s' EndpointState for (type=%s,region=%s)",
+                        ctx.endpointState.name,
+                        ctx.taskState.endpointType,
+                        regionStr));
+            } else {
+                logInfo(() -> String.format(
+                        "SUCCESS: NO EndpointState for (type=%s,region=%s)",
+                        ctx.taskState.endpointType,
+                        regionStr));
+
+                // Throw an error to break/exit outer DeferredResult chain.
+                throw new EndpointStatesNotFound();
+            }
+
+            return ctx;
+        });
+    }
+
+    /**
+     * Indicates no end-points are currently registered into the system. Thrown by
+     * {@code ImageEnumerationTaskService#sendImageEnumerationAdapterRequest(ImageEnumerationTaskState)}
+     * to terminate execution chain.
+     */
+    @SuppressWarnings("serial")
+    private static final class EndpointStatesNotFound extends RuntimeException {
     }
 
     /**
@@ -388,12 +551,21 @@ public class ImageEnumerationTaskService
         }
 
         // Create 'image-enumeration' adapter request
-        ImageEnumerateRequest adapterReq = new ImageEnumerateRequest();
+        final ImageEnumerateRequest adapterReq = new ImageEnumerateRequest();
 
         // Set ImageEnumerateRequest specific params
         adapterReq.enumerationAction = ctx.taskState.enumerationAction;
+        if (ctx.taskState.enumeratePrivateImages()) {
+            adapterReq.requestType = ImageEnumerateRequestType.PRIVATE;
+        } else if (ctx.taskState.enumeratePublicImages()) {
+            adapterReq.requestType = ImageEnumerateRequestType.PUBLIC;
+        }
+
         // Set generic ResourceRequest params
-        adapterReq.resourceReference = buildUri(getHost(), ctx.taskState.endpointLink);
+
+        // The end-point is ALWAYS set regardless of Private/Public enum type
+        // In case of Public, end-point credentials are used to run the enumeration
+        adapterReq.resourceReference = buildUri(getHost(), ctx.endpointState.documentSelfLink);
         adapterReq.taskReference = buildUri(getHost(), ctx.taskState.documentSelfLink);
         adapterReq.isMockRequest = ctx.taskState.options.contains(TaskOption.IS_MOCK);
 
