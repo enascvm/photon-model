@@ -88,6 +88,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         // enumerate all resources hoping to find the template
         doRefresh();
         snapshotFactoryState("networks", NetworkService.class);
+        snapshotFactoryState("computes", ComputeService.class);
 
         // find the template by vm name
         // template must have vm-tools and cloud-config installed

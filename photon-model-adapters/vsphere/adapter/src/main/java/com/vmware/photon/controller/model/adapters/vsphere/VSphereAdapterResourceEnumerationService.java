@@ -482,8 +482,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         continue;
                     }
                     VmOverlay vm = new VmOverlay(cont);
-                    if (!vm.isTemplate()) {
-                        // templats are enumerated as "images"
+                    if (vm.isTemplate()) {
+                        // templates are skipped, enumerated as "images" instead
                         continue;
                     }
                     if (vm.getInstanceUuid() == null) {

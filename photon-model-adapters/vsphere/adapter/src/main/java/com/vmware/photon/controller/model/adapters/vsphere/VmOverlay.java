@@ -121,7 +121,7 @@ public class VmOverlay extends AbstractOverlay {
     }
 
     public boolean isTemplate() {
-        return (boolean) getOrFail(VimPath.vm_config_template);
+        return (boolean) getOrDefault(VimPath.vm_config_template, Boolean.FALSE);
     }
 
     public long getLastReconfigureMillis() {
