@@ -29,14 +29,15 @@ import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
-
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
+import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.ServiceUriPaths;
@@ -217,7 +218,20 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
             sendRequest(Operation.createGet(this, currentState.resourcePoolLink)
                     .setCompletion((o, e) -> {
                         if (e != null) {
-                            TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), e);
+                            if (e instanceof ServiceNotFoundException) {
+                                logInfo(() -> String.format(
+                                        "Resource pool %d seems to have been deleted",
+                                        currentState.resourcePoolLink));
+                            } else {
+                                logWarning(
+                                        () -> String.format("Error retrieving resource pool %d: %s",
+                                                currentState.resourcePoolLink, Utils.toString(e)));
+                            }
+                            sendSelfPatch(new StatsCollectionTaskState(), TaskStage.FAILED,
+                                    patchBody -> {
+                                        patchBody.taskInfo.failure = Utils
+                                                .toServiceErrorResponse(e);
+                                    });
                             return;
                         }
 
