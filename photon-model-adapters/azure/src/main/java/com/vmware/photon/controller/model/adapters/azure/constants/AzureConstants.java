@@ -26,6 +26,8 @@ public class AzureConstants {
     public static final String AZURE_OSDISK_CACHING = "azureOsDiskCaching";
     public static final String AZURE_STORAGE_ACCOUNT_TYPE = "azureStorageAccountType";
     public static final String AZURE_STORAGE_ACCOUNT_NAME = "azureStorageAccountName";
+    public static final String AZURE_STORAGE_ACCOUNT_RG_NAME = "azureSAResourceGroupName";
+    public static final String AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME = "default-rg"; // in case none is specified
     public static final String AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK = "azureDiagnosticStorageAccountLink";
     public static final String AZURE_STORAGE_ACCOUNT_KEY1 = "azureStorageAccountKey1";
     public static final String AZURE_STORAGE_ACCOUNT_KEY2 = "azureStorageAccountKey2";
@@ -45,6 +47,7 @@ public class AzureConstants {
     public static final String MISSING_SUBSCRIPTION_CODE = "MissingSubscriptionRegistration";
     public static final String RESOURCE_NOT_FOUND = "ResourceNotFound";
     public static final String INVALID_PARAMETER = "InvalidParameter";
+    public static final String STORAGE_ACCOUNT_ALREADY_EXIST = "StorageAccountAlreadyExists";
 
     // Azure constants
     public static final String AZURE_VM_POWER_STATE_RUNNING = "PowerState/running";

@@ -17,9 +17,11 @@ import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROU
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_INBOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_OUTBOUND;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
@@ -27,6 +29,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REGISTRED_STATE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_ALREADY_EXIST;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
@@ -115,6 +118,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext.AzureNicContext;
 import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.AzureDiagnosticSettings;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDecommissionCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
@@ -544,21 +548,52 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
-    private void createStorageAccount(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
-        StorageAccountCreateParameters storageParameters = new StorageAccountCreateParameters();
-        storageParameters.setLocation(ctx.resourceGroup.getLocation());
+    // Init storage account name and resource group
+    private DeferredResult<AzureInstanceContext> createStorageAccountRG(AzureInstanceContext ctx) {
 
         if (ctx.bootDisk.customProperties == null) {
-            handleError(ctx,
+            return DeferredResult.failed(
                     new IllegalArgumentException("Custom properties for boot disk is required"));
-            return;
         }
 
         ctx.storageAccountName = ctx.bootDisk.customProperties.get(AZURE_STORAGE_ACCOUNT_NAME);
+        ctx.storageAccountRGName = ctx.bootDisk.customProperties
+                .getOrDefault(AZURE_STORAGE_ACCOUNT_RG_NAME, AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME);
 
         if (ctx.storageAccountName == null) {
+            // In case SA is not provided in the request, use request VA resource group
             ctx.storageAccountName = String.valueOf(System.currentTimeMillis()) + "st";
+            ctx.storageAccountRGName = ctx.resourceGroup.getName();
+
+            return DeferredResult.completed(ctx);
         }
+
+        // Use shared RG. In case not provided in the bootDisk properties, use the default one
+        final ResourceGroup sharedSARG = new ResourceGroup();
+        sharedSARG.setLocation(ctx.child.description.regionId);
+
+        String msg = "Create/Update SA Resource Group [" + ctx.storageAccountRGName + "] for ["
+                + ctx.vmName + "] VM";
+
+        AzureDeferredResultServiceCallback<ResourceGroup> handler = new AzureDeferredResultServiceCallback<ResourceGroup>(
+                this, msg) {
+            @Override
+            protected DeferredResult<ResourceGroup> consumeSuccess(ResourceGroup rg) {
+                return DeferredResult.completed(rg);
+            }
+        };
+
+        getResourceManagementClient(ctx)
+                .getResourceGroupsOperations()
+                .createOrUpdateAsync(ctx.storageAccountRGName, sharedSARG, handler);
+
+        return handler.toDeferredResult().thenApply(ignore -> ctx);
+    }
+
+    private void createStorageAccount(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
+
+        StorageAccountCreateParameters storageParameters = new StorageAccountCreateParameters();
+        storageParameters.setLocation(ctx.child.description.regionId);
 
         String accountType = ctx.bootDisk.customProperties
                 .getOrDefault(AZURE_STORAGE_ACCOUNT_TYPE, DEFAULT_STORAGE_ACCOUNT_TYPE.toValue());
@@ -567,11 +602,24 @@ public class AzureInstanceService extends StatelessService {
         String msg = "Creating Azure Storage Account [" + ctx.storageAccountName + "] for ["
                 + ctx.vmName + "] VM";
 
-        StorageAccountsOperations azureClient = getStorageManagementClient(ctx)
+        StorageAccountsOperations azureSAClient = getStorageManagementClient(ctx)
                 .getStorageAccountsOperations();
 
         AzureProvisioningCallback<StorageAccount> handler = new AzureProvisioningCallback<StorageAccount>(
                 this, msg) {
+
+            @Override
+            protected Throwable consumeError(Throwable exc) {
+                if (exc instanceof CloudException) {
+                    CloudException azureExc = (CloudException) exc;
+                    if (STORAGE_ACCOUNT_ALREADY_EXIST
+                            .equalsIgnoreCase(azureExc.getBody().getCode())) {
+                        return RECOVERED;
+                    }
+                }
+                return exc;
+            }
+
             @Override
             protected DeferredResult<StorageAccount> consumeProvisioningSuccess(
                     StorageAccount sa) {
@@ -625,22 +673,26 @@ public class AzureInstanceService extends StatelessService {
             @Override
             protected Runnable checkProvisioningStateCall(
                     ServiceCallback<StorageAccount> checkProvisioningStateCallback) {
-                return () -> azureClient.getPropertiesAsync(
-                        ctx.resourceGroup.getName(),
+                return () -> azureSAClient.getPropertiesAsync(
+                        ctx.storageAccountRGName,
                         ctx.storageAccountName,
                         checkProvisioningStateCallback);
 
             }
         };
 
-        azureClient.createAsync(
-                ctx.resourceGroup.getName(),
-                ctx.storageAccountName,
-                storageParameters,
-                handler);
+        // First create SA RG (if does not exist), then create the SA itself (if does not exist)
+        createStorageAccountRG(ctx)
+                .thenCompose(context -> {
 
-        handler.toDeferredResult()
-                .thenApply(ignore -> ctx)
+                    azureSAClient.createAsync(
+                            context.storageAccountRGName,
+                            context.storageAccountName,
+                            storageParameters,
+                            handler);
+
+                    return handler.toDeferredResult().thenApply(ignore -> context);
+                })
                 .whenComplete(thenAllocation(ctx, nextStage, STORAGE_NAMESPACE));
     }
 
@@ -1269,7 +1321,7 @@ public class AzureInstanceService extends StatelessService {
     private void getStorageKeys(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
         StorageManagementClient client = getStorageManagementClient(ctx);
 
-        client.getStorageAccountsOperations().listKeysAsync(ctx.resourceGroup.getName(),
+        client.getStorageAccountsOperations().listKeysAsync(ctx.storageAccountRGName,
                 ctx.storageAccountName, new AzureAsyncCallback<StorageAccountKeys>() {
                     @Override
                     public void onError(Throwable e) {
@@ -1279,7 +1331,7 @@ public class AzureInstanceService extends StatelessService {
                     @Override
                     public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
                         logFine(() -> String.format("Retrieved the storage account keys for storage"
-                                        + " account [%s].", ctx.storageAccountName));
+                                + " account [%s].", ctx.storageAccountName));
                         StorageAccountKeys keys = result.getBody();
                         String key1 = keys.getKey1();
                         String key2 = keys.getKey2();
@@ -1338,11 +1390,11 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * This method tries to detect specific CloudErrors by their code and apply some additional handling.
-     * In case a subscription registration error is detected the method register subscription for
-     * given namespace.
-     * In case invalid parameter error is detected, the error message is made better human-readable.
-     * Otherwise the fallback is to transition to error state through next specific error handler.
+     * This method tries to detect specific CloudErrors by their code and apply some additional
+     * handling. In case a subscription registration error is detected the method register
+     * subscription for given namespace. In case invalid parameter error is detected, the error
+     * message is made better human-readable. Otherwise the fallback is to transition to error state
+     * through next specific error handler.
      */
     private void handleCloudError(AzureInstanceContext ctx, String namespace,
             Throwable e) {
@@ -1419,12 +1471,14 @@ public class AzureInstanceService extends StatelessService {
                                 Provider provider = result.getBody();
                                 String registrationState = provider.getRegistrationState();
                                 if (!PROVIDER_REGISTRED_STATE.equalsIgnoreCase(registrationState)) {
-                                    logInfo(() -> String.format("%s namespace registration in %s state",
+                                    logInfo(() -> String.format(
+                                            "%s namespace registration in %s state",
                                             namespace, registrationState));
                                     getSubscriptionState(ctx, namespace, retryExpiration);
                                     return;
                                 }
-                                logFine(() -> String.format("Successfully registered namespace [%s]",
+                                logFine(() -> String.format(
+                                        "Successfully registered namespace [%s]",
                                         provider.getNamespace()));
                                 handleAllocation(ctx);
                             }
@@ -1856,7 +1910,7 @@ public class AzureInstanceService extends StatelessService {
             } else {
                 final String finalMsg = e.getMessage();
                 AzureInstanceService.this.logFine(() -> String.format("%s: SUCCESS with error."
-                                + " Details: %s", this.msg, finalMsg));
+                        + " Details: %s", this.msg, finalMsg));
 
                 transition();
             }

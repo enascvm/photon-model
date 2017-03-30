@@ -109,6 +109,7 @@ public class AzureInstanceContext extends
     public ResourceGroup resourceGroup;
     public StorageAccount storage;
 
+    public String storageAccountRGName;
     public String storageAccountName;
     public ImageReference imageReference;
     public String operatingSystemFamily;
