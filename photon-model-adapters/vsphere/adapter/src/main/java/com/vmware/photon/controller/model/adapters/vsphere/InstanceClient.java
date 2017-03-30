@@ -223,9 +223,9 @@ public class InstanceClient extends BaseHelper {
         populateCloudConfig(spec, infos);
 
         // remove nics and attach to proper networks if nics are configured
+        ArrayOfVirtualDevice devices = null;
         if (this.nics != null && this.nics.size() > 0) {
-            ArrayOfVirtualDevice devices = this.get.entityProp(vm,
-                    VimPath.vm_config_hardware_device);
+            devices = this.get.entityProp(vm, VimPath.vm_config_hardware_device);
             devices.getVirtualDevice().stream()
                     .filter(d -> d instanceof VirtualEthernetCard)
                     .forEach(nic -> {
@@ -238,6 +238,20 @@ public class InstanceClient extends BaseHelper {
             for (NetworkInterfaceStateWithDetails niState : this.nics) {
                 VirtualDevice nic = createNic(niState, null);
                 addDeviceToVm(spec, nic);
+            }
+        }
+
+        if (this.disks != null && this.disks.size() > 0) {
+            // Find whether it has HDD disk
+            DiskState bootDisk = findBootDisk();
+            if (bootDisk != null && bootDisk.capacityMBytes > 0) {
+                // If there are nics, then devices would have already retrieved, so that it
+                // can avoid one more network call.
+                VirtualDeviceConfigSpec bootDiskSpec = getBootDiskCustomizeConfigSpec(vm, bootDisk,
+                        devices);
+                if (bootDiskSpec != null) {
+                    spec.getDeviceChange().add(bootDiskSpec);
+                }
             }
         }
 
@@ -750,6 +764,7 @@ public class InstanceClient extends BaseHelper {
         List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
 
         boolean cdromAdded = false;
+        DiskState bootDisk = null;
 
         for (DiskState ds : diskStates) {
             String diskPath = VimUtils.uriToDatastorePath(ds.sourceImageReference);
@@ -760,13 +775,13 @@ public class InstanceClient extends BaseHelper {
                     VirtualDeviceConfigSpec hdd = createFullCloneAndAttach(diskPath, ds, dir,
                             scsiController, scsiUnit);
                     newDisks.add(hdd);
+                    bootDisk = ds;
                 } else {
                     String diskName = makePathToVmdkFile(ds.id, dir);
                     VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(),
                             scsiUnit, ds, diskName, getDatastore());
                     newDisks.add(hdd);
                 }
-
                 scsiUnit = nextUnitNumber(scsiUnit);
             }
             if (ds.type == DiskType.CDROM) {
@@ -810,6 +825,43 @@ public class InstanceClient extends BaseHelper {
                 VimUtils.rethrow(info.getError());
             }
         }
+
+        // If boot HDD disk capacityMBytes is > 0 && created through full clone, then reconfigure
+        if (bootDisk != null && bootDisk.capacityMBytes > 0) {
+            VirtualDeviceConfigSpec hddDevice = getBootDiskCustomizeConfigSpec(this.vm, bootDisk,
+                    null);
+            if (hddDevice != null) {
+                VirtualMachineConfigSpec bootDiskSpec = new VirtualMachineConfigSpec();
+                bootDiskSpec.getDeviceChange().add(hddDevice);
+                ManagedObjectReference task = getVimPort().reconfigVMTask(this.vm, bootDiskSpec);
+                TaskInfo info = waitTaskEnd(task);
+
+                if (info.getState() == TaskInfoState.ERROR) {
+                    VimUtils.rethrow(info.getError());
+                }
+            }
+        }
+    }
+
+    /**
+     * Construct VM config spec for boot disk size customization, if the user defined value is
+     * greater then the existing size of the disk
+     */
+    private VirtualDeviceConfigSpec getBootDiskCustomizeConfigSpec(ManagedObjectReference vm,
+            DiskState bootDisk, ArrayOfVirtualDevice devices)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg, FinderException {
+        if (devices == null) {
+            devices = this.get.entityProp(vm, VimPath.vm_config_hardware_device);
+        }
+        VirtualDisk virtualDisk = devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .map(d -> (VirtualDisk) d).findFirst().orElse(null);
+        // If HDD disk is attached successfully and new boot size is > then existing size, then resize
+        if (virtualDisk != null && toKb(bootDisk.capacityMBytes) > virtualDisk.getCapacityInKB()) {
+            VirtualDeviceConfigSpec hdd = resizeHdd(virtualDisk, bootDisk);
+            return hdd;
+        }
+        return null;
     }
 
     private TaskInfo waitTaskEnd(ManagedObjectReference task)
@@ -853,7 +905,6 @@ public class InstanceClient extends BaseHelper {
         backing.setDatastore(getDatastore());
 
         VirtualDisk disk = new VirtualDisk();
-        disk.setCapacityInKB(toKb(ds.capacityMBytes));
         disk.setBacking(backing);
         disk.setControllerKey(scsiController.getKey());
         disk.setUnitNumber(unitNumber);

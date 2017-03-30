@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
 import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.net.URI;
@@ -23,13 +24,13 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
-import com.vmware.photon.controller.model.resources.DiskService;
-import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -51,6 +52,10 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
 
     private ComputeDescription computeHostDescription;
     private ComputeState computeHost;
+
+    private static final long FLOPPY_DISK_SIZE = 2048;
+    private static final long HDD_DISK_SIZE = 62464;
+    private static final long CLONE_HDD_DISK_SIZE = 63488;
 
     @Test
     public void createInstanceFromTemplate() throws Throwable {
@@ -74,12 +79,13 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         awaitTaskEnd(provisionTask);
 
         vm = getComputeState(vm);
+
         // put fake moref in the vm
         if (isMock()) {
             ManagedObjectReference moref = new ManagedObjectReference();
             moref.setValue("vm-0");
             moref.setType(VimNames.TYPE_VM);
-            CustomProperties.of(vm).put(CustomProperties.MOREF, moref);
+            CustomProperties.of(vm).put(MOREF, moref);
             vm = doPost(this.host, vm,
                     ComputeState.class,
                     UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
@@ -95,6 +101,12 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         clonedVm = getComputeState(clonedVm);
 
         if (!isMock()) {
+            // Verify that the disk is resized
+            BasicConnection connection = createConnection();
+            GetMoRef get = new GetMoRef(connection);
+            verifyDiskSize(vm, get, HDD_DISK_SIZE);
+            verifyDiskSize(clonedVm, get, CLONE_HDD_DISK_SIZE);
+
             deleteVmAndWait(vm);
             deleteVmAndWait(clonedVm);
         }
@@ -154,8 +166,8 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeState.networkInterfaceLinks.add(iface.documentSelfLink);
 
         computeState.diskLinks = new ArrayList<>(2);
-        computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri()).documentSelfLink);
-        computeState.diskLinks.add(createDisk("A", DiskType.FLOPPY, null).documentSelfLink);
+        computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri(), HDD_DISK_SIZE).documentSelfLink);
+        computeState.diskLinks.add(createDisk("A", DiskType.FLOPPY, null, FLOPPY_DISK_SIZE).documentSelfLink);
         String placementLink = findRandomResourcePoolOwningCompute();
 
         CustomProperties.of(computeState)
@@ -195,6 +207,10 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
 
         computeState.parentLink = this.computeHost.documentSelfLink;
 
+        computeState.diskLinks = new ArrayList<>(1);
+        computeState.diskLinks.add(createDisk("boot", DiskType.HDD, getDiskUri(), CLONE_HDD_DISK_SIZE)
+                .documentSelfLink);
+
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
                 .put(ComputeProperties.PLACEMENT_LINK, findRandomResourcePoolOwningCompute());
@@ -230,20 +246,6 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
             // never gets here
             return null;
         }
-    }
-
-    private DiskState createDisk(String alias, DiskType type, URI sourceImageReference)
-            throws Throwable {
-        DiskState res = new DiskState();
-        res.capacityMBytes = 2048;
-        res.bootOrder = 1;
-        res.type = type;
-        res.id = res.name = "disk-" + alias;
-
-        res.sourceImageReference = sourceImageReference;
-        return doPost(this.host, res,
-                DiskState.class,
-                UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
     }
 
     private ComputeDescription createVmDescription() throws Throwable {

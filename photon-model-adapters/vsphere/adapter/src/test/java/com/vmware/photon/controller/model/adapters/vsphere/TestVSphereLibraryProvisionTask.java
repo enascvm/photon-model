@@ -21,12 +21,15 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
@@ -54,6 +57,7 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
     public String libraryItemName = System.getProperty("vc.libItemName");
     public String placementClusterName = System.getProperty("vc.placementClusterName");
 
+    private static final long HDD_DISK_SIZE = 9216;
     private EndpointState endpoint;
 
     @Test
@@ -95,6 +99,11 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
 
         vm = getComputeState(vm);
 
+        // Verify that the disk is resized
+        BasicConnection connection = createConnection();
+        GetMoRef get = new GetMoRef(connection);
+        verifyDiskSize(vm, get, HDD_DISK_SIZE);
+
         deleteVmAndWait(vm);
     }
 
@@ -114,6 +123,8 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
         computeState.networkInterfaceLinks = new ArrayList<>(1);
 
         computeState.diskLinks = new ArrayList<>(1);
+        computeState.diskLinks.add(createDisk("boot", DiskService.DiskType.HDD, null,
+                HDD_DISK_SIZE).documentSelfLink);
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)

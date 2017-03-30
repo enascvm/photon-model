@@ -13,7 +13,11 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+
+import static com.vmware.photon.controller.model.adapters.vsphere.CustomProperties.MOREF;
+import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -38,12 +42,15 @@ import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
+import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
@@ -63,7 +70,11 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.vim25.ArrayOfVirtualDevice;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
+import com.vmware.vim25.VirtualDisk;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.QueryResultsProcessor;
 import com.vmware.xenon.common.ServiceDocument;
@@ -457,5 +468,37 @@ public class BaseVSphereAdapterTest {
 
         String now = DateTimeFormatter.ofPattern("D_HH_mm_ssSSS").format(LocalDateTime.now());
         return prefix + System.getProperty("user.name") + "-" + now;
+    }
+
+    /**
+     * Create a new disk state to attach it to the virual machine.
+     */
+    protected DiskService.DiskState createDisk(String alias, DiskService.DiskType type,
+            URI sourceImageReference, long capacityMBytes) throws Throwable {
+        DiskService.DiskState res = new DiskService.DiskState();
+        res.capacityMBytes = capacityMBytes;
+        res.bootOrder = 1;
+        res.type = type;
+        res.id = res.name = "disk-" + alias;
+
+        res.sourceImageReference = sourceImageReference;
+        return doPost(this.host, res,
+                DiskService.DiskState.class,
+                UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
+    }
+
+    /**
+     * Verify that the boot disk is resized.
+     */
+    protected void verifyDiskSize(ComputeState vm, GetMoRef get, long size)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        ManagedObjectReference vmMoRef = CustomProperties.of(vm).getMoRef(MOREF);
+        ArrayOfVirtualDevice devices = get.entityProp(vmMoRef, VimPath.vm_config_hardware_device);
+        VirtualDisk vd = devices.getVirtualDevice().stream()
+                .filter(d -> d instanceof VirtualDisk)
+                .map(d -> (VirtualDisk) d).findFirst().orElse(null);
+
+        long diskSizeinMb = vd.getCapacityInBytes() / 1024 / 1024;
+        assertEquals(size, diskSizeinMb);
     }
 }
