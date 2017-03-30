@@ -204,11 +204,12 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
             ResourceMetrics metric = getResourceMetrics(verificationHost, computeLink, MockStatsAdapter.KEY_1);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_1 +
                     " should not be null ", metric);
+            assertEquals(metric.entries.size(), 1);
 
             ResourceMetrics metric2 = getResourceMetrics(verificationHost, computeLink, MockStatsAdapter.KEY_2);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_2 +
                     "should not be null ", metric2);
-            assertEquals(metric2.entries.size(), 2);
+            assertEquals(metric2.entries.size(), 1);
             String lastSuccessfulRunMetricKey = StatsUtil.getMetricKeyPrefix(MockStatsAdapter.SELF_LINK,
                     PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME);
             ResourceMetrics metricLastRun = getResourceMetrics(verificationHost, computeLink, lastSuccessfulRunMetricKey);

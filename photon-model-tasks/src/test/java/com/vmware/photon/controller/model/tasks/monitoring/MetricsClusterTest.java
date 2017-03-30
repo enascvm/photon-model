@@ -154,7 +154,7 @@ public class MetricsClusterTest extends BaseModelTest {
         // Count should be 0 on this.host()
         assertEquals(0, resourceHostResourceMetricCount.intValue());
         // Count should be something on this.metricHost()
-        assertEquals(this.numResources * 2, metricHostResourceMetricCount.intValue());
+        assertEquals(this.numResources * 4, metricHostResourceMetricCount.intValue());
 
         // Kick off an Aggregation Task - Verifies that the ResourceMetricQueries are going to the right cluster.
         StatsAggregationTaskState aggregationTaskState = new StatsAggregationTaskState();

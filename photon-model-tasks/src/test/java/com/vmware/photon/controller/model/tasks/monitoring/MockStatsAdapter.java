@@ -67,24 +67,32 @@ public class MockStatsAdapter extends StatelessService {
             key1.sourceTimeMicrosUtc = timestampMicros;
             key1.unit = UNIT_1;
             statValues.put(KEY_1, Collections.singletonList(key1));
+            sendBatchResponse(statsRequest, statsResponse, statValues, false);
+            statValues.clear();
             ServiceStat key2 = new ServiceStat();
             key2.latestValue = currentCounter;
             key2.sourceTimeMicrosUtc = timestampMicros;
             key2.unit = UNIT_2;
             statValues.put(KEY_2, Collections.singletonList(key2));
-            ComputeStats cStat = new ComputeStats();
-            cStat.statValues = statValues;
-            cStat.computeLink = statsRequest.resourceReference.getPath();
-            statsResponse.statsList = new ArrayList<>();
-            statsResponse.statsList.add(cStat);
-            statsResponse.taskStage = SingleResourceTaskCollectionStage.valueOf(statsRequest.nextStage);
-            statsResponse.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
-            this.sendRequest(Operation.createPatch(statsRequest.taskReference)
-                    .setBody(statsResponse));
+            sendBatchResponse(statsRequest, statsResponse, statValues, true);
             break;
         default:
             super.handleRequest(op);
         }
+    }
+
+    private void sendBatchResponse(ComputeStatsRequest statsRequest,
+            SingleResourceStatsCollectionTaskState statsResponse,
+            Map<String, List<ServiceStat>> statValues, boolean isFinalBatch) {
+        ComputeStats cStat = new ComputeStats();
+        cStat.statValues = statValues;
+        cStat.computeLink = statsRequest.resourceReference.getPath();
+        statsResponse.statsList = new ArrayList<>();
+        statsResponse.statsList.add(cStat);
+        statsResponse.taskStage = SingleResourceTaskCollectionStage.valueOf(statsRequest.nextStage);
+        statsResponse.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
+        statsResponse.isFinalBatch = isFinalBatch;
+        this.sendRequest(Operation.createPatch(statsRequest.taskReference).setBody(statsResponse));
     }
 
 }

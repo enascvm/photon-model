@@ -135,6 +135,12 @@ public class SingleResourceStatsCollectionTaskService
         @Documentation(description = "The stats adapter reference")
         public URI statsAdapterReference;
 
+        /**
+         * This flag will be used when adapter is sending huge data in multiple batches
+         */
+        @UsageOption(option = PropertyUsageOption.SERVICE_USE)
+        public boolean isFinalBatch = true;
+
     }
 
     public SingleResourceStatsCollectionTaskService() {
@@ -250,6 +256,7 @@ public class SingleResourceStatsCollectionTaskService
         if (patchState.statsAdapterReference != null) {
             currentState.statsAdapterReference = patchState.statsAdapterReference;
         }
+        currentState.isFinalBatch = patchState.isFinalBatch;
     }
 
     private void handleStagePatch(SingleResourceStatsCollectionTaskState currentState) {
@@ -331,10 +338,13 @@ public class SingleResourceStatsCollectionTaskService
         }
 
         if (currentState.statsList.size() == 0) {
-            // If there are no stats reported, just finish the task.
-            SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
-            nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-            TaskUtils.sendPatch(this, nextStatePatch);
+            // If there are no stats reported and if it's a final batch, just finish the task.
+            if (currentState.isFinalBatch) {
+                SingleResourceStatsCollectionTaskState nextStatePatch = new
+                        SingleResourceStatsCollectionTaskState();
+                nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+                TaskUtils.sendPatch(this, nextStatePatch);
+            }
             return;
         }
 
@@ -396,10 +406,11 @@ public class SingleResourceStatsCollectionTaskService
                             .setBodyNoCloning(metric));
         }
         // Save each data point sequentially to create time based monotonically increasing sequence.
-        batchPersistStats(operations, 0);
+        batchPersistStats(operations, 0, currentState.isFinalBatch);
     }
 
-    private void batchPersistStats(List<Operation> operations, int batchIndex) {
+    private void batchPersistStats(List<Operation> operations, int batchIndex,
+            boolean isFinalBatch) {
         OperationSequence opSequence = null;
         Integer nextBatchIndex = null;
         for (int i = batchIndex; i < operations.size(); i++) {
@@ -430,13 +441,16 @@ public class SingleResourceStatsCollectionTaskService
             }
 
             if (finalNextBatchIndex == null || finalNextBatchIndex == operations.size()) {
-                SingleResourceStatsCollectionTaskState nextStatePatch = new SingleResourceStatsCollectionTaskState();
-                nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-                TaskUtils.sendPatch(this, nextStatePatch);
+                if (isFinalBatch) {
+                    SingleResourceStatsCollectionTaskState nextStatePatch = new
+                            SingleResourceStatsCollectionTaskState();
+                    nextStatePatch.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+                    TaskUtils.sendPatch(this, nextStatePatch);
+                }
                 return;
             }
 
-            batchPersistStats(operations, finalNextBatchIndex);
+            batchPersistStats(operations, finalNextBatchIndex, isFinalBatch);
         });
         opSequence.sendWith(this);
     }
