@@ -548,7 +548,36 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
-    // Init storage account name and resource group
+    /**
+     * Init storage account name and resource group, using the following approach:
+     * <table border=1>
+     * <tr>
+     * <th>AZURE_STORAGE_ACCOUNT_NAME</th>
+     * <th>AZURE_STORAGE_ACCOUNT_RG_NAME</th>
+     * <th>Used Parameter</th>
+     * </tr>
+     * <tr>
+     * <td>provided</td>
+     * <td>provided</td>
+     * <td>SA name = AZURE_STORAGE_ACCOUNT_NAME<br>SA RG name = AZURE_STORAGE_ACCOUNT_RG_NAME</td>
+     * </tr>
+     * <tr>
+     * <td>provided</td>
+     * <td>not provided</td>
+     * <td>SA name = AZURE_STORAGE_ACCOUNT_NAME<br>SA RG name = AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME</td>
+     * </tr>
+     * <tr>
+     * <td>not provided</td>
+     * <td>provided</td>
+     * <td>SA name = generated name<br>SA RG name = ctx.resourceGroup.getName()</td>
+     * </tr>
+     * <tr>
+     * <td>not provided</td>
+     * <td>not provided</td>
+     * <td>SA name = generated name<br>SA RG name = ctx.resourceGroup.getName()</td>
+     * </tr>
+     * </table>
+     */
     private DeferredResult<AzureInstanceContext> createStorageAccountRG(AzureInstanceContext ctx) {
 
         if (ctx.bootDisk.customProperties == null) {

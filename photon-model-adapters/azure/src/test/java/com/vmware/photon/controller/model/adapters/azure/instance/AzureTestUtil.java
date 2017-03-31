@@ -499,6 +499,8 @@ public class AzureTestUtil {
 
         rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
                 (azureVMName + "sa").replace("-", "").toLowerCase());
+        rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME,
+                azureVMName);
         rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
                 AZURE_STORAGE_ACCOUNT_TYPE);
 
