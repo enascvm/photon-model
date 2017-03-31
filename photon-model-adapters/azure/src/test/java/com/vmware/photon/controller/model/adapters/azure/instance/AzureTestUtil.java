@@ -399,6 +399,8 @@ public class AzureTestUtil {
         azureHostDescription.enumerationAdapterReference = UriUtils.buildUri(
                 host,
                 AzureUriPaths.AZURE_ENUMERATION_ADAPTER);
+        azureHostDescription.statsAdapterReference = UriUtils.buildUri(host,
+                AzureUriPaths.AZURE_STATS_ADAPTER);
         azureHostDescription.authCredentialsLink = authLink;
 
         TestUtils.doPost(host, azureHostDescription,
