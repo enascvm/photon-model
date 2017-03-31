@@ -19,13 +19,11 @@ import com.vmware.xenon.common.ServiceDocumentDescription;
 public class ServiceUtils {
 
     public static final int SERVICE_DOCUMENT_VERSION_RETENTION_LIMIT = Integer
-            .parseInt(System.getProperty("service.document.version.retention.limit",
-                    new Integer(ServiceDocumentDescription.DEFAULT_VERSION_RETENTION_LIMIT)
-                            .toString()));
+            .getInteger("service.document.version.retention.limit",
+                    ServiceDocumentDescription.DEFAULT_VERSION_RETENTION_LIMIT);
     public static final int SERVICE_DOCUMENT_VERSION_RETENTION_FLOOR = Integer
-            .parseInt(System.getProperty("service.document.version.retention.floor",
-                    new Integer(ServiceDocumentDescription.DEFAULT_VERSION_RETENTION_FLOOR)
-                            .toString()));
+            .getInteger("service.document.version.retention.floor",
+                    ServiceDocumentDescription.DEFAULT_VERSION_RETENTION_FLOOR);
 
     public static void setRetentionLimit(ServiceDocument template) {
         template.documentDescription.versionRetentionLimit = SERVICE_DOCUMENT_VERSION_RETENTION_LIMIT;
