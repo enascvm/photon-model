@@ -145,6 +145,9 @@ public class AzureTestUtil {
     public static final AzureNicSpecs SHARED_NETWORK_NIC_SPEC;
     public static final AzureNicSpecs NO_PUBLIC_IP_NIC_SPEC;
 
+    public static final long AZURE_CUSTOM_OSDISK_SIZE = 1024 * 32; //32 GBs. We can only increase
+    // size of OS Disk. The Image used already has 30 GB size.
+
     private static final String AZURE_NETWORK_NAME = "test-vNet";
     private static final String AZURE_NETWORK_CIDR = "172.16.0.0/16";
     private static final String AZURE_SUBNET_NAME = "test-subnet";
@@ -491,6 +494,7 @@ public class AzureTestUtil {
         rootDisk.id = UUID.randomUUID().toString();
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.type = DiskType.HDD;
+        rootDisk.capacityMBytes = AZURE_CUSTOM_OSDISK_SIZE; //Custom OSDisk size of 32 GBs
         rootDisk.sourceImageReference = URI.create(IMAGE_REFERENCE);
         rootDisk.bootOrder = 1;
         rootDisk.documentSelfLink = rootDisk.id;
@@ -503,6 +507,7 @@ public class AzureTestUtil {
                 azureVMName);
         rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE,
                 AZURE_STORAGE_ACCOUNT_TYPE);
+
 
         TestUtils.doPost(host, rootDisk, DiskState.class,
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));

@@ -170,6 +170,8 @@ public class AzureInstanceService extends StatelessService {
 
     private static final long DEFAULT_EXPIRATION_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
     private static final int RETRY_INTERVAL_SECONDS = 30;
+    private static final long AZURE_MAXIMUM_OS_DISK_SIZE_MB = 1023 * 1024; //Maximum allowed OS
+    // disk size on Azure is 1023 GB
 
     private ExecutorService executorService;
 
@@ -1188,6 +1190,16 @@ public class AzureInstanceService extends StatelessService {
         // We don't support Attach option which allows to use a specialized disk to create the
         // virtual machine.
         osDisk.setCreateOption(OS_DISK_CREATION_OPTION);
+        if (ctx.bootDisk.capacityMBytes > 0 && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) { // In case
+            // custom boot disk size is set then  use that value. If value more than maximum
+            // allowed then proceed with default size.
+            int diskSizeInGB = (int)ctx.bootDisk.capacityMBytes / 1024; // Converting MBs to GBs and
+            // casting as int
+            osDisk.setDiskSizeGB(diskSizeInGB);
+        } else {
+            logInfo(String.format("Proceeding with Default OS Disk Size defined by VHD %s", vhdName));
+        }
+
 
         StorageProfile storageProfile = new StorageProfile();
         // Currently we only support platform images.

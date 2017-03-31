@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.NO_PUBLIC_IP_NIC_SPEC;
@@ -27,6 +28,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultVMResource;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
+
 
 import java.util.UUID;
 import java.util.logging.Level;
@@ -56,6 +58,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
@@ -191,6 +194,8 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
         kickOffProvisionTask();
 
         assertVmNetworksConfiguration();
+
+        assertConfigurationOfDisks();
 
         // Stats on individual VM is currently broken.
         if (!this.skipStats) {
@@ -383,5 +388,37 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
             assertNull("Non-primary NIC" + i + " security group should not be set.",
                     nonPrimaryNicState.securityGroupLinks);
         }
+    }
+
+    private void assertConfigurationOfDisks() {
+
+        ComputeState vm = this.host.getServiceState(null,
+                ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+        String diskLink = vm.diskLinks.get(0);
+        DiskState diskState = this.host.getServiceState(null, DiskState.class,
+                UriUtils.buildUri(this.host, diskLink));
+        assertEquals("OS Disk size does not match", AzureTestUtil.AZURE_CUSTOM_OSDISK_SIZE,
+                diskState.capacityMBytes);
+
+        if (this.isMock) { // return. Nothing to check on Azure.
+            return;
+        }
+
+        try {
+            com.microsoft.azure.management.compute.models.VirtualMachine provisionedVM = AzureTestUtil.getAzureVirtualMachine(
+                    this
+                            .computeManagementClient,
+                    azureVMName,
+                    azureVMName);
+            int OSDiskSizeInAzure = provisionedVM.getStorageProfile().getOsDisk().getDiskSizeGB();
+            assertEquals("OS Disk size of the VM in azure does not match with the intended size",
+                    AzureTestUtil
+                            .AZURE_CUSTOM_OSDISK_SIZE,
+                    OSDiskSizeInAzure * 1024);
+        } catch (Exception e) {
+            fail("Unable to verify OS Disk Size on Azure");
+            e.printStackTrace();
+        }
+
     }
 }
