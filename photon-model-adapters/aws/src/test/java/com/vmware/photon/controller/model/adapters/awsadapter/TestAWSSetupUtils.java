@@ -95,6 +95,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnu
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndCreationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAndDeletionAdapterService;
 
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -128,6 +129,9 @@ import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+
+import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService.StatsAggregationTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
 
@@ -135,6 +139,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceStats;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
@@ -1960,5 +1965,83 @@ public class TestAWSSetupUtils {
                 StatsCollectionTaskState.class, uri);
 
         return statsTask;
+    }
+
+    /**
+     * Performs stats aggregation for given resourcePoolLink
+     */
+    public static void resourceStatsAggregation(VerificationHost host,
+            String resourcePoolLink) throws Throwable {
+        host.testStart(1);
+        StatsAggregationTaskState statsAggregationTaskState = new StatsAggregationTaskState();
+        Query taskQuery = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK, resourcePoolLink).build();
+        statsAggregationTaskState.query =  taskQuery;
+        statsAggregationTaskState.taskInfo = TaskState.createDirect();
+        statsAggregationTaskState.metricNames = getMetricNames();
+
+        host.send(Operation
+                .createPost(
+                        UriUtils.buildUri(host,
+                                StatsAggregationTaskService.FACTORY_LINK))
+                .setBody(statsAggregationTaskState)
+                .setCompletion(host.getCompletion()));
+        host.testWait();
+    }
+
+    /**
+     * Define the metric names that should be aggregated.
+     */
+    public static Set<String> getMetricNames() {
+        Set<String> metricNames = new HashSet<>();
+        // CPU
+        metricNames.add(PhotonModelConstants.CPU_UTILIZATION_PERCENT);
+
+        // Memory
+        metricNames.add(PhotonModelConstants.MEMORY_USED_PERCENT);
+
+        // Cost
+        metricNames.add(PhotonModelConstants.ESTIMATED_CHARGES);
+        metricNames.add(PhotonModelConstants.COST);
+
+        metricNames.addAll(getServiceMetrics());
+
+        return metricNames;
+    }
+
+    public static final Set<String> SERVICES;
+
+    static {
+        Set<String> services = new HashSet<>();
+        //AWS service/product names
+        services.add("AWSCloudTrail");
+        services.add("AmazonRoute53");
+        services.add("AmazonSimpleDB");
+        services.add("AmazonDynamoDB");
+        services.add("AmazonCloudWatch");
+        services.add("AmazonCloudFront");
+        services.add("AmazonRDSService");
+        services.add("AmazonElastiCache");
+        services.add("AWSKeyManagementService");
+        services.add("AmazonSimpleEmailService");
+        services.add("AmazonSimpleQueueService");
+        services.add("AmazonElasticComputeCloud");
+        services.add("AmazonVirtualPrivateCloud");
+        services.add("AmazonSimpleStorageService");
+        services.add("AmazonSimpleNotificationService");
+        SERVICES = Collections.unmodifiableSet(services);
+    }
+
+    /**
+     * Returns set of service metrics that should be aggregated
+     */
+    private static Set<String> getServiceMetrics() {
+        Set<String> metrics = new HashSet<>();
+        for (String s : SERVICES) {
+            metrics.add(String.format(PhotonModelConstants.SERVICE_RESOURCE_COST, s));
+            metrics.add(String.format(PhotonModelConstants.SERVICE_OTHER_COST, s));
+        }
+        return metrics;
     }
 }
