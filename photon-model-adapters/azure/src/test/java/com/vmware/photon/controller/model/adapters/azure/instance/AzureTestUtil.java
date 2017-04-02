@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
@@ -37,11 +38,14 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.CloudException;
@@ -63,15 +67,19 @@ import com.microsoft.azure.management.resources.models.ResourceGroup;
 import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
-import org.junit.Assert;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureComputeEnumerationAdapterService;
+import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.GatewaySpec;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -101,18 +109,31 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService.St
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
+import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceRemovalTaskService.ResourceRemovalTaskState;
+import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsAggregationTaskService.StatsAggregationTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
+import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceDocumentDescription;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
+import com.vmware.xenon.services.common.QueryTask.QueryTerm;
+import com.vmware.xenon.services.common.ServiceUriPaths;
 
 public class AzureTestUtil {
     public static final String AZURE_ADMIN_USERNAME = "azureuser";
@@ -832,7 +853,7 @@ public class AzureTestUtil {
              * CloudException is thrown if the vNet already exists and we are trying to do an
              * update, because there are objects (GatewaySubnet) attached to it
              */
-            Assert.assertTrue(ex.getBody().getCode().equals("InUseSubnetCannotBeDeleted"));
+            assertTrue(ex.getBody().getCode().equals("InUseSubnetCannotBeDeleted"));
         }
     }
 
@@ -960,5 +981,178 @@ public class AzureTestUtil {
         }
 
         assertEquals("Expected: " + shouldExists + ", but was: " + exists, shouldExists, exists);
+    }
+
+    /**
+     * Query to get ResourceMetrics document for a specific resource containing a specific metric.
+     * @param host host against which query is triggered
+     * @param resourceLink Link to the resource on which stats are being collected.
+     * @param metricKey Metric name.
+     * @return ResourceMetrics document.
+     */
+    public static ResourceMetrics getResourceMetrics(VerificationHost host, String resourceLink,
+            String metricKey) {
+        QueryTask qt = QueryTask.Builder
+                .createDirectTask()
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.SORT)
+                .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK,
+                        ServiceDocumentDescription.TypeName.STRING)
+                .setQuery(QueryTask.Query.Builder.create()
+                        .addKindFieldClause(ResourceMetrics.class)
+                        .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK,
+                                        UriUtils.getLastPathSegment(resourceLink)),
+                                QueryTerm.MatchType.PREFIX)
+                        .addRangeClause(QuerySpecification
+                                        .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES,
+                                                metricKey),
+                                QueryTask.NumericRange
+                                        .createDoubleRange(0.0, Double.MAX_VALUE, true, true))
+                        .build())
+                .build();
+        Operation op = Operation.createPost(UriUtils.buildUri(host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+                .setReferer(host.getUri()).setBody(qt).setCompletion((o, e) -> {
+                    if (e != null) {
+                        host.log(Level.INFO, e.toString());
+                    }
+                });
+        Operation result = host.waitForResponse(op);
+        QueryTask qtResult = result.getBody(QueryTask.class);
+        ResourceMetrics resourceMetric = null;
+        if (qtResult.results.documentLinks.size() > 0) {
+            String documentLink = qtResult.results.documentLinks.get(0);
+            resourceMetric = Utils.fromJson(qtResult.results.documents.get(documentLink),
+                    ResourceMetrics.class);
+        }
+        return resourceMetric;
+    }
+
+    /**
+     * Runs azure enumeration.
+     */
+    public static void runEnumeration(VerificationHost host, String hostSelfLink,
+            String resourcePoolLink, boolean isMock) throws Throwable {
+        ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
+
+        enumerationTaskState.parentComputeLink = hostSelfLink;
+        enumerationTaskState.enumerationAction = EnumerationAction.START;
+        enumerationTaskState.adapterManagementReference = UriUtils
+                .buildUri(AzureEnumerationAdapterService.SELF_LINK);
+        enumerationTaskState.resourcePoolLink = resourcePoolLink;
+        if (isMock) {
+            enumerationTaskState.options = EnumSet.of(TaskOption.IS_MOCK);
+        }
+
+        ResourceEnumerationTaskState enumTask = TestUtils
+                .doPost(host, enumerationTaskState, ResourceEnumerationTaskState.class,
+                        UriUtils.buildUri(host, ResourceEnumerationTaskService.FACTORY_LINK));
+
+        host.waitFor("Error waiting for enumeration task", () -> {
+            try {
+                ResourceEnumerationTaskState state = host
+                        .waitForFinishedTask(ResourceEnumerationTaskState.class,
+                                enumTask.documentSelfLink);
+                if (state != null) {
+                    return true;
+                }
+            } catch (Throwable e) {
+                return false;
+            }
+            return false;
+        });
+    }
+
+    /**
+     * Helper for running stats collection task.
+     * @param host
+     * @param isMock
+     * @throws Throwable
+     */
+    public static void resourceStatsCollection(VerificationHost host,
+            boolean isMock, String resourcePoolLink) throws Throwable {
+        resourceStatsCollection(host, null,
+                isMock ? EnumSet.of(TaskOption.IS_MOCK) : null, resourcePoolLink);
+    }
+
+    /**
+     * Waits for stats collection task to be finished.
+     * @param host
+     * @param peerURI
+     * @param options
+     * @throws Throwable
+     */
+    public static void resourceStatsCollection(VerificationHost host, URI peerURI,
+            EnumSet<TaskOption> options, String resourcePoolLink) throws Throwable {
+        StatsCollectionTaskState statsTask = performResourceStatsCollection(
+                host, options, resourcePoolLink);
+
+        // Wait for the stats collection task to be completed.
+        host.waitForFinishedTask(StatsCollectionTaskState.class,
+                ProvisioningUtils.createServiceURI(host, peerURI, statsTask.documentSelfLink));
+    }
+
+    /**
+     * Performs stats collection for given resourcePoolLink.
+     */
+    public static StatsCollectionTaskState performResourceStatsCollection(
+            VerificationHost host, EnumSet<TaskOption> options, String resourcePoolLink)
+            throws Throwable {
+
+        StatsCollectionTaskState statsCollectionTaskState =
+                new StatsCollectionTaskState();
+
+        statsCollectionTaskState.resourcePoolLink = resourcePoolLink;
+        statsCollectionTaskState.options = EnumSet.noneOf(TaskOption.class);
+
+        if (options != null) {
+            statsCollectionTaskState.options = options;
+        }
+
+        URI uri = UriUtils.buildUri(host, StatsCollectionTaskService.FACTORY_LINK);
+        StatsCollectionTaskState statsTask = TestUtils.doPost(
+                host, statsCollectionTaskState, StatsCollectionTaskState.class, uri);
+
+        return statsTask;
+    }
+
+    /**
+     * Performs stats collection for given resourcePoolLink.
+     */
+    public static void resourceStatsAggregation(VerificationHost host,
+            String resourcePoolLink) throws Throwable {
+        host.testStart(1);
+        StatsAggregationTaskState statsAggregationTaskState = new StatsAggregationTaskState();
+        QueryTask.Query taskQuery = QueryTask.Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK, resourcePoolLink).build();
+        statsAggregationTaskState.query =  taskQuery;
+        statsAggregationTaskState.taskInfo = TaskState.createDirect();
+        statsAggregationTaskState.metricNames = getMetricNames();
+
+        host.send(Operation
+                .createPost(
+                        UriUtils.buildUri(host,
+                                StatsAggregationTaskService.FACTORY_LINK))
+                .setBody(statsAggregationTaskState)
+                .setCompletion(host.getCompletion()));
+        host.testWait();
+    }
+
+    /**
+     * Define the metric names that should be aggregated.
+     */
+    public static Set<String> getMetricNames() {
+        Set<String> metricNames = new HashSet<>();
+        // CPU
+        metricNames.add(PhotonModelConstants.CPU_UTILIZATION_PERCENT);
+
+        // Memory
+        metricNames.add(PhotonModelConstants.MEMORY_USED_PERCENT);
+
+        // Storage
+        metricNames.add(PhotonModelConstants.STORAGE_USED_BYTES);
+
+        return metricNames;
     }
 }
