@@ -34,12 +34,10 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
@@ -104,7 +102,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
             this.localComputeDescriptionMap = new HashMap<>();
             this.representativeComputeDescriptionSet = new HashSet<>();
             this.computeDescriptionsToBeCreatedList = new ArrayList<>();
-            this.createOperations = new ArrayList<Operation>();
+            this.createOperations = new ArrayList<>();
             this.creationStage = AWSComputeDescCreationStage.GET_REPRESENTATIVE_LIST;
             this.operation = op;
         }
@@ -322,7 +320,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
         computeDescription.endpointLink = cdState.endpointLink;
         computeDescription.tenantLinks = cdState.tenantLinks;
         // Book keeping information about the creation of the compute description in the system.
-        computeDescription.customProperties = new HashMap<String, String>();
+        computeDescription.customProperties = new HashMap<>();
         computeDescription.customProperties.put(SOURCE_TASK_LINK,
                 ResourceEnumerationTaskService.FACTORY_LINK);
 
@@ -365,6 +363,5 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
 
     private void finishWithFailure(AWSComputeDescriptionCreationServiceContext context, Throwable exc) {
         context.operation.fail(exc);
-        AdapterUtils.sendFailurePatchToEnumerationTask(this, context.cdState.parentTaskLink, exc);
     }
 }

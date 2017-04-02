@@ -26,6 +26,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -87,6 +88,7 @@ public class AWSMockStatsService extends StatelessService {
         public ComputeStatsRequest statsRequest;
         public ComputeStats statsResponse;
         public boolean isComputeHost;
+        public TaskManager taskManager;
 
         public AWSMockStatsDataHolder() {
             this.statsResponse = new ComputeStats();
@@ -113,13 +115,16 @@ public class AWSMockStatsService extends StatelessService {
         }
         op.complete();
         ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
-        if (statsRequest.isMockRequest) {
-            // patch status to parent task
-            AdapterUtils.sendPatchToProvisioningTask(this, statsRequest.taskReference);
-            return;
-        }
         AWSMockStatsDataHolder statsData = new AWSMockStatsDataHolder();
         statsData.statsRequest = statsRequest;
+        statsData.taskManager = new TaskManager(this, statsRequest.taskReference,
+                statsRequest.resourceLink());
+        if (statsRequest.isMockRequest) {
+            // patch status to parent task
+            statsData.taskManager.finishTask();
+            return;
+        }
+
         getVMDescription(statsData);
     }
 
@@ -181,8 +186,7 @@ public class AWSMockStatsService extends StatelessService {
 
     private Consumer<Throwable> getFailureConsumer(AWSMockStatsDataHolder statsData) {
         return ((t) -> {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, t);
+            statsData.taskManager.patchTaskToFailure(t);
         });
     }
 

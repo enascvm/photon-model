@@ -40,12 +40,12 @@ import com.vmware.photon.controller.model.adapters.gcp.utils.GCPStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils;
 import com.vmware.photon.controller.model.adapters.gcp.utils.JSONWebToken;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
@@ -146,6 +146,7 @@ public class GCPStatsService extends StatelessService {
         public String projectId;
         public String instanceId;
         public Operation gcpStatsCollectionOperation;
+        public TaskManager taskManager;
 
         public GCPStatsDataHolder(Operation op) {
             this.gcpStatsCollectionOperation = op;
@@ -324,6 +325,8 @@ public class GCPStatsService extends StatelessService {
         ComputeStatsRequest statsRequest = patch.getBody(ComputeStatsRequest.class);
         GCPStatsDataHolder statsData = new GCPStatsDataHolder(patch);
         statsData.statsRequest = statsRequest;
+        statsData.taskManager = new TaskManager(this, statsRequest.taskReference,
+                statsRequest.resourceLink());
 
         // If mock mode is enabled, patch back to the parent.
         if (statsData.statsRequest.isMockRequest) {
@@ -366,13 +369,11 @@ public class GCPStatsService extends StatelessService {
             getStats(statsData, StatsCollectionStage.FINISHED);
             break;
         case ERROR:
-            statsData.gcpStatsCollectionOperation.fail(statsData.error);
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, statsData.error);
+            statsData.taskManager.patchTaskToFailure(statsData.error);
             break;
         case FINISHED:
             // Patch status to parent task
-            AdapterUtils.sendPatchToProvisioningTask(this, statsData.statsRequest.taskReference);
+            statsData.taskManager.finishTask();
             break;
         default:
             String err = String.format("Unknown GCP stats collection stage %s ", statsData.stage.toString());
@@ -380,8 +381,7 @@ public class GCPStatsService extends StatelessService {
             statsData.error = new IllegalStateException(err);
             statsData.gcpStatsCollectionOperation.fail(statsData.error);
             // Patch failure back to parent task
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, statsData.error);
+            statsData.taskManager.patchTaskToFailure(statsData.error);
         }
     }
 
@@ -473,9 +473,9 @@ public class GCPStatsService extends StatelessService {
          * description.
          */
         if (statsData.isComputeHost) {
-            groupLink = new ArrayList<String>(statsData.computeDesc.description.groupLinks);
+            groupLink = new ArrayList<>(statsData.computeDesc.description.groupLinks);
         } else {
-            groupLink = new ArrayList<String>(statsData.parentDesc.description.groupLinks);
+            groupLink = new ArrayList<>(statsData.parentDesc.description.groupLinks);
         }
         AdapterUtils.getServiceState(this, groupLink.get(0), onSuccess, getFailureConsumer(statsData));
     }
@@ -552,7 +552,7 @@ public class GCPStatsService extends StatelessService {
     private void storeAndSendStats(GCPStatsDataHolder statsData, String[] metricInfo,
             GCPMetricResponse response, StatsCollectionStage nextStage) {
         ServiceStat stat = new ServiceStat();
-        List<ServiceStat> datapoint = new ArrayList<ServiceStat>();
+        List<ServiceStat> datapoint = new ArrayList<>();
         if (response.timeSeries != null) {
             TimeSeries ts = response.timeSeries[0];
             stat.latestValue = ts.points[0].value.int64Value == null ?
@@ -604,8 +604,7 @@ public class GCPStatsService extends StatelessService {
      */
     private Consumer<Throwable> getFailureConsumer(GCPStatsDataHolder statsData) {
         return ((t) -> {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, t);
+            statsData.taskManager.patchTaskToFailure(t);
         });
     }
 }

@@ -41,7 +41,7 @@ public abstract class BasePowerContext<CONTEXT extends BasePowerContext<CONTEXT>
      */
     public BasePowerContext(StatelessService service,
             ComputePowerRequest computePowerRequest) {
-        super(service, computePowerRequest.resourceReference);
+        super(service, computePowerRequest);
         this.request = computePowerRequest;
     }
 

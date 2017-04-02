@@ -58,13 +58,13 @@ import com.vmware.photon.controller.model.adapters.azure.model.stats.TableInfo;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceHost.ServiceNotFoundException;
@@ -116,6 +116,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
         public AtomicInteger numResponses = new AtomicInteger(0);
         public String tableName;
         public String partitionValue;
+        public TaskManager taskManager;
 
         public AzureStatsDataHolder() {
             this.statsResponse = new ComputeStats();
@@ -132,15 +133,12 @@ public class AzureComputeStatsGatherer extends StatelessService {
         }
         op.complete();
         ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
-
-        if (statsRequest.isMockRequest) {
-            // patch status to parent task
-            AdapterUtils.sendPatchToProvisioningTask(this, statsRequest.taskReference);
-            return;
-        }
+        TaskManager taskManager = new TaskManager(this, statsRequest.taskReference,
+                statsRequest.resourceLink());
 
         AzureStatsDataHolder statsData = new AzureStatsDataHolder();
         statsData.statsRequest = statsRequest;
+        statsData.taskManager = taskManager;
         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1336
         getVMDescription(statsData);
     }
@@ -188,9 +186,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
          */
         if (statsData.computeDesc.diskLinks == null ||
                 statsData.computeDesc.diskLinks.isEmpty()) {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference,
-                    new IllegalStateException("No disks found"));
+            statsData.taskManager.patchTaskToFailure(new IllegalStateException("No disks found"));
         }
         AdapterUtils.getServiceState(this, statsData.computeDesc.diskLinks.get(0), onSuccess,
                 getFailureConsumer(statsData));
@@ -210,8 +206,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                         patchEmptyResponse(statsData);
                         return;
                     }
-                    AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                            statsData.statsRequest.taskReference, throwable);
+                    statsData.taskManager.patchTaskToFailure(throwable);
                 }));
     }
 
@@ -232,8 +227,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                 patchEmptyResponse(statsData);
                 return;
             }
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, throwable);
+            statsData.taskManager.patchTaskToFailure(throwable);
         });
     }
 
@@ -252,8 +246,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
         try {
             getMetricDefinitions(statsData);
         } catch (Exception e) {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, e);
+            statsData.taskManager.patchTaskToFailure(e);
         }
     }
 
@@ -286,8 +279,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                 AzureConstants.AUTH_HEADER_BEARER_PREFIX + statsData.credentials.getToken());
         operation.setCompletion((op, ex) -> {
             if (ex != null) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        statsData.statsRequest.taskReference, ex);
+                statsData.taskManager.patchTaskToFailure(ex);
                 return;
             }
             MetricDefinitions metricDefinitions = op.getBody(MetricDefinitions.class);
@@ -317,8 +309,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                 try {
                     getMetrics(statsData);
                 } catch (Exception e) {
-                    AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                            statsData.statsRequest.taskReference, e);
+                    statsData.taskManager.patchTaskToFailure(e);
                 }
             } else {
                 patchEmptyResponse(statsData);
@@ -375,8 +366,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
-            AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                    this.statsData.statsRequest.taskReference, exception);
+            this.statsData.taskManager.patchTaskToFailure(exception);
         }
 
         @Override

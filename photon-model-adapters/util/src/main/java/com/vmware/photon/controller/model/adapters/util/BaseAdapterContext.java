@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.function.Function;
 import java.util.logging.Level;
 
+import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
@@ -40,8 +41,8 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
     public static final class DefaultAdapterContext
             extends BaseAdapterContext<DefaultAdapterContext> {
 
-        public DefaultAdapterContext(StatelessService service, URI computeReference) {
-            super(service, computeReference);
+        public DefaultAdapterContext(StatelessService service, ResourceRequest resourceRequest) {
+            super(service, resourceRequest);
         }
     }
 
@@ -68,22 +69,28 @@ public class BaseAdapterContext<T extends BaseAdapterContext<T>> {
      */
     public Operation operation;
 
+    public TaskManager taskManager;
+
     /**
-     * @param service           The service that is creating and using this context.
-     * @param resourceReference The URI of the resource that is used to start the
-     *                          {@link #populateBaseContext(BaseAdapterStage) state machine}.
-     *                          <ul>
-     *                          <li>If {@code populateContext} is called with {@code BaseAdapterStage#VMDESC} then
-     *                          this should point to <b>child</b> resource.</li>
-     *                          <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTDESC}
-     *                          then this should point to <b>parent</b> resource.</li>
-     *                          <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTAUTH}
-     *                          then this should point to <b>parent auth</b> resource.</li>
-     *                          </ul>
+     * @param service
+     *            The service that is creating and using this context.
+     * @param resourceRequest
+     *            The ResourceRequest that is used to start the
+     *            {@link #populateBaseContext(BaseAdapterStage) state machine}.
+     *            <ul>
+     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#VMDESC} then
+     *            this should point to <b>child</b> resource.</li>
+     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTDESC}
+     *            then this should point to <b>parent</b> resource.</li>
+     *            <li>If {@code populateContext} is called with {@code BaseAdapterStage#PARENTAUTH}
+     *            then this should point to <b>parent auth</b> resource.</li>
+     *            </ul>
      */
-    public BaseAdapterContext(StatelessService service, URI resourceReference) {
+    public BaseAdapterContext(StatelessService service, ResourceRequest resourceRequest) {
         this.service = service;
-        this.resourceReference = resourceReference;
+        this.resourceReference = resourceRequest.resourceReference;
+        this.taskManager = new TaskManager(this.service, resourceRequest.taskReference,
+                resourceRequest.resourceLink());
     }
 
     public final DeferredResult<T> populateBaseContext(BaseAdapterStage stage) {

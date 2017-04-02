@@ -23,18 +23,12 @@ import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
-import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceState;
-import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
-import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
-import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
@@ -57,106 +51,6 @@ public class AdapterUtils {
         } else {
             return false;
         }
-    }
-
-    public static void sendFailurePatchToProvisioningTask(StatelessService service,
-            URI taskLink, Throwable t) {
-        service.logWarning("Patching task to failure: %s", t.getMessage());
-        service.logFine(Utils.toString(t));
-        sendPatchToProvisioningTask(service, taskLink, t);
-    }
-
-    /**
-     * Overloaded sendFailurePatchToProvisioningTask method that takes the ServiceHost
-     * and path inputs to build the URI.
-     *
-     * @param service
-     * @param host
-     * @param path
-     * @param t
-     */
-    public static void sendFailurePatchToProvisioningTask(StatelessService service,
-            ServiceHost host, String path, Throwable t) {
-        service.logWarning("Patching task to failure: %s", t.getMessage());
-        service.logFine(Utils.toString(t));
-        URI taskLink = UriUtils.buildUri(host, path);
-        sendPatchToProvisioningTask(service, taskLink, t);
-    }
-
-    public static void sendPatchToProvisioningTask(StatelessService service, URI taskLink) {
-        sendPatchToProvisioningTask(service, taskLink, null);
-    }
-
-    private static void sendPatchToProvisioningTask(StatelessService service, URI taskLink,
-            Throwable t) {
-        ProvisionComputeTaskState provisioningTaskBody = new ProvisionComputeTaskState();
-        TaskState taskInfo = new TaskState();
-        if (t == null) {
-            taskInfo.stage = TaskState.TaskStage.FINISHED;
-        } else {
-            taskInfo.failure = Utils.toServiceErrorResponse(t);
-            taskInfo.stage = TaskState.TaskStage.FAILED;
-        }
-        provisioningTaskBody.taskInfo = taskInfo;
-        service.sendRequest(Operation.createPatch(taskLink).setBody(
-                provisioningTaskBody));
-    }
-
-    public static void sendPatchToTask(StatelessService service, URI taskReference,
-            ResourceOperationResponse response) {
-
-        if (taskReference == null) {
-            // Do nothing.
-            return;
-        }
-
-        service.sendRequest(Operation.createPatch(taskReference).setBody(
-                response));
-    }
-
-    /**
-     * Sends failure patch to the enumeration task.
-     *
-     * @param service  The service from which the patch is originating.
-     * @param taskLink The enumeration task service to which the patch is to be sent
-     * @param t        The exception that was encountered.
-     */
-    public static void sendFailurePatchToEnumerationTask(StatelessService service,
-            URI taskLink, Throwable t) {
-        service.logWarning(Utils.toString(t));
-        sendPatchToEnumerationTask(service, taskLink, t);
-    }
-
-    /**
-     * Sends patch to the enumeration task.
-     *
-     * @param service  The service from which the patch is originating.
-     * @param taskLink The enumeration task service to which the patch is to be sent
-     */
-    public static void sendPatchToEnumerationTask(StatelessService service, URI taskLink) {
-        sendPatchToEnumerationTask(service, taskLink, null);
-    }
-
-    /**
-     * Sends patch to the enumeration task.
-     *
-     * @param service  The service from which the patch is originating.
-     * @param taskLink The enumeration task service to which the patch is to be sent
-     * @param t        The exception that was encountered.
-     */
-    private static void sendPatchToEnumerationTask(StatelessService service, URI taskLink,
-            Throwable t) {
-        ResourceEnumerationTaskState enumerationTaskBody = new ResourceEnumerationTaskState();
-        TaskState taskInfo = new TaskState();
-        if (t == null) {
-            taskInfo.stage = TaskState.TaskStage.FINISHED;
-        } else {
-            taskInfo.failure = Utils.toServiceErrorResponse(t);
-            taskInfo.stage = TaskState.TaskStage.FAILED;
-        }
-        enumerationTaskBody.taskInfo = taskInfo;
-        service.sendRequest(Operation.createPatch(taskLink).setBody(
-                enumerationTaskBody));
     }
 
     /**
@@ -185,16 +79,6 @@ public class AdapterUtils {
         service.sendRequest(Operation.createGet(service, path).setCompletion(success, (o, e) -> {
             failure.accept(e);
         }));
-    }
-
-    public static void sendNetworkFinishPatch(StatelessService service,
-            URI taskLink) {
-        ProvisionNetworkTaskService.ProvisionNetworkTaskState pn = new ProvisionNetworkTaskService.ProvisionNetworkTaskState();
-        TaskState taskInfo = new TaskState();
-        taskInfo.stage = TaskState.TaskStage.FINISHED;
-        pn.taskInfo = taskInfo;
-        service.sendRequest(Operation.createPatch(taskLink).setBody(pn));
-
     }
 
     /**

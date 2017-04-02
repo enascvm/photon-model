@@ -52,7 +52,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -589,15 +588,15 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // Calculate delta lists {{
 
         // From the AWS NICs, substract all local NICs to identify NICs that should be created
-        List<Integer> remoteDeviceIndexesToAdd = new ArrayList<Integer>(awsDeviceIndexes);
+        List<Integer> remoteDeviceIndexesToAdd = new ArrayList<>(awsDeviceIndexes);
         remoteDeviceIndexesToAdd.removeAll(localNICsDeviceIndexes);
 
         // From the local NIC States, retain only the ones which correspond to AWS NICs to identify which one to update
-        List<Integer> localDeviceIndexesToUpdate = new ArrayList<Integer>(awsDeviceIndexes);
+        List<Integer> localDeviceIndexesToUpdate = new ArrayList<>(awsDeviceIndexes);
         localDeviceIndexesToUpdate.retainAll(localNICsDeviceIndexes);
 
         // From the local NIC States, substract all the AWS NICs to identify NICs that should be removed
-        List<Integer> localDeviceIndexesToRemove = new ArrayList<Integer>(localNICsDeviceIndexes);
+        List<Integer> localDeviceIndexesToRemove = new ArrayList<>(localNICsDeviceIndexes);
         localDeviceIndexesToRemove.removeAll(awsDeviceIndexes);
         // }}
 
@@ -766,8 +765,6 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
     private void finishWithFailure(AWSComputeStateCreationContext context, Throwable exc) {
         context.operation.fail(exc);
-        AdapterUtils.sendFailurePatchToEnumerationTask(this, context.request.parentTaskLink,
-                exc);
     }
 
 }

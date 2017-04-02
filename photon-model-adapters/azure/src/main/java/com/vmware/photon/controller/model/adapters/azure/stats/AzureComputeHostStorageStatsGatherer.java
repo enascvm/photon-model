@@ -55,6 +55,7 @@ import com.microsoft.azure.storage.blob.PageRange;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
@@ -148,12 +149,6 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
         }
 
         ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
-
-        if (statsRequest.isMockRequest) {
-            // patch status to parent task
-            AdapterUtils.sendPatchToProvisioningTask(this, statsRequest.taskReference);
-            return;
-        }
 
         AzureStorageStatsDataHolder statsData = new AzureStorageStatsDataHolder(op);
         statsData.statsRequest = statsRequest;
@@ -326,6 +321,7 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
                                 handleError(statsData, e);
                             }
 
+                            @Override
                             public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
                                 logFine(() -> String
                                         .format("Retrieved the storage account keys for"
@@ -486,10 +482,10 @@ public class AzureComputeHostStorageStatsGatherer extends StatelessService {
             if (throwable instanceof ServiceHost.ServiceNotFoundException) {
                 logWarning(() -> String.format("Skipping storage stats collection because [%s]",
                         throwable.getMessage()));
+                statsData.azureStorageStatsOperation.complete();
                 return;
             }
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, throwable);
+            statsData.azureStorageStatsOperation.fail(throwable);
         });
     }
 }

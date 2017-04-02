@@ -21,10 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
@@ -87,9 +84,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
         public Operation computeHostStatsOp;
 
         public ComputeService.ComputeStateWithDescription computeHost;
-        public ApplicationTokenCredentials credentials;
         public ComputeHostMetricsStages stage;
-        public AtomicInteger numResponses = new AtomicInteger(0);
         public Throwable error;
 
         public AzureStatsDataHolder(Operation op) {
@@ -108,12 +103,6 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
             return;
         }
         ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
-
-        if (statsRequest.isMockRequest) {
-            // patch status to parent task
-            AdapterUtils.sendPatchToProvisioningTask(this, statsRequest.taskReference);
-            return;
-        }
 
         AzureStatsDataHolder statsData = new AzureStatsDataHolder(op);
         statsData.statsRequest = statsRequest;
@@ -323,8 +312,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
      */
     private void sendFailurePatch(AzureStatsDataHolder statsData, Throwable throwable) {
         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1271
-        AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                statsData.statsRequest.taskReference, throwable);
+        statsData.computeHostStatsOp.fail(throwable);
     }
 
     /**
@@ -332,8 +320,7 @@ public class AzureComputeHostStatsGatherer extends StatelessService {
      */
     private Consumer<Throwable> getFailureConsumer(AzureStatsDataHolder statsData) {
         return ((throwable) -> {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, throwable);
+            statsData.computeHostStatsOp.fail(throwable);
         });
     }
 }

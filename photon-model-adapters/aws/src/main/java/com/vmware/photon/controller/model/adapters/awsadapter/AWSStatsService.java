@@ -38,13 +38,13 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -105,6 +105,7 @@ public class AWSStatsService extends StatelessService {
         public AmazonCloudWatchAsyncClient statsClient;
         public AmazonCloudWatchAsyncClient billingClient;
         public boolean isComputeHost;
+        public TaskManager taskManager;
 
         public AWSStatsDataHolder() {
             this.statsResponse = new ComputeStats();
@@ -131,15 +132,18 @@ public class AWSStatsService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        op.complete();
         ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
+        op.complete();
+        TaskManager taskManager = new TaskManager(this, statsRequest.taskReference,
+                statsRequest.resourceLink());
         if (statsRequest.isMockRequest) {
             // patch status to parent task
-            AdapterUtils.sendPatchToProvisioningTask(this, statsRequest.taskReference);
+            taskManager.finishTask();
             return;
         }
         AWSStatsDataHolder statsData = new AWSStatsDataHolder();
         statsData.statsRequest = statsRequest;
+        statsData.taskManager = taskManager;
         getVMDescription(statsData);
     }
 
@@ -189,8 +193,7 @@ public class AWSStatsService extends StatelessService {
 
     private Consumer<Throwable> getFailureConsumer(AWSStatsDataHolder statsData) {
         return ((t) -> {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, t);
+            statsData.taskManager.patchTaskToFailure(t);
         });
     }
 
@@ -227,7 +230,7 @@ public class AWSStatsService extends StatelessService {
                         metricRequest);
             } catch (IllegalStateException e) {
                 // no data to process. notify parent
-                AdapterUtils.sendPatchToProvisioningTask(this, statsData.statsRequest.taskReference);
+                statsData.taskManager.finishTask();
                 return;
             }
             metricRequest.setPeriod(collectionPeriod.intValue());
@@ -249,7 +252,7 @@ public class AWSStatsService extends StatelessService {
 
             logFine(() -> String.format("Retrieving %s metric from AWS", metricName));
             AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler = new AWSStatsHandler(
-                    this, statsData, metricNames.length, isAggregateStats);
+                    statsData, metricNames.length, isAggregateStats);
             statsData.statsClient.getMetricStatisticsAsync(metricRequest, resultHandler);
         }
     }
@@ -285,7 +288,7 @@ public class AWSStatsService extends StatelessService {
                     request);
         } catch (IllegalStateException e) {
             // no data to process. notify parent
-            AdapterUtils.sendPatchToProvisioningTask(this, statsData.statsRequest.taskReference);
+            statsData.taskManager.finishTask();
             return;
         }
 
@@ -298,7 +301,7 @@ public class AWSStatsService extends StatelessService {
         logFine(() -> String.format("Retrieving %s metric from AWS",
                 AWSConstants.ESTIMATED_CHARGES));
         AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> resultHandler = new AWSBillingStatsHandler(
-                this, statsData, lastCollectionTimeForEstimatedCharges);
+                statsData, lastCollectionTimeForEstimatedCharges);
         statsData.billingClient.getMetricStatisticsAsync(request, resultHandler);
     }
 
@@ -346,19 +349,17 @@ public class AWSStatsService extends StatelessService {
     }
 
     private AmazonCloudWatchAsyncClient getAWSAsyncStatsClient(AWSStatsDataHolder statsData) {
-        URI parentURI = statsData.statsRequest.taskReference;
         statsData.statsClient = this.clientManager.getOrCreateCloudWatchClient(statsData.parentAuth,
-                statsData.computeDesc.description.regionId, this, parentURI,
-                statsData.statsRequest.isMockRequest);
+                statsData.computeDesc.description.regionId, this,
+                statsData.statsRequest.isMockRequest, getFailureConsumer(statsData));
         return statsData.statsClient;
     }
 
     private AmazonCloudWatchAsyncClient getAWSAsyncBillingClient(AWSStatsDataHolder statsData) {
-        URI parentURI = statsData.statsRequest.taskReference;
         statsData.billingClient = this.clientManager.getOrCreateCloudWatchClient(
                 statsData.parentAuth,
-                COST_ZONE_ID, this, parentURI,
-                statsData.statsRequest.isMockRequest);
+                COST_ZONE_ID, this, statsData.statsRequest.isMockRequest,
+                getFailureConsumer(statsData));
         return statsData.billingClient;
     }
 
@@ -369,14 +370,12 @@ public class AWSStatsService extends StatelessService {
             AsyncHandler<GetMetricStatisticsRequest, GetMetricStatisticsResult> {
 
         private AWSStatsDataHolder statsData;
-        private StatelessService service;
         private OperationContext opContext;
         private Long lastCollectionTimeMicrosUtc;
 
-        public AWSBillingStatsHandler(StatelessService service, AWSStatsDataHolder statsData,
+        public AWSBillingStatsHandler(AWSStatsDataHolder statsData,
                 Long lastCollectionTimeMicrosUtc) {
             this.statsData = statsData;
-            this.service = service;
             this.opContext = OperationContext.getOperationContext();
             this.lastCollectionTimeMicrosUtc = lastCollectionTimeMicrosUtc;
         }
@@ -384,8 +383,7 @@ public class AWSStatsService extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
-            AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                    this.statsData.statsRequest.taskReference, exception);
+            this.statsData.taskManager.patchTaskToFailure(exception);
         }
 
         @Override
@@ -453,8 +451,7 @@ public class AWSStatsService extends StatelessService {
                 }
                 sendStats(this.statsData);
             } catch (Exception e) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                        this.statsData.statsRequest.taskReference, e);
+                this.statsData.taskManager.patchTaskToFailure(e);
             }
         }
     }
@@ -465,13 +462,11 @@ public class AWSStatsService extends StatelessService {
         private final int numOfMetrics;
         private final Boolean isAggregateStats;
         private AWSStatsDataHolder statsData;
-        private StatelessService service;
         private OperationContext opContext;
 
-        public AWSStatsHandler(StatelessService service, AWSStatsDataHolder statsData,
-                int numOfMetrics, Boolean isAggregateStats) {
+        public AWSStatsHandler(AWSStatsDataHolder statsData, int numOfMetrics,
+                Boolean isAggregateStats) {
             this.statsData = statsData;
-            this.service = service;
             this.numOfMetrics = numOfMetrics;
             this.isAggregateStats = isAggregateStats;
             this.opContext = OperationContext.getOperationContext();
@@ -480,8 +475,7 @@ public class AWSStatsService extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
-            AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                    this.statsData.statsRequest.taskReference, exception);
+            this.statsData.taskManager.patchTaskToFailure(exception);
         }
 
         @Override
@@ -510,8 +504,7 @@ public class AWSStatsService extends StatelessService {
                     sendStats(this.statsData);
                 }
             } catch (Exception e) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                        this.statsData.statsRequest.taskReference, e);
+                this.statsData.taskManager.patchTaskToFailure(e);
             }
         }
     }

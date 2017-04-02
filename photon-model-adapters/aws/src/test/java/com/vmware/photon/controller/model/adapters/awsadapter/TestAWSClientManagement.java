@@ -62,7 +62,7 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
     @Before
     public void setUp() throws Exception {
         CommandLineArgumentParser.parseFromProperties(this);
-        List<String> serviceSelfLinks = new ArrayList<String>();
+        List<String> serviceSelfLinks = new ArrayList<>();
         try {
             // TODO: VSYM-992 - improve test/remove arbitrary timeout
             this.instanceService = new AWSInstanceService();
@@ -111,13 +111,17 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
         this.creds.privateKeyId = this.secretKey;
 
         this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.zoneId,
-                this.instanceService, null, false);
+                this.instanceService, t -> {
+                    throw new RuntimeException(t);
+                });
         assertEquals(count1, clientManager.getCacheCount());
 
         // Requesting another AWS client with the same set of credentials will not
         // create a new entry in the cache
         this.client = clientManager.getOrCreateEC2Client(this.creds, TestAWSSetupUtils.zoneId,
-                this.instanceService, null, false);
+                this.instanceService, t -> {
+                    throw new RuntimeException(t);
+                });
         assertEquals(count1, clientManager.getCacheCount());
 
         // Saving a reference to the executor associated with the client to chec

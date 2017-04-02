@@ -66,7 +66,6 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -201,12 +200,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         }
         EnumerationCreationContext awsEnumerationContext = new EnumerationCreationContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
-        if (awsEnumerationContext.request.original.isMockRequest) {
-            // patch status to parent task
-            AdapterUtils.sendPatchToEnumerationTask(this,
-                    awsEnumerationContext.request.original.taskReference);
-            return;
-        }
         handleEnumerationRequest(awsEnumerationContext);
     }
 
@@ -279,15 +272,13 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             }
             break;
         case ERROR:
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.original.taskReference, aws.error);
+            aws.operation.fail(aws.error);
             break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
                     aws.stage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.original.taskReference, aws.error);
+            aws.operation.fail(aws.error);
             break;
         }
     }
@@ -317,15 +308,13 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                     aws.resultHandler);
             break;
         case ERROR:
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.original.taskReference, aws.error);
+            aws.operation.fail(aws.error);
             break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
                     aws.refreshSubStage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage");
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.original.taskReference, aws.error);
+            aws.operation.fail(aws.error);
             break;
         }
 
@@ -337,13 +326,23 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     private void getAWSAsyncClient(EnumerationCreationContext aws,
             AWSEnumerationCreationStages next) {
         aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
-                aws.request.regionId, this,
-                aws.request.original.taskReference, true);
+                aws.request.regionId, this, (t) -> aws.error = t);
+        if (aws.error != null) {
+            aws.stage = AWSEnumerationCreationStages.ERROR;
+            handleEnumerationRequest(aws);
+            return;
+        }
         OperationContext opContext = OperationContext.getOperationContext();
         AWSUtils.validateCredentials(aws.amazonEC2Client, aws.request, aws.operation, this,
                 (describeAvailabilityZonesResult) -> {
                     aws.stage = next;
                     OperationContext.restoreOperationContext(opContext);
+                    handleEnumerationRequest(aws);
+                },
+                t -> {
+                    OperationContext.restoreOperationContext(opContext);
+                    aws.error = t;
+                    aws.stage = AWSEnumerationCreationStages.ERROR;
                     handleEnumerationRequest(aws);
                 });
     }
@@ -521,9 +520,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                                                             + " compute descriptions for "
                                                             + "discovered AvailabilityZone: %s",
                                                     Utils.toString(exs)));
-                                    AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                                            this.context.request.original.taskReference,
-                                            exs.values().iterator().next());
+                                    this.context.operation.fail(exs.values().iterator().next());
                                     return;
                                 }
                                 List<Operation> computeOps = ops
@@ -554,9 +551,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
                             this.service.logSevere(() -> String.format("Error creating a compute"
                                             + " states for discovered AvailabilityZone: %s",
                                     Utils.toString(exs)));
-                            AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                                    this.context.request.original.taskReference,
-                                    exs.values().iterator().next());
+                            this.context.operation.fail(exs.values().iterator().next());
                             return;
                         }
                         ops.values().stream()
@@ -617,9 +612,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
 
         @Override
         protected void handleError(Exception exception) {
-            AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.context.request.original.taskReference,
-                    exception);
+            this.context.operation.fail(exception);
         }
 
     }
@@ -645,9 +638,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
-            AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.context.request.original.taskReference,
-                    exception);
+            this.context.operation.fail(exception);
         }
 
         @Override

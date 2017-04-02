@@ -40,7 +40,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -146,12 +145,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         }
         EnumerationDeletionContext awsEnumerationContext = new EnumerationDeletionContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
-        if (awsEnumerationContext.request.original.isMockRequest) {
-            // patch status to parent task
-            AdapterUtils.sendPatchToEnumerationTask(this,
-                    awsEnumerationContext.request.original.taskReference);
-            return;
-        }
         handleEnumerationRequestForDeletion(awsEnumerationContext);
     }
 
@@ -193,8 +186,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             }
             break;
         case ERROR:
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.original.taskReference, aws.error);
+            aws.operation.fail(aws.error);
             break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s", aws.stage.toString()));
@@ -210,13 +202,23 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
     private void getAWSAsyncClient(EnumerationDeletionContext aws,
             AWSEnumerationDeletionStages next) {
         aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
-                aws.request.regionId, this,
-                aws.request.original.taskReference, true);
+                aws.request.regionId, this, (t) -> aws.error = t);
+        if (aws.error != null) {
+            aws.stage = AWSEnumerationDeletionStages.ERROR;
+            handleEnumerationRequestForDeletion(aws);
+            return;
+        }
         OperationContext opContext = OperationContext.getOperationContext();
         AWSUtils.validateCredentials(aws.amazonEC2Client, aws.request, aws.operation, this,
                 (describeAvailabilityZonesResult) -> {
                     aws.stage = next;
                     OperationContext.restoreOperationContext(opContext);
+                    handleEnumerationRequestForDeletion(aws);
+                },
+                t -> {
+                    OperationContext.restoreOperationContext(opContext);
+                    aws.error = t;
+                    aws.stage = AWSEnumerationDeletionStages.ERROR;
                     handleEnumerationRequestForDeletion(aws);
                 });
     }
@@ -362,7 +364,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         // local system.
         logFine(() -> String.format("Fetching instance details for %d instances on the AWS"
                         + " endpoint.", aws.localInstanceIds.keySet().size()));
-        request.getInstanceIds().addAll(new ArrayList<String>(aws.localInstanceIds.keySet()));
+        request.getInstanceIds().addAll(new ArrayList<>(aws.localInstanceIds.keySet()));
         AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> resultHandler =
                 new AWSEnumerationAsyncHandler(this, aws, next);
         aws.amazonEC2Client.describeInstancesAsync(request,
@@ -393,10 +395,7 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
             this.service.logSevere(exception);
-            AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.aws.request.original.taskReference,
-                    exception);
-
+            this.aws.operation.fail(exception);
         }
 
         @Override

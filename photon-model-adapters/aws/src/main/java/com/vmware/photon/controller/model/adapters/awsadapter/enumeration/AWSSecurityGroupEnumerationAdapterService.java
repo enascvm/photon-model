@@ -267,7 +267,10 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         if (context.amazonEC2Client == null) {
             context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
                     context.request.parentAuth, context.regionId,
-                    this, context.request.original.taskReference, true);
+                    this, (t) -> handleError(context, t));
+            if (context.amazonEC2Client == null) {
+                return;
+            }
             context.stage = next;
         }
         handleEnumeration(context);

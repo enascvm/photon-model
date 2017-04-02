@@ -28,6 +28,8 @@ public class ResourceOperationResponse {
 
     public TaskState taskInfo;
 
+    public String failureMessage;
+
     public String documentKind = KIND;
 
     public static ResourceOperationResponse finish(String resourceLink) {

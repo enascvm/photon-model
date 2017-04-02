@@ -65,7 +65,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSAsyncHandl
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -327,9 +326,10 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
         context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(
                 context.request.parentAuth, context.request.regionId,
-                this, context.request.request.taskReference, true);
-
-        handleNetworkStateChanges(context, next);
+                this, (t) -> context.operation.fail(t));
+        if (context.amazonEC2Client != null) {
+            handleNetworkStateChanges(context, next);
+        }
     }
 
     /**
@@ -852,8 +852,6 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         context.operation.fail(exc);
 
-        AdapterUtils.sendFailurePatchToEnumerationTask(
-                this, context.request.request.taskReference, exc);
     }
 
     /**

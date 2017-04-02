@@ -34,7 +34,7 @@ import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.Operation;
@@ -76,13 +76,13 @@ public class AWSFirewallService extends StatelessService {
      */
     public static class AWSFirewallRequestState {
         public AmazonEC2AsyncClient client;
-        transient Operation fwOperation;
         public AuthCredentialsServiceState credentials;
         public FirewallInstanceRequest firewallRequest;
         public SecurityGroupState securityGroup;
         public String securityGroupID;
         public FirewallStage stage;
         public Throwable error;
+        TaskManager taskManager;
 
     }
 
@@ -104,10 +104,13 @@ public class AWSFirewallService extends StatelessService {
             }
             // initialize request state object
             AWSFirewallRequestState requestState = new AWSFirewallRequestState();
-            requestState.fwOperation = op;
             requestState.firewallRequest = op
                     .getBody(FirewallInstanceRequest.class);
             requestState.stage = FirewallStage.FIREWALL_STATE;
+            requestState.taskManager = new TaskManager(this,
+                    requestState.firewallRequest.taskReference,
+                    requestState.firewallRequest.resourceLink());
+            op.complete();
             handleStages(requestState);
             break;
         default:
@@ -126,7 +129,10 @@ public class AWSFirewallService extends StatelessService {
         case AWS_CLIENT:
             requestState.client = this.clientManager.getOrCreateEC2Client(requestState.credentials,
                     requestState.securityGroup.regionId, this,
-                    requestState.firewallRequest.taskReference, false);
+                    (t) -> requestState.taskManager.patchTaskToFailure(t));
+            if (requestState.client == null) {
+                return;
+            }
             if (requestState.firewallRequest.requestType == FirewallInstanceRequest.InstanceRequestType.CREATE) {
                 requestState.stage = FirewallStage.PROVISION_SECURITY_GROUP;
             } else {
@@ -159,18 +165,10 @@ public class AWSFirewallService extends StatelessService {
                     requestState, FirewallStage.FINISHED);
             break;
         case FAILED:
-            if (requestState.firewallRequest.taskReference != null) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                        requestState.firewallRequest.taskReference,
-                        requestState.error);
-            } else {
-                requestState.fwOperation.fail(requestState.error);
-            }
+            requestState.taskManager.patchTaskToFailure(requestState.error);
             break;
         case FINISHED:
-            requestState.fwOperation.complete();
-            AdapterUtils.sendNetworkFinishPatch(this,
-                    requestState.firewallRequest.taskReference);
+            requestState.taskManager.finishTask();
             return;
         default:
             break;

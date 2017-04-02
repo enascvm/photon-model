@@ -135,8 +135,7 @@ public class AWSInstanceService extends StatelessService {
                 op.complete();
                 if (ctx.computeRequest.isMockRequest
                         && ctx.computeRequest.requestType == InstanceRequestType.CREATE) {
-                    AdapterUtils.sendPatchToProvisioningTask(this,
-                            ctx.computeRequest.taskReference);
+                    ctx.taskManager.finishTask();
                     return;
                 }
                 startingStage = BaseAdapterStage.VMDESC;
@@ -206,9 +205,18 @@ public class AWSInstanceService extends StatelessService {
             getProvisioningTaskReference(context, AWSInstanceStage.CLIENT);
             break;
         case CLIENT:
+            Consumer<Throwable> c = t -> {
+                if (context.computeRequest.requestType == InstanceRequestType.VALIDATE_CREDENTIALS) {
+                    context.operation.fail(t);
+                } else {
+                    context.taskManager.patchTaskToFailure(t);
+                }
+            };
             context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(context.parentAuth,
-                    getRequestRegionId(context), this,
-                    context.computeRequest.taskReference, false);
+                    getRequestRegionId(context), this, c);
+            if (context.amazonEC2Client == null) {
+                return;
+            }
             // now that we have a client lets move onto the next step
             switch (context.computeRequest.requestType) {
             case CREATE:
@@ -254,12 +262,7 @@ public class AWSInstanceService extends StatelessService {
         String errorMessage = context.error != null ? context.error.getMessage() : "no error set";
         this.logWarning(() -> "[AWSInstanceService] finished exceptionally. " + errorMessage);
 
-        if (context.computeRequest.taskReference != null) {
-            this.logInfo(() -> "[AWSInstanceService] Send failure notification to the parent task: "
-                    + context.computeRequest.taskReference);
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    context.computeRequest.taskReference, context.error);
-        }
+        context.taskManager.patchTaskToFailure(context.error);
         if (context.operation != null) {
             context.operation.fail(context.error);
         }
@@ -286,22 +289,19 @@ public class AWSInstanceService extends StatelessService {
 
     private void createInstance(AWSInstanceContext aws) {
         if (aws.computeRequest.isMockRequest) {
-            AdapterUtils.sendPatchToProvisioningTask(this,
-                    aws.computeRequest.taskReference);
+            aws.taskManager.finishTask();
             return;
         }
 
         DiskState bootDisk = aws.childDisks.get(DiskType.HDD);
         if (bootDisk == null) {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    aws.computeRequest.taskReference,
-                    new IllegalStateException("AWS bootDisk not specified"));
+            aws.taskManager
+                    .patchTaskToFailure(new IllegalStateException("AWS bootDisk not specified"));
             return;
         }
 
         if (bootDisk.bootConfig != null && bootDisk.bootConfig.files.length > 1) {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    aws.computeRequest.taskReference,
+            aws.taskManager.patchTaskToFailure(
                     new IllegalStateException("Only 1 configuration file allowed"));
             return;
         }
@@ -385,8 +385,8 @@ public class AWSInstanceService extends StatelessService {
             }
         }
 
-        String message =
-                "[AWSInstanceService] Sending run instance request for instance id: " + imageId
+        String message = "[AWSInstanceService] Sending run instance request for instance id: "
+                + imageId
                 + ", instance type: " + instanceType
                 + ", parent task id: " + aws.computeRequest.taskReference;
         this.logInfo(() -> message);
@@ -409,8 +409,7 @@ public class AWSInstanceService extends StatelessService {
 
         @Override
         protected void handleError(Exception exception) {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                    this.context.computeRequest.taskReference, exception);
+            this.context.taskManager.patchTaskToFailure(exception);
         }
 
         @Override
@@ -422,10 +421,9 @@ public class AWSInstanceService extends StatelessService {
 
             // consumer to be invoked once a VM is in the running state
             Consumer<Instance> consumer = instance -> {
-                List<Operation> patchOperations = new ArrayList<Operation>();
+                List<Operation> patchOperations = new ArrayList<>();
                 if (instance == null) {
-                    AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                            this.context.computeRequest.taskReference,
+                    this.context.taskManager.patchTaskToFailure(
                             new IllegalStateException("Error getting instance EC2 instance"));
                     return;
                 }
@@ -460,13 +458,11 @@ public class AWSInstanceService extends StatelessService {
                     if (exc != null) {
                         this.service.logSevere(() -> String.format("Error updating VM state. %s",
                                 Utils.toString(exc)));
-                        AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                                this.context.computeRequest.taskReference,
+                        this.context.taskManager.patchTaskToFailure(
                                 new IllegalStateException("Error updating VM state"));
                         return;
                     }
-                    AdapterUtils.sendPatchToProvisioningTask(this.service,
-                            this.context.computeRequest.taskReference);
+                    this.context.taskManager.finishTask();
                 };
                 OperationJoin joinOp = OperationJoin.create(patchOperations);
                 joinOp.setCompletion(joinCompletion);
@@ -490,7 +486,8 @@ public class AWSInstanceService extends StatelessService {
                         }).collect(Collectors.toList());
                 NetworkInterfaceState nicStateWithDesc = nicStates.stream()
                         .filter(nicState -> nicState != null)
-                        .filter(nicState -> nicState.deviceIndex == instanceNic.getAttachment().getDeviceIndex())
+                        .filter(nicState -> nicState.deviceIndex == instanceNic.getAttachment()
+                                .getDeviceIndex())
                         .findFirst()
                         .orElse(null);
 
@@ -520,7 +517,7 @@ public class AWSInstanceService extends StatelessService {
                 AWSTaskStatusChecker
                         .create(this.context.amazonEC2Client, instanceId,
                                 AWSInstanceService.AWS_RUNNING_NAME, consumer,
-                                this.context.computeRequest,
+                                this.context.taskManager,
                                 this.service, this.context.taskExpirationMicros)
                         .start();
             };
@@ -534,9 +531,7 @@ public class AWSInstanceService extends StatelessService {
             // if there are tag links get the TagStates and convert to amazon Tags
             OperationJoin.JoinedCompletionHandler joinedCompletionHandler = (ops, exs) -> {
                 if (exs != null && !exs.isEmpty()) {
-                    AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                            this.context.computeRequest.taskReference,
-                            exs.values().iterator().next());
+                    this.context.taskManager.patchTaskToFailure(exs.values().iterator().next());
                     return;
                 }
 
@@ -559,7 +554,7 @@ public class AWSInstanceService extends StatelessService {
     private void deleteInstance(AWSInstanceContext aws) {
 
         if (aws.computeRequest.isMockRequest) {
-            AdapterUtils.sendPatchToProvisioningTask(this, aws.computeRequest.taskReference);
+            aws.taskManager.finishTask();
             return;
         }
 
@@ -600,10 +595,9 @@ public class AWSInstanceService extends StatelessService {
             OperationContext.restoreOperationContext(this.opContext);
 
             AWSInstanceService.this.logWarning(() -> String.format("Error deleting instances"
-                            + " received from AWS: %s", exception.getMessage()));
+                    + " received from AWS: %s", exception.getMessage()));
 
-            AdapterUtils.sendFailurePatchToProvisioningTask(AWSInstanceService.this,
-                    this.context.computeRequest.taskReference, exception);
+            this.context.taskManager.patchTaskToFailure(exception);
         }
 
         @Override
@@ -615,9 +609,7 @@ public class AWSInstanceService extends StatelessService {
                 OperationContext.restoreOperationContext(AWSTerminateHandler.this.opContext);
 
                 if (instance == null) {
-                    AdapterUtils.sendFailurePatchToProvisioningTask(
-                            AWSInstanceService.this,
-                            this.context.computeRequest.taskReference,
+                    this.context.taskManager.patchTaskToFailure(
                             new IllegalStateException("Error getting instance"));
                     return;
                 }
@@ -625,32 +617,29 @@ public class AWSInstanceService extends StatelessService {
                 deleteConstructsReferredByInstance()
                         .whenComplete((aVoid, exc) -> {
                             if (exc != null) {
-                                AdapterUtils.sendFailurePatchToProvisioningTask(
-                                        AWSInstanceService.this,
-                                        this.context.computeRequest.taskReference,
-                                        new IllegalStateException(
-                                                "Error deleting AWS subnet", exc));
+                                this.context.taskManager.patchTaskToFailure(
+                                        new IllegalStateException("Error deleting AWS subnet",
+                                                exc));
                             } else {
                                 AWSInstanceService.this.logInfo(() -> String.format("Deleting"
-                                                + " subnets 'created-by' [%s]: SUCCESS",
+                                        + " subnets 'created-by' [%s]: SUCCESS",
                                         this.context.computeRequest.resourceLink()));
 
-                                AdapterUtils.sendPatchToProvisioningTask(AWSInstanceService.this,
-                                        this.context.computeRequest.taskReference);
+                                this.context.taskManager.finishTask();
                             }
                         });
             };
 
             AWSTaskStatusChecker.create(this.context.amazonEC2Client, this.instanceId,
                     AWSInstanceService.AWS_TERMINATED_NAME, postTerminationCallback,
-                    this.context.computeRequest, AWSInstanceService.this,
+                    this.context.taskManager, AWSInstanceService.this,
                     this.context.taskExpirationMicros).start();
         }
 
         private DeferredResult<List<ResourceState>> deleteConstructsReferredByInstance() {
 
             AWSInstanceService.this.logInfo(() -> String.format("Get all states to delete"
-                            + " 'created-by' [%s]", this.context.computeRequest.resourceLink()));
+                    + " 'created-by' [%s]", this.context.computeRequest.resourceLink()));
 
             // Query all states that are usedBy/createdBy the VM state we are deleting
             Query query = Builder.create()
@@ -661,7 +650,8 @@ public class AWSInstanceService extends StatelessService {
                     .build();
 
             QueryTop<ResourceState> statesToDeleteQuery = new QueryTop<>(
-                    getHost(), query, ResourceState.class, this.context.parent.tenantLinks, null /*endpointLink*/);
+                    getHost(), query, ResourceState.class, this.context.parent.tenantLinks,
+                    null /* endpointLink */);
 
             // Once got states to delete process with actual deletion
             return statesToDeleteQuery.collectDocuments(Collectors.toList())
@@ -685,36 +675,35 @@ public class AWSInstanceService extends StatelessService {
         private DeferredResult<ResourceState> deleteAWSSubnet(ResourceState stateToDelete) {
 
             AWSInstanceService.this.logInfo(() -> String.format("Deleting AWS Subnet [%s]"
-                            + " 'created-by' [%s]", stateToDelete.id,
+                    + " 'created-by' [%s]", stateToDelete.id,
                     this.context.computeRequest.resourceLink()));
 
             DeleteSubnetRequest req = new DeleteSubnetRequest().withSubnetId(stateToDelete.id);
 
             String msg = "Delete AWS subnet + [" + stateToDelete.name + "]";
 
-            AWSDeferredResultAsyncHandler<DeleteSubnetRequest, DeleteSubnetResult>
-                    deleteAWSSubnet = new AWSDeferredResultAsyncHandler<DeleteSubnetRequest,
-                    DeleteSubnetResult>(AWSInstanceService.this, msg) {
+            AWSDeferredResultAsyncHandler<DeleteSubnetRequest, DeleteSubnetResult> deleteAWSSubnet = new AWSDeferredResultAsyncHandler<DeleteSubnetRequest, DeleteSubnetResult>(
+                    AWSInstanceService.this, msg) {
 
-                        @Override
-                        protected DeferredResult<DeleteSubnetResult> consumeSuccess(
-                                DeleteSubnetRequest request,
-                                DeleteSubnetResult result) {
-                            return DeferredResult.completed(result);
-                        }
+                @Override
+                protected DeferredResult<DeleteSubnetResult> consumeSuccess(
+                        DeleteSubnetRequest request,
+                        DeleteSubnetResult result) {
+                    return DeferredResult.completed(result);
+                }
 
-                        @Override
-                        protected Exception consumeError(Exception exception) {
-                            if (exception instanceof AmazonEC2Exception) {
-                                AmazonEC2Exception amazonExc = (AmazonEC2Exception) exception;
-                                if (AWS_DEPENDENCY_VIOLATION_ERROR_CODE.equals(amazonExc.getErrorCode())) {
-                                    // AWS subnet is being used by other AWS Instances.
-                                    return RECOVERED;
-                                }
-                            }
-                            return exception;
+                @Override
+                protected Exception consumeError(Exception exception) {
+                    if (exception instanceof AmazonEC2Exception) {
+                        AmazonEC2Exception amazonExc = (AmazonEC2Exception) exception;
+                        if (AWS_DEPENDENCY_VIOLATION_ERROR_CODE.equals(amazonExc.getErrorCode())) {
+                            // AWS subnet is being used by other AWS Instances.
+                            return RECOVERED;
                         }
-                    };
+                    }
+                    return exception;
+                }
+            };
 
             this.context.amazonEC2Client.deleteSubnetAsync(req, deleteAWSSubnet);
 
@@ -731,12 +720,14 @@ public class AWSInstanceService extends StatelessService {
             }
 
             AWSInstanceService.this.logInfo(() -> String.format("Deleting Subnet state [%s]"
-                            + " 'created-by' [%s]", stateToDelete.documentSelfLink,
+                    + " 'created-by' [%s]", stateToDelete.documentSelfLink,
                     this.context.computeRequest.resourceLink()));
 
-            Operation delOp = Operation.createDelete(AWSInstanceService.this, stateToDelete.documentSelfLink);
+            Operation delOp = Operation.createDelete(AWSInstanceService.this,
+                    stateToDelete.documentSelfLink);
 
-            return AWSInstanceService.this.sendWithDeferredResult(delOp).thenApply(ignore -> stateToDelete);
+            return AWSInstanceService.this.sendWithDeferredResult(delOp)
+                    .thenApply(ignore -> stateToDelete);
         }
     }
 
@@ -759,10 +750,6 @@ public class AWSInstanceService extends StatelessService {
             aws.operation.complete();
             return;
         }
-
-        aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
-                getRequestRegionId(aws), this,
-                aws.computeRequest.taskReference, false);
 
         // make a call to validate credentials
         aws.amazonEC2Client

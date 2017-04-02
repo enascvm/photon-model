@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CLIENT_CACHE_INITIAL_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.CLIENT_CACHE_MAX_SIZE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.THREAD_POOL_CACHE_INITIAL_SIZE;
@@ -26,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import com.amazonaws.handlers.AsyncHandler;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
@@ -35,10 +35,10 @@ import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.s3.transfer.TransferManager;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AwsClientType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.LRUCache;
-
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
@@ -99,7 +99,7 @@ public class AWSClientManager {
      */
     public synchronized AmazonEC2AsyncClient getOrCreateEC2Client(
             AuthCredentialsServiceState credentials,
-            String regionId, StatelessService service, URI parentTaskLink, boolean isEnumeration) {
+            String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.EC2) {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
@@ -115,13 +115,7 @@ public class AWSClientManager {
             this.ec2ClientCache.put(cacheKey, amazonEC2Client);
         } catch (Throwable e) {
             service.logSevere(e);
-            if (isEnumeration) {
-                AdapterUtils.sendFailurePatchToEnumerationTask(service,
-                        parentTaskLink, e);
-            } else {
-                AdapterUtils.sendFailurePatchToProvisioningTask(service,
-                        parentTaskLink, e);
-            }
+            failConsumer.accept(e);
         }
         return amazonEC2Client;
     }
@@ -136,8 +130,8 @@ public class AWSClientManager {
      */
     public synchronized AmazonCloudWatchAsyncClient getOrCreateCloudWatchClient(
             AuthCredentialsServiceState credentials,
-            String regionId, StatelessService service,
-            URI parentTaskLink, boolean isMock) {
+            String regionId, StatelessService service, boolean isMock,
+            Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.CLOUD_WATCH) {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
@@ -148,8 +142,8 @@ public class AWSClientManager {
             if ((entryTimestamp + TimeUnit.MINUTES.toMicros(RETRY_AFTER_INTERVAL_MINUTES)) < Utils.getNowMicrosUtc()) {
                 this.invalidcloudWatchClients.remove(cacheKey);
             } else {
-                AdapterUtils.sendFailurePatchToProvisioningTask(service,
-                        parentTaskLink, new IllegalStateException("Invalid cloud watch client for key: " + cacheKey));
+                failConsumer.accept(new IllegalStateException(
+                        "Invalid cloud watch client for key: " + cacheKey));
                 return null;
             }
         }
@@ -175,8 +169,7 @@ public class AWSClientManager {
             this.cloudWatchClientCache.put(cacheKey, amazonCloudWatchClient);
         } catch (Throwable e) {
             service.logSevere(e);
-            AdapterUtils.sendFailurePatchToProvisioningTask(service,
-                    parentTaskLink, e);
+            failConsumer.accept(e);
         }
         return amazonCloudWatchClient;
     }
@@ -189,7 +182,7 @@ public class AWSClientManager {
 
     public synchronized TransferManager getOrCreateS3AsyncClient(
             AuthCredentialsServiceState credentials,
-            String regionId, StatelessService service, URI parentTaskLink) {
+            String regionId, StatelessService service, Consumer<Throwable> failConsumer) {
         if (this.awsClientType != AwsClientType.S3) {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
@@ -205,7 +198,7 @@ public class AWSClientManager {
             return s3AsyncClient;
         } catch (Throwable t) {
             service.logSevere(t);
-            AdapterUtils.sendFailurePatchToProvisioningTask(service, parentTaskLink, t);
+            failConsumer.accept(t);
             return null;
         }
     }
@@ -244,7 +237,7 @@ public class AWSClientManager {
         ExecutorService executorService;
         URI hostURI = host.getPublicUri();
         if (this.executorCache == null) {
-            this.executorCache = new LRUCache<URI, ExecutorService>(
+            this.executorCache = new LRUCache<>(
                     THREAD_POOL_CACHE_INITIAL_SIZE, THREAD_POOL_CACHE_MAX_SIZE);
         }
         executorService = this.executorCache.get(hostURI);

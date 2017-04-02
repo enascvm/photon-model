@@ -27,7 +27,7 @@ import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
@@ -73,7 +73,6 @@ public class AWSNetworkService extends StatelessService {
      */
     private static class AWSNetworkContext {
 
-        final Operation networkOperation;
         final NetworkInstanceRequest networkRequest;
 
         AuthCredentialsServiceState credentials;
@@ -82,10 +81,12 @@ public class AWSNetworkService extends StatelessService {
         ProvisionNetworkTaskState networkTaskState;
         Throwable error;
         AWSNetworkClient client;
+        TaskManager taskManager;
 
-        AWSNetworkContext(NetworkInstanceRequest networkRequest, Operation networkOperation) {
+        AWSNetworkContext(StatelessService service, NetworkInstanceRequest networkRequest) {
             this.networkRequest = networkRequest;
-            this.networkOperation = networkOperation;
+            this.taskManager = new TaskManager(service, networkRequest.taskReference,
+                    networkRequest.resourceLink());
         }
     }
 
@@ -112,8 +113,9 @@ public class AWSNetworkService extends StatelessService {
                 return;
             }
             // initialize allocation object
-            AWSNetworkContext context = new AWSNetworkContext(
-                    op.getBody(NetworkInstanceRequest.class), op);
+            AWSNetworkContext context = new AWSNetworkContext(this,
+                    op.getBody(NetworkInstanceRequest.class));
+            op.complete();
             handleStages(context, AWSNetworkStage.NETWORK_TASK_STATE);
             break;
         default:
@@ -147,7 +149,14 @@ public class AWSNetworkService extends StatelessService {
                 context.client = new AWSNetworkClient(
                         this.clientManager.getOrCreateEC2Client(
                                 context.credentials, context.network.regionId,
-                                this, context.networkRequest.taskReference, false));
+                                this, (t) -> {
+                                    context.stage = AWSNetworkStage.FAILED;
+                                    context.error = t;
+                                }));
+                if (context.error != null) {
+                    handleStages(context);
+                    return;
+                }
                 if (context.networkRequest.requestType == NetworkInstanceRequest.InstanceRequestType.CREATE) {
                     context.stage = AWSNetworkStage.PROVISION_VPC;
                 } else {
@@ -209,29 +218,17 @@ public class AWSNetworkService extends StatelessService {
                         AWSNetworkStage.FINISHED);
                 break;
             case FAILED:
-                if (context.networkRequest.taskReference != null) {
-                    AdapterUtils.sendFailurePatchToProvisioningTask(
-                            this, context.networkRequest.taskReference, context.error);
-                } else {
-                    context.networkOperation.fail(context.error);
-                }
+                context.taskManager.patchTaskToFailure(context.error);
                 break;
             case FINISHED:
-                context.networkOperation.complete();
-                AdapterUtils.sendNetworkFinishPatch(
-                        this, context.networkRequest.taskReference);
+                context.taskManager.finishTask();
                 break;
             default:
                 break;
             }
         } catch (Throwable error) {
             // Same as FAILED stage
-            if (context.networkRequest.taskReference != null) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(
-                        this, context.networkRequest.taskReference, error);
-            } else {
-                context.networkOperation.fail(error);
-            }
+            context.taskManager.patchTaskToFailure(error);
         }
     }
 

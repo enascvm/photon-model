@@ -63,6 +63,7 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -73,7 +74,6 @@ import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -138,6 +138,7 @@ public class AWSCostStatsService extends StatelessService {
         protected Map<String, Long> accountIdToBillProcessedTime;
         // Holds the month for which bill has to be downloaded and processed
         protected LocalDate billMonthToDownload;
+        protected TaskManager taskManager;
 
         protected AWSCostStatsCreationContext(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
@@ -176,12 +177,15 @@ public class AWSCostStatsService extends StatelessService {
         }
         op.complete();
         ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
+        TaskManager taskManager = new TaskManager(this, statsRequest.taskReference,
+                statsRequest.resourceLink());
         if (statsRequest.isMockRequest) {
             // patch status to parent task
-            AdapterUtils.sendPatchToProvisioningTask(this, statsRequest.taskReference);
+            taskManager.finishTask();
             return;
         }
         AWSCostStatsCreationContext statsData = new AWSCostStatsCreationContext(statsRequest);
+        statsData.taskManager = taskManager;
         handleCostStatsCreationRequest(statsData);
     }
 
@@ -341,6 +345,9 @@ public class AWSCostStatsService extends StatelessService {
         if (statsData.s3Client == null) {
             getAWSAsyncCostingClient(statsData);
         }
+        if (statsData.s3Client == null) {
+            return;
+        }
         OperationContext origContext = OperationContext.getOperationContext();
         this.executor.submit(() -> {
             OperationContext.restoreOperationContext(origContext);
@@ -392,9 +399,8 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     protected void getAWSAsyncCostingClient(AWSCostStatsCreationContext statsData) {
-        URI parentURI = statsData.statsRequest.taskReference;
         statsData.s3Client = this.clientManager.getOrCreateS3AsyncClient(statsData.parentAuth, null,
-                this, parentURI);
+                this, getFailureConsumer(statsData));
     }
 
     /**
@@ -1033,8 +1039,7 @@ public class AWSCostStatsService extends StatelessService {
     }
 
     private Consumer<Throwable> getFailureConsumer(AWSCostStatsCreationContext statsData) {
-        return ((t) -> AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                statsData.statsRequest.taskReference, t));
+        return ((t) -> statsData.taskManager.patchTaskToFailure(t));
     }
 
     /**

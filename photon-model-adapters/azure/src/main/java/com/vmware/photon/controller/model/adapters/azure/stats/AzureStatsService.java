@@ -24,12 +24,12 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
@@ -42,6 +42,7 @@ public class AzureStatsService extends StatelessService {
     private class AzureStatsDataHolder {
         public ComputeStateWithDescription computeDesc;
         public ComputeStatsRequest statsRequest;
+        public TaskManager taskManager;
     }
 
     @Override
@@ -50,17 +51,20 @@ public class AzureStatsService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        op.complete();
-        ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
 
+        ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
+        op.complete();
+        TaskManager taskManager = new TaskManager(this, statsRequest.taskReference,
+                statsRequest.resourceLink());
         if (statsRequest.isMockRequest) {
             // patch status to parent task
-            AdapterUtils.sendPatchToProvisioningTask(this, statsRequest.taskReference);
+            taskManager.finishTask();
             return;
         }
 
         AzureStatsDataHolder statsData = new AzureStatsDataHolder();
         statsData.statsRequest = statsRequest;
+        statsData.taskManager = taskManager;
         getVMDescription(statsData);
     }
 
@@ -83,9 +87,8 @@ public class AzureStatsService extends StatelessService {
                 ComputeStatsRequest statsRequest = statsData.statsRequest;
                 Operation statsOp = Operation.createPatch(
                         UriUtils.buildUri(getHost(), AzureUriPaths.AZURE_COMPUTE_STATS_GATHERER))
-                        .setBody(statsRequest)
-                        .setReferer(getUri());
-                getHost().sendRequest(statsOp);
+                        .setBody(statsRequest);
+                sendRequest(statsOp);
                 return;
             }
 
@@ -162,8 +165,7 @@ public class AzureStatsService extends StatelessService {
      */
     private void sendFailurePatch(AzureStatsDataHolder statsData, Throwable throwable) {
         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1271
-        AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                statsData.statsRequest.taskReference, throwable);
+        statsData.taskManager.patchTaskToFailure(throwable);
     }
 
     /**
@@ -171,8 +173,7 @@ public class AzureStatsService extends StatelessService {
      */
     private Consumer<Throwable> getFailureConsumer(AzureStatsDataHolder statsData) {
         return ((throwable) -> {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, throwable);
+            statsData.taskManager.patchTaskToFailure(throwable);
         });
     }
 }

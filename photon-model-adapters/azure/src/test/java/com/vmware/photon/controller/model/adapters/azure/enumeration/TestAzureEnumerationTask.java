@@ -156,7 +156,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     public static final String STALE_SG_NAME_PREFIX = "stalesg-";
 
     private static final int STALE_RG_COUNT = 3;
-    private static final int STALE_VM_RESOURCES_COUNT = 100;
+    private static final int STALE_VM_RESOURCES_COUNT = 5;
     private static final int STALE_STORAGE_ACCOUNTS_COUNT = 5;
     private static final int STALE_CONTAINERS_COUNT = 5;
     private static final int STALE_BLOBS_COUNT = 5;
@@ -249,10 +249,6 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
                 // create a compute host for the Azure
                 computeHost = createDefaultComputeHost(this.host, resourcePoolLink, authLink);
             }
-
-            this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-            this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
-            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
             if (!this.isMock) {
                 ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(

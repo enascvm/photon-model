@@ -14,12 +14,13 @@
 package com.vmware.photon.controller.model.adapters.util;
 
 import java.net.URI;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
+import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceRequestSender;
-import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.Utils;
 
@@ -30,15 +31,28 @@ import com.vmware.xenon.common.Utils;
 public class TaskManager implements CompletionHandler {
     private final ServiceRequestSender service;
     private final URI taskReference;
+    private String resourceLink;
+    private Logger lg = Logger.getLogger(this.getClass().getName());
 
     public TaskManager(ServiceRequestSender service, URI taskReference) {
+        this(service, taskReference, null);
+    }
+
+    public TaskManager(ServiceRequestSender service, URI taskReference, String resourceLink) {
         this.service = service;
         this.taskReference = taskReference;
+        this.resourceLink = resourceLink;
     }
 
     public void patchTask(TaskStage stage) {
+        if (this.taskReference == null) {
+            log(Level.WARNING,
+                    "Skipping task patching in stage %s as taskReference URI is not provided",
+                    stage);
+            return;
+        }
+        log(Level.INFO, "Patching task %s to stage: %s", this.taskReference, stage);
         Operation op = createTaskPatch(stage);
-
         op.sendWith(this.service);
     }
 
@@ -47,42 +61,44 @@ public class TaskManager implements CompletionHandler {
         if (failure == null) {
             throw new IllegalStateException("TaskManager can only be used as error handler");
         }
-
         this.patchTaskToFailure(failure);
     }
 
-    public Operation createTaskPatch(TaskStage stage) {
-        ProvisionComputeTaskState body = new ProvisionComputeTaskState();
-        TaskState taskInfo = new TaskState();
-        taskInfo.stage = stage;
-        body.taskInfo = taskInfo;
+    public void finishTask() {
+        patchTask(TaskStage.FINISHED);
+    }
 
-        return Operation
-                .createPatch(this.taskReference)
-                .setBody(body);
+    public Operation createTaskPatch(TaskStage stage) {
+        ResourceOperationResponse body = ResourceOperationResponse.finish(this.resourceLink);
+        body.taskInfo.stage = stage;
+        return Operation.createPatch(this.taskReference).setBody(body);
     }
 
     public void patchTaskToFailure(Throwable failure) {
-        createFailurePatch(null, failure).sendWith(this.service);
+        patchTaskToFailure(null, failure);
     }
 
     public void patchTaskToFailure(String msg, Throwable failure) {
+        if (this.taskReference == null) {
+            log(Level.WARNING, "Skipping task patching as taskReference URI is not provided: %s",
+                    failure.getMessage());
+            return;
+        }
+        log(Level.WARNING, "Patching task %s to failure: %s", this.taskReference,
+                failure.getMessage());
         createFailurePatch(msg, failure).sendWith(this.service);
     }
 
-    public Operation createFailurePatch(Throwable failure) {
-        return createFailurePatch(null, failure);
-    }
-
-    public Operation createFailurePatch(String msg, Throwable failure) {
-        ProvisionComputeTaskState body = new ProvisionComputeTaskState();
-        body.taskInfo = new TaskState();
-        body.taskInfo.stage = TaskStage.FAILED;
+    private Operation createFailurePatch(String msg, Throwable failure) {
+        ResourceOperationResponse body = ResourceOperationResponse.fail(this.resourceLink, failure);
         body.failureMessage = msg;
-        body.taskInfo.failure = Utils.toServiceErrorResponse(failure);
 
         return Operation
                 .createPatch(this.taskReference)
                 .setBody(body);
+    }
+
+    private void log(Level level, String fmt, Object... args) {
+        Utils.log(TaskManager.class, TaskManager.class.getSimpleName(), level, fmt, args);
     }
 }

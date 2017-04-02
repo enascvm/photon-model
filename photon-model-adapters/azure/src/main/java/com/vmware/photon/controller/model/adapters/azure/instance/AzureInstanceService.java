@@ -505,23 +505,15 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private void finishWithFailure(AzureInstanceContext ctx) {
-
-        if (ctx.computeRequest.taskReference != null) {
-            // Report the error back to the caller
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    ctx.computeRequest.taskReference,
-                    ctx.error);
-        }
+        // Report the error back to the caller
+        ctx.taskManager.patchTaskToFailure(ctx.error);
 
         cleanUpHttpClient(this, ctx.httpClient);
     }
 
     private void finishWithSuccess(AzureInstanceContext ctx) {
-
-        if (ctx.computeRequest.taskReference != null) {
-            // Report the success back to the caller
-            AdapterUtils.sendPatchToProvisioningTask(this, ctx.computeRequest.taskReference);
-        }
+        // Report the success back to the caller
+        ctx.taskManager.finishTask();
 
         cleanUpHttpClient(this, ctx.httpClient);
     }
@@ -953,9 +945,9 @@ public class AzureInstanceService extends StatelessService {
 
         List<DeferredResult<NetworkSecurityGroup>> createSGDR = ctx.nics.stream()
                 .filter(nicCtx -> (
-                // Security Group is requested but no existing security group is mapped.
-                nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
-                        && nicCtx.securityGroup == null))
+                        // Security Group is requested but no existing security group is mapped.
+                        nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
+                                && nicCtx.securityGroup == null))
                 .map(nicCtx -> {
                     SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
                     NetworkSecurityGroup nsg = newAzureSecurityGroup(ctx, sgState);
@@ -1314,7 +1306,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
                                         logFine(() -> String.format("Patching compute state with VM"
-                                                + " Public IP address [%s]: SUCCESS",
+                                                        + " Public IP address [%s]: SUCCESS",
                                                 computeState.address));
                                     }
                                 });
@@ -1335,7 +1327,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
                                         logFine(() -> String.format("Patching primary NIC state"
-                                                + " with VM Public IP address [%s] : SUCCESS",
+                                                        + " with VM Public IP address [%s] : SUCCESS",
                                                 primaryNicState.address));
                                     }
                                 });
@@ -1437,7 +1429,7 @@ public class AzureInstanceService extends StatelessService {
                     return;
                 } else if (INVALID_PARAMETER.equals(code)) {
                     String invalidParameterMsg = String.format("Provisioning for [%s] "
-                            + "Azure VM: %s. Details: Invalid parameter. %s", ctx.vmName, "FAILED",
+                                    + "Azure VM: %s. Details: Invalid parameter. %s", ctx.vmName, "FAILED",
                             body.getMessage());
 
                     e = new IllegalStateException(invalidParameterMsg, ctx.error);

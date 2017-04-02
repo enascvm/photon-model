@@ -61,6 +61,7 @@ import com.vmware.photon.controller.model.adapters.gcp.podo.vm.GCPInstancesList;
 import com.vmware.photon.controller.model.adapters.gcp.utils.GCPUtils;
 import com.vmware.photon.controller.model.adapters.gcp.utils.JSONWebToken;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -143,12 +144,13 @@ public class GCPEnumerationAdapterService extends StatelessService {
         String privateKey;
         String projectId;
         String zoneId;
-        Operation gcpAdapterOperation;
+        TaskManager taskManager;
 
-        EnumerationContext(Operation op) {
-            this.gcpAdapterOperation = op;
+        EnumerationContext(StatelessService service, Operation op) {
             this.enumRequest = op.getBody(ComputeEnumerateResourceRequest.class);
             this.stage = EnumerationStages.HOSTDESC;
+            this.taskManager = new TaskManager(service, this.enumRequest.taskReference,
+                    this.enumRequest.resourceLink());
         }
     }
 
@@ -167,11 +169,12 @@ public class GCPEnumerationAdapterService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        EnumerationContext ctx = new EnumerationContext(op);
+        EnumerationContext ctx = new EnumerationContext(this, op);
         AdapterUtils.validateEnumRequest(ctx.enumRequest);
+        op.complete();
         if (ctx.enumRequest.isMockRequest) {
-            op.complete();
-            AdapterUtils.sendPatchToEnumerationTask(this,ctx.enumRequest.taskReference);
+            ctx.taskManager.finishTask();
+            ;
             return;
         }
         handleEnumerationRequest(ctx);
@@ -230,22 +233,16 @@ public class GCPEnumerationAdapterService extends StatelessService {
             }
             break;
         case FINISHED:
-            AdapterUtils.sendPatchToEnumerationTask(this, ctx.enumRequest.taskReference);
-            setOperationDurationStat(ctx.gcpAdapterOperation);
-            ctx.gcpAdapterOperation.complete();
+            ctx.taskManager.finishTask();
             break;
         case ERROR:
-            ctx.gcpAdapterOperation.fail(ctx.error);
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    ctx.enumRequest.taskReference, ctx.error);
+            ctx.taskManager.patchTaskToFailure(ctx.error);
             break;
         default:
             String msg = String.format("Unknown GCP enumeration stage %s ", ctx.stage.toString());
             logSevere(() -> msg);
             ctx.error = new IllegalStateException(msg);
-            ctx.gcpAdapterOperation.fail(ctx.error);
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    ctx.enumRequest.taskReference, ctx.error);
+            ctx.taskManager.patchTaskToFailure(ctx.error);
         }
     }
 

@@ -27,9 +27,7 @@ import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.Instance;
 
-import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
-
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 
@@ -44,19 +42,19 @@ public class AWSTaskStatusChecker {
     private AmazonEC2AsyncClient amazonEC2Client;
     private String desiredState;
     private Consumer<Instance> consumer;
-    private ComputeInstanceRequest computeRequest;
+    private TaskManager taskManager;
     private StatelessService service;
     private long expirationTimeMicros;
 
     private AWSTaskStatusChecker(AmazonEC2AsyncClient amazonEC2Client,
             String instanceId, String desiredState,
-            Consumer<Instance> consumer, ComputeInstanceRequest computeRequest,
-            StatelessService service, long expirationTimeMicros) {
+            Consumer<Instance> consumer, TaskManager taskManager, StatelessService service,
+            long expirationTimeMicros) {
         this.instanceId = instanceId;
         this.amazonEC2Client = amazonEC2Client;
         this.consumer = consumer;
         this.desiredState = desiredState;
-        this.computeRequest = computeRequest;
+        this.taskManager = taskManager;
         this.service = service;
         this.expirationTimeMicros = expirationTimeMicros;
     }
@@ -64,10 +62,10 @@ public class AWSTaskStatusChecker {
     public static AWSTaskStatusChecker create(
             AmazonEC2AsyncClient amazonEC2Client, String instanceId,
             String desiredState, Consumer<Instance> consumer,
-            ComputeInstanceRequest computeRequest, StatelessService service,
+            TaskManager taskManager, StatelessService service,
             long expirationTimeMicros) {
         return new AWSTaskStatusChecker(amazonEC2Client, instanceId,
-                desiredState, consumer, computeRequest, service, expirationTimeMicros);
+                desiredState, consumer, taskManager, service, expirationTimeMicros);
     }
 
     public void start() {
@@ -76,13 +74,11 @@ public class AWSTaskStatusChecker {
                     .format("Compute with instance id %s did not reach desired %s state in the required time interval.",
                             this.instanceId, this.desiredState);
             this.service.logSevere(() -> msg);
-            Throwable t = new RuntimeException(msg);
-            AdapterUtils.sendFailurePatchToProvisioningTask(this.service,
-                    this.computeRequest.taskReference, t);
+            this.taskManager.patchTaskToFailure(new RuntimeException(msg));
             return;
         }
         DescribeInstancesRequest descRequest = new DescribeInstancesRequest();
-        List<String> instanceIdList = new ArrayList<String>();
+        List<String> instanceIdList = new ArrayList<>();
         instanceIdList.add(this.instanceId);
         descRequest.setInstanceIds(instanceIdList);
         AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> describeHandler = new AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult>() {
@@ -100,11 +96,12 @@ public class AWSTaskStatusChecker {
                             AWSTaskStatusChecker.this.instanceId, exception);
                     AWSTaskStatusChecker.create(AWSTaskStatusChecker.this.amazonEC2Client,
                             AWSTaskStatusChecker.this.instanceId, AWSTaskStatusChecker.this.desiredState, AWSTaskStatusChecker.this.consumer,
-                            AWSTaskStatusChecker.this.computeRequest, AWSTaskStatusChecker.this.service, AWSTaskStatusChecker.this.expirationTimeMicros).start();
+                            AWSTaskStatusChecker.this.taskManager,
+                            AWSTaskStatusChecker.this.service,
+                            AWSTaskStatusChecker.this.expirationTimeMicros).start();
                     return;
                 }
-                AdapterUtils.sendFailurePatchToProvisioningTask(AWSTaskStatusChecker.this.service,
-                        AWSTaskStatusChecker.this.computeRequest.taskReference, exception);
+                AWSTaskStatusChecker.this.taskManager.patchTaskToFailure(exception);
                 return;
             }
 
@@ -120,7 +117,10 @@ public class AWSTaskStatusChecker {
                             () -> {
                                 AWSTaskStatusChecker.create(AWSTaskStatusChecker.this.amazonEC2Client,
                                         AWSTaskStatusChecker.this.instanceId, AWSTaskStatusChecker.this.desiredState, AWSTaskStatusChecker.this.consumer,
-                                        AWSTaskStatusChecker.this.computeRequest, AWSTaskStatusChecker.this.service, AWSTaskStatusChecker.this.expirationTimeMicros).start();
+                                                AWSTaskStatusChecker.this.taskManager,
+                                                AWSTaskStatusChecker.this.service,
+                                                AWSTaskStatusChecker.this.expirationTimeMicros)
+                                        .start();
                             }, 5, TimeUnit.SECONDS);
                     return;
                 }

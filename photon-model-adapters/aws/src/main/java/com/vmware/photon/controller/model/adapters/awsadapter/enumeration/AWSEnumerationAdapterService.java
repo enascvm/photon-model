@@ -26,7 +26,6 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.OperationSequence;
@@ -67,7 +66,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
 
         public EnumerationContext(StatelessService service, ComputeEnumerateResourceRequest request,
                 Operation op) {
-            super(service, request.resourceReference);
+            super(service, request);
             this.request = request;
             this.stage = AWSEnumerationStages.GET_REGIONS;
             this.regions = new ArrayList<>();
@@ -91,14 +90,12 @@ public class AWSEnumerationAdapterService extends StatelessService {
         ComputeEnumerateResourceRequest request = op.getBody(ComputeEnumerateResourceRequest.class);
 
         AdapterUtils.validateEnumRequest(request);
+        EnumerationContext context = new EnumerationContext(this, request, op);
         if (request.isMockRequest) {
             // patch status to parent task
-            AdapterUtils.sendPatchToEnumerationTask(this, request.taskReference);
+            context.taskManager.finishTask();
             return;
         }
-
-
-        EnumerationContext context = new EnumerationContext(this, request, op);
 
         context.populateBaseContext(BaseAdapterStage.PARENTDESC)
                 .whenComplete((ignoreCtx, t) -> {
@@ -155,19 +152,16 @@ public class AWSEnumerationAdapterService extends StatelessService {
             break;
         case PATCH_COMPLETION:
             setOperationDurationStat(aws.operation);
-            AdapterUtils.sendPatchToEnumerationTask(this,
-                    aws.request.taskReference);
+            aws.taskManager.finishTask();
             break;
         case ERROR:
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.taskReference, aws.error);
+            aws.taskManager.patchTaskToFailure(aws.error);
             break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
                     aws.stage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage");
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.taskReference, aws.error);
+            aws.taskManager.patchTaskToFailure(aws.error);
             break;
 
         }
@@ -234,9 +228,7 @@ public class AWSEnumerationAdapterService extends StatelessService {
             if (exc != null) {
                 logSevere(() -> String.format("Error starting the enumeration workflows for AWS: %s",
                         Utils.toString(exc)));
-                AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                        context.request.taskReference,
-                        exc.values().iterator().next());
+                context.taskManager.patchTaskToFailure(exc.values().iterator().next());
                 return;
             }
             logInfo(() -> "Completed creation and deletion enumeration for compute and storage"

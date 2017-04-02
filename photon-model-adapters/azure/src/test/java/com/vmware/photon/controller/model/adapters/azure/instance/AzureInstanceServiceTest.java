@@ -29,8 +29,10 @@ import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
@@ -88,6 +90,8 @@ public class AzureInstanceServiceTest extends Suite {
             ComputeInstanceRequest req = new ComputeInstanceRequest();
             req.requestType = ComputeInstanceRequest.InstanceRequestType.VALIDATE_CREDENTIALS;
             req.authCredentialsLink = this.authCredentialsLink;
+            req.resourceReference = UriUtils.buildUri(getHost(),
+                    UriUtils.buildUriPath(ComputeService.FACTORY_LINK, "my-compute"));
             req.regionId = "westus";
             req.isMockRequest = true;
             int statusCode = patchServiceSynchronously(

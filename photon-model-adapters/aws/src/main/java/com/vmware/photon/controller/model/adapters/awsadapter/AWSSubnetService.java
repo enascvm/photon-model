@@ -14,16 +14,15 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
-import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.sendPatchToTask;
 
 import java.net.URI;
 import java.util.UUID;
 
-import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
@@ -51,14 +50,16 @@ public class AWSSubnetService extends StatelessService {
         SubnetState subnetState;
         NetworkState parentNetwork;
 
-        Throwable error;
-
         String awsSubnetId;
 
         AWSNetworkClient client;
 
-        AWSSubnetContext(SubnetInstanceRequest request) {
+        TaskManager taskManager;
+
+        AWSSubnetContext(StatelessService service, SubnetInstanceRequest request) {
             this.request = request;
+            this.taskManager = new TaskManager(service, request.taskReference,
+                    request.resourceLink());
         }
     }
 
@@ -100,7 +101,7 @@ public class AWSSubnetService extends StatelessService {
         op.complete();
 
         // initialize context object
-        AWSSubnetContext context = new AWSSubnetContext(
+        AWSSubnetContext context = new AWSSubnetContext(this,
                 op.getBody(SubnetInstanceRequest.class));
 
 
@@ -110,12 +111,9 @@ public class AWSSubnetService extends StatelessService {
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
-                        sendPatchToTask(this, context.request.taskReference,
-                                ResourceOperationResponse.finish(context.request.resourceLink
-                                        ()));
+                        context.taskManager.finishTask();
                     } else {
-                        sendPatchToTask(this, context.request.taskReference,
-                                ResourceOperationResponse.fail(context.request.resourceLink(), e));
+                        context.taskManager.patchTaskToFailure(e);
                     }
                 });
     }
@@ -173,11 +171,15 @@ public class AWSSubnetService extends StatelessService {
     }
 
     private DeferredResult<AWSSubnetContext> getAWSClient(AWSSubnetContext context) {
+        DeferredResult<AWSSubnetContext> r = new DeferredResult<>();
         context.client = new AWSNetworkClient(this,
                 this.clientManager.getOrCreateEC2Client(
                         context.credentials, context.parentNetwork.regionId,
-                        this, context.request.taskReference, false));
-        return DeferredResult.completed(context);
+                        this, (t) -> r.fail(t)));
+        if (context.client != null) {
+            r.complete(context);
+        }
+        return r;
     }
 
     private DeferredResult<AWSSubnetContext> handleSubnetInstanceRequest(AWSSubnetContext context) {

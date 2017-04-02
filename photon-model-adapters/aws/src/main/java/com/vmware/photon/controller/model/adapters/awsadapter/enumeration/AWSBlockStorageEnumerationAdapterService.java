@@ -47,7 +47,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -178,9 +177,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         BlockStorageEnumerationContext awsEnumerationContext = new BlockStorageEnumerationContext(
                 op.getBody(ComputeEnumerateAdapterRequest.class), op);
         if (awsEnumerationContext.request.original.isMockRequest) {
-            // patch status to parent task
-            AdapterUtils.sendPatchToEnumerationTask(this,
-                    awsEnumerationContext.request.original.taskReference);
+            awsEnumerationContext.operation.complete();
             return;
         }
         handleEnumerationRequest(awsEnumerationContext);
@@ -218,8 +215,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             }
             break;
         case ERROR:
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.original.taskReference, aws.error);
+            aws.operation.fail(aws.error);
             break;
         default:
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
@@ -256,8 +252,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             logSevere(() -> String.format("Unknown AWS enumeration stage %s ",
                     aws.refreshSubStage.toString()));
             aws.error = new Exception("Unknown AWS enumeration stage %s");
-            AdapterUtils.sendFailurePatchToEnumerationTask(this,
-                    aws.request.original.taskReference, aws.error);
+            aws.operation.fail(aws.error);
             break;
         }
     }
@@ -268,13 +263,23 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
     private void getAWSAsyncClient(BlockStorageEnumerationContext aws,
             AWSStorageEnumerationStages next) {
         aws.amazonEC2Client = this.clientManager.getOrCreateEC2Client(aws.parentAuth,
-                aws.request.regionId, this,
-                aws.request.original.taskReference, true);
+                aws.request.regionId, this, t -> aws.error = t);
+        if (aws.error != null) {
+            aws.stage = AWSStorageEnumerationStages.ERROR;
+            handleEnumerationRequest(aws);
+            return;
+        }
         OperationContext opContext = OperationContext.getOperationContext();
         AWSUtils.validateCredentials(aws.amazonEC2Client, aws.request, aws.operation, this,
                 (describeAvailabilityZonesResult) -> {
                     aws.stage = next;
                     OperationContext.restoreOperationContext(opContext);
+                    handleEnumerationRequest(aws);
+                },
+                t -> {
+                    OperationContext.restoreOperationContext(opContext);
+                    aws.error = t;
+                    aws.stage = AWSStorageEnumerationStages.ERROR;
                     handleEnumerationRequest(aws);
                 });
     }
@@ -316,9 +321,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         @Override
         public void onError(Exception exception) {
             OperationContext.restoreOperationContext(this.opContext);
-            AdapterUtils.sendFailurePatchToEnumerationTask(this.service,
-                    this.context.request.original.taskReference,
-                    exception);
+            this.context.operation.fail(exception);
         }
 
         @Override

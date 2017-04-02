@@ -25,7 +25,6 @@ import org.joda.time.LocalDate;
 
 import com.vmware.photon.controller.model.adapters.aws.dto.AwsAccountDetailDto;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
@@ -90,8 +89,8 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
                             accountMarkers);
             statsData.accountsHistoricalDetailsMap.put(monthDate, accountDetails);
         } catch (Throwable e) {
-            AdapterUtils.sendFailurePatchToProvisioningTask(this,
-                    statsData.statsRequest.taskReference, new RuntimeException(e));
+            statsData.taskManager.patchTaskToFailure(e);
+            return;
         }
         statsData.stage = next;
         handleCostStatsCreationRequest(statsData);

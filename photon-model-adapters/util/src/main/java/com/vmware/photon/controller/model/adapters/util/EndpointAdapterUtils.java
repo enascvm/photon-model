@@ -212,8 +212,9 @@ public class EndpointAdapterUtils {
             BiConsumer<ComputeState, Retriever> compEnhancer,
             BiConsumer<EndpointState, Retriever> endpointEnhancer) {
 
+        TaskManager tm = new TaskManager(service, body.taskReference, body.resourceLink());
         Consumer<Throwable> onFailure = (t) -> {
-            AdapterUtils.sendFailurePatchToProvisioningTask(service, body.taskReference, t);
+            tm.patchTaskToFailure(t);
         };
 
         Consumer<Operation> onSuccess = (op) -> {
@@ -252,9 +253,9 @@ public class EndpointAdapterUtils {
                                     .setReferer(service.getUri());
                         });
 
-                applyChanges(service, body, endpoint, operations);
+                applyChanges(tm, service, body, endpoint, operations);
             } catch (Exception e) {
-                AdapterUtils.sendFailurePatchToProvisioningTask(service, body.taskReference, e);
+                tm.patchTaskToFailure(e);
             }
 
         };
@@ -262,7 +263,8 @@ public class EndpointAdapterUtils {
         AdapterUtils.getServiceState(service, body.resourceReference, onSuccess, onFailure);
     }
 
-    private static void applyChanges(StatelessService service, EndpointConfigRequest body,
+    private static void applyChanges(TaskManager tm, StatelessService service,
+            EndpointConfigRequest body,
             EndpointState endpoint, Stream<Operation> operations) {
 
         OperationJoin joinOp = OperationJoin.create(operations);
@@ -272,14 +274,13 @@ public class EndpointAdapterUtils {
                         "Error patching endpoint configuration data for %s. %s",
                         endpoint.endpointType,
                         Utils.toString(exc));
-                AdapterUtils.sendFailurePatchToEnumerationTask(service, body.taskReference,
-                        exc.values().iterator().next());
+                tm.patchTaskToFailure(exc.values().iterator().next());
                 return;
             }
             service.logFine(
                     () -> String.format("Successfully completed %s endpoint configuration tasks.",
                             endpoint.endpointType));
-            AdapterUtils.sendPatchToProvisioningTask(service, body.taskReference);
+            tm.finishTask();
         });
         joinOp.sendWith(service);
     }

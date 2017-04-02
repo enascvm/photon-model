@@ -21,10 +21,8 @@ import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesResult;
 
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
-import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.DefaultAdapterContext;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -54,14 +52,17 @@ public class AWSPowerService extends StatelessService {
         ComputePowerRequest pr = op.getBody(ComputePowerRequest.class);
         op.complete();
         if (pr.isMockRequest) {
-            updateComputeState(pr);
+            updateComputeState(pr, new DefaultAdapterContext(this, pr));
         } else {
-            new DefaultAdapterContext(this, pr.resourceReference)
+            new DefaultAdapterContext(this, pr)
                     .populateBaseContext(BaseAdapterStage.VMDESC)
                     .whenComplete((c, e) -> {
                         AmazonEC2AsyncClient client = this.clientManager.getOrCreateEC2Client(
-                                c.parentAuth, c.child.description.regionId, this, pr.taskReference,
-                                false);
+                                c.parentAuth, c.child.description.regionId, this,
+                                (t) -> c.taskManager.patchTaskToFailure(t));
+                        if (client == null) {
+                            return;
+                        }
                         applyPowerOperation(client, pr, c);
                     });
         }
@@ -79,20 +80,18 @@ public class AWSPowerService extends StatelessService {
             break;
         case SUSPEND:
             // TODO: Not supported yet, so simply patch the state with requested power state.
-            updateComputeState(pr);
+            updateComputeState(pr, c);
             break;
         case UNKNOWN:
         default:
-            AdapterUtils.sendPatchToTask(this, pr.taskReference, ResourceOperationResponse.fail(
-                    pr.resourceLink(),
-                    new IllegalArgumentException("Unsupported power state transition requested.")));
+            c.taskManager.patchTaskToFailure(
+                    new IllegalArgumentException("Unsupported power state transition requested."));
         }
 
     }
 
     private void powerOn(AmazonEC2AsyncClient client, ComputePowerRequest pr,
             DefaultAdapterContext c) {
-        AWSPowerService powerService = this;
         OperationContext opContext = OperationContext.getOperationContext();
 
         StartInstancesRequest request = new StartInstancesRequest();
@@ -103,21 +102,19 @@ public class AWSPowerService extends StatelessService {
                     public void onSuccess(StartInstancesRequest request,
                             StartInstancesResult result) {
                         OperationContext.restoreOperationContext(opContext);
-                        updateComputeState(pr);
+                        updateComputeState(pr, c);
                     }
 
                     @Override
                     public void onError(Exception e) {
                         OperationContext.restoreOperationContext(opContext);
-                        AdapterUtils.sendPatchToTask(powerService, pr.taskReference,
-                                ResourceOperationResponse.fail(pr.resourceLink(), e));
+                        c.taskManager.patchTaskToFailure(e);
                     }
                 });
     }
 
     private void powerOff(AmazonEC2AsyncClient client, ComputePowerRequest pr,
             DefaultAdapterContext c) {
-        AWSPowerService powerService = this;
         OperationContext opContext = OperationContext.getOperationContext();
 
         StopInstancesRequest request = new StopInstancesRequest();
@@ -128,31 +125,28 @@ public class AWSPowerService extends StatelessService {
                     public void onSuccess(StopInstancesRequest request,
                             StopInstancesResult result) {
                         OperationContext.restoreOperationContext(opContext);
-                        updateComputeState(pr);
+                        updateComputeState(pr, c);
                     }
 
                     @Override
                     public void onError(Exception e) {
                         OperationContext.restoreOperationContext(opContext);
-                        AdapterUtils.sendPatchToTask(powerService, pr.taskReference,
-                                ResourceOperationResponse.fail(pr.resourceLink(), e));
+                        c.taskManager.patchTaskToFailure(e);
                     }
                 });
     }
 
-    private void updateComputeState(ComputePowerRequest pr) {
+    private void updateComputeState(ComputePowerRequest pr, DefaultAdapterContext c) {
         ComputeState state = new ComputeState();
         state.powerState = pr.powerState;
         Operation.createPatch(pr.resourceReference)
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     if (e != null) {
-                        AdapterUtils.sendPatchToTask(this, pr.taskReference,
-                                ResourceOperationResponse.fail(pr.resourceLink(), e));
+                        c.taskManager.patchTaskToFailure(e);
                         return;
                     }
-                    AdapterUtils.sendPatchToTask(this, pr.taskReference,
-                            ResourceOperationResponse.finish(pr.resourceLink()));
+                    c.taskManager.finishTask();
                 })
                 .sendWith(this);
     }

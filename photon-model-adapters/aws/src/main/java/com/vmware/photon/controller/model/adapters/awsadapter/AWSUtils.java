@@ -81,7 +81,6 @@ import com.amazonaws.services.s3.transfer.TransferManager;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -167,7 +166,8 @@ public class AWSUtils {
     public static void validateCredentials(AmazonEC2AsyncClient ec2Client,
             ComputeEnumerateAdapterRequest context,
             Operation op, StatelessService service,
-            Consumer<DescribeAvailabilityZonesResult> onSuccess) {
+            Consumer<DescribeAvailabilityZonesResult> onSuccess,
+            Consumer<Throwable> onFail) {
         ec2Client.describeAvailabilityZonesAsync(new DescribeAvailabilityZonesRequest(),
                 new AsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult>() {
 
@@ -179,8 +179,7 @@ public class AWSUtils {
                                 op.complete();
                                 return;
                             }
-                            AdapterUtils.sendFailurePatchToEnumerationTask(service,
-                                    context.original.taskReference, e);
+                            onFail.accept(e);
                         }
                     }
 

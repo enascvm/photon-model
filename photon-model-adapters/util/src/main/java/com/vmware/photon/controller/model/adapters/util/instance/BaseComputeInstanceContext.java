@@ -98,7 +98,7 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
             ComputeInstanceRequest computeRequest,
             Supplier<S> nicContextSupplier) {
 
-        super(service, computeRequest.resourceReference);
+        super(service, computeRequest);
 
         this.computeRequest = computeRequest;
         this.nicContextSupplier = nicContextSupplier;

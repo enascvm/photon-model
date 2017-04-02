@@ -25,18 +25,20 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 
 /**
  * This class implements tests for the {@link AWSInstanceService} class.
  */
 @RunWith(AWSInstanceServiceTest.class)
-@SuiteClasses({ AWSInstanceServiceTest.HandleRequestTest.class})
+@SuiteClasses({ AWSInstanceServiceTest.HandleRequestTest.class })
 public class AWSInstanceServiceTest extends Suite {
 
-    public AWSInstanceServiceTest(Class<?> klass, RunnerBuilder builder) throws InitializationError {
+    public AWSInstanceServiceTest(Class<?> klass, RunnerBuilder builder)
+            throws InitializationError {
         super(klass, builder);
     }
 
@@ -78,6 +80,8 @@ public class AWSInstanceServiceTest extends Suite {
             ComputeInstanceRequest req = new ComputeInstanceRequest();
             req.requestType = ComputeInstanceRequest.InstanceRequestType.VALIDATE_CREDENTIALS;
             req.authCredentialsLink = this.authCredentialsLink;
+            req.resourceReference = UriUtils.buildUri(getHost(),
+                    UriUtils.buildUriPath(ComputeService.FACTORY_LINK, "my-compute"));
             req.regionId = "us-east-1";
             req.isMockRequest = true;
             int statusCode = patchServiceSynchronously(

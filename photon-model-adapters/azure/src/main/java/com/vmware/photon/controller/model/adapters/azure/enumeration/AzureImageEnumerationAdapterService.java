@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static java.util.Collections.singletonList;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
-import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.sendPatchToTask;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,10 +35,10 @@ import com.microsoft.azure.management.compute.models.VirtualMachineImageResource
 import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
-import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureSdkClients;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.util.enums.EndpointEnumerationProcess;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
@@ -87,12 +86,15 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         ImageTraversingIterator azureImages;
 
+        TaskManager taskManager;
+
         AzureImageEnumerationContext(
                 AzureImageEnumerationAdapterService service,
                 ImageEnumerateRequest request) {
 
             super(service, request.resourceReference, ImageState.class, ImageService.FACTORY_LINK);
-
+            this.taskManager = new TaskManager(this.service, request.taskReference,
+                    request.resourceLink());
             this.request = request;
         }
 
@@ -315,12 +317,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
     }
 
     private void completeWithFailure(AzureImageEnumerationContext ctx, Throwable exc) {
-
-        if (ctx.request.taskReference != null) {
-            // Report the error back to the caller
-            sendPatchToTask(this, ctx.request.taskReference,
-                    ResourceOperationResponse.fail(ctx.request.resourceLink(), exc));
-        }
+        ctx.taskManager.patchTaskToFailure(exc);
 
         if (ctx.azureClient != null) {
             ctx.azureClient.close();
@@ -328,12 +325,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
     }
 
     private void completeWithSuccess(AzureImageEnumerationContext ctx) {
-
-        if (ctx.request.taskReference != null) {
-            // Report the success back to the caller
-            sendPatchToTask(this, ctx.request.taskReference,
-                    ResourceOperationResponse.finish(ctx.request.resourceLink()));
-        }
+        // Report the success back to the caller
+        ctx.taskManager.finishTask();
 
         if (ctx.azureClient != null) {
             ctx.azureClient.close();

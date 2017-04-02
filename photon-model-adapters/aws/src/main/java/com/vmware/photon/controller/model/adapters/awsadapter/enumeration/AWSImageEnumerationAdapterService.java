@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory.returnClientManager;
-import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.sendPatchToTask;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -31,12 +30,12 @@ import com.amazonaws.services.ec2.model.Image;
 import com.amazonaws.services.ec2.model.Tag;
 
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
-import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.util.enums.EndpointEnumerationProcess;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
@@ -77,6 +76,8 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
         PartitionedIterator<Image> awsImages;
 
+        TaskManager taskManager;
+
         AWSImageEnumerationContext(
                 AWSImageEnumerationAdapterService service,
                 ImageEnumerateRequest request) {
@@ -84,6 +85,8 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             super(service, request.resourceReference, ImageState.class, ImageService.FACTORY_LINK);
 
             this.request = request;
+            this.taskManager = new TaskManager(this.service, request.taskReference,
+                    request.resourceLink());
         }
 
         /**
@@ -147,22 +150,23 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                 AWSImageEnumerationContext context) {
 
             return DeferredResult.completed(context)
-                    .thenApply(this::createAmazonClient)
+                    .thenCompose(this::createAmazonClient)
                     .thenCompose(ctx -> super.enumeratePageByPage(ctx));
         }
 
-        protected AWSImageEnumerationContext createAmazonClient(
+        protected DeferredResult<AWSImageEnumerationContext> createAmazonClient(
                 AWSImageEnumerationContext context) {
-
+            DeferredResult<AWSImageEnumerationContext> r = new DeferredResult<>();
             context.awsClient = ((AWSImageEnumerationAdapterService) context.service).clientManager
                     .getOrCreateEC2Client(
                             context.endpointAuthState,
                             context.regionId,
                             context.service,
-                            context.request.taskReference,
-                            true /* isEnumeration */);
-
-            return context;
+                            t -> r.fail(t));
+            if (context.awsClient != null) {
+                r.complete(context);
+            }
+            return r;
         }
 
         @Override
@@ -327,19 +331,11 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
     }
 
     private void completeWithFailure(AWSImageEnumerationContext ctx, Throwable exc) {
-        if (ctx.request.taskReference != null) {
-            // Report the error back to the caller
-            sendPatchToTask(this, ctx.request.taskReference,
-                    ResourceOperationResponse.fail(ctx.request.resourceLink(), exc));
-        }
+        ctx.taskManager.patchTaskToFailure(exc);
     }
 
     private void completeWithSuccess(AWSImageEnumerationContext ctx) {
-        if (ctx.request.taskReference != null) {
-            // Report the success back to the caller
-            sendPatchToTask(this, ctx.request.taskReference,
-                    ResourceOperationResponse.finish(ctx.request.resourceLink()));
-        }
+        ctx.taskManager.finishTask();
     }
 
     /**
