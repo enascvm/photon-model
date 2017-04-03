@@ -31,6 +31,17 @@ public class EndpointConfigRequest extends ResourceRequest {
     public static final String TOKEN_REFERENCE_KEY = "tokenReference";
     public static final String REGION_KEY = "regionId";
     public static final String ZONE_KEY = "zoneId";
+    /**
+     * A key for the property of {@link #endpointProperties} which specifies trusted certificate
+     * for the endpoint
+     */
+    public static final String CERTIFICATE_PROP_NAME = "certificate";
+
+    /**
+     * A key for the property of {@link #endpointProperties} which specifies whether to accept or
+     * not the certificate (if self-signed) for the endpoint
+     */
+    public static final String ACCEPT_SELFSIGNED_CERTIFICATE = "acceptSelfSignedCertificate";
 
     /**
      * Endpoint request type.

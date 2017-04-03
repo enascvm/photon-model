@@ -18,7 +18,12 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.math.BigInteger;
 import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.Proxy.Type;
+import java.net.Socket;
 import java.net.URI;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyManagementException;
@@ -32,7 +37,6 @@ import java.security.Principal;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
-import java.security.SecureRandom;
 import java.security.SignatureException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateEncodingException;
@@ -53,6 +57,7 @@ import java.util.logging.Logger;
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
+import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -62,6 +67,7 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 
+import org.apache.commons.net.util.Base64;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.DEROctetString;
@@ -89,6 +95,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import com.vmware.photon.controller.model.security.ssl.X509TrustManagerResolver;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.LocalizableValidationException;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -116,6 +123,7 @@ public class CertificateUtil {
             "default.selfSignedCertificate.validity.day", 365 * 2));
 
     private static final String HEX = "0123456789ABCDEF";
+    public static final String REQUEST_HEADER_PROXY_AUTHORIZATION = "Proxy-Authorization";
 
     /**
      * Utility method to decode a certificate chain PEM encoded string value to an array of
@@ -419,54 +427,123 @@ public class CertificateUtil {
         return sw.toString();
     }
 
-    public static X509TrustManagerResolver resolveCertificate(URI uri, long timeout) {
-        String hostAddress = uri.getHost();
-        int port = uri.getPort() == -1 ? DEFAULT_SECURE_CONNECTION_PORT : uri.getPort();
-        int tout = (int) (timeout == -1 ? DEFAULT_CONNECTION_TIMEOUT_MILLIS : timeout);
-        logger.entering(logger.getName(), "connect");
-        // create a SocketFactory without TrustManager (well with one that accepts anything)
+    public static X509TrustManagerResolver resolveCertificate(URI uri,
+            String httpProxyHost, int httpProxyPort,
+            String httpProxyUser, String httpProxyPass,
+            long timeout) {
+
+        InetSocketAddress proxyInet = new InetSocketAddress(httpProxyHost, httpProxyPort);
+        Proxy proxy = new Proxy(Proxy.Type.HTTP, proxyInet);
+        return resolveCertificate(uri, proxy, httpProxyUser, httpProxyPass, timeout);
+    }
+
+    public static X509TrustManagerResolver resolveCertificate(URI uri,
+            Proxy proxy, String proxyUsername, String proxyPassword, long timeout) {
+        logger.entering(logger.getName(), "resolveCertificate");
+
         X509TrustManagerResolver trustManagerResolver = new X509TrustManagerResolver();
-        TrustManager[] trustAllCerts = new TrustManager[] { trustManagerResolver };
 
         SSLContext sslContext;
         try {
             sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, trustAllCerts, new SecureRandom());
+            sslContext.init(null, new TrustManager[] { trustManagerResolver }, null);
         } catch (KeyManagementException | NoSuchAlgorithmException e) {
             logger.throwing(logger.getName(), "connect", e);
             throw new LocalizableValidationException(e, "Failed to initialize SSL context.",
-                    "common.ssh.context.init");
+                    "security.certificate.context.init.error");
         }
 
-        SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
+        String hostAddress = uri.getHost();
+        int port = uri.getPort() == -1 ? DEFAULT_SECURE_CONNECTION_PORT : uri.getPort();
+        String uriScheme = uri.getScheme();
+        String host = String.format("%s://%s:%d", uriScheme, hostAddress, port);
 
-        try (SSLSocket sslSocket = (SSLSocket) sslSocketFactory.createSocket()) {
-            sslSocket.connect(new InetSocketAddress(hostAddress, port), tout);
-            SSLSession session = sslSocket.getSession();
-            session.invalidate();
+        try {
+            SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
 
-        } catch (IOException e) {
-            if (trustManagerResolver.isCertsTrusted()
-                    || trustManagerResolver.getCertificateChain().length == 0) {
-                Utils.logWarning(
-                        "Exception while resolving certificate for host: [%s]. Error: %s ",
-                        uri.toASCIIString(), e.getMessage());
+            if (proxy != null && proxy.type() == Type.HTTP && proxyUsername != null
+                    && UriUtils.HTTPS_SCHEME.equalsIgnoreCase(uriScheme)) {
+                URL url = uri.toURL();
+                handleCertForHttpsThroughHttpProxyWithAuth(url,
+                        proxy, proxyUsername, proxyPassword,
+                        timeout, sslSocketFactory);
             } else {
-                logger.throwing(logger.getName(), "connect", e);
-                throw new IllegalArgumentException(e.getMessage(), e);
+                SSLSocket sslSocket;
+                if (proxy != null) {
+                    if (proxyUsername != null) {
+                        throw new LocalizableValidationException("Proxy authentication supported "
+                                + "for HTTPS URI through HTTP Proxy only."
+                                + " URI: " + uri.toASCIIString()
+                                + ", Proxy: " + proxy.toString(),
+                                "security.certificate.proxy.authentication.not.supported.error",
+                                uri.toASCIIString(), proxy.toString());
+                    }
+                    Socket tunnel = new Socket(proxy);
+                    tunnel.connect(new InetSocketAddress(hostAddress, port), (int) timeout);
+                    sslSocket = (SSLSocket) sslSocketFactory.createSocket(
+                            tunnel,
+                            hostAddress,
+                            port,
+                            true);
+                } else {
+                    sslSocket = (SSLSocket) sslSocketFactory.createSocket();
+                    sslSocket.connect(new InetSocketAddress(hostAddress, port), (int) timeout);
+                }
+                SSLSession session = sslSocket.getSession();
+                session.invalidate();
+            }
+        } catch (IOException e) {
+            try {
+                if (trustManagerResolver.isCertsTrusted()
+                        || trustManagerResolver.getCertificateChain().length == 0) {
+                    Utils.logWarning(
+                            "Exception while resolving certificate for host: [%s]. Error: %s ",
+                            host, e.getMessage());
+                } else {
+                    logger.throwing(logger.getName(), "connect", e);
+                    throw new IllegalArgumentException(e.getMessage(), e);
+                }
+            } catch (IllegalStateException ise) {
+                throw new LocalizableValidationException(e,
+                        String.format("Cannot connect to host: [%s]. Error: %s",
+                                host, e.getMessage()),
+                        "security.certificate.connection.error", host, e.getMessage());
             }
         }
 
         if (trustManagerResolver.getCertificateChain().length == 0) {
             LocalizableValidationException e = new LocalizableValidationException(
-                    "Importing ssl certificate failed for server: " + uri.toASCIIString(),
-                    "common.certificate.import.failed", uri.toASCIIString());
+                    "Check ssl certificate failed for server: " + host,
+                    "security.certificate.check.error", host);
 
             logger.throwing(logger.getName(), "connect", e);
             throw e;
         }
-        logger.exiting(logger.getName(), "connect");
+        logger.exiting(logger.getName(), "resolveCertificate");
         return trustManagerResolver;
+    }
+
+    private static void handleCertForHttpsThroughHttpProxyWithAuth(URL url, Proxy proxy,
+            String proxyUsername, String proxyPassword, long timeout,
+            SSLSocketFactory socketFactory) throws IOException {
+        HttpsURLConnection connection = (HttpsURLConnection) url.openConnection(proxy);
+
+        connection.setSSLSocketFactory(socketFactory);
+        connection.setConnectTimeout((int) (timeout < 0 ? 0 : timeout));
+        if (proxyUsername != null && proxyPassword != null) {
+            byte[] token = (proxyUsername + ":" + proxyPassword)
+                    .getBytes(StandardCharsets.UTF_8);
+
+            connection.setRequestProperty(REQUEST_HEADER_PROXY_AUTHORIZATION,
+                    "Basic " + Base64.encodeBase64StringUnChunked(token));
+        }
+
+        connection.connect();
+        connection.disconnect();
+    }
+
+    public static X509TrustManagerResolver resolveCertificate(URI uri, long timeout) {
+        return resolveCertificate(uri, null, null, null, timeout);
     }
 
     public static void validateCertificateChain(X509Certificate[] certificateChain)
@@ -493,7 +570,7 @@ public class CertificateUtil {
                 throw new IllegalArgumentException(e);
             } catch (SignatureException e) {
                 throw new LocalizableValidationException("Certificate chain is not valid.",
-                        "common.certificate.invalid");
+                        "security.certificate.invalid");
             }
             current = next;
         }
@@ -510,7 +587,7 @@ public class CertificateUtil {
                         "Certificate with subject: %s exists in more than one place in chain.",
                         certificate.getSubjectX500Principal().getName());
                 throw new LocalizableValidationException(errorMsg,
-                        "common.certificate.exists.in.chain",
+                        "security.certificate.exists.in.chain",
                         certificate.getSubjectX500Principal().getName());
             } else if (certificate.equals(currentcert)) {
                 exists++;
@@ -549,7 +626,7 @@ public class CertificateUtil {
             ThumbprintAlgorithm thumbprintAlgorithm) {
         if (cert == null) {
             throw new LocalizableValidationException("certificate must not be null.",
-                    "common.certificate.null");
+                    "security.certificate.null.error");
         }
         byte[] digest;
         try {

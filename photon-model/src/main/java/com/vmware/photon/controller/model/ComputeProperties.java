@@ -78,13 +78,6 @@ public class ComputeProperties {
     public static final String INFRASTRUCTURE_USE_PROP_NAME = "__infrastructureUse";
 
     /**
-     * A key for the custom properties property of
-     * {@link com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState
-     * } which keeps the certificate for the endpoint
-     */
-    public static final String CERTIFICATE_PROP_NAME = "__certificate";
-
-    /**
      * A key for a linked endpoint link, used to link two accounts.
      */
     public static final String LINKED_ENDPOINT_PROP_NAME = "linkedEndpointLink";
