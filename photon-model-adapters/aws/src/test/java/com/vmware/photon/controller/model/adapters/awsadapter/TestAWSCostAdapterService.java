@@ -18,7 +18,6 @@ import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.MockCostStatsAdapterService.INSTANCE_1_SELF_LINK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.MockCostStatsAdapterService.INSTANCE_2_SELF_LINK;
-import static com.vmware.photon.controller.model.constants.PhotonModelConstants.DELETED_VM_COUNT;
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createDoubleRange;
 import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buildCompositeFieldName;
 
@@ -100,6 +99,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
             // This bill is re-generated every time for current month
             TestUtils.generateCurrentMonthsBill();
         }
+        System.setProperty(AWSCostStatsService.BATCH_SIZE_KEY, "1");
     }
 
     @After
@@ -107,6 +107,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         if (this.isMock) {
             TestUtils.deleteCurrentMonthsBill();
         }
+        System.clearProperty(AWSCostStatsService.BATCH_SIZE_KEY);
     }
 
     @Test
@@ -208,9 +209,15 @@ public class TestAWSCostAdapterService extends BaseModelTest {
                     if (TestAWSCostAdapterService.this.isMock) {
                         SingleResourceStatsCollectionTaskState resp = op
                                 .getBody(SingleResourceStatsCollectionTaskState.class);
-                        verifyCollectedStats(resp, account);
+                        if (resp.isFinalBatch) {
+                            verifyCollectedStats(resp, true);
+                            TestAWSCostAdapterService.this.host.completeIteration();
+                        } else {
+                            verifyCollectedStats(resp, false);
+                        }
+                    } else {
+                        TestAWSCostAdapterService.this.host.completeIteration();
                     }
-                    TestAWSCostAdapterService.this.host.completeIteration();
                 }
             }
         };
@@ -235,40 +242,22 @@ public class TestAWSCostAdapterService extends BaseModelTest {
     }
 
     protected void verifyCollectedStats(SingleResourceStatsCollectionTaskState resp,
-            ComputeState account) {
-
-        if (resp.statsList.size() != 4) {
-            // 2 account + 2 instance stats
-            TestAWSCostAdapterService.this.host.failIteration(
-                    new IllegalStateException("response size was incorrect."));
-            return;
-        }
-        if (!resp.statsList.get(0).computeLink.equals(account.documentSelfLink)) {
-            TestAWSCostAdapterService.this.host
-                    .failIteration(new IllegalStateException(
-                            "Incorrect resourceReference returned."));
-            return;
-        }
+            boolean isFinalBatch) {
 
         Map<String, ComputeStats> computeStatsByLink = resp.statsList.stream()
                 .collect(Collectors.toMap(e -> e.computeLink, Function.identity()));
         ComputeStats account1Stats = computeStatsByLink.get(account1SelfLink);
         ComputeStats account2Stats = computeStatsByLink.get(account2SelfLink);
-
-        ComputeStats instance1Stats = computeStatsByLink.get(INSTANCE_1_SELF_LINK);
-        ComputeStats instance2Stats = computeStatsByLink.get(INSTANCE_2_SELF_LINK);
-
-        //check total account cost
         String normalizedStatKeyValue = AWSStatsNormalizer
                 .getNormalizedStatKeyValue(AWSConstants.COST);
-        String normalizedReservedInstanceStatKeyValue = AWSStatsNormalizer
-                .getNormalizedStatKeyValue(AWSConstants.RESERVED_INSTANCE_DURATION);
-        assertTrue(account1Stats.statValues.get(normalizedStatKeyValue)
-                .get(0).latestValue == account1TotalCost);
-
-        // check VM count stats
-        assertEquals(0, account1Stats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
-        assertEquals(0, account2Stats.statValues.get(DELETED_VM_COUNT).get(0).latestValue, 0.0);
+        if (isFinalBatch) {
+            // verify account costs
+            assertTrue(account1Stats.statValues.get(normalizedStatKeyValue)
+                    .get(0).latestValue == account1TotalCost);
+            assertTrue(account2Stats.statValues.get(normalizedStatKeyValue)
+                    .get(0).latestValue == account2TotalCost);
+            return;
+        }
 
         // check that service level stats exist
         String serviceCode = AWSCsvBillParser.AwsServices.ec2.getName().replaceAll(" ", "");
@@ -288,12 +277,18 @@ public class TestAWSCostAdapterService extends BaseModelTest {
                 .format(AWSConstants.SERVICE_RESERVED_RECURRING_COST, serviceCode);
         assertTrue(!account1Stats.statValues.get(serviceReservedRecurringCostMetric).isEmpty());
 
+        ComputeStats instance1Stats = computeStatsByLink.get(INSTANCE_1_SELF_LINK);
+        ComputeStats instance2Stats = computeStatsByLink.get(INSTANCE_2_SELF_LINK);
         assertEquals(instance1TotalCost,
                 instance1Stats.statValues.get(normalizedStatKeyValue).get(0).latestValue, 0);
-        assertEquals(1.0, instance1Stats.statValues.get(normalizedReservedInstanceStatKeyValue).get(0).latestValue, 0);
         assertEquals(instance2TotalCost,
                 instance2Stats.statValues.get(normalizedStatKeyValue).get(0).latestValue, 0);
-        assertEquals(1.0, instance1Stats.statValues.get(normalizedReservedInstanceStatKeyValue).get(0).latestValue, 0);
+        String normalizedReservedInstanceStatKeyValue = AWSStatsNormalizer
+                .getNormalizedStatKeyValue(AWSConstants.RESERVED_INSTANCE_DURATION);
+        assertEquals(1.0, instance1Stats.statValues.get(normalizedReservedInstanceStatKeyValue)
+                .get(0).latestValue, 0);
+        assertEquals(1.0, instance1Stats.statValues.get(normalizedReservedInstanceStatKeyValue)
+                .get(0).latestValue, 0);
         // Check that stat values are accompanied with Units.
         for (String key : account1Stats.statValues.keySet()) {
             List<ServiceStat> stats = account1Stats.statValues.get(key);
@@ -301,11 +296,6 @@ public class TestAWSCostAdapterService extends BaseModelTest {
                 assertTrue("Unit is empty", !stat.unit.isEmpty());
             }
         }
-
-        // Check the cost of linked account
-        ComputeStats account2ComputeStats = computeStatsByLink.get(account2SelfLink);
-        assertTrue(account2ComputeStats.statValues.get(normalizedStatKeyValue)
-                .get(0).latestValue == account2TotalCost);
     }
 
 }

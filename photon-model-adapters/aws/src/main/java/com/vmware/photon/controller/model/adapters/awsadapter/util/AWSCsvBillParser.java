@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -63,9 +64,11 @@ public class AWSCsvBillParser {
     public static final String INVOICE_TOTAL = "InvoiceTotal";
     public static final String ACCOUNT_TOTAL = "AccountTotal";
 
-    public Map<String, AwsAccountDetailDto> parseDetailedCsvBill(
-            List<String> ignorableInvoiceCharge, Path csvBillZipFilePath,
-            Map<String, Long> accountIdToBillProcessedTime) throws IOException {
+    public void parseDetailedCsvBill(List<String> ignorableInvoiceCharge, Path csvBillZipFilePath,
+            Map<String, Long> accountIdToBillProcessedTime,
+            Consumer<Map<String, AwsAccountDetailDto>> hourlyStatsConsumer,
+            Consumer<Map<String, AwsAccountDetailDto>> monthlyStatsConsumer)
+            throws IOException {
 
         Path workingDirPath = csvBillZipFilePath.getParent();
         unzip(csvBillZipFilePath.toString(), workingDirPath.toString());
@@ -73,25 +76,26 @@ public class AWSCsvBillParser {
                 .substring(0, csvBillZipFilePath.toString().lastIndexOf('.'));
         Path unzippedCsvFilePath = Paths.get(unzippedCsvFilePathStr);
 
-        Map<String, AwsAccountDetailDto> accountToDetailsMap;
         try (InputStream extractedObjectContentInputStream = new FileInputStream(
                 unzippedCsvFilePath.toFile())) {
-            accountToDetailsMap = parseDetailedCsvBill(extractedObjectContentInputStream,
-                    ignorableInvoiceCharge, accountIdToBillProcessedTime);
+            parseDetailedCsvBill(extractedObjectContentInputStream, ignorableInvoiceCharge,
+                    accountIdToBillProcessedTime, hourlyStatsConsumer, monthlyStatsConsumer);
         } finally {
             Files.deleteIfExists(unzippedCsvFilePath);
         }
-
-        return accountToDetailsMap;
     }
 
-    private Map<String, AwsAccountDetailDto> parseDetailedCsvBill(InputStream inputStream,
-            Collection<String> ignorableInvoiceCharge, Map<String, Long> accountIdToBillProcessedTime)
+    private void parseDetailedCsvBill(InputStream inputStream,
+            Collection<String> ignorableInvoiceCharge,
+            Map<String, Long> accountIdToBillProcessedTime,
+            Consumer<Map<String, AwsAccountDetailDto>> hourlyStatsConsumer,
+            Consumer<Map<String, AwsAccountDetailDto>> monthlyStatsConsumer)
             throws IOException {
+
         final CsvPreference STANDARD_SKIP_COMMENTS = new CsvPreference.Builder(
                 CsvPreference.STANDARD_PREFERENCE)
-                    .skipComments(new CommentStartsWith(AWS_SKIP_COMMENTS))
-                    .build();
+                .skipComments(new CommentStartsWith(AWS_SKIP_COMMENTS))
+                .build();
 
         try (InputStreamReader reader = new InputStreamReader(inputStream, "UTF-8");
                 ICsvMapReader mapReader = new CsvMapReader(reader, STANDARD_SKIP_COMMENTS)) {
@@ -116,8 +120,20 @@ public class AWSCsvBillParser {
             Map<String, AwsAccountDetailDto> monthlyBill = new HashMap<>();
             cellProcessorArray = processorList.toArray(cellProcessorArray);
             Map<String, Object> rowMap;
+            Long prevRowTime = null;
             while ((rowMap = mapReader.read(header, cellProcessorArray)) != null) {
-                readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge, accountIdToBillProcessedTime);
+                LocalDateTime currRowLocalDateTime = (LocalDateTime) rowMap
+                        .get(DetailedCsvHeaders.USAGE_START_DATE);
+                Long curRowTime = getMillisForHour(currRowLocalDateTime);
+                if (prevRowTime != null && curRowTime != null && !prevRowTime.equals(curRowTime)) {
+                    // This indicates that we have processed all rows belonging to a
+                    // corresponding hour in the current month bill.
+                    // Consume the batch
+                    hourlyStatsConsumer.accept(monthlyBill);
+                }
+                readRow(rowMap, monthlyBill, tagHeaders, ignorableInvoiceCharge,
+                        accountIdToBillProcessedTime);
+                prevRowTime = curRowTime;
             }
             // Subtract the one-time subscription charges from the account cost
             // since the one-time subscription charges is divided among the total cost of all months
@@ -128,7 +144,9 @@ public class AWSCsvBillParser {
                 }
             }
 
-            return monthlyBill;
+            // Consume the final batch of parsed rows
+            hourlyStatsConsumer.accept(monthlyBill);
+            monthlyStatsConsumer.accept(monthlyBill);
         }
     }
 
@@ -213,13 +231,11 @@ public class AWSCsvBillParser {
         LocalDateTime usageStartTimeFromCsv = (LocalDateTime) rowMap
                 .get(DetailedCsvHeaders.USAGE_START_DATE);
         Long millisForBillHour = getMillisForHour(usageStartTimeFromCsv);
-        long currentMonthStartMillis = LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1)
-                .toDateTimeAtStartOfDay(DateTimeZone.UTC).getMillis();
 
         // Populate hourly resource and service stats only for current month since they are not needed
         // for previous months. Also don't parse already persisted line items.
         if (millisForBillHour == null ||
-                (millisForBillHour >= currentMonthStartMillis && millisForBillHour > markerTime)) {
+                (millisForBillHour >= getMonthStartMillis() && millisForBillHour > markerTime)) {
 
             AwsServiceDetailDto serviceDetail = createOrGetServiceDetailObject(accountDetails,
                     serviceName);
@@ -257,6 +273,11 @@ public class AWSCsvBillParser {
                 && millisForBillHour > accountDetails.billProcessedTimeMillis) {
             accountDetails.billProcessedTimeMillis = millisForBillHour;
         }
+    }
+
+    private long getMonthStartMillis() {
+        return LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1)
+                .toDateTimeAtStartOfDay(DateTimeZone.UTC).getMillis();
     }
 
     private Long getMillisForHour(LocalDateTime usageStartTime) {

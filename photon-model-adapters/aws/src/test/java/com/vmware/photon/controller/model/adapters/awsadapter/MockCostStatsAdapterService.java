@@ -23,13 +23,10 @@ import java.util.Map;
 import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDate;
 
-import com.vmware.photon.controller.model.adapters.aws.dto.AwsAccountDetailDto;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-import com.vmware.xenon.common.ServiceStats;
 import com.vmware.xenon.common.Utils;
 
 public class MockCostStatsAdapterService extends AWSCostStatsService {
@@ -40,13 +37,10 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     public static final String INSTANCE_1_SELF_LINK = "instanceSelfLink1";
     public static final String INSTANCE_2_SELF_LINK = "instanceSelfLink2";
 
-    public static final Long billProcessedTimeMillis =
-            com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getDateTimeToday()
-                    .withDayOfMonth(1).toDateTime(DateTimeZone.UTC).withTimeAtStartOfDay().getMillis();
-
     @Override
     protected void getAccountDescription(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
+        statsData.accountId = TestAWSCostAdapterService.account1Id;
         getParentAuth(statsData, next);
     }
 
@@ -58,8 +52,10 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     }
 
     @Override
-    protected void getAWSAsyncCostingClient(AWSCostStatsCreationContext statsData) {
-        return;
+    protected void checkBillBucketConfig(AWSCostStatsCreationContext statsData,
+            AWSCostStatsCreationStages next) {
+        statsData.stage = next;
+        handleCostStatsCreationRequest(statsData);
     }
 
     @Override
@@ -77,13 +73,10 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
     }
 
     @Override
-    protected void scheduleDownload(AWSCostStatsCreationContext statsData,
-            AWSCostStatsCreationStages next) {
+    protected void scheduleDownload(AWSCostStatsCreationContext statsData) {
 
         validatePastMonthsBillsAreScheduledForDownload(statsData);
-
         AWSCsvBillParser parser = new AWSCsvBillParser();
-        LocalDate monthDate = com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getDateTimeToday().toLocalDate();
         Path csvBillZipFilePath;
         try {
             csvBillZipFilePath = TestUtils.getTestResourcePath(TestAWSCostAdapterService.class,
@@ -91,15 +84,14 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
             Map<String, Long> accountMarkers = new HashMap<>();
             accountMarkers.put(TestAWSCostAdapterService.account1Id, 0L);
             accountMarkers.put(TestAWSCostAdapterService.account2Id, 0L);
-            Map<String, AwsAccountDetailDto> accountDetails = parser
-                    .parseDetailedCsvBill(statsData.ignorableInvoiceCharge, csvBillZipFilePath,
-                            accountMarkers);
-            statsData.accountsHistoricalDetailsMap.put(monthDate, accountDetails);
+            LocalDate billMonth = LocalDate.now(DateTimeZone.UTC).withDayOfMonth(1);
+            parser.parseDetailedCsvBill(statsData.ignorableInvoiceCharge, csvBillZipFilePath,
+                    accountMarkers, getHourlyStatsConsumer(billMonth, statsData),
+                    getMonthlyStatsConsumer(billMonth, statsData));
         } catch (Throwable e) {
             statsData.taskManager.patchTaskToFailure(e);
             return;
         }
-        statsData.stage = next;
         handleCostStatsCreationRequest(statsData);
     }
 
@@ -107,14 +99,15 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
             AWSCostStatsCreationContext statsData) {
 
         // Backup the accountIdToBillProcessedTimeMap and restore after test
-        Map<String, Long> accountIdToBillProcessedTimeBackup = statsData.accountIdToBillProcessedTime;
+        Map<String, Long> accountIdToBillProcessedTimeBackup = statsData
+                .accountIdToBillProcessedTime;
 
         // Set billProcessedTime to 0 for this test case
         for (Map.Entry<String, Long> entries : statsData.accountIdToBillProcessedTime.entrySet()) {
             entries.setValue(0L);
         }
         AWSCostStatsService costStatsService = new AWSCostStatsService();
-        costStatsService.populateBillMonthToProcess(statsData, "");
+        costStatsService.populateBillMonthToProcess(statsData);
 
         String property = System.getProperty(AWSCostStatsService.BILLS_BACK_IN_TIME_MONTHS_KEY);
         int numberOfMonthsToDownloadBill = AWSConstants.DEFAULT_NO_OF_MONTHS_TO_GET_PAST_BILLS;
@@ -177,21 +170,5 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
 
         context.stage = next;
         handleCostStatsCreationRequest(context);
-    }
-
-    @Override
-    protected ServiceStats.ServiceStat createBillProcessedTimeStat(
-            AwsAccountDetailDto awsAccountDetailDto) {
-        ServiceStats.ServiceStat billProcessedTimeStat = new ServiceStats.ServiceStat();
-        billProcessedTimeStat.name = AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS;
-        billProcessedTimeStat.unit = PhotonModelConstants.UNIT_MILLISECONDS;
-        billProcessedTimeStat.latestValue = billProcessedTimeMillis;
-        billProcessedTimeStat.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
-        return billProcessedTimeStat;
-    }
-
-    @Override
-    protected void setLinkedAccountIds(AWSCostStatsCreationContext context) {
-        return;
     }
 }
