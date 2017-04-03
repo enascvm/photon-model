@@ -56,6 +56,7 @@ public class AWSClientManager {
     private LRUCache<String, TransferManager> s3ClientCache;
     private LRUCache<URI, ExecutorService> executorCache;
 
+    private LRUCache<String, Long> invalidEc2Clients;
     private LRUCache<String, Long> invalidcloudWatchClients;
     public static final String AWS_RETRY_AFTER_INTERVAL_MINUTES = UriPaths.PROPERTY_PREFIX + "AWSClientManager.retryInterval";
     private static final int DEFAULT_RETRY_AFTER_INTERVAL_MINUTES = 60;
@@ -71,6 +72,8 @@ public class AWSClientManager {
         switch (awsClientType) {
         case EC2:
             this.ec2ClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
+            this.invalidEc2Clients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
+                    CLIENT_CACHE_MAX_SIZE);
             return;
         case CLOUD_WATCH:
             this.cloudWatchClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
@@ -105,7 +108,7 @@ public class AWSClientManager {
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
         AmazonEC2AsyncClient amazonEC2Client = null;
-        String cacheKey = credentials.documentSelfLink + TILDA + regionId;
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         if (this.ec2ClientCache.containsKey(cacheKey)) {
             return this.ec2ClientCache.get(cacheKey);
         }
@@ -118,6 +121,34 @@ public class AWSClientManager {
             failConsumer.accept(e);
         }
         return amazonEC2Client;
+    }
+
+    /**
+     * Checks if an EC2 client has been marked as invalid.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @return true if the EC2 client is marked as invalid, false otherwise.
+     */
+    public synchronized boolean isEc2ClientInvalid(AuthCredentialsServiceState credentials,
+            String regionId) {
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
+        return isInvalidClient(this.invalidEc2Clients, cacheKey);
+    }
+
+    /**
+     * Marks an EC2 client as invalid.
+     *
+     * @param service The stateless service for which the operation is being performed.
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     */
+    public synchronized void markEc2ClientInvalid(StatelessService service,
+            AuthCredentialsServiceState credentials, String regionId) {
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
+        service.logWarning("Marking EC2 client cache entry invalid for key: " + cacheKey);
+        this.invalidEc2Clients.put(cacheKey, Utils.getNowMicrosUtc());
+        this.ec2ClientCache.remove(cacheKey);
     }
 
     /**
@@ -136,16 +167,10 @@ public class AWSClientManager {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
-        String cacheKey = credentials.documentSelfLink + TILDA + regionId;
-        Long entryTimestamp = this.invalidcloudWatchClients.get(cacheKey);
-        if (entryTimestamp != null ) {
-            if ((entryTimestamp + TimeUnit.MINUTES.toMicros(RETRY_AFTER_INTERVAL_MINUTES)) < Utils.getNowMicrosUtc()) {
-                this.invalidcloudWatchClients.remove(cacheKey);
-            } else {
-                failConsumer.accept(new IllegalStateException(
-                        "Invalid cloud watch client for key: " + cacheKey));
-                return null;
-            }
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
+        if (isInvalidClient(this.invalidcloudWatchClients, cacheKey)) {
+            failConsumer.accept(new IllegalStateException("Invalid cloud watch client for key: " + cacheKey));
+            return null;
         }
         AmazonCloudWatchAsyncClient amazonCloudWatchClient = null;
         if (this.cloudWatchClientCache.containsKey(cacheKey)) {
@@ -187,7 +212,7 @@ public class AWSClientManager {
             throw new UnsupportedOperationException(
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
-        String cacheKey = credentials.documentSelfLink + TILDA + regionId;
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
         if (this.s3ClientCache.containsKey(cacheKey)) {
             return this.s3ClientCache.get(cacheKey);
         }
@@ -201,6 +226,41 @@ public class AWSClientManager {
             failConsumer.accept(t);
             return null;
         }
+    }
+
+    /**
+     * Checks if a client (via cache key) has been marked as invalid within the last
+     * {@link #RETRY_AFTER_INTERVAL_MINUTES} minutes. If a client has been marked before, but
+     * {@link #RETRY_AFTER_INTERVAL_MINUTES} minutes has passed, the client is removed from the
+     * cache and it is no longer considered invalid.
+     *
+     * @param cache The cache to check.
+     * @param cacheKey The commonly used key to identify a client in the cache.
+     * @return true if the client is marked as invalid, false otherwise.
+     */
+    private synchronized boolean isInvalidClient(LRUCache<String, Long> cache, String cacheKey) {
+        Long entryTimestamp = cache.get(cacheKey);
+        if (entryTimestamp != null) {
+            if ((entryTimestamp + TimeUnit.MINUTES.toMicros(RETRY_AFTER_INTERVAL_MINUTES)) <
+                    Utils.getNowMicrosUtc()) {
+                cache.remove(cacheKey);
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Generates a common cache key formed via credentials and specific region ID.
+     *
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @return A common, consistent cache key for use in the AWS Client Manager.
+     */
+    public static String createCredentialRegionCacheKey(AuthCredentialsServiceState credentials,
+            String regionId) {
+        return credentials.documentSelfLink + TILDA + regionId;
     }
 
     /**

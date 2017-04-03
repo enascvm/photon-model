@@ -209,7 +209,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
             return;
         }
         OperationContext opContext = OperationContext.getOperationContext();
-        AWSUtils.validateCredentials(aws.amazonEC2Client, aws.request, aws.operation, this,
+        AWSUtils.validateCredentials(aws.amazonEC2Client, this.clientManager, aws.parentAuth,
+                aws.request, aws.operation, this,
                 (describeAvailabilityZonesResult) -> {
                     aws.stage = next;
                     OperationContext.restoreOperationContext(opContext);
