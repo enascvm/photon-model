@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.xenon.common.UriUtils.buildUriPath;
+
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -114,7 +116,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     public static final String SELF_LINK = VSphereUriPaths.ENUMERATION_SERVICE;
 
     private static final int MAX_CONCURRENT_ENUM_PROCESSES = 10;
-    private static final String FAKE_SUBNET_CIDR = "0.0.0.0/0";
+    private static final String ALL_IPS_SUBNET_CIDR = "0.0.0.0/0";
     private static final long QUERY_TASK_EXPIRY_MICROS = TimeUnit.MINUTES.toMicros(1);
 
     /*
@@ -668,7 +670,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         state.id = state.name = net.getName();
         state.endpointLink = enumerationContext.getRequest().endpointLink;
-        state.subnetCIDR = FAKE_SUBNET_CIDR;
+        state.subnetCIDR = ALL_IPS_SUBNET_CIDR;
 
         ManagedObjectReference parentSwitch = net.getParentSwitch();
         state.networkLink = buildStableDvsLink(parentSwitch, request.endpointLink);
@@ -702,30 +704,72 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
     }
 
     private void updateNetwork(NetworkState oldDocument, EnumerationContext enumerationContext, NetworkOverlay net) {
-        NetworkState state = makeNetworkStateFromResults(enumerationContext, net);
-        state.documentSelfLink = oldDocument.documentSelfLink;
-        state.resourcePoolLink = null;
+        NetworkState networkState = makeNetworkStateFromResults(enumerationContext, net);
+        networkState.documentSelfLink = oldDocument.documentSelfLink;
+        networkState.resourcePoolLink = null;
 
         if (oldDocument.tenantLinks == null) {
-            state.tenantLinks = enumerationContext.getTenantLinks();
+            networkState.tenantLinks = enumerationContext.getTenantLinks();
         }
 
         logFine(() -> String.format("Syncing Network %s", net.getName()));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
-                .setBody(state)
+                .setBody(networkState)
                 .setCompletion(trackNetwork(enumerationContext, net))
+                .sendWith(this);
+
+        if (!VimNames.TYPE_NETWORK.equals(net.getId().getType())) {
+            return;
+        }
+
+        SubnetState subnet = new SubnetState();
+        subnet.documentSelfLink = UriUtils.buildUriPath(SubnetService.FACTORY_LINK,
+                UriUtils.getLastPathSegment(networkState.documentSelfLink));
+        subnet.id = subnet.name = net.getName();
+        subnet.endpointLink = enumerationContext.getRequest().endpointLink;
+        subnet.subnetCIDR = ALL_IPS_SUBNET_CIDR;
+        subnet.networkLink = networkState.documentSelfLink;
+
+        CustomProperties.of(subnet)
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
+                .put(CustomProperties.MOREF, net.getId())
+                .put(CustomProperties.TYPE, net.getId().getType());
+
+        Operation.createPost(this, SubnetService.FACTORY_LINK)
+                .setBody(subnet)
                 .sendWith(this);
     }
 
     private void createNewNetwork(EnumerationContext enumerationContext, NetworkOverlay net) {
-        NetworkState state = makeNetworkStateFromResults(enumerationContext, net);
-        state.tenantLinks = enumerationContext.getTenantLinks();
+        NetworkState networkState = makeNetworkStateFromResults(enumerationContext, net);
+        networkState.tenantLinks = enumerationContext.getTenantLinks();
         Operation.createPost(this, NetworkService.FACTORY_LINK)
-                .setBody(state)
+                .setBody(networkState)
                 .setCompletion(trackNetwork(enumerationContext, net))
                 .sendWith(this);
 
         logFine(() -> String.format("Found new Network %s", net.getName()));
+
+        if (!VimNames.TYPE_NETWORK.equals(net.getId().getType())) {
+            return;
+        }
+
+        SubnetState subnet = new SubnetState();
+        subnet.documentSelfLink = UriUtils.buildUriPath(SubnetService.FACTORY_LINK,
+                UriUtils.getLastPathSegment(networkState.documentSelfLink));
+        subnet.id = subnet.name = net.getName();
+        subnet.endpointLink = enumerationContext.getRequest().endpointLink;
+        subnet.subnetCIDR = ALL_IPS_SUBNET_CIDR;
+        subnet.networkLink = networkState.documentSelfLink;
+
+        CustomProperties.of(subnet)
+                .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
+                .put(CustomProperties.MOREF, net.getId())
+                .put(CustomProperties.TYPE, net.getId().getType());
+
+        Operation.createPost(this, SubnetService.FACTORY_LINK)
+                .setBody(subnet)
+                .sendWith(this);
     }
 
     private String getSelfLinkFromOperation(Operation o) {
@@ -788,9 +832,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         NetworkState state = new NetworkState();
 
+        state.documentSelfLink = NetworkService.FACTORY_LINK + "/" + this.getHost().nextUUID();
         state.id = state.name = net.getName();
         state.endpointLink = enumerationContext.getRequest().endpointLink;
-        state.subnetCIDR = FAKE_SUBNET_CIDR;
+        state.subnetCIDR = ALL_IPS_SUBNET_CIDR;
         state.regionId = enumerationContext.getRegionId();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
@@ -978,8 +1023,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             ResourcePoolOverlay rp, String rpSelfLink) {
         ComputeDescription res = new ComputeDescription();
         res.name = rp.getName();
-        res.documentSelfLink = UriUtils
-                .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UriUtils.getLastPathSegment(rpSelfLink));
+        res.documentSelfLink =
+                buildUriPath(ComputeDescriptionService.FACTORY_LINK, UriUtils.getLastPathSegment(rpSelfLink));
 
         res.totalMemoryBytes = rp.getMemoryReservationBytes();
         // resource pools CPU is measured in Mhz
@@ -1001,8 +1046,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             ComputeResourceOverlay cr) {
         ComputeDescription res = new ComputeDescription();
         res.name = cr.getName();
-        res.documentSelfLink = UriUtils
-                .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
+        res.documentSelfLink =
+                buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.cpuCount = cr.getTotalCpuCores();
         if (cr.getTotalCpuCores() != 0) {
             res.cpuMhzPerCore = cr.getTotalCpuMhz() / cr.getTotalCpuCores();
@@ -1234,8 +1279,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             HostSystemOverlay hs) {
         ComputeDescription res = new ComputeDescription();
         res.name = hs.getName();
-        res.documentSelfLink = UriUtils
-                .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
+        res.documentSelfLink =
+                buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.cpuCount = hs.getCoreCount();
         res.endpointLink = enumerationContext.getRequest().endpointLink;
         res.cpuMhzPerCore = hs.getCpuMhz();
@@ -1332,7 +1377,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 iface.networkLink = enumerationContext.getNetworkTracker()
                         .getSelfLink(veth.getNetwork());
                 iface.name = nic.getDeviceInfo().getLabel();
-                iface.documentSelfLink = UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK,
+                iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
                         UUID.randomUUID().toString());
 
                 Operation.createPost(this, NetworkInterfaceService.FACTORY_LINK)
@@ -1359,8 +1404,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeDescription res = new ComputeDescription();
         res.name = vm.getName();
         res.endpointLink = enumerationContext.getRequest().endpointLink;
-        res.documentSelfLink = UriUtils
-                .buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
+        res.documentSelfLink =
+                buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
         res.instanceAdapterReference = enumerationContext
                 .getParent().description.instanceAdapterReference;
         res.enumerationAdapterReference = enumerationContext

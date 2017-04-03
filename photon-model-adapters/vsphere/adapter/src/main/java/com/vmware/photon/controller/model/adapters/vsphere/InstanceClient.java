@@ -59,7 +59,6 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootCo
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
-import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
 import com.vmware.vim25.ArrayOfVAppPropertyInfo;
 import com.vmware.vim25.ArrayOfVirtualDevice;
@@ -1552,8 +1551,8 @@ public class InstanceClient extends BaseHelper {
                 backing.setPort(port);
                 nic.setBacking(backing);
             } else {
-                if (isStandardSwitch(nicWithDetails.network)) {
-                    // network
+                if (VimNames.TYPE_NETWORK.equals(props.getString(CustomProperties.TYPE))) {
+                    // standard network passed as subnet
                     VirtualEthernetCardNetworkBackingInfo backing = new VirtualEthernetCardNetworkBackingInfo();
                     backing.setDeviceName(nicWithDetails.network.name);
                     nic.setBacking(backing);
@@ -1584,14 +1583,6 @@ public class InstanceClient extends BaseHelper {
         }
 
         return nic;
-    }
-
-    private boolean isStandardSwitch(NetworkState network) {
-        if (network == null) {
-            return false;
-        }
-        CustomProperties custProp = CustomProperties.of(network);
-        return VimNames.TYPE_NETWORK.equals(custProp.getString(CustomProperties.TYPE, null));
     }
 
     private Long toMb(long bytes) {
