@@ -822,16 +822,29 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         addScopeCriteria(qBuilder, DiskState.class, ctx);
 
         Query.Builder diskUriFilterParentQuery = Query.Builder.create();
+
+        List<Query> diskUriFilters = new ArrayList<>();
         for (String instanceId : ctx.virtualMachines.keySet()) {
-            String diskId = httpsToHttp(
-                    ctx.virtualMachines.get(instanceId).properties.storageProfile.getOsDisk()
-                            .getVhd().getUri());
+            String diskId = getVhdUri(ctx.virtualMachines.get(instanceId));
+
+            if (diskId == null) {
+                continue;
+            }
+
             Query diskUriFilter = Query.Builder.create(Query.Occurance.SHOULD_OCCUR)
                     .addFieldClause(DiskState.FIELD_NAME_ID, diskId)
                     .build();
-
-            diskUriFilterParentQuery.addClause(diskUriFilter);
+            diskUriFilters.add(diskUriFilter);
         }
+
+        if (diskUriFilters.isEmpty()) {
+            logFine(() -> "No virtual machines found to be associated with local disks");
+            ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
+            handleSubStage(ctx);
+            return;
+        }
+
+        diskUriFilters.stream().forEach(diskUriFilter -> diskUriFilterParentQuery.addClause(diskUriFilter));
         qBuilder.addClause(diskUriFilterParentQuery.build());
 
         QueryTask q = QueryTask.Builder.createDirectTask()
@@ -1046,8 +1059,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         while (iterator.hasNext()) {
             Entry<String, VirtualMachine> vmEntry = iterator.next();
             VirtualMachine virtualMachine = vmEntry.getValue();
-            String diskUri = httpsToHttp(
-                    virtualMachine.properties.storageProfile.getOsDisk().getVhd().getUri());
+            String diskUri = getVhdUri(virtualMachine);
+
+            if (diskUri == null) {
+                logFine(() -> String.format("Disk URI not found for vm: %s", virtualMachine.id));
+                continue;
+            }
 
             DiskState diskToUpdate = ctx.diskStates.get(diskUri);
             if (diskToUpdate == null) {
@@ -1067,6 +1084,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     .setBody(diskToUpdate);
             opCollection.add(diskOp);
         }
+
+        if (opCollection.isEmpty()) {
+            logFine(() -> "No local disk states fount to update.");
+            ctx.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
+            handleSubStage(ctx);
+            return;
+        }
+
         OperationJoin.create(opCollection)
                 .setCompletion((ops, exs) -> {
                     if (exs != null) {
@@ -1147,9 +1172,17 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             List<String> vmDisks = new ArrayList<>();
             if (ctx.diskStates != null && ctx.diskStates.size() > 0) {
-                vmDisks.add(ctx.diskStates.get(
-                        httpsToHttp(virtualMachine.properties.storageProfile.getOsDisk().getVhd()
-                                .getUri())).documentSelfLink);
+                String diskUri = getVhdUri(virtualMachine);
+                if (diskUri != null) {
+                    DiskState state = ctx.diskStates.get(diskUri);
+                    if (state != null) {
+                        vmDisks.add(state.documentSelfLink);
+                    }
+                }
+            }
+
+            if (vmDisks.isEmpty()) {
+                continue;
             }
 
             List<String> networkLinks = new ArrayList<>();
@@ -1196,6 +1229,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     .createPost(getHost(), ComputeService.FACTORY_LINK)
                     .setBody(computeState);
             opCollection.add(resourceOp);
+        }
+
+        if (opCollection.isEmpty()) {
+            logFine(() -> "No compute states found for update.");
+            ctx.subStage = ComputeEnumerationSubStages.PATCH_ADDITIONAL_FIELDS;
+            handleSubStage(ctx);
         }
 
         OperationJoin.create(opCollection)
@@ -1467,6 +1506,18 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         } else {
             return null;
         }
+    }
+
+    private String getVhdUri(VirtualMachine vm) {
+        if (vm.properties == null
+                || vm.properties.storageProfile == null
+                || vm.properties.storageProfile.getOsDisk() == null
+                || vm.properties.storageProfile.getOsDisk().getVhd() == null
+                || vm.properties.storageProfile.getOsDisk().getVhd().getUri() == null) {
+            logWarning(String.format("Enumeration failed. VM %s has a ManagedDisk configuration, which is currently not supported.", vm.id));
+            return null;
+        }
+        return httpsToHttp(vm.properties.storageProfile.getOsDisk().getVhd().getUri());
     }
 
     /**
