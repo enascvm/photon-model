@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.resources;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import java.util.Collections;
@@ -32,6 +33,7 @@ import org.junit.runners.model.RunnerBuilder;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionServiceTest.HandleCRUDTest;
 import com.vmware.xenon.common.Service;
 
 /**
@@ -39,7 +41,7 @@ import com.vmware.xenon.common.Service;
  */
 @RunWith(NetworkInterfaceDescriptionServiceTest.class)
 @SuiteClasses({ NetworkInterfaceDescriptionServiceTest.ConstructorTest.class,
-        NetworkInterfaceDescriptionServiceTest.HandleGetTest.class })
+        HandleCRUDTest.class })
 public class NetworkInterfaceDescriptionServiceTest extends Suite {
 
     public NetworkInterfaceDescriptionServiceTest(Class<?> klass, RunnerBuilder builder)
@@ -104,7 +106,7 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
     /**
      * This class implements tests for the handleGet method.
      */
-    public static class HandleGetTest extends BaseModelTest {
+    public static class HandleCRUDTest extends BaseModelTest {
 
         @Test
         public void testGet() throws Throwable {
@@ -130,6 +132,49 @@ public class NetworkInterfaceDescriptionServiceTest extends Suite {
             assertThat(getState.networkLink, is(startState.networkLink));
             assertThat(getState.subnetLink, is(startState.subnetLink));
             assertThat(getState.deviceIndex, is(startState.deviceIndex));
+        }
+
+        @Test
+        public void testPatchNullEndpointLink() throws Throwable {
+            NetworkInterfaceDescription startState = buildValidStartState();
+            startState.endpointLink = null;
+
+            NetworkInterfaceDescription returnState = postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    startState,
+                    NetworkInterfaceDescription.class);
+
+            final String endpointLink = "/myEndpointLink";
+            returnState.endpointLink = endpointLink;
+            returnState = patchServiceSynchronously(
+                    returnState.documentSelfLink,
+                    returnState,
+                    NetworkInterfaceDescription.class);
+
+            assertEquals(endpointLink, returnState.endpointLink);
+        }
+
+
+        @Test
+        public void testPatchNotNullEndpointLink() throws Throwable {
+            NetworkInterfaceDescription startState = buildValidStartState();
+            final String endpointLink = "/myEndpointLink";
+
+            startState.endpointLink = endpointLink;
+
+            NetworkInterfaceDescription returnState = postServiceSynchronously(
+                    NetworkInterfaceDescriptionService.FACTORY_LINK,
+                    startState,
+                    NetworkInterfaceDescription.class);
+
+            returnState.endpointLink = "/modified";
+
+            returnState = patchServiceSynchronously(
+                    returnState.documentSelfLink,
+                    returnState,
+                    NetworkInterfaceDescription.class);
+
+            assertEquals(endpointLink, returnState.endpointLink);
         }
     }
 }

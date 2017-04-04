@@ -42,14 +42,14 @@ public class SecurityGroupService extends StatefulService {
 
     public static final String FACTORY_LINK = UriPaths.RESOURCES_SECURITY_GROUPS;
 
-    public static enum Protocol {
+    public enum Protocol {
 
         ANY(SecurityGroupService.ANY, 0), TCP("tcp", 6), UDP("udp", 17), ICMP("icmp", 1);
 
         private final int protocolNumber;
         private final String name;
 
-        private Protocol(String name, int protocolNumber) {
+        Protocol(String name, int protocolNumber) {
             this.protocolNumber = protocolNumber;
             this.name = name;
         }
@@ -61,6 +61,7 @@ public class SecurityGroupService extends StatefulService {
         public String getName() {
             return this.name;
         }
+
         /**
          * Obtain the enumeration choice that corresponds to the provided String
          * which either equal the name or the ProtocolNumber of the choice
@@ -231,6 +232,10 @@ public class SecurityGroupService extends StatefulService {
                     currentState.egress = patchBody.egress;
                     hasStateChanged = true;
                 }
+            }
+            if (patchBody.endpointLink != null && currentState.endpointLink == null) {
+                currentState.endpointLink = patchBody.endpointLink;
+                hasStateChanged = true;
             }
             return hasStateChanged;
         };

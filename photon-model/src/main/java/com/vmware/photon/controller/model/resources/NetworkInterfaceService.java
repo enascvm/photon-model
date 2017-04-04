@@ -206,7 +206,15 @@ public class NetworkInterfaceService extends StatefulService {
     public void handlePatch(Operation patch) {
         NetworkInterfaceState currentState = getState(patch);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                NetworkInterfaceState.class, null);
+                NetworkInterfaceState.class, t -> {
+                    NetworkInterfaceState patchBody = patch.getBody(NetworkInterfaceState.class);
+                    boolean hasStateChanged = false;
+                    if (patchBody.endpointLink != null && currentState.endpointLink == null) {
+                        currentState.endpointLink = patchBody.endpointLink;
+                        hasStateChanged = true;
+                    }
+                    return hasStateChanged;
+                });
     }
 
     private NetworkInterfaceState processInput(Operation op) {

@@ -409,7 +409,7 @@ public class ImageEnumerationTaskService
     }
 
     /**
-     * @see ImageEnumerationTaskService#sendImageEnumerationAdapterRequest(SendImageEnumerationAdapterContext)
+     * @see ImageEnumerationTaskService#sendImageEnumerationAdapterRequest(ImageEnumerationTaskState)
      */
     private static class SendImageEnumerationAdapterContext {
 

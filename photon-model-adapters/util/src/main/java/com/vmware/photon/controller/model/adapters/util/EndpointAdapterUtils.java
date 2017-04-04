@@ -163,14 +163,16 @@ public class EndpointAdapterUtils {
 
             URI uri = buildFactoryUri(host, PhotonModelAdaptersRegistryService.class);
 
-            Operation postEndpointConfigOp = Operation.createPost(uri).setBody(endpointConfig);
+            Operation postEndpointConfigOp = Operation.createPost(uri)
+                    .setReferer(host.getUri())
+                    .setBody(endpointConfig);
 
             host.sendWithDeferredResult(postEndpointConfigOp).whenComplete((o, e) -> {
                 if (e != null) {
                     host.log(Level.WARNING,
                             "Registering %d '%s' adapters into End-point Adapters Registry: FAILED - %s",
                             endpointConfig.adapterEndpoints.size(), endpointType,
-                            Utils.toString(ex));
+                            Utils.toString(e));
                 } else {
                     host.log(Level.INFO,
                             "Registering %d '%s' adapters into End-point Adapters Registry: SUCCESS",
@@ -213,9 +215,7 @@ public class EndpointAdapterUtils {
             BiConsumer<EndpointState, Retriever> endpointEnhancer) {
 
         TaskManager tm = new TaskManager(service, body.taskReference, body.resourceLink());
-        Consumer<Throwable> onFailure = (t) -> {
-            tm.patchTaskToFailure(t);
-        };
+        Consumer<Throwable> onFailure = tm::patchTaskToFailure;
 
         Consumer<Operation> onSuccess = (op) -> {
 
@@ -248,12 +248,12 @@ public class EndpointAdapterUtils {
                         Pair.of(cd, endpoint.computeDescriptionLink),
                         Pair.of(cs, endpoint.computeLink),
                         Pair.of(es, endpoint.documentSelfLink))
-                        .map((p) -> {
-                            return Operation.createPatch(body.buildUri(p.right)).setBody(p.left)
-                                    .setReferer(service.getUri());
-                        });
+                        .map((p) ->
+                                Operation.createPatch(body.buildUri(p.right))
+                                        .setBody(p.left)
+                                        .setReferer(service.getUri()));
 
-                applyChanges(tm, service, body, endpoint, operations);
+                applyChanges(tm, service, endpoint, operations);
             } catch (Exception e) {
                 tm.patchTaskToFailure(e);
             }
@@ -264,7 +264,6 @@ public class EndpointAdapterUtils {
     }
 
     private static void applyChanges(TaskManager tm, StatelessService service,
-            EndpointConfigRequest body,
             EndpointState endpoint, Stream<Operation> operations) {
 
         OperationJoin joinOp = OperationJoin.create(operations);
@@ -318,7 +317,7 @@ public class EndpointAdapterUtils {
 
             if (endpointState.authCredentialsLink != null) {
                 AdapterUtils.getServiceState(service, endpointState.authCredentialsLink,
-                        onSuccessGetCredentials, e -> op.fail(e));
+                        onSuccessGetCredentials, op::fail);
             } else {
                 onSuccessGetCredentials.accept(getEmptyAuthCredentialState());
             }
@@ -331,7 +330,7 @@ public class EndpointAdapterUtils {
             AdapterUtils.getServiceState(service, body.resourceReference, onSuccessGetEndpoint,
                     e -> onSuccessGetCredentials.accept(getEmptyAuthCredentialState()));
         } else { // otherwise, proceed with empty credentials and rely on what's in
-                 // endpointProperties
+            // endpointProperties
             onSuccessGetCredentials.accept(getEmptyAuthCredentialState());
         }
     }

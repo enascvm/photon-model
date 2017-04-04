@@ -146,7 +146,16 @@ public class NetworkInterfaceDescriptionService extends StatefulService {
     public void handlePatch(Operation patch) {
         NetworkInterfaceDescription currentState = getState(patch);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                NetworkInterfaceDescription.class, null);
+                NetworkInterfaceDescription.class, t -> {
+                    NetworkInterfaceDescription patchBody =
+                            patch.getBody(NetworkInterfaceDescription.class);
+                    boolean hasStateChanged = false;
+                    if (patchBody.endpointLink != null && currentState.endpointLink == null) {
+                        currentState.endpointLink = patchBody.endpointLink;
+                        hasStateChanged = true;
+                    }
+                    return hasStateChanged;
+                });
     }
 
     private void validateState(NetworkInterfaceDescription state) {

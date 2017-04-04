@@ -142,8 +142,16 @@ public class NetworkService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         NetworkState currentState = getState(patch);
-        ResourceUtils.handlePatch(patch, currentState, getStateDescription(), NetworkState.class,
-                null);
+        ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
+                NetworkState.class, t -> {
+                    NetworkState patchBody = patch.getBody(NetworkState.class);
+                    boolean hasStateChanged = false;
+                    if (patchBody.endpointLink != null && currentState.endpointLink == null) {
+                        currentState.endpointLink = patchBody.endpointLink;
+                        hasStateChanged = true;
+                    }
+                    return hasStateChanged;
+                });
     }
 
     @Override

@@ -13,7 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 
 /**
  * URI definitions for vSphere adapters.
@@ -35,4 +40,23 @@ public class VSphereUriPaths {
     public static final String STATS_SERVICE = PROVISIONING + "/stats-adapter";
     public static final String ENDPOINT_CONFIG_ADAPTER = PROVISIONING + "/endpoint-config-adapter";
     public static final String DVS_NETWORK_SERVICE = PROVISIONING + "/dvs-network-adapter";
+
+    /**
+     * Map an adapter link to its {@link AdapterTypePath adapter type}.
+     */
+    public static final Map<String, AdapterTypePath> VSPHERE_ADAPTER_LINK_TYPES;
+
+    static {
+        Map<String, AdapterTypePath> adapterLinksByType = new HashMap<>();
+
+        adapterLinksByType.put(INSTANCE_SERVICE, AdapterTypePath.INSTANCE_ADAPTER);
+        adapterLinksByType.put(DVS_NETWORK_SERVICE, AdapterTypePath.SUBNET_ADAPTER);
+        adapterLinksByType.put(STATS_SERVICE, AdapterTypePath.STATS_ADAPTER);
+        adapterLinksByType.put(ENUMERATION_SERVICE, AdapterTypePath.ENUMERATION_ADAPTER);
+        adapterLinksByType.put(IMAGE_ENUMERATION_SERVICE, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER);
+        adapterLinksByType.put(ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER);
+        adapterLinksByType.put(POWER_SERVICE, AdapterTypePath.POWER_ADAPTER);
+
+        VSPHERE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
+    }
 }

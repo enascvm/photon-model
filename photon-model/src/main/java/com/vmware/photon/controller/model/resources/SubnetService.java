@@ -166,7 +166,15 @@ public class SubnetService extends StatefulService {
     public void handlePatch(Operation patch) {
         SubnetState currentState = getState(patch);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                SubnetState.class, null);
+                SubnetState.class, t -> {
+                    SubnetState patchBody = patch.getBody(SubnetState.class);
+                    boolean hasStateChanged = false;
+                    if (patchBody.endpointLink != null && currentState.endpointLink == null) {
+                        currentState.endpointLink = patchBody.endpointLink;
+                        hasStateChanged = true;
+                    }
+                    return hasStateChanged;
+                });
     }
 
     private void validateState(SubnetState state) {
