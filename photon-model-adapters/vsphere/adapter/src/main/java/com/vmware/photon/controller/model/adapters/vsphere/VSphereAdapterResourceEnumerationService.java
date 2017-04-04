@@ -1493,6 +1493,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.type = ComputeType.VM_HOST;
         state.powerState = PowerState.ON;
         state.endpointLink = request.endpointLink;
+        state.parentLink = enumerationContext.getRequest().resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
 
