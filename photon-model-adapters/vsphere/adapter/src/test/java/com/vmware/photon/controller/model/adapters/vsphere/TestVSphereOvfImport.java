@@ -19,6 +19,7 @@ import static org.junit.Assert.assertTrue;
 import java.io.File;
 import java.util.ArrayList;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.vsphere.ovf.ImportOvfRequest;
@@ -35,6 +36,7 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
+@Ignore
 public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
 
     private ComputeDescription computeHostDescription;

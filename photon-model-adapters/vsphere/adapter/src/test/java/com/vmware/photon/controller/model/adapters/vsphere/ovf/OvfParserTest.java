@@ -31,6 +31,7 @@ import org.xml.sax.SAXException;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.xenon.common.Utils;
 
+@Ignore
 public class OvfParserTest {
     @Test
     public void test() throws IOException, SAXException {
