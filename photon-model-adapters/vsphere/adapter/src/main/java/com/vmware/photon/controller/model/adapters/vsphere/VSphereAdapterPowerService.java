@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.net.URI;
 
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
-import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -43,13 +42,9 @@ public class VSphereAdapterPowerService extends StatelessService {
         op.setStatusCode(Operation.STATUS_CODE_CREATED);
         op.complete();
 
-        // mark task as started
-        TaskManager mgr = new TaskManager(this, request.taskReference);
-        mgr.patchTask(TaskStage.STARTED);
-
         ProvisionContext.populateContextThen(this, createInitialContext(request), ctx -> {
             if (request.isMockRequest) {
-                patchComputeAndCompleteRequest(mgr, request, ctx);
+                patchComputeAndCompleteRequest(request, ctx);
                 return;
             }
 
@@ -63,8 +58,6 @@ public class VSphereAdapterPowerService extends StatelessService {
                     if (ctx.fail(ce)) {
                         return;
                     }
-
-                    TaskManager mgr = new TaskManager(this, ctx.provisioningTaskReference);
 
                     PowerStateClient client = new PowerStateClient(connection);
 
@@ -91,7 +84,7 @@ public class VSphereAdapterPowerService extends StatelessService {
                     }
 
                     if (currentState == request.powerState) {
-                        mgr.patchTask(TaskStage.FINISHED);
+                        ctx.mgr.finishTask();
                         return;
                     }
 
@@ -106,7 +99,7 @@ public class VSphereAdapterPowerService extends StatelessService {
                         return;
                     }
 
-                    patchComputeAndCompleteRequest(mgr, request, ctx);
+                    patchComputeAndCompleteRequest(request, ctx);
                 });
     }
 
@@ -132,14 +125,14 @@ public class VSphereAdapterPowerService extends StatelessService {
                 .getMoRef(CustomProperties.MOREF);
     }
 
-    private void patchComputeAndCompleteRequest(TaskManager mgr, ComputePowerRequest request,
+    private void patchComputeAndCompleteRequest(ComputePowerRequest request,
             ProvisionContext ctx) {
         // update just the power state
         ctx.child.powerState = request.powerState;
         Operation patchState = patchComputeResource(ctx.child, ctx.computeReference);
 
         // finish task
-        Operation patchTask = mgr.createTaskPatch(TaskStage.FINISHED);
+        Operation patchTask = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
 
         OperationSequence.create(patchState)
                 .next(patchTask)
@@ -148,13 +141,7 @@ public class VSphereAdapterPowerService extends StatelessService {
     }
 
     private ProvisionContext createInitialContext(ComputePowerRequest request) {
-        ProvisionContext initialContext = new ProvisionContext(request);
-
-        // global error handler: it marks the task as failed
-        initialContext.errorHandler = failure -> {
-            TaskManager mgr = new TaskManager(this, request.taskReference);
-            mgr.patchTaskToFailure(failure);
-        };
+        ProvisionContext initialContext = new ProvisionContext(this,request);
 
         initialContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
         return initialContext;

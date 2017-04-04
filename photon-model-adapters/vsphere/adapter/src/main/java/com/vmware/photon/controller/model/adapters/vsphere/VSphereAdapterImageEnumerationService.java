@@ -70,7 +70,7 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
 
         validate(request);
 
-        TaskManager mgr = new TaskManager(this, request.taskReference);
+        TaskManager mgr = new TaskManager(this, request.taskReference, request.resourceLink());
 
         if (request.isMockRequest) {
             // just finish the mock request
@@ -79,19 +79,24 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
         }
 
         Operation.createGet(request.resourceReference)
-                .setCompletion(o -> thenWithEndpointState(request, o.getBody(EndpointState.class), mgr), mgr)
+                .setCompletion(
+                        o -> thenWithEndpointState(request, o.getBody(EndpointState.class), mgr), mgr)
                 .sendWith(this);
     }
 
-    private void thenWithEndpointState(ImageEnumerateRequest request, EndpointState endpoint, TaskManager mgr) {
-        URI parentUri = ComputeStateWithDescription.buildUri(UriUtils.buildUri(getHost(), endpoint.computeLink));
+    private void thenWithEndpointState(ImageEnumerateRequest request, EndpointState endpoint,
+            TaskManager mgr) {
+        URI parentUri = ComputeStateWithDescription
+                .buildUri(UriUtils.buildUri(getHost(), endpoint.computeLink));
         Operation.createGet(parentUri)
-                .setCompletion(o -> thenWithParentState(request, o.getBody(ComputeStateWithDescription.class), mgr),
+                .setCompletion(o -> thenWithParentState(request,
+                        o.getBody(ComputeStateWithDescription.class), mgr),
                         mgr)
                 .sendWith(this);
     }
 
-    private void thenWithParentState(ImageEnumerateRequest request, ComputeStateWithDescription parent,
+    private void thenWithParentState(ImageEnumerateRequest request,
+            ComputeStateWithDescription parent,
             TaskManager mgr) {
 
         VSphereIOThreadPool pool = VSphereIOThreadPoolAllocator.getPool(this);
@@ -108,7 +113,8 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
                         if (request.enumerationAction == EnumerationAction.REFRESH) {
                             refreshResourcesOnce(request, parent, connection, mgr);
                         } else {
-                            mgr.patchTaskToFailure(new IllegalArgumentException("Only REFRESH supported"));
+                            mgr.patchTaskToFailure(
+                                    new IllegalArgumentException("Only REFRESH supported"));
                         }
                     }
                 });
@@ -121,7 +127,8 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
 
         try {
             EnumerationClient client = new EnumerationClient(connection, parent);
-            processAllTemplates(request.resourceLink(), request.taskLink(), client, parent.description.regionId);
+            processAllTemplates(request.resourceLink(), request.taskLink(), client,
+                    parent.description.regionId);
         } catch (Throwable e) {
             mgr.patchTaskToFailure("Error processing library items", e);
             return;
@@ -223,7 +230,8 @@ public class VSphereAdapterImageEnumerationService extends StatelessService {
         });
     }
 
-    private void processAllLibraries(String endpointLink, String taskLink, LibraryClient libraryClient)
+    private void processAllLibraries(String endpointLink, String taskLink,
+            LibraryClient libraryClient)
             throws IOException, RpcException {
         Phaser phaser = new Phaser(1);
 

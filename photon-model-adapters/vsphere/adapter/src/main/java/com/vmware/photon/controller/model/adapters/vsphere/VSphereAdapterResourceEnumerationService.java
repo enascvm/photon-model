@@ -162,7 +162,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         op.setStatusCode(Operation.STATUS_CODE_CREATED);
         op.complete();
 
-        TaskManager mgr = new TaskManager(this, request.taskReference);
+        TaskManager mgr = new TaskManager(this, request.taskReference,request.resourceLink());
 
         if (request.isMockRequest) {
             // just finish the mock request

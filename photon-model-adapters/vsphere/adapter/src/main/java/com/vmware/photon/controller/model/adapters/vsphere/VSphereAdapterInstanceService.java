@@ -72,10 +72,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
         ComputeInstanceRequest request = op.getBody(ComputeInstanceRequest.class);
 
-        TaskManager mgr = new TaskManager(this, request.taskReference);
+        TaskManager mgr = new TaskManager(this, request.taskReference, request.resourceLink());
 
-        // mark task as started
-        mgr.patchTask(TaskStage.STARTED);
         if (request.isMockRequest) {
             handleMockRequest(mgr, request);
             return;
@@ -98,20 +96,13 @@ public class VSphereAdapterInstanceService extends StatelessService {
     }
 
     private ProvisionContext createInitialContext(ComputeInstanceRequest request) {
-        ProvisionContext initialContext = new ProvisionContext(request);
-
-        // global error handler: it marks the task as failed
-        initialContext.errorHandler = failure -> {
-            TaskManager mgr = new TaskManager(this, request.taskReference);
-            mgr.patchTaskToFailure(failure);
-        };
+        ProvisionContext initialContext = new ProvisionContext(this, request);
 
         initialContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
         return initialContext;
     }
 
     private void handleCreateInstance(ProvisionContext ctx) {
-        TaskManager mgr = new TaskManager(this, ctx.provisioningTaskReference);
 
         ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
                 (connection, ce) -> {
@@ -121,7 +112,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
 
                     try {
                         InstanceClient client = new InstanceClient(connection, ctx.child,
-                                ctx.parent, ctx.disks, ctx.nics, ctx.computeMoRef, ctx.datacenterPath);
+                                ctx.parent, ctx.disks, ctx.nics, ctx.computeMoRef,
+                                ctx.datacenterPath);
 
                         ComputeState state;
 
@@ -138,7 +130,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                 state = client.createInstanceFromTemplate(moRef);
                             } else {
                                 // library item
-                                state =  client.createInstanceFromLibraryItem(ctx.image);
+                                state = client.createInstanceFromLibraryItem(ctx.image);
                             }
                         } else {
                             state = client.createInstance();
@@ -161,13 +153,16 @@ public class VSphereAdapterInstanceService extends StatelessService {
                             // request guest customization while vm of powered off
                             NetworkInterfaceDescription desc = nic.description;
                             SubnetState subnet = nic.subnet;
-                            if (subnet != null && desc != null && desc.assignment == IpAssignment.STATIC) {
-                                CustomizationClient cc = new CustomizationClient(connection, ctx.child, vmOverlay.getGuestId());
+                            if (subnet != null && desc != null
+                                    && desc.assignment == IpAssignment.STATIC) {
+                                CustomizationClient cc = new CustomizationClient(connection,
+                                        ctx.child, vmOverlay.getGuestId());
                                 CustomizationSpec template = new CustomizationSpec();
                                 cc.customizeNic(vmOverlay.getPrimaryMac(), desc, subnet, template);
                                 cc.customizeDns(subnet.dnsServerAddresses, subnet.dnsSearchDomains,
                                         template);
-                                ManagedObjectReference task = cc.customizeGuest(client.getVm(), template);
+                                ManagedObjectReference task = cc
+                                        .customizeGuest(client.getVm(), template);
 
                                 TaskInfo taskInfo = VimUtils.waitTaskEnd(connection, task);
                                 if (taskInfo.getState() == TaskInfoState.ERROR) {
@@ -182,7 +177,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                     PowerState.ON, null, 0);
                             state.powerState = PowerState.ON;
 
-                            Operation op = mgr.createTaskPatch(TaskStage.FINISHED);
+                            Operation op = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
 
                             Runnable runnable = createCheckForIpTask(ctx.pool, op, client.getVm(),
                                     connection.createUnmanagedCopy(),
@@ -193,10 +188,8 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                     TimeUnit.SECONDS);
                         } else {
                             // only finish the task without waiting for IP
-                            finishTask = mgr.createTaskPatch(TaskStage.FINISHED);
+                            finishTask = ctx.mgr.createTaskPatch(TaskStage.FINISHED);
                         }
-
-
 
                         if (ctx.templateMoRef != null || ctx.image != null) {
                             addDiskLinksAfterClone(state, vmOverlay.getDisks(), ctx);
@@ -333,7 +326,6 @@ public class VSphereAdapterInstanceService extends StatelessService {
     }
 
     private void handleDeleteInstance(ProvisionContext ctx) {
-        TaskManager mgr = new TaskManager(this, ctx.provisioningTaskReference);
 
         ctx.pool.submit(this, ctx.getAdapterManagementReference(), ctx.vSphereCredentials,
                 (conn, ce) -> {
@@ -346,13 +338,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
                                 ctx.disks, ctx.nics, null, null);
                         client.deleteInstance();
 
-                        Operation finishTask = mgr.createTaskPatch(TaskStage.FINISHED);
-
-                        OperationSequence seq = OperationSequence
-                                .create(finishTask);
-
-                        seq.setCompletion(ctx.logOnError())
-                                .sendWith(this);
+                        ctx.mgr.finishTask();
                     } catch (Exception e) {
                         ctx.fail(e);
                     }

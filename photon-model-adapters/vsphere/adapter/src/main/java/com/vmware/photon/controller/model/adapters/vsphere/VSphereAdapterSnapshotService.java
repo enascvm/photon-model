@@ -47,7 +47,7 @@ public class VSphereAdapterSnapshotService extends StatelessService {
 
         SnapshotRequest request = op.getBody(SnapshotRequest.class);
 
-        TaskManager mgr = new TaskManager(this, request.taskReference);
+        TaskManager mgr = new TaskManager(this, request.taskReference,request.resourceLink());
 
         if (request.isMockRequest) {
             mgr.patchTask(TaskStage.FINISHED);

@@ -46,11 +46,11 @@ public class ResourcePoolOverlay extends AbstractOverlay {
     }
 
     public long getMemoryReservationBytes() {
-        long value = (long) getOrDefault(VimPath.rp_summary_config_memoryAllocation_reservation, 0L);
+        long value = (long) getOrDefault(VimPath.rp_runtime_memory_maxUsage, 0L);
         if (value < 0) {
             return 0;
         }
-        return value * 1024 * 1024;
+        return value;
     }
 
     public String makeUserFriendlyName(String context) {

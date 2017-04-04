@@ -24,9 +24,9 @@ import java.util.stream.Stream;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
-import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
-import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
+import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
@@ -41,6 +41,7 @@ import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
 import com.vmware.xenon.common.QueryResultsProcessor;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
+import com.vmware.xenon.common.ServiceRequestSender;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
@@ -54,7 +55,7 @@ public class ProvisionContext {
     private static final Logger logger = Logger.getLogger(ProvisionContext.class.getName());
 
     public final URI computeReference;
-    public final URI provisioningTaskReference;
+    public final TaskManager mgr;
 
     public ComputeStateWithDescription parent;
     public ComputeStateWithDescription child;
@@ -64,7 +65,6 @@ public class ProvisionContext {
     public ManagedObjectReference computeMoRef;
     public String datacenterPath; // target datacenter resolved from the target placement
 
-    public ServiceDocument task;
     public List<DiskState> disks;
     public List<NetworkInterfaceStateWithDetails> nics;
     public AuthCredentialsServiceState vSphereCredentials;
@@ -72,6 +72,8 @@ public class ProvisionContext {
     public VSphereIOThreadPool pool;
     public Consumer<Throwable> errorHandler;
 
+    public ServiceDocument task;
+    private final URI provisioningTaskReference;
     private final InstanceRequestType instanceRequestType;
 
     public static class NetworkInterfaceStateWithDetails extends NetworkInterfaceState {
@@ -80,27 +82,21 @@ public class ProvisionContext {
         public NetworkInterfaceDescription description;
     }
 
-    public ProvisionContext(ComputeInstanceRequest req) {
-        this.instanceRequestType = req.requestType;
+    public ProvisionContext(ServiceRequestSender service, ResourceRequest req) {
         this.computeReference = req.resourceReference;
+        this.instanceRequestType = req instanceof ComputeInstanceRequest ?
+                ((ComputeInstanceRequest) req).requestType : null;
+        this.mgr = new TaskManager(service, req.taskReference, req.resourceLink());
         this.provisioningTaskReference = req.taskReference;
-    }
-
-    public ProvisionContext(ComputePowerRequest req) {
-        this.instanceRequestType = null;
-        this.computeReference = req.resourceReference;
-        this.provisioningTaskReference = req.taskReference;
-    }
-
-    public ProvisionContext(ComputeStatsRequest statsRequest) {
-        this.instanceRequestType = null;
-        this.computeReference = statsRequest.resourceReference;
-        this.provisioningTaskReference = statsRequest.taskReference;
+        this.errorHandler = failure -> {
+            this.mgr.patchTaskToFailure(failure);
+        };
     }
 
     /**
      * Populates the given initial context and invoke the onSuccess handler when built. At every step,
      * if failure occurs the ProvisionContext's errorHandler is invoked to cleanup.
+     *
      * @param ctx
      * @param onSuccess
      */
@@ -222,17 +218,20 @@ public class ProvisionContext {
 
                             if (nic.networkInterfaceDescriptionLink != null) {
                                 NetworkInterfaceDescription desc =
-                                        processor.selectedDocument(nic.networkInterfaceDescriptionLink,
+                                        processor.selectedDocument(
+                                                nic.networkInterfaceDescriptionLink,
                                                 NetworkInterfaceDescription.class);
                                 nic.description = desc;
                             }
 
                             if (nic.subnetLink != null) {
-                                SubnetState subnet = processor.selectedDocument(nic.subnetLink, SubnetState.class);
+                                SubnetState subnet = processor
+                                        .selectedDocument(nic.subnetLink, SubnetState.class);
                                 nic.subnet = subnet;
                             }
                             if (nic.networkLink != null) {
-                                NetworkState network = processor.selectedDocument(nic.networkLink, NetworkState.class);
+                                NetworkState network = processor
+                                        .selectedDocument(nic.networkLink, NetworkState.class);
                                 nic.network = network;
                             }
 
@@ -294,7 +293,7 @@ public class ProvisionContext {
 
                 populateContextThen(service, ctx, onSuccess);
             })
-            .sendWith(service);
+                    .sendWith(service);
 
             return;
         }
@@ -335,9 +334,11 @@ public class ProvisionContext {
 
         String libraryItemLink = VimUtils.firstNonNull(
                 CustomProperties.of(ctx.child).getString(CustomProperties.LIBRARY_ITEM_LINK),
-                CustomProperties.of(ctx.child.description).getString(CustomProperties.LIBRARY_ITEM_LINK)
+                CustomProperties.of(ctx.child.description)
+                        .getString(CustomProperties.LIBRARY_ITEM_LINK)
         );
-        if (libraryItemLink != null && ctx.image == null && ctx.instanceRequestType == InstanceRequestType.CREATE) {
+        if (libraryItemLink != null && ctx.image == null
+                && ctx.instanceRequestType == InstanceRequestType.CREATE) {
             URI libraryUri = UriUtils.buildUri(service.getHost(), libraryItemLink);
 
             AdapterUtils.getServiceState(service, libraryUri, op -> {
@@ -367,8 +368,9 @@ public class ProvisionContext {
 
     /**
      * Fails the provisioning by invoking the errorHandler.
-     * @return tre if t is defined, false otherwise
+     *
      * @param t
+     * @return tre if t is defined, false otherwise
      */
     public boolean fail(Throwable t) {
         if (t != null) {
@@ -395,13 +397,13 @@ public class ProvisionContext {
         fail(new IllegalStateException(msg));
     }
 
-    public JoinedCompletionHandler logOnError() {
-        return (ops, failures) -> {
-            if (failures != null && !failures.isEmpty()) {
-                logger.info(
-                        "Ignoring errors while completing task " + this.task.documentSelfLink + ": "
-                                + failures.values());
-            }
-        };
-    }
+    //    public JoinedCompletionHandler logOnError() {
+    //        return (ops, failures) -> {
+    //            if (failures != null && !failures.isEmpty()) {
+    //                logger.info(
+    //                        "Ignoring errors while completing task " + this.task.documentSelfLink + ": "
+    //                                + failures.values());
+    //            }
+    //        };
+    //    }
 }

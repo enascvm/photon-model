@@ -40,7 +40,7 @@ public abstract class BaseVsphereNetworkProvisionFlow {
         this.service = service;
         this.request = req;
         this.operationContext = operationContext;
-        this.taskManager = new TaskManager(service, req.taskReference);
+        this.taskManager = new TaskManager(service, req.taskReference,req.resourceLink());
     }
 
     public BaseVsphereNetworkProvisionFlow(StatelessService service, SubnetInstanceRequest req) {

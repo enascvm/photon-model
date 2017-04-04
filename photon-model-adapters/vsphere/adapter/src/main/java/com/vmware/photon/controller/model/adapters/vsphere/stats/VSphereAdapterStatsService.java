@@ -20,7 +20,6 @@ import java.util.List;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
-import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.CustomProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext;
 import com.vmware.photon.controller.model.adapters.vsphere.VSphereIOThreadPoolAllocator;
@@ -28,10 +27,8 @@ import com.vmware.photon.controller.model.adapters.vsphere.VSphereUriPaths;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
-
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.StatelessService;
@@ -51,13 +48,12 @@ public class VSphereAdapterStatsService extends StatelessService {
         op.complete();
 
         ComputeStatsRequest statsRequest = op.getBody(ComputeStatsRequest.class);
-        TaskManager mgr = new TaskManager(this, statsRequest.taskReference);
 
         ProvisionContext.populateContextThen(this, createInitialContext(statsRequest), ctx -> {
             if (statsRequest.isMockRequest) {
                 // patch status to parent task
                 persistStats(mockStats(), statsRequest);
-                mgr.patchTask(TaskStage.FINISHED);
+                ctx.mgr.patchTask(TaskStage.FINISHED);
                 return;
             }
             collectStats(ctx, statsRequest);
@@ -163,13 +159,7 @@ public class VSphereAdapterStatsService extends StatelessService {
     }
 
     private ProvisionContext createInitialContext(ComputeStatsRequest statsRequest) {
-        ProvisionContext initialContext = new ProvisionContext(statsRequest);
-
-        // global error handler: it marks the task as failed
-        initialContext.errorHandler = failure -> {
-            TaskManager mgr = new TaskManager(this, statsRequest.taskReference);
-            mgr.patchTaskToFailure(failure);
-        };
+        ProvisionContext initialContext = new ProvisionContext(this, statsRequest);
 
         initialContext.pool = VSphereIOThreadPoolAllocator.getPool(this);
         return initialContext;

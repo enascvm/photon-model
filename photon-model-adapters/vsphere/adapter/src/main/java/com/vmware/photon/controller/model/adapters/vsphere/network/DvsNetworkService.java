@@ -34,7 +34,7 @@ public class DvsNetworkService extends StatelessService {
         SubnetInstanceRequest req = op.getBody(SubnetInstanceRequest.class);
 
         if (req.isMockRequest) {
-            new TaskManager(this, req.taskReference).patchTask(TaskStage.FINISHED);
+            new TaskManager(this, req.taskReference,req.resourceLink()).patchTask(TaskStage.FINISHED);
             op.complete();
         }
 

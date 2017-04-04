@@ -34,10 +34,6 @@ public class TaskManager implements CompletionHandler {
     private String resourceLink;
     private Logger lg = Logger.getLogger(this.getClass().getName());
 
-    public TaskManager(ServiceRequestSender service, URI taskReference) {
-        this(service, taskReference, null);
-    }
-
     public TaskManager(ServiceRequestSender service, URI taskReference, String resourceLink) {
         this.service = service;
         this.taskReference = taskReference;
