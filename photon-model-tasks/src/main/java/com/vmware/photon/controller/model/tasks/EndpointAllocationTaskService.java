@@ -483,34 +483,14 @@ public class EndpointAllocationTaskService
                         }
                         return;
                     }
-                    // update endpoint, but first stop current enumeration.
-                    currentState.endpointState.endpointProperties = endpointProperties;
-                    doUpdateEndpoint(o.getBody(EndpointState.class), currentState);
-                })
-                .sendWith(this);
-    }
-
-    private void doUpdateEndpoint(EndpointState loadedState,
-            EndpointAllocationTaskState currentState) {
-        loadedState.endpointProperties = currentState.endpointState.endpointProperties;
-
-        String id = UriUtils.getLastPathSegment(loadedState.documentSelfLink);
-        logFine(() -> String.format("Stopping any scheduled task for endpoint %s",
-                loadedState.documentSelfLink));
-        Operation.createDelete(this, UriUtils.buildUriPath(ScheduledTaskService.FACTORY_LINK, id))
-                .setCompletion((o, e) -> {
-                    if (e != null) {
-                        logWarning(() -> String.format("Unable to delete ScheduleTaskState for"
-                                        + " endpoint %s : %s",
-                                loadedState.documentSelfLink, e.getMessage()));
-                    }
-
+                    EndpointState loadedState = o.getBody(EndpointState.class);
+                    loadedState.endpointProperties = endpointProperties;
                     EndpointAllocationTaskState state = createUpdateSubStageTask(
                             SubStage.INVOKE_ADAPTER);
                     state.endpointState = loadedState;
                     sendSelfPatch(state);
-                }).sendWith(this);
-
+                })
+                .sendWith(this);
     }
 
     private void rollbackEndpoint(EndpointAllocationTaskState currentState) {
@@ -518,7 +498,8 @@ public class EndpointAllocationTaskService
             sendSelfPatch(createUpdateSubStageTask(TaskStage.FAILED, SubStage.FAILED));
         };
 
-        if (currentState.createdDocumentLinks == null || currentState.createdDocumentLinks.isEmpty()) {
+        if (currentState.createdDocumentLinks == null || currentState.createdDocumentLinks
+                .isEmpty()) {
             completionHandler.run();
         } else {
             List<Operation> deleteOps = currentState.createdDocumentLinks.stream()
