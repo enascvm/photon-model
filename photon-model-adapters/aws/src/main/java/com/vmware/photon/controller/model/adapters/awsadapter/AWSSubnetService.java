@@ -201,6 +201,8 @@ public class AWSSubnetService extends StatelessService {
         case DELETE:
             if (context.request.isMockRequest) {
                 // no need to go to the end-point
+                this.logFine("Mock request to delete an AWS subnet ["
+                        + context.subnetState.name + "] processed.");
             } else {
                 execution = execution.thenCompose(this::deleteSubnet);
             }

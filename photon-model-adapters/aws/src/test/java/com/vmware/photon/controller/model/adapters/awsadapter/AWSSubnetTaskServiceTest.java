@@ -43,6 +43,8 @@ import com.amazonaws.services.ec2.model.DescribeSubnetsResult;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Subnet;
 
+import io.netty.handler.codec.http.HttpResponseStatus;
+
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -148,7 +150,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
         kickOffSubnetProvision(InstanceRequestType.DELETE, subnetState, TaskStage.FINISHED);
 
         if (!this.isMock) {
-            // Verify that the subnet was created.
+            // Verify that the subnet was deleted.
             DescribeSubnetsRequest describeRequest = new DescribeSubnetsRequest()
                     .withSubnetIds(Collections.singletonList(awsSubnet.getSubnetId()));
 
@@ -156,7 +158,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
                 this.client.describeSubnets(describeRequest).getSubnets();
                 fail("Subnet should not exists in AWS.");
             } catch (AmazonEC2Exception ex) {
-                assertEquals(400, ex.getStatusCode());
+                assertEquals(HttpResponseStatus.NOT_FOUND.code(), ex.getStatusCode());
             }
         }
     }

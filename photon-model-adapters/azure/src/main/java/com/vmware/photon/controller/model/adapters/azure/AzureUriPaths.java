@@ -30,6 +30,8 @@ public class AzureUriPaths {
             + "/azure";
     public static final String AZURE_INSTANCE_ADAPTER = AdapterTypePath.INSTANCE_ADAPTER
             .adapterLink(EndpointType.azure.name());
+    public static final String AZURE_SUBNET_ADAPTER = AdapterTypePath.SUBNET_ADAPTER
+            .adapterLink(EndpointType.azure.name());
     public static final String AZURE_STATS_ADAPTER = AdapterTypePath.STATS_ADAPTER
             .adapterLink(EndpointType.azure.name());
     public static final String AZURE_COMPUTE_STATS_GATHERER = PROVISIONING_AZURE

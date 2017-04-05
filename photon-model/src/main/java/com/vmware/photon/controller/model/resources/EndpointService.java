@@ -64,8 +64,9 @@ public class EndpointService extends StatefulService {
         @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK })
         public String resourcePoolLink;
 
-        @Documentation(description = "Endpoint specfic properties. The specific endpoint adapter will extract "
-                + "them and enhance the linked Credentials,Compute and ComputeDescription.")
+        @Documentation(description = "Endpoint specific properties. The specific endpoint adapter"
+                + " will extract them and enhance the linked Credentials,Compute and"
+                + " ComputeDescription.")
         @PropertyOptions(usage = { AUTO_MERGE_IF_NOT_NULL }, indexing = {
                 PropertyIndexingOption.CASE_INSENSITIVE,
                 PropertyIndexingOption.EXPAND,

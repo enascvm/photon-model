@@ -19,6 +19,7 @@ import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointA
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureSubnetService;
 import com.vmware.photon.controller.model.adapters.azure.stats.AzureComputeHostStatsGatherer;
 import com.vmware.photon.controller.model.adapters.azure.stats.AzureComputeHostStorageStatsGatherer;
 import com.vmware.photon.controller.model.adapters.azure.stats.AzureComputeStatsGatherer;
@@ -39,6 +40,7 @@ public class AzureAdapters {
             AzureEnumerationAdapterService.SELF_LINK,
             AzureImageEnumerationAdapterService.SELF_LINK,
             AzureInstanceService.SELF_LINK,
+            AzureSubnetService.SELF_LINK,
             AzureStatsService.SELF_LINK,
             AzureComputeStatsGatherer.SELF_LINK,
             AzureComputeHostStatsGatherer.SELF_LINK,
@@ -58,6 +60,7 @@ public class AzureAdapters {
             host.startService(new AzureEnumerationAdapterService());
             host.startService(new AzureImageEnumerationAdapterService());
             host.startService(new AzureInstanceService());
+            host.startService(new AzureSubnetService());
             host.startService(new AzureStatsService());
             host.startService(new AzureComputeStatsGatherer());
             host.startService(new AzureComputeHostStatsGatherer());
