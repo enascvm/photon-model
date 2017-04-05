@@ -73,7 +73,7 @@ public class ComputeResourceOverlay extends AbstractOverlay {
     }
 
     public long getTotalMemoryBytes() {
-        return (long) getOrFail(VimPath.res_summary_totalMemory);
+        return (long) getOrDefault(VimPath.res_summary_totalMemory, 0L);
     }
 
     public int getTotalCpuMhz() {

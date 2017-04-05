@@ -313,9 +313,10 @@ public class EnumerationClient extends BaseHelper {
         clusterSpec.getPathSet().addAll(Arrays.asList(
                 VimPath.res_summary_numCpuCores,
                 VimPath.res_summary_totalCpu,
+                VimPath.res_summary_totalMemory,
                 VimPath.res_resourcePool,
                 VimPath.res_configurationEx,
-                VimPath.res_summary_totalMemory,
+                VimPath.res_host,
                 VimNames.PROPERTY_NAME
         ));
 

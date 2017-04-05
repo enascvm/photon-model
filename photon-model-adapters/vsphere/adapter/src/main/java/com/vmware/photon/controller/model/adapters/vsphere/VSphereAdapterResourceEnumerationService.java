@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -361,7 +362,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         MoRefKeyedMap<NetworkOverlay> networks = new MoRefKeyedMap<>();
         List<HostSystemOverlay> hosts = new ArrayList<>();
         List<DatastoreOverlay> datastores = new ArrayList<>();
-        List<ComputeResourceOverlay> computeResources = new ArrayList<>();
+        List<ComputeResourceOverlay> clusters = new ArrayList<>();
         List<ResourcePoolOverlay> resourcePools = new ArrayList<>();
 
         Map<String, ComputeResourceOverlay> nonDrsClusters = new HashMap<>();
@@ -386,7 +387,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         ComputeResourceOverlay cr = new ComputeResourceOverlay(cont);
                         if (cr.isDrsEnabled()) {
                             // when DRS is enabled add the cluster itself and skip the hosts
-                            computeResources.add(cr);
+                            clusters.add(cr);
                         } else if (VimUtils.isClusterComputeResource(cont.getObj())) {
                             // when DRS is not enabled, skip the cluster and then
                             // add the inside hosts instead; when provisioning into a non-DRS
@@ -394,10 +395,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                             // resource pool which always has to be specified)
                             nonDrsClusters.put(cr.getId().getValue(), cr);
                         } else {
-                            // add standalone hosts (by their ComputeResource instance instead of
-                            // the inner HostSystem one because the former contains the resource
-                            // pool which we need)
-                            computeResources.add(cr);
+                            // ignore non-clusters: they are handled as hosts
+                            continue;
                         }
                     } else if (VimUtils.isDatastore(cont.getObj())) {
                         DatastoreOverlay ds = new DatastoreOverlay(cont);
@@ -435,15 +434,23 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             return;
         }
 
-        // include hosts that are part of a non-DRS enabled cluster
-        hosts.removeIf(hs -> !nonDrsClusters.containsKey(hs.getParent().getValue()));
+        // exclude standalone hosts that are part of a non-drs cluster
+        hosts.removeIf(hs -> nonDrsClusters.containsKey(hs.getParent().getValue()));
+
+        // exclude hosts part of a cluster
+        for (ComputeResourceOverlay cluster : clusters) {
+            for (ManagedObjectReference hostRef : cluster.getHosts()) {
+                hosts.removeIf(ho -> Objects.equals(ho.getId().getValue(), hostRef.getValue()));
+            }
+        }
+
         ctx.expectHostSystemCount(hosts.size());
         for (HostSystemOverlay hs : hosts) {
             processFoundHostSystem(ctx, hs);
         }
 
-        ctx.expectComputeResourceCount(computeResources.size());
-        for (ComputeResourceOverlay cr : computeResources) {
+        ctx.expectComputeResourceCount(clusters.size());
+        for (ComputeResourceOverlay cr : clusters) {
             processFoundComputeResource(ctx, cr);
         }
 
@@ -456,7 +463,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             }
         }
 
-        MoRefKeyedMap<String> computeResourceNamesByMoref = collectComputeNames(hosts, computeResources);
+        MoRefKeyedMap<String> computeResourceNamesByMoref = collectComputeNames(hosts, clusters);
         ctx.expectResourcePoolCount(resourcePools.size());
         for (ResourcePoolOverlay rp : resourcePools) {
             String ownerName = computeResourceNamesByMoref.get(rp.getOwner());
@@ -679,7 +686,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .put(CustomProperties.MOREF, net.getId())
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, net.getId().getType());
-
 
         custProp.put(DvsProperties.PORT_GROUP_KEY, net.getPortgroupKey());
 
@@ -1110,7 +1116,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         Stream<Operation> ops = tags.stream()
                 .map(s -> Operation
                         .createPost(UriUtils.buildFactoryUri(getHost(), TagService.class))
-                        .setReferer(getUri())
                         .setBody(s));
 
         OperationJoin.create(ops)
@@ -1141,6 +1146,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 if (state.tenantLinks == null) {
                     state.tenantLinks = tenantLinks;
                 }
+                state.documentSelfLink = TagFactoryService.generateSelfLink(state);
                 res.add(state);
             }
         }
@@ -1165,8 +1171,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 TagState res = new TagState();
                 res.value = tagModel.get("name").asText();
                 res.key = client.getCategoryName(tagModel.get("category_id").asText());
-
-                res.documentSelfLink = TagFactoryService.generateSelfLink(res);
                 return res;
             } catch (IOException | RpcException e) {
                 return null;
@@ -1346,7 +1350,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationContext.getTenantLinks();
         }
-        populateTags(enumerationContext,  vm, state);
+        populateTags(enumerationContext, vm, state);
 
         logFine(() -> String.format("Syncing VM %s", state.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
