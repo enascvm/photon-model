@@ -25,6 +25,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
@@ -47,6 +48,7 @@ public class PhotonModelAdaptersRegistryServiceTest extends BasicReusableHostTes
         this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(10));
 
         PhotonModelServices.startServices(this.host);
+        PhotonModelMetricServices.startServices(this.host);
         PhotonModelAdaptersRegistryAdapters.startServices(this.host);
 
         this.host.setTimeoutSeconds(300);

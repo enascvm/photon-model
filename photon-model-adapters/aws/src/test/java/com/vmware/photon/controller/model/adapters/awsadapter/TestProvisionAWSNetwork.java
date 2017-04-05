@@ -33,6 +33,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
@@ -82,6 +83,7 @@ public class TestProvisionAWSNetwork {
         try {
             this.host.start();
             PhotonModelServices.startServices(this.host);
+            PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             // start the aws network service
             this.host.startService(

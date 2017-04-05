@@ -40,6 +40,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
@@ -102,6 +103,7 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
 
         try {
             PhotonModelServices.startServices(this.host);
+            PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             AWSAdapters.startServices(this.host);
 

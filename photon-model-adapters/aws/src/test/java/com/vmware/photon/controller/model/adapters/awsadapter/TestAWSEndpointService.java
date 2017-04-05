@@ -26,6 +26,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -45,6 +46,7 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
         try {
             this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(10));
             PhotonModelServices.startServices(this.host);
+            PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             AWSAdapters.startServices(this.host);
 

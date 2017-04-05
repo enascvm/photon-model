@@ -65,6 +65,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
@@ -142,6 +143,7 @@ public class TestAWSProvisionTask {
             this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(250));
             this.host.start();
             PhotonModelServices.startServices(this.host);
+            PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             AWSAdapters.startServices(this.host);
 

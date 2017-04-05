@@ -31,7 +31,7 @@ import org.junit.runners.Suite.SuiteClasses;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
-import com.vmware.photon.controller.model.PhotonModelServices;
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 
@@ -135,7 +135,7 @@ public class ResourceMetricsServiceTest extends Suite {
             this.host.waitForServiceAvailable(ResourceMetricsService.FACTORY_LINK);
 
             this.host.testStart(1);
-            PhotonModelServices.setFactoryToAvailable(this.host, ResourceMetricsService.FACTORY_LINK, this.host.getCompletion());
+            PhotonModelMetricServices.setFactoryToAvailable(this.host, ResourceMetricsService.FACTORY_LINK, this.host.getCompletion());
             this.host.testWait();
 
             URI availableUri = UriUtils.buildAvailableUri(this.host, ResourceMetricsService.FACTORY_LINK);

@@ -79,6 +79,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
@@ -224,6 +225,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
              */
             if (computeHost == null) {
                 PhotonModelServices.startServices(this.host);
+                PhotonModelMetricServices.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
                 AzureAdapters.startServices(this.host);
 

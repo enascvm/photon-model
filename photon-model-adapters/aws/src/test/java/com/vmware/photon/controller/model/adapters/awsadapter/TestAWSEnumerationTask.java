@@ -77,6 +77,7 @@ import org.junit.Test;
 import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -184,6 +185,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         try {
             PhotonModelServices.startServices(this.host);
+            PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             AWSAdapters.startServices(this.host);
 

@@ -23,6 +23,7 @@ import java.util.function.Predicate;
 
 import org.junit.Before;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -48,6 +49,7 @@ public abstract class BaseModelTest extends BasicReusableHostTestCase {
             return;
         }
         PhotonModelServices.startServices(test.getHost());
+        PhotonModelMetricServices.startServices(test.getHost());
         test.getHost().waitForServiceAvailable(PhotonModelServices.LINKS);
     }
 

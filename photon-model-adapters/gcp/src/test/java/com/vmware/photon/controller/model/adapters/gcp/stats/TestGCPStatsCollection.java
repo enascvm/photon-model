@@ -28,6 +28,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
@@ -95,6 +96,7 @@ public class TestGCPStatsCollection extends BaseModelTest {
     public void setUp() throws Throwable {
         CommandLineArgumentParser.parseFromProperties(this.host);
         PhotonModelServices.startServices(this.host);
+        PhotonModelMetricServices.startServices(this.host);
         PhotonModelTaskServices.startServices(this.host);
         GCPAdapters.startServices(this.host);
         this.host.waitForServiceAvailable(PhotonModelServices.LINKS);

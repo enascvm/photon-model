@@ -26,6 +26,7 @@ import java.util.logging.Level;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
@@ -48,6 +49,7 @@ public class TestAzureEndpointAdapterService extends BasicReusableHostTestCase {
         try {
             this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(10));
             PhotonModelServices.startServices(this.host);
+            PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             AzureAdapters.startServices(this.host);
 

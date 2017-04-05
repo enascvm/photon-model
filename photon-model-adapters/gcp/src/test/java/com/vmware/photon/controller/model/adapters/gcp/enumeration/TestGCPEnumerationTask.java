@@ -41,6 +41,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.gcp.GCPAdapters;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -102,6 +103,7 @@ public class TestGCPEnumerationTask extends BasicReusableHostTestCase {
         CommandLineArgumentParser.parseFromProperties(this.host);
         this.gcpVMName = this.gcpVMName == null ? generateRandomName(GCP_VM_NAME_PREFIX) : this.gcpVMName;
         PhotonModelServices.startServices(this.host);
+        PhotonModelMetricServices.startServices(this.host);
         PhotonModelTaskServices.startServices(this.host);
         GCPAdapters.startServices(this.host);
         this.host.setTimeoutSeconds(TIME_OUT_SECONDS);
