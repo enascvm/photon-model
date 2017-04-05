@@ -47,6 +47,7 @@ public class AzureConstants {
     public static final String MISSING_SUBSCRIPTION_CODE = "MissingSubscriptionRegistration";
     public static final String RESOURCE_NOT_FOUND = "ResourceNotFound";
     public static final String INVALID_PARAMETER = "InvalidParameter";
+    public static final String INVALID_RESOURCE_GROUP = "InvalidResourceGroup";
     public static final String STORAGE_ACCOUNT_ALREADY_EXIST = "StorageAccountAlreadyExists";
 
     // Azure constants

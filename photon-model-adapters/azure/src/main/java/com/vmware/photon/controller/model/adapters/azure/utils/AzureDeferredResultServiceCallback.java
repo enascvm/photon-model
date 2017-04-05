@@ -13,8 +13,11 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_NOT_FOUND;
 
+import com.microsoft.azure.CloudError;
 import com.microsoft.azure.CloudException;
 import com.microsoft.rest.ServiceResponse;
 
@@ -74,8 +77,19 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     protected Throwable consumeError(Throwable exc) {
         if (exc instanceof CloudException) {
             CloudException azureExc = (CloudException) exc;
-            if (RESOURCE_NOT_FOUND.equalsIgnoreCase(azureExc.getBody().getCode())) {
-                return RECOVERED;
+            CloudError body = azureExc.getBody();
+            if (body != null) {
+                String code = body.getCode();
+                if (RESOURCE_NOT_FOUND.equalsIgnoreCase(code)) {
+                    return RECOVERED;
+                } else if (INVALID_PARAMETER.equals(code) || INVALID_RESOURCE_GROUP.equals(code)) {
+                    String invalidParameterMsg = String.format(
+                            "Invalid parameter. %s",
+                            body.getMessage());
+
+                    IllegalStateException e = new IllegalStateException(invalidParameterMsg, exc);
+                    return e;
+                }
             }
         }
         return exc;

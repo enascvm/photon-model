@@ -25,6 +25,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.MISSING_SUBSCRIPTION_CODE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REGISTRED_STATE;
@@ -252,7 +253,7 @@ public class AzureInstanceService extends StatelessService {
             // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             if (exc != null) {
                 if (namespace != null) {
-                    handleCloudError(ctx, namespace, exc);
+                    handleCloudError(ctx.stage + ": FAILED. Details:", ctx, namespace, exc);
                 } else {
                     handleError(ctx, exc);
                 }
@@ -1228,7 +1229,7 @@ public class AzureInstanceService extends StatelessService {
                 new AzureAsyncCallback<VirtualMachine>() {
                     @Override
                     public void onError(Throwable e) {
-                        handleCloudError(ctx, COMPUTE_NAMESPACE, e);
+                        handleCloudError("Provisioning VM " + vmName + ": FAILED. Details:", ctx, COMPUTE_NAMESPACE, e);
                     }
 
                     @Override
@@ -1429,7 +1430,7 @@ public class AzureInstanceService extends StatelessService {
      * message is made better human-readable. Otherwise the fallback is to transition to error state
      * through next specific error handler.
      */
-    private void handleCloudError(AzureInstanceContext ctx, String namespace,
+    private void handleCloudError(String msg, AzureInstanceContext ctx, String namespace,
             Throwable e) {
         if (e instanceof CloudException) {
             CloudException ce = (CloudException) e;
@@ -1439,10 +1440,9 @@ public class AzureInstanceService extends StatelessService {
                 if (MISSING_SUBSCRIPTION_CODE.equals(code)) {
                     registerSubscription(ctx, namespace);
                     return;
-                } else if (INVALID_PARAMETER.equals(code)) {
-                    String invalidParameterMsg = String.format("Provisioning for [%s] "
-                                    + "Azure VM: %s. Details: Invalid parameter. %s", ctx.vmName, "FAILED",
-                            body.getMessage());
+                } else if (INVALID_PARAMETER.equals(code) || INVALID_RESOURCE_GROUP.equals(code)) {
+                    String invalidParameterMsg = String.format("%s Invalid parameter. %s",
+                            msg, body.getMessage());
 
                     e = new IllegalStateException(invalidParameterMsg, ctx.error);
                     handleError(ctx, e);
@@ -1930,13 +1930,12 @@ public class AzureInstanceService extends StatelessService {
 
             if (this.callCtx.failOnError) {
 
-                e = new IllegalStateException(this.msg + ": FAILED. Details: " + e.getMessage(), e);
-
                 if (this.callCtx.hasAnyFailed.compareAndSet(false, true)) {
                     // Check whether this is the first failure and proceed to next stage.
                     // i.e. fail-fast on batch operations.
-                    handleFailure(e);
+                    AzureInstanceService.this.handleCloudError(this.msg + ": FAILED. Details:", this.ctx, COMPUTE_NAMESPACE, e);
                 } else {
+                    e = new IllegalStateException(this.msg + ": FAILED. Details: " + e.getMessage(), e);
                     // Any subsequent failure is just logged.
                     AzureInstanceService.this.logSevere(e);
                 }
