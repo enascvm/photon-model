@@ -35,6 +35,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
+import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
@@ -152,6 +153,11 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
         computeState.diskLinks = new ArrayList<>();
         computeState.diskLinks.add(this.bootDisk.documentSelfLink);
+
+        computeState.networkInterfaceLinks = new ArrayList<>(1);
+
+        NetworkService.NetworkState network = createNetwork(networkId);
+        computeState.networkInterfaceLinks.add(createNic("nic for " + this.networkId, network.documentSelfLink));
 
         Query q = createQueryForComputeResource();
 
