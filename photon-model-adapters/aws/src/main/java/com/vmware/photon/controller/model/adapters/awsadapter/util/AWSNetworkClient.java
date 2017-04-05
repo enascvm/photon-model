@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_MAIN_ROUTE_ASSOCIATION;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +26,8 @@ import com.amazonaws.services.ec2.model.CreateInternetGatewayResult;
 import com.amazonaws.services.ec2.model.CreateRouteRequest;
 import com.amazonaws.services.ec2.model.CreateSubnetRequest;
 import com.amazonaws.services.ec2.model.CreateSubnetResult;
+import com.amazonaws.services.ec2.model.CreateTagsRequest;
+import com.amazonaws.services.ec2.model.CreateTagsResult;
 import com.amazonaws.services.ec2.model.CreateVpcRequest;
 import com.amazonaws.services.ec2.model.CreateVpcResult;
 import com.amazonaws.services.ec2.model.DeleteInternetGatewayRequest;
@@ -44,6 +47,7 @@ import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.InternetGateway;
 import com.amazonaws.services.ec2.model.RouteTable;
 import com.amazonaws.services.ec2.model.Subnet;
+import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
@@ -159,9 +163,34 @@ public class AWSNetworkClient {
                 .thenApply(CreateSubnetResult::getSubnet);
     }
 
+    public DeferredResult<Void> createNameTagAsync(String resourceId, String name) {
+        Tag nameTag = new Tag().withKey(AWS_TAG_NAME).withValue(name);
+
+        CreateTagsRequest request = new CreateTagsRequest()
+                .withResources(resourceId)
+                .withTags(nameTag);
+
+        String message = "Name tag AWS resource with id [" + resourceId + "] with name ["
+                + name + "].";
+        AWSDeferredResultAsyncHandler<CreateTagsRequest, CreateTagsResult> handler =
+                new AWSDeferredResultAsyncHandler<CreateTagsRequest, CreateTagsResult>(this.service,
+                        message) {
+                    @Override
+                    protected DeferredResult<CreateTagsResult> consumeSuccess(
+                            CreateTagsRequest request,
+                            CreateTagsResult result) {
+                        return DeferredResult.completed(result);
+                    }
+                };
+        this.client.createTagsAsync(request, handler);
+        return handler.toDeferredResult()
+                .thenApply(result -> (Void) null);
+    }
+
     /**
      * Delete the specified subnet
-     * @throws  AmazonEC2Exception if the subnet doesn't exist.
+     *
+     * @throws AmazonEC2Exception if the subnet doesn't exist.
      */
     public void deleteSubnet(String subnetId) throws AmazonEC2Exception {
         DeleteSubnetRequest req = new DeleteSubnetRequest().withSubnetId(subnetId);

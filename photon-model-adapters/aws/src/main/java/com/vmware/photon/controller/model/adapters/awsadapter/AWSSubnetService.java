@@ -88,7 +88,6 @@ public class AWSSubnetService extends StatelessService {
         super.handleStop(op);
     }
 
-
     @Override
     public void handlePatch(Operation op) {
 
@@ -103,7 +102,6 @@ public class AWSSubnetService extends StatelessService {
         // initialize context object
         AWSSubnetContext context = new AWSSubnetContext(this,
                 op.getBody(SubnetInstanceRequest.class));
-
 
         DeferredResult.completed(context)
                 .thenCompose(this::populateContext)
@@ -192,10 +190,13 @@ public class AWSSubnetService extends StatelessService {
                 // no need to go the end-point; just generate AWS Subnet Id.
                 context.awsSubnetId = UUID.randomUUID().toString();
             } else {
-                execution = execution.thenCompose(this::createSubnet);
+                execution = execution
+                        .thenCompose(this::createSubnet)
+                        .thenCompose(this::nameTagSubnet);
             }
 
-            return execution.thenCompose(this::updateSubnetState);
+            return execution
+                    .thenCompose(this::updateSubnetState);
 
         case DELETE:
             if (context.request.isMockRequest) {
@@ -219,6 +220,11 @@ public class AWSSubnetService extends StatelessService {
                     context.awsSubnetId = subnet.getSubnetId();
                     return context;
                 });
+    }
+
+    private DeferredResult<AWSSubnetContext> nameTagSubnet(AWSSubnetContext context) {
+        return context.client.createNameTagAsync(context.awsSubnetId, context.subnetState.name)
+                .thenApply(none -> context);
     }
 
     private DeferredResult<AWSSubnetContext> updateSubnetState(AWSSubnetContext context) {

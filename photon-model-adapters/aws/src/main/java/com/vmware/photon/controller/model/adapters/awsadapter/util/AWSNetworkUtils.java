@@ -14,6 +14,8 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
 import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getTagValue;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -27,6 +29,8 @@ import java.util.Set;
 import com.amazonaws.services.ec2.model.Subnet;
 import com.amazonaws.services.ec2.model.Vpc;
 
+import io.netty.util.internal.StringUtil;
+
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -34,7 +38,6 @@ import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceStateCollectionUpdateRequest;
 import com.vmware.xenon.common.StatelessService;
@@ -99,6 +102,15 @@ public class AWSNetworkUtils {
         subnetState.endpointLink = endpointLink;
         subnetState.customProperties = new HashMap<>();
         subnetState.customProperties.put(REGION_ID, regionId);
+
+        if (!subnet.getTags().isEmpty()) {
+
+            // The name of the subnet state is the value of the AWS_TAG_NAME tag
+            String nameTag = getTagValue(subnet.getTags(), AWS_TAG_NAME);
+            if (!StringUtil.isNullOrEmpty(nameTag)) {
+                subnetState.name = nameTag;
+            }
+        }
         return subnetState;
     }
 
