@@ -19,11 +19,20 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.SUPPORT_PUBLIC_IMAGES;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTHORIZATION_NAMESPACE;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_PROVISIONING_PERMISSION;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_SUBSCRIPTION_STATUS_ACTIVE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_PERMISSIONS_URI;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REST_API_VERSION;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
+import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -34,15 +43,15 @@ import java.util.function.BiConsumer;
 import com.microsoft.azure.management.resources.SubscriptionClient;
 import com.microsoft.azure.management.resources.SubscriptionClientImpl;
 import com.microsoft.azure.management.resources.models.Subscription;
-import com.microsoft.rest.ServiceCallback;
-import com.microsoft.rest.ServiceResponse;
-
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.model.permission.Permission;
+import com.vmware.photon.controller.model.adapters.azure.model.permission.PermissionList;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
@@ -50,6 +59,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
@@ -93,6 +103,8 @@ public class AzureEndpointAdapterService extends StatelessService {
 
             r.get(REGION_KEY).ifPresent(rk -> e.endpointProperties.put(REGION_KEY, rk));
             r.get(ZONE_KEY).ifPresent(zk -> e.endpointProperties.put(ZONE_KEY, zk));
+            r.get(AZURE_PROVISIONING_PERMISSION).ifPresent(pr -> e.endpointProperties.put
+                    (AZURE_PROVISIONING_PERMISSION, pr));
 
             // Azure end-point does support public images enumeration
             e.endpointProperties.put(SUPPORT_PUBLIC_IMAGES, Boolean.TRUE.toString());
@@ -109,25 +121,50 @@ public class AzureEndpointAdapterService extends StatelessService {
                         httpClient.newBuilder(),
                         getRetrofitBuilder());
 
-                subscriptionClient.getSubscriptionsOperations().getAsync(
-                        credentials.userLink, new ServiceCallback<Subscription>() {
-                            @Override
-                            public void failure(Throwable e) {
+                String msg = "Getting Azure Subscription [" + credentials.userLink
+                        + "] for endpoint validation";
+
+                AzureDeferredResultServiceCallback<Subscription> handler = new AzureDeferredResultServiceCallback<Subscription>(
+                        this, msg) {
+                    @Override
+                    protected DeferredResult<Subscription> consumeSuccess(
+                            Subscription subscription) {
+                        logFine(() -> String.format("Got subscription %s with id %s",
+                                        subscription.getDisplayName(),
+                                        subscription.getId()));
+
+                        if (!AZURE_SUBSCRIPTION_STATUS_ACTIVE.equals(subscription.getState())) {
+                            logFine(() ->
+                                    String.format("Subscription with id %s is not in active"
+                                            + " state but in %s",
+                                    subscription.getId(),
+                                    subscription.getState()));
+                            return DeferredResult.failed(
+                                    new IllegalStateException("Subscription is not active"));
+                        }
+                        return DeferredResult.completed(subscription);
+                    }
+                };
+
+                subscriptionClient.getSubscriptionsOperations()
+                        .getAsync(credentials.userLink, handler);
+
+                String shouldProvision = body.endpointProperties.get(AZURE_PROVISIONING_PERMISSION);
+
+                handler.toDeferredResult()
+                        .thenCompose(
+                                subscription -> getPermissions(credentials))
+                        .thenCompose(permissionList -> verifyPermissions(permissionList,
+                                Boolean.parseBoolean(shouldProvision)))
+                        .whenComplete((aVoid, e) -> {
+                            if (e != null) {
                                 // Azure doesn't send us any meaningful status code to work with
                                 ServiceErrorResponse rsp = new ServiceErrorResponse();
-                                rsp.message = "Invalid Azure credentials";
+                                rsp.message = e.getMessage();
                                 rsp.statusCode = STATUS_CODE_UNAUTHORIZED;
                                 callback.accept(rsp, e);
                             }
-
-                            @Override
-                            public void success(ServiceResponse<Subscription> result) {
-                                Subscription subscription = result.getBody();
-                                logFine(() -> String.format("Got subscription %s with id %s",
-                                        subscription.getDisplayName(),
-                                        subscription.getId()));
-                                callback.accept(null, null);
-                            }
+                            callback.accept(null, null);
                         });
             } catch (Throwable e) {
                 logSevere(e);
@@ -206,5 +243,59 @@ public class AzureEndpointAdapterService extends StatelessService {
         Retrofit.Builder builder = new Retrofit.Builder();
         builder.callbackExecutor(this.executorService);
         return builder;
+    }
+
+    private DeferredResult<PermissionList> getPermissions(
+            AuthCredentialsServiceState credentials) {
+
+        logFine(() -> String.format("Retrieving permissions for subscription with id [%s]",
+                credentials.userLink));
+
+        String uriStr = AdapterUriUtil.expandUriPathTemplate(PROVIDER_PERMISSIONS_URI,
+                credentials.userLink, AUTHORIZATION_NAMESPACE);
+        URI uri = UriUtils.extendUriWithQuery(UriUtils.buildUri(uriStr),
+                QUERY_PARAM_API_VERSION, PROVIDER_REST_API_VERSION);
+
+        Operation operation = Operation.createGet(uri);
+        operation.addRequestHeader(Operation.ACCEPT_HEADER, Operation.MEDIA_TYPE_APPLICATION_JSON);
+        operation.addRequestHeader(Operation.CONTENT_TYPE_HEADER,
+                Operation.MEDIA_TYPE_APPLICATION_JSON);
+
+        try {
+            operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
+                    AUTH_HEADER_BEARER_PREFIX + getAzureConfig(credentials).getToken());
+        } catch (IOException e) {
+            return DeferredResult.failed(e);
+        }
+        return sendWithDeferredResult(operation, PermissionList.class);
+    }
+
+    private DeferredResult<Void> verifyPermissions(PermissionList permissions, boolean
+            shouldProvision) {
+
+        if (permissions == null || permissions.value == null) {
+            return DeferredResult.failed(new IllegalStateException("'Owner', 'Contributor' or "
+                    + "'Reader' permissions required"));
+        }
+        if (shouldProvision && permissions.value.stream().noneMatch(this::canProvision)) {
+            return DeferredResult.failed(new IllegalStateException(
+                    "Provisioning requires 'Owner' or 'Contributor' role"));
+        }
+
+        if (!shouldProvision && permissions.value.stream().noneMatch(this::canRead)) {
+            return DeferredResult.failed(new IllegalStateException(
+                    "'Owner', 'Contributor' or 'Reader' role required for Read only endpoint"));
+        }
+
+        return DeferredResult.completed(null);
+
+    }
+
+    private boolean canProvision(Permission permission) {
+        return permission.isOwner() || permission.isContributor();
+    }
+
+    private boolean canRead(Permission permission) {
+        return permission.isOwner() || permission.isReader() || permission.isContributor();
     }
 }

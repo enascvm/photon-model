@@ -33,11 +33,14 @@ public class AzureConstants {
     public static final String AZURE_STORAGE_ACCOUNT_KEY2 = "azureStorageAccountKey2";
     public static final String AZURE_STORAGE_ACCOUNT_URI = "storageAccountUri";
     public static final String AZURE_STORAGE_TYPE = "storageType";
+    public static final String AZURE_SUBSCRIPTION_STATUS_ACTIVE = "Enabled";
+    public static final String AZURE_PROVISIONING_PERMISSION = "provisioningPermission";
 
     // Azure Namespace
     public static final String COMPUTE_NAMESPACE = "Microsoft.Compute";
     public static final String STORAGE_NAMESPACE = "Microsoft.Storage";
     public static final String NETWORK_NAMESPACE = "Microsoft.Network";
+    public static final String AUTHORIZATION_NAMESPACE = "Microsoft.Authorization";
     public static final String AZURE_STORAGE_ACCOUNTS = STORAGE_NAMESPACE + "/storageAccounts";
     public static final String AZURE_STORAGE_CONTAINERS = STORAGE_NAMESPACE + "/containers";
     public static final String AZURE_STORAGE_DISKS = STORAGE_NAMESPACE + "/disks";
@@ -169,6 +172,12 @@ public class AzureConstants {
 
     // Azure network properties
     public static final String DEFAULT_INSTANCE_ADAPTER_REFERENCE = "defaultInstanceAdapterReference";
+
+    // Provider REST constants
+    public static final String PROVIDER_REST_API_VERSION = "2016-07-01";
+    public static final String PROVIDER_URI = BASE_URI_FOR_REST
+            + "/subscriptions/{subscriptionId}/providers/{resourceProviderNamespace}";
+    public static final String PROVIDER_PERMISSIONS_URI = PROVIDER_URI + "/permissions";
 
     /**
      * The required name for any gateway subnet.
