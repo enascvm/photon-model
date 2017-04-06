@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.12-SNAPSHOT
+
+
 ## 0.6.11
 
 * Upgrading to AWS SDK v1.11.105.
