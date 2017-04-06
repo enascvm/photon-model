@@ -26,6 +26,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeTerminated;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForProvisioningToComplete;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.zoneId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.net.URI;
@@ -47,7 +48,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
-import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -91,8 +91,9 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     private static final String T2_NANO_INSTANCE_TYPE = "t2.nano";
     private static final String SEPARATOR = ": ";
     private static final String FIELD_NAME_ID = "id";
-    private static final String STAT_NAME_CPU_USAGE_PERCENT = "CPU Usage Percent";
-    private static final String STAT_NAME_MEMORY_AVAILABLE_IN_MB = "Memory available in MB";
+    private static final String STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT = "MemoryAvailablePercent";
+    private static final int MEMORY_THRESHOLD_SEVERE = 60;
+    private static final int MEMORY_THRESHOLD_WARNING = 40;
     private static final double BYTES_TO_MB = 1024 * 1024;
 
     // Sets for storing document links and ids
@@ -112,9 +113,9 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
     private ResourcePoolState outPool;
     private ComputeState outComputeHost;
-    private Level loggingLevel;
-    private double cpuUsagePercentage;
-    private double availableMemoryMb;
+    private Level loggingLevelForMemory;
+    private double availableMemoryPercentage;
+    private double maxMemoryInMb;
     private ArrayList<String> instancesToCleanUp;
     private List<String> instanceIds;
     private String nicToCleanUp = null;
@@ -124,7 +125,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     public boolean isAwsClientMock = false;
     private boolean postDeletion = false;
 
-    public boolean useAllRegions = true;
+    public boolean useAllRegions = false;
     public boolean isMock = true;
     public String accessKey = "accessKey";
     public String secretKey = "secretKey";
@@ -132,9 +133,6 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     public int enumerationFrequencyInMinutes = 1;
     public int testRunDurationInMinutes = 3;
     public int numberOfInstancesToProvision = 4;
-    // Adjust according to total CPU percent based on machine the host is running on.
-    public int cpuUtilizationThresholdForWarning = 160;
-    public int cpuUtilizationThresholdForSevere = 240;
 
     private Map<String, Object> awsTestContext;
     private String subnetId;
@@ -167,7 +165,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
         creds.privateKey = this.secretKey;
         creds.privateKeyId = this.accessKey;
-        this.client = AWSUtils.getAsyncClient(creds, null, getExecutor());
+        this.client = AWSUtils.getAsyncClient(creds, regionId, getExecutor());
 
         this.awsTestContext = new HashMap<>();
         setUpTestVpc(this.client, this.awsTestContext, this.isMock);
@@ -176,7 +174,6 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
         try {
             PhotonModelServices.startServices(this.host);
-            PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             AWSAdapters.startServices(this.host);
 
@@ -191,6 +188,8 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         }
 
         this.nodeStatsUri = UriUtils.buildUri(this.host.getUri(), ServiceUriPaths.CORE_MANAGEMENT);
+
+        this.maxMemoryInMb = this.host.getState().systemInfo.maxMemoryByteCount / BYTES_TO_MB;
 
         // create the compute host, resource pool and the VM state to be used in the test.
         initResourcePoolAndComputeHost();
@@ -288,7 +287,6 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
                         TEST_CASE_INITIAL);
 
                 // Print node CPU Utilization and Memory usages
-                Thread.sleep(1000);
                 logNodeStats(this.host.getServiceStats(this.nodeStatsUri));
             } catch (Throwable e) {
                 this.host.log(Level.WARNING, "Error running enumeration in test" + e.getMessage());
@@ -307,22 +305,21 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             return;
         }
 
-        this.cpuUsagePercentage = statsMap.get(ServiceHostManagementService.STAT_NAME_CPU_USAGE_PCT_PER_HOUR)
-                .latestValue * 100;
-        this.availableMemoryMb = statsMap.get(ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR)
-                .latestValue / BYTES_TO_MB;
+        this.availableMemoryPercentage = (statsMap.get(
+                ServiceHostManagementService.STAT_NAME_AVAILABLE_MEMORY_BYTES_PER_HOUR)
+                .latestValue / BYTES_TO_MB) / this.maxMemoryInMb * 100;
 
-        this.loggingLevel = Level.INFO;
+        this.loggingLevelForMemory = Level.INFO;
 
-        // Increase logging level if CPU utilization is higher than expected.
-        if (this.cpuUsagePercentage > this.cpuUtilizationThresholdForSevere) {
-            this.loggingLevel = Level.SEVERE;
-        } else if (this.cpuUsagePercentage > this.cpuUtilizationThresholdForWarning) {
-            this.loggingLevel = Level.WARNING;
+        // Increase logging level if available Memory is less than expected.
+        if (this.availableMemoryPercentage > MEMORY_THRESHOLD_SEVERE) {
+            this.loggingLevelForMemory = Level.SEVERE;
+        } else if (this.availableMemoryPercentage > MEMORY_THRESHOLD_WARNING) {
+            this.loggingLevelForMemory = Level.WARNING;
         }
 
-        this.host.log(this.loggingLevel, STAT_NAME_CPU_USAGE_PERCENT + SEPARATOR + this.cpuUsagePercentage);
-        this.host.log(this.loggingLevel, STAT_NAME_MEMORY_AVAILABLE_IN_MB + SEPARATOR + this.availableMemoryMb);
+        this.host.log(this.loggingLevelForMemory, STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT
+                + SEPARATOR + this.availableMemoryPercentage);
     }
 
     /**
@@ -560,7 +557,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
         // create a compute host for the AWS EC2 VM
         this.outComputeHost = createAWSComputeHost(this.host, this.outPool.documentSelfLink,
-                null, this.useAllRegions ? null : regionId,
+                null, this.useAllRegions ? null : zoneId,
                 this.accessKey, this.secretKey, this.isAwsClientMock,
                 this.awsMockEndpointReference, null);
 
