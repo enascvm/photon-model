@@ -1,8 +1,17 @@
 # CHANGELOG
 
-## 0.6.11-SNAPSHOT
+## 0.6.11
 
 * Upgrading to AWS SDK v1.11.105.
+* Updates to metric creation and reading, if a metric cluster is provided.
+* Add permission validation during endpoint validation.
+* Separate MetricServices from PhotonModelServices.
+* Implement Public-Private images enumeration.
+* [vsphere] Set parentLink on resourcePools during enumeration.
+* Retrieve ssl certificate for host behind a proxy.
+* Cache invalid credentials for EC2 clients.
+* Refactor adapters to use TaskManager to patch back Task Services.
+* Introduce explicit method to get instance of ServerX509TrustManager and another one to invalidate it.
 
 ## 0.6.10
 
