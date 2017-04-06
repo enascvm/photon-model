@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -172,7 +173,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeDesc.id = nextName("vm");
         computeDesc.regionId = this.datacenterId;
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
+        computeDesc.supportedChildren = new HashSet<>();
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
@@ -208,7 +209,7 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeDesc.id = nextName("host");
         computeDesc.name = computeDesc.id;
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
+        computeDesc.supportedChildren = new HashSet<>();
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);

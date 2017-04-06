@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
@@ -72,7 +73,7 @@ public class AzureStatsService extends StatelessService {
      * Returns if the given compute description is a compute host or not.
      */
     private boolean isComputeHost(ComputeDescription computeDescription) {
-        List<String> supportedChildren = computeDescription.supportedChildren;
+        Set<String> supportedChildren = computeDescription.supportedChildren;
         return supportedChildren != null && supportedChildren.contains(ComputeType.VM_GUEST.name());
     }
 

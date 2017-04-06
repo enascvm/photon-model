@@ -33,10 +33,10 @@ import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
 
@@ -218,7 +218,7 @@ public class AzureEndpointAdapterService extends StatelessService {
 
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
 
-            List<String> children = new ArrayList<>();
+            Set<String> children = new HashSet<>();
             children.add(ComputeType.VM_GUEST.toString());
             cd.supportedChildren = children;
 

@@ -20,10 +20,10 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.List;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 import com.amazonaws.AmazonServiceException;
@@ -152,7 +152,7 @@ public class AWSEndpointAdapterService extends StatelessService {
             cd.regionId = r.get(REGION_KEY).orElse(null);
             cd.zoneId = r.get(ZONE_KEY).orElse(null);
             cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
-            List<String> children = new ArrayList<>();
+            Set<String> children = new HashSet<>();
             children.add(ComputeType.VM_GUEST.toString());
             cd.supportedChildren = children;
 

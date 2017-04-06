@@ -392,7 +392,7 @@ public class AzureTestUtil {
         azureHostDescription.name = azureHostDescription.id;
         azureHostDescription.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         azureHostDescription.documentSelfLink = azureHostDescription.id;
-        azureHostDescription.supportedChildren = new ArrayList<>();
+        azureHostDescription.supportedChildren = new HashSet<>();
         azureHostDescription.supportedChildren.add(ComputeType.VM_GUEST.name());
         azureHostDescription.instanceAdapterReference = UriUtils.buildUri(host,
                 AzureUriPaths.AZURE_INSTANCE_ADAPTER);

@@ -20,6 +20,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -76,7 +77,7 @@ public class ResourceAllocationTaskServiceTest extends Suite {
         cd.healthAdapterReference = null;
         cd.enumerationAdapterReference = new URI(
                 "http://enumerationAdapterReference");
-        cd.supportedChildren = new ArrayList<>();
+        cd.supportedChildren = new HashSet<>();
         cd.supportedChildren.add(ComputeType.VM_GUEST.toString());
         cd.environmentName = ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
         cd.cpuMhzPerCore = 1000;

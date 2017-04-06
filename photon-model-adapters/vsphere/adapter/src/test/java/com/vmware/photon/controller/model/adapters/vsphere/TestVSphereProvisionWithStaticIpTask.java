@@ -19,6 +19,7 @@ import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -264,7 +265,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         computeDesc.id = nextName("vm");
         computeDesc.regionId = this.datacenterId;
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
+        computeDesc.supportedChildren = new HashSet<>();
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
@@ -303,7 +304,7 @@ public class TestVSphereProvisionWithStaticIpTask extends BaseVSphereAdapterTest
         computeDesc.id = UUID.randomUUID().toString();
         computeDesc.name = computeDesc.id;
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
+        computeDesc.supportedChildren = new HashSet<>();
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);

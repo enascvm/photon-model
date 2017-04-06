@@ -17,7 +17,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.net.URI;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.UUID;
 
 import org.junit.Test;
@@ -80,7 +80,7 @@ public class TestVSphereProvisionWithMissingDatacenter extends BaseVSphereAdapte
 
         computeDesc.id = "cloned-" + UUID.randomUUID().toString();
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
+        computeDesc.supportedChildren = new HashSet<>();
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
@@ -156,7 +156,7 @@ public class TestVSphereProvisionWithMissingDatacenter extends BaseVSphereAdapte
 
         computeDesc.id = nextName("vm");
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new ArrayList<>();
+        computeDesc.supportedChildren = new HashSet<>();
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;

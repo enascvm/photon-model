@@ -76,7 +76,7 @@ public class ComputeDescriptionServiceTest extends Suite {
         cd.enumerationAdapterReference = new URI(
                 "http://enumerationAdapterReference");
 
-        ArrayList<String> children = new ArrayList<>();
+        Set<String> children = new HashSet<>();
         children.add(ComputeType.VM_HOST.toString());
 
         cd.supportedChildren = children;

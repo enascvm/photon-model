@@ -16,8 +16,8 @@ package com.vmware.photon.controller.model.tasks;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
-import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -146,7 +146,7 @@ public class ProvisionComputeTaskServiceTest extends Suite {
             ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
                     .buildValidStartState();
             cd.healthAdapterReference = null;
-            cd.supportedChildren = new ArrayList<>();
+            cd.supportedChildren = new HashSet<>();
             cd.supportedChildren.add(ComputeType.DOCKER_CONTAINER.toString());
             cd.instanceAdapterReference = null;
             ComputeDescriptionService.ComputeDescription cd1 = postServiceSynchronously(

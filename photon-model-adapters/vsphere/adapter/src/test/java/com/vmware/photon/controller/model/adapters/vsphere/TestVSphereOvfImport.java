@@ -17,7 +17,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
-import java.util.ArrayList;
+import java.util.HashSet;
 
 import org.junit.Ignore;
 import org.junit.Test;
@@ -50,7 +50,7 @@ public class TestVSphereOvfImport extends BaseVSphereAdapterTest {
         createComputeHost();
 
         ComputeDescription computeDesc = new ComputeDescription();
-        computeDesc.supportedChildren = new ArrayList<>();
+        computeDesc.supportedChildren = new HashSet<>();
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
