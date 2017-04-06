@@ -21,11 +21,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -365,8 +363,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         List<ComputeResourceOverlay> clusters = new ArrayList<>();
         List<ResourcePoolOverlay> resourcePools = new ArrayList<>();
 
-        Map<String, ComputeResourceOverlay> nonDrsClusters = new HashMap<>();
-
         // put results in different buckets by type
         PropertyFilterSpec spec = client.createResourcesFilterSpec(ctx.getDatacenterPath());
         try {
@@ -388,14 +384,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         if (cr.isDrsEnabled()) {
                             // when DRS is enabled add the cluster itself and skip the hosts
                             clusters.add(cr);
-                        } else if (VimUtils.isClusterComputeResource(cont.getObj())) {
-                            // when DRS is not enabled, skip the cluster and then
-                            // add the inside hosts instead; when provisioning into a non-DRS
-                            // cluster, specifying a host is mandatory (in addition to the target
-                            // resource pool which always has to be specified)
-                            nonDrsClusters.put(cr.getId().getValue(), cr);
                         } else {
-                            // ignore non-clusters: they are handled as hosts
+                            // ignore non-clusters and non-drs cluster: they are handled as hosts
                             continue;
                         }
                     } else if (VimUtils.isDatastore(cont.getObj())) {
@@ -433,9 +423,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             threadInterrupted(mgr, e);
             return;
         }
-
-        // exclude standalone hosts that are part of a non-drs cluster
-        hosts.removeIf(hs -> nonDrsClusters.containsKey(hs.getParent().getValue()));
 
         // exclude hosts part of a cluster
         for (ComputeResourceOverlay cluster : clusters) {
