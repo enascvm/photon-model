@@ -292,6 +292,8 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.host_summary_hardware_numCpuCores,
                 VimPath.host_summary_hardware_uuid,
                 VimPath.host_parent,
+                VimPath.host_datastore,
+                VimPath.host_network,
                 VimNames.PROPERTY_NAME
         ));
 
@@ -317,6 +319,8 @@ public class EnumerationClient extends BaseHelper {
                 VimPath.res_resourcePool,
                 VimPath.res_configurationEx,
                 VimPath.res_host,
+                VimPath.res_datastore,
+                VimPath.res_network,
                 VimNames.PROPERTY_NAME
         ));
 

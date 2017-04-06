@@ -70,6 +70,12 @@ public class CustomProperties {
 
     public static final String IMAGE_LIBRARY_ID = "__libraryId";
 
+    /**
+     * Groups that are represent connectivity between a host and a target resource (network, storage, etc)
+     * store the target link under this property.
+     */
+    public static final String TARGET_LINK = "__targetLink";
+
     private final Supplier<Map<String, String>> getPropsForRead;
     private final Supplier<Map<String, String>> getPropsForWrite;
     private final Consumer<String> remove;

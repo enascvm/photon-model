@@ -17,8 +17,10 @@ import java.util.List;
 import java.util.concurrent.Phaser;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
+import com.vmware.photon.controller.model.adapters.vsphere.util.MoRefKeyedMap;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.vim25.ManagedObjectReference;
 
 /**
  * Stores state/configuration/progress for an enumeration task.
@@ -35,6 +37,8 @@ public class EnumerationContext {
     private ResourceTracker computeResourceTracker;
     private ResourceTracker resourcePoolTracker;
 
+    private final MoRefKeyedMap<AbstractOverlay> overlays;
+
     private Phaser vmTracker;
 
     public EnumerationContext(ComputeEnumerateResourceRequest request,
@@ -45,6 +49,7 @@ public class EnumerationContext {
         this.endpoint = endpoint;
         this.datacenterPath = datacenterPath;
         this.vmTracker = new Phaser(1);
+        this.overlays = new MoRefKeyedMap<>();
     }
 
     public VapiConnection getEndpoint() {
@@ -117,5 +122,13 @@ public class EnumerationContext {
 
     public void resetVmTracker() {
         this.vmTracker = new Phaser(1);
+    }
+
+    public AbstractOverlay getOverlay(ManagedObjectReference ref) {
+        return this.overlays.get(ref);
+    }
+
+    public void track(AbstractOverlay overlay) {
+        this.overlays.put(overlay.getId(), overlay);
     }
 }

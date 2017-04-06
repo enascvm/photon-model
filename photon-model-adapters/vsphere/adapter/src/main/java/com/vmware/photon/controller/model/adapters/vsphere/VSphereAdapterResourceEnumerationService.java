@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -69,6 +70,8 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
+import com.vmware.photon.controller.model.resources.ResourceGroupService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
@@ -124,6 +127,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
      * a VM being provisioned by photon-model will not be enumerated mid-flight.
      */
     private static final long VM_FERMENTATION_PERIOD_MILLIS = 3 * 60 * 1000;
+    public static final String PREFIX_NETWORK = "network";
+    public static final String PREFIX_DATASTORE = "datastore";
 
     /**
      * Stores currently running enumeration processes.
@@ -370,6 +375,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 for (ObjectContent cont : page) {
                     if (VimUtils.isNetwork(cont.getObj())) {
                         NetworkOverlay net = new NetworkOverlay(cont);
+                        ctx.track(net);
                         if (!net.getName().toLowerCase().contains("dvuplinks")) {
                             // skip uplinks altogether,
                             // TODO starting with 6.5 query the property config.uplink instead
@@ -433,11 +439,13 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         ctx.expectHostSystemCount(hosts.size());
         for (HostSystemOverlay hs : hosts) {
+            ctx.track(hs);
             processFoundHostSystem(ctx, hs);
         }
 
         ctx.expectComputeResourceCount(clusters.size());
         for (ComputeResourceOverlay cr : clusters) {
+            ctx.track(cr);
             processFoundComputeResource(ctx, cr);
         }
 
@@ -738,7 +746,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         networkState.tenantLinks = enumerationContext.getTenantLinks();
         Operation.createPost(this, NetworkService.FACTORY_LINK)
                 .setBody(networkState)
-                .setCompletion(trackNetwork(enumerationContext, net))
+                .setCompletion((o, e) -> {
+                    trackNetwork(enumerationContext, net).handle(o, e);
+                    Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
+                            .setBody(makeNetworkGroup(net, enumerationContext))
+                            .sendWith(this);
+                })
                 .sendWith(this);
 
         logFine(() -> String.format("Found new Network %s", net.getName()));
@@ -926,8 +939,46 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         Operation.createPost(this, StorageDescriptionService.FACTORY_LINK)
                 .setBody(desc)
-                .setCompletion(trackDatastore(enumerationContext, ds))
+                .setCompletion((o, e) -> {
+                    trackDatastore(enumerationContext, ds).handle(o, e);
+                    Operation.createPost(this, ResourceGroupService.FACTORY_LINK)
+                            .setBody(makeStorageGroup(ds, enumerationContext))
+                            .sendWith(this);
+                })
                 .sendWith(this);
+    }
+
+    private ResourceGroupState makeNetworkGroup(NetworkOverlay net, EnumerationContext ctx) {
+        ResourceGroupState res = new ResourceGroupState();
+        res.id = net.getName();
+        res.name = "Hosts connected to network '" + net.getName() + "'";
+        res.tenantLinks = ctx.getTenantLinks();
+        CustomProperties.of(res)
+                .put(CustomProperties.MOREF, net.getId())
+                .put(CustomProperties.TARGET_LINK, ctx.getNetworkTracker().getSelfLink(net.getId()));
+        res.documentSelfLink = computeGroupStableLink(net.getId(), PREFIX_NETWORK, ctx.getRequest().endpointLink);
+
+        return res;
+    }
+
+    private String computeGroupStableLink(ManagedObjectReference ref, String prefix, String endpointLink) {
+        return UriUtils.buildUriPath(
+                ResourceGroupService.FACTORY_LINK,
+                prefix + "-" +
+                VimUtils.buildStableManagedObjectId(ref, endpointLink));
+    }
+
+    private ResourceGroupState makeStorageGroup(DatastoreOverlay ds, EnumerationContext ctx) {
+        ResourceGroupState res = new ResourceGroupState();
+        res.id = ds.getName();
+        res.name = "Hosts that can access datastore '" + ds.getName() + "'";
+        res.tenantLinks = ctx.getTenantLinks();
+        CustomProperties.of(res)
+                .put(CustomProperties.MOREF, ds.getId())
+                .put(CustomProperties.TARGET_LINK, ctx.getDatastoreTracker().getSelfLink(ds.getId()));
+        res.documentSelfLink = computeGroupStableLink(ds.getId(), PREFIX_DATASTORE, ctx.getRequest().endpointLink);
+
+        return res;
     }
 
     private StorageDescription makeStorageFromResults(ComputeEnumerateResourceRequest request,
@@ -1176,6 +1227,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .getRequest().adapterManagementReference;
         state.parentLink = enumerationContext.getRequest().resourceLink();
         state.resourcePoolLink = enumerationContext.getRequest().resourcePoolLink;
+        state.groupLinks = getConnectedDatastoresAndNetworks(enumerationContext, cr.getDatastore(), cr.getNetwork());
+
         state.name = cr.getName();
         state.powerState = PowerState.ON;
         CustomProperties.of(state)
@@ -1299,6 +1352,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .getRequest().adapterManagementReference;
         state.parentLink = enumerationContext.getRequest().resourceLink();
         state.resourcePoolLink = enumerationContext.getRequest().resourcePoolLink;
+        state.groupLinks = getConnectedDatastoresAndNetworks(enumerationContext, hs.getDatastore(), hs.getNetwork());
+
         state.name = hs.getName();
         // TODO: retrieve host power state
         state.powerState = PowerState.ON;
@@ -1308,6 +1363,28 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         enumerationContext.getRequest().taskLink())
                 .put(CustomProperties.TYPE, hs.getId().getType());
         return state;
+    }
+
+    private Set<String> getConnectedDatastoresAndNetworks(EnumerationContext ctx,
+            List<ManagedObjectReference> datastores, List<ManagedObjectReference> networks) {
+        Set<String> res = new TreeSet<>();
+
+        for (ManagedObjectReference ref : datastores) {
+            res.add(computeGroupStableLink(ref, PREFIX_DATASTORE, ctx.getRequest().endpointLink));
+        }
+
+        for (ManagedObjectReference ref : networks) {
+            NetworkOverlay ov = (NetworkOverlay) ctx.getOverlay(ref);
+            if (ov.getParentSwitch() != null) {
+                // instead of a portgroup add the switch
+                res.add(computeGroupStableLink(ov.getParentSwitch(), PREFIX_NETWORK, ctx.getRequest().endpointLink));
+            } else if (!VimNames.TYPE_PORTGROUP.equals(ov.getId().getType())) {
+                // skip portgroups and care only about opaque nets and standard swtiches
+                res.add(computeGroupStableLink(ov.getId(), PREFIX_NETWORK, ctx.getRequest().endpointLink));
+            }
+        }
+
+        return res;
     }
 
     /**
@@ -1487,6 +1564,19 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.parentLink = enumerationContext.getRequest().resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;
         state.adapterManagementReference = request.adapterManagementReference;
+
+        ManagedObjectReference owner = rp.getOwner();
+        AbstractOverlay ov = enumerationContext.getOverlay(owner);
+        if (ov instanceof ComputeResourceOverlay) {
+            ComputeResourceOverlay cr = (ComputeResourceOverlay) ov;
+            state.groupLinks = getConnectedDatastoresAndNetworks(enumerationContext,
+                    cr.getDatastore(), cr.getNetwork());
+        } else if (ov instanceof HostSystemOverlay) {
+            HostSystemOverlay cr = (HostSystemOverlay) ov;
+            state.groupLinks = getConnectedDatastoresAndNetworks(enumerationContext,
+                    cr.getDatastore(), cr.getNetwork());
+        }
+
 
         CustomProperties.of(state)
                 .put(CustomProperties.MOREF, rp.getId())

@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.Collections;
+import java.util.List;
+
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
 import com.vmware.vim25.ArrayOfManagedObjectReference;
@@ -45,7 +48,21 @@ public class HostSystemOverlay extends AbstractOverlay {
         return (long) getOrFail(VimPath.host_summary_hardware_memorySize);
     }
 
-    public ArrayOfManagedObjectReference getDatastore() {
-        return (ArrayOfManagedObjectReference) getOrFail(VimPath.host_datastore);
+    public List<ManagedObjectReference> getDatastore() {
+        ArrayOfManagedObjectReference res = (ArrayOfManagedObjectReference) getOrDefault(VimPath.res_datastore, null);
+        if (res == null) {
+            return Collections.emptyList();
+        } else {
+            return res.getManagedObjectReference();
+        }
+    }
+
+    public List<ManagedObjectReference> getNetwork() {
+        ArrayOfManagedObjectReference res = (ArrayOfManagedObjectReference) getOrDefault(VimPath.res_network, null);
+        if (res == null) {
+            return Collections.emptyList();
+        } else {
+            return res.getManagedObjectReference();
+        }
     }
 }

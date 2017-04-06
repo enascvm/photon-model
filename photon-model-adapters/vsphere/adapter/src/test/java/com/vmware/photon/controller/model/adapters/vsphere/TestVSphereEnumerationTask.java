@@ -29,6 +29,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -125,6 +126,7 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
         snapshotFactoryState(marker, TagService.class);
         snapshotFactoryState(marker, NetworkInterfaceService.class);
         snapshotFactoryState(marker, SubnetService.class);
+        snapshotFactoryState(marker, ResourceGroupService.class);
     }
 
     private ComputeState findRandomVm()

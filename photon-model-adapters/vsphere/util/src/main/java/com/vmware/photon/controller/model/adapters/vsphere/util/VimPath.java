@@ -1326,6 +1326,9 @@ public class VimPath {
     /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
     public static final String host_datastore = "datastore";
 
+    /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
+    public static final String host_network = "network";
+
     /** PropertyType: <code>TaskInfo</code> */
     public static final String task_info = "info";
 
@@ -1661,6 +1664,9 @@ public class VimPath {
 
     /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
     public static final String res_datastore = "datastore";
+
+    /** PropertyType: <code>ArrayOfManagedObjectReference</code> */
+    public static final String res_network = "network";
 
     /** PropertyType: <code>DatastoreSummary</code> */
     public static final String ds_summary = "summary";

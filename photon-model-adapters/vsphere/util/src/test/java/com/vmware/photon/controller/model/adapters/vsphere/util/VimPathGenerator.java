@@ -115,6 +115,7 @@ public final class VimPathGenerator {
         this.roots.put("host:summary", "HostListSummary");
         this.roots.put("host:parent", "ManagedObjectReference");
         this.roots.put("host:datastore", "ArrayOfManagedObjectReference");
+        this.roots.put("host:network", "ArrayOfManagedObjectReference");
 
         this.roots.put("task:info", "TaskInfo");
 
@@ -126,6 +127,7 @@ public final class VimPathGenerator {
         this.roots.put("res:resourcePool", "ManagedObjectReference");
         this.roots.put("res:host", "ArrayOfManagedObjectReference");
         this.roots.put("res:datastore", "ArrayOfManagedObjectReference");
+        this.roots.put("res:network", "ArrayOfManagedObjectReference");
 
         this.roots.put("ds:summary", "DatastoreSummary");
         this.roots.put("net:summary", "NetworkSummary");
