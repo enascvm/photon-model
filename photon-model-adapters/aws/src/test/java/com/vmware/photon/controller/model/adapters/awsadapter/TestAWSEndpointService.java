@@ -13,11 +13,15 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -33,7 +37,15 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointServiceTests;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
+
 import com.vmware.xenon.common.BasicReusableHostTestCase;
+import com.vmware.xenon.common.QueryResultsProcessor;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
+import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.Query;
+import com.vmware.xenon.services.common.QueryTask.Query.Builder;
+import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 
 public class TestAWSEndpointService extends BasicReusableHostTestCase {
     public String accessKey = "access-key";
@@ -81,6 +93,29 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
         new EndpointServiceTests(this.host, this.regionId, this.isMock,
                 ComputeDescriptionService.ComputeDescription.ENVIRONMENT_NAME_AWS)
                 .testCreateAndThenValidate(createEndpointState());
+
+        // Tests that EndpointService QueryTasks can use SELECT_LINKS + EXPAND_LINKS
+        Query query = Builder.create()
+                .addKindFieldClause(EndpointState.class)
+                .build();
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOptions(EnumSet.of(QueryOption.EXPAND_CONTENT, QueryOption.SELECT_LINKS, QueryOption.EXPAND_LINKS))
+                .addLinkTerm(EndpointState.FIELD_NAME_AUTH_CREDENTIALS_LINK)
+                .setQuery(query)
+                .build();
+        this.host.createQueryTaskService(queryTask, false, true, queryTask, null);
+        ServiceDocumentQueryResult results = queryTask.results;
+        assertEquals(Long.valueOf(1), results.documentCount);
+        assertEquals(1, results.selectedLinks.size());
+        assertEquals(1, results.selectedDocuments.size());
+
+        QueryResultsProcessor processor = QueryResultsProcessor.create(results);
+        for (EndpointState endpoint : processor.documents(EndpointState.class)) {
+            String authCredentialSelfLink = endpoint.authCredentialsLink;
+            assertNotNull(authCredentialSelfLink);
+            assertNotNull(
+                    processor.selectedDocument(authCredentialSelfLink, AuthCredentialsServiceState.class));
+        }
     }
 
     @Test

@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.resources;
 
-import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINK;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.REQUIRED;
@@ -42,6 +41,7 @@ public class EndpointService extends StatefulService {
     public static class EndpointState extends ResourceState {
 
         public static final String FIELD_NAME_ENDPOINT_TYPE = "endpointType";
+        public static final String FIELD_NAME_AUTH_CREDENTIALS_LINK = "authCredentialsLink";
         public static final String FIELD_NAME_ENDPOINT_PROPERTIES = "endpointProperties";
 
         @Documentation(description = "Endpoint type of the endpoint instance,e.g. aws,azure,...")
@@ -49,19 +49,19 @@ public class EndpointService extends StatefulService {
         public String endpointType;
 
         @Documentation(description = "The link to the credentials to authenticate against this endpoint.")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK }, indexing = STORE_ONLY)
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK })
         public String authCredentialsLink;
 
         @Documentation(description = "The link to the compute that represents this endpoint.")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK }, indexing = STORE_ONLY)
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK })
         public String computeLink;
 
         @Documentation(description = "The link to the compute description that represents this endpoint.")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK }, indexing = STORE_ONLY)
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK })
         public String computeDescriptionLink;
 
         @Documentation(description = "The link to the resource pool that is default for an endpoint.")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK }, indexing = STORE_ONLY)
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, LINK })
         public String resourcePoolLink;
 
         @Documentation(description = "Endpoint specfic properties. The specific endpoint adapter will extract "
