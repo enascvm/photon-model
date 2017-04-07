@@ -14,8 +14,8 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -101,7 +101,7 @@ public class ComputeDescriptionService extends StatefulService {
          */
         @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL, indexing = {
                 PropertyIndexingOption.EXPAND })
-        public Set<String> supportedChildren;
+        public List<String> supportedChildren;
 
         /**
          * List of Network interfaces descriptions to attach to this compute.
@@ -410,7 +410,7 @@ public class ComputeDescriptionService extends StatefulService {
 
         template.dataStoreId = null;
 
-        Set<String> children = new HashSet<>();
+        ArrayList<String> children = new ArrayList<>();
         for (ComputeDescription.ComputeType type : ComputeDescription.ComputeType
                 .values()) {
             children.add(type.name());

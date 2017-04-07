@@ -515,7 +515,7 @@ public class TestAWSSetupUtils {
         awshostDescription.name = ComputeDescription.ENVIRONMENT_NAME_AWS;
         awshostDescription.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
         awshostDescription.documentSelfLink = awshostDescription.id;
-        awshostDescription.supportedChildren = new HashSet<>();
+        awshostDescription.supportedChildren = new ArrayList<String>();
         awshostDescription.supportedChildren.add(ComputeType.VM_GUEST.name());
         awshostDescription.instanceAdapterReference = UriUtils.buildUri(host,
                 AWSUriPaths.AWS_INSTANCE_ADAPTER);
@@ -614,7 +614,7 @@ public class TestAWSSetupUtils {
         awsVMDesc.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
         awsVMDesc.instanceType = instanceType_t2_micro;
 
-        awsVMDesc.supportedChildren = new HashSet<>();
+        awsVMDesc.supportedChildren = new ArrayList<>();
         awsVMDesc.supportedChildren.add(ComputeType.DOCKER_CONTAINER.name());
 
         awsVMDesc.customProperties = new HashMap<>();

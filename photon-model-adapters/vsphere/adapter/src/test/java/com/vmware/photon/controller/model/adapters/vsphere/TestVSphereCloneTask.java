@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.tasks.TestUtils.doPost;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.HashSet;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -123,7 +122,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeDesc.id = nextName("cloned-vm");
         computeDesc.regionId = this.datacenterId;
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new HashSet<>();
+        computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;
@@ -255,7 +254,7 @@ public class TestVSphereCloneTask extends BaseVSphereAdapterTest {
         computeDesc.id = nextName("vm");
         computeDesc.regionId = this.datacenterId;
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new HashSet<>();
+        computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);
         computeDesc.authCredentialsLink = this.auth.documentSelfLink;

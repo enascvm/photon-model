@@ -13,8 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.UUID;
 
 import org.junit.Assert;
@@ -183,7 +183,7 @@ public class TestVSpherePortgroupProvisioning extends BaseVSphereAdapterTest {
         computeDesc.id = UUID.randomUUID().toString();
         computeDesc.name = computeDesc.id;
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new HashSet<>();
+        computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);

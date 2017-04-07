@@ -1073,7 +1073,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.totalMemoryBytes = rp.getMemoryReservationBytes();
         // resource pools CPU is measured in Mhz
         res.cpuCount = 0;
-        res.supportedChildren = Collections.singleton(ComputeType.VM_GUEST.name());
+        res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
         res.endpointLink = enumerationContext.getRequest().endpointLink;
         res.instanceAdapterReference = enumerationContext
                 .getParent().description.instanceAdapterReference;
@@ -1097,7 +1097,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
             res.cpuMhzPerCore = cr.getTotalCpuMhz() / cr.getTotalCpuCores();
         }
         res.totalMemoryBytes = cr.getTotalMemoryBytes();
-        res.supportedChildren = Collections.singleton(ComputeType.VM_GUEST.name());
+        res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
         res.endpointLink = enumerationContext.getRequest().endpointLink;
         res.instanceAdapterReference = enumerationContext
                 .getParent().description.instanceAdapterReference;
@@ -1329,7 +1329,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.endpointLink = enumerationContext.getRequest().endpointLink;
         res.cpuMhzPerCore = hs.getCpuMhz();
         res.totalMemoryBytes = hs.getTotalMemoryBytes();
-        res.supportedChildren = Collections.singleton(ComputeType.VM_GUEST.name());
+        res.supportedChildren = Collections.singletonList(ComputeType.VM_GUEST.name());
         res.instanceAdapterReference = enumerationContext
                 .getParent().description.instanceAdapterReference;
         res.enumerationAdapterReference = enumerationContext

@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -195,7 +194,7 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
 
     private ComputeDescription createTemplate() {
         ComputeDescription computeDesc = new ComputeDescription();
-        computeDesc.supportedChildren = new HashSet<>();
+        computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.regionId = this.datacenterId;
         computeDesc.instanceAdapterReference = UriUtils
                 .buildUri(this.host, VSphereUriPaths.INSTANCE_SERVICE);

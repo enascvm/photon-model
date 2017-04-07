@@ -19,7 +19,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -526,7 +525,7 @@ public class AWSStatsService extends StatelessService {
      * Returns if the given compute description is a compute host or not.
      */
     private boolean isComputeHost(ComputeDescription computeDescription) {
-        Set<String> supportedChildren = computeDescription.supportedChildren;
+        List<String> supportedChildren = computeDescription.supportedChildren;
         return supportedChildren != null && supportedChildren.contains(ComputeType.VM_GUEST.name());
     }
 }

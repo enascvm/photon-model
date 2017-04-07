@@ -28,7 +28,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -321,7 +320,7 @@ public class BaseVSphereAdapterTest {
         computeDesc.id = UUID.randomUUID().toString();
         computeDesc.name = computeDesc.id;
         computeDesc.documentSelfLink = computeDesc.id;
-        computeDesc.supportedChildren = new HashSet<>();
+        computeDesc.supportedChildren = new ArrayList<>();
         computeDesc.supportedChildren.add(ComputeType.VM_GUEST.name());
 
         computeDesc.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(this.host,
