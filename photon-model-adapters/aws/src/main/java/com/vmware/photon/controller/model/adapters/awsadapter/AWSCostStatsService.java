@@ -74,6 +74,9 @@ import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
+
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.OperationJoin;
@@ -1064,7 +1067,7 @@ public class AWSCostStatsService extends StatelessService {
                                 ResourceMetricsService.ResourceMetrics.FIELD_NAME_ENTRIES,
                                 AWSConstants.AWS_ACCOUNT_BILL_PROCESSED_TIME_MILLIS),
                 QueryTask.NumericRange
-                        .createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true));
+                        .createDoubleRange(0.0, Double.MAX_VALUE, true, true));
         QueryTask qTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.SORT)
                 .addOption(QueryOption.TOP_RESULTS)
@@ -1077,7 +1080,10 @@ public class AWSCostStatsService extends StatelessService {
                 .setResultLimit(1)
                 .setQuery(builder.build()).build();
         qTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
-        return Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+        URI postUri = UriUtils.buildUri(
+                ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.METRIC_SERVICE),
+                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS);
+        return Operation.createPost(postUri)
                 .setBody(qTask)
                 .setCompletion((operation, exception) -> {
                     if (exception != null) {
