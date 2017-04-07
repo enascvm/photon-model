@@ -490,6 +490,31 @@ public class EndpointAllocationTaskServiceTest extends Suite {
             Assert.assertEquals(MockUntrustedCertEndpointAdapter.UNTRUSTED_CERT,
                     certificateInfo.certificate);
         }
+
+        @Test
+        public void testNoTenantLinks_neg() throws Throwable {
+            EndpointState endpoint = createEndpointState();
+            endpoint.tenantLinks = null;
+            EndpointAllocationTaskState startState = createEndpointAllocationRequest(endpoint);
+            startState.adapterReference = UriUtils.buildUri(getHost(),
+                    MockSuccessEndpointAdapter.SELF_LINK);
+
+            EndpointAllocationTaskState returnState = this
+                    .postServiceSynchronously(
+                            EndpointAllocationTaskService.FACTORY_LINK,
+                            startState, EndpointAllocationTaskState.class);
+
+            EndpointAllocationTaskState completeState = this
+                    .waitForServiceState(
+                            EndpointAllocationTaskState.class,
+                            returnState.documentSelfLink,
+                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                    .ordinal());
+
+            assertThat(completeState.taskInfo.stage, is(TaskStage.FAILED));
+            assertEquals(MockSuccessEndpointAdapter.ERROR_NO_TENANTS,
+                    completeState.taskInfo.failure.message);
+        }
     }
 
     private static EndpointState createEndpointState() {

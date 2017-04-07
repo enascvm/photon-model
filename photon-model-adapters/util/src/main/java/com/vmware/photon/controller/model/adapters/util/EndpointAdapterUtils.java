@@ -284,7 +284,8 @@ public class EndpointAdapterUtils {
         joinOp.sendWith(service);
     }
 
-    private static void validate(StatelessService service, Operation op, EndpointConfigRequest body,
+    private static void validate(StatelessService service, Operation op,
+            EndpointConfigRequest configRequest,
             BiConsumer<AuthCredentialsServiceState, Retriever> enhancer,
             BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validator) {
 
@@ -292,13 +293,13 @@ public class EndpointAdapterUtils {
             try {
                 AuthCredentialsServiceState credentials = oc
                         .getBody(AuthCredentialsServiceState.class);
-                enhancer.accept(credentials, Retriever.of(body.endpointProperties));
+                enhancer.accept(credentials, Retriever.of(configRequest.endpointProperties));
 
                 BiConsumer<ServiceErrorResponse, Throwable> callback = (r, e) -> {
                     service.logInfo("Finished validating credentials for operation: %d",
                             op.getId());
                     if (r == null && e == null) {
-                        if (body.requestType == RequestType.VALIDATE) {
+                        if (configRequest.requestType == RequestType.VALIDATE) {
                             op.complete();
                         }
                     } else {
@@ -319,24 +320,28 @@ public class EndpointAdapterUtils {
                 AdapterUtils.getServiceState(service, endpointState.authCredentialsLink,
                         onSuccessGetCredentials, op::fail);
             } else {
-                onSuccessGetCredentials.accept(getEmptyAuthCredentialState());
+                onSuccessGetCredentials.accept(getEmptyAuthCredentialState(configRequest));
             }
         };
 
         // if there is an endpoint, get it and then get the credentials
-        if (body.resourceReference != null) {
+        if (configRequest.resourceReference != null) {
             // If there is an error getting endpoint state, we assume that endpoint is not yet
             // created, but it was requested with a predefined link
-            AdapterUtils.getServiceState(service, body.resourceReference, onSuccessGetEndpoint,
-                    e -> onSuccessGetCredentials.accept(getEmptyAuthCredentialState()));
+            AdapterUtils.getServiceState(service, configRequest.resourceReference, onSuccessGetEndpoint,
+                    e -> onSuccessGetCredentials.accept(getEmptyAuthCredentialState(configRequest)));
         } else { // otherwise, proceed with empty credentials and rely on what's in
             // endpointProperties
-            onSuccessGetCredentials.accept(getEmptyAuthCredentialState());
+            onSuccessGetCredentials.accept(getEmptyAuthCredentialState(configRequest));
         }
     }
 
-    private static Operation getEmptyAuthCredentialState() {
-        return new Operation().setBody(new AuthCredentialsServiceState());
+    private static Operation getEmptyAuthCredentialState(EndpointConfigRequest configRequest) {
+        AuthCredentialsServiceState authCredentials = new AuthCredentialsServiceState();
+        if (configRequest.tenantLinks != null) {
+            authCredentials.tenantLinks = configRequest.tenantLinks;
+        }
+        return new Operation().setBody(authCredentials);
     }
 
     public static class Retriever {

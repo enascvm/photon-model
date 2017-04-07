@@ -13,7 +13,14 @@
 
 package com.vmware.photon.controller.model.adapterapi;
 
+import java.util.List;
 import java.util.Map;
+
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.xenon.common.ServiceDocument.PropertyOptions;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 
 /**
  * Request to validate and/or enhance an Endpoint. The {@link ResourceRequest#resourceReference}
@@ -66,4 +73,11 @@ public class EndpointConfigRequest extends ResourceRequest {
      * A map of value to use to validate and enhance Endpoint.
      */
     public Map<String, String> endpointProperties;
+
+    /**
+     * A list of tenant links which can access this service.
+     */
+    @PropertyOptions(indexing = { PropertyIndexingOption.EXPAND })
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_12)
+    public List<String> tenantLinks;
 }

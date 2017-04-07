@@ -614,6 +614,8 @@ public class MockAdapter {
         public static final String SELF_LINK = UriPaths.PROVISIONING
                 + "/mock_success_endpoint_adapter";
 
+        public static final String ERROR_NO_TENANTS = "No tenants.";
+
         private BaseModelTest test;
 
         public MockSuccessEndpointAdapter(BaseModelTest test) {
@@ -630,6 +632,10 @@ public class MockAdapter {
             case PATCH:
                 EndpointConfigRequest request = op
                         .getBody(EndpointConfigRequest.class);
+                if (request.tenantLinks == null) {
+                    op.fail(new IllegalStateException(ERROR_NO_TENANTS));
+                    return;
+                }
                 if (request.requestType == RequestType.VALIDATE) {
                     op.complete();
                     return;
