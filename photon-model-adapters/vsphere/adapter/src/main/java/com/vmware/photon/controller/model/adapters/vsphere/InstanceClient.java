@@ -1554,7 +1554,7 @@ public class InstanceClient extends BaseHelper {
                 if (VimNames.TYPE_NETWORK.equals(props.getString(CustomProperties.TYPE))) {
                     // standard network passed as subnet
                     VirtualEthernetCardNetworkBackingInfo backing = new VirtualEthernetCardNetworkBackingInfo();
-                    backing.setDeviceName(nicWithDetails.network.name);
+                    backing.setDeviceName(nicWithDetails.subnet.name);
                     nic.setBacking(backing);
                 } else {
                     // NSX-T logical switch

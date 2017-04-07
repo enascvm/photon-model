@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -47,6 +46,7 @@ import org.codehaus.jackson.node.ObjectNode;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
 import com.vmware.photon.controller.model.adapters.vsphere.InstanceClient.ClientException;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
@@ -77,7 +77,6 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
@@ -1091,7 +1090,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeDescription res = new ComputeDescription();
         res.name = cr.getName();
         res.documentSelfLink =
-                buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
+                buildUriPath(ComputeDescriptionService.FACTORY_LINK, getHost().nextUUID());
         res.cpuCount = cr.getTotalCpuCores();
         if (cr.getTotalCpuCores() != 0) {
             res.cpuMhzPerCore = cr.getTotalCpuMhz() / cr.getTotalCpuCores();
@@ -1179,13 +1178,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
 
         List<TagState> res = new ArrayList<>();
         for (String id : tagIds) {
-            TagState state = this.tagCache.get(id, newTagRetriever(taggingClient));
-            if (state != null) {
-                if (state.tenantLinks == null) {
-                    state.tenantLinks = tenantLinks;
-                }
-                state.documentSelfLink = TagFactoryService.generateSelfLink(state);
-                res.add(state);
+            TagState cached = this.tagCache.get(id, newTagRetriever(taggingClient));
+            if (cached != null) {
+                TagState tag = TagsUtil.newExternalTagState(cached.key, cached.value, tenantLinks);
+                res.add(tag);
             }
         }
 
@@ -1324,7 +1320,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         ComputeDescription res = new ComputeDescription();
         res.name = hs.getName();
         res.documentSelfLink =
-                buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
+                buildUriPath(ComputeDescriptionService.FACTORY_LINK, getHost().nextUUID());
         res.cpuCount = hs.getCoreCount();
         res.endpointLink = enumerationContext.getRequest().endpointLink;
         res.cpuMhzPerCore = hs.getCpuMhz();
@@ -1446,7 +1442,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                         .getSelfLink(veth.getNetwork());
                 iface.name = nic.getDeviceInfo().getLabel();
                 iface.documentSelfLink = buildUriPath(NetworkInterfaceService.FACTORY_LINK,
-                        UUID.randomUUID().toString());
+                        getHost().nextUUID());
 
                 Operation.createPost(this, NetworkInterfaceService.FACTORY_LINK)
                         .setBody(iface)
@@ -1473,7 +1469,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         res.name = vm.getName();
         res.endpointLink = enumerationContext.getRequest().endpointLink;
         res.documentSelfLink =
-                buildUriPath(ComputeDescriptionService.FACTORY_LINK, UUID.randomUUID().toString());
+                buildUriPath(ComputeDescriptionService.FACTORY_LINK, getHost().nextUUID());
         res.instanceAdapterReference = enumerationContext
                 .getParent().description.instanceAdapterReference;
         res.enumerationAdapterReference = enumerationContext
