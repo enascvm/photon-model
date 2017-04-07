@@ -16,20 +16,14 @@ package com.vmware.photon.controller.model.adapters.registry;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
 import com.google.gson.JsonObject;
 
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
-import com.vmware.photon.controller.model.PhotonModelMetricServices;
-import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
-import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -38,24 +32,9 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
 import com.vmware.xenon.services.common.QueryTask.QueryTerm.MatchType;
 import com.vmware.xenon.services.common.ServiceUriPaths;
 
-public class PhotonModelAdaptersRegistryServiceTest extends BasicReusableHostTestCase {
-    private final Logger logger = Logger.getLogger(getClass().getName());
+public class PhotonModelAdaptersRegistryServiceTest extends BaseAdaptersRegistryServiceTest {
 
     private static final String ICON = "icon";
-
-    @Before
-    public void setUp() throws Throwable {
-        this.host.setMaintenanceIntervalMicros(TimeUnit.MILLISECONDS.toMicros(10));
-
-        PhotonModelServices.startServices(this.host);
-        PhotonModelMetricServices.startServices(this.host);
-        PhotonModelAdaptersRegistryAdapters.startServices(this.host);
-
-        this.host.setTimeoutSeconds(300);
-
-        this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
-        this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-    }
 
     @Test
     public void testRegisterAdapter() throws Exception {

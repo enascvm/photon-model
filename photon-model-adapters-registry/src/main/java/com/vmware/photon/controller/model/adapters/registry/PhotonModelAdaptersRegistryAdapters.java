@@ -15,6 +15,8 @@ package com.vmware.photon.controller.model.adapters.registry;
 
 import java.util.logging.Level;
 
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecFactoryService;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.Utils;
 
@@ -23,15 +25,18 @@ import com.vmware.xenon.common.Utils;
  */
 public class PhotonModelAdaptersRegistryAdapters {
     public static final String[] LINKS = {
-            PhotonModelAdaptersRegistryService.FACTORY_LINK
+            PhotonModelAdaptersRegistryService.FACTORY_LINK,
+            ResourceOperationSpecService.FACTORY_LINK
     };
 
     public static void startServices(ServiceHost host) {
         try {
             host.startFactory(new PhotonModelAdaptersRegistryService());
+            host.startFactory(ResourceOperationSpecService.class, ResourceOperationSpecFactoryService::new);
         } catch (Exception e) {
-            host.log(Level.WARNING, "Exception staring registry adapters: %s",
+            host.log(Level.WARNING, "Error on start adapter registry related services. %s",
                     Utils.toString(e));
+            throw e;
         }
     }
 }
