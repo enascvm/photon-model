@@ -123,11 +123,14 @@ public class VSphereAdapterStatsService extends StatelessService {
         cs.computeLink = statsRequest.resourceReference.toString();
         cs.statValues = new HashMap<>();
 
-        for (ServiceStat stat : stats) {
-            cs.statValues.put(stat.name, Collections.singletonList(stat));
+        if (stats != null) {
+            for (ServiceStat stat : stats) {
+                cs.statValues.put(stat.name, Collections.singletonList(stat));
+            }
         }
 
-        SingleResourceStatsCollectionTaskState respBody = new SingleResourceStatsCollectionTaskState();
+        SingleResourceStatsCollectionTaskState respBody =
+                new SingleResourceStatsCollectionTaskState();
         respBody.statsList = new ArrayList<>();
         respBody.statsList.add(cs);
         respBody.taskStage = SingleResourceTaskCollectionStage.valueOf(statsRequest.nextStage);
