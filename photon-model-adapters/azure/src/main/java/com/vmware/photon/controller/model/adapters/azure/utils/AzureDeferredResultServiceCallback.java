@@ -15,6 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.utils;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_NOT_FOUND;
 
 import com.microsoft.azure.CloudError;
@@ -80,7 +81,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
             CloudError body = azureExc.getBody();
             if (body != null) {
                 String code = body.getCode();
-                if (RESOURCE_NOT_FOUND.equalsIgnoreCase(code)) {
+                if (RESOURCE_NOT_FOUND.equalsIgnoreCase(code) || RESOURCE_GROUP_NOT_FOUND.equals(code)) {
                     return RECOVERED;
                 } else if (INVALID_PARAMETER.equals(code) || INVALID_RESOURCE_GROUP.equals(code)) {
                     String invalidParameterMsg = String.format(
@@ -105,7 +106,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
             consumedError = consumeError(exc);
         } catch (Throwable t) {
             if (this.service != null) {
-                this.service.logWarning(this.message + ": FAILED. Details: " + t.getMessage());
+                this.service.logWarning(() -> String.format(" %s : FAILED. Details: %s", this.message, t.getMessage()));
             }
             toDeferredResult().fail(t);
             return;
@@ -122,8 +123,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
             toDeferredResult().complete(null);
         } else {
             if (this.service != null) {
-                this.service.logWarning(
-                        this.message + ": FAILED. Details: " + consumedError.getMessage());
+                this.service.logWarning(() -> String.format(" %s : FAILED. Details: %s", this.message, consumedError.getMessage()));
             }
             toDeferredResult().fail(consumedError);
         }
@@ -133,7 +133,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
     protected final void onSuccess(ServiceResponse<RES> result) {
         DeferredResult<RES> consumeSuccess;
         if (this.service != null) {
-            this.service.logFine(this.message + ": SUCCESS");
+            this.service.logFine(() -> String.format(" %s : SUCCESS", this.message));
         }
         try {
             // First delegate to descendants to process result

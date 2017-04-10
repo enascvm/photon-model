@@ -253,7 +253,7 @@ public class AzureInstanceService extends StatelessService {
             // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             if (exc != null) {
                 if (namespace != null) {
-                    handleCloudError(ctx.stage + ": FAILED. Details:", ctx, namespace, exc);
+                    handleCloudError(String.format( "%s: FAILED. Details:", ctx.stage), ctx, namespace, exc);
                 } else {
                     handleError(ctx, exc);
                 }
@@ -437,7 +437,7 @@ public class AzureInstanceService extends StatelessService {
             }
         };
 
-        azureClient.beginDeleteAsync(rgName, callback);
+        azureClient.deleteAsync(rgName, callback);
 
         callback.toDeferredResult()
                 .thenApply(ignore -> ctx)
@@ -502,7 +502,7 @@ public class AzureInstanceService extends StatelessService {
             }
         };
 
-        azureClient.beginDeleteAsync(rgName, callback);
+        azureClient.deleteAsync(rgName, callback);
 
         callback.toDeferredResult().whenComplete((o, e) -> finishWithFailure(ctx));
     }
@@ -1229,7 +1229,7 @@ public class AzureInstanceService extends StatelessService {
                 new AzureAsyncCallback<VirtualMachine>() {
                     @Override
                     public void onError(Throwable e) {
-                        handleCloudError("Provisioning VM " + vmName + ": FAILED. Details:", ctx, COMPUTE_NAMESPACE, e);
+                        handleCloudError(String.format("Provisioning VM %s: FAILED. Details:", vmName), ctx, COMPUTE_NAMESPACE, e);
                     }
 
                     @Override
@@ -1446,6 +1446,7 @@ public class AzureInstanceService extends StatelessService {
 
                     e = new IllegalStateException(invalidParameterMsg, ctx.error);
                     handleError(ctx, e);
+                    return;
                 }
             }
         }
@@ -1933,7 +1934,7 @@ public class AzureInstanceService extends StatelessService {
                 if (this.callCtx.hasAnyFailed.compareAndSet(false, true)) {
                     // Check whether this is the first failure and proceed to next stage.
                     // i.e. fail-fast on batch operations.
-                    AzureInstanceService.this.handleCloudError(this.msg + ": FAILED. Details:", this.ctx, COMPUTE_NAMESPACE, e);
+                    AzureInstanceService.this.handleCloudError(String.format("%s: FAILED. Details:", this.msg), this.ctx, COMPUTE_NAMESPACE, e);
                 } else {
                     e = new IllegalStateException(this.msg + ": FAILED. Details: " + e.getMessage(), e);
                     // Any subsequent failure is just logged.
