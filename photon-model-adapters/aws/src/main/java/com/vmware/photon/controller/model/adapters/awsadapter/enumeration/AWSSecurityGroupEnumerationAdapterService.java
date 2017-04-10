@@ -45,6 +45,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService.Securit
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.tasks.QueryStrategy;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
+import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -101,9 +102,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         AWSSecurityGroupEnumerationResponse response = new AWSSecurityGroupEnumerationResponse();
 
         return querySecurityGroupStates
-                .queryDocuments(sgState -> {
-                    response.securityGroupStates.put(sgState.id, sgState.documentSelfLink);
-                })
+                .queryDocuments(sgState ->
+                        response.securityGroupStates.put(sgState.id, sgState.documentSelfLink))
                 .thenApply(aVoid -> response);
     }
 
@@ -173,6 +173,9 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
         protected DeferredResult<LocalStateHolder> buildLocalResourceState(
                 SecurityGroup remoteResource,
                 SecurityGroupState existingLocalResourceState) {
+
+            AssertUtil.assertNotNull(remoteResource, "AWS remote resource is null.");
+
             LocalStateHolder stateHolder = new LocalStateHolder();
             stateHolder.localState = new SecurityGroupState();
 
@@ -223,6 +226,9 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
          */
         private Rule generateSecurityRuleFromAWSIpPermission(IpPermission ipPermission,
                 Rule.Access access) {
+
+            AssertUtil.assertNotNull(ipPermission, "AWS ipPermission is null.");
+
             Rule rule = new Rule();
             rule.name = UUID.randomUUID().toString();
             rule.access = access;
@@ -233,31 +239,43 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             } else {
                 rule.protocol = enumProtocol.getName();
             }
-            if (protocolName.equals("-1")) { // when the protocol is -1, the ports are not specified
-                                             // in AWS
-                rule.ports = "1-65535"; // this means that all the ports are included
+            if (isAllPorts(ipPermission)) {
+                rule.ports = "1-65535";    // this means that all the ports are included
             } else {
-                if (ipPermission.getFromPort() != null) { // A value of -1 indicates all ICMP/ICMPv6
-                                                          // types.
+                if (ipPermission.getFromPort() != null) {
                     rule.ports = ipPermission.getFromPort().toString();
                     if (ipPermission.getToPort() != null) { // both from and to ports are provided
-                        if (ipPermission.getFromPort() != ipPermission.getToPort()) { // the ports
-                                                                                      // are not the
-                                                                                      // same
-                            rule.ports += "-" + ipPermission.getToPort();
+                        if (ipPermission.getFromPort().intValue() !=
+                                ipPermission.getToPort().intValue()) {
+                            // the ports are not the same
+                            rule.ports = ipPermission.getFromPort() + "-"
+                                    + ipPermission.getToPort();
                         }
                     }
-                } else if (ipPermission.getToPort() != null) { // A value of -1 indicates all
-                                                               // ICMP/ICMPv6 types.
+                } else if (ipPermission.getToPort() != null) {
                     rule.ports = ipPermission.getToPort().toString();
                 }
             }
-
             rule.ipRangeCidr = ipPermission.getIpv4Ranges().size() > 0
                     ? ipPermission.getIpv4Ranges().get(0).getCidrIp() : SecurityGroupService.ANY;
             return rule;
         }
 
+    }
+
+    private static boolean isAllPorts(IpPermission ipPermission) {
+        Integer minusOne = -1;
+
+        if (ipPermission.getFromPort() == null && ipPermission.getToPort() == null) {
+            return true;
+        }
+
+        if (minusOne.equals(ipPermission.getFromPort())
+                && minusOne.equals(ipPermission.getToPort())) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
