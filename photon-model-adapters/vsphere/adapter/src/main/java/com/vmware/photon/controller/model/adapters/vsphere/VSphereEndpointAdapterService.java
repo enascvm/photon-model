@@ -95,22 +95,35 @@ public class VSphereEndpointAdapterService extends StatelessService {
 
         return (credentials, callback) -> {
             String host = body.endpointProperties.get(HOST_NAME_KEY);
-
             URI adapterManagementUri = getAdapterManagementUri(host);
             String id = body.endpointProperties.get(REGION_KEY);
 
+            // certificate to trust in the request
             String certPEM = body.endpointProperties.get(EndpointConfigRequest.CERTIFICATE_PROP_NAME);
             if (certPEM != null) {
-                storeCertificate(certPEM, body.tenantLinks, (o, e) -> {
+                X509Certificate[] certificates = CertificateUtil.createCertificateChain(certPEM);
+                storeCertificate(certificates[0], body.tenantLinks, (o, e) -> {
                     doValidate(credentials, callback, adapterManagementUri, id);
                 });
                 return;
             } else {
+                // check certificate if the endpoint.
                 X509TrustManagerResolver resolver = CertificateUtil
                         .resolveCertificate(adapterManagementUri, CERT_RESOLVE_TIMEOUT);
+
                 if (!resolver.isCertsTrusted()) {
-                    handleBadCertificate(resolver, callback);
-                    return;
+                    // bad cert
+                    if (body.endpointProperties
+                            .get(EndpointConfigRequest.ACCEPT_SELFSIGNED_CERTIFICATE) != null) {
+                        // lax policy
+                        storeCertificate(resolver.getCertificate(), body.tenantLinks, (o, e) -> {
+                            doValidate(credentials, callback, adapterManagementUri, id);
+                        });
+                    } else {
+                        // reply with error
+                        handleBadCertificate(resolver, callback);
+                        return;
+                    }
                 }
             }
 
@@ -143,15 +156,12 @@ public class VSphereEndpointAdapterService extends StatelessService {
         }
     }
 
-    private void storeCertificate(String certPEM, List<String> tenantLinks, CompletionHandler ch) {
+    private void storeCertificate(X509Certificate endCertificate, List<String> tenantLinks, CompletionHandler ch) {
         SslTrustCertificateState certState = new SslTrustCertificateState();
         if (tenantLinks != null) {
             certState.tenantLinks = tenantLinks;
         }
 
-        X509Certificate[] certificates = CertificateUtil.createCertificateChain(certPEM);
-        // Populate the certificate properties based on the first (end server) certificate
-        X509Certificate endCertificate = certificates[0];
         certState.certificate = CertificateUtil.toPEMformat(endCertificate);
         SslTrustCertificateState.populateCertificateProperties(
                 certState,
