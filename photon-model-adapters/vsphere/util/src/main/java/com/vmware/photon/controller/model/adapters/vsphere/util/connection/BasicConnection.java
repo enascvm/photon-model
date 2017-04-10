@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import javax.net.ssl.TrustManager;
 import javax.xml.ws.BindingProvider;
 import javax.xml.ws.handler.MessageContext;
 
@@ -58,6 +59,7 @@ public class BasicConnection implements Connection {
     private String password = ""; // default password is empty since on rare occasion passwords are not set
     private Map<String, List<String>> headers;
     private long requestTimeoutMillis = -1;
+    private TrustManager trustManager;
 
     public void setURI(URI uri) {
         this.uri = uri;
@@ -149,6 +151,10 @@ public class BasicConnection implements Connection {
             IgnoreSslErrors.ignoreErrors(bindingProvider);
         }
 
+        if (this.trustManager != null) {
+            IgnoreSslErrors.useTrustManager(bindingProvider, this.trustManager);
+        }
+
         this.serviceContent = this.vimPort
                 .retrieveServiceContent(this.getServiceInstanceReference());
 
@@ -220,6 +226,14 @@ public class BasicConnection implements Connection {
         return this.requestTimeoutMillis;
     }
 
+    public void setTrustManager(TrustManager trustManager) {
+        this.trustManager = trustManager;
+    }
+
+    public TrustManager getTrustManager() {
+        return this.trustManager;
+    }
+
     public static class BasicConnectionException extends ConnectionException {
         private static final long serialVersionUID = 1L;
 
@@ -234,6 +248,7 @@ public class BasicConnection implements Connection {
         res.setURI(this.getURI());
         res.setPassword(this.getPassword());
         res.setIgnoreSslErrors(this.ignoreSslErrors);
+        res.setTrustManager(this.trustManager);
         res.setUsername(this.getUsername());
         res.setRequestTimeout(this.getRequestTimeout(TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS);
         res.connect();

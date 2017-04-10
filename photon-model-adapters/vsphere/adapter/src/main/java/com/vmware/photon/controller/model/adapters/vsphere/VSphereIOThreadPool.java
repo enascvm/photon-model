@@ -24,6 +24,7 @@ import java.util.logging.Logger;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Connection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.ConnectionException;
+import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;
@@ -136,8 +137,7 @@ public class VSphereIOThreadPool {
             ConnectionCallback callback, Consumer<Connection> connectionEnhancer) {
         BasicConnection connection = new BasicConnection();
 
-        // TODO control sslErrors policy externally
-        connection.setIgnoreSslErrors(true);
+        connection.setTrustManager(ServerX509TrustManager.getInstance());
 
         connection.setUsername(auth.privateKeyId);
         connection.setPassword(EncryptionUtils.decrypt(auth.privateKey));

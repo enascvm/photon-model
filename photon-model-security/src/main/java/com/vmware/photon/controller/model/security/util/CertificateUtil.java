@@ -112,7 +112,7 @@ public class CertificateUtil {
     public static final String VALID_TO_KEY = "validTo";
 
     private static final int DEFAULT_SECURE_CONNECTION_PORT = 443;
-    private static final long DEFAULT_CONNECTION_TIMEOUT_MILLIS = Long.getLong(
+    public static final long DEFAULT_CONNECTION_TIMEOUT_MILLIS = Long.getLong(
             "ssl.resolver.import.timeout.millis", TimeUnit.SECONDS.toMillis(30));
 
     private static final char[] EMPTY = new char[0];
@@ -438,7 +438,7 @@ public class CertificateUtil {
     }
 
     public static X509TrustManagerResolver resolveCertificate(URI uri,
-            Proxy proxy, String proxyUsername, String proxyPassword, long timeout) {
+            Proxy proxy, String proxyUsername, String proxyPassword, long timeoutMillis) {
         logger.entering(logger.getName(), "resolveCertificate");
 
         X509TrustManagerResolver trustManagerResolver = new X509TrustManagerResolver();
@@ -466,7 +466,7 @@ public class CertificateUtil {
                 URL url = uri.toURL();
                 handleCertForHttpsThroughHttpProxyWithAuth(url,
                         proxy, proxyUsername, proxyPassword,
-                        timeout, sslSocketFactory);
+                        timeoutMillis, sslSocketFactory);
             } else {
                 SSLSocket sslSocket;
                 if (proxy != null) {
@@ -479,7 +479,7 @@ public class CertificateUtil {
                                 uri.toASCIIString(), proxy.toString());
                     }
                     Socket tunnel = new Socket(proxy);
-                    tunnel.connect(new InetSocketAddress(hostAddress, port), (int) timeout);
+                    tunnel.connect(new InetSocketAddress(hostAddress, port), (int) timeoutMillis);
                     sslSocket = (SSLSocket) sslSocketFactory.createSocket(
                             tunnel,
                             hostAddress,
@@ -487,7 +487,7 @@ public class CertificateUtil {
                             true);
                 } else {
                     sslSocket = (SSLSocket) sslSocketFactory.createSocket();
-                    sslSocket.connect(new InetSocketAddress(hostAddress, port), (int) timeout);
+                    sslSocket.connect(new InetSocketAddress(hostAddress, port), (int) timeoutMillis);
                 }
                 SSLSession session = sslSocket.getSession();
                 session.invalidate();
@@ -542,8 +542,8 @@ public class CertificateUtil {
         connection.disconnect();
     }
 
-    public static X509TrustManagerResolver resolveCertificate(URI uri, long timeout) {
-        return resolveCertificate(uri, null, null, null, timeout);
+    public static X509TrustManagerResolver resolveCertificate(URI uri, long timeoutMillis) {
+        return resolveCertificate(uri, null, null, null, timeoutMillis);
     }
 
     public static void validateCertificateChain(X509Certificate[] certificateChain)

@@ -16,6 +16,8 @@ package com.vmware.photon.controller.model.adapters.vsphere.vapi;
 import java.io.IOException;
 import java.net.URI;
 
+import javax.net.ssl.TrustManager;
+
 import org.apache.http.client.HttpClient;
 import org.apache.http.conn.ssl.AllowAllHostnameVerifier;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -77,8 +79,7 @@ public class VapiConnection {
     }
 
     public static HttpClient newUnsecureHttpClient() {
-        return HttpClientBuilder
-                .create()
+        return HttpClientBuilder.create()
                 .setSslcontext(IgnoreSslErrors.newInsecureSslContext("TLS"))
                 .setHostnameVerifier(new AllowAllHostnameVerifier())
                 .build();
@@ -87,6 +88,13 @@ public class VapiConnection {
     public static HttpClient newDefaultHttpClient() {
         return HttpClientBuilder
                 .create()
+                .build();
+    }
+
+    private static HttpClient newDefaultHttpClient(TrustManager trustManager) {
+        return HttpClientBuilder.create()
+                .setSslcontext(IgnoreSslErrors.newTrustedSslContext("TLS", trustManager))
+                .setHostnameVerifier(new AllowAllHostnameVerifier())
                 .build();
     }
 
@@ -112,12 +120,16 @@ public class VapiConnection {
         vapiConnection.setPassword(connection.getPassword());
 
         if (connection instanceof BasicConnection) {
-            if (((BasicConnection) connection).isIgnoreSslErrors()) {
+            BasicConnection basicConn = (BasicConnection) connection;
+            if (basicConn.isIgnoreSslErrors()) {
                 vapiConnection.setClient(VapiConnection.newUnsecureHttpClient());
+            } else if (basicConn.getTrustManager() != null) {
+                vapiConnection.setClient(VapiConnection.newDefaultHttpClient(basicConn.getTrustManager()));
             } else {
                 vapiConnection.setClient(VapiConnection.newDefaultHttpClient());
             }
         }
+
         return vapiConnection;
     }
 }

@@ -62,6 +62,12 @@ import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
+import com.vmware.photon.controller.model.security.PhotonModelSecurityServices;
+import com.vmware.photon.controller.model.security.service.SslTrustCertificateService;
+import com.vmware.photon.controller.model.security.service.SslTrustCertificateService.SslTrustCertificateState;
+import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
+import com.vmware.photon.controller.model.security.ssl.X509TrustManagerResolver;
+import com.vmware.photon.controller.model.security.util.CertificateUtil;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
@@ -135,11 +141,15 @@ public class BaseVSphereAdapterTest {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             VSphereAdapters.startServices(this.host);
+            PhotonModelSecurityServices.startServices(this.host);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
 
             this.host.waitForServiceAvailable(VSphereAdapters.CONFIG_LINK);
+            this.host.waitForServiceAvailable(PhotonModelSecurityServices.LINKS);
+
+            ServerX509TrustManager.create(this.host);
         } catch (Throwable e) {
             this.host.log("Error starting up services for the test %s", e.getMessage());
             throw new Exception(e);
@@ -147,6 +157,22 @@ public class BaseVSphereAdapterTest {
 
         if (this.vcUrl == null) {
             this.vcUrl = "http://not-configured";
+        } else {
+            X509TrustManagerResolver resolver = CertificateUtil.resolveCertificate(URI.create(this.vcUrl), 20000);
+            if (!resolver.isCertsTrusted()) {
+                SslTrustCertificateState certState = new SslTrustCertificateState();
+
+                certState.certificate = CertificateUtil.toPEMformat(resolver.getCertificate());
+                SslTrustCertificateState.populateCertificateProperties(
+                        certState,
+                        resolver.getCertificate());
+
+                Operation op = Operation.createPost(this.host, SslTrustCertificateService.FACTORY_LINK)
+                        .setReferer(this.host.getReferer())
+                        .setBody(certState);
+
+                this.host.waitForResponse(op);
+            }
         }
     }
 

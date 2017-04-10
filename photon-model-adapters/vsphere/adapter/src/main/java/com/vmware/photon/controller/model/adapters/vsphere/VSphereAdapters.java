@@ -44,7 +44,7 @@ public class VSphereAdapters {
      * The link of vSphere configuration registered in {@link PhotonModelAdaptersRegistryService
      * End-point Adapters Registry}.
      */
-    public static String CONFIG_LINK = UriUtils.buildUriPath(
+    public static final String CONFIG_LINK = UriUtils.buildUriPath(
             PhotonModelAdaptersRegistryService.FACTORY_LINK,
             EndpointType.vsphere.name());
 

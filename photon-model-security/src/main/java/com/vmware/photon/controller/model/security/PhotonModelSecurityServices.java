@@ -26,8 +26,6 @@ public class PhotonModelSecurityServices {
             SslTrustCertificateService.FACTORY_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
-
         host.startFactory(SslTrustCertificateService.class, SslTrustCertificateFactoryService::new);
     }
-
 }

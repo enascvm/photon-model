@@ -44,6 +44,17 @@ public class IgnoreSslErrors {
         requestContext.put(HOSTNAME_VERIFIER, newNonVerifyingHostnameVerifier());
     }
 
+    public static void useTrustManager(BindingProvider bp, TrustManager trustManager) {
+        Map<String, Object> requestContext = bp.getRequestContext();
+
+        requestContext.put(SSL_SOCKET_FACTORY, newTrustedSocketFactory(trustManager));
+        requestContext.put(HOSTNAME_VERIFIER, newNonVerifyingHostnameVerifier());
+    }
+
+    private static SSLSocketFactory newTrustedSocketFactory(TrustManager trustManager) {
+        return newTrustedSslContext("TLS", trustManager).getSocketFactory();
+    }
+
     public static HostnameVerifier newNonVerifyingHostnameVerifier() {
         return new NonVerifyingHostnameVerifier();
     }
@@ -60,6 +71,20 @@ public class IgnoreSslErrors {
     public static SSLContext newInsecureSslContext(String protocol) {
         TrustManager[] trustManagers = new TrustManager[] {
                 new AllTrustingTrustManager()
+        };
+
+        try {
+            SSLContext sslContext = SSLContext.getInstance(protocol);
+            sslContext.init(new KeyManager[0], trustManagers, new SecureRandom());
+            return sslContext;
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    public static SSLContext newTrustedSslContext(String protocol, TrustManager trustManager) {
+        TrustManager[] trustManagers = new TrustManager[] {
+                trustManager
         };
 
         try {
