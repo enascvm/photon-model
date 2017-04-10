@@ -33,6 +33,8 @@ import com.amazonaws.services.ec2.model.DescribeReservedInstancesResult;
 import com.amazonaws.services.ec2.model.Region;
 import com.amazonaws.services.ec2.model.ReservedInstances;
 import org.apache.commons.collections.CollectionUtils;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
@@ -50,6 +52,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
  */
 public class AWSReservedInstancePlanService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_RESERVED_INSTANCE_PLANS_ADAPTER;
+    private static final int NO_OF_MONTHS = 3;
 
     protected AWSClientManager ec2ClientManager;
 
@@ -213,7 +216,16 @@ public class AWSReservedInstancePlanService extends StatelessService {
             List<ReservedInstances> reservedInstances = describeReservedInstancesResult
                     .getReservedInstances();
             if (CollectionUtils.isNotEmpty(reservedInstances)) {
-                this.context.reservedInstancesPlan.addAll(reservedInstances);
+                DateTime endDate = new DateTime(DateTimeZone.UTC).withDayOfMonth(1)
+                        .minusMonths(NO_OF_MONTHS)
+                        .withTimeAtStartOfDay();
+                for (ReservedInstances reservedInstance : reservedInstances) {
+                    if (reservedInstance.getEnd() != null && reservedInstance.getEnd().before(
+                            endDate.toDate())) {
+                        continue;
+                    }
+                    this.context.reservedInstancesPlan.add(reservedInstance);
+                }
             }
             checkAndPatchReservedInstancesPlans();
         }
