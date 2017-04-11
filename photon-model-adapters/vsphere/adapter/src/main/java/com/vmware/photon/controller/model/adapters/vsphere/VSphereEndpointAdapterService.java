@@ -122,8 +122,8 @@ public class VSphereEndpointAdapterService extends StatelessService {
                     } else {
                         // reply with error
                         handleBadCertificate(resolver, callback);
-                        return;
                     }
+                    return;
                 }
             }
 
