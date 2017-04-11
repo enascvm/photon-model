@@ -14,9 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NOT_FOUND;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_NOT_FOUND;
 
 import com.microsoft.azure.CloudError;
@@ -81,10 +79,9 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
             if (body != null) {
                 String code = body.getCode();
                 if (RESOURCE_NOT_FOUND.equalsIgnoreCase(code)
-                        || RESOURCE_GROUP_NOT_FOUND.equals(code)
                         || NOT_FOUND.equalsIgnoreCase(code)) {
                     return RECOVERED;
-                } else if (INVALID_PARAMETER.equals(code) || INVALID_RESOURCE_GROUP.equals(code)) {
+                } else if (INVALID_PARAMETER.equals(code)) {
                     String invalidParameterMsg = String.format(
                             "Invalid parameter. %s",
                             body.getMessage());

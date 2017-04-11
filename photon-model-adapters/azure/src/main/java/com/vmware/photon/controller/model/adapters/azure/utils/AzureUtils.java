@@ -13,7 +13,17 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
+import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
+
+import java.util.HashMap;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -21,14 +31,24 @@ import java.util.regex.Pattern;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.credentials.AzureEnvironment;
+import com.microsoft.azure.management.storage.models.StorageAccount;
+import com.microsoft.azure.management.storage.models.StorageAccountKeys;
 
 import okhttp3.OkHttpClient;
 
+import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceContext;
 import com.vmware.photon.controller.model.adapters.azure.model.network.VirtualNetwork;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.UriUtils;
+import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 
@@ -236,5 +256,72 @@ public class AzureUtils {
                 .findFirst();
 
         return matcher.isPresent() ? matcher.get().group(0) : null;
+    }
+
+    public static StorageDescription constructStorageDescription(ServiceHost host,
+            String serviceSelfLink, StorageAccount sa,
+            AzureInstanceContext ctx, StorageAccountKeys keys) {
+        return constructStorageDescription(
+                host, serviceSelfLink,
+                ctx.parent.endpointLink, ctx.parent.tenantLinks,
+                ctx.parent.resourcePoolLink, ctx.parent.documentSelfLink,
+                ctx.storage.getId(), ctx.storage.getName(),
+                ctx.storage.getLocation(),
+                null, keys);
+    }
+
+    public static StorageDescription constructStorageDescription(ServiceHost host,
+            String serviceSelfLink, ComputeStateWithDescription parentCompute,
+            ComputeEnumerateResourceRequest request,
+            com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount storageAccount,
+            StorageAccountKeys keys) {
+        return constructStorageDescription(host,
+                serviceSelfLink, request.endpointLink,
+                parentCompute.tenantLinks, request.resourcePoolLink,
+                parentCompute.documentSelfLink, storageAccount.id, storageAccount.name,
+                storageAccount.location, storageAccount.properties.primaryEndpoints.blob, keys);
+    }
+
+    private static StorageDescription constructStorageDescription(ServiceHost host,
+            String serviceSelfLink, String endpointLink, List<String> tenantLinks,
+            String resourcePoolLink, String parentComputeSelfLink,
+            String saId, String saName, String saLocation, String saUri,
+            StorageAccountKeys keys) {
+        AuthCredentialsService.AuthCredentialsServiceState storageAuth =
+                new AuthCredentialsService.AuthCredentialsServiceState();
+        storageAuth.documentSelfLink = UUID.randomUUID().toString();
+        storageAuth.customProperties = new HashMap<>();
+        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1,
+                keys.getKey1());
+        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2,
+                keys.getKey2());
+        storageAuth.tenantLinks = tenantLinks;
+        if (endpointLink != null) {
+            storageAuth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
+                    endpointLink);
+        }
+
+        Operation storageAuthOp = Operation
+                .createPost(host, AuthCredentialsService.FACTORY_LINK)
+                .setBody(storageAuth);
+        storageAuthOp.setReferer(UriUtils.buildUri(host.getPublicUri(), serviceSelfLink));
+        host.sendRequest(storageAuthOp);
+
+        String storageAuthLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
+                storageAuth.documentSelfLink);
+        StorageDescription storageDescription = new StorageDescription();
+        storageDescription.id = saId;
+        storageDescription.regionId = saLocation;
+        storageDescription.name = saName;
+        storageDescription.authCredentialsLink = storageAuthLink;
+        storageDescription.resourcePoolLink = resourcePoolLink;
+        storageDescription.documentSelfLink = UUID.randomUUID().toString();
+        storageDescription.endpointLink = endpointLink;
+        storageDescription.computeHostLink = parentComputeSelfLink;
+        storageDescription.customProperties = new HashMap<>();
+        storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
+        storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI, saUri);
+        storageDescription.tenantLinks = tenantLinks;
+        return storageDescription;
     }
 }

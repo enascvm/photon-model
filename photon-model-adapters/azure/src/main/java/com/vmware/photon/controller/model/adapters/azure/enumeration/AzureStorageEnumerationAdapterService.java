@@ -15,10 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_BLOBS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINERS;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_CONTAINER_LEASE_LAST_MODIFIED;
@@ -82,6 +79,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount;
 import com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccountResultList;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
@@ -659,46 +657,15 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                         + " storage account [%s].", storageAccount.name));
                                 StorageAccountKeys keys = result.getBody();
 
-                                AuthCredentialsService.AuthCredentialsServiceState storageAuth =
-                                        new AuthCredentialsService.AuthCredentialsServiceState();
-                                storageAuth.documentSelfLink = UUID.randomUUID().toString();
-                                storageAuth.customProperties = new HashMap<>();
-                                storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1,
-                                        keys.getKey1());
-                                storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2,
-                                        keys.getKey2());
-                                storageAuth.tenantLinks = context.parentCompute.tenantLinks;
-                                if (context.request.endpointLink != null) {
-                                    storageAuth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
-                                            context.request.endpointLink);
-                                }
+                                StorageDescription storageDescription = AzureUtils.constructStorageDescription(getHost(),
+                                        getSelfLink(), context.parentCompute, context.request,
+                                        storageAccount, keys);
 
-                                Operation storageAuthOp = Operation
-                                        .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
-                                        .setBody(storageAuth);
-                                sendRequest(storageAuthOp);
-
+                                // construct storage connection string
                                 String connectionString = String.format(STORAGE_CONNECTION_STRING,
                                         storageAccount.name,
                                         keys.getKey1());
                                 context.storageConnectionStrings.put(storageAccount.id, connectionString);
-
-                                String storageAuthLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
-                                        storageAuth.documentSelfLink);
-                                StorageDescription storageDescription = new StorageDescription();
-                                storageDescription.id = storageAccount.id;
-                                storageDescription.regionId = storageAccount.location;
-                                storageDescription.name = storageAccount.name;
-                                storageDescription.authCredentialsLink = storageAuthLink;
-                                storageDescription.resourcePoolLink = context.request.resourcePoolLink;
-                                storageDescription.documentSelfLink = UUID.randomUUID().toString();
-                                storageDescription.endpointLink = context.request.endpointLink;
-                                storageDescription.computeHostLink = context.parentCompute.documentSelfLink;
-                                storageDescription.customProperties = new HashMap<>();
-                                storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
-                                storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI,
-                                        storageAccount.properties.primaryEndpoints.blob);
-                                storageDescription.tenantLinks = context.parentCompute.tenantLinks;
 
                                 Operation storageDescOp = Operation
                                         .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
@@ -727,7 +694,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             }
                         });
     }
-
 
     /*
      * Delete local storage accounts and all resources inside them that no longer exist in Azure

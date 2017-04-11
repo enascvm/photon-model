@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.instance;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
@@ -29,9 +30,11 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
-
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.credentials.AzureEnvironment;
@@ -57,6 +60,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
@@ -64,9 +68,12 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService.Netw
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
+import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
@@ -198,6 +205,8 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
         assertVmNetworksConfiguration();
 
         assertConfigurationOfDisks();
+
+        assertStorageDescription();
 
         // Stats on individual VM is currently broken.
         if (!this.skipStats) {
@@ -422,5 +431,34 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
             e.printStackTrace();
         }
 
+    }
+
+    /**
+     * Ensure that after provisioning, there is one (but only one) StorageDescription
+     * created for the shared storage account. This test does not use shared SA, thus
+     * provisioning should create a StorageDescription.
+     */
+    private void assertStorageDescription() {
+        if (this.isMock) { // return. Nothing provisioned on Azure so nothing to check
+            return;
+        }
+
+        try {
+            ComputeState vm = this.host.getServiceState(null,
+                    ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
+            String sharedSAName = vm.customProperties.get(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME);
+            if (sharedSAName != null && !sharedSAName.isEmpty()) {
+                Map<String, StorageDescription> storageDescriptionsMap =
+                        ProvisioningUtils.<StorageDescription> getResourceStates(this.host,
+                                StorageDescriptionService.FACTORY_LINK, StorageDescription.class);
+                assertTrue(!storageDescriptionsMap.isEmpty());
+                List<StorageDescription> storageDescriptions = storageDescriptionsMap.values().stream()
+                        .filter(name -> name.equals(sharedSAName)).collect(Collectors.toList());
+                assertEquals("More than one storage description was created for the provisinoed storage account.", storageDescriptions.size(), 1);
+            }
+        } catch (Throwable t) {
+            fail("Unable to verify Storage Description documents");
+            t.printStackTrace();
+        }
     }
 }

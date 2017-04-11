@@ -30,6 +30,7 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REGISTRED_STATE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVISIONING_STATE_SUCCEEDED;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_ALREADY_EXIST;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
@@ -121,6 +122,7 @@ import com.vmware.photon.controller.model.adapters.azure.model.diagnostics.Azure
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDecommissionCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
@@ -425,6 +427,28 @@ public class AzureInstanceService extends StatelessService {
 
         AzureDecommissionCallback callback = new AzureDecommissionCallback(
                 this, msg) {
+            @Override
+            protected Throwable consumeError(Throwable exc) {
+                exc = super.consumeError(exc);
+                if (exc instanceof CloudException) {
+                    CloudException azureExc = (CloudException) exc;
+                    CloudError body = azureExc.getBody();
+
+                    String code = body.getCode();
+                    if (RESOURCE_GROUP_NOT_FOUND.equals(code)) {
+                        return RECOVERED;
+                    } else if (INVALID_RESOURCE_GROUP.equals(code)) {
+                        String invalidParameterMsg = String.format(
+                                "Invalid resource group parameter. %s",
+                                body.getMessage());
+
+                        IllegalStateException e = new IllegalStateException(invalidParameterMsg,
+                                exc);
+                        return e;
+                    }
+                }
+                return exc;
+            }
 
             @Override
             protected DeferredResult<Void> consumeDecommissionSuccess(Void body) {
@@ -602,6 +626,29 @@ public class AzureInstanceService extends StatelessService {
         AzureDeferredResultServiceCallback<ResourceGroup> handler = new AzureDeferredResultServiceCallback<ResourceGroup>(
                 this, msg) {
             @Override
+            protected Throwable consumeError(Throwable exc) {
+                exc = super.consumeError(exc);
+                if (exc instanceof CloudException) {
+                    CloudException azureExc = (CloudException) exc;
+                    CloudError body = azureExc.getBody();
+                    if (body != null) {
+                        String code = body.getCode();
+                        if (RESOURCE_GROUP_NOT_FOUND.equals(code)) {
+                            return RECOVERED;
+                        } else if (INVALID_RESOURCE_GROUP.equals(code)) {
+                            String invalidParameterMsg = String.format(
+                                    "Invalid resource group parameter. %s",
+                                    body.getMessage());
+
+                            IllegalStateException e = new IllegalStateException(invalidParameterMsg, exc);
+                            return e;
+                        }
+                    }
+                }
+                return exc;
+            }
+
+            @Override
             protected DeferredResult<ResourceGroup> consumeSuccess(ResourceGroup rg) {
                 return DeferredResult.completed(rg);
             }
@@ -623,87 +670,12 @@ public class AzureInstanceService extends StatelessService {
                 .getOrDefault(AZURE_STORAGE_ACCOUNT_TYPE, DEFAULT_STORAGE_ACCOUNT_TYPE.toValue());
         storageParameters.setAccountType(AccountType.fromValue(accountType));
 
-        String msg = "Creating Azure Storage Account [" + ctx.storageAccountName + "] for ["
-                + ctx.vmName + "] VM";
+        String msg = "Creating Azure Storage Account for [" + ctx.vmName + "] VM";
 
         StorageAccountsOperations azureSAClient = getStorageManagementClient(ctx)
                 .getStorageAccountsOperations();
 
-        AzureProvisioningCallback<StorageAccount> handler = new AzureProvisioningCallback<StorageAccount>(
-                this, msg) {
-
-            @Override
-            protected Throwable consumeError(Throwable exc) {
-                if (exc instanceof CloudException) {
-                    CloudException azureExc = (CloudException) exc;
-                    if (STORAGE_ACCOUNT_ALREADY_EXIST
-                            .equalsIgnoreCase(azureExc.getBody().getCode())) {
-                        return RECOVERED;
-                    }
-                }
-                return exc;
-            }
-
-            @Override
-            protected DeferredResult<StorageAccount> consumeProvisioningSuccess(
-                    StorageAccount sa) {
-                ctx.storage = sa;
-
-                StorageDescription storageDescriptionToCreate = new StorageDescription();
-                storageDescriptionToCreate.name = ctx.storageAccountName;
-                storageDescriptionToCreate.type = ctx.storage.getAccountType().name();
-
-                Operation createStorageDescOp = Operation
-                        .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
-                        .setBody(storageDescriptionToCreate);
-
-                Operation patchBootDiskOp = Operation
-                        .createPatch(
-                                UriUtils.buildUri(getHost(),
-                                        ctx.bootDisk.documentSelfLink))
-                        .setBody(ctx.bootDisk);
-
-                return sendWithDeferredResult(createStorageDescOp, StorageDescription.class)
-                        // Consume created StorageDescription
-                        .thenAccept((storageDescription) -> {
-                            ctx.storageDescription = storageDescription;
-                            ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
-                            logFine(() -> String.format("Creating StorageDescription [%s]: SUCCESS",
-                                    storageDescription.name));
-                        })
-                        // Start next op, patch boot disk, in the sequence
-                        .thenCompose((woid) -> sendWithDeferredResult(patchBootDiskOp))
-                        // Log boot disk patch success
-                        .thenRun(() -> {
-                            logFine(() -> String.format("Updating boot disk [%s]: SUCCESS",
-                                    ctx.bootDisk.name));
-                        })
-                        // Return original StorageAccount
-                        .thenApply((woid) -> sa);
-            }
-
-            @Override
-            protected String getProvisioningState(StorageAccount sa) {
-                ProvisioningState provisioningState = sa.getProvisioningState();
-
-                // For some reason SA.provisioningState is null, so consider it CREATING.
-                if (provisioningState == null) {
-                    provisioningState = ProvisioningState.CREATING;
-                }
-
-                return provisioningState.name();
-            }
-
-            @Override
-            protected Runnable checkProvisioningStateCall(
-                    ServiceCallback<StorageAccount> checkProvisioningStateCallback) {
-                return () -> azureSAClient.getPropertiesAsync(
-                        ctx.storageAccountRGName,
-                        ctx.storageAccountName,
-                        checkProvisioningStateCallback);
-
-            }
-        };
+        StorageAccountAsyncHandler handler = new StorageAccountAsyncHandler(ctx, azureSAClient, this, msg);
 
         // First create SA RG (if does not exist), then create the SA itself (if does not exist)
         createStorageAccountRG(ctx)
@@ -1829,6 +1801,129 @@ public class AzureInstanceService extends StatelessService {
             resourceGroupName = DEFAULT_GROUP_PREFIX + String.valueOf(System.currentTimeMillis());
         }
         return resourceGroupName;
+    }
+
+    public class StorageAccountAsyncHandler extends AzureProvisioningCallback<StorageAccount> {
+
+        private AzureInstanceContext ctx;
+        private StorageAccountsOperations azureSAClient;
+
+        public StorageAccountAsyncHandler(AzureInstanceContext ctx, StorageAccountsOperations azureSAClient,
+                StatelessService service, String message) {
+            super(service, message);
+            this.ctx = ctx;
+            this.azureSAClient = azureSAClient;
+        }
+
+        @Override
+        protected Throwable consumeError(Throwable exc) {
+            exc = super.consumeError(exc);
+            if (exc instanceof CloudException) {
+                CloudException azureExc = (CloudException) exc;
+                if (STORAGE_ACCOUNT_ALREADY_EXIST
+                        .equalsIgnoreCase(azureExc.getBody().getCode())) {
+                    return RECOVERED;
+                }
+            }
+            return exc;
+        }
+
+        @Override
+        protected DeferredResult<StorageAccount> consumeProvisioningSuccess(
+                StorageAccount sa) {
+            this.ctx.storage = sa;
+
+            return createStorageDescription(this.ctx)
+                    // Start next op, patch boot disk, in the sequence
+                    .thenCompose((woid) -> {
+                        Operation patchBootDiskOp = Operation
+                                .createPatch(this.ctx.computeRequest
+                                        .buildUri(this.ctx.bootDisk.documentSelfLink))
+                                .setBody(this.ctx.bootDisk);
+                        return sendWithDeferredResult(patchBootDiskOp).thenRun(() -> {
+                            logFine(() -> String.format("Updating boot disk [%s]: SUCCESS",
+                                    this.ctx.bootDisk.name));
+                        });
+                    })
+                    // Return processed context with StorageAccount
+                    .thenApply((woid) -> {
+                        return this.ctx.storage;
+                    });
+        }
+
+        /**
+         * Based on the queried result, in case no SA description exists for the given name,
+         * create a new one. For this purpose, StorageAccountKeys should be obtained, and with them
+         * AuthCredentialsServiceState is created, and a StorageDescription, pointing to that
+         * authentication description document.
+         */
+        private DeferredResult<StorageDescription> createStorageDescription(
+                AzureInstanceContext ctx) {
+
+
+            String msg = "Getting Azure StorageAccountKeys for [" + ctx.storage.getName()
+                    + "] Storage Account";
+            AzureDeferredResultServiceCallback<StorageAccountKeys> handler =
+                    new AzureDeferredResultServiceCallback<StorageAccountKeys>(this.service, msg) {
+
+                @Override
+                protected Throwable consumeError(Throwable exc) {
+                    return new IllegalStateException(String.format(
+                            "Getting Azure StorageAccountKeys for [%s] Storage Account: FAILED. Details: %s",
+                            ctx.storage.getName(), exc.getMessage()));
+                }
+
+                @Override
+                protected DeferredResult<StorageAccountKeys> consumeSuccess(StorageAccountKeys body) {
+                    logFine(() -> String.format("Getting Azure StorageAccountKeys for [%s] Storage Account: SUCCESS",
+                            ctx.storage.getName()));
+                    return DeferredResult.completed(body);
+                }
+            };
+
+            this.azureSAClient.listKeysAsync(ctx.storageAccountRGName, ctx.storage.getName(),
+                    handler);
+
+            return handler.toDeferredResult()
+                    .thenCompose(keys -> {
+                        Operation createStorageDescOp = Operation
+                                .createPost(getHost(), StorageDescriptionService.FACTORY_LINK)
+                                .setBody(AzureUtils.constructStorageDescription(
+                                        getHost(), getSelfLink(),
+                                        this.ctx.storage, ctx, keys))
+                                .setReferer(getUri());
+                        return sendWithDeferredResult(createStorageDescOp,
+                                StorageDescription.class);
+                    })
+                    .thenCompose(storageDescription -> {
+                        this.ctx.storageDescription = storageDescription;
+                        this.ctx.bootDisk.storageDescriptionLink = storageDescription.documentSelfLink;
+
+                        return DeferredResult.completed(this.ctx.storageDescription);
+                    });
+        }
+
+        @Override
+        protected String getProvisioningState(StorageAccount sa) {
+            ProvisioningState provisioningState = sa.getProvisioningState();
+
+            // For some reason SA.provisioningState is null, so consider it CREATING.
+            if (provisioningState == null) {
+                return ProvisioningState.CREATING.name();
+            }
+
+            return provisioningState.name();
+        }
+
+        @Override
+        protected Runnable checkProvisioningStateCall(
+                ServiceCallback<StorageAccount> checkProvisioningStateCallback) {
+            return () -> this.azureSAClient.getPropertiesAsync(
+                    this.ctx.storageAccountRGName,
+                    this.ctx.storageAccountName,
+                    checkProvisioningStateCallback);
+
+        }
     }
 
     /**
