@@ -729,6 +729,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         subnet.endpointLink = enumerationContext.getRequest().endpointLink;
         subnet.subnetCIDR = ALL_IPS_SUBNET_CIDR;
         subnet.networkLink = networkState.documentSelfLink;
+        subnet.tenantLinks = enumerationContext.getTenantLinks();
 
         CustomProperties.of(subnet)
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())
@@ -766,6 +767,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         subnet.endpointLink = enumerationContext.getRequest().endpointLink;
         subnet.subnetCIDR = ALL_IPS_SUBNET_CIDR;
         subnet.networkLink = networkState.documentSelfLink;
+        subnet.tenantLinks = enumerationContext.getTenantLinks();
 
         CustomProperties.of(subnet)
                 .put(CustomProperties.ENUMERATED_BY_TASK_LINK, enumerationContext.getRequest().taskLink())

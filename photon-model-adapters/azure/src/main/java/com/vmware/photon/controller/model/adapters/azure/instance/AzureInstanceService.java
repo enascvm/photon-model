@@ -1191,7 +1191,7 @@ public class AzureInstanceService extends StatelessService {
         // We don't support Attach option which allows to use a specialized disk to create the
         // virtual machine.
         osDisk.setCreateOption(OS_DISK_CREATION_OPTION);
-        if (ctx.bootDisk.capacityMBytes > 0 && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) { // In case
+        if (ctx.bootDisk.capacityMBytes > 31744 && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) { // In case
             // custom boot disk size is set then  use that value. If value more than maximum
             // allowed then proceed with default size.
             int diskSizeInGB = (int)ctx.bootDisk.capacityMBytes / 1024; // Converting MBs to GBs and
