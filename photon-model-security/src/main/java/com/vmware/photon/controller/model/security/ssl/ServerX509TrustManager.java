@@ -266,15 +266,16 @@ public class ServerX509TrustManager implements X509TrustManager, Closeable {
         operation.complete();
     }
 
-    private void registerCertificate(SslTrustCertificateState sslTrustCert) {
+    public void registerCertificate(SslTrustCertificateState sslTrustCert) {
+        String alias = sslTrustCert.getAlias();
         try {
-            this.putDelegate(sslTrustCert.getAlias(), sslTrustCert.certificate);
+            this.putDelegate(alias, sslTrustCert.certificate);
             Utils.log(getClass(), "Self Signed Trust Store", Level.FINE,
-                    "Certificate with alias %s updated", sslTrustCert.getAlias());
+                    "Certificate with alias %s updated", alias);
         } catch (Throwable e) {
             Utils.logWarning(
                     "Exception during certificate reload with alias: %s. Error: %s",
-                    sslTrustCert.getAlias(), Utils.toString(e));
+                    alias, Utils.toString(e));
         }
     }
 

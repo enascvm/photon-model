@@ -21,10 +21,8 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.xenon.common.Operation.STATUS_CODE_BAD_REQUEST;
 
 import java.net.URI;
-import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BiConsumer;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
@@ -38,14 +36,10 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.finders.FinderEx
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
-import com.vmware.photon.controller.model.security.service.SslTrustCertificateService;
-import com.vmware.photon.controller.model.security.service.SslTrustCertificateService.SslTrustCertificateState;
 import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
 import com.vmware.photon.controller.model.security.ssl.X509TrustManagerResolver;
 import com.vmware.photon.controller.model.security.util.CertificateUtil;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
-import com.vmware.photon.controller.model.support.CertificateInfo;
-import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.xenon.common.Operation;
@@ -99,7 +93,8 @@ public class VSphereEndpointAdapterService extends StatelessService {
             String id = body.endpointProperties.get(REGION_KEY);
 
             // certificate to trust in the request
-            String certPEM = body.endpointProperties.get(EndpointConfigRequest.CERTIFICATE_PROP_NAME);
+            String certPEM = body.endpointProperties
+                    .get(EndpointConfigRequest.CERTIFICATE_PROP_NAME);
             if (certPEM != null) {
                 X509Certificate[] certificates = CertificateUtil.createCertificateChain(certPEM);
                 storeCertificate(certificates[0], body.tenantLinks, (o, e) -> {
@@ -132,7 +127,8 @@ public class VSphereEndpointAdapterService extends StatelessService {
     }
 
     private void doValidate(AuthCredentialsServiceState credentials,
-            BiConsumer<ServiceErrorResponse, Throwable> callback, URI adapterManagementUri, String id) {
+            BiConsumer<ServiceErrorResponse, Throwable> callback, URI adapterManagementUri,
+            String id) {
         BasicConnection connection = createConnection(adapterManagementUri, credentials);
         try {
             // login and session creation
@@ -156,46 +152,16 @@ public class VSphereEndpointAdapterService extends StatelessService {
         }
     }
 
-    private void storeCertificate(X509Certificate endCertificate, List<String> tenantLinks, CompletionHandler ch) {
-        SslTrustCertificateState certState = new SslTrustCertificateState();
-        if (tenantLinks != null) {
-            certState.tenantLinks = tenantLinks;
-        }
-
-        certState.certificate = CertificateUtil.toPEMformat(endCertificate);
-        SslTrustCertificateState.populateCertificateProperties(
-                certState,
-                endCertificate);
-
-        logInfo("Register certificate with common name: %s "
-                        + "and fingerprint: %s in trust store",
-                certState.commonName, certState.fingerprint);
-        //save untrusted certificate to the trust store
-        Operation.createPost(this, SslTrustCertificateService.FACTORY_LINK)
-                .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE)
-                .setBody(certState)
-                .setCompletion(ch)
-                .sendWith(this);
+    private void storeCertificate(X509Certificate endCertificate,
+            List<String> tenantLinks,
+            CompletionHandler ch) {
+        CertificateUtil.storeCertificate(endCertificate, tenantLinks,
+                this.getHost(), this, ch);
     }
 
     private void handleBadCertificate(X509TrustManagerResolver resolver,
             BiConsumer<ServiceErrorResponse, Throwable> callback) {
-        X509Certificate[] chain = resolver.getCertificateChain();
-        String certificate = CertificateUtil.toPEMformat(chain);
-        Map<String, String> certProps = CertificateUtil.getCertificateInfoProperties(chain[0]);
-        CertificateInfo certificateInfo = CertificateInfo.of(certificate, certProps);
-
-        CertificateException certException = resolver.getCertificateException();
-
-        CertificateInfoServiceErrorResponse errorResponse =
-                CertificateInfoServiceErrorResponse.create(
-                        certificateInfo,
-                        Operation.STATUS_CODE_UNAVAILABLE,
-                        CertificateInfoServiceErrorResponse.ERROR_CODE_UNTRUSTED_CERTIFICATE,
-                        certException.getCause()
-                );
-
-        callback.accept(errorResponse, null);
+        callback.accept(resolver.getCertificateInfoServiceErrorResponse(), null);
     }
 
     private BiConsumer<AuthCredentialsServiceState, Retriever> credentials() {
@@ -266,7 +232,8 @@ public class VSphereEndpointAdapterService extends StatelessService {
         try {
             connection.close();
         } catch (Exception e) {
-            logWarning(() -> String.format("Error closing connection to " + connection.getURI(), e));
+            logWarning(
+                    () -> String.format("Error closing connection to " + connection.getURI(), e));
         }
     }
 }

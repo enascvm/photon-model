@@ -92,9 +92,16 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
+import com.vmware.photon.controller.model.security.service.SslTrustCertificateService;
+import com.vmware.photon.controller.model.security.service.SslTrustCertificateService.SslTrustCertificateState;
+import com.vmware.photon.controller.model.security.ssl.ServerX509TrustManager;
 import com.vmware.photon.controller.model.security.ssl.X509TrustManagerResolver;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.LocalizableValidationException;
+import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.ServiceHost;
+import com.vmware.xenon.common.ServiceRequestSender;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
@@ -219,18 +226,15 @@ public class CertificateUtil {
     /**
      * Set a certificate entry in a trust store
      */
-    public static void setCertificateEntry(KeyStore trustStore, String alias,
-            String trustedCert) {
+    public static void setCertificateEntry(KeyStore trustStore, String alias, String trustedCert) {
 
-        X509Certificate[] certificates = CertificateUtil
-                .createCertificateChain(trustedCert);
+        X509Certificate[] certificates = CertificateUtil.createCertificateChain(trustedCert);
 
         for (X509Certificate certificate : certificates) {
             String certAlias = alias + "_"
                     + CertificateUtil.getCommonName(certificate.getSubjectDN());
             try {
                 trustStore.setCertificateEntry(certAlias, certificate);
-
             } catch (KeyStoreException e) {
                 throw new RuntimeException("Failed to set certificate entry", e);
             }
@@ -487,7 +491,8 @@ public class CertificateUtil {
                             true);
                 } else {
                     sslSocket = (SSLSocket) sslSocketFactory.createSocket();
-                    sslSocket.connect(new InetSocketAddress(hostAddress, port), (int) timeoutMillis);
+                    sslSocket
+                            .connect(new InetSocketAddress(hostAddress, port), (int) timeoutMillis);
                 }
                 SSLSession session = sslSocket.getSession();
                 session.invalidate();
@@ -544,6 +549,34 @@ public class CertificateUtil {
 
     public static X509TrustManagerResolver resolveCertificate(URI uri, long timeoutMillis) {
         return resolveCertificate(uri, null, null, null, timeoutMillis);
+    }
+
+    public static void storeCertificate(X509Certificate endCertificate, List<String> tenantLinks,
+            ServiceHost host, ServiceRequestSender sender, CompletionHandler ch) {
+        SslTrustCertificateState certState = new SslTrustCertificateState();
+        if (tenantLinks != null) {
+            certState.tenantLinks = tenantLinks;
+        }
+
+        certState.certificate = CertificateUtil.toPEMformat(endCertificate);
+        SslTrustCertificateState.populateCertificateProperties(
+                certState,
+                endCertificate);
+
+        logger.info(String.format("Register certificate with common name: %s "
+                        + "and fingerprint: %s in trust store",
+                certState.commonName, certState.fingerprint));
+        //save untrusted certificate to the trust store
+        Operation.createPost(host, SslTrustCertificateService.FACTORY_LINK)
+                .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE)
+                .setBody(certState)
+                .setCompletion(ch)
+                .sendWith(sender);
+        ServerX509TrustManager trustManager = ServerX509TrustManager.getInstance();
+        if (trustManager != null) {
+            logger.fine("Register Certificate " + certState);
+            trustManager.registerCertificate(certState);
+        }
     }
 
     public static void validateCertificateChain(X509Certificate[] certificateChain)

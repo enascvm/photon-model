@@ -18,10 +18,15 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 
 import javax.net.ssl.X509TrustManager;
 
+import com.vmware.photon.controller.model.security.util.CertificateUtil;
+import com.vmware.photon.controller.model.support.CertificateInfo;
+import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
+import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Utils;
 
 public class X509TrustManagerResolver implements X509TrustManager {
@@ -73,16 +78,36 @@ public class X509TrustManagerResolver implements X509TrustManager {
         return this.certificateException;
     }
 
+    /**
+     * @return {@link CertificateInfoServiceErrorResponse} for the untrusted certificate or {@code
+     * null} if the resolver was not called or the certificate is trusted
+     */
+    public CertificateInfoServiceErrorResponse getCertificateInfoServiceErrorResponse() {
+        if (this.connectionCertificates.isEmpty()) {
+            return null;
+        }
+        X509Certificate[] chain = getCertificateChain();
+        String certificate = CertificateUtil.toPEMformat(chain);
+        Map<String, String> certProps = CertificateUtil.getCertificateInfoProperties(chain[0]);
+        CertificateInfo certificateInfo = CertificateInfo.of(certificate, certProps);
+
+        CertificateException certException = getCertificateException();
+
+        return CertificateInfoServiceErrorResponse.create(
+                certificateInfo,
+                Operation.STATUS_CODE_UNAVAILABLE,
+                CertificateInfoServiceErrorResponse.ERROR_CODE_UNTRUSTED_CERTIFICATE,
+                certException.getCause()
+        );
+    }
+
     public X509Certificate[] getCertificateChain() {
         if (this.connectionCertificates.isEmpty()) {
             throw new IllegalStateException(
                     "checkServerTrusted was not called or was not successful.");
         }
 
-        X509Certificate[] certificateChain =
-                new X509Certificate[this.connectionCertificates.size()];
-        certificateChain = this.connectionCertificates.toArray(certificateChain);
-        return certificateChain;
+        return this.connectionCertificates.toArray(new X509Certificate[0]);
     }
 
     private CertificateException validateIfTrusted(X509Certificate[] certificates,

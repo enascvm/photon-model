@@ -120,7 +120,13 @@ public class SslTrustCertificateService extends StatefulService {
         public String subscriptionLink;
 
         public String getAlias() {
-            return Service.getId(this.documentSelfLink);
+            if (this.documentSelfLink != null) {
+                return Service.getId(this.documentSelfLink);
+            } else {
+                return CertificateUtil.generatePureFingerPrint(
+                        CertificateUtil.createCertificateChain(this.certificate));
+            }
+
         }
 
         public static void populateCertificateProperties(SslTrustCertificateState state,
