@@ -17,6 +17,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -28,6 +31,7 @@ public class ResourceState extends ServiceDocument {
 
     public static final String FIELD_NAME_ID = "id";
     public static final String FIELD_NAME_NAME = "name";
+    public static final String FIELD_NAME_DESC = "desc";
     public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
     public static final String FIELD_NAME_TENANT_LINKS = "tenantLinks";
     public static final String FIELD_NAME_GROUP_LINKS = "groupLinks";
@@ -47,6 +51,18 @@ public class ResourceState extends ServiceDocument {
     @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
     @PropertyOptions(indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.SORT })
     public String name;
+
+    /**
+     * Description of the resource instance
+     */
+    @PropertyOptions(
+            usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+            indexing = {
+                    PropertyIndexingOption.CASE_INSENSITIVE,
+                    PropertyIndexingOption.SORT
+            })
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_12)
+    public String desc;
 
     /**
      * Custom property bag that can be used to store resource specific properties.

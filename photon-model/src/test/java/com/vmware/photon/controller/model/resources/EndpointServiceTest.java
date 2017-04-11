@@ -64,6 +64,7 @@ public class EndpointServiceTest extends Suite {
         endpointState.endpointProperties.put("privateKey", "privateKey");
         endpointState.endpointType = "aws";
         endpointState.name = "aws-test-endpoint";
+        endpointState.desc = "aws-test-endpoint description";
         endpointState.tenantLinks = new ArrayList<>();
         endpointState.tenantLinks.add("tenant-linkA");
         endpointState.authCredentialsLink = "http://authCredentialsLink";
@@ -107,6 +108,7 @@ public class EndpointServiceTest extends Suite {
             assertNotNull(returnState);
             assertThat(returnState.id, is(startState.id));
             assertThat(returnState.name, is(startState.name));
+            assertThat(returnState.desc, is(startState.desc));
             assertThat(returnState.tenantLinks.get(0),
                     is(startState.tenantLinks.get(0)));
             assertThat(returnState.authCredentialsLink,
@@ -152,6 +154,7 @@ public class EndpointServiceTest extends Suite {
             patchState.endpointProperties.put("privateKey", "privateKey");
             patchState.endpointType = "aws";
             patchState.name = "aws-test-endpoint";
+            patchState.name = "aws-test-endpoint description";
             patchState.tenantLinks = new ArrayList<>();
             patchState.tenantLinks.add("tenant-linkA");
             patchState.authCredentialsLink = "http://authCredentialsLink";
@@ -175,6 +178,7 @@ public class EndpointServiceTest extends Suite {
             EndpointService.EndpointState patchState = new EndpointService.EndpointState();
             patchState.id = UUID.randomUUID().toString();
             patchState.name = "aws-test-endpoint-updatedName";
+            patchState.desc = "aws-test-endpoint description updated";
             patchState.tenantLinks = new ArrayList<>();
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
@@ -183,6 +187,7 @@ public class EndpointServiceTest extends Suite {
                     EndpointService.EndpointState.class);
 
             assertThat(updatedReturnState.name, is(patchState.name));
+            assertThat(updatedReturnState.desc, is(patchState.desc));
         }
     }
 
