@@ -917,7 +917,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(qBuilder.build())
                 .setResultLimit(getQueryResultLimit())
                 .build();
@@ -929,26 +928,52 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         handleError(context, e);
                         return;
                     }
-                    logFine(() -> String.format("Found %d matching resource for Azure storage"
-                                    + " containers", queryTask.results.documentCount));
 
-                    // If there are no matches, there is nothing to update.
-                    if (queryTask.results.documentCount == 0) {
-                        context.subStage = StorageEnumStages.CREATE_RESOURCE_GROUP_STATES;
+                    if (queryTask.results.nextPageLink == null) {
+                        logFine(() -> "No matching resource found for Azure storage containers");
+                        context.subStage = next;
                         handleSubStage(context);
                         return;
                     }
-
-                    for (Object s : queryTask.results.documents.values()) {
-                        ResourceGroupState resourceGroupState = Utils
-                                .fromJson(s, ResourceGroupState.class);
-                        String containerId = resourceGroupState.id;
-                        context.resourceGroupStates.put(containerId, resourceGroupState);
-                    }
-
-                    context.subStage = next;
-                    handleSubStage(context);
+                    context.enumNextPageLink = queryTask.results.nextPageLink;
+                    getLocalStorageContainerStatesHelper(context);
                 });
+    }
+
+    private void getLocalStorageContainerStatesHelper(StorageEnumContext context) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                handleError(context, e);
+                return;
+            }
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            context.enumNextPageLink = queryTask.results.nextPageLink;
+
+            for (Object s : queryTask.results.documents.values()) {
+                ResourceGroupState resourceGroupState = Utils
+                        .fromJson(s, ResourceGroupState.class);
+                String containerId = resourceGroupState.id;
+                if (context.resourceGroupStates.containsKey(containerId)) {
+                    continue;
+                }
+
+                context.resourceGroupStates.put(containerId, resourceGroupState);
+            }
+
+            if (context.enumNextPageLink != null) {
+                getLocalStorageContainerStatesHelper(context);
+            } else {
+                logFine(() -> "Finished getting resources for Azure storage containers");
+                context.subStage = StorageEnumStages.UPDATE_RESOURCE_GROUP_STATES;
+                handleSubStage(context);
+                return;
+            }
+        };
+        logFine(() -> String.format("Querying page [%s] for getting resource groups",
+                context.enumNextPageLink));
+        sendRequest(Operation.createGet(this, context.enumNextPageLink)
+                .setCompletion(completionHandler));
     }
 
     private void updateResourceGroupStates(StorageEnumContext context, StorageEnumStages next) {
@@ -1352,7 +1377,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         qBuilder.addClause(typeFilterQuery.build());
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(qBuilder.build())
                 .setResultLimit(getQueryResultLimit())
                 .build();
@@ -1364,25 +1388,51 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         handleError(context, e);
                         return;
                     }
-                    logFine(() -> String.format("Found %d matching disk states for Azure blobs",
-                            queryTask.results.documentCount));
 
-                    // If there are no matches, there is nothing to update.
-                    if (queryTask.results.documentCount == 0) {
-                        context.subStage = StorageEnumStages.CREATE_DISK_STATES;
+                    if (queryTask.results.nextPageLink == null) {
+                        logFine(() -> "No matching disk states found for Azure blobs");
+                        context.subStage = next;
                         handleSubStage(context);
                         return;
                     }
-
-                    for (Object d : queryTask.results.documents.values()) {
-                        DiskState diskState = Utils.fromJson(d, DiskState.class);
-                        String diskUri = diskState.id;
-                        context.diskStates.put(diskUri, diskState);
-                    }
-
-                    context.subStage = next;
-                    handleSubStage(context);
+                    context.enumNextPageLink = queryTask.results.nextPageLink;
+                    getLocalDiskStatesHelper(context);
                 });
+    }
+
+    private void getLocalDiskStatesHelper(StorageEnumContext context) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                handleError(context, e);
+                return;
+            }
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            context.enumNextPageLink = queryTask.results.nextPageLink;
+
+            for (Object d : queryTask.results.documents.values()) {
+                DiskState diskState = Utils.fromJson(d, DiskState.class);
+                String diskUri = diskState.id;
+                if (context.diskStates.containsKey(diskUri)) {
+                    continue;
+                }
+
+                context.diskStates.put(diskUri, diskState);
+            }
+
+            if (context.enumNextPageLink != null) {
+                getLocalDiskStatesHelper(context);
+            } else {
+                logFine(() -> "Finished getting local disk states for Azure blobs");
+                context.subStage = StorageEnumStages.UPDATE_DISK_STATES;
+                handleSubStage(context);
+                return;
+            }
+        };
+        logFine(() -> String.format("Querying page [%s] for getting local disk states",
+                context.enumNextPageLink));
+        sendRequest(Operation.createGet(this, context.enumNextPageLink)
+                .setCompletion(completionHandler));
     }
 
     /**
