@@ -16,13 +16,20 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.Sets;
+
+import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -45,6 +52,7 @@ import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate;
+import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -64,11 +72,17 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
     public boolean enableLongRunning = false;
     // }}
 
+    // Format is 'publisher:offer:sku:version' {{
+
     // As of now uniquely identify a SINGLE Azure image (version is not specified).
     private static final String AZURE_SINGLE_IMAGE_FILTER = "cognosys:secured-wordpress-on-windows-2012-r2:secured-wordpress-on-windows-enterprise-lic:";
 
-    // Format is 'publisher:offer:sku:version'
     private static final String AZURE_MULTI_IMAGES_FILTER = "CoreOS:::";
+
+    private static final String AZURE_DEFAULT_IMAGES_FILTER = "default";
+    // }}
+
+    private static final int DEFAULT_IMAGES = 11;
 
     private static final boolean EXACT_COUNT = true;
 
@@ -103,7 +117,8 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
         }));
 
         getHost().log(Level.INFO,
-                "[" + this.currentTestName.getMethodName() + "] Deleted " + counter + " ImageStates");
+                "[" + this.currentTestName.getMethodName() + "] Deleted " + counter
+                        + " ImageStates");
     }
 
     @Override
@@ -142,6 +157,13 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
         ServiceDocumentQueryResult imagesAfterSecondEnum = null;
 
+        final Function<Collection<Object>, ImageState> imageFinder = collection -> collection
+                .stream()
+                .map(imageStateAsObj -> Utils.fromJson(imageStateAsObj, ImageState.class))
+                .filter(imageState -> imageState.id.startsWith(AZURE_SINGLE_IMAGE_FILTER))
+                .findFirst()
+                .get();
+
         {
             getHost().log(Level.INFO,
                     "=== First enumeration should create a single '%s' image",
@@ -152,8 +174,10 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
             kickOffImageEnumeration(endpointState, true, AZURE_SINGLE_IMAGE_FILTER);
 
             if (!this.isMock) {
-                // Validate 1 image state is CREATED
-                imagesAfterFirstEnum = queryDocumentsAndAssertExpectedCount(getHost(), 1,
+                // Validate 1 image state is CREATED (in addition of 11 default)
+                imagesAfterFirstEnum = queryDocumentsAndAssertExpectedCount(
+                        getHost(),
+                        1 + DEFAULT_IMAGES,
                         ImageService.FACTORY_LINK,
                         EXACT_COUNT);
 
@@ -162,9 +186,7 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                         !imagesAfterFirstEnum.documentLinks
                                 .contains(staleImageState.documentSelfLink));
 
-                imageAfterFirstEnum = Utils.fromJson(
-                        imagesAfterFirstEnum.documents.values().iterator().next(),
-                        ImageState.class);
+                imageAfterFirstEnum = imageFinder.apply(imagesAfterFirstEnum.documents.values());
 
                 // Validate created image is correctly populated
                 Assert.assertNotNull("Public image must have endpointType set.",
@@ -174,12 +196,12 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                 Assert.assertNull("Public image must NOT have tenantLinks set.",
                         imageAfterFirstEnum.tenantLinks);
 
-                Assert.assertTrue("Image.id format is not correct: " + imageAfterFirstEnum.id,
-                        imageAfterFirstEnum.id.startsWith(AZURE_SINGLE_IMAGE_FILTER));
                 Assert.assertEquals("Image.name is different from the id",
                         imageAfterFirstEnum.id, imageAfterFirstEnum.name);
                 Assert.assertEquals("Image.description is different from the id",
                         imageAfterFirstEnum.id, imageAfterFirstEnum.description);
+                Assert.assertEquals("Image.region is invalid",
+                        "westus", imageAfterFirstEnum.regionId);
             }
         }
 
@@ -190,24 +212,25 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
             if (!this.isMock) {
                 // Update local image state
-                updateImageState(imagesAfterFirstEnum.documentLinks.get(0));
+                updateImageState(imageAfterFirstEnum.documentSelfLink);
             }
 
             kickOffImageEnumeration(endpointState, true, AZURE_SINGLE_IMAGE_FILTER);
 
             if (!this.isMock) {
                 // Validate 1 image state is UPDATED (and the local update above is overridden)
-                imagesAfterSecondEnum = queryDocumentsAndAssertExpectedCount(getHost(), 1,
+                imagesAfterSecondEnum = queryDocumentsAndAssertExpectedCount(
+                        getHost(),
+                        1 + DEFAULT_IMAGES,
                         ImageService.FACTORY_LINK,
                         EXACT_COUNT);
 
                 Assert.assertEquals("Images should be the same after the two enums",
-                        imagesAfterFirstEnum.documentLinks,
-                        imagesAfterSecondEnum.documentLinks);
+                        imagesAfterFirstEnum.documents.keySet(),
+                        imagesAfterSecondEnum.documents.keySet());
 
-                ImageState imageAfterSecondEnum = Utils.fromJson(
-                        imagesAfterSecondEnum.documents.values().iterator().next(),
-                        ImageState.class);
+                ImageState imageAfterSecondEnum = imageFinder.apply(
+                        imagesAfterSecondEnum.documents.values());
 
                 Assert.assertNotEquals("Images timestamp should differ after the two enums",
                         imageAfterFirstEnum.documentUpdateTimeMicros,
@@ -216,6 +239,52 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                 Assert.assertTrue("Image name is not updated correctly after second enum.",
                         !imageAfterSecondEnum.name.contains("OVERRIDE"));
             }
+        }
+    }
+
+    @Test
+    public void testPublicImageEnumeration_default() throws Throwable {
+
+        Assume.assumeFalse(this.isMock);
+
+        ImageEnumerationTaskState task = kickOffImageEnumeration(
+                createEndpointState(), true, AZURE_DEFAULT_IMAGES_FILTER);
+
+        // Validate 11 image states are created.
+
+        QueryTop<ImageState> queryAll = new QueryTop<ImageState>(
+                getHost(),
+                Builder.create().addKindFieldClause(ImageState.class).build(),
+                ImageState.class,
+                task.tenantLinks);
+
+        Map<String, List<ImageState>> imagesByOsFamily = QueryByPages.waitToComplete(
+                queryAll.collectDocuments(
+                        Collectors.groupingBy(imageState -> imageState.osFamily)));
+
+        Assert.assertEquals("The OS families of default images enumerated is incorrect",
+                Sets.newHashSet("Linux", "Windows"), imagesByOsFamily.keySet());
+
+        Assert.assertEquals("The count of default Linux images enumerated is incorrect",
+                7, imagesByOsFamily.get("Linux").size());
+
+        for (ImageState imageState : imagesByOsFamily.get("Linux")) {
+            Assert.assertEquals(StringUtils.split(imageState.id, ":").length, 4);
+            Assert.assertTrue(imageState.id.endsWith(":latest"));
+            Assert.assertNotNull(imageState.regionId);
+            Assert.assertNotNull(imageState.name);
+            Assert.assertNotNull(imageState.description);
+        }
+
+        Assert.assertEquals("The count of default Windows images enumerated is incorrect",
+                4, imagesByOsFamily.get("Windows").size());
+
+        for (ImageState imageState : imagesByOsFamily.get("Windows")) {
+            Assert.assertEquals(StringUtils.split(imageState.id, ":").length, 4);
+            Assert.assertTrue(imageState.id.endsWith(":latest"));
+            Assert.assertNotNull(imageState.regionId);
+            Assert.assertNotNull(imageState.name);
+            Assert.assertNotNull(imageState.description);
         }
     }
 
@@ -303,7 +372,8 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
     private EndpointState createEndpointState() throws Throwable {
 
-        String testSpecificStr = EndpointType.azure.name() + "-" + this.currentTestName.getMethodName();
+        String testSpecificStr = EndpointType.azure.name() + "-"
+                + this.currentTestName.getMethodName();
 
         final EndpointState endpoint = new EndpointState();
 

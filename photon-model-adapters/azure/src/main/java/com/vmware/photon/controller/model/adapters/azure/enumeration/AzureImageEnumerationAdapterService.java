@@ -18,16 +18,22 @@ import static java.util.Collections.singletonList;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.microsoft.azure.CloudException;
 import com.microsoft.azure.management.compute.VirtualMachineImagesOperations;
+import com.microsoft.azure.management.compute.models.OSDiskImage;
 import com.microsoft.azure.management.compute.models.PurchasePlan;
 import com.microsoft.azure.management.compute.models.VirtualMachineImage;
 import com.microsoft.azure.management.compute.models.VirtualMachineImageResource;
@@ -47,6 +53,7 @@ import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.Imag
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 /**
@@ -64,6 +71,16 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
     private static class AzureImageEnumerationContext extends
             EndpointEnumerationProcess<AzureImageEnumerationContext, ImageState, VirtualMachineImage> {
 
+        static final String DEFAULT_FILTER_VALUE = "default";
+
+        static final VirtualMachineImageResource[] DEFAULT_IMAGES_FILTER = toImageFilter(
+                new String[] { DEFAULT_FILTER_VALUE,
+                        DEFAULT_FILTER_VALUE,
+                        DEFAULT_FILTER_VALUE,
+                        DEFAULT_FILTER_VALUE });
+
+        static final String NEXT_PAGE_LINK = "azureImages_";
+
         /**
          * The underlying image-enum request.
          */
@@ -76,7 +93,12 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         /**
          * The canonized image filter (of imageEnumTaskState.filter) in the form of
-         * 'publisher:offer:sku:version'. Empty VirtualMachineImageResource.name means 'no filter'.
+         * 'publisher:offer:sku:version'. Special cases:
+         * <ul>
+         * <li>empty VirtualMachineImageResource.name means 'no filter' at specific position</li>
+         * <li>'default' string filter is mapped to DEFAULT_IMAGES_FILTER and means load default
+         * images ONLY</li>
+         * </ul>
          */
         VirtualMachineImageResource[] imageFilter;
 
@@ -84,7 +106,9 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         String regionId;
 
-        ImageTraversingIterator azureImages;
+        DefaultImagesLoader azureDefaultImages;
+
+        StandardImagesLoader azureStandardImages;
 
         TaskManager taskManager;
 
@@ -172,33 +196,89 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         @Override
         protected DeferredResult<RemoteResourcesPage> getExternalResources(String nextPageLink) {
-            String msg = "Enumerating Azure images by [" +
+
+            // First load default images to speed up overall images enumeration.
+
+            DeferredResult<RemoteResourcesPage> defaultImagesPage = loadDefaultImagesPage();
+
+            if (defaultImagesPage != null) {
+                return defaultImagesPage;
+            }
+
+            // Second load standard images which might be time consuming.
+
+            return loadStandardImagesPage();
+        }
+
+        private DeferredResult<RemoteResourcesPage> loadDefaultImagesPage() {
+
+            if (this.azureDefaultImages != null) {
+                // Already loaded.
+                return null;
+            }
+
+            final String msg = "Enumerating Default Azure images";
+
+            this.azureDefaultImages = new DefaultImagesLoader(this);
+
+            this.service.logFine(() -> msg + ": STARTING");
+
+            final RemoteResourcesPage page = new RemoteResourcesPage();
+
+            page.nextPageLink = this.imageFilter == DEFAULT_IMAGES_FILTER
+                    // Load ONLY default images so NULL is returned as next page
+                    ? null
+                    // Otherwise continue with standard images
+                    : NEXT_PAGE_LINK + 0;
+
+            return this.azureDefaultImages.load().handle((defaultImages, exc) -> {
+
+                if (exc != null) {
+                    this.service.logWarning(
+                            () -> String.format(msg + ": FAILED - %s", Utils.toString(exc)));
+                } else {
+                    for (VirtualMachineImage image : defaultImages) {
+                        page.resourcesPage.put(toImageReference(image), image);
+                    }
+
+                    this.service.logFine(() -> msg + ": TOTAL number " + defaultImages.size());
+                }
+
+                return page;
+            });
+        }
+
+        private DeferredResult<RemoteResourcesPage> loadStandardImagesPage() {
+
+            final String msg = "Enumerating Azure images by [" +
                     Arrays.asList(this.imageFilter).stream()
                             .map(VirtualMachineImageResource::getName)
                             .collect(Collectors.joining(":"))
                     + "]";
 
-            if (this.azureImages == null) {
+            if (this.azureStandardImages == null) {
                 this.service.logInfo(() -> msg + ": STARTING");
 
-                this.azureImages = new ImageTraversingIterator(
-                        this, ImageTraversingIterator.DEFAULT_PAGE_SIZE);
+                this.azureStandardImages = new StandardImagesLoader(
+                        this, StandardImagesLoader.DEFAULT_PAGE_SIZE);
             }
 
-            RemoteResourcesPage page = new RemoteResourcesPage();
+            final RemoteResourcesPage page = new RemoteResourcesPage();
 
-            if (this.azureImages.hasNext()) {
-                for (VirtualMachineImage image : this.azureImages.next()) {
+            if (this.azureStandardImages.hasNext()) {
+                // Consume this page from underlying Iterator
+                for (VirtualMachineImage image : this.azureStandardImages.next()) {
                     page.resourcesPage.put(toImageReference(image), image);
                 }
             }
 
-            // Return a non-null nextPageLink to the parent so we are called back.
-            if (this.azureImages.hasNext()) {
-                page.nextPageLink = "azureImages_" + (this.azureImages.pageNumber() + 1);
+            if (this.azureStandardImages.hasNext()) {
+                // Return a non-null nextPageLink to the parent so we are called back.
+                page.nextPageLink = NEXT_PAGE_LINK + (this.azureStandardImages.pageNumber() + 1);
             } else {
-                this.service
-                        .logFine(() -> msg + ": TOTAL number " + this.azureImages.totalNumber());
+                // Return null nextPageLink to the parent so we are NOT called back any more.
+                this.service.logFine(
+                        () -> msg + ": TOTAL number " + this.azureStandardImages.totalNumber());
             }
 
             return DeferredResult.completed(page);
@@ -247,6 +327,10 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         static VirtualMachineImageResource[] createImageFilter(String filter) {
 
+            if (DEFAULT_FILTER_VALUE.equalsIgnoreCase(filter)) {
+                return DEFAULT_IMAGES_FILTER;
+            }
+
             // publisher:offer:sku:version
             String[] strFilters = { "", "", "", "" };
 
@@ -256,6 +340,11 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                     strFilters = tokens;
                 }
             }
+
+            return toImageFilter(strFilters);
+        }
+
+        static VirtualMachineImageResource[] toImageFilter(String[] strFilters) {
 
             VirtualMachineImageResource[] posv = new VirtualMachineImageResource[strFilters.length];
 
@@ -362,7 +451,232 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         }
     }
 
-    private static class ImageTraversingIterator implements Iterator<List<VirtualMachineImage>> {
+    /**
+     *
+     * An Azure <b>default</b> images loader that reads pre-defined images from a file and exposes
+     * them as {@code VirtualMachineImage}s.
+     *
+     * <p>
+     * Here's the content of the file, located at
+     * {@link https://raw.githubusercontent.com/Azure/azure-rest-api-specs/master/arm-compute/quickstart-templates/aliases.json}.
+     *
+     * <pre>
+     * {
+          "$schema":"http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+          "contentVersion":"1.0.0.0",
+          "parameters":{},
+          "variables":{},
+          "resources":[],
+
+          "outputs":{
+            "aliases":{
+              "type":"object",
+              "value":{
+
+                "Linux":{
+                  "CentOS":{
+                    "publisher":"OpenLogic",
+                    "offer":"CentOS",
+                    "sku":"7.3",
+                    "version":"latest"
+                  },
+                  "CoreOS":{
+                    "publisher":"CoreOS",
+                    "offer":"CoreOS",
+                    "sku":"Stable",
+                    "version":"latest"
+                  },
+                  "Debian":{
+                    "publisher":"credativ",
+                    "offer":"Debian",
+                    "sku":"8",
+                    "version":"latest"
+                  },
+                  "openSUSE-Leap": {
+                    "publisher":"SUSE",
+                    "offer":"openSUSE-Leap",
+                    "sku":"42.2",
+                    "version": "latest"
+                  },
+                  "RHEL":{
+                    "publisher":"RedHat",
+                    "offer":"RHEL",
+                    "sku":"7.3",
+                    "version":"latest"
+                  },
+                  "SLES":{
+                    "publisher":"SUSE",
+                    "offer":"SLES",
+                    "sku":"12-SP2",
+                    "version":"latest"
+                  },
+                  "UbuntuLTS":{
+                    "publisher":"Canonical",
+                    "offer":"UbuntuServer",
+                    "sku":"16.04-LTS",
+                    "version":"latest"
+                  }
+                },
+
+                "Windows":{
+                  "Win2016Datacenter":{
+                    "publisher":"MicrosoftWindowsServer",
+                    "offer":"WindowsServer",
+                    "sku":"2016-Datacenter",
+                    "version":"latest"
+                  },
+                  "Win2012R2Datacenter":{
+                    "publisher":"MicrosoftWindowsServer",
+                    "offer":"WindowsServer",
+                    "sku":"2012-R2-Datacenter",
+                    "version":"latest"
+                  },
+                  "Win2012Datacenter":{
+                    "publisher":"MicrosoftWindowsServer",
+                    "offer":"WindowsServer",
+                    "sku":"2012-Datacenter",
+                    "version":"latest"
+                  },
+                  "Win2008R2SP1":{
+                    "publisher":"MicrosoftWindowsServer",
+                    "offer":"WindowsServer",
+                    "sku":"2008-R2-SP1",
+                    "version":"latest"
+                  }
+                }
+              }
+            }
+          }
+        }
+     * </pre>
+     */
+    private static class DefaultImagesLoader {
+
+        private static final URI ALIASES_JSON_URI = URI.create(
+                "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/master/arm-compute/quickstart-templates/aliases.json");
+
+        /**
+         * Represents the inner most JSON node in the JSON file.
+         */
+        private static class ImageRef {
+
+            String osFamily;
+
+            String publisher;
+            String offer;
+            String sku;
+            String version;
+
+            @Override
+            public String toString() {
+                return this.getClass().getSimpleName()
+                        + " [osFamily=" + this.osFamily
+                        + ", publisher=" + this.publisher
+                        + ", offer=" + this.offer
+                        + ", sku=" + this.sku
+                        + ", version=" + this.version + "]";
+            }
+        }
+
+        final AzureImageEnumerationContext ctx;
+
+        DefaultImagesLoader(AzureImageEnumerationContext ctx) {
+            this.ctx = ctx;
+        }
+
+        /**
+         * Download aliases.json file, parse it and convert image entries presented to
+         * {@code VirtualMachineImage}s.
+         *
+         * <p>
+         * The return type is designed to be consistent with {@code StandardImagesLoader}.
+         */
+        public DeferredResult<List<VirtualMachineImage>> load() {
+
+            return this.ctx.service
+                    .sendWithDeferredResult(Operation.createGet(ALIASES_JSON_URI), String.class)
+                    .thenApply(this::parseJson)
+                    .thenApply(this::toVirtualMachineImages);
+        }
+
+        /**
+         * Parse aliases.json file to {@code ImageRef}s.
+         */
+        private List<ImageRef> parseJson(String jsonText) {
+
+            JsonObject rootJson = Utils.fromJson(jsonText, JsonObject.class);
+
+            Set<Entry<String, JsonElement>> byOsFamily = rootJson
+                    .getAsJsonObject("outputs")
+                    .getAsJsonObject("aliases")
+                    .getAsJsonObject("value")
+                    .entrySet();
+
+            List<DefaultImagesLoader.ImageRef> imageRefs = new ArrayList<>();
+
+            for (Entry<String, JsonElement> byOsFamilyEntry : byOsFamily) {
+
+                for (Entry<String, JsonElement> byOsEntry : byOsFamilyEntry.getValue()
+                        .getAsJsonObject()
+                        .entrySet()) {
+
+                    ImageRef imageRef = Utils.fromJson(
+                            byOsEntry.getValue().getAsJsonObject(), ImageRef.class);
+
+                    imageRef.osFamily = byOsFamilyEntry.getKey();
+
+                    imageRefs.add(imageRef);
+                }
+            }
+
+            return imageRefs;
+        }
+
+        /**
+         * Convert {@code ImageRef}s to {@code VirtualMachineImage}s.
+         */
+        private List<VirtualMachineImage> toVirtualMachineImages(List<ImageRef> imageRefs) {
+
+            return imageRefs.stream().map(this::toVirtualMachineImage).collect(Collectors.toList());
+        }
+
+        /**
+         * Convert {@code ImageRef} to {@code VirtualMachineImage}.
+         */
+        private VirtualMachineImage toVirtualMachineImage(ImageRef imageRef) {
+
+            // Create artificial Azure image object
+            final VirtualMachineImage image = new VirtualMachineImage();
+
+            image.setLocation(this.ctx.regionId);
+
+            image.setName(imageRef.version);
+
+            {
+                final PurchasePlan plan = new PurchasePlan();
+                plan.setPublisher(imageRef.publisher);
+                plan.setProduct(imageRef.offer);
+                plan.setName(imageRef.sku);
+
+                image.setPlan(plan);
+            }
+
+            {
+                final OSDiskImage osDiskImage = new OSDiskImage();
+                osDiskImage.setOperatingSystem(imageRef.osFamily);
+
+                image.setOsDiskImage(osDiskImage);
+            }
+
+            return image;
+        }
+    }
+
+    /**
+     * An Azure images loader that traverses (in depth) 'publisher-offer-sku-version' hierarchy and
+     * exposes {@code VirtualMachineImage}s through an {@code Iterator} interface.
+     */
+    private static class StandardImagesLoader implements Iterator<List<VirtualMachineImage>> {
 
         static final int DEFAULT_PAGE_SIZE = 100;
 
@@ -390,7 +704,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         private int pageNumber = -1;
         private int totalNumber = 0;
 
-        ImageTraversingIterator(AzureImageEnumerationContext ctx, int pageSize) {
+        StandardImagesLoader(AzureImageEnumerationContext ctx, int pageSize) {
 
             this.ctx = ctx;
             this.pageSize = pageSize;

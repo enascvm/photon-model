@@ -317,7 +317,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                 .thenApply(remoteResourcesPage -> {
 
                     context.service.logFine(() -> String.format(
-                            "Fetch next page [%s] of %d remote resources: SUCCESS",
+                            "Fetch page [%s] of %d remote resources: SUCCESS",
                             this.enumExternalResourcesNextPageLink == null
                                     ? "FIRST" : this.enumExternalResourcesNextPageLink,
                             remoteResourcesPage.resourcesPage.size()));
@@ -366,8 +366,10 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      */
     protected DeferredResult<T> queryLocalResourceStates(T context) {
 
+        String msg = "Query local %ss to match %d remote resources";
+
         context.service.logFine(
-                () -> String.format("Query local %ss to match %d remote resources.",
+                () -> String.format(msg + ": STARTED",
                         context.localStateClass.getSimpleName(),
                         context.remoteResources.size()));
 
@@ -396,7 +398,16 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
         return queryLocalStates
                 .queryDocuments(doc -> context.localResourceStates.put(doc.id, doc))
-                .thenApply(ignore -> context);
+                .thenApply(ignore -> {
+                    context.service.logFine(
+                            () -> String.format(
+                                    msg + ": FOUND %s",
+                                    context.localStateClass.getSimpleName(),
+                                    context.remoteResources.size(),
+                                    context.localResourceStates.size()));
+
+                    return context;
+                });
     }
 
     /**
@@ -496,13 +507,22 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
         lsOp.setBody(localState);
 
         return tagsDR.thenCompose(ignore -> this.service.sendWithDeferredResult(lsOp)
-                .exceptionally(ex -> {
-                    this.service.logWarning(
-                            () -> String.format("%s local %s to match remote resources: ERROR - %s",
-                                    lsOp.getAction(),
-                                    lsOp.getUri().getPath(),
-                                    ex.getMessage()));
-                    return lsOp;
+                .whenComplete((ignoreOp, exc) -> {
+                    String msg = "%s local %s(id=%s) to match remote resources";
+                    if (exc != null) {
+                        this.service.logWarning(
+                                () -> String.format(msg + ": ERROR - %s",
+                                        lsOp.getAction(),
+                                        localState.getClass().getSimpleName(),
+                                        localState.id,
+                                        Utils.toString(exc)));
+                    } else {
+                        this.service.log(Level.FINEST,
+                                () -> String.format(msg + ": SUCCESS",
+                                        lsOp.getAction(),
+                                        localState.getClass().getSimpleName(),
+                                        localState.id));
+                    }
                 }));
     }
 

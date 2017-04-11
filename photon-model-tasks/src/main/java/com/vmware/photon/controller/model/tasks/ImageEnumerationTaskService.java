@@ -16,6 +16,8 @@ package com.vmware.photon.controller.model.tasks;
 import static io.netty.util.internal.StringUtil.isNullOrEmpty;
 
 import static com.vmware.photon.controller.model.util.AssertUtil.assertTrue;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.EXPAND;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.FIXED_ITEM_NAME;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.STORE_ONLY;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINK;
 import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.LINKS;
@@ -27,9 +29,12 @@ import static com.vmware.xenon.common.UriUtils.buildUriPath;
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
@@ -40,6 +45,7 @@ import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest.Image
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
@@ -115,6 +121,11 @@ public class ImageEnumerationTaskService
                 + " this task execution.")
         @PropertyOptions(usage = { OPTIONAL, SINGLE_ASSIGNMENT }, indexing = STORE_ONLY)
         public EnumSet<TaskOption> options;
+
+        @Documentation(description = "Custom properties associated with the task.")
+        @PropertyOptions(usage = { OPTIONAL }, indexing = { EXPAND, FIXED_ITEM_NAME })
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_13)
+        public Map<String, String> customProperties;
 
         /**
          * Optional end-point specific filter that might be used by image enumeration adapter to
