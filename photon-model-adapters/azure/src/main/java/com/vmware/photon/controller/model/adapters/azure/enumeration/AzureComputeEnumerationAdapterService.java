@@ -672,7 +672,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(qBuilder.build())
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
                 .build();
         queryTask.tenantLinks = ctx.parentCompute.tenantLinks;
@@ -683,25 +682,52 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         handleError(ctx, e);
                         return;
                     }
-                    logFine(() -> String.format("Found %d matching compute states for Azure VMs",
-                            qrt.results.documentCount));
 
                     // If there are no matches, there is nothing to update.
-                    if (qrt.results.documentCount == 0) {
+                    if (qrt.results.nextPageLink == null) {
+                        logFine(() -> "No matching compute states found for Azure virtual machine");
                         ctx.subStage = ComputeEnumerationSubStages.CREATE_TAG_STATES;
                         handleSubStage(ctx);
                         return;
                     }
-
-                    for (Object s : qrt.results.documents.values()) {
-                        ComputeState computeState = Utils.fromJson(s, ComputeState.class);
-                        String instanceId = computeState.id;
-                        ctx.computeStates.put(instanceId, computeState);
-                    }
-
-                    ctx.subStage = ComputeEnumerationSubStages.CREATE_TAG_STATES;
-                    handleSubStage(ctx);
+                    ctx.enumNextPageLink = qrt.results.nextPageLink;
+                    getComputeStatesHelper(ctx);
                 });
+    }
+
+    private void getComputeStatesHelper(EnumerationContext ctx) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                handleError(ctx, e);
+                return;
+            }
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            ctx.enumNextPageLink = queryTask.results.nextPageLink;
+
+            for (Object c : queryTask.results.documents.values()) {
+                ComputeState computeState = Utils.fromJson(c, ComputeState.class);
+                String instanceId = computeState.id;
+                if (ctx.computeStates.containsKey(instanceId)) {
+                    continue;
+                }
+
+                ctx.computeStates.put(instanceId, computeState);
+            }
+
+            if (ctx.enumNextPageLink != null) {
+                getComputeStatesHelper(ctx);
+            } else {
+                logFine(() -> "Finished getting compute states for Azure virtual machine");
+                ctx.subStage = ComputeEnumerationSubStages.CREATE_TAG_STATES;
+                handleSubStage(ctx);
+                return;
+            }
+        };
+        logFine(() -> String.format("Querying page [%s] for getting compute states",
+                ctx.enumNextPageLink));
+        sendRequest(Operation.createGet(this, ctx.enumNextPageLink)
+                .setCompletion(completionHandler));
     }
 
     /**
@@ -860,7 +886,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
                 .setQuery(qBuilder.build())
                 .build();
@@ -872,25 +897,52 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         logWarning(() -> String.format("Failed to get disk: %s", e.getMessage()));
                         return;
                     }
-                    logFine(() -> String.format("Found %d matching disk states for Azure blobs",
-                            queryTask.results.documentCount));
 
                     // If there are no matches, continue with storage descriptions
-                    if (queryTask.results.documentCount == 0) {
+                    if (queryTask.results.nextPageLink == null) {
+                        logFine(() -> "No matching disk states found for Azure blobs");
                         ctx.subStage = ComputeEnumerationSubStages.GET_STORAGE_DESCRIPTIONS;
                         handleSubStage(ctx);
                         return;
                     }
-
-                    for (Object d : queryTask.results.documents.values()) {
-                        DiskState diskState = Utils.fromJson(d, DiskState.class);
-                        String diskUri = diskState.id;
-                        ctx.diskStates.put(diskUri, diskState);
-                    }
-
-                    ctx.subStage = ComputeEnumerationSubStages.GET_STORAGE_DESCRIPTIONS;
-                    handleSubStage(ctx);
+                    ctx.enumNextPageLink = queryTask.results.nextPageLink;
+                    getLocalDiskStatesHelper(ctx);
                 });
+    }
+
+    private void getLocalDiskStatesHelper(EnumerationContext ctx) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                handleError(ctx, e);
+                return;
+            }
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            ctx.enumNextPageLink = queryTask.results.nextPageLink;
+
+            for (Object d : queryTask.results.documents.values()) {
+                DiskState diskState = Utils.fromJson(d, DiskState.class);
+                String diskUri = diskState.id;
+                if (ctx.diskStates.containsKey(diskUri)) {
+                    continue;
+                }
+
+                ctx.diskStates.put(diskUri, diskState);
+            }
+
+            if (ctx.enumNextPageLink != null) {
+                getLocalDiskStatesHelper(ctx);
+            } else {
+                logFine(() -> "Finished getting local disk states for Azure blobs");
+                ctx.subStage = ComputeEnumerationSubStages.GET_STORAGE_DESCRIPTIONS;
+                handleSubStage(ctx);
+                return;
+            }
+        };
+        logFine(() -> String.format("Querying page [%s] for getting local disk states",
+                ctx.enumNextPageLink));
+        sendRequest(Operation.createGet(this, ctx.enumNextPageLink)
+                .setCompletion(completionHandler));
     }
 
     /**
@@ -936,7 +988,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
                 .setQuery(qBuilder.build())
                 .build();
@@ -950,27 +1001,53 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         return;
                     }
 
-                    logFine(() -> String.format("Found %d matching diagnostics storage accounts",
-                            queryTask.results.documentCount));
-
                     // If there are no matches, continue to creating compute states
-                    if (queryTask.results.documentCount == 0) {
+                    if (queryTask.results.nextPageLink == null) {
+                        logFine(() -> "No matching diagnostics storage accounts found");
                         ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
                         handleSubStage(ctx);
                         return;
                     }
-
-                    for (Object d : queryTask.results.documents.values()) {
-                        StorageDescription storageDesc = Utils
-                                .fromJson(d, StorageDescription.class);
-                        String storageDescUri = storageDesc.customProperties
-                                .get(AZURE_STORAGE_ACCOUNT_URI);
-                        ctx.storageDescriptions.put(storageDescUri, storageDesc);
-                    }
-
-                    ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
-                    handleSubStage(ctx);
+                    ctx.enumNextPageLink = queryTask.results.nextPageLink;
+                    getDiagnosticStorageDescriptionHelper(ctx);
                 });
+    }
+
+    private void getDiagnosticStorageDescriptionHelper(EnumerationContext ctx) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                handleError(ctx, e);
+                return;
+            }
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            ctx.enumNextPageLink = queryTask.results.nextPageLink;
+
+            for (Object d : queryTask.results.documents.values()) {
+                StorageDescription storageDesc = Utils
+                        .fromJson(d, StorageDescription.class);
+                String storageDescUri = storageDesc.customProperties
+                        .get(AZURE_STORAGE_ACCOUNT_URI);
+                if (ctx.storageDescriptions.containsKey(storageDescUri)) {
+                    continue;
+                }
+
+                ctx.storageDescriptions.put(storageDescUri, storageDesc);
+            }
+
+            if (ctx.enumNextPageLink != null) {
+                getDiagnosticStorageDescriptionHelper(ctx);
+            } else {
+                logFine(() -> "Finished getting diagnostic storage descriptions");
+                ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_DESCRIPTIONS;
+                handleSubStage(ctx);
+                return;
+            }
+        };
+        logFine(() -> String.format("Querying page [%s] for getting local disk states",
+                ctx.enumNextPageLink));
+        sendRequest(Operation.createGet(this, ctx.enumNextPageLink)
+                .setCompletion(completionHandler));
     }
 
     /**

@@ -564,7 +564,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         QueryTask qt = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
                 .setQuery(qBuilder.build())
                 .build();
@@ -576,16 +575,46 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         handleError(context, e);
                         return;
                     }
-                    if (queryTask.results != null && queryTask.results.documentCount > 0) {
-                        queryTask.results.documents.values().forEach(document -> {
-                            ResourceGroupState rgState = Utils.fromJson(document,
-                                    ResourceGroupState.class);
-                            context.resourceGroupStates.put(rgState.id, rgState.documentSelfLink);
-                        });
-                    }
 
-                    handleSubStage(context, next);
+                    // If no match found, continue to query network states
+                    if (queryTask.results.nextPageLink == null) {
+                        logFine(() -> "No matching resource group state found");
+                        handleSubStage(context, next);
+                        return;
+                    }
+                    context.enumNextPageLink = queryTask.results.nextPageLink;
+                    getResourceGroupStatesHelper(context, next);
                 });
+    }
+
+    private void getResourceGroupStatesHelper(NetworkEnumContext context, NetworkEnumStages next) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                handleError(context, e);
+                return;
+            }
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            context.enumNextPageLink = queryTask.results.nextPageLink;
+
+            queryTask.results.documents.values().forEach(document -> {
+                ResourceGroupState rgState = Utils.fromJson(document, ResourceGroupState
+                        .class);
+                context.resourceGroupStates.put(rgState.id, rgState.documentSelfLink);
+            });
+
+            if (context.enumNextPageLink != null) {
+                getResourceGroupStatesHelper(context, next);
+            } else {
+                logFine(() -> "Finished getting resource group states");
+                handleSubStage(context ,next);
+                return;
+            }
+        };
+        logFine(() -> String.format("Querying page [%s] for getting local disk states",
+                context.enumNextPageLink));
+        sendRequest(Operation.createGet(this, context.enumNextPageLink)
+                .setCompletion(completionHandler));
     }
 
     /**
@@ -603,7 +632,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         QueryTask qt = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
                 .setQuery(qBuilder.build())
                 .build();
@@ -616,19 +644,44 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         return;
                     }
 
-                    logFine(() -> String.format("Found %d matching network states for Azure virtual"
-                            + " networks.", queryTask.results.documentCount));
-
                     // If there are no matches, there is nothing to update.
-                    if (queryTask.results != null && queryTask.results.documentCount > 0) {
-                        queryTask.results.documents.values().forEach(network -> {
-                            NetworkState networkState = Utils.fromJson(network, NetworkState.class);
-                            context.networkStates.put(networkState.id, networkState);
-                        });
+                    if (queryTask.results.nextPageLink == null) {
+                        logFine(() -> "No matching network states for Azure virtual networks");
+                        handleSubStage(context, next);
+                        return;
                     }
-
-                    handleSubStage(context, next);
+                    context.enumNextPageLink = queryTask.results.nextPageLink;
+                    getNetworkStatesHelper(context, next);
                 });
+    }
+
+    private void getNetworkStatesHelper(NetworkEnumContext context, NetworkEnumStages next) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                handleError(context, e);
+                return;
+            }
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            context.enumNextPageLink = queryTask.results.nextPageLink;
+
+            queryTask.results.documents.values().forEach(network -> {
+                NetworkState networkState = Utils.fromJson(network, NetworkState.class);
+                context.networkStates.put(networkState.id, networkState);
+            });
+
+            if (context.enumNextPageLink != null) {
+                getNetworkStatesHelper(context, next);
+            } else {
+                logFine(() -> "Finished getting network states for azure virtual networks");
+                handleSubStage(context, next);
+                return;
+            }
+        };
+        logFine(() -> String.format("Querying page [%s] for getting network states",
+                context.enumNextPageLink));
+        sendRequest(Operation.createGet(this, context.enumNextPageLink)
+                .setCompletion(completionHandler));
     }
 
     /**
@@ -649,7 +702,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
                 .setResultLimit(getQueryResultLimit())
                 .setQuery(qBuilder.build())
                 .build();
@@ -661,23 +713,45 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                         handleError(context, e);
                         return;
                     }
-
-                    logFine(() -> String.format(
-                            "Found %d matching subnet states for Azure subnets.",
-                            queryTask.results.documentCount));
-
                     // If there are no matches, there is nothing to update.
-                    if (queryTask.results != null || queryTask.results.documentCount > 0) {
-                        queryTask.results.documents.values().forEach(result -> {
-
-                            SubnetState subnetState = Utils.fromJson(result, SubnetState.class);
-                            context.subnetStates.put(subnetState.id, subnetState.documentSelfLink);
-                        });
+                    if (queryTask.results.nextPageLink == null) {
+                        logFine(() -> "No matching subnet states found for Azure subnets");
+                        handleSubStage(context, next);
+                        return;
                     }
-
-                    handleSubStage(context, next);
-
+                    context.enumNextPageLink = queryTask.results.nextPageLink;
+                    getSubnetStatesHelper(context, next);
                 });
+    }
+
+    private void getSubnetStatesHelper(NetworkEnumContext context, NetworkEnumStages next) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                handleError(context, e);
+                return;
+            }
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            context.enumNextPageLink = queryTask.results.nextPageLink;
+
+            queryTask.results.documents.values().forEach(result -> {
+
+                SubnetState subnetState = Utils.fromJson(result, SubnetState.class);
+                context.subnetStates.put(subnetState.id, subnetState.documentSelfLink);
+            });
+
+            if (context.enumNextPageLink != null) {
+                getSubnetStatesHelper(context, next);
+            } else {
+                logFine(() -> "Finished getting subnet states for Azure subnets");
+                handleSubStage(context, next);
+                return;
+            }
+        };
+        logFine(() -> String.format("Querying page [%s] for getting subnet states",
+                context.enumNextPageLink));
+        sendRequest(Operation.createGet(this, context.enumNextPageLink)
+                .setCompletion(completionHandler));
     }
 
     private void createNetworkTagStates(NetworkEnumContext context, NetworkEnumStages next) {

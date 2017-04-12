@@ -523,7 +523,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         QueryTask q = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
                 .setQuery(qBuilder.build())
                 .setResultLimit(getQueryResultLimit())
                 .build();
@@ -535,31 +534,58 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         handleError(context, e);
                         return;
                     }
-                    logFine(() -> String.format("Found %d matching storage descriptions for Azure"
-                            + " storage accounts", queryTask.results.documentCount));
 
                     // If there are no matches, there is nothing to update.
-                    if (queryTask.results.documentCount == 0) {
+                    if (queryTask.results.nextPageLink == null) {
+                        logFine(() -> "No matching storage descriptions found for storage accounts");
                         context.subStage = StorageEnumStages.CREATE_STORAGE_DESCRIPTIONS;
                         handleSubStage(context);
                         return;
                     }
-
-                    for (Object s : queryTask.results.documents.values()) {
-                        StorageDescription storageDescription = Utils.fromJson(s,
-                                StorageDescription.class);
-                        String storageAcctId = storageDescription.id;
-                        context.storageDescriptions.put(storageAcctId, storageDescription);
-
-                        // populate connectionStrings
-                        if (!context.storageConnectionStrings.containsKey(storageDescription.id)) {
-                            addConnectionString(context, storageDescription);
-                        }
-                    }
-
-                    context.subStage = next;
-                    handleSubStage(context);
+                    context.enumNextPageLink = queryTask.results.nextPageLink;
+                    getLocalStorageAccountDescriptionsHelper(context, next);
                 });
+    }
+
+    private void getLocalStorageAccountDescriptionsHelper(StorageEnumContext context,
+            StorageEnumStages next) {
+        Operation.CompletionHandler completionHandler = (o, e) -> {
+            if (e != null) {
+                handleError(context, e);
+                return;
+            }
+            QueryTask queryTask = o.getBody(QueryTask.class);
+
+            context.enumNextPageLink = queryTask.results.nextPageLink;
+
+            for (Object s : queryTask.results.documents.values()) {
+                StorageDescription storageDescription = Utils.fromJson(s,
+                        StorageDescription.class);
+                String storageAcctId = storageDescription.id;
+                if (context.storageDescriptions.containsKey(storageAcctId)) {
+                    continue;
+                }
+
+                context.storageDescriptions.put(storageAcctId, storageDescription);
+                // populate connectionStrings
+                if (!context.storageConnectionStrings.containsKey(storageDescription.id)) {
+                    addConnectionString(context, storageDescription);
+                }
+            }
+
+            if (context.enumNextPageLink != null) {
+                getLocalStorageAccountDescriptionsHelper(context, next);
+            } else {
+                logFine(() -> "Finished getting local storage account descriptions for storage accounts");
+                context.subStage = next;
+                handleSubStage(context);
+                return;
+            }
+        };
+        logFine(() -> String.format("Querying page [%s] for getting local storage account descriptions",
+                context.enumNextPageLink));
+        sendRequest(Operation.createGet(this, context.enumNextPageLink)
+                .setCompletion(completionHandler));
     }
 
     /**
@@ -912,18 +938,20 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         return;
                     }
 
+                    // If there are no matching resources, there is nothing to update.
                     if (queryTask.results.nextPageLink == null) {
                         logFine(() -> "No matching resource found for Azure storage containers");
-                        context.subStage = next;
+                        context.subStage = StorageEnumStages.CREATE_RESOURCE_GROUP_STATES;
                         handleSubStage(context);
                         return;
                     }
                     context.enumNextPageLink = queryTask.results.nextPageLink;
-                    getLocalStorageContainerStatesHelper(context);
+                    getLocalStorageContainerStatesHelper(context, next);
                 });
     }
 
-    private void getLocalStorageContainerStatesHelper(StorageEnumContext context) {
+    private void getLocalStorageContainerStatesHelper(StorageEnumContext context,
+            StorageEnumStages next) {
         Operation.CompletionHandler completionHandler = (o, e) -> {
             if (e != null) {
                 handleError(context, e);
@@ -945,10 +973,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             }
 
             if (context.enumNextPageLink != null) {
-                getLocalStorageContainerStatesHelper(context);
+                getLocalStorageContainerStatesHelper(context, next);
             } else {
                 logFine(() -> "Finished getting resources for Azure storage containers");
-                context.subStage = StorageEnumStages.UPDATE_RESOURCE_GROUP_STATES;
+                context.subStage = next;
                 handleSubStage(context);
                 return;
             }
@@ -1373,18 +1401,20 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         return;
                     }
 
+                    // If there are no disk states, there is nothing to update.
                     if (queryTask.results.nextPageLink == null) {
                         logFine(() -> "No matching disk states found for Azure blobs");
-                        context.subStage = next;
+                        context.subStage = StorageEnumStages.CREATE_DISK_STATES;
                         handleSubStage(context);
                         return;
                     }
                     context.enumNextPageLink = queryTask.results.nextPageLink;
-                    getLocalDiskStatesHelper(context);
+                    getLocalDiskStatesHelper(context, next);
                 });
     }
 
-    private void getLocalDiskStatesHelper(StorageEnumContext context) {
+    private void getLocalDiskStatesHelper(StorageEnumContext context,
+            StorageEnumStages next) {
         Operation.CompletionHandler completionHandler = (o, e) -> {
             if (e != null) {
                 handleError(context, e);
@@ -1405,10 +1435,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             }
 
             if (context.enumNextPageLink != null) {
-                getLocalDiskStatesHelper(context);
+                getLocalDiskStatesHelper(context, next);
             } else {
                 logFine(() -> "Finished getting local disk states for Azure blobs");
-                context.subStage = StorageEnumStages.UPDATE_DISK_STATES;
+                context.subStage = next;
                 handleSubStage(context);
                 return;
             }
