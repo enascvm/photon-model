@@ -1,7 +1,13 @@
 # CHANGELOG
 
-## 0.6.12-SNAPSHOT
-* add tenantLinks to the EndpointConfigRequest
+## 0.6.12
+
+* Add tenantLinks to the EndpointConfigRequest.
+* Allow QueryTask to use SELECT_LINKS for EndpointState documents.
+* Add description field to ResourceState.
+* Support self-signed certificates in vSphere.
+* Handle cost of reserved instance in AWS.
+* Enhance StatsCollection to accept multiple responses from adapters.
 
 ## 0.6.11
 
