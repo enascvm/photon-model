@@ -127,7 +127,7 @@ public class ProvisionContext {
             URI computeUri = UriUtils.buildUri(service.getHost(), templateLink);
 
             AdapterUtils.getServiceState(service, computeUri, op -> {
-                ComputeStateWithDescription body = op.getBody(ComputeStateWithDescription.class);
+                ImageState body = op.getBody(ImageState.class);
                 ctx.templateMoRef = CustomProperties.of(body).getMoRef(CustomProperties.MOREF);
                 if (ctx.templateMoRef == null) {
                     String msg = String
