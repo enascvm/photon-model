@@ -779,6 +779,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
             DiskState rootDisk = new DiskState();
             rootDisk.customProperties = new HashMap<>();
+            rootDisk.regionId = virtualMachine.location;
             rootDisk.customProperties.put(AZURE_OSDISK_CACHING,
                     virtualMachine.properties.storageProfile.getOsDisk().getCaching());
             rootDisk.documentSelfLink = computeState.diskLinks.get(0);
@@ -1195,6 +1196,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             computeState.creationTimeMicros = Utils.getNowMicrosUtc();
             computeState.id = virtualMachine.id.toLowerCase();
             computeState.name = virtualMachine.name;
+            computeState.regionId = virtualMachine.location;
             computeState.type = ComputeType.VM_GUEST;
             computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
             computeState.parentLink = ctx.request.resourceLink();

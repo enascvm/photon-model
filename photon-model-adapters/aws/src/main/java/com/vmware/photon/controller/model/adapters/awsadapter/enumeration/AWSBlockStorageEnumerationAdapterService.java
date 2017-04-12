@@ -548,6 +548,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             diskState.name = volume.getVolumeId();
             // AWS returns the disk size in GBs
             diskState.capacityMBytes = volume.getSize() * GB_TO_MB_MULTIPLIER;
+            diskState.regionId = regionId;
             diskState.zoneId = volume.getAvailabilityZone();
             diskState.authCredentialsLink = authCredentialsLink;
             diskState.resourcePoolLink = resourcePoolLink;

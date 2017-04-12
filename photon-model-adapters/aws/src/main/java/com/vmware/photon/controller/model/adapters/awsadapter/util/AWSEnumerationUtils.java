@@ -175,6 +175,7 @@ public class AWSEnumerationUtils {
         computeState.parentLink = parentComputeLink;
         computeState.type = ComputeType.VM_GUEST;
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
+        computeState.regionId = regionId;
 
         computeState.resourcePoolLink = resourcePoolLink;
         computeState.endpointLink = endpointLink;
@@ -186,7 +187,7 @@ public class AWSEnumerationUtils {
 
         computeState.address = instance.getPublicIpAddress();
         computeState.powerState = AWSUtils.mapToPowerState(instance.getState());
-        computeState.customProperties = new HashMap<String, String>();
+        computeState.customProperties = new HashMap<>();
         computeState.customProperties.put(REGION_ID, regionId);
         computeState.customProperties.put(CUSTOM_OS_TYPE,
                 getNormalizedOSType(instance));

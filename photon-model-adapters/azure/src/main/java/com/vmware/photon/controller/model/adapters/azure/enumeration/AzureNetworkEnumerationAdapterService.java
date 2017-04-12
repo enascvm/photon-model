@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
+import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VIRTUAL_NETWORKS_URI;
@@ -492,7 +493,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 virtualNetwork.properties.subnets.forEach(subnet -> {
 
                     SubnetState subnetState = buildSubnetState(subnet,
-                            context.parentCompute.tenantLinks, context.request.endpointLink);
+                            context.parentCompute.tenantLinks, context.request.endpointLink,
+                            virtualNetwork.location);
                     SubnetStateWithParentVNetId subnetStateWithParentVNetId = new
                             SubnetStateWithParentVNetId(virtualNetwork.id, subnetState);
 
@@ -508,7 +510,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * Map Azure subnet to {@link SubnetState}.
      */
     private SubnetState buildSubnetState(Subnet subnet, List<String> tenantLinks,
-            String endpointLink) {
+            String endpointLink, String location) {
         if (subnet == null) {
             throw new IllegalArgumentException("Cannot map Subnet to subnet state for null "
                     + "instance.");
@@ -525,6 +527,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         subnetState.endpointLink = endpointLink;
 
         subnetState.customProperties = new HashMap<>();
+        subnetState.customProperties.put(REGION_ID, location);
         if (AzureConstants.GATEWAY_SUBNET_NAME.equalsIgnoreCase(subnet.name)) {
             // This is a subnet gateway. Mark it for infrastructure use only.
             subnetState.customProperties.put(ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME,
