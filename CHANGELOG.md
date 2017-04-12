@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.13-SNAPSHOT
+
+
 ## 0.6.12
 
 * Add tenantLinks to the EndpointConfigRequest.
