@@ -104,12 +104,12 @@ public class AzureSubnetService extends StatelessService {
             return;
         }
 
-        // Immediately complete the Operation from calling task.
-        op.complete();
-
         // initialize context object
         AzureSubnetContext context = new AzureSubnetContext(this,
                 op.getBody(SubnetInstanceRequest.class));
+
+        // Immediately complete the Operation from calling task.
+        op.complete();
 
         DeferredResult.completed(context)
                 .thenCompose(this::populateContext)
