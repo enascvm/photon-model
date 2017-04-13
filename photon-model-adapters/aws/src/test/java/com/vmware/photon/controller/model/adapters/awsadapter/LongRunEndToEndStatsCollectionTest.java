@@ -359,8 +359,8 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
             } else if (state.type == ComputeType.ZONE) {
                 resourceMetric = getResourceMetrics(resourceMap.getKey(),
                         PhotonModelConstants.ESTIMATED_CHARGES);
-                // EstimatedCharges metric will be available for ZONE
-                assertNotNull(resourceMetric);
+                // EstimatedCharges metric will not be available for ZONE
+                assertNull(resourceMetric);
 
                 // CPUUtilizationPercent metric will not be available for ZONE
                 resourceMetric = getResourceMetrics(resourceMap.getKey(),
@@ -368,7 +368,7 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
                 assertNull(resourceMetric);
 
                 zones++;
-                resourcesWithEstChargesMetricCount++;
+                resourcesWithNoEstChargesMetricCount++;
             } else {
                 misc++;
             }
@@ -397,10 +397,10 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
         assertEquals(this.totalComputeResources - vmHosts, vmGuests + zones);
 
         // Number of VM_HOST's equals number of resources having metric for EstimatedCharges
-        assertEquals(vmHosts + zones, resourcesWithEstChargesMetricCount);
+        assertEquals(vmHosts, resourcesWithEstChargesMetricCount);
 
         // count of other resources will equal to number of resources not having metric for EstimatedCharges
-        assertEquals(vmGuests, resourcesWithNoEstChargesMetricCount);
+        assertEquals(vmGuests + zones, resourcesWithNoEstChargesMetricCount);
 
         // count of zones supposed to be greater than 0
         assertTrue(zones > 0);

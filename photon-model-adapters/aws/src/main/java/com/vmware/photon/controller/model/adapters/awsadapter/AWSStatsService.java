@@ -39,7 +39,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
@@ -150,7 +149,7 @@ public class AWSStatsService extends StatelessService {
     private void getVMDescription(AWSStatsDataHolder statsData) {
         Consumer<Operation> onSuccess = (op) -> {
             statsData.computeDesc = op.getBody(ComputeStateWithDescription.class);
-            statsData.isComputeHost = isComputeHost(statsData.computeDesc.description);
+            statsData.isComputeHost = isComputeHost(statsData.computeDesc);
 
             // if we have a compute host then we directly get the auth.
             if (statsData.isComputeHost) {
@@ -524,8 +523,7 @@ public class AWSStatsService extends StatelessService {
     /**
      * Returns if the given compute description is a compute host or not.
      */
-    private boolean isComputeHost(ComputeDescription computeDescription) {
-        List<String> supportedChildren = computeDescription.supportedChildren;
-        return supportedChildren != null && supportedChildren.contains(ComputeType.VM_GUEST.name());
+    private boolean isComputeHost(ComputeStateWithDescription computeStateWithDescription) {
+        return computeStateWithDescription.type == ComputeType.VM_HOST;
     }
 }
