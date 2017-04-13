@@ -105,10 +105,21 @@ public class PhotonModelConstants {
     }
 
     public enum EndpointType {
-        aws,
-        azure,
-        gpc,
-        vsphere;
+        aws("AWS"),
+        azure("Azure"),
+        gpc("GCP"),
+        vsphere("vSphere");
+
+        private final String value;
+
+        private EndpointType(String value) {
+            this.value = value;
+        }
+
+        @Override
+        public String toString() {
+            return this.value;
+        }
     }
 
     public static final String FIELD_NAME_ENDPOINT_LINK = "endpointLink";

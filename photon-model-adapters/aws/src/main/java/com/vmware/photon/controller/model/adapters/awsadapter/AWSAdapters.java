@@ -65,7 +65,7 @@ public class AWSAdapters {
             host.startService(new AWSFirewallService());
 
             EndpointAdapterUtils.registerEndpointAdapters(
-                    host, EndpointType.aws.name(), LINKS, AWSUriPaths.AWS_ADAPTER_LINK_TYPES);
+                    host, EndpointType.aws, LINKS, AWSUriPaths.AWS_ADAPTER_LINK_TYPES);
 
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception starting AWS adapters: %s",

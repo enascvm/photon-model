@@ -68,7 +68,7 @@ public class AzureAdapters {
             host.startService(new AzureEndpointAdapterService());
 
             EndpointAdapterUtils.registerEndpointAdapters(
-                    host, EndpointType.azure.name(), LINKS, AzureUriPaths.AZURE_ADAPTER_LINK_TYPES);
+                    host, EndpointType.azure, LINKS, AzureUriPaths.AZURE_ADAPTER_LINK_TYPES);
 
         } catch (Exception e) {
             host.log(Level.WARNING, "Exception staring Azure adapters: %s",

@@ -62,7 +62,7 @@ public class VSphereAdapters {
 
         EndpointAdapterUtils.registerEndpointAdapters(
                 host,
-                EndpointType.vsphere.name(),
+                EndpointType.vsphere,
                 LINKS,
                 VSphereUriPaths.VSPHERE_ADAPTER_LINK_TYPES);
     }

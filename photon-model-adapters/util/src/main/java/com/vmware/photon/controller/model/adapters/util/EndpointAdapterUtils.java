@@ -31,6 +31,7 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
+import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
@@ -65,7 +66,7 @@ public class EndpointAdapterUtils {
      */
     public static void registerEndpointAdapters(
             ServiceHost host,
-            String endpointType,
+            EndpointType endpointType,
             String[] startedAdapterLinks,
             Map<String, AdapterTypePath> adapterLinksToRegister) {
 
@@ -134,7 +135,7 @@ public class EndpointAdapterUtils {
      */
     public static void handleEndpointRegistration(
             ServiceHost host,
-            String endpointType,
+            EndpointType endpointType,
             Consumer<PhotonModelAdapterConfig> endpointConfigEnhancer) {
 
         host.registerForServiceAvailability((op, ex) -> {
@@ -151,9 +152,9 @@ public class EndpointAdapterUtils {
             PhotonModelAdapterConfig endpointConfig = new PhotonModelAdapterConfig();
 
             // By contract the id MUST equal to endpointType
-            endpointConfig.id = endpointType;
+            endpointConfig.id = endpointType.name();
             endpointConfig.documentSelfLink = endpointConfig.id;
-            endpointConfig.name = endpointType;
+            endpointConfig.name = endpointType.toString();
             endpointConfig.adapterEndpoints = new HashMap<>();
 
             if (endpointConfigEnhancer != null) {
