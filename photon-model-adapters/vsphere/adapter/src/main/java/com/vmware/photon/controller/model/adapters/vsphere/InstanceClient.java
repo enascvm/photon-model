@@ -214,7 +214,7 @@ public class InstanceClient extends BaseHelper {
             spec.setGuestId(gt);
         }
 
-        spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
+        spec.setMemoryMB(toMemoryMb(this.state.description.totalMemoryBytes));
 
         // set ovf environment
         ArrayOfVAppPropertyInfo infos = this.get.entityProp(vm,
@@ -652,7 +652,7 @@ public class InstanceClient extends BaseHelper {
         // even though this is a clone, hw config from the compute resource
         // is takes precedence
         spec.setNumCPUs((int) this.state.description.cpuCount);
-        spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
+        spec.setMemoryMB(toMemoryMb(this.state.description.totalMemoryBytes));
         String gt = CustomProperties.of(this.state).getString(CustomProperties.GUEST_ID, null);
         if (gt != null) {
             spec.setGuestId(gt);
@@ -1489,7 +1489,7 @@ public class InstanceClient extends BaseHelper {
         spec.setName(displayName);
         spec.setNumCPUs((int) this.state.description.cpuCount);
         spec.setGuestId(VirtualMachineGuestOsIdentifier.OTHER_GUEST_64.value());
-        spec.setMemoryMB(toMb(this.state.description.totalMemoryBytes));
+        spec.setMemoryMB(toMemoryMb(this.state.description.totalMemoryBytes));
 
         VirtualMachineFileInfo files = new VirtualMachineFileInfo();
         // Use a full path to the config file to avoid creating a VM with the same name
@@ -1585,8 +1585,14 @@ public class InstanceClient extends BaseHelper {
         return nic;
     }
 
-    private Long toMb(long bytes) {
-        return bytes / 1024 / 1024;
+    /**
+     * Convert bytes to MB rounding up to the nearest 4MB block.
+     * @param bytes
+     * @return
+     */
+    private long toMemoryMb(long bytes) {
+        long mb = bytes / 1024 / 1024;
+        return mb / 4 * 4;
     }
 
     private Long toKb(long mb) {

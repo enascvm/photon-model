@@ -179,6 +179,8 @@ public class TestVSphereProvisionWithCloudConfigTask extends BaseVSphereAdapterT
         computeDesc.name = computeDesc.id;
         computeDesc.dataStoreId = this.dataStoreId;
 
+        computeDesc.cpuCount = 2L;
+        computeDesc.totalMemoryBytes = 1L * 1024 * 1024 * 1024;
         return TestUtils.doPost(this.host, computeDesc,
                 ComputeDescription.class,
                 UriUtils.buildUri(this.host, ComputeDescriptionService.FACTORY_LINK));
