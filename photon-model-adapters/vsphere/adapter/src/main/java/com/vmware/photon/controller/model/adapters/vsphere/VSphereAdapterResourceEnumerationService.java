@@ -21,9 +21,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
@@ -1049,11 +1051,15 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationContext.getTenantLinks();
         }
-        populateTags(enumerationContext, cr, state);
 
         logFine(() -> String.format("Syncing ComputeResource %s", oldDocument.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
+                .setCompletion((o, e) -> {
+                    if (e == null) {
+                        updateLocalTags(enumerationContext, cr, o.getBody(ResourceState.class));
+                    }
+                })
                 .sendWith(this);
 
         ComputeDescription desc = makeDescriptionForCluster(enumerationContext, cr);
@@ -1278,12 +1284,16 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationContext.getTenantLinks();
         }
-        populateTags(enumerationContext, hs, state);
 
         logFine(() -> String.format("Syncing HostSystem %s", oldDocument.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), state.documentSelfLink))
                 .setBody(state)
-                .setCompletion(trackHostSystem(enumerationContext, hs))
+                .setCompletion((o, e) -> {
+                    trackHostSystem(enumerationContext, hs).handle(o, e);
+                    if (e == null) {
+                        updateLocalTags(enumerationContext, hs, o.getBody(ResourceState.class));
+                    }
+                })
                 .sendWith(this);
 
         ComputeDescription desc = makeDescriptionForHost(enumerationContext, hs);
@@ -1412,13 +1422,37 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         if (oldDocument.tenantLinks == null) {
             state.tenantLinks = enumerationContext.getTenantLinks();
         }
-        populateTags(enumerationContext, vm, state);
 
         logFine(() -> String.format("Syncing VM %s", state.documentSelfLink));
         Operation.createPatch(UriUtils.buildUri(getHost(), oldDocument.documentSelfLink))
                 .setBody(state)
-                .setCompletion(trackVm(enumerationContext))
+                .setCompletion((o, e) -> {
+                    trackVm(enumerationContext).handle(o, e);
+                    if (e == null) {
+                        updateLocalTags(enumerationContext, vm, o.getBody(ResourceState.class));
+                    }
+                })
                 .sendWith(this);
+    }
+
+    private void updateLocalTags(EnumerationContext enumerationContext, AbstractOverlay obj,
+            ResourceState patchResponse) {
+        List<TagState> tags;
+        try {
+            tags = retrieveAttachedTags(enumerationContext.getEndpoint(),
+                    obj.getId(),
+                    enumerationContext.getTenantLinks());
+        } catch (IOException | RpcException e) {
+            logWarning("Error updating local tags for %s", patchResponse.documentSelfLink);
+            return;
+        }
+
+        Map<String, String> remoteTagMap = new HashMap<>();
+        for (TagState ts : tags) {
+            remoteTagMap.put(ts.key, ts.value);
+        }
+
+        TagsUtil.updateLocalTagStates(this, patchResponse, remoteTagMap);
     }
 
     private void createNewVm(EnumerationContext enumerationContext, VmOverlay vm) {
