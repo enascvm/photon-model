@@ -93,7 +93,6 @@ public class ResourceUtils {
     /**
      * Updates the state of the service based on the input patch.
      *
-     * @param description service document description
      * @param source currentState of the service
      * @param patch patch state
      * @return whether the state has changed or not

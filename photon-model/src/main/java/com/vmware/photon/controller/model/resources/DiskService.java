@@ -20,6 +20,7 @@ import java.util.function.Function;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
+import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
@@ -119,6 +120,29 @@ public class DiskService extends StatefulService {
          * Capacity (in MB) of this disk service instance.
          */
         public long capacityMBytes;
+
+        /**
+         * Indicates whether the contents of the disk will survive power off / reboot.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_13)
+        public Boolean persistent;
+
+        /**
+         * Indicates whether the contents of the disk should be encrypted or not.
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_13)
+        public Boolean encrypted;
+
+        /**
+         * Constraint that this disk should satisfy. For ex: Requested disk should
+         * support THIN_PROVISION as HARD condition, HA as SOFT, CRITICAL as HARD etc.,
+         */
+        @UsageOption(option = PropertyUsageOption.OPTIONAL)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_13)
+        public Constraint constraint;
 
         /**
          * If set, disks will be connected in ascending order by the
