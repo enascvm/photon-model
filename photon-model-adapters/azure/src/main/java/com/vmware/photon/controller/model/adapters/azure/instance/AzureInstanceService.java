@@ -173,7 +173,7 @@ public class AzureInstanceService extends StatelessService {
 
     private static final long DEFAULT_EXPIRATION_INTERVAL_MICROS = TimeUnit.MINUTES.toMicros(5);
     private static final int RETRY_INTERVAL_SECONDS = 30;
-    private static final long AZURE_MAXIMUM_OS_DISK_SIZE_MB = 1023 * 1024; //Maximum allowed OS
+    private static final long AZURE_MAXIMUM_OS_DISK_SIZE_MB = 1023 * 1024; // Maximum allowed OS
     // disk size on Azure is 1023 GB
 
     private ExecutorService executorService;
@@ -246,8 +246,8 @@ public class AzureInstanceService extends StatelessService {
     }
 
     /**
-     * {@code handleAllocation} version suitable for chaining to
-     * {@code DeferredResult.whenComplete}.
+     * {@code handleAllocation} version suitable for chaining to {@code DeferredResult.whenComplete}
+     * .
      */
     private BiConsumer<AzureInstanceContext, Throwable> thenAllocation(AzureInstanceContext ctx,
             AzureInstanceStage next, String namespace) {
@@ -255,7 +255,8 @@ public class AzureInstanceService extends StatelessService {
             // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             if (exc != null) {
                 if (namespace != null) {
-                    handleCloudError(String.format( "%s: FAILED. Details:", ctx.stage), ctx, namespace, exc);
+                    handleCloudError(String.format("%s: FAILED. Details:", ctx.stage), ctx,
+                            namespace, exc);
                 } else {
                     handleError(ctx, exc);
                 }
@@ -289,7 +290,8 @@ public class AzureInstanceService extends StatelessService {
                 // https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
                 // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
                 ctx.httpClient = new OkHttpClient();
-                ctx.clientBuilder = ctx.httpClient.newBuilder();
+                ctx.clientBuilder = ctx.httpClient.newBuilder().connectTimeout(30,
+                        TimeUnit.SECONDS);
 
                 // now that we have a client lets move onto the next step
                 switch (ctx.computeRequest.requestType) {
@@ -578,22 +580,26 @@ public class AzureInstanceService extends StatelessService {
      * <tr>
      * <td>provided</td>
      * <td>provided</td>
-     * <td>SA name = AZURE_STORAGE_ACCOUNT_NAME<br>SA RG name = AZURE_STORAGE_ACCOUNT_RG_NAME</td>
+     * <td>SA name = AZURE_STORAGE_ACCOUNT_NAME<br>
+     * SA RG name = AZURE_STORAGE_ACCOUNT_RG_NAME</td>
      * </tr>
      * <tr>
      * <td>provided</td>
      * <td>not provided</td>
-     * <td>SA name = AZURE_STORAGE_ACCOUNT_NAME<br>SA RG name = AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME</td>
+     * <td>SA name = AZURE_STORAGE_ACCOUNT_NAME<br>
+     * SA RG name = AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME</td>
      * </tr>
      * <tr>
      * <td>not provided</td>
      * <td>provided</td>
-     * <td>SA name = generated name<br>SA RG name = ctx.resourceGroup.getName()</td>
+     * <td>SA name = generated name<br>
+     * SA RG name = ctx.resourceGroup.getName()</td>
      * </tr>
      * <tr>
      * <td>not provided</td>
      * <td>not provided</td>
-     * <td>SA name = generated name<br>SA RG name = ctx.resourceGroup.getName()</td>
+     * <td>SA name = generated name<br>
+     * SA RG name = ctx.resourceGroup.getName()</td>
      * </tr>
      * </table>
      */
@@ -640,7 +646,8 @@ public class AzureInstanceService extends StatelessService {
                                     "Invalid resource group parameter. %s",
                                     body.getMessage());
 
-                            IllegalStateException e = new IllegalStateException(invalidParameterMsg, exc);
+                            IllegalStateException e = new IllegalStateException(invalidParameterMsg,
+                                    exc);
                             return e;
                         }
                     }
@@ -675,7 +682,8 @@ public class AzureInstanceService extends StatelessService {
         StorageAccountsOperations azureSAClient = getStorageManagementClient(ctx)
                 .getStorageAccountsOperations();
 
-        StorageAccountAsyncHandler handler = new StorageAccountAsyncHandler(ctx, azureSAClient, this, msg);
+        StorageAccountAsyncHandler handler = new StorageAccountAsyncHandler(ctx, azureSAClient,
+                this, msg);
 
         // First create SA RG (if does not exist), then create the SA itself (if does not exist)
         createStorageAccountRG(ctx)
@@ -920,9 +928,9 @@ public class AzureInstanceService extends StatelessService {
 
         List<DeferredResult<NetworkSecurityGroup>> createSGDR = ctx.nics.stream()
                 .filter(nicCtx -> (
-                        // Security Group is requested but no existing security group is mapped.
-                        nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
-                                && nicCtx.securityGroup == null))
+                // Security Group is requested but no existing security group is mapped.
+                nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
+                        && nicCtx.securityGroup == null))
                 .map(nicCtx -> {
                     SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
                     NetworkSecurityGroup nsg = newAzureSecurityGroup(ctx, sgState);
@@ -1163,16 +1171,18 @@ public class AzureInstanceService extends StatelessService {
         // We don't support Attach option which allows to use a specialized disk to create the
         // virtual machine.
         osDisk.setCreateOption(OS_DISK_CREATION_OPTION);
-        if (ctx.bootDisk.capacityMBytes > 31744 && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) { // In case
-            // custom boot disk size is set then  use that value. If value more than maximum
+        if (ctx.bootDisk.capacityMBytes > 31744
+                && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) { // In case
+            // custom boot disk size is set then use that value. If value more than maximum
             // allowed then proceed with default size.
-            int diskSizeInGB = (int)ctx.bootDisk.capacityMBytes / 1024; // Converting MBs to GBs and
+            int diskSizeInGB = (int) ctx.bootDisk.capacityMBytes / 1024; // Converting MBs to GBs
+                                                                         // and
             // casting as int
             osDisk.setDiskSizeGB(diskSizeInGB);
         } else {
-            logInfo(String.format("Proceeding with Default OS Disk Size defined by VHD %s", vhdName));
+            logInfo(String.format("Proceeding with Default OS Disk Size defined by VHD %s",
+                    vhdName));
         }
-
 
         StorageProfile storageProfile = new StorageProfile();
         // Currently we only support platform images.
@@ -1201,7 +1211,9 @@ public class AzureInstanceService extends StatelessService {
                 new AzureAsyncCallback<VirtualMachine>() {
                     @Override
                     public void onError(Throwable e) {
-                        handleCloudError(String.format("Provisioning VM %s: FAILED. Details:", vmName), ctx, COMPUTE_NAMESPACE, e);
+                        handleCloudError(
+                                String.format("Provisioning VM %s: FAILED. Details:", vmName), ctx,
+                                COMPUTE_NAMESPACE, e);
                     }
 
                     @Override
@@ -1291,7 +1303,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
                                         logFine(() -> String.format("Patching compute state with VM"
-                                                        + " Public IP address [%s]: SUCCESS",
+                                                + " Public IP address [%s]: SUCCESS",
                                                 computeState.address));
                                     }
                                 });
@@ -1312,7 +1324,7 @@ public class AzureInstanceService extends StatelessService {
                                 .setCompletion((op, exc) -> {
                                     if (exc == null) {
                                         logFine(() -> String.format("Patching primary NIC state"
-                                                        + " with VM Public IP address [%s] : SUCCESS",
+                                                + " with VM Public IP address [%s] : SUCCESS",
                                                 primaryNicState.address));
                                     }
                                 });
@@ -1808,7 +1820,8 @@ public class AzureInstanceService extends StatelessService {
         private AzureInstanceContext ctx;
         private StorageAccountsOperations azureSAClient;
 
-        public StorageAccountAsyncHandler(AzureInstanceContext ctx, StorageAccountsOperations azureSAClient,
+        public StorageAccountAsyncHandler(AzureInstanceContext ctx,
+                StorageAccountsOperations azureSAClient,
                 StatelessService service, String message) {
             super(service, message);
             this.ctx = ctx;
@@ -1852,19 +1865,18 @@ public class AzureInstanceService extends StatelessService {
         }
 
         /**
-         * Based on the queried result, in case no SA description exists for the given name,
-         * create a new one. For this purpose, StorageAccountKeys should be obtained, and with them
+         * Based on the queried result, in case no SA description exists for the given name, create
+         * a new one. For this purpose, StorageAccountKeys should be obtained, and with them
          * AuthCredentialsServiceState is created, and a StorageDescription, pointing to that
          * authentication description document.
          */
         private DeferredResult<StorageDescription> createStorageDescription(
                 AzureInstanceContext ctx) {
 
-
             String msg = "Getting Azure StorageAccountKeys for [" + ctx.storage.getName()
                     + "] Storage Account";
-            AzureDeferredResultServiceCallback<StorageAccountKeys> handler =
-                    new AzureDeferredResultServiceCallback<StorageAccountKeys>(this.service, msg) {
+            AzureDeferredResultServiceCallback<StorageAccountKeys> handler = new AzureDeferredResultServiceCallback<StorageAccountKeys>(
+                    this.service, msg) {
 
                 @Override
                 protected Throwable consumeError(Throwable exc) {
@@ -1874,8 +1886,10 @@ public class AzureInstanceService extends StatelessService {
                 }
 
                 @Override
-                protected DeferredResult<StorageAccountKeys> consumeSuccess(StorageAccountKeys body) {
-                    logFine(() -> String.format("Getting Azure StorageAccountKeys for [%s] Storage Account: SUCCESS",
+                protected DeferredResult<StorageAccountKeys> consumeSuccess(
+                        StorageAccountKeys body) {
+                    logFine(() -> String.format(
+                            "Getting Azure StorageAccountKeys for [%s] Storage Account: SUCCESS",
                             ctx.storage.getName()));
                     return DeferredResult.completed(body);
                 }
@@ -2029,9 +2043,12 @@ public class AzureInstanceService extends StatelessService {
                 if (this.callCtx.hasAnyFailed.compareAndSet(false, true)) {
                     // Check whether this is the first failure and proceed to next stage.
                     // i.e. fail-fast on batch operations.
-                    AzureInstanceService.this.handleCloudError(String.format("%s: FAILED. Details:", this.msg), this.ctx, COMPUTE_NAMESPACE, e);
+                    AzureInstanceService.this.handleCloudError(
+                            String.format("%s: FAILED. Details:", this.msg), this.ctx,
+                            COMPUTE_NAMESPACE, e);
                 } else {
-                    e = new IllegalStateException(this.msg + ": FAILED. Details: " + e.getMessage(), e);
+                    e = new IllegalStateException(this.msg + ": FAILED. Details: " + e.getMessage(),
+                            e);
                     // Any subsequent failure is just logged.
                     AzureInstanceService.this.logSevere(e);
                 }

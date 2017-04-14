@@ -232,25 +232,25 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                             enumKey));
                 } else {
                     logInfo(() -> String.format("Enumeration service is not running or has already"
-                                    + " been stopped for %s", enumKey));
+                            + " been stopped for %s", enumKey));
                 }
                 context.stage = EnumerationStages.FINISHED;
                 handleEnumeration(context);
                 break;
             default:
-                handleError(context, new RuntimeException( "Unknown enumeration action"
+                handleError(context, new RuntimeException("Unknown enumeration action"
                         + context.request.original.enumerationAction));
                 break;
             }
             break;
         case FINISHED:
-            context.operation.complete();
             logInfo(() -> String.format("Enumeration finished for %s", getEnumKey(context)));
+            context.operation.complete();
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
-            context.operation.fail(context.error);
             logWarning(() -> String.format("Enumeration error for %s", getEnumKey(context)));
+            context.operation.fail(context.error);
             this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         default:
@@ -258,6 +258,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                     context.stage.toString());
             logSevere(() -> msg);
             context.error = new IllegalStateException(msg);
+            context.operation.fail(context.error);
             this.ongoingEnumerations.remove(getEnumKey(context));
         }
     }

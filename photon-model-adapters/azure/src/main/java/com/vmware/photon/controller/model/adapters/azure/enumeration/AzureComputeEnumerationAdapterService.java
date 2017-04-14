@@ -56,9 +56,11 @@ import java.util.stream.Collectors;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.VirtualMachinesOperations;
 import com.microsoft.azure.management.compute.models.ImageReference;
 import com.microsoft.azure.management.compute.models.InstanceViewStatus;
 import com.microsoft.azure.management.compute.models.NetworkInterfaceReference;
+import com.microsoft.azure.management.network.NetworkInterfacesOperations;
 import com.microsoft.azure.management.network.NetworkManagementClient;
 import com.microsoft.azure.management.network.NetworkManagementClientImpl;
 import com.microsoft.azure.management.network.models.NetworkInterface;
@@ -66,6 +68,7 @@ import com.microsoft.azure.management.network.models.PublicIPAddress;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
+
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
@@ -117,15 +120,11 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
  */
 public class AzureComputeEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_COMPUTE_ENUMERATION_ADAPTER;
-
-    public AzureComputeEnumerationAdapterService() {
-        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-    }
-
     public static final List<String> AZURE_VM_TERMINATION_STATES = Arrays.asList("Deleting",
             "Deleted");
-
     private static final String EXPAND_INSTANCE_VIEW_PARAM = "instanceView";
+    private ExecutorService executorService;
+    private Set<String> ongoingEnumerations = new ConcurrentSkipListSet<>();
 
     /**
      * Substages to handle Azure VM data collection.
@@ -147,26 +146,17 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         FINISHED
     }
 
-    private ExecutorService executorService;
-
-    @Override
-    public void handleStart(Operation startPost) {
-        this.executorService = getHost().allocateExecutor(this);
-        super.handleStart(startPost);
-    }
-
-    @Override
-    public void handleStop(Operation delete) {
-        this.executorService.shutdown();
-        AdapterUtils.awaitTermination(this.executorService);
-        super.handleStop(delete);
-    }
-
     /**
      * The enumeration service context that holds all the information needed to determine the list
      * of instances that need to be represented in the system.
      */
     private static class EnumerationContext {
+        // Stored operation to signal completion to the Azure storage enumeration once all the
+        // stages
+        // are successfully completed.
+        public Operation operation;
+        public OkHttpClient.Builder clientBuilder;
+        public OkHttpClient httpClient;
         ComputeEnumerateResourceRequest request;
         ComputeStateWithDescription parentCompute;
         EnumerationStages stage;
@@ -175,7 +165,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         long enumerationStartTimeInMicros;
         String deletionNextPageLink;
         String enumNextPageLink;
-
         // Substage specific fields
         ComputeEnumerationSubStages subStage;
         Map<String, VirtualMachine> virtualMachines = new ConcurrentHashMap<>();
@@ -187,18 +176,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // Compute States for patching additional fields.
         Map<String, ComputeState> computeStatesForPatching = new ConcurrentHashMap<>();
         Map<String, VirtualMachine> vmsToUpdate = new ConcurrentHashMap<>();
-
         List<String> vmIds = new ArrayList<>();
-
-        // Stored operation to signal completion to the Azure storage enumeration once all the
-        // stages
-        // are successfully completed.
-        public Operation operation;
         // Azure specific fields
         ApplicationTokenCredentials credentials;
-        public OkHttpClient.Builder clientBuilder;
-        public OkHttpClient httpClient;
-
         // Azure clients
         NetworkManagementClient networkClient;
         ComputeManagementClient computeClient;
@@ -213,7 +193,33 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         }
     }
 
-    private Set<String> ongoingEnumerations = new ConcurrentSkipListSet<>();
+    public AzureComputeEnumerationAdapterService() {
+        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
+    }
+
+    /**
+     * Constrain every query with endpointLink and tenantLinks, if presented.
+     */
+    private static void addScopeCriteria(Query.Builder qBuilder,
+            Class<? extends ResourceState> stateClass, EnumerationContext ctx) {
+        // Add TENANT_LINKS criteria
+        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
+        // Add ENDPOINT_LINK criteria
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
+    }
+
+    @Override
+    public void handleStart(Operation startPost) {
+        this.executorService = getHost().allocateExecutor(this);
+        super.handleStart(startPost);
+    }
+
+    @Override
+    public void handleStop(Operation delete) {
+        this.executorService.shutdown();
+        AdapterUtils.awaitTermination(this.executorService);
+        super.handleStop(delete);
+    }
 
     @Override
     public void handlePatch(Operation op) {
@@ -285,7 +291,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                             enumKey));
                 } else {
                     logInfo(() -> String.format("Enumeration service is not running or was already"
-                                    + " stopped for %s", enumKey));
+                            + " stopped for %s", enumKey));
                 }
                 ctx.stage = EnumerationStages.FINISHED;
                 handleEnumeration(ctx);
@@ -299,23 +305,23 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             }
             break;
         case FINISHED:
-            ctx.operation.complete();
-            cleanUpHttpClient(this, ctx.httpClient);
             logInfo(() -> String.format("Enumeration finished for %s", getEnumKey(ctx)));
+            cleanUpHttpClient(this, ctx.httpClient);
+            ctx.operation.complete();
             this.ongoingEnumerations.remove(getEnumKey(ctx));
             break;
         case ERROR:
-            ctx.operation.fail(ctx.error);
-            cleanUpHttpClient(this, ctx.httpClient);
             logWarning(() -> String.format("Enumeration error for %s", getEnumKey(ctx)));
+            cleanUpHttpClient(this, ctx.httpClient);
+            ctx.operation.fail(ctx.error);
             this.ongoingEnumerations.remove(getEnumKey(ctx));
             break;
         default:
             String msg = String.format("Unknown Azure enumeration stage %s ", ctx.stage.toString());
             logSevere(() -> msg);
             ctx.error = new IllegalStateException(msg);
-            ctx.operation.fail(ctx.error);
             cleanUpHttpClient(this, ctx.httpClient);
+            ctx.operation.fail(ctx.error);
             this.ongoingEnumerations.remove(getEnumKey(ctx));
         }
     }
@@ -344,7 +350,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             updateComputeStates(ctx);
             break;
         case UPDATE_TAG_LINKS:
-            updateTagLinks(ctx).whenComplete(thenHandleSubStage(ctx, ComputeEnumerationSubStages.GET_DISK_STATES));
+            updateTagLinks(ctx).whenComplete(
+                    thenHandleSubStage(ctx, ComputeEnumerationSubStages.GET_DISK_STATES));
             break;
         case GET_DISK_STATES:
             queryForDiskStates(ctx);
@@ -385,10 +392,10 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     private DeferredResult<EnumerationContext> updateTagLinks(EnumerationContext context) {
-        logFine(() -> "Create or update Network States' tags with the actual tags in Azure.");
+        logFine(() -> "Create or update Compute States' tags with the actual tags in Azure.");
 
         if (context.vmsToUpdate.size() == 0) {
-            logFine(() -> "No local networks or subnets to be updated so there are no tags to update.");
+            logFine(() -> "No local computes to be updated so there are no tags to update.");
             return DeferredResult.completed(context);
         } else {
 
@@ -404,7 +411,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     }
                 }
                 updateTagLinksOps.add(updateLocalTagStates(this, existingComputeState, remoteTags));
-                // clean up the working copy of existing compute state tag links, so that they are not overwritten
+                // clean up the working copy of existing compute state tag links, so that they are
+                // not overwritten
                 // with the updated ones in the subsequent state machine steps
                 existingComputeState.tagLinks = null;
                 context.computeStatesForPatching.put(vmId, existingComputeState);
@@ -415,8 +423,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * {@code handleSubStage} version suitable for chaining to
-     * {@code DeferredResult.whenComplete}.
+     * {@code handleSubStage} version suitable for chaining to {@code DeferredResult.whenComplete}.
      */
     private BiConsumer<EnumerationContext, Throwable> thenHandleSubStage(EnumerationContext context,
             ComputeEnumerationSubStages next) {
@@ -596,6 +603,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         }
 
         operation.setCompletion((op, er) -> {
+            op.complete();
             if (er != null) {
                 handleError(ctx, er);
                 return;
@@ -680,7 +688,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
                     // If there are no matches, there is nothing to update.
                     if (qrt.results.documentCount == 0) {
-                        ctx.subStage = ComputeEnumerationSubStages.GET_DISK_STATES;
+                        ctx.subStage = ComputeEnumerationSubStages.CREATE_TAG_STATES;
                         handleSubStage(ctx);
                         return;
                     }
@@ -714,7 +722,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         List<Operation> operations = context.virtualMachines.values()
                 .stream().filter(vm -> vm.tags != null && !vm.tags.isEmpty())
                 .flatMap(vm -> vm.tags.entrySet().stream())
-                .map(entry -> newExternalTagState(entry.getKey(), entry.getValue(), context.parentCompute.tenantLinks))
+                .map(entry -> newExternalTagState(entry.getKey(), entry.getValue(),
+                        context.parentCompute.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
                         .setBody(tagState))
                 .collect(Collectors.toList());
@@ -740,7 +749,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Updates matching compute states for given VMs.
      */
     private void updateComputeStates(EnumerationContext ctx) {
-        if (ctx.computeStates.size() == 0) {
+        if (ctx.computeStates.isEmpty()) {
             logFine(() -> "No compute states found to be updated.");
             ctx.subStage = ComputeEnumerationSubStages.UPDATE_TAG_LINKS;
             handleSubStage(ctx);
@@ -765,7 +774,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             ctx.virtualMachines.remove(computeState.id);
 
             if (computeState.diskLinks == null || computeState.diskLinks.size() != 1) {
-                logWarning(() -> String.format("Only 1 disk is currently supported. Update skipped for"
+                logWarning(
+                        () -> String.format("Only 1 disk is currently supported. Update skipped for"
                                 + " compute state %s", computeState.id));
 
                 if (ctx.computeStates.size() == 0) {
@@ -844,7 +854,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             return;
         }
 
-        diskUriFilters.stream().forEach(diskUriFilter -> diskUriFilterParentQuery.addClause(diskUriFilter));
+        diskUriFilters.stream()
+                .forEach(diskUriFilter -> diskUriFilterParentQuery.addClause(diskUriFilter));
         qBuilder.addClause(diskUriFilterParentQuery.build());
 
         QueryTask q = QueryTask.Builder.createDirectTask()
@@ -1100,7 +1111,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                 ex.getMessage())));
                     }
 
-                    logFine(() -> "Continue on to create tag states.");
+                    logFine(() -> "Continue on to create network interfaces.");
                     ctx.subStage = ComputeEnumerationSubStages.CREATE_NETWORK_INTERFACE_STATES;
                     handleSubStage(ctx);
 
@@ -1150,7 +1161,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                                 ex.getMessage())));
                     }
 
-                    logFine(() -> "Continue to create network interfaces.");
+                    logFine(() -> "Continue to create compute states.");
                     ctx.subStage = ComputeEnumerationSubStages.CREATE_COMPUTE_STATES;
                     handleSubStage(ctx);
 
@@ -1273,25 +1284,29 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .iterator();
         AtomicInteger numOfPatches = new AtomicInteger(
                 ctx.computeStatesForPatching.size() * numberOfAdditionalFieldsToPatch);
+        ComputeManagementClient computeClient = getComputeManagementClient(ctx);
+        VirtualMachinesOperations vmOps = computeClient
+                .getVirtualMachinesOperations();
+        NetworkManagementClient client = getNetworkManagementClient(ctx);
+        NetworkInterfacesOperations netOps = client
+                .getNetworkInterfacesOperations();
         while (iterator.hasNext()) {
             Entry<String, ComputeState> csEntry = iterator.next();
             ComputeState computeState = csEntry.getValue();
-            patchAdditionalFieldsHelper(ctx, computeState, numOfPatches);
+            String resourceGroupName = getResourceGroupName(computeState.id);
+            String vmName = computeState.name;
+            patchVMInstanceDetails(ctx, vmOps, computeState, resourceGroupName, vmName,
+                    numOfPatches);
+            patchVMNetworkDetails(ctx, netOps, computeState, resourceGroupName, vmName,
+                    numOfPatches);
         }
     }
 
-    private void patchAdditionalFieldsHelper(EnumerationContext ctx, ComputeState computeState,
-            AtomicInteger numOfPatches) {
-        String resourceGroupName = getResourceGroupName(computeState.id);
-        String vmName = computeState.name;
-        patchVMInstanceDetails(ctx, computeState, resourceGroupName, vmName, numOfPatches);
-        patchVMNetworkDetails(ctx, computeState, resourceGroupName, vmName, numOfPatches);
-    }
-
-    private void patchVMInstanceDetails(EnumerationContext ctx, ComputeState computeState,
+    private void patchVMInstanceDetails(EnumerationContext ctx,
+            VirtualMachinesOperations vmOps,
+            ComputeState computeState,
             String resourceGroupName, String vmName, AtomicInteger numOfPatches) {
-        ComputeManagementClient computeClient = getComputeManagementClient(ctx);
-        computeClient.getVirtualMachinesOperations().getAsync(resourceGroupName, vmName,
+        vmOps.getAsync(resourceGroupName, vmName,
                 EXPAND_INSTANCE_VIEW_PARAM,
                 new AzureAsyncCallback<com.microsoft.azure.management.compute.models.VirtualMachine>() {
                     @Override
@@ -1332,7 +1347,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      * Gets the network links from the compute state. Obtains the Network state information from
      * Azure.
      */
-    private void patchVMNetworkDetails(EnumerationContext ctx, ComputeState computeState,
+    private void patchVMNetworkDetails(EnumerationContext ctx,
+            NetworkInterfacesOperations netOps, ComputeState computeState,
             String resourceGroupName, String vmName, AtomicInteger numOfPatches) {
         // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1473
         if (computeState.networkInterfaceLinks != null) {
@@ -1348,15 +1364,20 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 }
                 NetworkInterfaceState state = o.getBody(NetworkInterfaceState.class);
                 String networkInterfaceName = UriUtils.getLastPathSegment(state.id);
+                String nicRG = getResourceGroupName(state.id);
+                if (!resourceGroupName.equals(nicRG)) {
+                    logWarning(
+                            "VM resource group %s is different from nic resource group %s, for vm %s",
+                            resourceGroupName, nicRG, vmName);
+                }
 
-                NetworkManagementClient client = getNetworkManagementClient(ctx);
-                client.getNetworkInterfacesOperations().getAsync(resourceGroupName,
+                netOps.getAsync(resourceGroupName,
                         networkInterfaceName, null, new AzureAsyncCallback<NetworkInterface>() {
                             @Override
                             public void onError(Throwable e) {
                                 // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-2765
                                 logWarning(() -> String.format("Error getting network interface"
-                                                + " details: %s", e.getMessage()));
+                                        + " details: %s", e.getMessage()));
                                 // There was an error for this compute. Log and move on.
                                 numOfPatches.decrementAndGet();
                             }
@@ -1515,7 +1536,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 || vm.properties.storageProfile.getOsDisk() == null
                 || vm.properties.storageProfile.getOsDisk().getVhd() == null
                 || vm.properties.storageProfile.getOsDisk().getVhd().getUri() == null) {
-            logWarning(String.format("Enumeration failed. VM %s has a ManagedDisk configuration, which is currently not supported.", vm.id));
+            logWarning(String.format(
+                    "Enumeration failed. VM %s has a ManagedDisk configuration, which is currently not supported.",
+                    vm.id));
             return null;
         }
         return httpsToHttp(vm.properties.storageProfile.getOsDisk().getVhd().getUri());
@@ -1526,15 +1549,5 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private String httpsToHttp(String uri) {
         return (uri.startsWith("https")) ? uri.replace("https", "http") : uri;
-    }
-
-    /**
-     * Constrain every query with endpointLink and tenantLinks, if presented.
-     */
-    private static void addScopeCriteria(Query.Builder qBuilder, Class<? extends ResourceState> stateClass, EnumerationContext ctx) {
-        // Add TENANT_LINKS criteria
-        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
     }
 }

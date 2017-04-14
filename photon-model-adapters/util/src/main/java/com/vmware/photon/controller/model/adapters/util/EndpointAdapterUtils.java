@@ -62,7 +62,7 @@ public class EndpointAdapterUtils {
      *            Map of adapter links (to be registered) to their {@link AdapterTypePath adapter
      *            type}.
      *
-     * @see #handleEndpointRegistration(ServiceHost, String, Consumer)
+     * @see #handleEndpointRegistration(ServiceHost, EndpointType, Consumer)
      */
     public static void registerEndpointAdapters(
             ServiceHost host,
@@ -249,10 +249,9 @@ public class EndpointAdapterUtils {
                         Pair.of(cd, endpoint.computeDescriptionLink),
                         Pair.of(cs, endpoint.computeLink),
                         Pair.of(es, endpoint.documentSelfLink))
-                        .map((p) ->
-                                Operation.createPatch(body.buildUri(p.right))
-                                        .setBody(p.left)
-                                        .setReferer(service.getUri()));
+                        .map((p) -> Operation.createPatch(body.buildUri(p.right))
+                                .setBody(p.left)
+                                .setReferer(service.getUri()));
 
                 applyChanges(tm, service, endpoint, operations);
             } catch (Exception e) {
@@ -329,8 +328,10 @@ public class EndpointAdapterUtils {
         if (configRequest.resourceReference != null) {
             // If there is an error getting endpoint state, we assume that endpoint is not yet
             // created, but it was requested with a predefined link
-            AdapterUtils.getServiceState(service, configRequest.resourceReference, onSuccessGetEndpoint,
-                    e -> onSuccessGetCredentials.accept(getEmptyAuthCredentialState(configRequest)));
+            AdapterUtils.getServiceState(service, configRequest.resourceReference,
+                    onSuccessGetEndpoint,
+                    e -> onSuccessGetCredentials
+                            .accept(getEmptyAuthCredentialState(configRequest)));
         } else { // otherwise, proceed with empty credentials and rely on what's in
             // endpointProperties
             onSuccessGetCredentials.accept(getEmptyAuthCredentialState(configRequest));

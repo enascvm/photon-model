@@ -26,10 +26,10 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
 
 /**
- * Enumeration Adapter for Azure. Performs a list call to the Azure API
- * and reconciles the local state with the state on the remote system. It lists the instances on the remote system.
- * Compares those with the local system, creates the instances that are missing in the local system, and deletes the
- * ones that no longer exist in the Azure environment.
+ * Enumeration Adapter for Azure. Performs a list call to the Azure API and reconciles the local
+ * state with the state on the remote system. It lists the instances on the remote system. Compares
+ * those with the local system, creates the instances that are missing in the local system, and
+ * deletes the ones that no longer exist in the Azure environment.
  */
 public class AzureEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_ENUMERATION_ADAPTER;
@@ -77,18 +77,19 @@ public class AzureEnumerationAdapterService extends StatelessService {
             op.fail(new IllegalArgumentException("body is required"));
             return;
         }
-        op.complete();
-
         ComputeEnumerateResourceRequest request = op.getBody(ComputeEnumerateResourceRequest.class);
-        AdapterUtils.validateEnumRequest(request);
+        try {
+            AdapterUtils.validateEnumRequest(request);
+            op.complete();
+        } catch (Exception e) {
+            op.fail(e);
+        }
         EnumerationContext context = new EnumerationContext(this, request, op);
         if (request.isMockRequest) {
             // patch status to parent task
             context.taskManager.finishTask();
             return;
         }
-
-
 
         context.populateBaseContext(BaseAdapterStage.PARENTDESC)
                 .whenComplete((ignoreCtx, t) -> {
@@ -208,19 +209,14 @@ public class AzureEnumerationAdapterService extends StatelessService {
             handleEnumerationRequest(context);
         };
 
-        ComputeEnumerateAdapterRequest azureEnumerationRequest =
-                new ComputeEnumerateAdapterRequest(
-                        context.request, context.parentAuth,
-                        context.parent);
+        ComputeEnumerateAdapterRequest azureEnumerationRequest = new ComputeEnumerateAdapterRequest(
+                context.request, context.parentAuth,
+                context.parent);
 
-        Operation patchEnumAdapterService = Operation
-                .createPatch(this, adapterSelfLink)
+        Operation.createPatch(this, adapterSelfLink)
                 .setBody(azureEnumerationRequest)
-                .setReferer(this.getUri());
-
-        patchEnumAdapterService
                 .setCompletion(completionHandler)
-                .sendWith(getHost());
+                .sendWith(this);
         logInfo(() -> String.format("Triggered Azure enumeration adapter %s", adapterSelfLink));
     }
 

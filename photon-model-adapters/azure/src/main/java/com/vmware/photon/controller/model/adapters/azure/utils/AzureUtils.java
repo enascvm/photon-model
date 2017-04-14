@@ -51,17 +51,15 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
-
 /**
  * Utility methods.
  */
 public class AzureUtils {
 
-    private static final Pattern RESOURCE_GROUP_NAME_PATTERN =
-            Pattern.compile(".*/resourcegroups/([^/]*)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern VIRTUAL_NETWORK_GATEWAY_PATTERN =
-            Pattern.compile("/subscriptions/.*/virtualNetworkGateways/([^/]*)", Pattern
-                    .CASE_INSENSITIVE);
+    private static final Pattern RESOURCE_GROUP_NAME_PATTERN = Pattern
+            .compile(".*/resourcegroups/([^/]*)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern VIRTUAL_NETWORK_GATEWAY_PATTERN = Pattern
+            .compile("/subscriptions/.*/virtualNetworkGateways/([^/]*)", Pattern.CASE_INSENSITIVE);
 
     /**
      * Strategy to control period between retry attempts.
@@ -116,8 +114,8 @@ public class AzureUtils {
     }
 
     /**
-     * {@link RetryStrategy} implementation that increases the period for each retry attempt
-     * using the exponential function.
+     * {@link RetryStrategy} implementation that increases the period for each retry attempt using
+     * the exponential function.
      */
     public static class ExponentialRetryStrategy extends RetryStrategy {
 
@@ -178,7 +176,8 @@ public class AzureUtils {
      * <p>
      * The returned name of the resource group is TestRG.
      *
-     * @param azureResourceId Azure resource id.
+     * @param azureResourceId
+     *            Azure resource id.
      * @return the resource group name (in lower case) where the resource belong to.
      */
     public static String getResourceGroupName(String azureResourceId) {
@@ -193,11 +192,13 @@ public class AzureUtils {
      * Returns the id of a resource group where an arbitrary Azure resource belongs to.
      * <p>
      * Example of Azure virtual network resource id:
-     *  "/subscriptions/[Id]/resourceGroups/TestRG/providers/Microsoft.Network/virtualNetworks/vNet"
+     * "/subscriptions/[Id]/resourceGroups/TestRG/providers/Microsoft.Network/virtualNetworks/vNet"
      * <p>
      * The id of the resource group that will be returned is:
      * "/subscriptions/[Id]/resourceGroups/TestRG"
-     * @param azureResourceId Azure resource id.
+     *
+     * @param azureResourceId
+     *            Azure resource id.
      * @return the resource group id where the resource belong to.
      */
     public static String getResourceGroupId(String azureResourceId) {
@@ -209,47 +210,33 @@ public class AzureUtils {
     }
 
     /**
-     * Returns the id of a virtual network gateway for a specified Azure virtual network.
-     * The id is extracted from the id of ipConfiguration.
+     * Returns the id of a virtual network gateway for a specified Azure virtual network. The id is
+     * extracted from the id of ipConfiguration.
      * <p>
-     * Example of Azure virtual network with configured gateway.
-     * Note: To be brief, here is only a snippet of the subnet that contains the ipConfiguration
-     * for the Virtual Network Gateway.
+     * Example of Azure virtual network with configured gateway. Note: To be brief, here is only a
+     * snippet of the subnet that contains the ipConfiguration for the Virtual Network Gateway.
      * <p>
-     * "subnets": [
-     * {
-     * ...
-     * },
-     * {
-     * "name": "GatewaySubnet",
+     * "subnets": [ { ... }, { "name": "GatewaySubnet", "id":
+     * "/subscriptions/[id]/resourceGroups/[id]/providers/Microsoft
+     * .Network/virtualNetworks/[id]/subnets/GatewaySubnet", "etag": "...", "properties": {
+     * "provisioningState": "Succeeded", "addressPrefix": "10.6.1.0/24", "ipConfigurations": [ {
      * "id": "/subscriptions/[id]/resourceGroups/[id]/providers/Microsoft
-     * .Network/virtualNetworks/[id]/subnets/GatewaySubnet",
-     * "etag": "...",
-     * "properties": {
-     * "provisioningState": "Succeeded",
-     * "addressPrefix": "10.6.1.0/24",
-     * "ipConfigurations": [
-     * {
-     * "id": "/subscriptions/[id]/resourceGroups/[id]/providers/Microsoft
-     * .Network/virtualNetworkGateways/vNetGateway/ipConfigurations/default"
-     * }
-     * ]
-     * }
-     * }
+     * .Network/virtualNetworkGateways/vNetGateway/ipConfigurations/default" } ] } }
      * <p>
      * <p>
      * The id of the resource group that will be returned is:
      * "/subscriptions/[Id]/resourceGroups/[id]/providers/Microsoft
      * .Network/virtualNetworkGateways/vNetGateway"
      *
-     * @param azureVirtualNetwork Azure virtual network.
+     * @param azureVirtualNetwork
+     *            Azure virtual network.
      * @return the id of the gateway the virtual network is attached to.
      */
     public static String getVirtualNetworkGatewayId(VirtualNetwork azureVirtualNetwork) {
 
         Optional<Matcher> matcher = azureVirtualNetwork.properties.subnets.stream()
-                .filter(subnet -> subnet.properties != null && subnet.properties.ipConfigurations
-                        != null)
+                .filter(subnet -> subnet.properties != null
+                        && subnet.properties.ipConfigurations != null)
                 .flatMap(sub -> sub.properties.ipConfigurations.stream())
                 .map(ipConfiguration -> VIRTUAL_NETWORK_GATEWAY_PATTERN.matcher(ipConfiguration.id))
                 .filter(m -> m.find())
@@ -287,8 +274,7 @@ public class AzureUtils {
             String resourcePoolLink, String parentComputeSelfLink,
             String saId, String saName, String saLocation, String saUri,
             StorageAccountKeys keys) {
-        AuthCredentialsService.AuthCredentialsServiceState storageAuth =
-                new AuthCredentialsService.AuthCredentialsServiceState();
+        AuthCredentialsService.AuthCredentialsServiceState storageAuth = new AuthCredentialsService.AuthCredentialsServiceState();
         storageAuth.documentSelfLink = UUID.randomUUID().toString();
         storageAuth.customProperties = new HashMap<>();
         storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1,
