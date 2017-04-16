@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -11,10 +11,11 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.tasks;
+package com.vmware.photon.controller.model.query;
 
 import static java.util.stream.Collector.Characteristics.IDENTITY_FINISH;
 
+import java.net.URI;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -28,9 +29,9 @@ import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
+import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
-
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -64,15 +65,15 @@ public class QueryUtils {
 
     /**
      * Executes the given query task on a Cluster.
-     *
      * @param service
-     *            The service executing the query task.
+     *         The service executing the query task.
      * @param queryTask
-     *            The query task.
+     *         The query task.
      * @param cluster
-     *            The cluster, the query runs against.
+     *         The cluster, the query runs against.
      */
-    public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask, ServiceTypeCluster cluster) {
+    public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask,
+            ServiceTypeCluster cluster) {
         // We don't want any unbounded queries. By default, we cap the query results to 10000.
         if (queryTask.querySpec.resultLimit == null) {
             service.getHost().log(Level.WARNING,
@@ -82,7 +83,8 @@ public class QueryUtils {
             queryTask.querySpec.resultLimit = MAX_RESULT_LIMIT;
         }
         if (queryTask.documentExpirationTimeMicros == 0) {
-            queryTask.documentExpirationTimeMicros = Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
+            queryTask.documentExpirationTimeMicros =
+                    Utils.getNowMicrosUtc() + QueryUtils.TEN_MINUTES_IN_MICROS;
         }
 
         return service.sendWithDeferredResult(Operation
@@ -94,11 +96,10 @@ public class QueryUtils {
 
     /**
      * Executes the given query task.
-     *
      * @param service
-     *            The service executing the query task.
+     *         The service executing the query task.
      * @param queryTask
-     *            The query task.
+     *         The query task.
      */
     public static DeferredResult<QueryTask> startQueryTask(Service service, QueryTask queryTask) {
         return startQueryTask(service, queryTask, null);
@@ -146,12 +147,13 @@ public class QueryUtils {
 
     /**
      * Query strategy template.
-     *
      * @see {#link {@link QueryTop}
      * @see {#link {@link QueryByPages}
      */
     public abstract static class QueryTemplate<T extends ServiceDocument>
             implements QueryStrategy<T> {
+
+        protected URI referer;
 
         /**
          * Wait\Block for query logic to complete.
@@ -172,18 +174,16 @@ public class QueryUtils {
 
         /**
          * Default constructor.
-         *
          * <p>
          * Note: The client is off-loaded from setting the {@code tenantLinks} to the query.
-         *
          * @param host
-         *            The host initiating the query.
+         *         The host initiating the query.
          * @param query
-         *            The query criteria.
+         *         The query criteria.
          * @param documentClass
-         *            The class of documents to query for.
+         *         The class of documents to query for.
          * @param tenantLinks
-         *            The scope of the query.
+         *         The scope of the query.
          */
         public QueryTemplate(ServiceHost host,
                 Query query,
@@ -195,21 +195,19 @@ public class QueryUtils {
 
         /**
          * Default constructor.
-         *
          * <p>
          * Note: The client is off-loaded from setting the {@code tenantLinks} and
          * {@code ednpointLink} to the query.
-         *
          * @param host
-         *            The host initiating the query.
+         *         The host initiating the query.
          * @param query
-         *            The query criteria.
+         *         The query criteria.
          * @param documentClass
-         *            The class of documents to query for.
+         *         The class of documents to query for.
          * @param tenantLinks
-         *            The scope of the query.
+         *         The scope of the query.
          * @param endpointLink
-         *            The scope of the query.
+         *         The scope of the query.
          */
         public QueryTemplate(ServiceHost host,
                 Query query,
@@ -234,6 +232,7 @@ public class QueryUtils {
 
             this.msg = this.getClass().getSimpleName() + " for " + documentClass.getSimpleName()
                     + "s";
+            this.referer = this.host.getUri();
         }
 
         /**
@@ -244,10 +243,20 @@ public class QueryUtils {
         protected abstract int getResultLimit();
 
         /**
+         * set custom referer to use for REST operations
+         * <p>
+         * default is {@code host.getUri()}. Callers are recommended to set more
+         * pertinent value for better traceability, e.g {@link Service#getUri()}.
+         */
+        public void setReferer(URI referer) {
+            AssertUtil.assertNotNull(referer, "'referer' must be set.");
+            this.referer = referer;
+        }
+
+        /**
          * Each query strategy should provide its own {@link QueryTask} processing logic.
-         *
          * @param queryTask
-         *            The QueryTask instance as returned by post-QueryTask-operation.
+         *         The QueryTask instance as returned by post-QueryTask-operation.
          */
         @SuppressWarnings("rawtypes")
         protected abstract DeferredResult<Void> handleQueryTask(
@@ -347,7 +356,7 @@ public class QueryUtils {
 
             Operation createQueryTaskOp = Operation
                     .createPost(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
-                    .setReferer(this.host.getUri())
+                    .setReferer(this.referer)
                     .setBody(queryTask);
 
             this.host.log(this.level, this.msg + ": STARTED with QT = " + Utils.toJsonHtml(queryTask));
@@ -455,12 +464,12 @@ public class QueryUtils {
         public static final String PROPERTY_NAME_MAX_PAGE_SIZE = UriPaths.PROPERTY_PREFIX
                 + QueryByPages.class.getSimpleName()
                 + ".maxPageSize";
-        protected static final int DEFAULT_MAX_PAGE_SIZE = DEFAULT_RESULT_LIMIT;
+        public static final int DEFAULT_MAX_PAGE_SIZE = DEFAULT_RESULT_LIMIT;
 
         /**
          * Get system default max number of documents per page from
          * {@link #PROPERTY_NAME_MAX_PAGE_SIZE} property. If not specified fallback to
-         * {@value #DEFAULT_MAX_PAGE_SIZE}.
+         * {@link #DEFAULT_MAX_PAGE_SIZE}.
          */
         public static int getDefaultMaxPageSize() {
             return Integer.getInteger(PROPERTY_NAME_MAX_PAGE_SIZE, DEFAULT_MAX_PAGE_SIZE);
@@ -525,7 +534,7 @@ public class QueryUtils {
 
             Operation getQueryTaskOp = Operation
                     .createGet(this.host, pageLink)
-                    .setReferer(this.host.getUri());
+                    .setReferer(super.referer);
 
             return this.host.sendWithDeferredResult(getQueryTaskOp, QueryTask.class)
                     // Handle current page of results
@@ -533,18 +542,16 @@ public class QueryUtils {
                     // Handle next page of results
                     .thenCompose(qt -> handleQueryTask(qt, resultConsumer));
         }
-
     }
 
     /**
      * Query for all "referrer" documents which refer a "referred" document.
-     *
      * @param referredDocumentSelfLink
-     *            All referrers point to this document.
+     *         All referrers point to this document.
      * @param referrerClass
-     *            The class of referrers that we want to query for.
+     *         The class of referrers that we want to query for.
      * @param referrerLinkFieldName
-     *            The name of the "foreign key link" field of the referrer class.
+     *         The name of the "foreign key link" field of the referrer class.
      */
     public static Query queryForReferrers(
             String referredDocumentSelfLink,

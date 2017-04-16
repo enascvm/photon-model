@@ -40,6 +40,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.ModelUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;

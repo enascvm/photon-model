@@ -42,6 +42,9 @@ import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSIma
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
@@ -51,9 +54,6 @@ import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.En
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.CommandLineArgumentParser;

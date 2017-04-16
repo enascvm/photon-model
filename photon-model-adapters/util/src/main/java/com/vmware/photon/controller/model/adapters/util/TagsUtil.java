@@ -22,13 +22,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
-import com.vmware.photon.controller.model.tasks.QueryStrategy;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;

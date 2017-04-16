@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import static com.vmware.photon.controller.model.ModelUtils.createSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceExists;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
@@ -38,9 +39,8 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualMachine;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualNetwork;
-import static com.vmware.photon.controller.model.tasks.ModelUtils.createSecurityGroup;
+import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
-import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -80,6 +80,9 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
+import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -101,13 +104,10 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
-import com.vmware.photon.controller.model.tasks.QueryStrategy;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
@@ -128,7 +128,7 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  * checks and logs node memory profile to verify that several enumeration cycles do not take too
  * much load on the host's memory.
  */
-public class TestAzureLongRunningEnumeration extends BasicReusableHostTestCase {
+public class TestAzureLongRunningEnumeration extends BaseModelTest {
     public static final String STALE_RG_NAME_PREFIX = "stalerg-";
     public static final String STALE_VM_NAME_PREFIX = "stalevm-";
     public static final String STALE_SA_NAME_PREFIX = "stalesa-";
@@ -882,7 +882,7 @@ public class TestAzureLongRunningEnumeration extends BasicReusableHostTestCase {
     private void createAzureSecurityGroups(int numOfSecurityGroups) throws Throwable {
         for (int i = 0; i < numOfSecurityGroups; i++) {
             String staleSecurityGroupName = STALE_SG_NAME_PREFIX + i;
-            createSecurityGroup(this.host, staleSecurityGroupName,
+            createSecurityGroup(this, staleSecurityGroupName,
                     computeHost, endpointState);
         }
     }

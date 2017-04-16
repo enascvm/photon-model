@@ -34,8 +34,6 @@ import com.vmware.xenon.services.common.TenantService;
 
 public class ResourceOperationSpecServiceTest extends BaseAdaptersRegistryServiceTest {
 
-    public static final String POWER_STATE = "powerState";
-
     public String endpointType = "rostEndpointType";
 
     @Test
@@ -53,7 +51,7 @@ public class ResourceOperationSpecServiceTest extends BaseAdaptersRegistryServic
 
         DeferredResult<ResourceOperationSpec> dr = ResourceOperationUtils.lookUpByEndpointType(
                 super.host,
-                super.host.getReferer().toASCIIString(),
+                super.host.getReferer(),
                 "endpointType",
                 ResourceType.COMPUTE,
                 "operation"
@@ -83,7 +81,7 @@ public class ResourceOperationSpecServiceTest extends BaseAdaptersRegistryServic
             dr = ResourceOperationUtils
                     .lookUpByEndpointLink(
                             super.host,
-                            super.host.getReferer().toASCIIString(),
+                            super.host.getReferer(),
                             endpointLink,
                             requestedState.resourceType,
                             requestedState.operation
@@ -92,7 +90,7 @@ public class ResourceOperationSpecServiceTest extends BaseAdaptersRegistryServic
             dr = ResourceOperationUtils
                     .lookUpByEndpointType(
                             super.host,
-                            super.host.getReferer().toASCIIString(),
+                            super.host.getReferer(),
                             requestedState.endpointType,
                             requestedState.resourceType,
                             requestedState.operation

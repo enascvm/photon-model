@@ -31,9 +31,9 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.util.ClusterUtil;
 import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 

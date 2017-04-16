@@ -18,6 +18,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.ModelUtils.createSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AZURE_SECURITY_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.SHARED_NETWORK_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.assertResourceExists;
@@ -43,8 +44,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualMachine;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualNetwork;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.STORAGE_USED_BYTES;
-import static com.vmware.photon.controller.model.tasks.ModelUtils.createSecurityGroup;
-import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
+import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.net.URI;
 import java.util.EnumSet;
@@ -92,7 +92,12 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
+import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -116,17 +121,12 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
-import com.vmware.photon.controller.model.tasks.QueryStrategy;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 import com.vmware.photon.controller.model.tasks.monitoring.StatsUtil;
-import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -150,7 +150,7 @@ import com.vmware.xenon.services.common.QueryTask.Query;
  * for i in {1..55}; do azure vm quick-create resourcegroup vm$i westus linux
  * canonical:UbuntuServer:12.04.3-LTS:12.04.201401270 azureuser Pa$$word% -z Standard_A0; done
  */
-public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
+public class TestAzureEnumerationTask extends BaseModelTest {
     public static final String STALE_RG_NAME_PREFIX = "stalerg-";
     public static final String STALE_VM_NAME_PREFIX = "stalevm-";
     public static final String STALE_SA_NAME_PREFIX = "stalesa-";
@@ -829,7 +829,7 @@ public class TestAzureEnumerationTask extends BasicReusableHostTestCase {
     private void createAzureSecurityGroups(int numOfSecurityGroups) throws Throwable {
         for (int i = 0; i < numOfSecurityGroups; i++) {
             String staleSecurityGroupName = STALE_SG_NAME_PREFIX + i;
-            createSecurityGroup(this.host, staleSecurityGroupName,
+            createSecurityGroup(this, staleSecurityGroupName,
                     computeHost, endpointState);
         }
     }

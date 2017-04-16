@@ -26,9 +26,9 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.tasks.helpers.ResourcePoolQueryHelper.QueryResult.ResourcePoolData;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.ServiceDocument;
@@ -53,10 +53,10 @@ import com.vmware.xenon.services.common.QueryTask.Query;
  * <p>In the first two operation types, clients of the helper can restrict the list of computes that
  * are included in the result. This is done by adding additional query clauses to the ones already
  * defined in the resource pool queries
- * (see {@link ResourcePoolQueryHelper#setAdditionalQueryClausesProvider()}).
+ * (see {@link ResourcePoolQueryHelper#setAdditionalQueryClausesProvider(Consumer)}).
  *
  * <p>By default computes are not expanded and values in {@link QueryResult#computesByLink} are
- * {@code null}. Use {@link ResourcePoolQueryHelper#setExpandComputes()} to change this.
+ * {@code null}. Use {@link ResourcePoolQueryHelper#setExpandComputes(boolean)} to change this.
  */
 public class ResourcePoolQueryHelper {
     private static final int PAGE_SIZE = Integer

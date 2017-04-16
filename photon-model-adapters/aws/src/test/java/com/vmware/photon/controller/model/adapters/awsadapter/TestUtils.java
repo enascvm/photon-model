@@ -16,7 +16,7 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_ALLOWED_NETWORK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.DEFAULT_PROTOCOL;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
-import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
+import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -56,6 +56,8 @@ import org.supercsv.io.ICsvMapWriter;
 import org.supercsv.prefs.CsvPreference;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
+import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
@@ -64,8 +66,6 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;

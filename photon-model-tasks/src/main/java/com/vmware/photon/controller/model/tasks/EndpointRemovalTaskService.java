@@ -32,6 +32,7 @@ import java.util.function.Consumer;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;

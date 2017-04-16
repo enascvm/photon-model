@@ -60,6 +60,7 @@ import com.vmware.photon.controller.model.adapters.vsphere.util.connection.Conne
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.RpcException;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.TaggingClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -81,7 +82,6 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.OpaqueNetworkSummary;

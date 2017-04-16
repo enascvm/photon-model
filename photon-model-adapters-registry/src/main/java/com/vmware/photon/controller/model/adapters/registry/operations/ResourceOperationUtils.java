@@ -13,19 +13,18 @@
 
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
-import java.util.Collection;
+import java.net.URI;
+import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
-import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
-import com.vmware.xenon.services.common.ServiceUriPaths;
 
 /**
  * Various {@link ResourceOperationSpec} related Utilities.
@@ -49,7 +48,7 @@ public class ResourceOperationUtils {
      */
     public static DeferredResult<ResourceOperationSpec> lookUpByEndpointType(
             ServiceHost host,
-            String refererURI,
+            URI refererURI,
             String endpointType,
             ResourceType resourceType,
             String operation) {
@@ -67,34 +66,24 @@ public class ResourceOperationUtils {
                         ResourceOperationSpec.FIELD_NAME_OPERATION,
                         operation)
                 .build();
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .setQuery(query).build();
 
-        Operation.createPost(host, ServiceUriPaths.CORE_QUERY_TASKS)
-                .setReferer(refererURI)
-                .setBody(queryTask)
-                .setCompletion((op, ex) -> {
-                    if (ex != null) {
-                        ret.fail(ex);
-                    } else {
-                        try {
-                            QueryTask qTask = op.getBody(QueryTask.class);
-                            if (qTask.results.documents.isEmpty()) {
-                                ret.complete(null);
-                            } else {
-                                Collection<Object> values = qTask.results.documents.values();
-                                ret.complete(Utils.fromJson(values.iterator().next(),
-                                        ResourceOperationSpec.class));
-                            }
-                        } catch (Exception e) {
-                            ret.fail(e);
-                        }
-                    }
-                })
-                .sendWith(host);
-
-        return ret;
+        QueryTop<ResourceOperationSpec> top = new QueryTop<>(
+                host, query, ResourceOperationSpec.class, null)
+                .setMaxResultsLimit(5);
+        top.setReferer(refererURI);
+        ResourceOperationSpec[] spec = new ResourceOperationSpec[1];
+        return top.queryDocuments(ros -> {
+            if (spec[0] == null) {
+                spec[0] = ros;
+            } else {
+                Utils.log(ResourceOperationUtils.class, "lookUpByEndpointType",
+                        Level.SEVERE,
+                        "Multiple specs for endpointType: %s, resourceType: %s and "
+                                + "operation: %s. First one: %s, current: %s",
+                        endpointType, resourceType, operation,
+                        spec[0], ros);
+            }
+        }).thenApply(aVoid -> spec[0]);
     }
 
     /**
@@ -114,7 +103,7 @@ public class ResourceOperationUtils {
      */
     public static DeferredResult<ResourceOperationSpec> lookUpByEndpointLink(
             ServiceHost host,
-            String refererURI,
+            URI refererURI,
             String endpointLink,
             ResourceType resourceType,
             String operation) {

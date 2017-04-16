@@ -28,12 +28,12 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
+import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.tasks.ProvisionNetworkTaskService.ProvisionNetworkTaskState;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;

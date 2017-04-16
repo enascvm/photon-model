@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -11,14 +11,13 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.tasks;
+package com.vmware.photon.controller.model;
 
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
 
-import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionServiceTest;
@@ -32,11 +31,9 @@ import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
-import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.xenon.common.UriUtils;
-import com.vmware.xenon.common.test.VerificationHost;
 
 /**
  * Utility class to create service documents for tests.
@@ -162,8 +159,7 @@ public class ModelUtils {
                 ResourcePoolState.class);
     }
 
-
-    public static SecurityGroupState createSecurityGroup(VerificationHost host,
+    public static SecurityGroupState createSecurityGroup(BaseModelTest test,
             String securityGroupName, ComputeState computeHost, EndpointState endpointState)
             throws Throwable {
 
@@ -199,7 +195,7 @@ public class ModelUtils {
         securityGroupState.instanceAdapterReference = new URI(
                 "http://instanceAdapterReference");
 
-        return TestUtils.doPost(host, securityGroupState, SecurityGroupState.class,
-                UriUtils.buildUri(host, SecurityGroupService.FACTORY_LINK));
+        return test.postServiceSynchronously(ResourcePoolService.FACTORY_LINK, securityGroupState,
+                SecurityGroupState.class);
     }
 }

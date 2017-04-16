@@ -46,9 +46,10 @@ import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersR
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService.PhotonModelAdapterConfig;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;

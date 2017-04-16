@@ -35,11 +35,11 @@ import java.util.stream.Collectors;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
+import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
-import com.vmware.photon.controller.model.tasks.QueryStrategy;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -376,7 +376,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      * <li>Add {@code tenantLinks} and {@code endpointLink} criteria as defined by
      * {@code QueryTemplate}</li>
      * <li>Add descendant specific criteria as defined by
-     * {@link customizeLocalStatesQuery(qBuilder)}</li>
+     * {@link #customizeLocalStatesQuery(com.vmware.xenon.services.common.QueryTask.Query.Builder)}</li>
      * </ul>
      */
     protected DeferredResult<T> queryLocalStates(T context) {
@@ -559,7 +559,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
      * <li>Add {@code tenantLinks} and {@code endpointLink} criteria as defined by
      * {@code QueryTemplate}</li>
      * <li>Add descendant specific criteria as defined by
-     * {@link customizeLocalStatesQuery(qBuilder)}</li>
+     * {@link #customizeLocalStatesQuery(com.vmware.xenon.services.common.QueryTask.Query.Builder)}</li>
      * </ul>
      */
     protected DeferredResult<T> deleteLocalResourceStates(T context) {

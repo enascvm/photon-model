@@ -30,10 +30,10 @@ import com.vmware.photon.controller.model.monitoring.InMemoryResourceMetricServi
 import com.vmware.photon.controller.model.monitoring.InMemoryResourceMetricService.InMemoryResourceMetric;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
 import com.vmware.photon.controller.model.util.ClusterUtil;

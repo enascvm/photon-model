@@ -34,9 +34,9 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.InstanceDescKey;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.ZoneData;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
@@ -53,7 +53,7 @@ public class AWSComputeDescriptionEnumerationAdapterService extends StatelessSer
 
     public static final String SELF_LINK = AWSUriPaths.AWS_COMPUTE_DESCRIPTION_CREATION_ADAPTER;
 
-    public static enum AWSComputeDescCreationStage {
+    public enum AWSComputeDescCreationStage {
         GET_REPRESENTATIVE_LIST,
         QUERY_LOCAL_COMPUTE_DESCRIPTIONS,
         COMPARE,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 VMware, Inc. All Rights Reserved.
+ * Copyright (c) 2017 VMware, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy of
@@ -11,14 +11,14 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.tasks;
+package com.vmware.photon.controller.model.query;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 
-import static com.vmware.photon.controller.model.tasks.QueryUtils.QueryTemplate.waitToComplete;
+import static com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate.waitToComplete;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,11 +30,12 @@ import java.util.stream.Collectors;
 
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.ModelUtils;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryByPages;
-import com.vmware.photon.controller.model.tasks.QueryUtils.QueryTop;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.services.common.QueryTask.Query;
 

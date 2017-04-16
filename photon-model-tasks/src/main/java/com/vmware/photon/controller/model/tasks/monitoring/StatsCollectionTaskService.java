@@ -19,9 +19,9 @@ import java.util.List;
 import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
-import com.vmware.photon.controller.model.tasks.QueryUtils;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.photon.controller.model.tasks.SubTaskService;
