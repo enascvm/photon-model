@@ -49,6 +49,20 @@ public class ResourceOperationSpecServiceTest extends BaseAdaptersRegistryServic
     }
 
     @Test
+    public void testGetByEndpointType_neg() {
+
+        DeferredResult<ResourceOperationSpec> dr = ResourceOperationUtils.lookUpByEndpointType(
+                super.host,
+                super.host.getReferer().toASCIIString(),
+                "endpointType",
+                ResourceType.COMPUTE,
+                "operation"
+        );
+        ResourceOperationSpec found = join(dr);
+        Assert.assertNull(found);
+    }
+
+    @Test
     public void testGetByEndpointType() {
         getByEndpointXXX(null);
     }

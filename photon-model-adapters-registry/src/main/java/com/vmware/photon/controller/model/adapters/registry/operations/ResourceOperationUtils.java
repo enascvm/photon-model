@@ -80,9 +80,13 @@ public class ResourceOperationUtils {
                     } else {
                         try {
                             QueryTask qTask = op.getBody(QueryTask.class);
-                            Collection<Object> values = qTask.results.documents.values();
-                            ret.complete(Utils.fromJson(values.iterator().next(),
-                                    ResourceOperationSpec.class));
+                            if (qTask.results.documents.isEmpty()) {
+                                ret.complete(null);
+                            } else {
+                                Collection<Object> values = qTask.results.documents.values();
+                                ret.complete(Utils.fromJson(values.iterator().next(),
+                                        ResourceOperationSpec.class));
+                            }
                         } catch (Exception e) {
                             ret.fail(e);
                         }
