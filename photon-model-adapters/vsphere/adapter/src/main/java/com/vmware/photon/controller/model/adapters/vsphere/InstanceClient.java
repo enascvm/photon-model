@@ -26,10 +26,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
-import io.netty.util.internal.StringUtil;
 import org.codehaus.jackson.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -136,21 +138,20 @@ public class InstanceClient extends BaseHelper {
 
     private static final String CLONE_STRATEGY_LINKED = "LINKED";
 
+    private static final Map<String, Lock> lockPerUri = new ConcurrentHashMap<>();
+    private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
     private final ComputeStateWithDescription state;
     private final ComputeStateWithDescription parent;
     private final List<DiskState> disks;
     private final List<NetworkInterfaceStateWithDetails> nics;
     private final ManagedObjectReference placementTarget;
     private final String targetDatacenterPath;
-
     private final GetMoRef get;
     private final Finder finder;
     private ManagedObjectReference vm;
     private ManagedObjectReference datastore;
     private ManagedObjectReference resourcePool;
     private ManagedObjectReference host;
-
-    private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
 
     public InstanceClient(Connection connection,
             ComputeStateWithDescription resource,
@@ -397,44 +398,54 @@ public class InstanceClient extends BaseHelper {
         GetMoRef get = new GetMoRef(this.connection);
 
         ManagedObjectReference vm = findTemplateByName(vmName, get);
-        if (vm != null) {
-            if (!isSameDatastore(ds, vm, get)) {
-                vm = replicateVMTemplate(resourcePool, ds, folder, vmName, vm, get);
-            }
-        } else {
+        if (vm == null) {
             String config = cust.getString(OvfParser.PROP_OVF_CONFIGURATION);
+            Lock lock = getLock(vmName);
+            lock.lock();
             try {
-                OvfParser parser = new OvfParser();
-                Document ovfDoc = parser.retrieveDescriptor(ovfUri);
-                List<OvfNetworkMapping> networks = mapNetworks(parser.extractNetworks(ovfDoc),
-                        ovfDoc, this.nics);
-                vm = deployer.deployOvf(ovfUri, getHost(), folder, vmName, networks,
-                        ds, Collections.emptyList(), config, resourcePool);
+                vm = findTemplateByName(vmName, get);
+                if (vm == null) {
+                    OvfParser parser = new OvfParser();
+                    Document ovfDoc = parser.retrieveDescriptor(ovfUri);
+                    List<OvfNetworkMapping> networks = mapNetworks(parser.extractNetworks(ovfDoc),
+                            ovfDoc, this.nics);
+                    vm = deployer.deployOvf(ovfUri, getHost(), folder, vmName, networks,
+                            ds, Collections.emptyList(), config, resourcePool);
 
-                logger.info("Removing NICs from deployed template: {} ({})", vmName, vm.getValue());
-                ArrayOfVirtualDevice devices = get.entityProp(vm,
-                        VimPath.vm_config_hardware_device);
-                if (devices != null) {
-                    VirtualMachineConfigSpec reconfig = new VirtualMachineConfigSpec();
+                    logger.info("Removing NICs from deployed template: {} ({})", vmName,
+                            vm.getValue());
+                    ArrayOfVirtualDevice devices = get.entityProp(vm,
+                            VimPath.vm_config_hardware_device);
+                    if (devices != null) {
+                        VirtualMachineConfigSpec reconfig = new VirtualMachineConfigSpec();
 
-                    for (VirtualDevice device : devices.getVirtualDevice()) {
-                        if (device instanceof VirtualEthernetCard) {
-                            VirtualDeviceConfigSpec spec = new VirtualDeviceConfigSpec();
-                            spec.setDevice(device);
-                            spec.setOperation(VirtualDeviceConfigSpecOperation.REMOVE);
-                            reconfig.getDeviceChange().add(spec);
+                        for (VirtualDevice device : devices.getVirtualDevice()) {
+                            if (device instanceof VirtualEthernetCard) {
+                                VirtualDeviceConfigSpec spec = new VirtualDeviceConfigSpec();
+                                spec.setDevice(device);
+                                spec.setOperation(VirtualDeviceConfigSpecOperation.REMOVE);
+                                reconfig.getDeviceChange().add(spec);
+                            }
                         }
+                        ManagedObjectReference reconfigTask = getVimPort()
+                                .reconfigVMTask(vm, reconfig);
+                        VimUtils.waitTaskEnd(this.connection, reconfigTask);
                     }
-                    ManagedObjectReference reconfigTask = getVimPort().reconfigVMTask(vm, reconfig);
-                    VimUtils.waitTaskEnd(this.connection, reconfigTask);
+                    ManagedObjectReference snapshotTask = getVimPort()
+                            .createSnapshotTask(vm, "initial",
+                                    null, false, false);
+                    VimUtils.waitTaskEnd(this.connection, snapshotTask);
                 }
-                ManagedObjectReference snapshotTask = getVimPort().createSnapshotTask(vm, "initial",
-                        null, false, false);
-                VimUtils.waitTaskEnd(this.connection, snapshotTask);
             } catch (Exception e) {
                 logger.warn("Error deploying Ovf for template [" + vmName + "],reason:", e);
-                vm = awaitVM(vmName, folder, ds, get);
+                vm = awaitVM(vmName, folder, get);
+            } finally {
+                lock.unlock();
             }
+        }
+
+        if (!isSameDatastore(ds, vm, get)) {
+            vm = replicateVMTemplate(resourcePool, ds, folder, vmName, vm, get);
         }
 
         return cloneOvfBasedTemplate(vm, ds, folder, resourcePool);
@@ -486,45 +497,49 @@ public class InstanceClient extends BaseHelper {
         }
 
         logger.info("Replicating {} ({}) to {}", vmName, vm.getValue(), replicatedName);
+        Lock lock = getLock(replicatedName);
+        lock.lock();
+        try {
+            VirtualMachineRelocateSpec spec = new VirtualMachineRelocateSpec();
+            spec.setPool(resourcePool);
+            spec.setDatastore(datastore);
 
-        VirtualMachineRelocateSpec spec = new VirtualMachineRelocateSpec();
-        spec.setPool(resourcePool);
-        spec.setDatastore(datastore);
+            VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
+            cloneSpec.setLocation(spec);
+            cloneSpec.setTemplate(false);
+            ManagedObjectReference cloneTask = getVimPort()
+                    .cloneVMTask(vm, vmFolder, replicatedName, cloneSpec);
 
-        VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
-        cloneSpec.setLocation(spec);
-        cloneSpec.setTemplate(false);
-        ManagedObjectReference cloneTask = getVimPort()
-                .cloneVMTask(vm, vmFolder, replicatedName, cloneSpec);
+            TaskInfo info = VimUtils.waitTaskEnd(this.connection, cloneTask);
 
-        TaskInfo info = VimUtils.waitTaskEnd(this.connection, cloneTask);
-
-        if (info.getState() == TaskInfoState.ERROR) {
-            MethodFault fault = info.getError().getFault();
-            if (fault instanceof DuplicateName) {
-                logger.info(
-                        "Template is being replicated by another thread, waiting for {} to be ready",
-                        replicatedName);
-                return awaitVM(replicatedName, vmFolder, datastore, get);
-            } else {
-                return VimUtils.rethrow(info.getError());
+            if (info.getState() == TaskInfoState.ERROR) {
+                MethodFault fault = info.getError().getFault();
+                if (fault instanceof DuplicateName) {
+                    logger.info(
+                            "Template is being replicated by another thread, waiting for {} to be ready",
+                            replicatedName);
+                    return awaitVM(replicatedName, vmFolder, get);
+                } else {
+                    return VimUtils.rethrow(info.getError());
+                }
             }
+
+            ManagedObjectReference rvm = (ManagedObjectReference) info.getResult();
+            logger.info("Replicated {} ({}) to {} ({})", vmName, vm.getValue(), replicatedName,
+                    rvm.getValue());
+            logger.info("Creating initial snapshot for linked clones on {}", rvm.getValue());
+            ManagedObjectReference snapshotTask = getVimPort().createSnapshotTask(rvm, "initial",
+                    null, false, false);
+            VimUtils.waitTaskEnd(this.connection, snapshotTask);
+            logger.info("Created initial snapshot for linked clones on {}", rvm.getValue());
+            return rvm;
+        } finally {
+            lock.unlock();
         }
-
-        ManagedObjectReference rvm = (ManagedObjectReference) info.getResult();
-        logger.info("Replicated {} ({}) to {} ({})", vmName, vm.getValue(), replicatedName,
-                rvm.getValue());
-        logger.info("Creating initial snapshot for linked clones on {}", rvm.getValue());
-        ManagedObjectReference snapshotTask = getVimPort().createSnapshotTask(rvm, "initial",
-                null, false, false);
-        VimUtils.waitTaskEnd(this.connection, snapshotTask);
-        logger.info("Created initial snapshot for linked clones on {}", rvm.getValue());
-        return rvm;
-
     }
 
     private ManagedObjectReference awaitVM(String replicatedName, ManagedObjectReference vmFolder,
-            ManagedObjectReference datastore, GetMoRef get)
+            GetMoRef get)
             throws RuntimeFaultFaultMsg, InvalidPropertyFaultMsg, FinderException {
 
         Element element = this.finder.fullPath(vmFolder);
@@ -610,7 +625,6 @@ public class InstanceClient extends BaseHelper {
                 .map(d -> (VirtualDisk) d).findFirst().orElse(null);
         VirtualMachineRelocateDiskMoveOptions diskMoveOptions = VirtualMachineRelocateDiskMoveOptions.CREATE_NEW_CHILD_DISK_BACKING;
 
-        String datastoreName = this.get.entityProp(datastore, VimPath.ds_summary_name);
         VirtualDevice scsiController = getFirstScsiController(devices);
         int scsiUnit = findFreeUnit(scsiController, devices.getVirtualDevice());
 
@@ -618,17 +632,21 @@ public class InstanceClient extends BaseHelper {
         DiskState bootDisk = findBootDisk();
         if (bootDisk != null) {
             if (vd == null) {
+                String datastoreName = this.get.entityProp(datastore, VimPath.ds_summary_name);
                 String path = makePathToVmdkFile("ephemeral_disk", vmName);
                 String diskName = String.format("[%s] %s", datastoreName, path);
                 VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(), scsiUnit, bootDisk,
                         diskName, datastore);
                 newDisks.add(hdd);
             } else {
-                if (vd.getCapacityInKB() < toKb(bootDisk.capacityMBytes)) {
-                    VirtualDeviceConfigSpec hdd = resizeHdd(vd, bootDisk);
-                    newDisks.add(hdd);
-                    diskMoveOptions = VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
-                }
+                // skip for now, as there is a problem with concurrent operation after that, have to
+                // investigate more.
+                // if (vd.getCapacityInKB() < toKb(bootDisk.capacityMBytes)) {
+                // VirtualDeviceConfigSpec hdd = resizeHdd(vd, bootDisk);
+                // newDisks.add(hdd);
+                // diskMoveOptions =
+                // VirtualMachineRelocateDiskMoveOptions.MOVE_CHILD_MOST_DISK_BACKING;
+                // }
             }
         }
 
@@ -855,7 +873,8 @@ public class InstanceClient extends BaseHelper {
         VirtualDisk virtualDisk = devices.getVirtualDevice().stream()
                 .filter(d -> d instanceof VirtualDisk)
                 .map(d -> (VirtualDisk) d).findFirst().orElse(null);
-        // If HDD disk is attached successfully and new boot size is > then existing size, then resize
+        // If HDD disk is attached successfully and new boot size is > then existing size, then
+        // resize
         if (virtualDisk != null && toKb(bootDisk.capacityMBytes) > virtualDisk.getCapacityInKB()) {
             VirtualDeviceConfigSpec hdd = resizeHdd(virtualDisk, bootDisk);
             return hdd;
@@ -1542,7 +1561,8 @@ public class InstanceClient extends BaseHelper {
         if (nicWithDetails.subnet != null) {
             // check if it is portgroup
             CustomProperties props = CustomProperties.of(nicWithDetails.subnet);
-            if (!StringUtil.isNullOrEmpty(props.getString(DvsProperties.DVS_UUID))) {
+            if (!io.netty.util.internal.StringUtil
+                    .isNullOrEmpty(props.getString(DvsProperties.DVS_UUID))) {
                 DistributedVirtualSwitchPortConnection port = new DistributedVirtualSwitchPortConnection();
                 port.setSwitchUuid(props.getString(DvsProperties.DVS_UUID));
                 port.setPortgroupKey(props.getString(DvsProperties.PORT_GROUP_KEY));
@@ -1587,6 +1607,7 @@ public class InstanceClient extends BaseHelper {
 
     /**
      * Convert bytes to MB rounding up to the nearest 4MB block.
+     *
      * @param bytes
      * @return
      */
@@ -1715,6 +1736,10 @@ public class InstanceClient extends BaseHelper {
                 .firstNonNull(this.state.resourcePoolLink, this.parent.resourcePoolLink);
 
         return state;
+    }
+
+    private Lock getLock(String key) {
+        return lockPerUri.computeIfAbsent(key, u -> new ReentrantLock());
     }
 
     public static class ClientException extends Exception {
