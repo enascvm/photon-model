@@ -871,7 +871,9 @@ public class AWSCostStatsService extends StatelessService {
         }
         logFine(() -> String.format("Reserved Instances stats count for %s is %d",
                 resourceComputeLink, reservedInstanceStats.size()));
-        resourceStats.statValues.put(normalizedReservedInstanceStatKey, reservedInstanceStats);
+        if (reservedInstanceStats.size() > 0) {
+            resourceStats.statValues.put(normalizedReservedInstanceStatKey, reservedInstanceStats);
+        }
 
         return resourceStats;
     }

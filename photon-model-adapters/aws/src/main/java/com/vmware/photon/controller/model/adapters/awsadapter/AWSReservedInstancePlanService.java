@@ -53,6 +53,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService;
 public class AWSReservedInstancePlanService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_RESERVED_INSTANCE_PLANS_ADAPTER;
     private static final int NO_OF_MONTHS = 3;
+    private static final String REGION = "Region";
 
     protected AWSClientManager ec2ClientManager;
 
@@ -223,6 +224,11 @@ public class AWSReservedInstancePlanService extends StatelessService {
                     if (reservedInstance.getEnd() != null && reservedInstance.getEnd().before(
                             endDate.toDate())) {
                         continue;
+                    }
+                    // Set the Region for RI's whose scope is region.
+                    if (reservedInstance != null && reservedInstance.getScope() != null &&
+                            reservedInstance.getScope().equals(REGION)) {
+                        reservedInstance.setAvailabilityZone(this.region.getRegionName());
                     }
                     this.context.reservedInstancesPlan.add(reservedInstance);
                 }
