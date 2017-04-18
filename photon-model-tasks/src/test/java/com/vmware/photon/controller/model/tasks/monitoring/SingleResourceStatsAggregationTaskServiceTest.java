@@ -285,7 +285,6 @@ public class SingleResourceStatsAggregationTaskServiceTest extends BaseModelTest
                 querySpec.sortTerm.propertyName = ServiceDocument.FIELD_NAME_SELF_LINK;
                 querySpec.options.add(QueryOption.EXPAND_CONTENT);
                 querySpec.options.add(QueryOption.SORT);
-                querySpec.options.add(QueryOption.TOP_RESULTS);
                 // No-op in photon-model. Required for special handling of immutable documents.
                 // This will prevent Lucene from holding the full result set in memory.
                 querySpec.options.add(QueryOption.INCLUDE_ALL_VERSIONS);

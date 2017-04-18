@@ -445,6 +445,11 @@ public class InstanceClient extends BaseHelper {
         }
 
         if (!isSameDatastore(ds, vm, get)) {
+            // make sure the original VM template is ready
+            Object snapshot = get.entityProp(vm, VimPath.vm_snapshot);
+            if (snapshot == null) {
+                vm = awaitVM(vmName, folder, get);
+            }
             vm = replicateVMTemplate(resourcePool, ds, folder, vmName, vm, get);
         }
 
@@ -503,10 +508,15 @@ public class InstanceClient extends BaseHelper {
             VirtualMachineRelocateSpec spec = new VirtualMachineRelocateSpec();
             spec.setPool(resourcePool);
             spec.setDatastore(datastore);
+            spec.setFolder(vmFolder);
+            spec.setDiskMoveType(
+                    VirtualMachineRelocateDiskMoveOptions.MOVE_ALL_DISK_BACKINGS_AND_ALLOW_SHARING
+                            .value());
 
             VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
             cloneSpec.setLocation(spec);
             cloneSpec.setTemplate(false);
+            cloneSpec.setPowerOn(false);
             ManagedObjectReference cloneTask = getVimPort()
                     .cloneVMTask(vm, vmFolder, replicatedName, cloneSpec);
 
