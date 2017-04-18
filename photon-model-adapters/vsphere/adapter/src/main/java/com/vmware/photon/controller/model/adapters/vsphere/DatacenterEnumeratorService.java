@@ -46,25 +46,25 @@ public class DatacenterEnumeratorService extends StatelessService {
 
         EnumerateDatacentersRequest req = patch.getBody(EnumerateDatacentersRequest.class);
 
-        if (req.isMock) {
-            patch.setBody(Collections.singletonList("dc-1"));
-            patch.complete();
-            return;
-        }
-
         try {
-            BasicConnection connection = new BasicConnection();
-            connection.setURI(URI.create("https://" + req.host + "/sdk"));
-            connection.setUsername(req.username);
-            connection.setPassword(req.password);
-            connection.setIgnoreSslErrors(true);
-            connection.connect();
+            List<String> dcs;
 
-            DatacenterLister lister = new DatacenterLister(connection);
+            if (req.isMock) {
+                dcs = Collections.singletonList("dc-1");
+            } else {
+                BasicConnection connection = new BasicConnection();
+                connection.setURI(URI.create("https://" + req.host + "/sdk"));
+                connection.setUsername(req.username);
+                connection.setPassword(req.password);
+                connection.setIgnoreSslErrors(true);
+                connection.connect();
 
-            List<String> dcs = lister.listAllDatacenters().stream()
-                    .map(el -> el.path)
-                    .collect(Collectors.toList());
+                DatacenterLister lister = new DatacenterLister(connection);
+
+                dcs = lister.listAllDatacenters().stream()
+                        .map(el -> el.path)
+                        .collect(Collectors.toList());
+            }
 
             EnumerateDatacentersResponse res = new EnumerateDatacentersResponse();
             res.datacenters = dcs;
