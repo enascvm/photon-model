@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -624,7 +625,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             return DeferredResult.completed(context);
         } else {
 
-            List<DeferredResult<Void>> updateNetwOrSubnTagLinksOps = new ArrayList<>();
+            List<DeferredResult<Set<String>>> updateNetwOrSubnTagLinksOps = new ArrayList<>();
             // update tag links for the existing NetworkStates
             for (String vpcId : context.awsVpcs.keySet()) {
                 if (!context.vpcs.containsKey(vpcId)) {

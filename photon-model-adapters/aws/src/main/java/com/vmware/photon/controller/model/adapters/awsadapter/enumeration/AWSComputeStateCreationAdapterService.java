@@ -453,7 +453,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             return DeferredResult.completed(context);
         } else {
 
-            List<DeferredResult<Void>> updateCSTagLinksOps = new ArrayList<>();
+            List<DeferredResult<Set<String>>> updateCSTagLinksOps = new ArrayList<>();
 
             for (String instanceId : context.request.instancesToBeUpdated.keySet()) {
                 Instance instance = context.request.instancesToBeUpdated.get(instanceId);

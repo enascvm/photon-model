@@ -157,7 +157,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         Map<String, String> computeDescriptionIds = new ConcurrentHashMap<>();
         // Compute States for patching additional fields.
         Map<String, ComputeState> computeStatesForPatching = new ConcurrentHashMap<>();
-        Map<String, VirtualMachine> vmsToUpdate = new ConcurrentHashMap<>();
         List<String> vmIds = new ArrayList<>();
         // Azure specific fields
         ApplicationTokenCredentials credentials;
@@ -699,7 +698,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .map(p -> {
                     ComputeState cs = p.getLeft();
                     Map<String, String> tags = p.getRight().tags;
-                    DeferredResult<Void> result = DeferredResult.completed(null);
+                    DeferredResult<Set<String>> result = DeferredResult.completed(null);
                     if (tags != null && !tags.isEmpty()) {
                         Set<String> tagLinks = cs.tagLinks;
                         cs.tagLinks = null;
@@ -1030,8 +1029,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void createNetworkInterfaceStates(EnumerationContext ctx,
             ComputeEnumerationSubStages next) {
-        Iterator<Entry<String, VirtualMachine>> iterator = ctx.virtualMachines.entrySet()
-                .iterator();
 
         NetworkManagementClient client = getNetworkManagementClient(ctx);
         NetworkInterfacesOperations netOps = client.getNetworkInterfacesOperations();
@@ -1301,8 +1298,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         // Patching power state and network Information. Hence 2.
         // If we patch more fields, this number should be increased accordingly.
-        Iterator<Entry<String, ComputeState>> iterator = ctx.computeStatesForPatching.entrySet()
-                .iterator();
         ComputeManagementClient computeClient = getComputeManagementClient(ctx);
         VirtualMachinesOperations vmOps = computeClient
                 .getVirtualMachinesOperations();

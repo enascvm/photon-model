@@ -494,15 +494,6 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
 
         final LOCAL_STATE currentState = this.localResourceStates.get(localState.id);
 
-        // NOTE: It's important to call this prior calling localStateOp.setBody(localState) so
-        // localState.tagLinks is populated.
-        // NEXT: rework.
-        DeferredResult<Void> tagsDR = TagsUtil.createOrUpdateTagStates(
-                this.service,
-                localState,
-                currentState,
-                localStateHolder.remoteTags);
-
         // POST or PATCH local state
         final Operation localStateOp;
 
@@ -523,9 +514,19 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
             localStateOp = Operation.createPatch(this.service, currentState.documentSelfLink);
         }
 
-        localStateOp.setBody(localState);
+        DeferredResult<Set<String>> tagsDR = TagsUtil.createOrUpdateTagStates(
+                this.service,
+                localState,
+                currentState,
+                localStateHolder.remoteTags);
 
-        return tagsDR.thenCompose(ignore -> this.service.sendWithDeferredResult(localStateOp)
+        return tagsDR
+                .thenCompose(tagsSet -> {
+                    localState.tagLinks = tagsSet;
+                    localStateOp.setBody(localState);
+                    return DeferredResult.completed(localStateOp);
+                })
+                .thenCompose(uodatedLocalStateOp -> this.service.sendWithDeferredResult(uodatedLocalStateOp)
                 .whenComplete((ignoreOp, exc) -> {
                     String msg = "%s local %s(id=%s) to match remote resources";
                     if (exc != null) {

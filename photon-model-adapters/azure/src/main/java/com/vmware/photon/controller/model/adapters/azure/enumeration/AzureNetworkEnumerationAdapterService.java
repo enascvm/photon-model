@@ -33,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -854,7 +855,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             return DeferredResult.completed(context);
         } else {
 
-            List<DeferredResult<Void>> updateNetwLinksOps = new ArrayList<>();
+            List<DeferredResult<Set<String>>> updateNetwLinksOps = new ArrayList<>();
             // update tag links for the existing NetworkStates
             for (String vnetId : context.networkStates.keySet()) {
                 if (!context.virtualNetworks.containsKey(vnetId)) {
