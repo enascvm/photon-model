@@ -316,6 +316,14 @@ public class OvfParser {
 
     private DocumentBuilder newDocumentBuilder() {
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        try {
+            dbf.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        } catch (ParserConfigurationException e) {
+            throw new IllegalStateException(e);
+        }
+
         dbf.setNamespaceAware(true);
         dbf.setValidating(false);
         try {
