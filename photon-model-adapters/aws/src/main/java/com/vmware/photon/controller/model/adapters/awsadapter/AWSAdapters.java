@@ -17,6 +17,9 @@ import java.util.logging.Level;
 
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.awsadapter.enumeration.AWSImageEnumerationAdapterService;
+
+import com.vmware.photon.controller.model.adapters.awsadapter.enumeration
+        .AWSMissingResourcesEnumerationService;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
@@ -41,7 +44,8 @@ public class AWSAdapters {
             AWSImageEnumerationAdapterService.SELF_LINK,
             AWSEndpointAdapterService.SELF_LINK,
             AWSPowerService.SELF_LINK,
-            AWSFirewallService.SELF_LINK };
+            AWSFirewallService.SELF_LINK,
+            AWSMissingResourcesEnumerationService.SELF_LINK};
 
     /**
      * The link of AWS configuration registered in {@link PhotonModelAdaptersRegistryService
@@ -65,7 +69,7 @@ public class AWSAdapters {
             host.startService(new AWSEndpointAdapterService());
             host.startService(new AWSPowerService());
             host.startService(new AWSFirewallService());
-
+            host.startService(new AWSMissingResourcesEnumerationService());
             EndpointAdapterUtils.registerEndpointAdapters(
                     host, EndpointType.aws, LINKS, AWSUriPaths.AWS_ADAPTER_LINK_TYPES);
 

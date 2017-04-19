@@ -224,7 +224,8 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         sendStatsRequest(account, parentService);
     }
 
-    private void sendStatsRequest(ComputeState account, StatelessService parentService) {
+    private void sendStatsRequest(ComputeState account, StatelessService parentService)
+            throws Throwable {
         String servicePath = UUID.randomUUID().toString();
         Operation startOp = Operation.createPost(UriUtils.buildUri(this.host, servicePath));
         this.host.startService(startOp, parentService);
@@ -252,10 +253,15 @@ public class TestAWSCostAdapterService extends BaseModelTest {
                 .getNormalizedStatKeyValue(AWSConstants.COST);
         if (isFinalBatch) {
             // verify account costs
+            if (account2Stats != null) {
+                assertTrue(account2Stats.statValues.get(normalizedStatKeyValue)
+                        .get(0).latestValue == account2TotalCost);
+            }
+            return;
+        }
+        if (account1Stats != null && account1Stats.statValues.get(normalizedStatKeyValue) != null) {
             assertTrue(account1Stats.statValues.get(normalizedStatKeyValue)
                     .get(0).latestValue == account1TotalCost);
-            assertTrue(account2Stats.statValues.get(normalizedStatKeyValue)
-                    .get(0).latestValue == account2TotalCost);
             return;
         }
 

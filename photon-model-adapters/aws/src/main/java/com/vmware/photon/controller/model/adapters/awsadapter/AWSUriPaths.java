@@ -65,10 +65,9 @@ public class AWSUriPaths {
             + "/security-group-enumeration-adapter";
     public static final String AWS_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
             .adapterLink(EndpointType.aws.name());
-
     public static final String AWS_POWER_ADAPTER = AdapterTypePath.POWER_ADAPTER
             .adapterLink(EndpointType.aws.name());
-
+    public static final String AWS_MISSING_RESOURCES_SERVICE = PROVISIONING_AWS + "/missing_resources_enumeration";
     /**
      * Map an adapter link to its {@link AdapterTypePath adapter type}.
      */
