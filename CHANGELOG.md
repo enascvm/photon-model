@@ -1,7 +1,13 @@
 # CHANGELOG
 
-## 0.6.13-SNAPSHOT
+## 0.6.13
 
+* Upgrading to xenon-1.4.2.
+* [Azure] Added Azure subnet service.
+* [Azure] Image enumeration supports a predefined list of well-defined images.
+* Syncing added during OVF deploy and replication.
+* Additional attributes accepted for DiskState for more specificity.
+* [AWS/Azure] Introduction of several long-running E2E tests for stats and enumeration.
 
 ## 0.6.12
 
