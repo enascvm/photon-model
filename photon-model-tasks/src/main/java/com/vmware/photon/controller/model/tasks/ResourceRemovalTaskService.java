@@ -389,7 +389,7 @@ public class ResourceRemovalTaskService
         subTaskInitState.tenantLinks = currentState.tenantLinks;
         subTaskInitState.documentExpirationTimeMicros = currentState.documentExpirationTimeMicros;
         Operation startPost = Operation
-                .createPost(this, UUID.randomUUID().toString())
+                .createPost(this, SubTaskService.FACTORY_LINK)
                 .setBody(subTaskInitState)
                 .setCompletion(
                         (o, e) -> {
@@ -404,7 +404,7 @@ public class ResourceRemovalTaskService
 
                             subTaskLinkConsumer.accept(body.documentSelfLink);
                         });
-        getHost().startService(startPost, new SubTaskService<SubStage>());
+        sendRequest(startPost);
     }
 
     private void sendInstanceDelete(String resourceLink, String subTaskLink,

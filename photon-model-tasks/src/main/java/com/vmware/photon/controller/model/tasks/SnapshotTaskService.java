@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.tasks;
 
 import java.net.URI;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -222,7 +221,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
         subTaskInitState.serviceTaskCallback = ServiceTaskCallback.create(getSelfLink())
                 .onSuccessFinishTask();
         Operation startPost = Operation
-                .createPost(this, UUID.randomUUID().toString())
+                .createPost(this, SubTaskService.FACTORY_LINK)
                 .setBody(subTaskInitState)
                 .setCompletion(
                         (o, e) -> {
@@ -237,7 +236,7 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
                                     .getBody(SubTaskService.SubTaskState.class);
                             createSnapshot(currentState, body.documentSelfLink);
                         });
-        getHost().startService(startPost, new SubTaskService());
+        sendRequest(startPost);
     }
 
     public boolean validateStageTransition(Operation patch,

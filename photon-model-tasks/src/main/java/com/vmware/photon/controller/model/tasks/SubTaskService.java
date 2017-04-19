@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.xenon.common.Operation;
@@ -32,6 +33,7 @@ import com.vmware.xenon.services.common.TaskService;
  */
 public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskService.SubTaskState<E>> {
 
+    public static final String FACTORY_LINK = UriPaths.TASKS + "/sub-tasks";
     /**
      * Represent the state of subtask service.
      */
@@ -70,6 +72,10 @@ public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskServic
 
     public SubTaskService() {
         super(SubTaskState.class);
+
+        // Will be enabled once Prelude is adapted to this change.
+        // super.toggleOption(ServiceOption.REPLICATION, true);
+        // super.toggleOption(ServiceOption.OWNER_SELECTION, true);
     }
 
     @Override

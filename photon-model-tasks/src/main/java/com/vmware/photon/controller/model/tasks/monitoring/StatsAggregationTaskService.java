@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.tasks.monitoring;
 
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -225,12 +224,13 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
         } else {
             callback.onSuccessFinishTask();
         }
-        SubTaskService.SubTaskState<StatsAggregationStage> subTaskInitState = new SubTaskService.SubTaskState<StatsAggregationStage>();
+        SubTaskService.SubTaskState<StatsAggregationStage> subTaskInitState =
+                new SubTaskService.SubTaskState<>();
         subTaskInitState.errorThreshold = 0;
         subTaskInitState.completionsRemaining = computeResources.size();
         subTaskInitState.serviceTaskCallback = callback;
         Operation startPost = Operation
-                .createPost(this, UUID.randomUUID().toString())
+                .createPost(this, SubTaskService.FACTORY_LINK)
                 .setBody(subTaskInitState)
                 .setCompletion((postOp, postEx) -> {
                     if (postEx != null) {
@@ -245,7 +245,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
                         createSingleResourceComputeTask(computeLink, body.documentSelfLink, currentState);
                     }
                 });
-        getHost().startService(startPost, new SubTaskService<StatsAggregationStage>());
+        sendRequest(startPost);
     }
 
     private void createSingleResourceComputeTask(String resourceLink, String subtaskLink, StatsAggregationTaskState currentState ) {

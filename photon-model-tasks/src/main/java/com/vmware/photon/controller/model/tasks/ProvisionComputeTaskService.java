@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.tasks;
 
 import java.net.URI;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
@@ -28,8 +27,10 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.BootDevice;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
+import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
 import com.vmware.xenon.common.UriUtils;
@@ -45,7 +46,8 @@ import com.vmware.xenon.services.common.TaskService;
  * higher level task, which is partitioned. So this task executes in isolation,
  * per node.
  */
-public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTaskService.ProvisionComputeTaskState> {
+public class ProvisionComputeTaskService
+        extends TaskService<ProvisionComputeTaskService.ProvisionComputeTaskState> {
     public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/compute-tasks";
 
     /**
@@ -328,7 +330,8 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
             // services
             // will provide the image reference (retrieved from the computeReference)
 
-            cr.taskReference = o.getUri();
+            ServiceDocument subTask = o.getBody(ServiceDocument.class);
+            cr.taskReference = UriUtils.buildUri(this.getHost(), subTask.documentSelfLink);
             cr.isMockRequest = updatedState.isMockRequest;
             sendHostServiceRequest(cr, updatedState.instanceAdapterReference);
         };
@@ -367,7 +370,8 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
             for (BootDevice bootDevice : bootDevices) {
                 br.bootDeviceOrder.add(bootDevice);
             }
-            br.taskReference = o.getUri();
+            ServiceDocument subTask = o.getBody(ServiceDocument.class);
+            br.taskReference = UriUtils.buildUri(this.getHost(), subTask.documentSelfLink);
             br.isMockRequest = updatedState.isMockRequest;
             sendHostServiceRequest(br, updatedState.bootAdapterReference);
         };
@@ -418,15 +422,15 @@ public class ProvisionComputeTaskService extends TaskService<ProvisionComputeTas
         ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
         callback.onSuccessTo(nextStage);
 
-        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
+        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<>();
         subTaskInitState.errorThreshold = 0;
         subTaskInitState.serviceTaskCallback = callback;
         subTaskInitState.tenantLinks = currentState.tenantLinks;
         subTaskInitState.documentExpirationTimeMicros = currentState.documentExpirationTimeMicros;
         Operation startPost = Operation
-                .createPost(this, UUID.randomUUID().toString())
+                .createPost(this, SubTaskService.FACTORY_LINK)
                 .setBody(subTaskInitState).setCompletion(c);
-        getHost().startService(startPost, new SubTaskService<SubStage>());
+        sendRequest(startPost);
     }
 
     private void sendHostServiceRequest(Object body, URI adapterReference) {

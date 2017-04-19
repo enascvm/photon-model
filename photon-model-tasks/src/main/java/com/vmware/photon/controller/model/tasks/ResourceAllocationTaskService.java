@@ -567,7 +567,7 @@ public class ResourceAllocationTaskService
         subTaskInitState.completionsRemaining = currentState.resourceCount;
         subTaskInitState.tenantLinks = currentState.tenantLinks;
         Operation startPost = Operation
-                .createPost(this, UUID.randomUUID().toString())
+                .createPost(this, SubTaskService.FACTORY_LINK)
                 .setBody(subTaskInitState)
                 .setCompletion(
                         (o, e) -> {
@@ -583,7 +583,7 @@ public class ResourceAllocationTaskService
                             doComputeResourceProvisioning(currentState, desc,
                                     body.documentSelfLink);
                         });
-        getHost().startService(startPost, new SubTaskService<SubStage>());
+        sendRequest(startPost);
     }
 
     // Create all the dependencies, then create the compute document. createDisk

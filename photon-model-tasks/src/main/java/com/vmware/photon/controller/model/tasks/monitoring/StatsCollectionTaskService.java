@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.tasks.monitoring;
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.UUID;
 
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -314,12 +313,12 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
             callback.onSuccessFinishTask();
         }
 
-        SubTaskState<StatsCollectionStage> subTaskInitState = new SubTaskState<StatsCollectionStage>();
+        SubTaskState<StatsCollectionStage> subTaskInitState = new SubTaskState<>();
         subTaskInitState.errorThreshold = 0;
         subTaskInitState.completionsRemaining = computeResources.size();
         subTaskInitState.serviceTaskCallback = callback;
         Operation startPost = Operation
-                .createPost(this, UUID.randomUUID().toString())
+                .createPost(this, SubTaskService.FACTORY_LINK)
                 .setBody(subTaskInitState)
                 .setCompletion((postOp, postEx) -> {
                     if (postEx != null) {
@@ -334,7 +333,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                         createSingleResourceComputeTask(computeLink, body.documentSelfLink, currentState.statsAdapterReference);
                     }
                 });
-        getHost().startService(startPost, new SubTaskService<StatsCollectionStage>());
+        sendRequest(startPost);
     }
 
     private void createSingleResourceComputeTask(String computeLink, String subtaskLink,
@@ -343,7 +342,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
         initState.parentTaskReference = UriUtils.buildPublicUri(getHost(), subtaskLink);
         initState.computeLink = computeLink;
         initState.statsAdapterReference = statsAdapterReference;
-        SubTaskState<StatsCollectionStage> patchState = new SubTaskState<StatsCollectionStage>();
+        SubTaskState<StatsCollectionStage> patchState = new SubTaskState<>();
         patchState.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
         initState.parentPatchBody = patchState;
         sendRequest(Operation

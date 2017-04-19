@@ -51,6 +51,7 @@ import com.vmware.photon.controller.model.tasks.ScheduledTaskService.ScheduledTa
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.OperationSequence;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.TaskState;
@@ -251,7 +252,8 @@ public class EndpointAllocationTaskService
             req.tenantLinks = currentState.tenantLinks;
             req.resourceReference = UriUtils.buildUri(getHost(),
                     currentState.endpointState.documentSelfLink);
-            req.taskReference = o.getUri();
+            ServiceDocument subTask = o.getBody(ServiceDocument.class);
+            req.taskReference = UriUtils.buildUri(this.getHost(), subTask.documentSelfLink);
             req.endpointProperties = currentState.endpointState.endpointProperties;
             sendEnhanceRequest(req, currentState);
         };
@@ -265,16 +267,16 @@ public class EndpointAllocationTaskService
         ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
         callback.onSuccessTo(nextStage).onErrorTo(SubStage.FAILED);
 
-        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<SubStage>();
+        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<>();
         subTaskInitState.errorThreshold = 0;
 
         subTaskInitState.serviceTaskCallback = callback;
         subTaskInitState.tenantLinks = currentState.endpointState.tenantLinks;
         subTaskInitState.documentExpirationTimeMicros = currentState.documentExpirationTimeMicros;
         Operation startPost = Operation
-                .createPost(this, UUID.randomUUID().toString())
+                .createPost(this, SubTaskService.FACTORY_LINK)
                 .setBody(subTaskInitState).setCompletion(c);
-        getHost().startService(startPost, new SubTaskService<SubStage>());
+        sendRequest(startPost);
     }
 
     private void sendEnhanceRequest(Object body, EndpointAllocationTaskState currentState) {
@@ -780,7 +782,7 @@ public class EndpointAllocationTaskService
     private AuthCredentialsServiceState configureAuth(EndpointState state) {
         AuthCredentialsServiceState authState = new AuthCredentialsServiceState();
         authState.tenantLinks = state.tenantLinks;
-        authState.customProperties = new HashMap<String, String>();
+        authState.customProperties = new HashMap<>();
         if (state.customProperties != null) {
             authState.customProperties.putAll(state.customProperties);
         }
@@ -801,7 +803,7 @@ public class EndpointAllocationTaskService
         cd.authCredentialsLink = state.authCredentialsLink;
         cd.name = state.name;
         cd.id = UUID.randomUUID().toString();
-        cd.customProperties = new HashMap<String, String>();
+        cd.customProperties = new HashMap<>();
         if (state.customProperties != null) {
             cd.customProperties.putAll(state.customProperties);
         }

@@ -43,7 +43,9 @@ public class PhotonModelTaskServices {
             SingleResourceStatsCollectionTaskService.FACTORY_LINK,
             StatsAggregationTaskService.FACTORY_LINK,
             EndpointAllocationTaskService.FACTORY_LINK,
-            SingleResourceStatsAggregationTaskService.FACTORY_LINK };
+            SingleResourceStatsAggregationTaskService.FACTORY_LINK,
+            SubTaskService.FACTORY_LINK
+    };
 
     public static void startServices(ServiceHost host) throws Throwable {
 
@@ -82,5 +84,7 @@ public class PhotonModelTaskServices {
                 () -> SingleResourceStatsCollectionTaskService.createFactory());
         host.startFactory(StatsCollectionTaskService.class,
                 () -> StatsCollectionTaskService.createFactory());
+        host.startFactory(SubTaskService.class,
+                () -> TaskFactoryService.create(SubTaskService.class));
     }
 }
