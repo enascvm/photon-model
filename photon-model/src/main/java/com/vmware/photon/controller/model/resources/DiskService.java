@@ -107,7 +107,6 @@ public class DiskService extends StatefulService {
         /**
          * Type of this disk service instance.
          */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
         public DiskType type;
 
         /**

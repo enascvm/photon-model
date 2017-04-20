@@ -152,16 +152,6 @@ public class DiskServiceTest extends Suite {
                     IllegalArgumentException.class);
         }
 
-        @Test
-        public void testMissingType() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
-            startState.type = null;
-
-            postServiceSynchronously(DiskService.FACTORY_LINK,
-                    startState, DiskService.DiskState.class,
-                    IllegalArgumentException.class);
-        }
-
         public void testCapacityLessThanOneMB(Long capacityMBytes)
                 throws Throwable {
             DiskService.DiskState startState = buildValidStartState();
