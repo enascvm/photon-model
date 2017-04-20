@@ -852,9 +852,32 @@ public class EndpointAllocationTaskService
     }
 
     private void complete(EndpointAllocationTaskState state, SubStage completeSubStage) {
-        if (!TaskUtils.isFailedOrCancelledTask(state)) {
+        if (TaskUtils.isFailedOrCancelledTask(state)) {
+            return;
+        }
+
+        if (state.endpointState.documentSelfLink != null) {
+            Operation.createGet(this, state.endpointState.documentSelfLink)
+                    .setCompletion((o, e) -> {
+                        if (e != null) {
+                            sendFailurePatch(this, state, e);
+                            return;
+                        }
+
+                        state.taskInfo.stage = TaskStage.FINISHED;
+                        state.taskSubStage = completeSubStage;
+
+                        // Return to the caller the latest/enhanced version of the ednpoint
+                        state.endpointState = o.getBody(EndpointState.class);
+
+                        sendSelfPatch(state);
+                    })
+                    .sendWith(this);
+        } else {
+            // VALIDATE_CREDENTIALS request type
             state.taskInfo.stage = TaskStage.FINISHED;
             state.taskSubStage = completeSubStage;
+
             sendSelfPatch(state);
         }
     }
