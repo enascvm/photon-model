@@ -28,6 +28,9 @@ import com.vmware.xenon.common.UriUtils;
  */
 public class ResourceOperationSpecFactoryService extends FactoryService {
 
+    public static final String TOKEN_SEPARATOR = "-";
+    private static final String TOKEN_SEPARATOR_REPLACEMENT = "_";
+
     public ResourceOperationSpecFactoryService() {
         super(ResourceOperationSpec.class);
 
@@ -68,6 +71,8 @@ public class ResourceOperationSpecFactoryService extends FactoryService {
     }
 
     private static String generateId(ResourceOperationSpec state) {
-        return state.endpointType.replace("-", "_") + "-" + state.operation;
+        return state.endpointType.replace(TOKEN_SEPARATOR, TOKEN_SEPARATOR_REPLACEMENT)
+                + TOKEN_SEPARATOR + state.resourceType.name().toLowerCase()
+                + TOKEN_SEPARATOR + state.operation;
     }
 }

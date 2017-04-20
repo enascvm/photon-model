@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.registry;
+package com.vmware.photon.controller.model.adapters.registry.operations;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.vmware.photon.controller.model.adapters.registry.BaseAdaptersRegistryServiceTest;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecFactoryService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;

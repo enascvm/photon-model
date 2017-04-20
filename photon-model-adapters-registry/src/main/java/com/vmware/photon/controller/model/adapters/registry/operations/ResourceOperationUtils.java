@@ -53,7 +53,6 @@ public class ResourceOperationUtils {
             ResourceType resourceType,
             String operation) {
 
-        DeferredResult<ResourceOperationSpec> ret = new DeferredResult<>();
         Query query = Query.Builder.create()
                 .addKindFieldClause(ResourceOperationSpec.class)
                 .addFieldClause(
