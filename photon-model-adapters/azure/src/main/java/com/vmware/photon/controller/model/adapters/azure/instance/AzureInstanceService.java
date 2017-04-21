@@ -800,8 +800,7 @@ public class AzureInstanceService extends StatelessService {
             }
         };
 
-        azureClient.beginCreateOrUpdateAsync(
-                vNetRGName, vNetName, vNetToCreate, handler);
+        azureClient.createOrUpdateAsync(vNetRGName, vNetName, vNetToCreate, handler);
 
         handler.toDeferredResult()
                 .thenApply(ignore -> ctx)
@@ -895,8 +894,7 @@ public class AzureInstanceService extends StatelessService {
             }
         };
 
-        azureClient.beginCreateOrUpdateAsync(
-                publicIPRGName, publicIPName, publicIPAddress, handler);
+        azureClient.createOrUpdateAsync(publicIPRGName, publicIPName, publicIPAddress, handler);
 
         handler.toDeferredResult()
                 .thenApply(ignore -> ctx)
@@ -1046,8 +1044,7 @@ public class AzureInstanceService extends StatelessService {
             }
         };
 
-        azureClient.beginCreateOrUpdateAsync(
-                nsgRGName, nsgName, securityGroupToCreate, handler);
+        azureClient.createOrUpdateAsync(nsgRGName, nsgName, securityGroupToCreate, handler);
 
         return handler.toDeferredResult();
     }
@@ -1073,7 +1070,7 @@ public class AzureInstanceService extends StatelessService {
 
             String msg = "Creating Azure NIC [" + nicName + "] for [" + ctx.vmName + "] VM";
 
-            azureClient.beginCreateOrUpdateAsync(
+            azureClient.createOrUpdateAsync(
                     ctx.resourceGroup.getName(),
                     nicName,
                     nic,

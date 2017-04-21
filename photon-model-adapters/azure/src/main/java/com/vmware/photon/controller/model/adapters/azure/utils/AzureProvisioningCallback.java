@@ -29,7 +29,7 @@ import com.vmware.xenon.common.StatelessService;
 /**
  * Use this Azure callback in case of Azure provisioning call (such as create vNet, NIC, etc.) with
  * a method signature similar to:
- * {@code ServiceCall beginCreateOrUpdateAsync(..., ServiceCallback<RES> callback)}
+ * {@code ServiceCall createOrUpdateAsync(..., ServiceCallback<RES> callback)}
  * <p>
  * The provisioning state of resources returned by Azure 'create' call is 'Updating'. This callback
  * is responsible to wait for resource provisioning state to change to 'Succeeded'.

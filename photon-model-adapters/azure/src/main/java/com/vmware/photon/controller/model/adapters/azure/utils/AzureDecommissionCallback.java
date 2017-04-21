@@ -27,7 +27,7 @@ import com.vmware.xenon.common.StatelessService;
 /**
  * Use this Azure callback in case of Azure decommission call (such as delete Resource Group) with a
  * method signature similar to:
- * {@code ServiceCall beginDeleteAsync(..., ServiceCallback<Void> deleteCallback)}
+ * {@code ServiceCall deleteAsync(..., ServiceCallback<Void> deleteCallback)}
  * <p>
  * This callback is responsible to wait until the resource does not exist on the Azure.
  */
@@ -58,7 +58,7 @@ public abstract class AzureDecommissionCallback extends AzureDeferredResultServi
 
     @Override
     protected final DeferredResult<Void> consumeSuccess(Void body) {
-        // Assume the resource STILL EXISTs upon beginDeleteAsync method completion
+        // Assume the resource STILL EXISTs upon deleteAsync method completion
         final Boolean existence = true;
         return waitDecommissionToSucceed(existence).thenCompose(this::consumeDecommissionSuccess);
     }
