@@ -73,9 +73,8 @@ public class SubTaskService<E extends Enum<E>> extends TaskService<SubTaskServic
     public SubTaskService() {
         super(SubTaskState.class);
 
-        // Will be enabled once Prelude is adapted to this change.
-        // super.toggleOption(ServiceOption.REPLICATION, true);
-        // super.toggleOption(ServiceOption.OWNER_SELECTION, true);
+        super.toggleOption(ServiceOption.REPLICATION, true);
+        super.toggleOption(ServiceOption.OWNER_SELECTION, true);
     }
 
     @Override
