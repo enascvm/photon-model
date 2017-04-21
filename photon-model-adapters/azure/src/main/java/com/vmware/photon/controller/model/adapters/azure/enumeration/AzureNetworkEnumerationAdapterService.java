@@ -528,6 +528,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
+        subnetState.supportPublicIpAddress = true;
 
         subnetState.customProperties = new HashMap<>();
         subnetState.customProperties.put(REGION_ID, location);
