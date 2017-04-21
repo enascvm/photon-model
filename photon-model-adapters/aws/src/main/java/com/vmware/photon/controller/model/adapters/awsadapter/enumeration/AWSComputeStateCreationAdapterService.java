@@ -56,9 +56,6 @@ import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.TagService;
@@ -408,27 +405,6 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     private NetworkInterfaceState createNICStateAndDescription(
             AWSComputeStateCreationContext context, InstanceNetworkInterface awsNic) {
 
-        final NetworkInterfaceDescription nicDescription;
-        {
-            nicDescription = new NetworkInterfaceDescription();
-            nicDescription.id = UUID.randomUUID().toString();
-            nicDescription.name = "nic-" + awsNic.getAttachment().getDeviceIndex()
-                    + "-desc";
-            nicDescription.assignment = IpAssignment.DYNAMIC;
-            nicDescription.deviceIndex = awsNic.getAttachment().getDeviceIndex();
-            // Link is set, because it's referenced by NICState before post
-            nicDescription.documentSelfLink = UUID.randomUUID().toString();
-            nicDescription.tenantLinks = context.request.tenantLinks;
-            nicDescription.endpointLink = context.request.endpointLink;
-
-            Operation postNetworkInterfaceDescription = createPostOperation(
-                    this, nicDescription,
-                    NetworkInterfaceDescriptionService.FACTORY_LINK);
-
-            context.enumerationOperations
-                    .add(postNetworkInterfaceDescription);
-        }
-
         final NetworkInterfaceState nicState;
         {
             nicState = new NetworkInterfaceState();
@@ -456,11 +432,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 }
             }
 
-            nicState.deviceIndex = nicDescription.deviceIndex;
-            nicState.networkInterfaceDescriptionLink = UriUtils
-                    .buildUriPath(
-                            NetworkInterfaceDescriptionService.FACTORY_LINK,
-                            nicDescription.documentSelfLink);
+            nicState.deviceIndex = awsNic.getAttachment().getDeviceIndex();
+
             // Link is set, because it's referenced by CS before post
             nicState.documentSelfLink = UUID.randomUUID().toString();
 
