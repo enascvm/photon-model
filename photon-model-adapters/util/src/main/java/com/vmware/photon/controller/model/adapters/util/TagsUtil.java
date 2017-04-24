@@ -118,6 +118,19 @@ public class TagsUtil {
             ResourceState localState,
             Map<String, String> remoteTagsMap) {
 
+        return updateLocalTagStates(service, localState, localState.tagLinks, remoteTagsMap);
+    }
+
+    /**
+     * Compare local with remote tags and identify which local tag links to remove and which to add
+     * to the resource state's list, in order the resource state to contain exactly the tag states,
+     * corresponding to the remote tags.
+     */
+    public static DeferredResult<Void> updateLocalTagStates(
+            StatelessService service,
+            ResourceState localState, Set<String> currentTagLinks,
+            Map<String, String> remoteTagsMap) {
+
         Map<String, TagState> remoteTagStates;
 
         if (remoteTagsMap == null) {
@@ -139,8 +152,8 @@ public class TagsUtil {
             // the remote tags which do not exist locally will be added to the computeState tagLinks
             // list
             tagLinksToAdd = new HashSet<>(remoteTagStates.keySet());
-            if (localState.tagLinks != null) {
-                tagLinksToAdd.removeAll(localState.tagLinks);
+            if (currentTagLinks != null) {
+                tagLinksToAdd.removeAll(currentTagLinks);
             }
 
             // not existing locally tags should be created
@@ -162,10 +175,10 @@ public class TagsUtil {
             // all local tag links which do not have remote correspondents and are external will be
             // removed from the currentState's tagLinks list
             Set<String> tagLinksToRemove = new HashSet<>();
-            if (localState.tagLinks == null) {
+            if (currentTagLinks == null) {
                 removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
             } else {
-                tagLinksToRemove.addAll(localState.tagLinks);
+                tagLinksToRemove.addAll(currentTagLinks);
                 tagLinksToRemove.removeAll(remoteTagStates.keySet());
 
                 if (tagLinksToRemove.isEmpty()) {

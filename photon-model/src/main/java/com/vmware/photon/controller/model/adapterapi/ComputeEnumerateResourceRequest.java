@@ -26,7 +26,6 @@ public class ComputeEnumerateResourceRequest extends ResourceRequest {
      */
     public String resourcePoolLink;
 
-
     /**
      * Enumeration Action Start, stop, refresh.
      */
@@ -39,8 +38,9 @@ public class ComputeEnumerateResourceRequest extends ResourceRequest {
 
     /**
      * If set to true, the adapter must not delete the missing resources, but set their
-     * {@link  com.vmware.photon.controller.model.resources.ComputeService.ComputeState#lifecycleState} field to
-     * {@link  com.vmware.photon.controller.model.resources.ComputeService.LifecycleState#RETIRED}
+     * {@link com.vmware.photon.controller.model.resources.ComputeService.ComputeState#lifecycleState}
+     * field to
+     * {@link com.vmware.photon.controller.model.resources.ComputeService.LifecycleState#RETIRED}
      */
     public boolean preserveMissing;
 
@@ -48,4 +48,11 @@ public class ComputeEnumerateResourceRequest extends ResourceRequest {
      * Link reference to the cloud account endpoint of this host
      */
     public String endpointLink;
+
+    /**
+     * Return a key to uniquely identify enumeration for endpoint and resource pool instance.
+     */
+    public String getEnumKey() {
+        return "endpoint:[" + this.endpointLink + "],pool:[" + this.resourcePoolLink + "]";
+    }
 }

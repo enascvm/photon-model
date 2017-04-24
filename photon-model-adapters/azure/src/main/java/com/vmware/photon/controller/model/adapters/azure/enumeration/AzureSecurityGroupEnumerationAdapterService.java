@@ -27,8 +27,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
@@ -48,7 +46,7 @@ import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterR
 import com.vmware.photon.controller.model.adapters.util.enums.BaseComputeEnumerationAdapterContext;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
 import com.vmware.photon.controller.model.query.QueryStrategy;
-import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
@@ -282,21 +280,19 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                             ComputeProperties.RESOURCE_TYPE_KEY,
                             ResourceGroupStateType.AzureResourceGroup.name());
 
-            QueryStrategy<ResourceGroupState> queryByPages = new QueryTop<>(
+            QueryStrategy<ResourceGroupState> queryByPages = new QueryByPages<ResourceGroupState>(
                     this.service.getHost(),
                     qBuilder.build(),
                     ResourceGroupState.class,
                     context.request.parentCompute.tenantLinks,
                     context.request.original.endpointLink)
-                            .setMaxResultsLimit(resourceGroupIds.size());
+                            .setMaxPageSize(resourceGroupIds.size());
 
             return queryByPages.queryDocuments(
                     rgState -> this.securityGroupRGStates.put(rgState.id, rgState.documentSelfLink))
                     .thenApply(ignore -> context);
         }
     }
-
-    Set<String> ongoingEnumerations = new ConcurrentSkipListSet<>();
 
     public AzureSecurityGroupEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
@@ -347,14 +343,8 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             String enumKey = getEnumKey(context);
             switch (context.request.original.enumerationAction) {
             case START:
-                if (!this.ongoingEnumerations.add(enumKey)) {
-                    logWarning(() -> String.format("Enumeration service has already been started"
-                            + " for %s", enumKey));
-                    context.stage = EnumerationStages.FINISHED;
-                    handleEnumeration(context);
-                    return;
-                }
-                logInfo(() -> String.format("Launching enumeration service for %s", enumKey));
+                logInfo(() -> String.format("Launching Azure SecurityGroup enumeration for %s",
+                        enumKey));
                 context.request.original.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumeration(context);
                 break;
@@ -372,13 +362,9 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                         });
                 break;
             case STOP:
-                if (this.ongoingEnumerations.remove(enumKey)) {
-                    logInfo(() -> String.format("Enumeration service will be stopped for %s",
-                            enumKey));
-                } else {
-                    logInfo(() -> String.format("Enumeration service is not running or has already"
-                            + " been stopped for %s", enumKey));
-                }
+                logInfo(() -> String.format(
+                        "Azure SecurityGroup enumeration will be stopped for %s",
+                        enumKey));
                 context.stage = EnumerationStages.FINISHED;
                 handleEnumeration(context);
                 break;
@@ -389,14 +375,14 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             }
             break;
         case FINISHED:
-            logInfo(() -> String.format("Enumeration finished for %s", getEnumKey(context)));
+            logInfo(() -> String.format("Azure SecurityGroup enumeration finished for %s",
+                    getEnumKey(context)));
             context.operation.complete();
-            this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
-            logWarning(() -> String.format("Enumeration error for %s", getEnumKey(context)));
+            logWarning(() -> String.format("Azure SecurityGroup enumeration error for %s",
+                    getEnumKey(context)));
             context.operation.fail(context.error);
-            this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         default:
             String msg = String.format("Unknown Azure enumeration stage %s ",
@@ -404,7 +390,6 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
             logSevere(() -> msg);
             context.error = new IllegalStateException(msg);
             context.operation.fail(context.error);
-            this.ongoingEnumerations.remove(getEnumKey(context));
         }
     }
 
@@ -412,9 +397,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
      * Return a key to uniquely identify enumeration for compute host instance.
      */
     private String getEnumKey(SecurityGroupEnumContext ctx) {
-        return "hostLink:" + ctx.request.original.resourceLink() +
-                "-enumerationAdapterReference:" +
-                ctx.request.parentCompute.description.enumerationAdapterReference;
+        return ctx.request.original.getEnumKey();
     }
 
     private void handleError(SecurityGroupEnumContext ctx, Throwable e) {

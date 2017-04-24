@@ -33,9 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -110,20 +108,13 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * network states based on the enumeration data received from Azure.
      */
     public static class NetworkEnumContext {
-        static class SubnetStateWithParentVNetId {
-            String parentVNetId;
-            SubnetState subnetState;
-
-            SubnetStateWithParentVNetId(String parentVNetId, SubnetState subnetState) {
-                this.parentVNetId = parentVNetId;
-                this.subnetState = subnetState;
-            }
-        }
 
         ComputeEnumerateResourceRequest request;
+
         ComputeStateWithDescription parentCompute;
 
         EnumerationStages stage;
+
         NetworkEnumStages subStage;
 
         // Used to store an error while transferring to the error stage.
@@ -134,14 +125,17 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         // Virtual Networks page as fetched from Azure
         // key -> Virtual Network id; value -> Virtual Network.
         Map<String, VirtualNetwork> virtualNetworks = new ConcurrentHashMap<>();
+
         // Network States stored in local document store.
         // key -> Network State id (matching Azure Virtual Network id); value -> Network State
         Map<String, NetworkState> networkStates = new ConcurrentHashMap<>();
+
         // Stores the map of resource groups state ids to document self links.
         // key -> resource group id; value - link to the local ResourceGroupState object.
         Map<String, String> resourceGroupStates = new ConcurrentHashMap<>();
 
         Map<String, SubnetStateWithParentVNetId> subnets = new ConcurrentHashMap<>();
+
         // Local subnet states map.
         // Key -> Subnet state id; value -> subnet state documentLink.
         Map<String, String> subnetStates = new ConcurrentHashMap<>();
@@ -156,6 +150,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         // List to temporary store all virtual network ids
         List<String> virtualNetworkIds = new ArrayList<>();
+
         // List to temporary store all subnet ids
         List<String> subnetIds = new ArrayList<>();
 
@@ -166,6 +161,16 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
 
         // Azure credentials.
         ApplicationTokenCredentials credentials;
+
+        static class SubnetStateWithParentVNetId {
+            String parentVNetId;
+            SubnetState subnetState;
+
+            SubnetStateWithParentVNetId(String parentVNetId, SubnetState subnetState) {
+                this.parentVNetId = parentVNetId;
+                this.subnetState = subnetState;
+            }
+        }
 
         NetworkEnumContext(ComputeEnumerateAdapterRequest request, Operation op) {
             this.request = request.original;
@@ -214,10 +219,19 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         FINISHED
     }
 
-    private Set<String> ongoingEnumerations = new ConcurrentSkipListSet<>();
-
     public AzureNetworkEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
+    }
+
+    /**
+     * Constrain every query with endpointLink and tenantLinks, if presented.
+     */
+    private static void addScopeCriteria(Query.Builder qBuilder,
+            Class<? extends ServiceDocument> stateClass, NetworkEnumContext ctx) {
+        // Add TENANT_LINKS criteria
+        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
+        // Add ENDPOINT_LINK criteria
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
     }
 
     @Override
@@ -266,13 +280,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             String enumKey = getEnumKey(context);
             switch (context.request.enumerationAction) {
             case START:
-                if (!this.ongoingEnumerations.add(enumKey)) {
-                    logWarning(() -> String.format("Enumeration service has already been started"
-                            + " for %s", enumKey));
-                    handleSubStage(context, NetworkEnumStages.FINISHED);
-                    return;
-                }
-                logInfo(() -> String.format("Launching enumeration service for %s", enumKey));
+                logInfo(() -> String.format("Launching Azure network enumeration for %s", enumKey));
                 context.request.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumeration(context);
                 break;
@@ -282,13 +290,8 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 handleSubStage(context);
                 break;
             case STOP:
-                if (this.ongoingEnumerations.remove(enumKey)) {
-                    logInfo(() -> String.format("Enumeration service will be stopped for %s",
-                            enumKey));
-                } else {
-                    logInfo(() -> String.format("Enumeration service is not running or has already"
-                            + " been stopped for %s", enumKey));
-                }
+                logInfo(() -> String.format("Azure network enumeration will be stopped for %s",
+                        enumKey));
                 context.stage = EnumerationStages.FINISHED;
                 handleEnumeration(context);
                 break;
@@ -301,32 +304,26 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             }
             break;
         case FINISHED:
+            logInfo(() -> String.format("Azure network enumeration finished for %s",
+                    getEnumKey(context)));
             context.operation.complete();
-            logInfo(() -> String.format("Enumeration finished for %s", getEnumKey(context)));
-            this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
+            logWarning(() -> String.format("Azure network enumeration error for %s",
+                    getEnumKey(context)));
             context.operation.fail(context.error);
-            logWarning(() -> String.format("Enumeration error for %s", getEnumKey(context)));
-            this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         default:
             String msg = String
-                    .format("Unknown Azure enumeration stage %s ", context.stage.toString());
+                    .format("Unknown Azure network enumeration stage %s ",
+                            context.stage.toString());
             logSevere(() -> msg);
             context.error = new IllegalStateException(msg);
             context.operation.fail(context.error);
-            this.ongoingEnumerations.remove(getEnumKey(context));
         }
     }
 
     private void handleSubStage(NetworkEnumContext context) {
-        if (!this.ongoingEnumerations.contains(getEnumKey(context))) {
-            context.stage = EnumerationStages.FINISHED;
-            handleEnumeration(context);
-            return;
-        }
-
         switch (context.subStage) {
         case GET_VNETS:
             context.clearPageTempData();
@@ -410,9 +407,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
      * Return a key to uniquely identify enumeration for compute host instance.
      */
     private String getEnumKey(NetworkEnumContext ctx) {
-        return "hostLink:" + ctx.request.resourceLink() +
-                "-enumerationAdapterReference:" +
-                ctx.parentCompute.description.enumerationAdapterReference;
+        return ctx.request.getEnumKey();
     }
 
     /**
@@ -599,8 +594,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             context.enumNextPageLink = queryTask.results.nextPageLink;
 
             queryTask.results.documents.values().forEach(document -> {
-                ResourceGroupState rgState = Utils.fromJson(document, ResourceGroupState
-                        .class);
+                ResourceGroupState rgState = Utils.fromJson(document, ResourceGroupState.class);
                 context.resourceGroupStates.put(rgState.id, rgState.documentSelfLink);
             });
 
@@ -608,7 +602,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
                 getResourceGroupStatesHelper(context, next);
             } else {
                 logFine(() -> "Finished getting resource group states");
-                handleSubStage(context ,next);
+                handleSubStage(context, next);
                 return;
             }
         };
@@ -1161,17 +1155,6 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             }
         }
         return true;
-    }
-
-    /**
-     * Constrain every query with endpointLink and tenantLinks, if presented.
-     */
-    private static void addScopeCriteria(Query.Builder qBuilder,
-            Class<? extends ServiceDocument> stateClass, NetworkEnumContext ctx) {
-        // Add TENANT_LINKS criteria
-        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.endpointLink);
     }
 
 }

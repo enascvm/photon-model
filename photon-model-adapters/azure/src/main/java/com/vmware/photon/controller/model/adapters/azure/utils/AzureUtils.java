@@ -44,6 +44,7 @@ import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
+import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
@@ -269,12 +270,53 @@ public class AzureUtils {
                 storageAccount.location, storageAccount.properties.primaryEndpoints.blob, keys);
     }
 
+    public static DeferredResult<AuthCredentialsServiceState> storeKeys(ServiceHost host,
+            StorageAccountKeys keys, String endpointLink, List<String> tenantLinks) {
+        AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
+        storageAuth.documentSelfLink = UUID.randomUUID().toString();
+        storageAuth.customProperties = new HashMap<>();
+        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1,
+                keys.getKey1());
+        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2,
+                keys.getKey2());
+        storageAuth.tenantLinks = tenantLinks;
+        if (endpointLink != null) {
+            storageAuth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
+                    endpointLink);
+        }
+
+        Operation storageAuthOp = Operation
+                .createPost(host, AuthCredentialsService.FACTORY_LINK)
+                .setReferer(host.getPublicUri())
+                .setBody(storageAuth);
+        return host.sendWithDeferredResult(storageAuthOp, AuthCredentialsServiceState.class);
+    }
+
+    public static StorageDescription constructStorageDescription(ServiceHost host, ComputeStateWithDescription parentCompute, ComputeEnumerateResourceRequest request,
+            com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount storageAccount,String keysAuthLink) {
+
+        StorageDescription storageDescription = new StorageDescription();
+        storageDescription.id = storageAccount.id;
+        storageDescription.regionId = storageAccount.location;
+        storageDescription.name = storageAccount.name;
+        storageDescription.authCredentialsLink = keysAuthLink;
+        storageDescription.resourcePoolLink = request.resourcePoolLink;
+        storageDescription.documentSelfLink = UUID.randomUUID().toString();
+        storageDescription.endpointLink = request.endpointLink;
+        storageDescription.computeHostLink = parentCompute.documentSelfLink;
+        storageDescription.customProperties = new HashMap<>();
+        storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
+        storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI, storageAccount.properties.primaryEndpoints.blob);
+        storageDescription.tenantLinks = parentCompute.tenantLinks;
+        return storageDescription;
+    }
+
     private static StorageDescription constructStorageDescription(ServiceHost host,
             String serviceSelfLink, String endpointLink, List<String> tenantLinks,
             String resourcePoolLink, String parentComputeSelfLink,
             String saId, String saName, String saLocation, String saUri,
             StorageAccountKeys keys) {
-        AuthCredentialsService.AuthCredentialsServiceState storageAuth = new AuthCredentialsService.AuthCredentialsServiceState();
+        AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
         storageAuth.documentSelfLink = UUID.randomUUID().toString();
         storageAuth.customProperties = new HashMap<>();
         storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1,

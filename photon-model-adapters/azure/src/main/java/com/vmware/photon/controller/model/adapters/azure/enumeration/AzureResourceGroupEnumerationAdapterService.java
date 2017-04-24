@@ -21,8 +21,6 @@ import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils
 
 import java.net.URI;
 import java.util.HashMap;
-import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 
@@ -151,8 +149,6 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
         }
     }
 
-    private Set<String> ongoingEnumerations = new ConcurrentSkipListSet<>();
-
     public AzureResourceGroupEnumerationAdapterService() {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
     }
@@ -202,14 +198,8 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
             String enumKey = getEnumKey(context);
             switch (context.request.original.enumerationAction) {
             case START:
-                if (!this.ongoingEnumerations.add(enumKey)) {
-                    logInfo(() -> String.format("Enumeration service has already been started for"
-                            + " %s", enumKey));
-                    context.stage = EnumerationStages.FINISHED;
-                    handleEnumeration(context);
-                    return;
-                }
-                logInfo(() -> String.format("Launching enumeration service for %s", enumKey));
+                logInfo(() -> String.format("Launching Azure ResourceGroup enumeration for %s",
+                        enumKey));
                 context.request.original.enumerationAction = EnumerationAction.REFRESH;
                 handleEnumeration(context);
                 break;
@@ -227,39 +217,35 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                         });
                 break;
             case STOP:
-                if (this.ongoingEnumerations.remove(enumKey)) {
-                    logInfo(() -> String.format("Enumeration service will be stopped for %s",
-                            enumKey));
-                } else {
-                    logInfo(() -> String.format("Enumeration service is not running or has already"
-                            + " been stopped for %s", enumKey));
-                }
+                logInfo(() -> String.format(
+                        "Azure ResourceGroup enumeration will be stopped for %s",
+                        enumKey));
                 context.stage = EnumerationStages.FINISHED;
                 handleEnumeration(context);
                 break;
             default:
-                handleError(context, new RuntimeException("Unknown enumeration action"
-                        + context.request.original.enumerationAction));
+                handleError(context,
+                        new RuntimeException("Unknown Azure ResourceGroup enumeration action"
+                                + context.request.original.enumerationAction));
                 break;
             }
             break;
         case FINISHED:
-            logInfo(() -> String.format("Enumeration finished for %s", getEnumKey(context)));
+            logInfo(() -> String.format("Azure ResourceGroup enumeration finished for %s",
+                    getEnumKey(context)));
             context.operation.complete();
-            this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         case ERROR:
-            logWarning(() -> String.format("Enumeration error for %s", getEnumKey(context)));
+            logWarning(() -> String.format("Azure ResourceGroup enumeration error for %s",
+                    getEnumKey(context)));
             context.operation.fail(context.error);
-            this.ongoingEnumerations.remove(getEnumKey(context));
             break;
         default:
-            String msg = String.format("Unknown Azure enumeration stage %s ",
+            String msg = String.format("Unknown Azure ResourceGroup enumeration stage %s ",
                     context.stage.toString());
             logSevere(() -> msg);
             context.error = new IllegalStateException(msg);
             context.operation.fail(context.error);
-            this.ongoingEnumerations.remove(getEnumKey(context));
         }
     }
 
@@ -267,9 +253,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
      * Return a key to uniquely identify enumeration for compute host instance.
      */
     private String getEnumKey(ResourceGroupEnumContext ctx) {
-        return "hostLink:" + ctx.request.original.resourceLink() +
-                "-enumerationAdapterReference:" +
-                ctx.request.parentCompute.description.enumerationAdapterReference;
+        return ctx.request.original.getEnumKey();
     }
 
     private void handleError(ResourceGroupEnumContext ctx, Throwable e) {

@@ -178,6 +178,45 @@ public class AzureInstanceService extends StatelessService {
 
     private ExecutorService executorService;
 
+    /**
+     * The class represents the context of async calls(either single or batch) to Azure cloud.
+     *
+     * @see TransitionToCallback
+     */
+    static class AzureCallContext {
+
+        /**
+         * The number of calls associated with this context.
+         */
+        final AtomicInteger numberOfCalls;
+        /**
+         * Flag indicating whether any call has failed.
+         */
+        final AtomicBoolean hasAnyFailed = new AtomicBoolean(false);
+        /**
+         * Flag indicating whether Azure error should be considered as exceptional. Default behavior
+         * is to fail on error.
+         */
+        boolean failOnError = true;
+
+        private AzureCallContext(int numberOfCalls) {
+            this.numberOfCalls = new AtomicInteger(numberOfCalls);
+        }
+
+        static AzureCallContext newSingleCallContext() {
+            return new AzureCallContext(1);
+        }
+
+        static AzureCallContext newBatchCallContext(int numberOfCalls) {
+            return new AzureCallContext(numberOfCalls);
+        }
+
+        AzureCallContext withFailOnError(boolean failOnError) {
+            this.failOnError = failOnError;
+            return this;
+        }
+    }
+
     @Override
     public void handleStart(Operation startPost) {
         this.executorService = getHost().allocateExecutor(this);
@@ -278,6 +317,7 @@ public class AzureInstanceService extends StatelessService {
      * @see #handleAllocation(AzureInstanceContext, AzureInstanceStage)
      */
     private void handleAllocation(AzureInstanceContext ctx) {
+        logInfo("Azure instance management at stage %s", ctx.stage);
         try {
             switch (ctx.stage) {
             case CLIENT:
@@ -291,7 +331,7 @@ public class AzureInstanceService extends StatelessService {
                 // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
                 ctx.httpClient = new OkHttpClient();
                 ctx.clientBuilder = ctx.httpClient.newBuilder().connectTimeout(30,
-                        TimeUnit.SECONDS);
+                        TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS);
 
                 // now that we have a client lets move onto the next step
                 switch (ctx.computeRequest.requestType) {
@@ -427,7 +467,7 @@ public class AzureInstanceService extends StatelessService {
 
         String msg = "Deleting resource group [" + rgName + "] for [" + ctx.vmName + "] VM";
 
-        AzureDecommissionCallback callback = new AzureDecommissionCallback(
+        AzureDeferredResultServiceCallback<Void> callback = new AzureDeferredResultServiceCallback<Void>(
                 this, msg) {
             @Override
             protected Throwable consumeError(Throwable exc) {
@@ -453,14 +493,10 @@ public class AzureInstanceService extends StatelessService {
             }
 
             @Override
-            protected DeferredResult<Void> consumeDecommissionSuccess(Void body) {
+            protected DeferredResult<Void> consumeSuccess(Void body) {
                 return DeferredResult.completed(body);
             }
 
-            @Override
-            protected Runnable checkExistenceCall(ServiceCallback<Boolean> checkExistenceCallback) {
-                return () -> azureClient.checkExistenceAsync(rgName, checkExistenceCallback);
-            }
         };
 
         azureClient.deleteAsync(rgName, callback);
@@ -1934,47 +1970,6 @@ public class AzureInstanceService extends StatelessService {
                     this.ctx.storageAccountName,
                     checkProvisioningStateCallback);
 
-        }
-    }
-
-    /**
-     * The class represents the context of async calls(either single or batch) to Azure cloud.
-     *
-     * @see TransitionToCallback
-     */
-    static class AzureCallContext {
-
-        static AzureCallContext newSingleCallContext() {
-            return new AzureCallContext(1);
-        }
-
-        static AzureCallContext newBatchCallContext(int numberOfCalls) {
-            return new AzureCallContext(numberOfCalls);
-        }
-
-        /**
-         * The number of calls associated with this context.
-         */
-        final AtomicInteger numberOfCalls;
-
-        /**
-         * Flag indicating whether any call has failed.
-         */
-        final AtomicBoolean hasAnyFailed = new AtomicBoolean(false);
-
-        /**
-         * Flag indicating whether Azure error should be considered as exceptional. Default behavior
-         * is to fail on error.
-         */
-        boolean failOnError = true;
-
-        private AzureCallContext(int numberOfCalls) {
-            this.numberOfCalls = new AtomicInteger(numberOfCalls);
-        }
-
-        AzureCallContext withFailOnError(boolean failOnError) {
-            this.failOnError = failOnError;
-            return this;
         }
     }
 
