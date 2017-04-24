@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
 
@@ -60,6 +61,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.xenon.common.DeferredResult;
+import com.vmware.xenon.common.LocalizableValidationException;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceErrorResponse;
 import com.vmware.xenon.common.StatelessService;
@@ -158,6 +160,9 @@ public class AzureEndpointAdapterService extends StatelessService {
                                 Boolean.parseBoolean(shouldProvision)))
                         .whenComplete((aVoid, e) -> {
                             if (e != null) {
+                                if (e instanceof CompletionException) {
+                                    e = e.getCause();
+                                }
                                 // Azure doesn't send us any meaningful status code to work with
                                 ServiceErrorResponse rsp = new ServiceErrorResponse();
                                 rsp.message = e.getMessage();
@@ -275,21 +280,20 @@ public class AzureEndpointAdapterService extends StatelessService {
             shouldProvision) {
 
         if (permissions == null || permissions.value == null) {
-            return DeferredResult.failed(new IllegalStateException("'Owner', 'Contributor' or "
-                    + "'Reader' permissions required"));
+            throw new LocalizableValidationException("The account does not have permissions",
+                    "adapter.azure.permission.empty");
         }
         if (shouldProvision && permissions.value.stream().noneMatch(this::canProvision)) {
-            return DeferredResult.failed(new IllegalStateException(
-                    "Provisioning requires 'Owner' or 'Contributor' role"));
+            throw new LocalizableValidationException("The account does not have permissions for "
+                    + "provisioning", "adapter.azure.permission.provision");
         }
-
         if (!shouldProvision && permissions.value.stream().noneMatch(this::canRead)) {
-            return DeferredResult.failed(new IllegalStateException(
-                    "'Owner', 'Contributor' or 'Reader' role required for Read only endpoint"));
+            throw new LocalizableValidationException(
+                    "The account does not have permissions for read",
+                    "adapter.azure.permission.read");
         }
 
         return DeferredResult.completed(null);
-
     }
 
     private boolean canProvision(Permission permission) {
