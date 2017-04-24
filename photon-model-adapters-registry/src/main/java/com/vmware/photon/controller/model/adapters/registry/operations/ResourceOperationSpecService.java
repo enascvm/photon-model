@@ -18,7 +18,10 @@ import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOp
 
 import java.net.URI;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -92,6 +95,22 @@ public class ResourceOperationSpecService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public URI adapterReference;
+
+        /**
+         * Target criteria, as JavaScript source, for this resource operation.
+         * <p>
+         * Callers shall evaluate the targetCriteria in the context of the resource for which the
+         * operation is activated, e.g. for Compute this shall be the {@link
+         * com.vmware.photon.controller.model.resources.ComputeService.ComputeState}
+         * <p>
+         * example: {@code ResourceOperationUtils.SCRIPT_CONTEXT_RESOURCE +
+         * ".hostName.startsWith('myPrefix') && "
+         * + ResourceOperationUtils.SCRIPT_CONTEXT_RESOURCE + ".cpuCount==4"}
+         */
+        @PropertyOptions(usage = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL,
+                indexing = PropertyIndexingOption.STORE_ONLY)
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_14)
+        public String targetCriteria;
 
         @Override
         public String toString() {

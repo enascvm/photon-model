@@ -16,10 +16,16 @@ package com.vmware.photon.controller.model.adapters.registry.operations;
 import java.net.URI;
 import java.util.logging.Level;
 
+import javax.script.ScriptContext;
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
+
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
@@ -30,6 +36,8 @@ import com.vmware.xenon.services.common.QueryTask.Query;
  * Various {@link ResourceOperationSpec} related Utilities.
  */
 public class ResourceOperationUtils {
+    public static final String SCRIPT_ENGINE_NAME_JS = "js";
+    public static final String SCRIPT_CONTEXT_RESOURCE = "resource";
 
     /**
      * Lookup for {@link ResourceOperationSpec} by given {@code endpointType},
@@ -113,5 +121,48 @@ public class ResourceOperationUtils {
                         (o.getBody(EndpointState.class)).endpointType,
                         resourceType, operation)
                 );
+    }
+
+    /**
+     * Evaluates provided {@code spec}'s target criteria against the specified {@code resourceState}
+     * and returns if the  {@link ResourceOperationSpec} is applicable for the given {@link
+     * ResourceState}
+     * @param resourceState
+     *         the resource state for which to check whether given {@code spec} is available
+     * @param spec
+     *         the {@link ResourceOperationSpec} which to check whether is available for the given
+     *         {@code resourceState}
+     * @return {@literal true} only in case there is targetCriteria, and the targetCriteria is
+     * evaluated to {@literal true} for the given {@code resourceState}
+     */
+    public static boolean isAvailable(ResourceState resourceState, ResourceOperationSpec spec) {
+        ScriptEngine engine = new ScriptEngineManager().getEngineByName(SCRIPT_ENGINE_NAME_JS);
+        engine.getBindings(ScriptContext.ENGINE_SCOPE).put(SCRIPT_CONTEXT_RESOURCE, resourceState);
+        try {
+            Object res = engine.eval(spec.targetCriteria);
+            if (res instanceof Boolean) {
+                return ((Boolean) res).booleanValue();
+            } else {
+                Utils.log(ResourceOperationUtils.class, "isAvailable",
+                        Level.WARNING,
+                        "Expect boolean result when evaluate targetCriteria '%s' of "
+                                + "endpointType: %s, resourceType: %s, operation: %s, "
+                                + "adapterReference: %s. Result: %s",
+                        spec.targetCriteria,
+                        spec.endpointType, spec.resourceType, spec.operation,
+                        spec.adapterReference, res);
+            }
+        } catch (ScriptException e) {
+            Utils.log(ResourceOperationUtils.class, "isAvailable",
+                    Level.SEVERE,
+                    "Cannot evaluate targetCriteria '%s' of "
+                            + "endpointType: %s, resourceType: %s, operation: %s, "
+                            + "adapterReference: %s. Cause: %s",
+                    spec.targetCriteria,
+                    spec.endpointType, spec.resourceType, spec.operation, spec.adapterReference,
+                    Utils.toString(e));
+
+        }
+        return false;
     }
 }
