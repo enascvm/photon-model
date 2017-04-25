@@ -101,8 +101,15 @@ public class AWSPowerService extends StatelessService {
                     @Override
                     public void onSuccess(StartInstancesRequest request,
                             StartInstancesResult result) {
-                        OperationContext.restoreOperationContext(opContext);
-                        updateComputeState(pr, c);
+                        AWSUtils.waitForTransitionCompletion(getHost(),
+                                result.getStartingInstances(), "running", client, (is, e) -> {
+                                    OperationContext.restoreOperationContext(opContext);
+                                    if (e != null) {
+                                        onError(e);
+                                        return;
+                                    }
+                                    updateComputeState(pr, c);
+                                });
                     }
 
                     @Override
@@ -124,8 +131,16 @@ public class AWSPowerService extends StatelessService {
                     @Override
                     public void onSuccess(StopInstancesRequest request,
                             StopInstancesResult result) {
-                        OperationContext.restoreOperationContext(opContext);
-                        updateComputeState(pr, c);
+                        AWSUtils.waitForTransitionCompletion(getHost(),
+                                result.getStoppingInstances(), "stopped", client, (is, e) -> {
+                                    OperationContext.restoreOperationContext(opContext);
+                                    if (e != null) {
+                                        onError(e);
+                                        return;
+                                    }
+
+                                    updateComputeState(pr, c);
+                                });
                     }
 
                     @Override

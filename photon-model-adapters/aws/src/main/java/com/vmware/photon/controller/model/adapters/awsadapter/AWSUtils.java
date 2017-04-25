@@ -36,6 +36,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -64,6 +65,8 @@ import com.amazonaws.services.ec2.model.CreateTagsRequest;
 import com.amazonaws.services.ec2.model.DeleteTagsRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesRequest;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
+import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
+import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.DescribeTagsRequest;
@@ -72,6 +75,7 @@ import com.amazonaws.services.ec2.model.DescribeVpcsResult;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceState;
+import com.amazonaws.services.ec2.model.InstanceStateChange;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.IpRange;
 import com.amazonaws.services.ec2.model.SecurityGroup;
@@ -94,6 +98,7 @@ import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -128,8 +133,58 @@ public class AWSUtils {
      */
     private static String awsMockHost = null;
 
-    public static void setAwsClientMock(boolean isAwsClientMock) {
-        IS_AWS_CLIENT_MOCK = isAwsClientMock;
+    /**
+     * Custom retry condition with exception logs.
+     */
+    public static class CustomRetryCondition implements RetryPolicy.RetryCondition {
+
+        @Override
+        public boolean shouldRetry(AmazonWebServiceRequest originalRequest,
+                AmazonClientException exception,
+                int retriesAttempted) {
+            Utils.log(CustomRetryCondition.class, CustomRetryCondition.class.getSimpleName(),
+                    Level.FINE, () -> String
+                            .format("Encountered exception %s for request %s, retries attempted: %d",
+                                    Utils.toString(exception), originalRequest, retriesAttempted));
+
+            // Always retry on client exceptions caused by IOException
+            if (exception.getCause() instanceof IOException) {
+                return true;
+            }
+
+            // Only retry on a subset of service exceptions
+            if (exception instanceof AmazonServiceException) {
+                AmazonServiceException ase = (AmazonServiceException) exception;
+
+                /*
+                 * For 500 internal server errors and 503 service unavailable errors, we want to
+                 * retry, but we need to use an exponential back-off strategy so that we don't
+                 * overload a server with a flood of retries.
+                 */
+                if (RetryUtils.isRetryableServiceException(new SdkBaseException(ase))) {
+                    return true;
+                }
+
+                /*
+                 * Throttling is reported as a 400 error from newer services. To try and smooth out
+                 * an occasional throttling error, we'll pause and retry, hoping that the pause is
+                 * long enough for the request to get through the next time.
+                 */
+                if (RetryUtils.isThrottlingException(new SdkBaseException(ase))) {
+                    return true;
+                }
+
+                /*
+                 * Clock skew exception. If it is then we will get the time offset between the
+                 * device time and the server time to set the clock skew and then retry the request.
+                 */
+                if (RetryUtils.isClockSkewError(new SdkBaseException(ase))) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     public static void setAwsMockHost(String mockHost) {
@@ -138,6 +193,10 @@ public class AWSUtils {
 
     public static boolean isAwsClientMock() {
         return System.getProperty("awsMockHost") == null ? IS_AWS_CLIENT_MOCK : true;
+    }
+
+    public static void setAwsClientMock(boolean isAwsClientMock) {
+        IS_AWS_CLIENT_MOCK = isAwsClientMock;
     }
 
     private static String getAWSMockHost() {
@@ -155,24 +214,22 @@ public class AWSUtils {
                 DEFAULT_MAX_ERROR_RETRY,
                 true));
 
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
-                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+                new BasicAWSCredentials(credentials.privateKeyId,
                         EncryptionUtils.decrypt(credentials.privateKey)));
 
-        AmazonEC2AsyncClientBuilder ec2AsyncClientBuilder =
-                AmazonEC2AsyncClientBuilder.standard()
-                        .withCredentials(awsStaticCredentialsProvider)
-                        .withClientConfiguration(configuration)
-                        .withExecutorFactory(() -> executorService);
+        AmazonEC2AsyncClientBuilder ec2AsyncClientBuilder = AmazonEC2AsyncClientBuilder.standard()
+                .withCredentials(awsStaticCredentialsProvider)
+                .withClientConfiguration(configuration)
+                .withExecutorFactory(() -> executorService);
 
         if (region == null) {
             region = Regions.DEFAULT_REGION.getName();
         }
 
         if (isAwsClientMock()) {
-            AwsClientBuilder.EndpointConfiguration endpointConfiguration =
-                    new AwsClientBuilder.EndpointConfiguration(
-                            getAWSMockHost() + AWS_EC2_ENDPOINT, region);
+            AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
+                    getAWSMockHost() + AWS_EC2_ENDPOINT, region);
             ec2AsyncClientBuilder.setEndpointConfiguration(endpointConfiguration);
         } else {
             ec2AsyncClientBuilder.setRegion(region);
@@ -219,23 +276,22 @@ public class AWSUtils {
     public static AmazonCloudWatchAsyncClient getStatsAsyncClient(
             AuthCredentialsServiceState credentials, String region,
             ExecutorService executorService, boolean isMockRequest) {
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
-                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+                new BasicAWSCredentials(credentials.privateKeyId,
                         EncryptionUtils.decrypt(credentials.privateKey)));
 
-        AmazonCloudWatchAsyncClientBuilder amazonCloudWatchAsyncClientBuilder =
-                AmazonCloudWatchAsyncClientBuilder.standard()
-                        .withCredentials(awsStaticCredentialsProvider)
-                        .withExecutorFactory(() -> executorService);
+        AmazonCloudWatchAsyncClientBuilder amazonCloudWatchAsyncClientBuilder = AmazonCloudWatchAsyncClientBuilder
+                .standard()
+                .withCredentials(awsStaticCredentialsProvider)
+                .withExecutorFactory(() -> executorService);
 
         if (region == null) {
             region = Regions.DEFAULT_REGION.getName();
         }
 
         if (isAwsClientMock()) {
-            AwsClientBuilder.EndpointConfiguration endpointConfiguration =
-                    new AwsClientBuilder.EndpointConfiguration(
-                            getAWSMockHost() + AWS_EC2_ENDPOINT, region);
+            AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
+                    getAWSMockHost() + AWS_EC2_ENDPOINT, region);
             amazonCloudWatchAsyncClientBuilder.setEndpointConfiguration(endpointConfiguration);
         } else {
             amazonCloudWatchAsyncClientBuilder.setRegion(region);
@@ -247,8 +303,8 @@ public class AWSUtils {
     public static TransferManager getS3AsyncClient(AuthCredentialsServiceState credentials,
             String region, ExecutorService executorService) {
 
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
-                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+                new BasicAWSCredentials(credentials.privateKeyId,
                         EncryptionUtils.decrypt(credentials.privateKey)));
 
         AmazonS3ClientBuilder amazonS3ClientBuilder = AmazonS3ClientBuilder.standard()
@@ -261,11 +317,10 @@ public class AWSUtils {
 
         amazonS3ClientBuilder.setRegion(region);
 
-        TransferManagerBuilder transferManagerBuilder =
-                TransferManagerBuilder.standard()
-                        .withS3Client(amazonS3ClientBuilder.build())
-                        .withExecutorFactory(() -> executorService)
-                        .withShutDownThreadPools(false);
+        TransferManagerBuilder transferManagerBuilder = TransferManagerBuilder.standard()
+                .withS3Client(amazonS3ClientBuilder.build())
+                .withExecutorFactory(() -> executorService)
+                .withShutDownThreadPools(false);
 
         return transferManagerBuilder.build();
     }
@@ -767,60 +822,36 @@ public class AWSUtils {
         return null;
     }
 
-    /**
-     * Custom retry condition with exception logs.
-     */
-    public static class CustomRetryCondition implements RetryPolicy.RetryCondition {
+    public static void waitForTransitionCompletion(ServiceHost host,
+            List<InstanceStateChange> stateChangeList,
+            final String desiredState, AmazonEC2AsyncClient client,
+            BiConsumer<InstanceState, Exception> callback) {
+        InstanceStateChange stateChange = stateChangeList.get(0);
 
-        @Override
-        public boolean shouldRetry(AmazonWebServiceRequest originalRequest,
-                AmazonClientException exception,
-                int retriesAttempted) {
-            Utils.log(CustomRetryCondition.class, CustomRetryCondition.class.getSimpleName(),
-                    Level.FINE, () -> String
-                            .format("Encountered exception %s for request %s, retries attempted: %d",
-                                    Utils.toString(exception), originalRequest, retriesAttempted));
+        try {
+            DescribeInstancesRequest request = new DescribeInstancesRequest();
+            request.withInstanceIds(stateChange.getInstanceId());
+            DescribeInstancesResult result = client.describeInstances(request);
+            Instance instance = result.getReservations()
+                    .stream()
+                    .flatMap(r -> r.getInstances().stream())
+                    .filter(i -> i.getInstanceId()
+                            .equalsIgnoreCase(stateChange.getInstanceId()))
+                    .findFirst().orElseThrow(() -> new IllegalArgumentException(
+                            String.format("%s instance not found", stateChange.getInstanceId())));
 
-            // Always retry on client exceptions caused by IOException
-            if (exception.getCause() instanceof IOException) {
-                return true;
+            String state = instance.getState().getName();
+
+            if (state.equals(desiredState)) {
+                callback.accept(instance.getState(), null);
+            } else {
+                host.schedule(() -> waitForTransitionCompletion(host, stateChangeList, desiredState,
+                        client, callback), 5, TimeUnit.SECONDS);
             }
 
-            // Only retry on a subset of service exceptions
-            if (exception instanceof AmazonServiceException) {
-                AmazonServiceException ase = (AmazonServiceException) exception;
-
-                /*
-                 * For 500 internal server errors and 503 service
-                 * unavailable errors, we want to retry, but we need to use
-                 * an exponential back-off strategy so that we don't overload
-                 * a server with a flood of retries.
-                 */
-                if (RetryUtils.isRetryableServiceException(new SdkBaseException(ase))) {
-                    return true;
-                }
-
-                /*
-                 * Throttling is reported as a 400 error from newer services. To try
-                 * and smooth out an occasional throttling error, we'll pause and
-                 * retry, hoping that the pause is long enough for the request to
-                 * get through the next time.
-                 */
-                if (RetryUtils.isThrottlingException(new SdkBaseException(ase))) {
-                    return true;
-                }
-
-                /*
-                 * Clock skew exception. If it is then we will get the time offset
-                 * between the device time and the server time to set the clock skew
-                 * and then retry the request.
-                 */
-                if (RetryUtils.isClockSkewError(new SdkBaseException(ase))) {
-                    return true;
-                }
-            }
-
-            return false;
+        } catch (AmazonServiceException | IllegalArgumentException ase) {
+            callback.accept(null, ase);
         }
+
     }
 }

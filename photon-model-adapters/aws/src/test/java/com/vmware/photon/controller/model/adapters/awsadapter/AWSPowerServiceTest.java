@@ -19,7 +19,6 @@ import static org.junit.Assert.assertNotNull;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
-import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getEC2InstanceIdsAssociatedWithVpcId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setUpTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.tearDownTestVpc;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.waitForInstancesToBeStopped;
@@ -28,14 +27,15 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -73,13 +73,16 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 
 public class AWSPowerServiceTest extends BasicReusableHostTestCase {
-    private static final int DEFAULT_TIMOUT_SECONDS = 200;
+    private static final int DEFAULT_TIMOUT_SECONDS = 300;
 
     public String secretKey = "test123";
     public String accessKey = "blas123";
-    private String regionId = "us-east-1";
-    private int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
+
     public boolean isMock = true;
+
+    private String regionId = "us-east-1";
+
+    private int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
 
     private AmazonEC2AsyncClient client;
     private Map<String, Object> awsTestContext;
@@ -151,15 +154,18 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
                 UriUtils.buildUri(this.host, endpoint.computeLink));
         assertNotNull(computeHost);
 
-        ComputeDescription computeHostDesc = this.host.getServiceState(null, ComputeDescription.class,
+        ComputeDescription computeHostDesc = this.host.getServiceState(null,
+                ComputeDescription.class,
                 UriUtils.buildUri(this.host, endpoint.computeDescriptionLink));
         assertNotNull(computeHostDesc);
 
         assertNotNull("Power addpter must be configured", computeHostDesc.powerAdapterReference);
 
         boolean addNonExistingSecurityGroup = false;
-        ComputeState cs = TestAWSSetupUtils.createAWSVMResource(this.host, computeHost, endpoint, getClass(),
-                "trainingVM", zoneId, this.regionId, null, this.singleNicSpec, addNonExistingSecurityGroup);
+        ComputeState cs = TestAWSSetupUtils.createAWSVMResource(this.host, computeHost, endpoint,
+                getClass(),
+                "trainingVM", zoneId, this.regionId, null, this.singleNicSpec,
+                addNonExistingSecurityGroup);
 
         this.computesToRemove.add(cs.documentSelfLink);
         assertEquals(PowerState.UNKNOWN, cs.powerState);
@@ -177,21 +183,16 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
         ComputeState compute = this.host.getServiceState(null, ComputeState.class,
                 UriUtils.buildUri(this.host, cs.documentSelfLink));
 
-        List<String> instanceIds = null;
-        if (!this.isMock) {
-            instanceIds = getEC2InstanceIdsAssociatedWithVpcId(this.client, (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY));
-        }
-
-
         changePowerState(computeHostDesc, compute.documentSelfLink, PowerState.OFF);
         if (!this.isMock) {
-            waitForInstancesToBeStopped(this.client, this.host, instanceIds);
+            waitForInstancesToBeStopped(this.client, this.host, Arrays.asList(compute.id));
         }
 
         changePowerState(computeHostDesc, compute.documentSelfLink, PowerState.ON);
         if (!this.isMock) {
             final int errorRate = 0;
-            waitForProvisioningToComplete(instanceIds,this.host, this.client, errorRate);
+            waitForProvisioningToComplete(Arrays.asList(compute.id), this.host, this.client,
+                    errorRate);
         }
     }
 
@@ -214,11 +215,12 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
             if (TaskState.isFailed(response.taskInfo)) {
                 ctx.failIteration(
                         new IllegalStateException(response.taskInfo.failure.message));
-            } else {
+            } else if (TaskState.isFinished(response.taskInfo)) {
                 ctx.completeIteration();
             }
             return true;
         });
+
         Operation powerOp = Operation.createPatch(cd.powerAdapterReference)
                 .setBody(powerRequest)
                 .setReferer("/boza")
@@ -277,11 +279,18 @@ public class AWSPowerServiceTest extends BasicReusableHostTestCase {
             }
         };
 
+        TestContext ctx = this.host.testCreate(1);
         Operation startOp = Operation
                 .createPost(host, taskLink)
-                .setCompletion(this.host.getCompletion())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        ctx.failIteration(e);
+                        return;
+                    }
+                    ctx.completeIteration();
+                })
                 .setReferer(this.host.getReferer());
         this.host.startService(startOp, service);
-
+        ctx.await();
     }
 }
