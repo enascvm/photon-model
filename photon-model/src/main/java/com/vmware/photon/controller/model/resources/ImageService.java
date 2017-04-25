@@ -22,7 +22,6 @@ import io.netty.util.internal.StringUtil;
 
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -45,7 +44,6 @@ public class ImageService extends StatefulService {
         public static final String FIELD_NAME_DESCRIPTION = "description";
         public static final String FIELD_NAME_REGION_ID = "regionId";
         public static final String FIELD_NAME_OS_FAMILY = "osFamily";
-        public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
         public static final String FIELD_NAME_ENDPOINT_TYPE = "endpointType";
 
         /**

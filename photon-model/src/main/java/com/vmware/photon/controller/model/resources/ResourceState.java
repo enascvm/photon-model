@@ -19,6 +19,7 @@ import java.util.Set;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
+import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption;
@@ -36,6 +37,7 @@ public class ResourceState extends ServiceDocument {
     public static final String FIELD_NAME_TENANT_LINKS = "tenantLinks";
     public static final String FIELD_NAME_GROUP_LINKS = "groupLinks";
     public static final String FIELD_NAME_TAG_LINKS = "tagLinks";
+    public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
 
     /**
      * Identifier of this resource instance

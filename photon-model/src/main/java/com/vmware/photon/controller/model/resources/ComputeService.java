@@ -26,7 +26,6 @@ import org.apache.commons.validator.routines.InetAddressValidator;
 
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -103,7 +102,6 @@ public class ComputeService extends StatefulService {
         public static final String FIELD_NAME_NETWORK_INTERFACE_LINKS = "networkInterfaceLinks";
         public static final String FIELD_NAME_DISK_LINKS = "diskLinks";
         public static final String FIELD_NAME_TYPE = "type";
-        public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
 
         /**
          * URI reference to corresponding ComputeDescription.
