@@ -26,6 +26,7 @@ import com.vmware.photon.controller.model.adapters.registry.operations.ResourceO
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourceState;
+import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
@@ -136,6 +137,10 @@ public class ResourceOperationUtils {
      * evaluated to {@literal true} for the given {@code resourceState}
      */
     public static boolean isAvailable(ResourceState resourceState, ResourceOperationSpec spec) {
+        AssertUtil.assertNotNull(spec, "'spec' must be set.");
+        if (spec.targetCriteria == null) {
+            return true;
+        }
         ScriptEngine engine = new ScriptEngineManager().getEngineByName(SCRIPT_ENGINE_NAME_JS);
         engine.getBindings(ScriptContext.ENGINE_SCOPE).put(SCRIPT_CONTEXT_RESOURCE, resourceState);
         try {

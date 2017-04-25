@@ -28,6 +28,21 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 public class ResourceOperationUtilsTest {
 
     @Test
+    public void testIsAvailable_null_neg() {
+        ResourceOperationSpec spec = createResourceOperationSpec();
+
+        ComputeState computeState = createComputeState("testIsAvailable_null_neg");
+
+        boolean ret = ResourceOperationUtils.isAvailable(computeState, spec);
+        Assert.assertTrue(ret);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testIsAvailable_noTargetCriteria_pos() {
+        ResourceOperationUtils.isAvailable(null, null);
+    }
+
+    @Test
     public void testIsAvailable_simple_pos() {
         ResourceOperationSpec spec = createResourceOperationSpec();
         spec.targetCriteria = SCRIPT_CONTEXT_RESOURCE + ".hostName.startsWith('test')"
