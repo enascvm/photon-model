@@ -468,10 +468,10 @@ public class InstanceClient extends BaseHelper {
         CustomProperties custProp;
         ManagedObjectReference moRef;
         NetworkInterfaceStateWithDetails nic = nics.iterator().next();
-        if (nic.network != null) {
-            custProp = CustomProperties.of(nic.network);
-        } else {
+        if (nic.subnet != null) {
             custProp = CustomProperties.of(nic.subnet);
+        } else {
+            custProp = CustomProperties.of(nic.network);
         }
         moRef = custProp.getMoRef(CustomProperties.MOREF);
 
