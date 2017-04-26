@@ -290,8 +290,9 @@ public class AWSUtils {
         }
 
         if (isAwsClientMock()) {
-            AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
-                    getAWSMockHost() + AWS_EC2_ENDPOINT, region);
+            AwsClientBuilder.EndpointConfiguration endpointConfiguration =
+                    new AwsClientBuilder.EndpointConfiguration(
+                            getAWSMockHost() + AWS_CLOUDWATCH_ENDPOINT, region);
             amazonCloudWatchAsyncClientBuilder.setEndpointConfiguration(endpointConfiguration);
         } else {
             amazonCloudWatchAsyncClientBuilder.setRegion(region);
