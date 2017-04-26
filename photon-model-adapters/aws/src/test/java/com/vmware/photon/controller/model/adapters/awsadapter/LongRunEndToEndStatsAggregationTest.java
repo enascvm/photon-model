@@ -82,6 +82,7 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
 public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
     private static final String TEST_CASE_INITIAL = "Initial Run ";
     private static final int DEFAULT_TIMEOUT_SECONDS = 200;
+    private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 1;
 
     private static final String SEPARATOR = ": ";
     private static final String STAT_NAME_CPU_USAGE_PERCENT = "CPU Usage Percent";
@@ -208,6 +209,8 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
 
         this.host.waitFor("Timeout while waiting for test run duration", () -> {
             TimeUnit.MINUTES.sleep(this.testRunDurationInMinutes);
+            this.host.getScheduledExecutor().awaitTermination(EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES,
+                    TimeUnit.MINUTES);
             return true;
         });
     }

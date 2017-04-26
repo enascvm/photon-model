@@ -88,6 +88,7 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
     private static final double BYTES_TO_MB = 1024 * 1024;
     private static final int MEMORY_THRESHOLD_SEVERE = 40;
     private static final int MEMORY_THRESHOLD_WARNING = 60;
+    private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 1;
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -205,6 +206,8 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
 
             this.host.waitFor("Timeout while waiting for test run duration", () -> {
                 TimeUnit.MINUTES.sleep(this.testRunDurationInMinutes);
+                this.host.getScheduledExecutor().awaitTermination(EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES,
+                        TimeUnit.MINUTES);
                 return true;
             });
         }

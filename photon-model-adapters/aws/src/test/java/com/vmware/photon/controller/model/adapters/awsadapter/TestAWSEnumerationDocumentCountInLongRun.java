@@ -49,10 +49,8 @@ import org.junit.Test;
 import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
-import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.ResourceState;
@@ -77,11 +75,9 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  * The test provisions and terminates AWS instances during the run and periodically runs enumeration.
  * It verifies counts of following resources in context of the test (i.e. the resources created/enumerated/deleted
  * during the test run):
- * ComputeDescription
  * ResourcePoolState
  * NetworkInterfaceState
  * SecurityGroupState
- * NetworkInterfaceWithDescription
  * SubnetState
  */
 public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
@@ -95,21 +91,18 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     private static final String STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT = "MemoryAvailablePercent";
     private static final int MEMORY_THRESHOLD_SEVERE = 60;
     private static final int MEMORY_THRESHOLD_WARNING = 40;
+    private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 1;
     private static final double BYTES_TO_MB = 1024 * 1024;
 
     // Sets for storing document links and ids
     private Set<String> computeStateLinks;
-    private Set<String> computeDescriptionLinks;
     private Set<String> resourcePoolLinks;
     private Set<String> networkInterfaceLinks;
     private Set<String> securityGroupLinks;
-    private Set<String> networkInterfaceDescriptionLinks;
     private Set<String> subnetLinks;
-    private Set<String> computeDescriptionIds;
     private Set<String> resourcePoolIds;
     private Set<String> networkInterfaceIds;
     private Set<String> securityGroupIds;
-    private Set<String> networkInterfaceDescriptionIds;
     private Set<String> subnetIds;
 
     private ComputeState computeHost;
@@ -149,17 +142,13 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
         this.instancesToCleanUp = new ArrayList<String>();
         this.computeStateLinks = new HashSet<String>();
-        this.computeDescriptionLinks = new HashSet<String>();
         this.resourcePoolLinks = new HashSet<String>();
         this.networkInterfaceLinks = new HashSet<String>();
         this.securityGroupLinks = new HashSet<String>();
-        this.networkInterfaceDescriptionLinks = new HashSet<String>();
         this.subnetLinks = new HashSet<String>();
-        this.computeDescriptionIds = new HashSet<String>();
         this.resourcePoolIds = new HashSet<String>();
         this.networkInterfaceIds = new HashSet<String>();
         this.securityGroupIds = new HashSet<String>();
-        this.networkInterfaceDescriptionIds = new HashSet<String>();
         this.subnetIds = new HashSet<String>();
 
         setAwsClientMockInfo(this.isAwsClientMock, this.awsMockEndpointReference);
@@ -246,6 +235,8 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         // Keep the host running for some time, specified by testRunDurationInMinutes parameter.
         this.host.waitFor("Timeout while waiting for test run duration", () -> {
             TimeUnit.MINUTES.sleep(this.testRunDurationInMinutes);
+            this.host.getScheduledExecutor().awaitTermination(EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES,
+                    TimeUnit.MINUTES);
             return true;
         });
 
@@ -323,12 +314,11 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
     /**
      * Calls the methods to:
-     * 1. Get and store compute description links, resource pool links and network interface links by
+     * 1. Get and store resource pool links and network interface links by
      *    querying given instance IDs.
-     * 2. Get and store network interface ids from network interface links and security group links, subnet
-     *    links and network interface description links by querying network interface ids.
-     * 3. Get and store IDs by querying compute description links, resource pool links, network
-     *    interface description links, subnet links and security group links.
+     * 2. Get and store network interface ids from network interface links and security group links and subnet
+     *    links by querying network interface ids.
+     * 3. Get and store IDs by querying, resource pool links, subnet links and security group links.
      * @param instanceIdList List of instance IDs provisioned by the test
      */
     private void storeDocumentLinksAndIds(List<String> instanceIdList) {
@@ -337,22 +327,18 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         storeDocumentLinksFromNetworkInterfaceStates();
 
         // Stores document ids obtained from document links of the resources
-        storeEnumeratedDocumentIdsByQueryingLinks(this.computeDescriptionLinks, this.computeDescriptionIds,
-                ComputeDescription.class);
         storeEnumeratedDocumentIdsByQueryingLinks(this.resourcePoolLinks, this.resourcePoolIds,
                 ResourcePoolState.class);
 
         if (!this.networkInterfaceLinks.isEmpty()) {
             storeEnumeratedDocumentIdsByQueryingLinks(this.securityGroupLinks, this.securityGroupIds,
                     SecurityGroupState.class);
-            storeEnumeratedDocumentIdsByQueryingLinks(this.networkInterfaceDescriptionLinks,
-                    this.networkInterfaceDescriptionIds, NetworkInterfaceDescription.class);
             storeEnumeratedDocumentIdsByQueryingLinks(this.subnetLinks, this.subnetIds, SubnetState.class);
         }
     }
 
     /**
-     * Gets and stores compute description links, resource pool links and network interface links by querying
+     * Gets and stores resource pool links and network interface links by querying
      * given instance IDs.
      * @param instanceIdList List of instance IDs provisioned by the test
      */
@@ -380,13 +366,12 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         // Store all compute links
         this.computeStateLinks.addAll(qt.results.documentLinks);
 
-        // Store compute description links, resource pool links and network links from all compute states.
+        // Store resource pool links and network links from all compute states.
         for (String documentLink : this.computeStateLinks) {
 
             ComputeState cs = Utils.fromJson(qt.results.documents.get(
                     documentLink), ComputeState.class);
 
-            this.computeDescriptionLinks.add(cs.descriptionLink);
             this.resourcePoolLinks.add(cs.resourcePoolLink);
             this.networkInterfaceLinks.addAll(cs.networkInterfaceLinks);
         }
@@ -394,7 +379,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
     /**
      * Gets and stores network interface ids from network interface links and security group links, subnet
-     * links and network interface description links by querying network interface ids.
+     * links by querying network interface ids.
      */
     private void storeDocumentLinksFromNetworkInterfaceStates() {
         // If there are no network interface links, return.
@@ -434,13 +419,12 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
         QueryTask qt = queryResponse.getBody(QueryTask.class);
 
-        // Store security group links, network interface description links and subnet links.
+        // Store security group links and subnet links.
         for (String documentLink : qt.results.documentLinks) {
             NetworkInterfaceState nis = Utils.fromJson(qt.results.documents.get(
                     documentLink), NetworkInterfaceState.class);
 
             this.securityGroupLinks.addAll(nis.securityGroupLinks);
-            this.networkInterfaceDescriptionLinks.add(nis.networkInterfaceDescriptionLink);
             this.subnetLinks.add(nis.subnetLink);
         }
     }
@@ -457,7 +441,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
             Operation.createGet(UriUtils.buildUri(this.host.getUri(), s)).setReferer(this.host.getUri())
                     .setCompletion((o, e) -> {
                         if (e != null) {
-                            this.host.log(Level.SEVERE, "Error getting compute description ids");
+                            this.host.log(Level.SEVERE, "Error getting resource document ids");
                         }
                         Object obj = o.getBody(classType);
                         if (obj instanceof ResourceState) {
@@ -470,26 +454,27 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
 
     /**
      * Query and obtain the total number of documents associated with set of ids for every resource.
-     * For every resource except compute description, the number of document ids and number of total documents
+     * For every resource the number of document ids and number of total documents
      * associated with those ids should be the same.
      */
     public void assertDocumentCounts() {
         // If asserting after deleting provisioned instances, there should be 0 compute state links.
         if (this.postDeletion) {
-            Assert.assertTrue(0 == this.computeStateLinks.size());
+            Assert.assertTrue("Compute document count mismatch during enumeration",
+                    0 == this.computeStateLinks.size());
         } else {
-            Assert.assertTrue(this.instanceIds.size() == this.computeStateLinks.size());
+            Assert.assertTrue("Compute document count mismatch during enumeration after deletion",
+                    this.instanceIds.size() == this.computeStateLinks.size());
         }
 
-        Assert.assertTrue(getEnumeratedDocumentCountByQueryingIds(this.computeDescriptionIds,
-                ComputeDescription.class) >= this.computeDescriptionIds.size());
-        Assert.assertTrue(getEnumeratedDocumentCountByQueryingIds(this.resourcePoolIds,
+        Assert.assertTrue("Resource pool document count mismatch during enumeration",
+                getEnumeratedDocumentCountByQueryingIds(this.resourcePoolIds,
                 ResourcePoolState.class) == this.resourcePoolIds.size());
-        Assert.assertTrue(getEnumeratedDocumentCountByQueryingIds(this.securityGroupIds,
+        Assert.assertTrue("Security group document count mismatch during enumeration",
+                getEnumeratedDocumentCountByQueryingIds(this.securityGroupIds,
                 SecurityGroupState.class) == this.securityGroupIds.size());
-        Assert.assertTrue(getEnumeratedDocumentCountByQueryingIds(this.networkInterfaceDescriptionIds,
-                NetworkInterfaceDescription.class) == this.networkInterfaceDescriptionIds.size());
-        Assert.assertTrue(getEnumeratedDocumentCountByQueryingIds(this.subnetIds,
+        Assert.assertTrue("Subnet document count mismatch during enumeration",
+                getEnumeratedDocumentCountByQueryingIds(this.subnetIds,
                 SubnetState.class) == this.subnetIds.size());
     }
 
@@ -531,17 +516,13 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
      */
     private void clearStoredDocumentLinksAndIds() {
         this.computeStateLinks.clear();
-        this.computeDescriptionLinks.clear();
         this.resourcePoolLinks.clear();
         this.networkInterfaceLinks.clear();
         this.securityGroupLinks.clear();
-        this.networkInterfaceDescriptionLinks.clear();
         this.subnetLinks.clear();
-        this.computeDescriptionIds.clear();
         this.resourcePoolIds.clear();
         this.networkInterfaceIds.clear();
         this.securityGroupIds.clear();
-        this.networkInterfaceDescriptionIds.clear();
         this.subnetIds.clear();
     }
 
