@@ -1650,13 +1650,6 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         state.parentLink = request.resourceLink();
         state.resourcePoolLink = request.resourcePoolLink;
 
-        state.instanceAdapterReference = enumerationContext.getParent()
-                .description.instanceAdapterReference;
-        state.enumerationAdapterReference = enumerationContext.getParent()
-                .description.enumerationAdapterReference;
-        state.powerAdapterReference = enumerationContext.getParent()
-                .description.powerAdapterReference;
-
         state.regionId = enumerationContext.getRegionId();
         state.cpuCount = new Long(vm.getNumCpu());
         state.totalMemoryBytes = vm.getMemoryBytes();

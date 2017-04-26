@@ -167,7 +167,8 @@ public class AWSEnumerationUtils {
      */
     public static ComputeState mapInstanceToComputeState(Instance instance,
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
-            String endpointLink,  String computeDescriptionLink, String regionId,
+            String endpointLink,  String computeDescriptionLink,
+            String regionId, String zoneId,
             List<String> tenantLinks) {
         ComputeState computeState = new ComputeState();
         computeState.id = instance.getInstanceId();
@@ -176,6 +177,8 @@ public class AWSEnumerationUtils {
         computeState.type = ComputeType.VM_GUEST;
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
         computeState.regionId = regionId;
+        computeState.zoneId = zoneId;
+        computeState.instanceType = instance.getInstanceType();
 
         computeState.resourcePoolLink = resourcePoolLink;
         computeState.endpointLink = endpointLink;
@@ -187,10 +190,18 @@ public class AWSEnumerationUtils {
 
         computeState.address = instance.getPublicIpAddress();
         computeState.powerState = AWSUtils.mapToPowerState(instance.getState());
+
         computeState.customProperties = new HashMap<>();
         computeState.customProperties.put(REGION_ID, regionId);
         computeState.customProperties.put(CUSTOM_OS_TYPE,
                 getNormalizedOSType(instance));
+        computeState.customProperties.put(SOURCE_TASK_LINK,
+                ResourceEnumerationTaskService.FACTORY_LINK);
+        computeState.customProperties.put(ComputeProperties.PLACEMENT_LINK,
+                placementComputeLink);
+        // Network State. Create one network state mapping to each VPC that is discovered during
+        // enumeration.
+        computeState.customProperties.put(AWS_VPC_ID, instance.getVpcId());
 
         if (!instance.getTags().isEmpty()) {
 
@@ -218,10 +229,6 @@ public class AWSEnumerationUtils {
 
         computeState.tenantLinks = tenantLinks;
 
-        // Network State. Create one network state mapping to each VPC that is discovered during
-        // enumeration.
-        computeState.customProperties.put(AWS_VPC_ID,
-                instance.getVpcId());
         return computeState;
     }
 

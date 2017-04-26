@@ -17,7 +17,6 @@ import static com.vmware.photon.controller.model.resources.ComputeDescriptionSer
 
 import java.net.URI;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -122,52 +121,6 @@ public class ComputeService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String resourcePoolLink;
-
-        /**
-         * URI reference to the adapter used to create an instance of this host.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Since(ReleaseConstants.RELEASE_VERSION_0_6_14)
-        public URI instanceAdapterReference;
-
-        /**
-         * URI reference to the adapter used to power-on this host.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Since(ReleaseConstants.RELEASE_VERSION_0_6_14)
-        public URI powerAdapterReference;
-
-        /**
-         * URI reference to the adapter used to boot this host.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Since(ReleaseConstants.RELEASE_VERSION_0_6_14)
-        public URI bootAdapterReference;
-
-        /**
-         * URI reference to the adapter used to get the health status of this host.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Since(ReleaseConstants.RELEASE_VERSION_0_6_14)
-        public URI healthAdapterReference;
-
-        /**
-         * URI reference to the adapter used to get the stats info of this host.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public URI statsAdapterReference;
-
-        @Documentation(description = "Set of URIs for stats adapters of this host")
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Since(ReleaseConstants.RELEASE_VERSION_0_6_14)
-        public Set<URI> statsAdapterReferences;
-
-        /**
-         * URI reference to the adapter used to enumerate instances of this host.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @Since(ReleaseConstants.RELEASE_VERSION_0_6_14)
-        public URI enumerationAdapterReference;
 
         /**
          * Ip address of this compute instance.

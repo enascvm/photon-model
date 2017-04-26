@@ -371,7 +371,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.request.resourcePoolLink,
                         context.request.endpointLink,
                         context.computeDescriptionMap.get(descKey),
-                        regionId,
+                        regionId, zoneId,
                         context.request.tenantLinks);
                 computeStateToBeCreated.networkInterfaceLinks = new ArrayList<>();
 
@@ -526,7 +526,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         context.request.resourcePoolLink,
                         context.request.endpointLink,
                         existingComputeState.descriptionLink,
-                        zoneData.regionId,
+                        zoneData.regionId, zoneId,
                         context.request.tenantLinks);
                 computeStateToBeUpdated.documentSelfLink = existingComputeState.documentSelfLink;
 

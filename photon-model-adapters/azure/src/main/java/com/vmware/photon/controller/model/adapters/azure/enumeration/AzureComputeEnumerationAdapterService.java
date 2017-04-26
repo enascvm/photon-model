@@ -1248,6 +1248,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         computeState.id = virtualMachine.id.toLowerCase();
         computeState.name = virtualMachine.name;
         computeState.regionId = virtualMachine.location;
+
         computeState.type = ComputeType.VM_GUEST;
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         computeState.parentLink = ctx.request.resourceLink();
@@ -1257,11 +1258,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         computeState.endpointLink = ctx.request.endpointLink;
         computeState.resourcePoolLink = ctx.request.resourcePoolLink;
         computeState.diskLinks = vmDisks;
+        computeState.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
+
         computeState.customProperties = new HashMap<>();
         computeState.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
 
-        // add tag links
-        setTagLinksToResourceState(computeState, virtualMachine.tags);
+        String resourceGroupName = getResourceGroupName(virtualMachine.id);
+        computeState.customProperties.put(AZURE_RESOURCE_GROUP_NAME, resourceGroupName);
 
         if (virtualMachine.properties.diagnosticsProfile != null) {
             String diagnosticsAccountUri = virtualMachine.properties.diagnosticsProfile
@@ -1272,6 +1275,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         storageDesk.documentSelfLink);
             }
         }
+        // add tag links
+        setTagLinksToResourceState(computeState, virtualMachine.tags);
         computeState.tenantLinks = ctx.parentCompute.tenantLinks;
 
         List<String> networkLinks = new ArrayList<>();
