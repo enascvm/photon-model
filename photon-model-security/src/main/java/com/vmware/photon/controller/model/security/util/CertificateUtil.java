@@ -60,7 +60,10 @@ import javax.naming.ldap.Rdn;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -117,6 +120,10 @@ public class CertificateUtil {
     public static final String FINGERPRINT_KEY = "fingerprint";
     public static final String VALID_SINCE_KEY = "validSince";
     public static final String VALID_TO_KEY = "validTo";
+
+    // Server Name Indication (SNI) Extension
+    public static final boolean SSL_CONNECT_USE_SNI = Boolean.parseBoolean(System.getProperty(
+            "ssl.resolver.use_sni", "true"));
 
     private static final int DEFAULT_SECURE_CONNECTION_PORT = 443;
     public static final long DEFAULT_CONNECTION_TIMEOUT_MILLIS = Long.getLong(
@@ -491,6 +498,17 @@ public class CertificateUtil {
                             true);
                 } else {
                     sslSocket = (SSLSocket) sslSocketFactory.createSocket();
+
+                    if (SSL_CONNECT_USE_SNI) {
+                        SNIHostName serverName = new SNIHostName(hostAddress);
+                        List<SNIServerName> serverNames = new ArrayList<>(1);
+                        serverNames.add(serverName);
+
+                        SSLParameters params = sslSocket.getSSLParameters();
+                        params.setServerNames(serverNames);
+                        sslSocket.setSSLParameters(params);
+                    }
+
                     sslSocket
                             .connect(new InetSocketAddress(hostAddress, port), (int) timeoutMillis);
                 }
