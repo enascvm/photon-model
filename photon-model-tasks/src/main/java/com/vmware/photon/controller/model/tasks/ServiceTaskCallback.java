@@ -31,10 +31,10 @@ import com.vmware.xenon.common.Utils;
 public class ServiceTaskCallback<E extends Enum<E>> {
 
     private TaskStage stageComplete;
-    private E subStageComplete;
+    private Object subStageComplete;
 
     private TaskStage stageFailed;
-    private E subStageFailed;
+    private Object subStageFailed;
 
     private Map<String, String> customProperties;
 
@@ -51,7 +51,7 @@ public class ServiceTaskCallback<E extends Enum<E>> {
     }
 
     public static <E extends Enum<E>> ServiceTaskCallback<E> create(String serviceSelfLink) {
-        return new ServiceTaskCallback<E>(serviceSelfLink);
+        return new ServiceTaskCallback<>(serviceSelfLink);
     }
 
     public ServiceTaskCallback<E> onSuccessFinishTask() {
@@ -104,7 +104,7 @@ public class ServiceTaskCallback<E extends Enum<E>> {
         public static final String KIND = Utils.buildKind(ServiceTaskCallbackResponse.class);
 
         public TaskState taskInfo;
-        public E taskSubStage;
+        public Object taskSubStage;
         public Map<String, String> customProperties;
         public Set<ResourceOperationResponse> failures;
         public Set<ResourceOperationResponse> completed;
@@ -114,7 +114,7 @@ public class ServiceTaskCallback<E extends Enum<E>> {
             // GSON serialization constructor
         }
 
-        public ServiceTaskCallbackResponse(TaskStage taskStage, E taskSubStage,
+        public ServiceTaskCallbackResponse(TaskStage taskStage, Object taskSubStage,
                 Map<String, String> customProperties,
                 ServiceErrorResponse failure) {
             this.taskInfo = new TaskState();
