@@ -75,15 +75,15 @@ public class TagsUtil {
             ResourceState localState,
             Map<String, String> remoteTagsMap) {
 
+        if (remoteTagsMap == null || remoteTagsMap.isEmpty()) {
+            return DeferredResult.completed((Void) null);
+        }
+
         String msg = "Create local TagStates (for %s.name=%s) to match %d remote tags: %s";
 
         service.logFine(
                 () -> String.format(msg, localState.getClass().getSimpleName(), localState.name,
                         remoteTagsMap.size(), "STARTING"));
-
-        if (remoteTagsMap == null || remoteTagsMap.isEmpty()) {
-            return DeferredResult.completed((Void) null);
-        }
 
         localState.tagLinks = new HashSet<>();
 
