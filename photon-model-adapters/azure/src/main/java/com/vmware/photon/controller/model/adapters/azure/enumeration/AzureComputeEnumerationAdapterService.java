@@ -1259,6 +1259,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         computeState.resourcePoolLink = ctx.request.resourcePoolLink;
         computeState.diskLinks = vmDisks;
         computeState.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
+        computeState.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
+        computeState.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
 
         computeState.customProperties = new HashMap<>();
         computeState.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));

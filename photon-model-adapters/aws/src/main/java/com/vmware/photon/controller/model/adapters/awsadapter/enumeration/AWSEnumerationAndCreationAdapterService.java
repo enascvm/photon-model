@@ -605,6 +605,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             awsComputeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
             awsComputeState.endpointLink = this.context.request.original.endpointLink;
             awsComputeState.parentTaskLink = this.context.request.original.taskReference;
+            awsComputeState.parentCDStatsAdapterReferences = this.context.parentCompute.description.statsAdapterReferences;
             awsComputeState.tenantLinks = this.context.parentCompute.tenantLinks;
             awsComputeState.parentAuth = this.context.parentAuth;
             awsComputeState.regionId = this.context.request.regionId;

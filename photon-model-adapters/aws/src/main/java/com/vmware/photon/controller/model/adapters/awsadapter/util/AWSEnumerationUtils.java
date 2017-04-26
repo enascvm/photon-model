@@ -41,13 +41,15 @@ import com.amazonaws.services.ec2.model.Tag;
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
+import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
+import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-
+import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -165,9 +167,9 @@ public class AWSEnumerationUtils {
     /**
      * Maps the instance discovered on AWS to a local compute state that will be persisted.
      */
-    public static ComputeState mapInstanceToComputeState(Instance instance,
+    public static ComputeState mapInstanceToComputeState(ServiceHost host, Instance instance,
             String parentComputeLink, String placementComputeLink, String resourcePoolLink,
-            String endpointLink,  String computeDescriptionLink,
+            String endpointLink,  String computeDescriptionLink, Set<URI> parentCDStatsAdapterReferences,
             String regionId, String zoneId,
             List<String> tenantLinks) {
         ComputeState computeState = new ComputeState();
@@ -179,6 +181,14 @@ public class AWSEnumerationUtils {
         computeState.regionId = regionId;
         computeState.zoneId = zoneId;
         computeState.instanceType = instance.getInstanceType();
+
+        computeState.instanceAdapterReference = AdapterUriUtil.buildAdapterUri(host,
+                AWSUriPaths.AWS_INSTANCE_ADAPTER);
+        computeState.enumerationAdapterReference = AdapterUriUtil.buildAdapterUri(host,
+                AWSUriPaths.AWS_ENUMERATION_CREATION_ADAPTER);
+        computeState.statsAdapterReference = AdapterUriUtil.buildAdapterUri(host,
+                AWSUriPaths.AWS_STATS_ADAPTER);
+        computeState.statsAdapterReferences = parentCDStatsAdapterReferences;
 
         computeState.resourcePoolLink = resourcePoolLink;
         computeState.endpointLink = endpointLink;
@@ -218,9 +228,6 @@ public class AWSEnumerationUtils {
                 computeState.name = nameTag;
             }
         }
-        computeState.customProperties.put(SOURCE_TASK_LINK,
-                ResourceEnumerationTaskService.FACTORY_LINK);
-        computeState.customProperties.put(ComputeProperties.PLACEMENT_LINK, placementComputeLink);
 
         if (instance.getLaunchTime() != null) {
             computeState.creationTimeMicros = TimeUnit.MILLISECONDS
