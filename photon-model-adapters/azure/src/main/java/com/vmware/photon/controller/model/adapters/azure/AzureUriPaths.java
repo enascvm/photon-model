@@ -75,6 +75,7 @@ public class AzureUriPaths {
         adapterLinksByType.put(AZURE_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER);
         adapterLinksByType.put(AZURE_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER);
         adapterLinksByType.put(AZURE_FIREWALL_ADAPTER, AdapterTypePath.FIREWALL_ADAPTER);
+        adapterLinksByType.put(AZURE_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER);
 
         AZURE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }
