@@ -877,7 +877,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 });
     }
 
-    private DeferredResult<List<Operation>> createResourceGroupStateHelper(
+    private DeferredResult<Operation> createResourceGroupStateHelper(
             StorageEnumContext context, CloudBlobContainer container,
             ResourceGroupState oldResourceGroup) {
         // Associate resource group with storage account
@@ -889,27 +889,38 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                         context.parentCompute.documentSelfLink)
                 .addFieldClause(StorageDescription.FIELD_NAME_NAME, storageAcctName);
 
-        // addScopeCriteria(qBuilder, StorageDescription.class, context);
-
-        QueryStrategy<StorageDescription> queryLocalStates = new QueryByPages<>(
+        QueryStrategy<StorageDescription> queryLocalStates = new QueryUtils.QueryTop<StorageDescription>(
                 getHost(),
                 qBuilder.build(),
                 StorageDescription.class,
                 context.parentCompute.tenantLinks,
                 context.request.endpointLink)
-                        .setMaxPageSize(getQueryResultLimit());
+                        .setMaxResultsLimit(getQueryResultLimit());
 
-        List<DeferredResult<Operation>> ops = new ArrayList<>();
-        return queryLocalStates.queryLinks(sdl -> {
-            ResourceGroupState resourceGroupState = createResourceGroupStateObject(
-                    context, container, sdl, oldResourceGroup);
-            if (oldResourceGroup != null) {
-                ops.add(updateResourceGroupState(context, resourceGroupState));
-            } else {
-                ops.add(createResourceGroupState(context, resourceGroupState));
-            }
-        })
-                .thenCompose(r -> DeferredResult.allOf(ops));
+        return queryLocalStates
+                .collectLinks(Collectors.toSet())
+                .thenCompose(sdls -> {
+                    logFine(() -> String.format("Found %d matching storage descriptions",
+                            sdls.size()));
+                    // the storage account names are unique so we should only get 1 result back
+                    if (!sdls.isEmpty()) {
+                        String storageDescSelfLink = sdls.iterator().next();
+
+                        if (sdls.size() > 1) {
+                            logWarning(() -> String.format("Found multiple instances of the same"
+                                    + " storage description %s", storageAcctName));
+                        }
+                        ResourceGroupState resourceGroupState = createResourceGroupStateObject(
+                                context, container, storageDescSelfLink, oldResourceGroup);
+                        if (oldResourceGroup != null) {
+                            return updateResourceGroupState(context, resourceGroupState);
+                        } else {
+                            return createResourceGroupState(context, resourceGroupState);
+                        }
+                    } else {
+                        return DeferredResult.completed((Operation) null);
+                    }
+                });
     }
 
     private ResourceGroupState createResourceGroupStateObject(StorageEnumContext context,
@@ -1195,23 +1206,23 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             context.parentCompute.documentSelfLink)
                     .addFieldClause(ResourceGroupState.FIELD_NAME_ID, containerId);
 
-            QueryStrategy<ResourceGroupState> queryLocalStates = new QueryByPages<ResourceGroupState>(
+            QueryStrategy<ResourceGroupState> queryLocalStates = new QueryUtils.QueryTop<ResourceGroupState>(
                     getHost(),
                     qBuilder.build(),
                     ResourceGroupState.class,
                     context.parentCompute.tenantLinks,
                     context.request.endpointLink)
-                            .setMaxPageSize(getQueryResultLimit());
+                            .setMaxResultsLimit(getQueryResultLimit());
 
             return queryLocalStates.collectLinks(Collectors.toSet())
                     .thenCompose(rgLinks -> {
-                        logFine(() -> String.format("Found %d matching resource group",
+                        logFine(() -> String.format("Found %d matching resource groups",
                                 rgLinks.size()));
                         String containerLink = null;
                         if (rgLinks.size() > 0) {
                             containerLink = rgLinks.iterator().next();
                             if (rgLinks.size() > 1) {
-                                logWarning(() -> String.format("Found multiple instance of the same"
+                                logWarning(() -> String.format("Found multiple instances of the same"
                                         + " resource group %s", containerId));
                             }
 
