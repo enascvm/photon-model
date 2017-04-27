@@ -117,8 +117,9 @@ public class AWSUtils {
             2376, 2375, 1 };
     public static final String DEFAULT_ALLOWED_NETWORK = "0.0.0.0/0";
     public static final String DEFAULT_PROTOCOL = "tcp";
-    public static final String AWS_EC2_ENDPOINT = "/aws-mock/ec2-endpoint/";
-    public static final String AWS_CLOUDWATCH_ENDPOINT = "/aws-mock/cloudwatch/";
+    public static final String AWS_MOCK_EC2_ENDPOINT = "/aws-mock/ec2-endpoint/";
+    public static final String AWS_MOCK_CLOUDWATCH_ENDPOINT = "/aws-mock/cloudwatch/";
+    public static final String AWS_REGION_HEADER = "region";
 
     /**
      * Flag to use aws-mock, will be set in test files. Aws-mock is a open-source tool for testing
@@ -228,8 +229,10 @@ public class AWSUtils {
         }
 
         if (isAwsClientMock()) {
+            configuration.addHeader(AWS_REGION_HEADER, region);
+            ec2AsyncClientBuilder.setClientConfiguration(configuration);
             AwsClientBuilder.EndpointConfiguration endpointConfiguration = new AwsClientBuilder.EndpointConfiguration(
-                    getAWSMockHost() + AWS_EC2_ENDPOINT, region);
+                    getAWSMockHost() + AWS_MOCK_EC2_ENDPOINT, region);
             ec2AsyncClientBuilder.setEndpointConfiguration(endpointConfiguration);
         } else {
             ec2AsyncClientBuilder.setRegion(region);
@@ -290,9 +293,12 @@ public class AWSUtils {
         }
 
         if (isAwsClientMock()) {
+            ClientConfiguration configuration = new ClientConfiguration();
+            configuration.addHeader(AWS_REGION_HEADER, region);
+            amazonCloudWatchAsyncClientBuilder.setClientConfiguration(configuration);
             AwsClientBuilder.EndpointConfiguration endpointConfiguration =
                     new AwsClientBuilder.EndpointConfiguration(
-                            getAWSMockHost() + AWS_CLOUDWATCH_ENDPOINT, region);
+                            getAWSMockHost() + AWS_MOCK_CLOUDWATCH_ENDPOINT, region);
             amazonCloudWatchAsyncClientBuilder.setEndpointConfiguration(endpointConfiguration);
         } else {
             amazonCloudWatchAsyncClientBuilder.setRegion(region);
