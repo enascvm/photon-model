@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
+import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
@@ -1356,6 +1357,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     computeState.powerState = PowerState.OFF;
                 }
             }
+            if (computeState.customProperties == null) {
+                computeState.customProperties = new HashMap<>();
+            }
+            computeState.customProperties.put(RESOURCE_GROUP_NAME, resourceGroupName);
+
             computeState.type = ComputeType.VM_GUEST;
             computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
             return computeState;

@@ -1266,6 +1266,7 @@ public class AzureInstanceService extends StatelessService {
                         } else {
                             cs.customProperties = ctx.child.customProperties;
                         }
+                        cs.customProperties.put(RESOURCE_GROUP_NAME,ctx.resourceGroup.getName());
 
                         Operation.CompletionHandler completionHandler = (ox,
                                 exc) -> {
