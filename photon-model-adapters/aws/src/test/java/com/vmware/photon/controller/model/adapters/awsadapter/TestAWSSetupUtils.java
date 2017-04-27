@@ -53,20 +53,31 @@ import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.AttachInternetGatewayRequest;
 import com.amazonaws.services.ec2.model.AttachNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.AttachNetworkInterfaceResult;
+import com.amazonaws.services.ec2.model.BlockDeviceMapping;
 import com.amazonaws.services.ec2.model.CreateNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.CreateNetworkInterfaceResult;
+import com.amazonaws.services.ec2.model.CreateSnapshotRequest;
+import com.amazonaws.services.ec2.model.CreateSnapshotResult;
 import com.amazonaws.services.ec2.model.CreateSubnetRequest;
 import com.amazonaws.services.ec2.model.CreateSubnetResult;
+import com.amazonaws.services.ec2.model.CreateVolumeRequest;
+import com.amazonaws.services.ec2.model.CreateVolumeResult;
 import com.amazonaws.services.ec2.model.CreateVpcRequest;
 import com.amazonaws.services.ec2.model.DeleteInternetGatewayRequest;
 import com.amazonaws.services.ec2.model.DeleteNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.DeleteSecurityGroupRequest;
+import com.amazonaws.services.ec2.model.DeleteSnapshotRequest;
 import com.amazonaws.services.ec2.model.DeleteSubnetRequest;
+import com.amazonaws.services.ec2.model.DeleteVolumeRequest;
 import com.amazonaws.services.ec2.model.DeleteVpcRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsRequest;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
+import com.amazonaws.services.ec2.model.DescribeSnapshotsRequest;
+import com.amazonaws.services.ec2.model.DescribeSnapshotsResult;
+import com.amazonaws.services.ec2.model.DescribeVolumesRequest;
+import com.amazonaws.services.ec2.model.DescribeVolumesResult;
 import com.amazonaws.services.ec2.model.DetachInternetGatewayRequest;
 import com.amazonaws.services.ec2.model.DetachNetworkInterfaceRequest;
 import com.amazonaws.services.ec2.model.Filter;
@@ -78,10 +89,12 @@ import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.SecurityGroup;
+import com.amazonaws.services.ec2.model.Snapshot;
 import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesResult;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.TerminateInstancesResult;
+import com.amazonaws.services.ec2.model.Volume;
 import com.amazonaws.services.ec2.model.Vpc;
 
 import org.joda.time.LocalDateTime;
@@ -186,6 +199,17 @@ public class TestAWSSetupUtils {
     public static final String INTERNET_GATEWAY_KEY = "internet-gateway";
     public static final String NIC_SPECS_KEY = "nicSpecs";
     public static final String SECURITY_GROUP_KEY = "security-group";
+
+    public static final String AWS_DEFAULT_SNAPSHOT_ID = "snap-12a3456b";
+    public static final String AWS_DEFAULT_DISK_ID = "vol-ce01b5e4";
+
+    public static final String SNAPSHOT_KEY = "snapshot-id";
+    public static final String DISK_KEY = "disk-id";
+
+    public static final String VOLUME_ID_ATTRIBUTE = "volume-id";
+    public static final String SNAPSHOT_ID_ATTRIBUTE = "snapshot-id";
+    public static final String VOLUME_STATUS_AVAILABLE = "available";
+    public static final String SNAPSHOT_STATUS_COMPLETE = "completed";
 
     /**
      * Return two-NIC spec where first NIC should be assigned to 'secondary' subnet and second NIC
@@ -301,17 +325,35 @@ public class TestAWSSetupUtils {
         }
     }
 
+    public static void setUpTestVolume(VerificationHost host, AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock) {
+        awsTestContext.put(SNAPSHOT_KEY, AWS_DEFAULT_SNAPSHOT_ID);
+        awsTestContext.put(DISK_KEY, AWS_DEFAULT_DISK_ID);
+        String volumeId = awsTestContext.get(DISK_KEY).toString();
+        if (!isMock && !volumeIdExists(client, AWS_DEFAULT_DISK_ID)) {
+            volumeId = createVolume(host, client);
+            awsTestContext.put(DISK_KEY, volumeId);
+        }
+
+        if (!isMock && !snapshotIdExists(client, AWS_DEFAULT_SNAPSHOT_ID)) {
+            String snapshotId = createSnapshot(host, client, volumeId);
+            awsTestContext.put(SNAPSHOT_KEY, snapshotId);
+        }
+
+    }
+
     public static void setUpTestVpc(AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock) {
         awsTestContext.put(VPC_KEY, AWS_DEFAULT_VPC_ID);
         awsTestContext.put(NIC_SPECS_KEY, SINGLE_NIC_SPEC);
         awsTestContext.put(SUBNET_KEY, AWS_DEFAULT_SUBNET_ID);
         awsTestContext.put(SECURITY_GROUP_KEY, AWS_DEFAULT_GROUP_ID);
+
         // create new VPC, Subnet, InternetGateway if the default VPC doesn't exist
         if (!isMock && !vpcIdExists(client, AWS_DEFAULT_VPC_ID)) {
             String vpcId = createVPC(client, AWS_DEFAULT_VPC_CIDR);
             awsTestContext.put(VPC_KEY, vpcId);
             String subnetId = createSubnet(client, AWS_DEFAULT_VPC_CIDR, vpcId);
             awsTestContext.put(SUBNET_KEY, subnetId);
+
             String internetGatewayId = createInternetGateway(client);
             awsTestContext.put(INTERNET_GATEWAY_KEY, internetGatewayId);
             attachInternetGateway(client, vpcId, internetGatewayId);
@@ -351,6 +393,17 @@ public class TestAWSSetupUtils {
         }
     }
 
+    public static void tearDownTestDisk(
+            AmazonEC2AsyncClient client, VerificationHost host,
+            Map<String, Object> awsTestContext, boolean isMock) {
+        if (!isMock && !vpcIdExists(client, AWS_DEFAULT_DISK_ID)) {
+            final String diskId = (String) awsTestContext.get(DISK_KEY);
+            final String snapshotId = (String) awsTestContext.get(SNAPSHOT_KEY);
+            deleteVolume(client, diskId);
+            deleteSnapshot(client, snapshotId);
+        }
+    }
+
     /**
      * Creates a VPC and returns the VPC id.
      */
@@ -378,6 +431,30 @@ public class TestAWSSetupUtils {
     }
 
     /**
+     * Return true if volumeId exists.
+     */
+    public static boolean volumeIdExists(AmazonEC2AsyncClient client, String volumeId) {
+        List<Volume> volumes = client.describeVolumes()
+                .getVolumes()
+                .stream()
+                .filter(volume -> volume.getVolumeId().equals(volumeId))
+                .collect(Collectors.toList());
+        return volumes != null && !volumes.isEmpty();
+    }
+
+    /**
+     * Return true if snapshotId exists.
+     */
+    public static boolean snapshotIdExists(AmazonEC2AsyncClient client, String snapshotId) {
+        List<Snapshot> snapshots = client.describeSnapshots()
+                .getSnapshots()
+                .stream()
+                .filter(snapshot -> snapshot.getSnapshotId().equals(snapshotId))
+                .collect(Collectors.toList());
+        return snapshots != null && !snapshots.isEmpty();
+    }
+
+    /**
      * Creates a Subnet and return the Subnet id.
      */
     public static String createSubnet(AmazonEC2AsyncClient client, String subnetCidr, String vpcId) {
@@ -389,10 +466,74 @@ public class TestAWSSetupUtils {
     }
 
     /**
+     * Creates a volume and return the volume id.
+     */
+    public static String createVolume(VerificationHost host, AmazonEC2Client client) {
+        CreateVolumeRequest req = new CreateVolumeRequest()
+                .withAvailabilityZone(zoneId + avalabilityZoneIdentifier)
+                .withSize(1);
+        CreateVolumeResult res = client.createVolume(req);
+        String volumeId = res.getVolume().getVolumeId();
+        Filter filter = new Filter().withName(VOLUME_ID_ATTRIBUTE).withValues(volumeId);
+
+        DescribeVolumesRequest volumesRequest = new DescribeVolumesRequest()
+                .withVolumeIds(volumeId)
+                .withFilters(filter);
+
+        host.waitFor("Timeout waiting for creating volume", () -> {
+            DescribeVolumesResult volumesResult = client.describeVolumes(volumesRequest);
+            String state = volumesResult.getVolumes().get(0).getState();
+            if (state.equalsIgnoreCase(VOLUME_STATUS_AVAILABLE)) {
+                return true;
+            }
+            return false;
+        });
+        return volumeId;
+    }
+
+    /**
+     * Creates a snapshot and return the snapshot id.
+     */
+    public static String createSnapshot(VerificationHost host, AmazonEC2Client client, String volumeId) {
+        CreateSnapshotRequest req = new CreateSnapshotRequest()
+                .withVolumeId(volumeId);
+        CreateSnapshotResult res = client.createSnapshot(req);
+        String snapshotId = res.getSnapshot().getSnapshotId();
+        Filter filter = new Filter().withName(SNAPSHOT_ID_ATTRIBUTE).withValues(snapshotId);
+
+        DescribeSnapshotsRequest snapshotsRequest = new DescribeSnapshotsRequest()
+                .withSnapshotIds(snapshotId)
+                .withFilters(filter);
+        host.waitFor("Timeout waiting for creating snapshot", () -> {
+            DescribeSnapshotsResult snapshotsResult = client.describeSnapshots(snapshotsRequest);
+            String state = snapshotsResult.getSnapshots().get(0).getState();
+            if (state.equalsIgnoreCase(SNAPSHOT_STATUS_COMPLETE)) {
+                return true;
+            }
+            return false;
+        });
+        return snapshotId;
+    }
+
+    /**
      * Delete a Subnet
      */
     public static void deleteSubnet(AmazonEC2AsyncClient client, String subnetId) {
         client.deleteSubnet(new DeleteSubnetRequest().withSubnetId(subnetId));
+    }
+
+    /**
+     * Delete a Volume
+     */
+    public static void deleteVolume(AmazonEC2AsyncClient client, String diskId) {
+        client.deleteVolume(new DeleteVolumeRequest().withVolumeId(diskId));
+    }
+
+    /**
+     * Delete a Snapshot
+     */
+    public static void deleteSnapshot(AmazonEC2AsyncClient client, String snapshotId) {
+        client.deleteSnapshot(new DeleteSnapshotRequest().withSnapshotId(snapshotId));
     }
 
     /**
@@ -1241,14 +1382,15 @@ public class TestAWSSetupUtils {
     }
 
     public static String provisionAWSVMWithEC2Client(VerificationHost host, AmazonEC2Client client,
-            String ami, String subnetId, String securityGroupId) {
+            String ami, String subnetId, String securityGroupId, BlockDeviceMapping blockDeviceMapping) {
 
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
                 .withSubnetId(subnetId)
                 .withImageId(ami)
                 .withInstanceType(instanceType_t2_micro)
                 .withMinCount(1).withMaxCount(1)
-                .withSecurityGroupIds(securityGroupId);
+                .withSecurityGroupIds(securityGroupId)
+                .withBlockDeviceMappings(blockDeviceMapping);
 
         // handler invoked once the EC2 runInstancesAsync commands completes
         RunInstancesResult result = null;
