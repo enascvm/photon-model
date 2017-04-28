@@ -37,6 +37,14 @@ public class ResourceOperationUtilsTest {
         Assert.assertTrue(ret);
     }
 
+    @Test
+    public void testIsAvailable_noComputeState_pos() {
+        ResourceOperationSpec spec = createResourceOperationSpec();
+        spec.targetCriteria = "true";
+
+        ResourceOperationUtils.isAvailable(null, spec);
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void testIsAvailable_noTargetCriteria_pos() {
         ResourceOperationUtils.isAvailable(null, null);
@@ -85,6 +93,18 @@ public class ResourceOperationUtilsTest {
 
         boolean ret = ResourceOperationUtils.isAvailable(computeState, spec);
         Assert.assertFalse(ret);
+    }
+
+    @Test
+    public void testIsAvailable_changeContextFromScript() {
+        ResourceOperationSpec spec = createResourceOperationSpec();
+        spec.targetCriteria = SCRIPT_CONTEXT_RESOURCE + ".hostName='changed'";
+
+        ComputeState computeState = createComputeState("testIsAvailable_changeContextFromScript");
+
+        String originalValue = computeState.hostName;
+        boolean ret = ResourceOperationUtils.isAvailable(computeState, spec);
+        Assert.assertEquals(originalValue, computeState.hostName);
     }
 
     private ComputeState createComputeState(String hostName) {

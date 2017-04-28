@@ -141,8 +141,15 @@ public class ResourceOperationUtils {
         if (spec.targetCriteria == null) {
             return true;
         }
+
         ScriptEngine engine = new ScriptEngineManager().getEngineByName(SCRIPT_ENGINE_NAME_JS);
-        engine.getBindings(ScriptContext.ENGINE_SCOPE).put(SCRIPT_CONTEXT_RESOURCE, resourceState);
+
+        if (resourceState != null) {
+            //Clone original object to avoid changing props of original object from vulnerable
+            // targetCriteria
+            ResourceState clone = Utils.cloneObject(resourceState);
+            engine.getBindings(ScriptContext.ENGINE_SCOPE).put(SCRIPT_CONTEXT_RESOURCE, clone);
+        }
         try {
             Object res = engine.eval(spec.targetCriteria);
             if (res instanceof Boolean) {
@@ -150,7 +157,7 @@ public class ResourceOperationUtils {
             } else {
                 Utils.log(ResourceOperationUtils.class, "isAvailable",
                         Level.WARNING,
-                        "Expect boolean result when evaluate targetCriteria '%s' of "
+                        "Expect boolean result when evaluate targetCriteria \"%s\" of "
                                 + "endpointType: %s, resourceType: %s, operation: %s, "
                                 + "adapterReference: %s. Result: %s",
                         spec.targetCriteria,
