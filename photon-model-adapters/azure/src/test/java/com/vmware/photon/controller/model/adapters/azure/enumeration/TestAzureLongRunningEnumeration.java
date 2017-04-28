@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import static com.vmware.photon.controller.model.ModelUtils.createSecurityGroup;
@@ -76,12 +77,14 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
+import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -90,7 +93,9 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
@@ -98,6 +103,7 @@ import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
+import com.vmware.photon.controller.model.resources.SubnetService.SubnetState;
 import com.vmware.photon.controller.model.resources.TagService.TagState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
@@ -108,11 +114,13 @@ import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
+import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.ServiceHostManagementService;
 import com.vmware.xenon.services.common.ServiceUriPaths;
@@ -129,6 +137,13 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  * much load on the host's memory.
  */
 public class TestAzureLongRunningEnumeration extends BaseModelTest {
+
+    static {
+        // Set the size of returned pages
+        System.setProperty(QueryByPages.PROPERTY_NAME_MAX_PAGE_SIZE, Integer.toString(5));
+        AzureConstants.setQueryResultLimit(5);
+    }
+
     public static final String STALE_RG_NAME_PREFIX = "stalerg-";
     public static final String STALE_VM_NAME_PREFIX = "stalevm-";
     public static final String STALE_SA_NAME_PREFIX = "stalesa-";
@@ -200,6 +215,21 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     public int timeoutSeconds = 1200;
 
     public static String azureVMNamePrefix = "az-lrt-";
+
+    private static final String RESOURCE_GROUP = "resourceGroup";
+    private static final String DISK_STATE = "diskState";
+    private static final String COMPUTE_STATE = "computeState";
+    private static final String STORAGE_DESC = "storageDesc";
+    private static final String NETWORK_STATE = "networkState";
+    private static final String NETWORK_INTERFACE_STATE = "networkInterfaceState";
+    private static final String SUBNET_STATE = "subnetState";
+
+    private Map<String, Long> resourcesCountAfterFirstEnumeration = new HashMap<>();
+    private Map<String, Long> resourcesCountAfterMultipleEnumerations = new HashMap<>();
+    private Map<String, Double> resourceDeltaMap = new HashMap<>();
+    public long resourceDeltaValue = 10;
+
+    private boolean resourceCountAssertError = true;
 
     @BeforeClass
     public static void setupClass() {
@@ -457,8 +487,13 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             TimeUnit.MINUTES.sleep(1);
             return true;
         });
-        // 4. Validate extra resources
 
+        if (this.resourceCountAssertError) {
+            this.host.log(Level.SEVERE, "Resource count assertions failed.");
+            fail("Resource count assertions failed.");
+        }
+
+        // 4. Validate extra resources
         assertRemoteResources();
         assertStaleResources();
 
@@ -593,7 +628,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     }
 
     /**
-     * Periodically runs enumeration and logs node stats.
+     * Periodically runs enumeration, verifies resources counts and logs node stats.
      */
     private ScheduledFuture<?> runEnumerationAndLogNodeStatsPeriodically() {
         return this.host.getScheduledExecutor().scheduleAtFixedRate(() -> {
@@ -606,12 +641,118 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             } catch (Throwable e) {
                 this.host.log(Level.WARNING, "Error running enumeration in test" + e.getMessage());
             }
+            // perform check on resource counts after each enumeration
+            generateResourcesCounts();
+            // assert check on resources count after first and last enumeration.
+            verifyResourcesCount();
         }, 0, this.enumerationFrequencyInMinutes, TimeUnit.MINUTES);
     }
 
     /**
+     * Fetch the document count for resources
+     */
+    private void generateResourcesCounts() {
+        if (this.numOfEnumerationsRan == 1) {
+            this.resourcesCountAfterFirstEnumeration
+                    .put(RESOURCE_GROUP, getDocumentCount(ResourceGroupState.class));
+            this.resourcesCountAfterFirstEnumeration
+                    .put(DISK_STATE, getDocumentCount(DiskState.class));
+            this.resourcesCountAfterFirstEnumeration
+                    .put(COMPUTE_STATE, getDocumentCount(ComputeState.class));
+            this.resourcesCountAfterFirstEnumeration
+                    .put(STORAGE_DESC, getDocumentCount(StorageDescription.class));
+            this.resourcesCountAfterFirstEnumeration
+                    .put(NETWORK_STATE, getDocumentCount(NetworkState.class));
+            this.resourcesCountAfterFirstEnumeration
+                    .put(NETWORK_INTERFACE_STATE, getDocumentCount(NetworkInterfaceState.class));
+            this.resourcesCountAfterFirstEnumeration
+                    .put(SUBNET_STATE, getDocumentCount(SubnetState.class));
+
+            // populate error delta margin for resources.
+            populateResourceDelta();
+
+        } else {
+            this.resourcesCountAfterMultipleEnumerations
+                    .put(RESOURCE_GROUP, getDocumentCount(ResourceGroupState.class));
+            this.resourcesCountAfterMultipleEnumerations
+                    .put(DISK_STATE, getDocumentCount(DiskState.class));
+            this.resourcesCountAfterMultipleEnumerations
+                    .put(COMPUTE_STATE, getDocumentCount(ComputeState.class));
+            this.resourcesCountAfterMultipleEnumerations
+                    .put(STORAGE_DESC, getDocumentCount(StorageDescription.class));
+            this.resourcesCountAfterMultipleEnumerations
+                    .put(NETWORK_STATE, getDocumentCount(NetworkState.class));
+            this.resourcesCountAfterMultipleEnumerations
+                    .put(NETWORK_INTERFACE_STATE, getDocumentCount(NetworkInterfaceState.class));
+            this.resourcesCountAfterMultipleEnumerations
+                    .put(SUBNET_STATE, getDocumentCount(SubnetState.class));
+        }
+    }
+
+    /**
+     * Verify document count of resources after first enumeration and later enumerations.
+     */
+    private void verifyResourcesCount() {
+        if (this.numOfEnumerationsRan > 1) {
+            this.host.log(Level.INFO, "Verifying Resources counts...");
+
+            assertTrue((this.resourcesCountAfterFirstEnumeration.get(RESOURCE_GROUP)
+                    + this.resourceDeltaMap.get(RESOURCE_GROUP))
+                    >= this.resourcesCountAfterMultipleEnumerations.get(RESOURCE_GROUP));
+            assertTrue((this.resourcesCountAfterFirstEnumeration.get(DISK_STATE)
+                    + this.resourceDeltaMap.get(DISK_STATE))
+                    >= this.resourcesCountAfterMultipleEnumerations.get(DISK_STATE));
+            assertTrue((this.resourcesCountAfterFirstEnumeration.get(COMPUTE_STATE)
+                    + this.resourceDeltaMap.get(COMPUTE_STATE))
+                    >= this.resourcesCountAfterMultipleEnumerations.get(COMPUTE_STATE));
+            assertTrue((this.resourcesCountAfterFirstEnumeration.get(STORAGE_DESC)
+                    + this.resourceDeltaMap.get(STORAGE_DESC))
+                    >= this.resourcesCountAfterMultipleEnumerations.get(STORAGE_DESC));
+            assertTrue((this.resourcesCountAfterFirstEnumeration.get(NETWORK_STATE)
+                    + this.resourceDeltaMap.get(NETWORK_STATE))
+                    >= this.resourcesCountAfterMultipleEnumerations.get(NETWORK_STATE));
+            assertTrue((this.resourcesCountAfterFirstEnumeration.get(NETWORK_INTERFACE_STATE)
+                    + this.resourceDeltaMap.get(NETWORK_INTERFACE_STATE))
+                    >= this.resourcesCountAfterMultipleEnumerations
+                    .get(NETWORK_INTERFACE_STATE));
+            assertTrue((this.resourcesCountAfterFirstEnumeration.get(SUBNET_STATE)
+                    + this.resourceDeltaMap.get(SUBNET_STATE))
+                    >= this.resourcesCountAfterMultipleEnumerations.get(SUBNET_STATE));
+
+            this.resourceCountAssertError = false;
+            this.host.log(Level.INFO, "Resources count assertions successful.");
+        }
+    }
+
+    /**
+     * Populate delta error margin for resources counts.
+     */
+    private void populateResourceDelta() {
+        this.resourceDeltaMap.put(RESOURCE_GROUP, Math.ceil(
+                this.resourcesCountAfterFirstEnumeration.get(RESOURCE_GROUP) * this.resourceDeltaValue
+                        / 100));
+        this.resourceDeltaMap.put(DISK_STATE, Math.ceil(
+                this.resourcesCountAfterFirstEnumeration.get(DISK_STATE) * this.resourceDeltaValue
+                        / 100));
+        this.resourceDeltaMap.put(COMPUTE_STATE, Math.ceil(
+                this.resourcesCountAfterFirstEnumeration.get(COMPUTE_STATE) * this.resourceDeltaValue
+                        / 100));
+        this.resourceDeltaMap.put(STORAGE_DESC, Math.ceil(
+                this.resourcesCountAfterFirstEnumeration.get(STORAGE_DESC) * this.resourceDeltaValue
+                        / 100));
+        this.resourceDeltaMap.put(NETWORK_STATE, Math.ceil(
+                this.resourcesCountAfterFirstEnumeration.get(NETWORK_STATE) * this.resourceDeltaValue
+                        / 100));
+        this.resourceDeltaMap.put(NETWORK_INTERFACE_STATE, Math.ceil(
+                this.resourcesCountAfterFirstEnumeration.get(NETWORK_INTERFACE_STATE)
+                        * this.resourceDeltaValue / 100));
+        this.resourceDeltaMap.put(SUBNET_STATE, Math.ceil(
+                this.resourcesCountAfterFirstEnumeration.get(SUBNET_STATE) * this.resourceDeltaValue
+                        / 100));
+    }
+
+    /**
      * Add tags, that later should be discovered as part of first enumeration cycle.
-     * @throws Exception
      */
     private void tagAzureResources() throws Exception {
         for (int i = 0; i < numOfVMsToTest; i++) {
@@ -654,7 +795,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     /**
      * Creates stale resource states for deletion. These should be deleted as part of the first
      * enumeration cycle.
-     * @throws Throwable
      */
     private void createStaleResource() throws Throwable {
         createAzureResourceGroups(STALE_RG_COUNT);
@@ -770,7 +910,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     /**
      * Creates a set of Azure Resource Groups.
      * @param numOfResourceGroups The number of resource groups to create.
-     * @throws Throwable
      */
     private void createAzureResourceGroups(int numOfResourceGroups) throws Throwable {
         for (int i = 0; i < numOfResourceGroups; i++) {
@@ -784,7 +923,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     /**
      * Creates a set of Azure VM resources.
      * @param numOfVMs The number of VM resources to create.
-     * @throws Throwable
      */
     private void createAzureVMResources(int numOfVMs) throws Throwable {
         for (int i = 0; i < numOfVMs; i++) {
@@ -797,7 +935,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
     /**
      * Runs an enumeration cycle.
-     * @throws Throwable
      */
     private void runEnumeration() throws Throwable {
         this.host.log(Level.INFO, "===== Running Enumeration =====");
@@ -837,7 +974,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     /**
      * Creates Azure storage accounts.
      * @param numOfAccts The number of storage accounts to create.
-     * @throws Throwable
      */
     private void createAzureStorageAccounts(int numOfAccts) throws Throwable {
         for (int i = 0; i < numOfAccts; i++) {
@@ -850,7 +986,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     /**
      * Creates Azure storage containers.
      * @param numOfCont The number of storage containers to create.
-     * @throws Throwable
      */
     private void createAzureStorageContainers(int numOfCont) throws Throwable {
         for (int i = 0; i < numOfCont; i++) {
@@ -864,7 +999,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     /**
      * Creates Azure blobs.
      * @param numOfBlobs The number of blobs to create.
-     * @throws Throwable
      */
     private void createAzureBlobs(int numOfBlobs) throws Throwable {
         for (int i = 0; i < numOfBlobs; i++) {
@@ -877,7 +1011,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     /**
      * Creates Azure security groups.
      * @param numOfSecurityGroups The number of security groups to create.
-     * @throws Throwable
      */
     private void createAzureSecurityGroups(int numOfSecurityGroups) throws Throwable {
         for (int i = 0; i < numOfSecurityGroups; i++) {
@@ -914,5 +1047,22 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
         this.host.log(this.loggingLevelForMemory, STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT
                 + SEPARATOR + this.availableMemoryPercentage);
+    }
+
+    /**
+     * Returns the count of resource documents for given Resource type.
+     */
+    private long getDocumentCount(Class <? extends ServiceDocument> T) {
+        QueryTask.Query.Builder qBuilder = QueryTask.Query.Builder.create()
+                .addKindFieldClause(T);
+        //.addFieldClause("documentSelfLink", "/resources/groups/", QueryTask.QueryTerm.MatchType.PREFIX);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .addOption(QueryTask.QuerySpecification.QueryOption.COUNT)
+                .setQuery(qBuilder.build())
+                .build();
+
+        this.host.createQueryTaskService(queryTask, false, true, queryTask, null);
+        return queryTask.results.documentCount;
     }
 }
