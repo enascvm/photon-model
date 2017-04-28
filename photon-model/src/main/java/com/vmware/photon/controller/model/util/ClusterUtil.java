@@ -33,12 +33,20 @@ public class ClusterUtil {
             .getProperty(UriPaths.PROPERTY_PREFIX + "metrics.uri");
 
     /**
+     * Discovery URI set as a system property.
+     * Eg: -Dphoton-model.discovery.uri=http://localhost/
+     */
+    public static final String DISCOVERY_URI = System
+            .getProperty(UriPaths.PROPERTY_PREFIX + "discovery.uri");
+
+    /**
      * Enum mapping Clusters with their URIs.
      *
      */
     public enum ServiceTypeCluster {
 
-        METRIC_SERVICE(METRICS_URI);
+        METRIC_SERVICE(METRICS_URI),
+        DISCOVERY_SERVICE(DISCOVERY_URI);
 
         private String uri;
 

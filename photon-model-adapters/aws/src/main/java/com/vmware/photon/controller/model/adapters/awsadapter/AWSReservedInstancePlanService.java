@@ -40,6 +40,8 @@ import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientMana
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.resources.ComputeService;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.StatelessService;
@@ -102,7 +104,8 @@ public class AWSReservedInstancePlanService extends StatelessService {
             context.computeDesc = op.getBody(ComputeService.ComputeStateWithDescription.class);
             getParentAuth(context);
         };
-        URI computeUri = UriUtils.extendUriWithQuery(UriUtils.buildUri(getHost(), computeLink),
+        URI computeUri = UriUtils.extendUriWithQuery(UriUtils
+                        .extendUri(getInventoryServiceUri(), computeLink),
                 UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString());
         AdapterUtils.getServiceState(this, computeUri, onSuccess, getFailureConsumer(context,
                 "Error while retrieving compute description"));
@@ -114,7 +117,8 @@ public class AWSReservedInstancePlanService extends StatelessService {
             getReservedInstancesPlans(context);
         };
         String authLink = context.computeDesc.description.authCredentialsLink;
-        AdapterUtils.getServiceState(this, authLink, onSuccess, getFailureConsumer(context,
+        URI authUri = UriUtils.extendUri(getInventoryServiceUri(), authLink);
+        AdapterUtils.getServiceState(this, authUri, onSuccess, getFailureConsumer(context,
                 "Error while retrieving auth credentials"));
     }
 
@@ -279,9 +283,15 @@ public class AWSReservedInstancePlanService extends StatelessService {
             ComputeService.ComputeState accountState = new ComputeService.ComputeState();
             accountState.customProperties = new HashMap<>();
             accountState.customProperties.put(key, value);
-            sendRequest(Operation.createPatch(this.host, this.context.computeDesc.documentSelfLink)
+
+            sendRequest(Operation.createPatch(UriUtils
+                    .extendUri(getInventoryServiceUri(), this.context.computeDesc.documentSelfLink))
                     .setBody(accountState));
         }
+    }
+
+    private URI getInventoryServiceUri() {
+        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE);
     }
 
 }

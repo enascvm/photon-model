@@ -39,6 +39,7 @@ public class ClusterUtilTest {
     @After
     public void cleanUp() {
         ServiceTypeCluster.METRIC_SERVICE.setUri(null);
+        ServiceTypeCluster.DISCOVERY_SERVICE.setUri(null);
         if (this.host == null) {
             return;
         }
@@ -61,6 +62,10 @@ public class ClusterUtilTest {
         URI expectedUri = this.host.getUri();
         URI returnedUri = ClusterUtil.getClusterUri(this.host, ServiceTypeCluster.METRIC_SERVICE);
         assertEquals(expectedUri, returnedUri);
+
+        this.setResourcesUri(null);
+        returnedUri = ClusterUtil.getClusterUri(this.host, ServiceTypeCluster.DISCOVERY_SERVICE);
+        assertEquals(expectedUri, returnedUri);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -78,9 +83,17 @@ public class ClusterUtilTest {
         ClusterUtil.getClusterUri(this.host, ServiceTypeCluster.METRIC_SERVICE);
         URI returnedUri = ClusterUtil.getClusterUri(this.host, ServiceTypeCluster.METRIC_SERVICE);
         assertEquals(expectedUri, returnedUri);
+
+        this.setResourcesUri(uri);
+        returnedUri = ClusterUtil.getClusterUri(this.host, ServiceTypeCluster.DISCOVERY_SERVICE);
+        assertEquals(expectedUri, returnedUri);
     }
 
     private void setMetricsUri(String newUri) {
         ServiceTypeCluster.METRIC_SERVICE.setUri(newUri);
+    }
+
+    private void setResourcesUri(String newUri) {
+        ServiceTypeCluster.DISCOVERY_SERVICE.setUri(newUri);
     }
 }

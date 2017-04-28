@@ -366,7 +366,8 @@ public class AWSCostStatsService extends StatelessService {
             handleCostStatsCreationRequest(statsData);
         };
         String authLink = statsData.computeDesc.description.authCredentialsLink;
-        AdapterUtils.getServiceState(this, authLink, onSuccess, getFailureConsumer(statsData));
+        URI authUri = UriUtils.extendUri(getInventoryServiceUri(), authLink);
+        AdapterUtils.getServiceState(this, authUri, onSuccess, getFailureConsumer(statsData));
     }
 
     protected void checkBillBucketConfig(AWSCostStatsCreationContext statsData,
@@ -449,7 +450,8 @@ public class AWSCostStatsService extends StatelessService {
                 .setQuery(awsAccountsQuery).build();
         queryTask.setDirect(true);
         queryTask.tenantLinks = context.computeDesc.tenantLinks;
-        return Operation.createPost(getHost(), ServiceUriPaths.CORE_LOCAL_QUERY_TASKS)
+        return Operation.createPost(UriUtils.extendUri(getInventoryServiceUri(),
+                ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
                 .setBody(queryTask)
                 .setConnectionSharing(true).setCompletion((o, e) -> {
                     if (e != null) {
@@ -537,7 +539,8 @@ public class AWSCostStatsService extends StatelessService {
         ComputeState accountState = new ComputeState();
         accountState.customProperties = new HashMap<>();
         accountState.customProperties.put(key, value);
-        sendRequest(Operation.createPatch(this.getHost(), context.computeDesc.documentSelfLink)
+        sendRequest(Operation.createPatch(UriUtils.extendUri(
+                getInventoryServiceUri(), context.computeDesc.documentSelfLink))
                 .setBody(accountState));
     }
 
@@ -562,13 +565,14 @@ public class AWSCostStatsService extends StatelessService {
                 .build();
         queryTask.tenantLinks = statsData.computeDesc.tenantLinks;
         queryTask.documentSelfLink = UUID.randomUUID().toString();
-        QueryUtils.startQueryTask(this, queryTask).whenComplete((qrt, e) -> {
-            if (e != null) {
-                getFailureConsumer(statsData).accept(e);
-                return;
-            }
-            populateAwsInstances(qrt.results.nextPageLink, statsData, next);
-        });
+        QueryUtils.startQueryTask(this, queryTask,
+                ServiceTypeCluster.DISCOVERY_SERVICE).whenComplete((qrt, e) -> {
+                    if (e != null) {
+                        getFailureConsumer(statsData).accept(e);
+                        return;
+                    }
+                    populateAwsInstances(qrt.results.nextPageLink, statsData, next);
+                });
     }
 
     private void populateAwsInstances(String nextPageLink, AWSCostStatsCreationContext context,
@@ -577,29 +581,33 @@ public class AWSCostStatsService extends StatelessService {
             context.stage = next;
             handleCostStatsCreationRequest(context);
         } else {
-            Operation.createGet(this, nextPageLink).setCompletion((o, ex) -> {
-                if (ex != null) {
-                    getFailureConsumer(context).accept(ex);
-                    return;
-                }
-                QueryTask queryTask = o.getBody(QueryTask.class);
-                Map<String, List<ComputeState>> instancesById = queryTask.results.documents.values()
-                        .stream()
-                        .map(s -> Utils.fromJson(s, ComputeState.class))
-                        .collect(Collectors.groupingBy(c -> c.id));
-                Map<String, List<String>> instanceLinksById = instancesById.entrySet().stream()
-                        .collect(Collectors.toMap(Entry::getKey,
-                                e -> e.getValue().stream().map(cs -> cs.documentSelfLink)
-                                        .collect(Collectors.toList())));
-                instanceLinksById.forEach(
-                        (k, v) -> context.awsInstanceLinksById.merge(k, v, (list1, list2) -> {
-                            list1.addAll(list2);
-                            return list1;
-                        }));
-                logFine(() -> String.format("Found %d instances in current page",
-                        queryTask.results.documentCount));
-                populateAwsInstances(queryTask.results.nextPageLink, context, next);
-            }).sendWith(this);
+            Operation.createGet(UriUtils.extendUri(getInventoryServiceUri(),
+                    nextPageLink)).setCompletion((o, ex) -> {
+                        if (ex != null) {
+                            getFailureConsumer(context).accept(ex);
+                            return;
+                        }
+                        QueryTask queryTask = o.getBody(QueryTask.class);
+                        Map<String, List<ComputeState>> instancesById =
+                                queryTask.results.documents.values()
+                                .stream()
+                                .map(s -> Utils.fromJson(s, ComputeState.class))
+                                .collect(Collectors.groupingBy(c -> c.id));
+                        Map<String, List<String>> instanceLinksById = instancesById.entrySet()
+                                .stream()
+                                .collect(Collectors.toMap(Entry::getKey,
+                                        e -> e.getValue().stream().map(cs -> cs.documentSelfLink)
+                                                .collect(Collectors.toList())));
+                        instanceLinksById.forEach(
+                                (k, v) -> context.awsInstanceLinksById.merge(k, v,
+                                        (list1, list2) -> {
+                                            list1.addAll(list2);
+                                            return list1;
+                                        }));
+                        logFine(() -> String.format("Found %d instances in current page",
+                                queryTask.results.documentCount));
+                        populateAwsInstances(queryTask.results.nextPageLink, context, next);
+                    }).sendWith(this);
         }
     }
 
@@ -1143,5 +1151,9 @@ public class AWSCostStatsService extends StatelessService {
             context.stage = next;
             handleCostStatsCreationRequest(context);
         }).sendWith(this, AWSConstants.OPERATION_BATCH_SIZE);
+    }
+
+    private URI getInventoryServiceUri() {
+        return ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE);
     }
 }

@@ -28,6 +28,8 @@ import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TaskUtils;
 import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.util.ClusterUtil;
+import com.vmware.photon.controller.model.util.ClusterUtil.ServiceTypeCluster;
 import com.vmware.xenon.common.FactoryService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
@@ -214,7 +216,8 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
 
         // load the RP state, if not already
         if (resourcePoolState == null) {
-            sendRequest(Operation.createGet(this, currentState.resourcePoolLink)
+            sendRequest(Operation.createGet(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
+                    ServiceTypeCluster.DISCOVERY_SERVICE), currentState.resourcePoolLink))
                     .setCompletion((o, e) -> {
                         if (e != null) {
                             if (e instanceof ServiceNotFoundException) {
@@ -264,26 +267,28 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
                 .setQuery(resourcePoolStateQuery)
                 .setResultLimit(resultLimit);
         QueryTask qTask = queryTaskBuilder.build();
-        QueryUtils.startQueryTask(this, qTask).whenComplete((queryRsp, queryEx) -> {
-            if (queryEx != null) {
-                TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), queryEx);
-                return;
-            }
-            StatsCollectionTaskState patchBody = new StatsCollectionTaskState();
-            if (queryRsp.results.nextPageLink == null) {
-                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
-            } else {
-                patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
-                patchBody.taskSubStage = StatsCollectionStage.GET_RESOURCES;
-                patchBody.nextPageLink = queryRsp.results.nextPageLink;
-            }
-            TaskUtils.sendPatch(this, patchBody);
-        });
+        QueryUtils.startQueryTask(this, qTask, ServiceTypeCluster.DISCOVERY_SERVICE)
+                .whenComplete((queryRsp, queryEx) -> {
+                    if (queryEx != null) {
+                        TaskUtils.sendFailurePatch(this, new StatsCollectionTaskState(), queryEx);
+                        return;
+                    }
+                    StatsCollectionTaskState patchBody = new StatsCollectionTaskState();
+                    if (queryRsp.results.nextPageLink == null) {
+                        patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.FINISHED);
+                    } else {
+                        patchBody.taskInfo = TaskUtils.createTaskState(TaskStage.STARTED);
+                        patchBody.taskSubStage = StatsCollectionStage.GET_RESOURCES;
+                        patchBody.nextPageLink = queryRsp.results.nextPageLink;
+                    }
+                    TaskUtils.sendPatch(this, patchBody);
+                });
     }
 
     private void getResources(Operation op, StatsCollectionTaskState currentState) {
         sendRequest(Operation
-                .createGet(UriUtils.buildUri(getHost(), currentState.nextPageLink))
+                .createGet(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
+                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.nextPageLink))
                 .setCompletion(
                         (getOp, getEx) -> {
                             if (getEx != null) {

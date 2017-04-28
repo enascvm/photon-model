@@ -274,7 +274,8 @@ public class SingleResourceStatsCollectionTaskService
 
     private void getDescriptions(SingleResourceStatsCollectionTaskState currentState) {
         URI computeDescUri = ComputeStateWithDescription
-                .buildUri(UriUtils.buildUri(getHost(), currentState.computeLink));
+                .buildUri(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
+                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.computeLink));
         sendRequest(Operation
                 .createGet(computeDescUri)
                 .setCompletion(
@@ -301,8 +302,10 @@ public class SingleResourceStatsCollectionTaskService
                                     statsAdapterReference = description.statsAdapterReference;
                                 } else if (description.statsAdapterReferences != null) {
                                     for (URI uri : description.statsAdapterReferences) {
-                                        if (uri.equals(currentState.statsAdapterReference)) {
-                                            statsAdapterReference = uri;
+                                        if (uri.getPath().equals(currentState
+                                                .statsAdapterReference.getPath())) {
+                                            statsAdapterReference = currentState
+                                                    .statsAdapterReference;
                                             break;
                                         }
                                     }
@@ -313,7 +316,9 @@ public class SingleResourceStatsCollectionTaskService
                                 statsRequest.nextStage = SingleResourceTaskCollectionStage.UPDATE_STATS
                                         .name();
                                 statsRequest.resourceReference = UriUtils
-                                        .buildUri(getHost(), computeStateWithDesc.documentSelfLink);
+                                        .extendUri(ClusterUtil.getClusterUri(getHost(),
+                                                ServiceTypeCluster.DISCOVERY_SERVICE),
+                                                computeStateWithDesc.documentSelfLink);
                                 statsRequest.taskReference = getUri();
                                 patchUri = statsAdapterReference;
                                 populateLastCollectionTimeForMetricsInStatsRequest(currentState,
@@ -361,7 +366,9 @@ public class SingleResourceStatsCollectionTaskService
         minuteStats.latestValue = Utils.getNowMicrosUtc();
         minuteStats.sourceTimeMicrosUtc = Utils.getNowMicrosUtc();
         minuteStats.unit = PhotonModelConstants.UNIT_MICROSECONDS;
-        URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.computeLink);
+        URI inMemoryStatsUri = UriUtils.buildStatsUri(UriUtils
+                .extendUri(UriUtils.buildUri(ClusterUtil.getClusterUri(getHost(),
+                        ServiceTypeCluster.DISCOVERY_SERVICE)), currentState.computeLink));
         operations.add(Operation.createPost(inMemoryStatsUri).setBody(minuteStats));
         populateResourceMetrics(metricsList,
                 getLastCollectionMetricKeyForAdapterLink(statsLink, false),
@@ -512,7 +519,8 @@ public class SingleResourceStatsCollectionTaskService
             SingleResourceStatsCollectionTaskState currentState,
             ComputeStatsRequest computeStatsRequest, URI patchUri, List<String> tenantLinks) {
         URI computeStatsUri = UriUtils
-                .buildStatsUri(UriUtils.buildUri(getHost(), currentState.computeLink));
+                .buildStatsUri(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
+                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.computeLink));
         Operation.createGet(computeStatsUri)
                 .setCompletion((o, e) -> {
                     if (e != null) {

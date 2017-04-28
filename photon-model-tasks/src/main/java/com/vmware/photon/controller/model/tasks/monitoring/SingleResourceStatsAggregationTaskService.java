@@ -335,7 +335,9 @@ public class SingleResourceStatsAggregationTaskService extends
         }
 
         // Lookup last rollup time from in memory stats - /<resource-link>/stats
-        URI statsUri = UriUtils.buildStatsUri(getHost(), currentState.resourceLink);
+        URI statsUri = UriUtils.buildStatsUri(
+                UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
+                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.resourceLink));
 
         sendRequest(Operation.createGet(statsUri)
                 .setCompletion((o, e) -> {
@@ -452,7 +454,7 @@ public class SingleResourceStatsAggregationTaskService extends
                 .setQuery(currentState.query)
                 .setResultLimit(resultLimit)
                 .build();
-        QueryUtils.startQueryTask(this, queryTask)
+        QueryUtils.startQueryTask(this, queryTask, ServiceTypeCluster.DISCOVERY_SERVICE)
                 .whenComplete((resultTask, queryEx) -> {
                     if (queryEx != null) {
                         sendSelfFailurePatch(currentState, queryEx.getMessage());
@@ -480,7 +482,8 @@ public class SingleResourceStatsAggregationTaskService extends
      */
     private void getResources(SingleResourceStatsAggregationTaskState currentState) {
         sendRequest(Operation
-                .createGet(UriUtils.buildUri(getHost(), currentState.queryResultLink))
+                .createGet(UriUtils.extendUri(ClusterUtil.getClusterUri(getHost(),
+                        ServiceTypeCluster.DISCOVERY_SERVICE), currentState.queryResultLink))
                 .setCompletion(
                         (getOp, getEx) -> {
                             if (getEx != null) {
@@ -984,7 +987,9 @@ public class SingleResourceStatsAggregationTaskService extends
             ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
             lastUpdateStat.name = rollupTime.getKey();
             lastUpdateStat.latestValue = 0;
-            URI inMemoryStatsUri = UriUtils.buildStatsUri(getHost(), currentState.resourceLink);
+            URI inMemoryStatsUri = UriUtils.buildStatsUri(UriUtils.extendUri(
+                    ClusterUtil.getClusterUri(getHost(), ServiceTypeCluster.DISCOVERY_SERVICE),
+                    currentState.resourceLink));
             operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
         }
     }
@@ -1033,8 +1038,11 @@ public class SingleResourceStatsAggregationTaskService extends
                     ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
                     lastUpdateStat.name = aggregateEntries.getKey();
                     lastUpdateStat.latestValue = latestTimeKey;
-                    URI inMemoryStatsUri = UriUtils
-                            .buildStatsUri(getHost(), currentState.resourceLink);
+
+                    URI inMemoryStatsUri = UriUtils.buildStatsUri(UriUtils.extendUri(
+                            ClusterUtil.getClusterUri(getHost(),
+                                    ServiceTypeCluster.DISCOVERY_SERVICE),
+                            currentState.resourceLink));
                     operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
                 }
                 addLastRollupTimeForMissingKeys(currentState, publishedKeys, operations);
@@ -1089,8 +1097,10 @@ public class SingleResourceStatsAggregationTaskService extends
             ServiceStats.ServiceStat lastUpdateStat = new ServiceStats.ServiceStat();
             lastUpdateStat.name = aggregateEntries.getKey();
             lastUpdateStat.latestValue = aggregateMetricUnit;
-            URI inMemoryStatsUri = UriUtils
-                    .buildStatsUri(getHost(), currentState.resourceLink);
+            URI inMemoryStatsUri = UriUtils.buildStatsUri(UriUtils.extendUri(
+                    ClusterUtil.getClusterUri(getHost(),
+                            ServiceTypeCluster.DISCOVERY_SERVICE),
+                    currentState.resourceLink));
             operations.add(Operation.createPost(inMemoryStatsUri).setBody(lastUpdateStat));
         }
         return operations;
