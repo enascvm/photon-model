@@ -88,36 +88,7 @@ import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption
 public class AWSEnumerationAndCreationAdapterService extends StatelessService {
     public static final String SELF_LINK = AWSUriPaths.AWS_ENUMERATION_CREATION_ADAPTER;
 
-    public enum AWSEnumerationCreationStages {
-        CLIENT,
-        ENUMERATE,
-        ERROR
-    }
-
     private AWSClientManager clientManager;
-
-    public enum AWSComputeEnumerationCreationSubStage {
-        QUERY_LOCAL_RESOURCES,
-        COMPARE,
-        CREATE_COMPUTE_DESCRIPTIONS,
-        CREATE_COMPUTE_STATES,
-        GET_NEXT_PAGE,
-        ENUMERATION_STOP
-    }
-
-    private enum AWSEnumerationRefreshSubStage {
-        ZONES,
-        VCP,
-        SECURITY_GROUP,
-        COMPUTE,
-        ERROR
-    }
-
-    public AWSEnumerationAndCreationAdapterService() {
-        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
-    }
 
     /**
      * The enumeration service context that holds all the information needed to determine the list
@@ -177,6 +148,624 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             this.subStage = AWSComputeEnumerationCreationSubStage.QUERY_LOCAL_RESOURCES;
             this.pageNo = 1;
         }
+    }
+
+    /**
+     * The async handler to handle the success and errors received after invoking the describe
+     * AvailabilityZones API on AWS
+     */
+    private static class AWSAvailabilityZoneAsyncHandler extends
+            AWSAsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult> {
+
+        private AWSEnumerationAndCreationAdapterService service;
+        private EnumerationCreationContext context;
+        private AWSEnumerationRefreshSubStage next;
+
+        private AWSAvailabilityZoneAsyncHandler(AWSEnumerationAndCreationAdapterService service,
+                EnumerationCreationContext context, AWSEnumerationRefreshSubStage next) {
+            super();
+            this.service = service;
+            this.context = context;
+            this.next = next;
+        }
+
+        @Override
+        public void handleSuccess(DescribeAvailabilityZonesRequest request,
+                DescribeAvailabilityZonesResult result) {
+
+            List<AvailabilityZone> zones = result.getAvailabilityZones();
+            if (zones == null || zones.isEmpty()) {
+                this.service
+                        .logFine(() -> "No AvailabilityZones found. Nothing to be created locally");
+                this.context.refreshSubStage = this.next;
+                this.service.processRefreshSubStages(this.context);
+                return;
+            }
+
+            loadLocalResources(this.service, this.context,
+                    zones.stream()
+                            .map(AvailabilityZone::getZoneName)
+                            .collect(Collectors.toList()),
+                    cm -> createMissingLocalInstances(zones, cm),
+                    cm -> {
+                        this.service.logFine(() -> "No AvailabilityZones found. Nothing to be"
+                                + " created locally");
+                        this.context.refreshSubStage = this.next;
+                        this.service.processRefreshSubStages(this.context);
+                    });
+        }
+
+        private void proceedWithRefresh() {
+            this.context.refreshSubStage = this.next;
+            this.service.processRefreshSubStages(this.context);
+        }
+
+        private void createMissingLocalInstances(List<AvailabilityZone> zones,
+                Map<String, ComputeState> cm) {
+            zones.stream()
+                    .filter(z -> cm.containsKey(z.getZoneName()))
+                    .forEach(z -> {
+                        ComputeState c = cm.get(z.getZoneName());
+                        this.context.zones.put(c.id,
+                                ZoneData.build(this.context.request.regionId,
+                                        c.id, c.documentSelfLink));
+                    });
+            List<Operation> descOps = zones.stream()
+                    .filter(z -> !cm.containsKey(z.getZoneName()))
+                    .map(this::createComputeDescription)
+                    .map(cd -> Operation
+                            .createPost(this.service, ComputeDescriptionService.FACTORY_LINK)
+                            .setBody(cd))
+                    .collect(Collectors.toList());
+
+            if (descOps.isEmpty()) {
+                proceedWithRefresh();
+                return;
+            }
+
+            OperationJoin
+                    .create(descOps)
+                    .setCompletion(
+                            (ops, exs) -> {
+                                if (exs != null) {
+                                    this.service
+                                            .logSevere(() -> String.format("Error creating a"
+                                                    + " compute descriptions for "
+                                                    + "discovered AvailabilityZone: %s",
+                                                    Utils.toString(exs)));
+                                    this.context.operation.fail(exs.values().iterator().next());
+                                    return;
+                                }
+                                List<Operation> computeOps = ops
+                                        .values()
+                                        .stream()
+                                        .map(o -> o.getBody(ComputeDescription.class))
+                                        .map(this::createComputeInstanceForAvailabilityZone)
+                                        .map(c -> Operation
+                                                .createPost(this.service,
+                                                        ComputeService.FACTORY_LINK)
+                                                .setBody(c))
+                                        .collect(Collectors.toList());
+
+                                invokeComputeOps(computeOps);
+                            })
+                    .sendWith(this.service);
+        }
+
+        private void invokeComputeOps(List<Operation> computeOps) {
+            if (computeOps.isEmpty()) {
+                proceedWithRefresh();
+                return;
+            }
+
+            OperationJoin.create(computeOps)
+                    .setCompletion((ops, exs) -> {
+                        if (exs != null) {
+                            this.service.logSevere(() -> String.format("Error creating a compute"
+                                    + " states for discovered AvailabilityZone: %s",
+                                    Utils.toString(exs)));
+                            this.context.operation.fail(exs.values().iterator().next());
+                            return;
+                        }
+                        ops.values().stream()
+                                .map(o -> o.getBody(ComputeState.class))
+                                .forEach(c -> this.context.zones.put(c.id,
+                                        ZoneData.build(
+                                                this.context.request.regionId,
+                                                c.id, c.documentSelfLink)));
+                        proceedWithRefresh();
+                    })
+                    .sendWith(this.service);
+        }
+
+        private ComputeState createComputeInstanceForAvailabilityZone(ComputeDescription cd) {
+            ComputeService.ComputeState computeState = new ComputeService.ComputeState();
+            computeState.name = cd.name;
+            computeState.id = cd.id;
+            computeState.adapterManagementReference = this.context.parentCompute.adapterManagementReference;
+            computeState.parentLink = this.context.parentCompute.documentSelfLink;
+            computeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
+            computeState.endpointLink = this.context.request.original.endpointLink;
+            computeState.descriptionLink = cd.documentSelfLink;
+            computeState.type = ComputeType.ZONE;
+            computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
+
+            computeState.powerState = PowerState.ON;
+
+            computeState.customProperties = this.context.parentCompute.customProperties;
+            if (computeState.customProperties == null) {
+                computeState.customProperties = new HashMap<>();
+            }
+            computeState.customProperties.put(REGION_ID, this.context.request.regionId);
+            computeState.customProperties.put(SOURCE_TASK_LINK,
+                    ResourceEnumerationTaskService.FACTORY_LINK);
+
+            computeState.tenantLinks = this.context.parentCompute.tenantLinks;
+            return computeState;
+        }
+
+        private ComputeDescription createComputeDescription(AvailabilityZone z) {
+            ComputeDescriptionService.ComputeDescription cd = Utils
+                    .clone(this.context.parentCompute.description);
+            cd.documentSelfLink = null;
+            cd.id = z.getZoneName();
+            cd.zoneId = z.getZoneName();
+            cd.name = z.getZoneName();
+            cd.endpointLink = this.context.request.original.endpointLink;
+            // Book keeping information about the creation of the compute description in the system.
+            if (cd.customProperties == null) {
+                cd.customProperties = new HashMap<>();
+            }
+            cd.customProperties.put(SOURCE_TASK_LINK,
+                    ResourceEnumerationTaskService.FACTORY_LINK);
+
+            return cd;
+        }
+
+        @Override
+        protected void handleError(Exception exception) {
+            this.context.operation.fail(exception);
+        }
+
+    }
+
+    /**
+     * The async handler to handle the success and errors received after invoking the describe
+     * instances API on AWS
+     */
+    public static class AWSEnumerationAsyncHandler implements
+            AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> {
+
+        private AWSEnumerationAndCreationAdapterService service;
+        private EnumerationCreationContext context;
+        private OperationContext opContext;
+
+        private AWSEnumerationAsyncHandler(AWSEnumerationAndCreationAdapterService service,
+                EnumerationCreationContext context) {
+            this.service = service;
+            this.context = context;
+            this.opContext = OperationContext.getOperationContext();
+        }
+
+        @Override
+        public void onError(Exception exception) {
+            OperationContext.restoreOperationContext(this.opContext);
+            this.context.operation.fail(exception);
+        }
+
+        @Override
+        public void onSuccess(DescribeInstancesRequest request,
+                DescribeInstancesResult result) {
+            OperationContext.restoreOperationContext(this.opContext);
+            int totalNumberOfInstances = 0;
+            // Print the details of the instances discovered on the AWS endpoint
+            for (Reservation r : result.getReservations()) {
+                for (Instance i : r.getInstances()) {
+                    ++totalNumberOfInstances;
+                    final int finalTotal1 = totalNumberOfInstances;
+                    this.service.logFine(() -> String.format("%d=====Instance details %s =====",
+                            finalTotal1, i.getInstanceId()));
+                    this.context.remoteAWSInstances.put(i.getInstanceId(), i);
+                }
+            }
+            final int finalTotal2 = totalNumberOfInstances;
+            this.service.logFine(() -> String.format("Successfully enumerated %d instances on the"
+                    + " AWS host", finalTotal2));
+            // Save the reference to the next token that will be used to retrieve the next page of
+            // results from AWS.
+            this.context.nextToken = result.getNextToken();
+            // Since there is filtering of resources at source, there can be a case when no
+            // resources are returned from AWS.
+            if (this.context.remoteAWSInstances.size() == 0) {
+                if (this.context.nextToken != null) {
+                    this.context.subStage = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
+                } else {
+                    this.context.subStage = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
+                }
+            }
+            handleReceivedEnumerationData();
+        }
+
+        /**
+         * Uses the received enumeration information and compares it against it the state of the
+         * local system and then tries to find and fix the gaps. At a high level this is the
+         * sequence of steps that is followed: 1) Create a query to get the list of local compute
+         * states 2) Compare the list of local resources against the list received from the AWS
+         * endpoint. 3) Create the instances not know to the local system. These are represented
+         * using a combination of compute descriptions and compute states. 4) Find and create a
+         * representative list of compute descriptions. 5) Create compute states to represent each
+         * and every VM that was discovered on the AWS endpoint.
+         */
+        private void handleReceivedEnumerationData() {
+            switch (this.context.subStage) {
+            case QUERY_LOCAL_RESOURCES:
+                getLocalResources(AWSComputeEnumerationCreationSubStage.COMPARE);
+                break;
+            case COMPARE:
+                compareLocalStateWithEnumerationData(
+                        AWSComputeEnumerationCreationSubStage.CREATE_COMPUTE_DESCRIPTIONS);
+                break;
+            case CREATE_COMPUTE_DESCRIPTIONS:
+                if (this.context.instancesToBeCreated.size() > 0
+                        || this.context.instancesToBeUpdated.size() > 0) {
+                    createComputeDescriptions(
+                            AWSComputeEnumerationCreationSubStage.CREATE_COMPUTE_STATES);
+                } else {
+                    if (this.context.nextToken == null) {
+                        this.context.subStage = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
+                    } else {
+                        this.context.subStage = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
+                    }
+                    handleReceivedEnumerationData();
+                }
+                break;
+            case CREATE_COMPUTE_STATES:
+                AWSComputeEnumerationCreationSubStage next;
+                if (this.context.nextToken == null) {
+                    next = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
+                } else {
+                    next = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
+                }
+                createComputeStates(next);
+                break;
+            case GET_NEXT_PAGE:
+                getNextPageFromEnumerationAdapter(
+                        AWSComputeEnumerationCreationSubStage.QUERY_LOCAL_RESOURCES);
+                break;
+            case ENUMERATION_STOP:
+                signalStopToEnumerationAdapter();
+                break;
+            default:
+                Throwable t = new Exception("Unknown AWS enumeration sub stage");
+                signalErrorToEnumerationAdapter(t);
+            }
+        }
+
+        /**
+         * Query the local data store and retrieve all the the compute states that exist filtered by
+         * the instanceIds that are received in the enumeration data from AWS.
+         */
+        private void getLocalResources(AWSComputeEnumerationCreationSubStage next) {
+            loadLocalResources(this.service, this.context, this.context.remoteAWSInstances.keySet(),
+                    lcsm -> {
+                        this.context.localAWSInstanceMap.putAll(lcsm);
+                        this.context.subStage = next;
+                        handleReceivedEnumerationData();
+                    },
+                    lcsm -> {
+                        if (this.context.nextToken == null) {
+                            this.service.logFine(() -> "Completed enumeration");
+                            this.context.subStage = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
+                        } else {
+                            this.service.logFine(() -> "No remote resources found, proceeding to"
+                                    + " next page");
+                            this.context.subStage = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
+                        }
+                        handleReceivedEnumerationData();
+                    });
+
+        }
+
+        /**
+         * Compares the local list of VMs against what is received from the AWS endpoint. Saves a
+         * list of the VMs that have to be created in the local system to correspond to the remote
+         * AWS endpoint.
+         */
+        private void compareLocalStateWithEnumerationData(
+                AWSComputeEnumerationCreationSubStage next) {
+            // No remote instances
+            if (this.context.remoteAWSInstances == null
+                    || this.context.remoteAWSInstances.size() == 0) {
+                this.service
+                        .logFine(() -> "No remote resources found. Nothing to be created locally");
+                // no local instances
+            } else if (this.context.localAWSInstanceMap == null
+                    || this.context.localAWSInstanceMap.size() == 0) {
+                for (String key : this.context.remoteAWSInstances.keySet()) {
+                    this.context.instancesToBeCreated.add(this.context.remoteAWSInstances.get(key));
+                }
+                // compare and add the ones that do not exist locally for creation. Mark others
+                // for updates.
+            } else {
+                for (String key : this.context.remoteAWSInstances.keySet()) {
+                    if (!this.context.localAWSInstanceMap.containsKey(key)) {
+                        this.context.instancesToBeCreated
+                                .add(this.context.remoteAWSInstances.get(key));
+                        // A map of the local compute state id and the corresponding latest
+                        // state on AWS
+                    } else {
+                        this.context.instancesToBeUpdated.put(key,
+                                this.context.remoteAWSInstances.get(key));
+                        this.context.computeStatesToBeUpdated.put(key,
+                                this.context.localAWSInstanceMap.get(key));
+                    }
+                }
+                queryAndCollectAllNICStatesToBeUpdated(next);
+                return;
+            }
+            this.context.subStage = next;
+            handleReceivedEnumerationData();
+        }
+
+        private void queryAndCollectAllNICStatesToBeUpdated(
+                AWSComputeEnumerationCreationSubStage next) {
+
+            List<DeferredResult<Void>> getNICsDR = this.context.computeStatesToBeUpdated
+                    .entrySet()
+                    .stream()
+                    // Get those computes which have NICs assigned
+                    .filter(en -> en.getValue().networkInterfaceLinks != null
+                            && !en.getValue().networkInterfaceLinks.isEmpty())
+                    // Merge NICs across all computes
+                    .flatMap(
+                            en -> {
+                                this.context.nicStatesToBeUpdated.put(en.getKey(),
+                                        new ArrayList<>());
+
+                                Stream<DeferredResult<Void>> getNICsPerComputeDRs = en
+                                        .getValue().networkInterfaceLinks
+                                                .stream()
+                                                .map(nicLink -> {
+                                                    Operation op = Operation.createGet(
+                                                            this.service.getHost(), nicLink);
+
+                                                    return this.service
+                                                            .sendWithDeferredResult(op,
+                                                                    NetworkInterfaceState.class)
+                                                            .thenAccept(
+                                                                    nic -> this.context.nicStatesToBeUpdated
+                                                                            .get(en.getKey())
+                                                                            .add(nic));
+                                                });
+                                return getNICsPerComputeDRs;
+                            })
+                    .collect(Collectors.toList());
+            if (getNICsDR.isEmpty()) {
+                this.context.subStage = next;
+                handleReceivedEnumerationData();
+            } else {
+                DeferredResult.allOf(getNICsDR).whenComplete((o, e) -> {
+                    if (e != null) {
+                        this.service.logSevere(() -> String.format("Failure querying"
+                                + " NetworkInterfaceStates for update %s", Utils.toString(e)));
+                    }
+                    this.service.logFine(() -> String.format("Populated NICs to be updated: %s",
+                            this.context.nicStatesToBeUpdated));
+                    this.context.subStage = next;
+                    handleReceivedEnumerationData();
+                });
+            }
+        }
+
+        /**
+         * Posts a compute description to the compute description service for creation.
+         */
+        private void createComputeDescriptions(AWSComputeEnumerationCreationSubStage next) {
+            this.service.logFine(() -> "Creating compute descriptions for enumerated VMs");
+            AWSComputeDescriptionCreationState cd = new AWSComputeDescriptionCreationState();
+            cd.instancesToBeCreated = this.context.instancesToBeCreated;
+            cd.parentTaskLink = this.context.request.original.taskReference;
+            cd.authCredentiaslLink = this.context.parentAuth.documentSelfLink;
+            cd.tenantLinks = this.context.parentCompute.tenantLinks;
+            cd.parentDescription = this.context.parentCompute.description;
+            cd.endpointLink = this.context.request.original.endpointLink;
+            cd.regionId = this.context.request.regionId;
+            cd.zones = this.context.zones;
+
+            this.service.sendRequest(Operation
+                    .createPatch(this.service,
+                            AWSComputeDescriptionEnumerationAdapterService.SELF_LINK)
+                    .setBody(cd)
+                    .setCompletion((o, e) -> {
+                        if (e != null) {
+                            this.service.logSevere(() -> String.format("Failure creating compute"
+                                    + " descriptions %s", Utils.toString(e)));
+                            signalErrorToEnumerationAdapter(e);
+                        } else {
+                            this.service
+                                    .logFine(() -> "Successfully created compute descriptions.");
+                            this.context.subStage = next;
+                            handleReceivedEnumerationData();
+                        }
+                    }));
+        }
+
+        /**
+         * Creates the compute states that represent the instances received from AWS during
+         * enumeration.
+         */
+        private void createComputeStates(AWSComputeEnumerationCreationSubStage next) {
+            this.service.logFine(() -> "Creating compute states for enumerated VMs");
+            AWSComputeStateCreationRequest awsComputeState = new AWSComputeStateCreationRequest();
+            awsComputeState.instancesToBeCreated = this.context.instancesToBeCreated;
+            awsComputeState.instancesToBeUpdated = this.context.instancesToBeUpdated;
+            awsComputeState.nicStatesToBeUpdated = this.context.nicStatesToBeUpdated;
+            awsComputeState.computeStatesToBeUpdated = this.context.computeStatesToBeUpdated;
+            awsComputeState.parentComputeLink = this.context.parentCompute.documentSelfLink;
+            awsComputeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
+            awsComputeState.endpointLink = this.context.request.original.endpointLink;
+            awsComputeState.parentTaskLink = this.context.request.original.taskReference;
+            awsComputeState.tenantLinks = this.context.parentCompute.tenantLinks;
+            awsComputeState.parentAuth = this.context.parentAuth;
+            awsComputeState.regionId = this.context.request.regionId;
+            awsComputeState.enumeratedNetworks = this.context.enumeratedNetworks;
+            awsComputeState.enumeratedSecurityGroups = this.context.enumeratedSecurityGroups;
+            awsComputeState.zones = this.context.zones;
+
+            this.service.sendRequest(Operation
+                    .createPatch(this.service, AWSComputeStateCreationAdapterService.SELF_LINK)
+                    .setBody(awsComputeState)
+                    .setCompletion((o, e) -> {
+                        if (e != null) {
+                            this.service.logSevere(() -> String.format("Failure creating compute"
+                                    + " states %s", Utils.toString(e)));
+                            signalErrorToEnumerationAdapter(e);
+                        } else {
+                            this.service.logFine(() -> "Successfully created compute states.");
+                            this.context.subStage = next;
+                            handleReceivedEnumerationData();
+                        }
+                    }));
+        }
+
+        /**
+         * Signals Enumeration Stop to the AWS enumeration adapter. The AWS enumeration adapter will
+         * in turn patch the parent task to indicate completion.
+         */
+        private void signalStopToEnumerationAdapter() {
+            this.context.request.original.enumerationAction = EnumerationAction.STOP;
+            this.service.handleEnumerationRequest(this.context);
+        }
+
+        /**
+         * Signals error to the AWS enumeration adapter. The adapter will in turn clean up resources
+         * and signal error to the parent task.
+         */
+        private void signalErrorToEnumerationAdapter(Throwable t) {
+            this.context.error = t;
+            this.context.stage = AWSEnumerationCreationStages.ERROR;
+            this.service.handleEnumerationRequest(this.context);
+        }
+
+        /**
+         * Calls the AWS enumeration adapter to get the next page from AWSs
+         */
+        private void getNextPageFromEnumerationAdapter(AWSComputeEnumerationCreationSubStage next) {
+            // Reset all the results from the last page that was processed.
+            this.context.remoteAWSInstances.clear();
+            this.context.instancesToBeCreated.clear();
+            this.context.instancesToBeUpdated.clear();
+            this.context.nicStatesToBeUpdated.clear();
+            this.context.computeStatesToBeUpdated.clear();
+            this.context.localAWSInstanceMap.clear();
+            this.context.describeInstancesRequest.setNextToken(this.context.nextToken);
+            this.context.subStage = next;
+            this.service.handleEnumerationRequest(this.context);
+        }
+    }
+
+    public enum AWSEnumerationCreationStages {
+        CLIENT,
+        ENUMERATE,
+        ERROR
+    }
+
+    public enum AWSComputeEnumerationCreationSubStage {
+        QUERY_LOCAL_RESOURCES,
+        COMPARE,
+        CREATE_COMPUTE_DESCRIPTIONS,
+        CREATE_COMPUTE_STATES,
+        GET_NEXT_PAGE,
+        ENUMERATION_STOP
+    }
+
+    private enum AWSEnumerationRefreshSubStage {
+        ZONES,
+        VCP,
+        SECURITY_GROUP,
+        COMPUTE,
+        ERROR
+    }
+
+    public AWSEnumerationAndCreationAdapterService() {
+        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
+    }
+
+    /**
+     * Signals error to the AWS enumeration adapter. The adapter will in turn clean up resources and
+     * signal error to the parent task.
+     */
+    private static void signalErrorToEnumerationAdapter(Throwable t, EnumerationCreationContext aws,
+            AWSEnumerationAndCreationAdapterService service) {
+        aws.error = t;
+        aws.stage = AWSEnumerationCreationStages.ERROR;
+        service.handleEnumerationRequest(aws);
+    }
+
+    /**
+     * Query the local data store and retrieve all the the compute states that exist filtered by the
+     * instanceIds that are received in the enumeration data from AWS.
+     */
+    private static void loadLocalResources(AWSEnumerationAndCreationAdapterService service,
+            EnumerationCreationContext context, Collection<String> remoteIds,
+            Consumer<Map<String, ComputeState>> successHandler,
+            Consumer<Map<String, ComputeState>> failureHandler) {
+        // query all ComputeState resources for the cluster filtered by the received set of
+        // instance Ids
+        if (remoteIds == null || remoteIds.isEmpty()) {
+            failureHandler.accept(null);
+            return;
+        }
+        Query.Builder qBuilder = Query.Builder.create()
+                .addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
+                        context.request.original.resourceLink())
+                .addInClause(ResourceState.FIELD_NAME_ID, remoteIds);
+
+        addScopeCriteria(qBuilder, ComputeState.class, context);
+
+        QueryTask queryTask = QueryTask.Builder.createDirectTask()
+                .setQuery(qBuilder.build())
+                .addOption(QueryOption.EXPAND_CONTENT)
+                .addOption(QueryOption.TOP_RESULTS)
+                .setResultLimit(getQueryResultLimit())
+                .build();
+        queryTask.tenantLinks = context.parentCompute.tenantLinks;
+
+        service.logFine(() -> String.format("Created query for resources: " + remoteIds));
+        QueryUtils.startQueryTask(service, queryTask)
+                .whenComplete((qrt, e) -> {
+                    if (e != null) {
+                        service.logSevere(
+                                () -> String.format("Failure retrieving query results: %s",
+                                        e.toString()));
+                        signalErrorToEnumerationAdapter(e, context, service);
+                        return;
+                    }
+                    service.logFine(() -> String.format("%d compute states found",
+                            qrt.results.documentCount));
+
+                    Map<String, ComputeState> localInstances = new HashMap<>();
+                    for (Object s : qrt.results.documents.values()) {
+                        ComputeState localInstance = Utils.fromJson(s, ComputeState.class);
+                        localInstances.put(localInstance.id, localInstance);
+                    }
+
+                    successHandler.accept(localInstances);
+                });
+    }
+
+    /**
+     * Constrain every query with endpointLink and tenantLinks, if presented.
+     */
+    private static void addScopeCriteria(Query.Builder qBuilder,
+            Class<? extends ResourceState> stateClass, EnumerationCreationContext ctx) {
+        // Add TENANT_LINKS criteria
+        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
+        // Add ENDPOINT_LINK criteria
+        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
     @Override
@@ -369,8 +958,7 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         ComputeEnumerateAdapterRequest sgEnumeration = new ComputeEnumerateAdapterRequest(
                 aws.request.original,
                 aws.parentAuth,
-                aws.parentCompute, aws.request.regionId
-        );
+                aws.parentCompute, aws.request.regionId);
         Operation patchSGOperation = Operation
                 .createPatch(this, AWSSecurityGroupEnumerationAdapterService.SELF_LINK)
                 .setBody(sgEnumeration)
@@ -437,594 +1025,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
         AWSAvailabilityZoneAsyncHandler asyncHandler = new AWSAvailabilityZoneAsyncHandler(this,
                 aws, next);
         aws.amazonEC2Client.describeAvailabilityZonesAsync(azRequest, asyncHandler);
-    }
-
-    /**
-     * The async handler to handle the success and errors received after invoking the describe
-     * AvailabilityZones API on AWS
-     */
-    private static class AWSAvailabilityZoneAsyncHandler extends
-            AWSAsyncHandler<DescribeAvailabilityZonesRequest, DescribeAvailabilityZonesResult> {
-
-        private AWSEnumerationAndCreationAdapterService service;
-        private EnumerationCreationContext context;
-        private AWSEnumerationRefreshSubStage next;
-
-        private AWSAvailabilityZoneAsyncHandler(AWSEnumerationAndCreationAdapterService service,
-                EnumerationCreationContext context, AWSEnumerationRefreshSubStage next) {
-            super();
-            this.service = service;
-            this.context = context;
-            this.next = next;
-        }
-
-        @Override
-        public void handleSuccess(DescribeAvailabilityZonesRequest request,
-                DescribeAvailabilityZonesResult result) {
-
-            List<AvailabilityZone> zones = result.getAvailabilityZones();
-            if (zones == null || zones.isEmpty()) {
-                this.service.logFine(() -> "No AvailabilityZones found. Nothing to be created locally");
-                this.context.refreshSubStage = this.next;
-                this.service.processRefreshSubStages(this.context);
-                return;
-            }
-
-            loadLocalResources(this.service, this.context,
-                    zones.stream()
-                            .map(AvailabilityZone::getZoneName)
-                            .collect(Collectors.toList()),
-                    cm -> createMissingLocalInstances(zones, cm),
-                    cm -> {
-                        this.service.logFine(() -> "No AvailabilityZones found. Nothing to be"
-                                + " created locally");
-                        this.context.refreshSubStage = this.next;
-                        this.service.processRefreshSubStages(this.context);
-                    });
-        }
-
-        private void proceedWithRefresh() {
-            this.context.refreshSubStage = this.next;
-            this.service.processRefreshSubStages(this.context);
-        }
-
-        private void createMissingLocalInstances(List<AvailabilityZone> zones,
-                Map<String, ComputeState> cm) {
-            zones.stream()
-                    .filter(z -> cm.containsKey(z.getZoneName()))
-                    .forEach(z -> {
-                        ComputeState c = cm.get(z.getZoneName());
-                        this.context.zones.put(c.id,
-                                ZoneData.build(this.context.request.regionId,
-                                        c.id, c.documentSelfLink));
-                    });
-            List<Operation> descOps = zones.stream()
-                    .filter(z -> !cm.containsKey(z.getZoneName()))
-                    .map(this::createComputeDescription)
-                    .map(cd -> Operation
-                            .createPost(this.service, ComputeDescriptionService.FACTORY_LINK)
-                            .setBody(cd))
-                    .collect(Collectors.toList());
-
-            if (descOps.isEmpty()) {
-                proceedWithRefresh();
-                return;
-            }
-
-            OperationJoin
-                    .create(descOps)
-                    .setCompletion(
-                            (ops, exs) -> {
-                                if (exs != null) {
-                                    this.service
-                                            .logSevere(() -> String.format("Error creating a"
-                                                            + " compute descriptions for "
-                                                            + "discovered AvailabilityZone: %s",
-                                                    Utils.toString(exs)));
-                                    this.context.operation.fail(exs.values().iterator().next());
-                                    return;
-                                }
-                                List<Operation> computeOps = ops
-                                        .values()
-                                        .stream()
-                                        .map(o -> o.getBody(ComputeDescription.class))
-                                        .map(this::createComputeInstanceForAvailabilityZone)
-                                        .map(c -> Operation
-                                                .createPost(this.service,
-                                                        ComputeService.FACTORY_LINK)
-                                                .setBody(c))
-                                        .collect(Collectors.toList());
-
-                                invokeComputeOps(computeOps);
-                            })
-                    .sendWith(this.service);
-        }
-
-        private void invokeComputeOps(List<Operation> computeOps) {
-            if (computeOps.isEmpty()) {
-                proceedWithRefresh();
-                return;
-            }
-
-            OperationJoin.create(computeOps)
-                    .setCompletion((ops, exs) -> {
-                        if (exs != null) {
-                            this.service.logSevere(() -> String.format("Error creating a compute"
-                                            + " states for discovered AvailabilityZone: %s",
-                                    Utils.toString(exs)));
-                            this.context.operation.fail(exs.values().iterator().next());
-                            return;
-                        }
-                        ops.values().stream()
-                                .map(o -> o.getBody(ComputeState.class))
-                                .forEach(c -> this.context.zones.put(c.id,
-                                        ZoneData.build(
-                                                this.context.request.regionId,
-                                                c.id, c.documentSelfLink)));
-                        proceedWithRefresh();
-                    })
-                    .sendWith(this.service);
-        }
-
-        private ComputeState createComputeInstanceForAvailabilityZone(ComputeDescription cd) {
-            ComputeService.ComputeState computeState = new ComputeService.ComputeState();
-            computeState.name = cd.name;
-            computeState.id = cd.id;
-            computeState.adapterManagementReference =
-                    this.context.parentCompute.adapterManagementReference;
-            computeState.parentLink = this.context.parentCompute.documentSelfLink;
-            computeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
-            computeState.endpointLink = this.context.request.original.endpointLink;
-            computeState.descriptionLink = cd.documentSelfLink;
-            computeState.type = ComputeType.ZONE;
-            computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
-
-            computeState.powerState = PowerState.ON;
-
-            computeState.customProperties = this.context.parentCompute.customProperties;
-            if (computeState.customProperties == null) {
-                computeState.customProperties = new HashMap<>();
-            }
-            computeState.customProperties.put(REGION_ID, this.context.request.regionId);
-            computeState.customProperties.put(SOURCE_TASK_LINK,
-                    ResourceEnumerationTaskService.FACTORY_LINK);
-
-            computeState.tenantLinks = this.context.parentCompute.tenantLinks;
-            return computeState;
-        }
-
-        private ComputeDescription createComputeDescription(AvailabilityZone z) {
-            ComputeDescriptionService.ComputeDescription cd = Utils
-                    .clone(this.context.parentCompute.description);
-            cd.documentSelfLink = null;
-            cd.id = z.getZoneName();
-            cd.zoneId = z.getZoneName();
-            cd.name = z.getZoneName();
-            cd.endpointLink = this.context.request.original.endpointLink;
-            // Book keeping information about the creation of the compute description in the system.
-            if (cd.customProperties == null) {
-                cd.customProperties = new HashMap<>();
-            }
-            cd.customProperties.put(SOURCE_TASK_LINK,
-                    ResourceEnumerationTaskService.FACTORY_LINK);
-
-            return cd;
-        }
-
-        @Override
-        protected void handleError(Exception exception) {
-            this.context.operation.fail(exception);
-        }
-
-    }
-
-    /**
-     * The async handler to handle the success and errors received after invoking the describe
-     * instances API on AWS
-     */
-    public static class AWSEnumerationAsyncHandler implements
-            AsyncHandler<DescribeInstancesRequest, DescribeInstancesResult> {
-
-        private AWSEnumerationAndCreationAdapterService service;
-        private EnumerationCreationContext context;
-        private OperationContext opContext;
-
-        private AWSEnumerationAsyncHandler(AWSEnumerationAndCreationAdapterService service,
-                EnumerationCreationContext context) {
-            this.service = service;
-            this.context = context;
-            this.opContext = OperationContext.getOperationContext();
-        }
-
-        @Override
-        public void onError(Exception exception) {
-            OperationContext.restoreOperationContext(this.opContext);
-            this.context.operation.fail(exception);
-        }
-
-        @Override
-        public void onSuccess(DescribeInstancesRequest request,
-                DescribeInstancesResult result) {
-            OperationContext.restoreOperationContext(this.opContext);
-            int totalNumberOfInstances = 0;
-            // Print the details of the instances discovered on the AWS endpoint
-            for (Reservation r : result.getReservations()) {
-                for (Instance i : r.getInstances()) {
-                    ++totalNumberOfInstances;
-                    final int finalTotal1 = totalNumberOfInstances;
-                    this.service.logFine(() -> String.format("%d=====Instance details %s =====",
-                            finalTotal1, i.getInstanceId()));
-                    this.context.remoteAWSInstances.put(i.getInstanceId(), i);
-                }
-            }
-            final int finalTotal2 = totalNumberOfInstances;
-            this.service.logFine(() -> String.format("Successfully enumerated %d instances on the"
-                            + " AWS host", finalTotal2));
-            // Save the reference to the next token that will be used to retrieve the next page of
-            // results from AWS.
-            this.context.nextToken = result.getNextToken();
-            // Since there is filtering of resources at source, there can be a case when no
-            // resources are returned from AWS.
-            if (this.context.remoteAWSInstances.size() == 0) {
-                if (this.context.nextToken != null) {
-                    this.context.subStage = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
-                } else {
-                    this.context.subStage = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
-                }
-            }
-            handleReceivedEnumerationData();
-        }
-
-        /**
-         * Uses the received enumeration information and compares it against it the state of the
-         * local system and then tries to find and fix the gaps. At a high level this is the
-         * sequence of steps that is followed: 1) Create a query to get the list of local compute
-         * states 2) Compare the list of local resources against the list received from the AWS
-         * endpoint. 3) Create the instances not know to the local system. These are represented
-         * using a combination of compute descriptions and compute states. 4) Find and create a
-         * representative list of compute descriptions. 5) Create compute states to represent each
-         * and every VM that was discovered on the AWS endpoint.
-         */
-        private void handleReceivedEnumerationData() {
-            switch (this.context.subStage) {
-            case QUERY_LOCAL_RESOURCES:
-                getLocalResources(AWSComputeEnumerationCreationSubStage.COMPARE);
-                break;
-            case COMPARE:
-                compareLocalStateWithEnumerationData(
-                        AWSComputeEnumerationCreationSubStage.CREATE_COMPUTE_DESCRIPTIONS);
-                break;
-            case CREATE_COMPUTE_DESCRIPTIONS:
-                if (this.context.instancesToBeCreated.size() > 0
-                        || this.context.instancesToBeUpdated.size() > 0) {
-                    createComputeDescriptions(
-                            AWSComputeEnumerationCreationSubStage.CREATE_COMPUTE_STATES);
-                } else {
-                    if (this.context.nextToken == null) {
-                        this.context.subStage = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
-                    } else {
-                        this.context.subStage = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
-                    }
-                    handleReceivedEnumerationData();
-                }
-                break;
-            case CREATE_COMPUTE_STATES:
-                AWSComputeEnumerationCreationSubStage next;
-                if (this.context.nextToken == null) {
-                    next = AWSComputeEnumerationCreationSubStage.ENUMERATION_STOP;
-                } else {
-                    next = AWSComputeEnumerationCreationSubStage.GET_NEXT_PAGE;
-                }
-                createComputeStates(next);
-                break;
-            case GET_NEXT_PAGE:
-                getNextPageFromEnumerationAdapter(
-                        AWSComputeEnumerationCreationSubStage.QUERY_LOCAL_RESOURCES);
-                break;
-            case ENUMERATION_STOP:
-                signalStopToEnumerationAdapter();
-                break;
-            default:
-                Throwable t = new Exception("Unknown AWS enumeration sub stage");
-                signalErrorToEnumerationAdapter(t);
-            }
-        }
-
-        /**
-         * Query the local data store and retrieve all the the compute states that exist filtered by
-         * the instanceIds that are received in the enumeration data from AWS.
-         */
-        private void getLocalResources(AWSComputeEnumerationCreationSubStage next) {
-            loadLocalResources(this.service, this.context, this.context.remoteAWSInstances.keySet(),
-                    lcsm -> {
-                        this.context.localAWSInstanceMap.putAll(lcsm);
-                        this.context.subStage = next;
-                        handleReceivedEnumerationData();
-                    },
-                    lcsm -> {
-                        if (this.context.nextToken == null) {
-                            this.service.logFine(() -> "Completed enumeration");
-                            this.context.subStage = AWSComputeEnumerationCreationSubStage
-                                    .ENUMERATION_STOP;
-                        } else {
-                            this.service.logFine(() -> "No remote resources found, proceeding to"
-                                    + " next page");
-                            this.context.subStage = AWSComputeEnumerationCreationSubStage
-                                    .GET_NEXT_PAGE;
-                        }
-                        handleReceivedEnumerationData();
-                    });
-
-        }
-
-        /**
-         * Compares the local list of VMs against what is received from the AWS endpoint. Saves a
-         * list of the VMs that have to be created in the local system to correspond to the remote
-         * AWS endpoint.
-         */
-        private void compareLocalStateWithEnumerationData(
-                AWSComputeEnumerationCreationSubStage next) {
-            // No remote instances
-            if (this.context.remoteAWSInstances == null
-                    || this.context.remoteAWSInstances.size() == 0) {
-                this.service.logFine(() -> "No remote resources found. Nothing to be created locally");
-                // no local instances
-            } else if (this.context.localAWSInstanceMap == null
-                    || this.context.localAWSInstanceMap.size() == 0) {
-                for (String key : this.context.remoteAWSInstances.keySet()) {
-                    this.context.instancesToBeCreated.add(this.context.remoteAWSInstances.get(key));
-                }
-                // compare and add the ones that do not exist locally for creation. Mark others
-                // for updates.
-            } else {
-                for (String key : this.context.remoteAWSInstances.keySet()) {
-                    if (!this.context.localAWSInstanceMap.containsKey(key)) {
-                        this.context.instancesToBeCreated
-                                .add(this.context.remoteAWSInstances.get(key));
-                        // A map of the local compute state id and the corresponding latest
-                        // state on AWS
-                    } else {
-                        this.context.instancesToBeUpdated.put(key,
-                                this.context.remoteAWSInstances.get(key));
-                        this.context.computeStatesToBeUpdated.put(key,
-                                this.context.localAWSInstanceMap.get(key));
-                    }
-                }
-                queryAndCollectAllNICStatesToBeUpdated(next);
-                return;
-            }
-            this.context.subStage = next;
-            handleReceivedEnumerationData();
-        }
-
-        private void queryAndCollectAllNICStatesToBeUpdated(
-                AWSComputeEnumerationCreationSubStage next) {
-
-            List<DeferredResult<Void>> getNICsDR = this.context.computeStatesToBeUpdated
-                    .entrySet()
-                    .stream()
-                    // Get those computes which have NICs assigned
-                    .filter(en -> en.getValue().networkInterfaceLinks != null
-                            && !en.getValue().networkInterfaceLinks.isEmpty())
-                    // Merge NICs across all computes
-                    .flatMap(
-                            en -> {
-                                this.context.nicStatesToBeUpdated.put(en.getKey(),
-                                        new ArrayList<>());
-
-                                Stream<DeferredResult<Void>> getNICsPerComputeDRs = en
-                                        .getValue().networkInterfaceLinks
-                                        .stream()
-                                        .map(nicLink -> {
-                                            Operation op = Operation.createGet(
-                                                    this.service.getHost(), nicLink);
-
-                                            return this.service
-                                                    .sendWithDeferredResult(op,
-                                                            NetworkInterfaceState.class)
-                                                    .thenAccept(
-                                                            nic -> this.context.nicStatesToBeUpdated
-                                                                    .get(en.getKey()).add(nic));
-                                        });
-                                return getNICsPerComputeDRs;
-                            })
-                    .collect(Collectors.toList());
-            if (getNICsDR.isEmpty()) {
-                this.context.subStage = next;
-                handleReceivedEnumerationData();
-            } else {
-                DeferredResult.allOf(getNICsDR).whenComplete((o, e) -> {
-                    if (e != null) {
-                        this.service.logSevere(() -> String.format("Failure querying"
-                                + " NetworkInterfaceStates for update %s",Utils.toString(e)));
-                    }
-                    this.service.logFine(() -> String.format("Populated NICs to be updated: %s",
-                            this.context.nicStatesToBeUpdated));
-                    this.context.subStage = next;
-                    handleReceivedEnumerationData();
-                });
-            }
-        }
-
-        /**
-         * Posts a compute description to the compute description service for creation.
-         */
-        private void createComputeDescriptions(AWSComputeEnumerationCreationSubStage next) {
-            this.service.logFine(() -> "Creating compute descriptions for enumerated VMs");
-            AWSComputeDescriptionCreationState cd = new AWSComputeDescriptionCreationState();
-            cd.instancesToBeCreated = this.context.instancesToBeCreated;
-            cd.parentTaskLink = this.context.request.original.taskReference;
-            cd.authCredentiaslLink = this.context.parentAuth.documentSelfLink;
-            cd.tenantLinks = this.context.parentCompute.tenantLinks;
-            cd.parentDescription = this.context.parentCompute.description;
-            cd.endpointLink = this.context.request.original.endpointLink;
-            cd.regionId = this.context.request.regionId;
-            cd.zones = this.context.zones;
-
-            this.service.sendRequest(Operation
-                    .createPatch(this.service,
-                            AWSComputeDescriptionEnumerationAdapterService.SELF_LINK)
-                    .setBody(cd)
-                    .setCompletion((o, e) -> {
-                        if (e != null) {
-                            this.service.logSevere(() -> String.format("Failure creating compute"
-                                            + " descriptions %s", Utils.toString(e)));
-                            signalErrorToEnumerationAdapter(e);
-                        } else {
-                            this.service.logFine(() -> "Successfully created compute descriptions.");
-                            this.context.subStage = next;
-                            handleReceivedEnumerationData();
-                        }
-                    }));
-        }
-
-        /**
-         * Creates the compute states that represent the instances received from AWS during
-         * enumeration.
-         */
-        private void createComputeStates(AWSComputeEnumerationCreationSubStage next) {
-            this.service.logFine(() -> "Creating compute states for enumerated VMs");
-            AWSComputeStateCreationRequest awsComputeState = new AWSComputeStateCreationRequest();
-            awsComputeState.instancesToBeCreated = this.context.instancesToBeCreated;
-            awsComputeState.instancesToBeUpdated = this.context.instancesToBeUpdated;
-            awsComputeState.nicStatesToBeUpdated = this.context.nicStatesToBeUpdated;
-            awsComputeState.computeStatesToBeUpdated = this.context.computeStatesToBeUpdated;
-            awsComputeState.parentComputeLink = this.context.parentCompute.documentSelfLink;
-            awsComputeState.resourcePoolLink = this.context.request.original.resourcePoolLink;
-            awsComputeState.endpointLink = this.context.request.original.endpointLink;
-            awsComputeState.parentTaskLink = this.context.request.original.taskReference;
-            awsComputeState.tenantLinks = this.context.parentCompute.tenantLinks;
-            awsComputeState.parentAuth = this.context.parentAuth;
-            awsComputeState.regionId = this.context.request.regionId;
-            awsComputeState.enumeratedNetworks = this.context.enumeratedNetworks;
-            awsComputeState.enumeratedSecurityGroups = this.context.enumeratedSecurityGroups;
-            awsComputeState.zones = this.context.zones;
-
-            this.service.sendRequest(Operation
-                    .createPatch(this.service, AWSComputeStateCreationAdapterService.SELF_LINK)
-                    .setBody(awsComputeState)
-                    .setCompletion((o, e) -> {
-                        if (e != null) {
-                            this.service.logSevere(() -> String.format("Failure creating compute"
-                                            + " states %s", Utils.toString(e)));
-                            signalErrorToEnumerationAdapter(e);
-                        } else {
-                            this.service.logFine(() -> "Successfully created compute states.");
-                            this.context.subStage = next;
-                            handleReceivedEnumerationData();
-                        }
-                    }));
-        }
-
-        /**
-         * Signals Enumeration Stop to the AWS enumeration adapter. The AWS enumeration adapter will
-         * in turn patch the parent task to indicate completion.
-         */
-        private void signalStopToEnumerationAdapter() {
-            this.context.request.original.enumerationAction = EnumerationAction.STOP;
-            this.service.handleEnumerationRequest(this.context);
-        }
-
-        /**
-         * Signals error to the AWS enumeration adapter. The adapter will in turn clean up resources
-         * and signal error to the parent task.
-         */
-        private void signalErrorToEnumerationAdapter(Throwable t) {
-            this.context.error = t;
-            this.context.stage = AWSEnumerationCreationStages.ERROR;
-            this.service.handleEnumerationRequest(this.context);
-        }
-
-        /**
-         * Calls the AWS enumeration adapter to get the next page from AWSs
-         */
-        private void getNextPageFromEnumerationAdapter(AWSComputeEnumerationCreationSubStage next) {
-            // Reset all the results from the last page that was processed.
-            this.context.remoteAWSInstances.clear();
-            this.context.instancesToBeCreated.clear();
-            this.context.instancesToBeUpdated.clear();
-            this.context.nicStatesToBeUpdated.clear();
-            this.context.computeStatesToBeUpdated.clear();
-            this.context.localAWSInstanceMap.clear();
-            this.context.describeInstancesRequest.setNextToken(this.context.nextToken);
-            this.context.subStage = next;
-            this.service.handleEnumerationRequest(this.context);
-        }
-    }
-
-    /**
-     * Signals error to the AWS enumeration adapter. The adapter will in turn clean up resources and
-     * signal error to the parent task.
-     */
-    private static void signalErrorToEnumerationAdapter(Throwable t, EnumerationCreationContext aws,
-            AWSEnumerationAndCreationAdapterService service) {
-        aws.error = t;
-        aws.stage = AWSEnumerationCreationStages.ERROR;
-        service.handleEnumerationRequest(aws);
-    }
-
-    /**
-     * Query the local data store and retrieve all the the compute states that exist filtered by the
-     * instanceIds that are received in the enumeration data from AWS.
-     */
-    private static void loadLocalResources(AWSEnumerationAndCreationAdapterService service,
-            EnumerationCreationContext context, Collection<String> remoteIds,
-            Consumer<Map<String, ComputeState>> successHandler,
-            Consumer<Map<String, ComputeState>> failureHandler) {
-        // query all ComputeState resources for the cluster filtered by the received set of
-        // instance Ids
-        if (remoteIds == null || remoteIds.isEmpty()) {
-            failureHandler.accept(null);
-            return;
-        }
-        Query.Builder qBuilder = Query.Builder.create()
-                .addKindFieldClause(ComputeState.class)
-                .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
-                        context.request.original.resourceLink())
-                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
-                        context.request.original.resourcePoolLink)
-                .addInClause(ResourceState.FIELD_NAME_ID, remoteIds);
-
-        addScopeCriteria(qBuilder, ComputeState.class, context);
-
-        QueryTask queryTask = QueryTask.Builder.createDirectTask()
-                .setQuery(qBuilder.build())
-                .addOption(QueryOption.EXPAND_CONTENT)
-                .addOption(QueryOption.TOP_RESULTS)
-                .setResultLimit(getQueryResultLimit())
-                .build();
-        queryTask.tenantLinks = context.parentCompute.tenantLinks;
-
-        service.logFine(() -> String.format("Created query for resources: " + remoteIds));
-        QueryUtils.startQueryTask(service, queryTask)
-                .whenComplete((qrt, e) -> {
-                    if (e != null) {
-                        service.logSevere(() -> String.format("Failure retrieving query results: %s",
-                                e.toString()));
-                        signalErrorToEnumerationAdapter(e, context, service);
-                        return;
-                    }
-                    service.logFine(() -> String.format("%d compute states found",
-                            qrt.results.documentCount));
-
-                    Map<String, ComputeState> localInstances = new HashMap<>();
-                    for (Object s : qrt.results.documents.values()) {
-                        ComputeState localInstance = Utils.fromJson(s, ComputeState.class);
-                        localInstances.put(localInstance.id, localInstance);
-                    }
-
-                    successHandler.accept(localInstances);
-                });
-    }
-
-    /**
-     * Constrain every query with endpointLink and tenantLinks, if presented.
-     */
-    private static void addScopeCriteria(Query.Builder qBuilder, Class<? extends ResourceState> stateClass, EnumerationCreationContext ctx) {
-        // Add TENANT_LINKS criteria
-        QueryUtils.addTenantLinks(qBuilder, ctx.parentCompute.tenantLinks);
-        // Add ENDPOINT_LINK criteria
-        QueryUtils.addEndpointLink(qBuilder, stateClass, ctx.request.original.endpointLink);
     }
 
 }

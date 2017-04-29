@@ -92,6 +92,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_NETWORK_STATE_CREATION_ADAPTER;
 
+    private AWSClientManager clientManager;
+
     /**
      * Request accepted by this service to trigger enumeration of Network entities in Amazon.
      *
@@ -122,7 +124,51 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         public Map<String, String> subnets = new HashMap<>();
     }
 
-    private AWSClientManager clientManager;
+    /**
+     * The service context that is created for representing the list of instances received into a
+     * list of compute states that will be persisted in the system.
+     */
+    static class AWSNetworkStateCreationContext {
+
+        // Cached operation to signal completion to the AWS instance adapter once all the compute
+        // states are successfully created.
+        public final Operation operation;
+
+        public AmazonEC2AsyncClient amazonEC2Client;
+        public AWSNetworkEnumerationRequest request;
+        public AWSNetworkStateCreationStage networkCreationStage;
+
+        // Map AWS VPC id to AWS VPC object
+        public Map<String, Vpc> awsVpcs = new HashMap<>();
+        // Map AWS VPC id to network state for discovered VPCs
+        public Map<String, NetworkState> vpcs = new HashMap<>();
+        // Map for local network states. key = vpc-id, value = NetworkState.documentSelfLink
+        public Map<String, String> localNetworkStateMap = new HashMap<>();
+
+        // Map AWS Subnet id to AWS Subnet object
+        public Map<String, Subnet> awsSubnets = new HashMap<>();
+        // Map AWS Subnet id to subnet state for discovered Subnets
+        public Map<String, SubnetStateWithParentVpcId> subnets = new HashMap<>();
+        // Map for local subnet states. key = subnet-id, value = SubnetState.documentSelfLink
+        public Map<String, String> localSubnetStateMap = new HashMap<>();
+
+        static class SubnetStateWithParentVpcId {
+            String parentVpcId;
+            SubnetState subnetState;
+
+            SubnetStateWithParentVpcId(String parentVpcId, SubnetState subnetState) {
+                this.parentVpcId = parentVpcId;
+                this.subnetState = subnetState;
+            }
+        }
+
+        public AWSNetworkStateCreationContext(AWSNetworkEnumerationRequest request,
+                Operation op) {
+            this.request = request;
+            this.networkCreationStage = AWSNetworkStateCreationStage.CLIENT;
+            this.operation = op;
+        }
+    }
 
     enum AWSNetworkStateCreationStage {
         CLIENT,
@@ -143,52 +189,6 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         super.toggleOption(ServiceOption.INSTRUMENTATION, true);
         this.clientManager = AWSClientManagerFactory
                 .getClientManager(AWSConstants.AwsClientType.EC2);
-    }
-
-    /**
-     * The service context that is created for representing the list of instances received into a
-     * list of compute states that will be persisted in the system.
-     */
-    static class AWSNetworkStateCreationContext {
-
-        static class SubnetStateWithParentVpcId {
-            String parentVpcId;
-            SubnetState subnetState;
-
-            SubnetStateWithParentVpcId(String parentVpcId, SubnetState subnetState) {
-                this.parentVpcId = parentVpcId;
-                this.subnetState = subnetState;
-            }
-        }
-
-        public AmazonEC2AsyncClient amazonEC2Client;
-        public AWSNetworkEnumerationRequest request;
-        public AWSNetworkStateCreationStage networkCreationStage;
-
-        // Map AWS VPC id to AWS VPC object
-        public Map<String, Vpc> awsVpcs = new HashMap<>();
-        // Map AWS VPC id to network state for discovered VPCs
-        public Map<String, NetworkState> vpcs = new HashMap<>();
-        // Map for local network states. key = vpc-id, value = NetworkState.documentSelfLink
-        public Map<String, String> localNetworkStateMap = new HashMap<>();
-
-        // Map AWS Subnet id to AWS Subnet object
-        public Map<String, Subnet> awsSubnets = new HashMap<>();
-        // Map AWS Subnet id to subnet state for discovered Subnets
-        public Map<String, SubnetStateWithParentVpcId> subnets = new HashMap<>();
-        // Map for local subnet states. key = subnet-id, value = SubnetState.documentSelfLink
-        public Map<String, String> localSubnetStateMap = new HashMap<>();
-
-        // Cached operation to signal completion to the AWS instance adapter once all the compute
-        // states are successfully created.
-        public final Operation operation;
-
-        public AWSNetworkStateCreationContext(AWSNetworkEnumerationRequest request,
-                Operation op) {
-            this.request = request;
-            this.networkCreationStage = AWSNetworkStateCreationStage.CLIENT;
-            this.operation = op;
-        }
     }
 
     @Override
@@ -256,7 +256,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             createSubnetStateOperations(context, AWSNetworkStateCreationStage.UPDATE_TAG_LINKS);
             break;
         case UPDATE_TAG_LINKS:
-            updateTagLinks(context).whenComplete(thenNetworkStateChanges(context, AWSNetworkStateCreationStage.SIGNAL_COMPLETION));
+            updateTagLinks(context).whenComplete(thenNetworkStateChanges(context,
+                    AWSNetworkStateCreationStage.SIGNAL_COMPLETION));
             break;
         case SIGNAL_COMPLETION:
             setOperationDurationStat(context.operation);
@@ -275,7 +276,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
      * {@code handleNetworkStateChanges} version suitable for chaining to
      * {@code DeferredResult.whenComplete}.
      */
-    private BiConsumer<AWSNetworkStateCreationContext, Throwable> thenNetworkStateChanges(AWSNetworkStateCreationContext context,
+    private BiConsumer<AWSNetworkStateCreationContext, Throwable> thenNetworkStateChanges(
+            AWSNetworkStateCreationContext context,
             AWSNetworkStateCreationStage next) {
         // NOTE: In case of error 'ignoreCtx' is null so use passed context!
         return (ignoreCtx, exc) -> {
@@ -440,123 +442,6 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
     }
 
     /**
-     * The async handler to handle the success and errors received after invoking the describe VPCs
-     * API on AWS
-     */
-    class AWSVPCAsyncHandler
-            extends TransitionToAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> {
-
-        AWSVPCAsyncHandler(AWSNetworkStateCreationStage next,
-                AWSNetworkStateCreationContext context) {
-            super(next, context);
-        }
-
-        @Override
-        protected void consumeSuccess(DescribeVpcsRequest request, DescribeVpcsResult result) {
-
-            URI adapterUri = AdapterUriUtil.buildAdapterUri(getHost(),
-                    AWSUriPaths.AWS_NETWORK_ADAPTER);
-            for (Vpc resultVPC : result.getVpcs()) {
-                NetworkState networkState = mapVPCToNetworkState(resultVPC,
-                        this.context.request.regionId,
-                        this.context.request.request.resourcePoolLink,
-                        this.context.request.request.endpointLink,
-                        this.context.request.parentAuth.documentSelfLink,
-                        this.context.request.tenantLinks,
-                        adapterUri);
-                if (networkState.subnetCIDR == null) {
-                    logWarning(() -> String.format("AWS did not return CIDR information for VPC %s",
-                            resultVPC.toString()));
-                }
-                this.context.awsVpcs.put(resultVPC.getVpcId(), resultVPC);
-                this.context.vpcs.put(resultVPC.getVpcId(), networkState);
-            }
-        }
-    }
-
-    /**
-     * The async handler to handle the success and errors received after invoking the describe
-     * Internet Gateways API on AWS
-     */
-    class AWSInternetGatewayAsyncHandler extends
-            TransitionToAsyncHandler<DescribeInternetGatewaysRequest, DescribeInternetGatewaysResult> {
-
-        AWSInternetGatewayAsyncHandler(
-                AWSNetworkStateCreationStage next,
-                AWSNetworkStateCreationContext context) {
-            super(next, context);
-        }
-
-        /**
-         * Update the Internet gateway information for the VPC in question. For the list of Internet
-         * gateways received based on the vpc filter work through the list of attachments and VPCs
-         * and update the Internet gateway information in the network state that maps to the VPC.
-         */
-        @Override
-        protected void consumeSuccess(DescribeInternetGatewaysRequest request,
-                DescribeInternetGatewaysResult result) {
-            for (InternetGateway resultGateway : result.getInternetGateways()) {
-                for (InternetGatewayAttachment attachment : resultGateway.getAttachments()) {
-                    if (this.context.vpcs.containsKey(attachment.getVpcId())) {
-                        NetworkState networkStateToUpdate = this.context.vpcs
-                                .get(attachment.getVpcId());
-                        networkStateToUpdate.customProperties.put(AWS_GATEWAY_ID,
-                                resultGateway.getInternetGatewayId());
-                        this.context.vpcs.put(attachment.getVpcId(), networkStateToUpdate);
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * The async handler to handle the success and errors received after invoking the describe
-     * Internet Gateways API on AWS
-     */
-    class AWSSubnetAsyncHandler extends
-            TransitionToAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult> {
-
-        AWSSubnetAsyncHandler(
-                AWSNetworkStateCreationStage next,
-                AWSNetworkStateCreationContext context) {
-            super(next, context);
-        }
-
-        /**
-         * Update the Subnet information for the VPC in question.
-         */
-        @Override
-        protected void consumeSuccess(DescribeSubnetsRequest request,
-                DescribeSubnetsResult result) {
-
-            for (Subnet subnet : result.getSubnets()) {
-
-                if (!this.context.vpcs.containsKey(subnet.getVpcId())) {
-                    logWarning(() -> String.format("AWS returned Subnet [%s] with VCP [%s] that is"
-                                    + " missing locally.", subnet.getSubnetId(), subnet.getVpcId()));
-                    continue;
-                }
-
-                SubnetState subnetState = mapSubnetToSubnetState(subnet,
-                        this.context.request.tenantLinks,
-                        this.context.request.regionId,
-                        this.context.request.request.endpointLink);
-
-                if (subnetState.subnetCIDR == null) {
-                    logWarning(() -> String.format("AWS did not return CIDR information for Subnet"
-                                    + " %s", subnet.toString()));
-                }
-
-                this.context.awsSubnets.put(subnet.getSubnetId(), subnet);
-                this.context.subnets.put(
-                        subnet.getSubnetId(),
-                        new AWSNetworkStateCreationContext.SubnetStateWithParentVpcId(
-                                subnet.getVpcId(), subnetState));
-            }
-        }
-    }
-
-    /**
      * Gets the main route table information associated with a VPC that is being mapped to a network
      * state in the system. *
      */
@@ -583,7 +468,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             AWSNetworkStateCreationStage next) {
         // Collect all tags in a List
         List<Tag> allNetworkAndSubnetsTags = context.awsVpcs.values().stream()
-                 // Create only the tags for the new vpcs
+                // Create only the tags for the new vpcs
                 .filter(vpc -> !context.localNetworkStateMap.containsKey(vpc.getVpcId()))
                 .flatMap(vpc -> vpc.getTags().stream())
                 .collect(Collectors.toList());
@@ -597,7 +482,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         // tags, so filter them out
         List<Operation> operations = allNetworkAndSubnetsTags.stream()
                 .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                .map(t -> newExternalTagState(t.getKey(), t.getValue(), context.request.tenantLinks))
+                .map(t -> newExternalTagState(t.getKey(), t.getValue(),
+                        context.request.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
                         .setBody(tagState))
                 .collect(Collectors.toList());
@@ -618,7 +504,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         }
     }
 
-    private DeferredResult<AWSNetworkStateCreationContext> updateTagLinks(AWSNetworkStateCreationContext context) {
+    private DeferredResult<AWSNetworkStateCreationContext> updateTagLinks(
+            AWSNetworkStateCreationContext context) {
         if ((context.awsVpcs == null || context.awsVpcs.isEmpty())
                 && (context.awsSubnets == null || context.awsSubnets.isEmpty())) {
             logFine(() -> "No local vpcs or subnets to be updated so there are no tags to update.");
@@ -639,7 +526,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         remoteTags.put(awsVpcTag.getKey(), awsVpcTag.getValue());
                     }
                 }
-                updateNetwOrSubnTagLinksOps.add(updateLocalTagStates(this, existingNetworkState, remoteTags));
+                updateNetwOrSubnTagLinksOps
+                        .add(updateLocalTagStates(this, existingNetworkState, remoteTags));
             }
             // update tag links for the existing SubnetStates
             for (String subnetId : context.awsSubnets.keySet()) {
@@ -654,44 +542,11 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         remoteTags.put(awsSubnetTag.getKey(), awsSubnetTag.getValue());
                     }
                 }
-                updateNetwOrSubnTagLinksOps.add(updateLocalTagStates(this, existingSubnetState, remoteTags));
+                updateNetwOrSubnTagLinksOps
+                        .add(updateLocalTagStates(this, existingSubnetState, remoteTags));
             }
 
             return DeferredResult.allOf(updateNetwOrSubnTagLinksOps).thenApply(gnore -> context);
-        }
-    }
-
-    /**
-     * The async handler to handle the success and errors received after invoking the describe Route
-     * Tables API on AWS
-     */
-    class AWSMainRouteTableAsyncHandler extends
-            TransitionToAsyncHandler<DescribeRouteTablesRequest, DescribeRouteTablesResult> {
-
-        AWSMainRouteTableAsyncHandler(
-                AWSNetworkStateCreationStage next,
-                AWSNetworkStateCreationContext context) {
-            super(next, context);
-        }
-
-        /**
-         * Update the main route table information for the VPC that is being mapped to a network
-         * state. Query AWS for the main route tables with a list of VPCs. From the result set find
-         * the relevant route table Id and upda
-         */
-        @Override
-        protected void consumeSuccess(DescribeRouteTablesRequest request,
-                DescribeRouteTablesResult result) {
-            for (RouteTable routeTable : result.getRouteTables()) {
-                if (this.context.vpcs.containsKey(routeTable.getVpcId())) {
-                    NetworkState networkStateToUpdate = this.context.vpcs
-                            .get(routeTable.getVpcId());
-                    networkStateToUpdate.customProperties.put(AWS_VPC_ROUTE_TABLE_ID,
-                            routeTable.getRouteTableId());
-                    this.context.vpcs.put(routeTable.getVpcId(),
-                            networkStateToUpdate);
-                }
-            }
         }
     }
 
@@ -719,6 +574,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             if (context.localNetworkStateMap.containsKey(remoteVPCId)) {
                 // If the local network state already exists for the VPC -> Update it.
                 networkState.documentSelfLink = context.localNetworkStateMap.get(remoteVPCId);
+                // don't overwrite resourcePoolLink
+                networkState.resourcePoolLink = null;
 
                 networkStateOp = createPatchOperation(this,
                         networkState, networkState.documentSelfLink);
@@ -853,6 +710,157 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
 
         context.operation.fail(exc);
 
+    }
+
+    /**
+     * The async handler to handle the success and errors received after invoking the describe VPCs
+     * API on AWS
+     */
+    class AWSVPCAsyncHandler
+            extends TransitionToAsyncHandler<DescribeVpcsRequest, DescribeVpcsResult> {
+
+        AWSVPCAsyncHandler(AWSNetworkStateCreationStage next,
+                AWSNetworkStateCreationContext context) {
+            super(next, context);
+        }
+
+        @Override
+        protected void consumeSuccess(DescribeVpcsRequest request, DescribeVpcsResult result) {
+
+            URI adapterUri = AdapterUriUtil.buildAdapterUri(getHost(),
+                    AWSUriPaths.AWS_NETWORK_ADAPTER);
+            for (Vpc resultVPC : result.getVpcs()) {
+                NetworkState networkState = mapVPCToNetworkState(resultVPC,
+                        this.context.request.regionId,
+                        this.context.request.request.resourcePoolLink,
+                        this.context.request.request.endpointLink,
+                        this.context.request.parentAuth.documentSelfLink,
+                        this.context.request.tenantLinks,
+                        adapterUri);
+                if (networkState.subnetCIDR == null) {
+                    logWarning(() -> String.format("AWS did not return CIDR information for VPC %s",
+                            resultVPC.toString()));
+                }
+                this.context.awsVpcs.put(resultVPC.getVpcId(), resultVPC);
+                this.context.vpcs.put(resultVPC.getVpcId(), networkState);
+            }
+        }
+    }
+
+    /**
+     * The async handler to handle the success and errors received after invoking the describe
+     * Internet Gateways API on AWS
+     */
+    class AWSInternetGatewayAsyncHandler extends
+            TransitionToAsyncHandler<DescribeInternetGatewaysRequest, DescribeInternetGatewaysResult> {
+
+        AWSInternetGatewayAsyncHandler(
+                AWSNetworkStateCreationStage next,
+                AWSNetworkStateCreationContext context) {
+            super(next, context);
+        }
+
+        /**
+         * Update the Internet gateway information for the VPC in question. For the list of Internet
+         * gateways received based on the vpc filter work through the list of attachments and VPCs
+         * and update the Internet gateway information in the network state that maps to the VPC.
+         */
+        @Override
+        protected void consumeSuccess(DescribeInternetGatewaysRequest request,
+                DescribeInternetGatewaysResult result) {
+            for (InternetGateway resultGateway : result.getInternetGateways()) {
+                for (InternetGatewayAttachment attachment : resultGateway.getAttachments()) {
+                    if (this.context.vpcs.containsKey(attachment.getVpcId())) {
+                        NetworkState networkStateToUpdate = this.context.vpcs
+                                .get(attachment.getVpcId());
+                        networkStateToUpdate.customProperties.put(AWS_GATEWAY_ID,
+                                resultGateway.getInternetGatewayId());
+                        this.context.vpcs.put(attachment.getVpcId(), networkStateToUpdate);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The async handler to handle the success and errors received after invoking the describe
+     * Internet Gateways API on AWS
+     */
+    class AWSSubnetAsyncHandler extends
+            TransitionToAsyncHandler<DescribeSubnetsRequest, DescribeSubnetsResult> {
+
+        AWSSubnetAsyncHandler(
+                AWSNetworkStateCreationStage next,
+                AWSNetworkStateCreationContext context) {
+            super(next, context);
+        }
+
+        /**
+         * Update the Subnet information for the VPC in question.
+         */
+        @Override
+        protected void consumeSuccess(DescribeSubnetsRequest request,
+                DescribeSubnetsResult result) {
+
+            for (Subnet subnet : result.getSubnets()) {
+
+                if (!this.context.vpcs.containsKey(subnet.getVpcId())) {
+                    logWarning(() -> String.format("AWS returned Subnet [%s] with VCP [%s] that is"
+                            + " missing locally.", subnet.getSubnetId(), subnet.getVpcId()));
+                    continue;
+                }
+
+                SubnetState subnetState = mapSubnetToSubnetState(subnet,
+                        this.context.request.tenantLinks,
+                        this.context.request.regionId,
+                        this.context.request.request.endpointLink);
+
+                if (subnetState.subnetCIDR == null) {
+                    logWarning(() -> String.format("AWS did not return CIDR information for Subnet"
+                            + " %s", subnet.toString()));
+                }
+
+                this.context.awsSubnets.put(subnet.getSubnetId(), subnet);
+                this.context.subnets.put(
+                        subnet.getSubnetId(),
+                        new AWSNetworkStateCreationContext.SubnetStateWithParentVpcId(
+                                subnet.getVpcId(), subnetState));
+            }
+        }
+    }
+
+    /**
+     * The async handler to handle the success and errors received after invoking the describe Route
+     * Tables API on AWS
+     */
+    class AWSMainRouteTableAsyncHandler extends
+            TransitionToAsyncHandler<DescribeRouteTablesRequest, DescribeRouteTablesResult> {
+
+        AWSMainRouteTableAsyncHandler(
+                AWSNetworkStateCreationStage next,
+                AWSNetworkStateCreationContext context) {
+            super(next, context);
+        }
+
+        /**
+         * Update the main route table information for the VPC that is being mapped to a network
+         * state. Query AWS for the main route tables with a list of VPCs. From the result set find
+         * the relevant route table Id and upda
+         */
+        @Override
+        protected void consumeSuccess(DescribeRouteTablesRequest request,
+                DescribeRouteTablesResult result) {
+            for (RouteTable routeTable : result.getRouteTables()) {
+                if (this.context.vpcs.containsKey(routeTable.getVpcId())) {
+                    NetworkState networkStateToUpdate = this.context.vpcs
+                            .get(routeTable.getVpcId());
+                    networkStateToUpdate.customProperties.put(AWS_VPC_ROUTE_TABLE_ID,
+                            routeTable.getRouteTableId());
+                    this.context.vpcs.put(routeTable.getVpcId(),
+                            networkStateToUpdate);
+                }
+            }
+        }
     }
 
     /**

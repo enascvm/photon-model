@@ -406,8 +406,6 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
-                    .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
-                            this.context.request.original.resourcePoolLink)
                     .addInClause(ComputeState.FIELD_NAME_ID,
                             this.context.remoteAWSVolumes.keySet());
 
@@ -503,7 +501,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
             List<DiskState> diskStatesToBeUpdated = new ArrayList<>();
             this.context.disksToBeUpdated.forEach(volume -> {
                 diskStatesToBeUpdated.add(mapVolumeToDiskState(volume,
-                        this.context.request.original.resourcePoolLink,
+                        null,
                         this.context.parentAuth.documentSelfLink,
                         this.context.request.original.endpointLink,
                         this.context.request.regionId,
@@ -634,8 +632,6 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
         private void deleteDiskStates(EBSVolumesEnumerationSubStage next) {
             Query.Builder qBuilder = Builder.create()
                     .addKindFieldClause(DiskState.class)
-                    .addFieldClause(DiskState.FIELD_NAME_RESOURCE_POOL_LINK,
-                            this.context.request.original.resourcePoolLink)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
                     .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,

@@ -958,14 +958,15 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
             resultNetworkState.authCredentialsLink = localNetworkState.authCredentialsLink;
             resultNetworkState.documentSelfLink = localNetworkState.documentSelfLink;
             resultNetworkState.groupLinks = localNetworkState.groupLinks;
+            resultNetworkState.resourcePoolLink = localNetworkState.resourcePoolLink;
         } else {
             resultNetworkState.id = azureVirtualNetwork.id;
             resultNetworkState.authCredentialsLink = context.parentAuth.documentSelfLink;
+            resultNetworkState.resourcePoolLink = context.request.resourcePoolLink;
         }
 
         resultNetworkState.name = azureVirtualNetwork.name;
         resultNetworkState.regionId = azureVirtualNetwork.location;
-        resultNetworkState.resourcePoolLink = context.request.resourcePoolLink;
         resultNetworkState.endpointLink = context.request.endpointLink;
 
         AddressSpace addressSpace = azureVirtualNetwork.properties.addressSpace;

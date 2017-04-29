@@ -291,8 +291,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
                         context.request.original.resourceLink())
-                .addFieldClause(ComputeState.FIELD_NAME_RESOURCE_POOL_LINK,
-                        context.request.original.resourcePoolLink)
                 .addInClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE,
                         Arrays.asList(LifecycleState.PROVISIONING.toString(),
                                 LifecycleState.RETIRED.toString()),

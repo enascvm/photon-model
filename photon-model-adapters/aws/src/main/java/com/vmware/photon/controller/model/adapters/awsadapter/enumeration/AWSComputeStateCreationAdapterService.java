@@ -77,44 +77,20 @@ import com.vmware.xenon.services.common.QueryTask;
  */
 public class AWSComputeStateCreationAdapterService extends StatelessService {
 
-    private static final String UPDATE_NIC_STATES = "update";
-    private static final String REMOVE_NIC_STATES = "remove";
-    private static final String ADD_NIC_STATES = "add";
     public static final String SELF_LINK = AWSUriPaths.AWS_COMPUTE_STATE_CREATION_ADAPTER;
+
+    private static final String UPDATE_NIC_STATES = "update";
+
+    private static final String REMOVE_NIC_STATES = "remove";
+
+    private static final String ADD_NIC_STATES = "add";
+
     private static final long QUERY_TASK_EXPIRY_MICROS = TimeUnit.MINUTES.toMicros(1);
     private AWSClientManager clientManager;
 
-    public static enum AWSComputeStateCreationStage {
-        GET_RELATED_COMPUTE_DESCRIPTIONS,
-        /**
-         * Create the operations for creating ComputeStates
-         * and their corresponding NetworkInterfaceStates
-         */
-        CREATE_COMPUTESTATES_OPERATIONS,
-        /**
-         * For each ComputeState which needs an update
-         * create post operation. Update corresponding NetworkInterfaceStates
-         */
-        UPDATE_COMPUTESTATES_OPERATIONS,
-        /**
-         * Execute all the crete and update operations,
-         * generated during the previous stages
-         */
-        CREATE_COMPUTESTATES,
-        SIGNAL_COMPLETION,
-        CREATE_TAGS,
-        UPDATE_TAGS
-    }
-
-    public AWSComputeStateCreationAdapterService() {
-        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
-        this.clientManager = AWSClientManagerFactory
-                .getClientManager(AWSConstants.AwsClientType.EC2);
-    }
-
     /**
-     * Request accepted by this service to trigger create or update of Compute states
-     * representing compute instances in Amazon.
+     * Request accepted by this service to trigger create or update of Compute states representing
+     * compute instances in Amazon.
      */
     public static class AWSComputeStateCreationRequest {
 
@@ -137,8 +113,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         public AuthCredentialsService.AuthCredentialsServiceState parentAuth;
         public String regionId;
         public URI parentTaskLink;
-        boolean isMock;
+
         public List<String> tenantLinks;
+
+        boolean isMock;
     }
 
     /**
@@ -165,6 +143,33 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             this.creationStage = AWSComputeStateCreationStage.GET_RELATED_COMPUTE_DESCRIPTIONS;
             this.operation = op;
         }
+    }
+
+    public static enum AWSComputeStateCreationStage {
+        GET_RELATED_COMPUTE_DESCRIPTIONS,
+        /**
+         * Create the operations for creating ComputeStates and their corresponding
+         * NetworkInterfaceStates
+         */
+        CREATE_COMPUTESTATES_OPERATIONS,
+        /**
+         * For each ComputeState which needs an update create post operation. Update corresponding
+         * NetworkInterfaceStates
+         */
+        UPDATE_COMPUTESTATES_OPERATIONS,
+        /**
+         * Execute all the crete and update operations, generated during the previous stages
+         */
+        CREATE_COMPUTESTATES,
+        SIGNAL_COMPLETION,
+        CREATE_TAGS,
+        UPDATE_TAGS
+    }
+
+    public AWSComputeStateCreationAdapterService() {
+        super.toggleOption(ServiceOption.INSTRUMENTATION, true);
+        this.clientManager = AWSClientManagerFactory
+                .getClientManager(AWSConstants.AwsClientType.EC2);
     }
 
     @Override
@@ -212,7 +217,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     AWSComputeStateCreationStage.UPDATE_TAGS);
             break;
         case UPDATE_TAGS:
-            updateTagLinks(context).whenComplete(thenComputeStateCreateOrUpdate(context, AWSComputeStateCreationStage.UPDATE_COMPUTESTATES_OPERATIONS));
+            updateTagLinks(context).whenComplete(thenComputeStateCreateOrUpdate(context,
+                    AWSComputeStateCreationStage.UPDATE_COMPUTESTATES_OPERATIONS));
             break;
         case UPDATE_COMPUTESTATES_OPERATIONS:
             populateUpdateOperations(context, AWSComputeStateCreationStage.CREATE_COMPUTESTATES);
@@ -236,7 +242,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
      * {@code handleComputeStateCreateOrUpdate} version suitable for chaining to
      * {@code DeferredResult.whenComplete}.
      */
-    private BiConsumer<AWSComputeStateCreationContext, Throwable> thenComputeStateCreateOrUpdate(AWSComputeStateCreationContext context,
+    private BiConsumer<AWSComputeStateCreationContext, Throwable> thenComputeStateCreateOrUpdate(
+            AWSComputeStateCreationContext context,
             AWSComputeStateCreationStage next) {
         // NOTE: In case of error 'ignoreCtx' is null so use passed context!
         return (ignoreCtx, exc) -> {
@@ -265,7 +272,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // tags, so filter them out
         List<Operation> operations = allTags.stream()
                 .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                .map(t -> newExternalTagState(t.getKey(), t.getValue(), context.request.tenantLinks))
+                .map(t -> newExternalTagState(t.getKey(), t.getValue(),
+                        context.request.tenantLinks))
                 .map(tagState -> Operation.createPost(this, TagService.FACTORY_LINK)
                         .setBody(tagState))
                 .collect(Collectors.toList());
@@ -384,8 +392,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                                 context, awsNic);
 
                         computeStateToBeCreated.networkInterfaceLinks.add(UriUtils.buildUriPath(
-                                        NetworkInterfaceService.FACTORY_LINK,
-                                        nicState.documentSelfLink));
+                                NetworkInterfaceService.FACTORY_LINK,
+                                nicState.documentSelfLink));
                     }
                 }
 
@@ -400,8 +408,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         }
     }
 
-    //Utility method which creates a new NetworkInterface State and Descriptions
-    //from provided AWS Nic, and adds them to the enumerationOperations list
+    // Utility method which creates a new NetworkInterface State and Descriptions
+    // from provided AWS Nic, and adds them to the enumerationOperations list
     private NetworkInterfaceState createNICStateAndDescription(
             AWSComputeStateCreationContext context, InstanceNetworkInterface awsNic) {
 
@@ -420,8 +428,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 for (GroupIdentifier awsSG : awsNic.getGroups()) {
                     // we should have updated the list of SG Ids before this step and
                     // should have ensured that all the SGs exist locally
-                    String securityGroupLink = context.request.enumeratedSecurityGroups
-                            .securityGroupStates.get(awsSG.getGroupId());
+                    String securityGroupLink = context.request.enumeratedSecurityGroups.securityGroupStates
+                            .get(awsSG.getGroupId());
                     if (securityGroupLink == null || securityGroupLink.isEmpty()) {
                         continue;
                     }
@@ -446,7 +454,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         return nicState;
     }
 
-    private DeferredResult<AWSComputeStateCreationContext> updateTagLinks(AWSComputeStateCreationContext context) {
+    private DeferredResult<AWSComputeStateCreationContext> updateTagLinks(
+            AWSComputeStateCreationContext context) {
         if (context.request.instancesToBeUpdated == null
                 || context.request.instancesToBeUpdated.size() == 0) {
             logFine(() -> "No local compute states to be updated so there are no tags to update.");
@@ -457,14 +466,16 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
 
             for (String instanceId : context.request.instancesToBeUpdated.keySet()) {
                 Instance instance = context.request.instancesToBeUpdated.get(instanceId);
-                ComputeState existingComputeState = context.request.computeStatesToBeUpdated.get(instanceId);
+                ComputeState existingComputeState = context.request.computeStatesToBeUpdated
+                        .get(instanceId);
                 Map<String, String> remoteTags = new HashMap<>();
                 for (Tag awsInstanceTag : instance.getTags()) {
                     if (!awsInstanceTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
                         remoteTags.put(awsInstanceTag.getKey(), awsInstanceTag.getValue());
                     }
                 }
-                updateCSTagLinksOps.add(updateLocalTagStates(this, existingComputeState, remoteTags));
+                updateCSTagLinksOps
+                        .add(updateLocalTagStates(this, existingComputeState, remoteTags));
             }
             return DeferredResult.allOf(updateCSTagLinksOps).thenApply(gnore -> context);
         }
@@ -484,9 +495,10 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             for (String instanceId : context.request.instancesToBeUpdated.keySet()) {
 
                 Instance instance = context.request.instancesToBeUpdated.get(instanceId);
-                ComputeState existingComputeState = context.request.computeStatesToBeUpdated.get(instanceId);
+                ComputeState existingComputeState = context.request.computeStatesToBeUpdated
+                        .get(instanceId);
 
-                //Calculate NICs delta - collection of NIC States to add, to update and to delete
+                // Calculate NICs delta - collection of NIC States to add, to update and to delete
                 Map<String, List<Integer>> deviceIndexesDelta = new HashMap<>();
                 Map<String, Map<String, Collection<Object>>> linksToNICSToAddOrRemove = new HashMap<>();
 
@@ -497,19 +509,24 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     List<NetworkInterfaceState> existingNicStates = context.request.nicStatesToBeUpdated
                             .get(instanceId);
 
-                    deviceIndexesDelta = calculateNICsDeviceIndexesDelta(instance, existingNicStates);
+                    deviceIndexesDelta = calculateNICsDeviceIndexesDelta(instance,
+                            existingNicStates);
 
-                    linksToNICSToAddOrRemove = addUpdateOrRemoveNICStates(context, instance, deviceIndexesDelta);
+                    linksToNICSToAddOrRemove = addUpdateOrRemoveNICStates(context, instance,
+                            deviceIndexesDelta);
                 }
                 // }}
 
                 // Create dedicated PATCH operation for updating NIC Links {{
-                if (linksToNICSToAddOrRemove.get(ADD_NIC_STATES) != null || linksToNICSToAddOrRemove.get(REMOVE_NIC_STATES) != null) {
-                    ServiceStateCollectionUpdateRequest updateComputeStateRequest =
-                            ServiceStateCollectionUpdateRequest.create(linksToNICSToAddOrRemove.get(ADD_NIC_STATES), linksToNICSToAddOrRemove.get(REMOVE_NIC_STATES));
+                if (linksToNICSToAddOrRemove.get(ADD_NIC_STATES) != null
+                        || linksToNICSToAddOrRemove.get(REMOVE_NIC_STATES) != null) {
+                    ServiceStateCollectionUpdateRequest updateComputeStateRequest = ServiceStateCollectionUpdateRequest
+                            .create(linksToNICSToAddOrRemove.get(ADD_NIC_STATES),
+                                    linksToNICSToAddOrRemove.get(REMOVE_NIC_STATES));
 
                     Operation patchComputeStateNICLinks = Operation
-                            .createPatch(UriUtils.buildUri(this.getHost(), existingComputeState.documentSelfLink))
+                            .createPatch(UriUtils.buildUri(this.getHost(),
+                                    existingComputeState.documentSelfLink))
                             .setBody(updateComputeStateRequest)
                             .setReferer(this.getUri());
                     context.enumerationOperations.add(patchComputeStateNICLinks);
@@ -523,14 +540,17 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 ComputeService.ComputeState computeStateToBeUpdated = mapInstanceToComputeState(
                         instance,
                         context.request.parentComputeLink, zoneData.computeLink,
-                        context.request.resourcePoolLink,
+                        existingComputeState.resourcePoolLink != null
+                                ? existingComputeState.resourcePoolLink
+                                : context.request.resourcePoolLink,
                         context.request.endpointLink,
                         existingComputeState.descriptionLink,
                         zoneData.regionId, zoneId,
                         context.request.tenantLinks);
                 computeStateToBeUpdated.documentSelfLink = existingComputeState.documentSelfLink;
 
-                Operation patchComputeState = createPatchOperation(this, computeStateToBeUpdated, existingComputeState.documentSelfLink);
+                Operation patchComputeState = createPatchOperation(this, computeStateToBeUpdated,
+                        existingComputeState.documentSelfLink);
                 context.enumerationOperations.add(patchComputeState);
                 // }}
             }
@@ -541,22 +561,24 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Compare the deviceIndexes of the AWS NICs to the ones of local NIC States
-     * and return arrays with indexes to add, to remove or to delete
+     * Compare the deviceIndexes of the AWS NICs to the ones of local NIC States and return arrays
+     * with indexes to add, to remove or to delete
      */
     private Map<String, List<Integer>> calculateNICsDeviceIndexesDelta(Instance instance,
             List<NetworkInterfaceState> existingNicStates) {
 
         // Collect all device indexes of local and remote NICs
-        List<Integer> awsDeviceIndexes = instance.getNetworkInterfaces() != null ?
-                instance.getNetworkInterfaces().stream()
+        List<Integer> awsDeviceIndexes = instance.getNetworkInterfaces() != null
+                ? instance.getNetworkInterfaces().stream()
                         .map(awsNic -> awsNic.getAttachment().getDeviceIndex())
-                        .collect(Collectors.toList()) : Collections.emptyList();
-        List<Integer> localNICsDeviceIndexes = existingNicStates != null ?
-                existingNicStates.stream()
+                        .collect(Collectors.toList())
+                : Collections.emptyList();
+        List<Integer> localNICsDeviceIndexes = existingNicStates != null
+                ? existingNicStates.stream()
                         .filter(Objects::nonNull)
                         .map(nicState -> nicState.deviceIndex)
-                        .collect(Collectors.toList()) : Collections.emptyList();
+                        .collect(Collectors.toList())
+                : Collections.emptyList();
 
         // Calculate delta lists {{
 
@@ -564,11 +586,13 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         List<Integer> remoteDeviceIndexesToAdd = new ArrayList<>(awsDeviceIndexes);
         remoteDeviceIndexesToAdd.removeAll(localNICsDeviceIndexes);
 
-        // From the local NIC States, retain only the ones which correspond to AWS NICs to identify which one to update
+        // From the local NIC States, retain only the ones which correspond to AWS NICs to identify
+        // which one to update
         List<Integer> localDeviceIndexesToUpdate = new ArrayList<>(awsDeviceIndexes);
         localDeviceIndexesToUpdate.retainAll(localNICsDeviceIndexes);
 
-        // From the local NIC States, substract all the AWS NICs to identify NICs that should be removed
+        // From the local NIC States, substract all the AWS NICs to identify NICs that should be
+        // removed
         List<Integer> localDeviceIndexesToRemove = new ArrayList<>(localNICsDeviceIndexes);
         localDeviceIndexesToRemove.removeAll(awsDeviceIndexes);
         // }}
@@ -583,51 +607,57 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * From the previously calculated NICs delta (based on whether the local state correspond to existing AWS object,
-     * the AWS object was deleted, or a new AWS object was added):
-     *   1) Create, update or delete NICState objects
-     *   2) Update the CS's references to the added or removed NetworkInterfaceStates
+     * From the previously calculated NICs delta (based on whether the local state correspond to
+     * existing AWS object, the AWS object was deleted, or a new AWS object was added): 1) Create,
+     * update or delete NICState objects 2) Update the CS's references to the added or removed
+     * NetworkInterfaceStates
      */
-    private Map<String, Map<String, Collection<Object>>> addUpdateOrRemoveNICStates(AWSComputeStateCreationContext context, Instance instance,
+    private Map<String, Map<String, Collection<Object>>> addUpdateOrRemoveNICStates(
+            AWSComputeStateCreationContext context, Instance instance,
             Map<String, List<Integer>> nicsDeviceIndexDeltaMap) {
 
-        List<NetworkInterfaceState> existingNicStates = context.request.nicStatesToBeUpdated.get(instance.getInstanceId());
+        List<NetworkInterfaceState> existingNicStates = context.request.nicStatesToBeUpdated
+                .get(instance.getInstanceId());
 
-        // Generate operation for adding NIC state and description, and retain its link to add to the CS {{
+        // Generate operation for adding NIC state and description, and retain its link to add to
+        // the CS {{
         List<Integer> deviceIndexesToAdd = nicsDeviceIndexDeltaMap.get(ADD_NIC_STATES);
 
         Collection<Object> networkInterfaceLinksToBeAdded = instance.getNetworkInterfaces().stream()
-                        .filter(awsNic -> deviceIndexesToAdd.contains(awsNic.getAttachment().getDeviceIndex()))
+                .filter(awsNic -> deviceIndexesToAdd
+                        .contains(awsNic.getAttachment().getDeviceIndex()))
 
-                        //create new NIC State and Description operation
-                        .map(awsNic -> createNICStateAndDescription(context, awsNic))
-                        //and collect their documentSelfLinks
-                        .map(addedNicState -> UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK,
-                                addedNicState.documentSelfLink))
-                        .collect(Collectors.toList());
+                // create new NIC State and Description operation
+                .map(awsNic -> createNICStateAndDescription(context, awsNic))
+                // and collect their documentSelfLinks
+                .map(addedNicState -> UriUtils.buildUriPath(NetworkInterfaceService.FACTORY_LINK,
+                        addedNicState.documentSelfLink))
+                .collect(Collectors.toList());
         // }}
 
         // Generate operation for removing NIC states, and retain its link to remove from the CS {{
         List<Integer> deviceIndexesToRemove = nicsDeviceIndexDeltaMap.get(REMOVE_NIC_STATES);
         Collection<Object> networkInterfaceLinksToBeRemoved = deviceIndexesToRemove.stream()
-                        // else, create Post operations to delete NICStates and collect their documentSelfLinks
-                        .map(deviceIndexToRemove -> {
-                            NetworkInterfaceState stateToDelete = existingNicStates.stream()
-                                    .filter(existNicState -> existNicState.deviceIndex == deviceIndexToRemove)
-                                    .findFirst()
-                                    .orElse(null);
-                            return stateToDelete;
-                        })
-                        .filter(existingNicState -> existingNicState != null)
+                // else, create Post operations to delete NICStates and collect their
+                // documentSelfLinks
+                .map(deviceIndexToRemove -> {
+                    NetworkInterfaceState stateToDelete = existingNicStates.stream()
+                            .filter(existNicState -> existNicState.deviceIndex == deviceIndexToRemove)
+                            .findFirst()
+                            .orElse(null);
+                    return stateToDelete;
+                })
+                .filter(existingNicState -> existingNicState != null)
 
-                        //create NIC state patch operation which set the expiration time to now
-                        .map(existingNicState -> deleteNICState(context, existingNicState))
+                // create NIC state patch operation which set the expiration time to now
+                .map(existingNicState -> deleteNICState(context, existingNicState))
 
-                        .map(existingNicState -> existingNicState.documentSelfLink)
-                        .collect(Collectors.toList());
+                .map(existingNicState -> existingNicState.documentSelfLink)
+                .collect(Collectors.toList());
         // }}
 
-        // Generate operation for updating NIC states, no links should be updated on CS in this case {{
+        // Generate operation for updating NIC states, no links should be updated on CS in this case
+        // {{
         List<Integer> deviceIndexesToUpdate = nicsDeviceIndexDeltaMap.get(UPDATE_NIC_STATES);
         deviceIndexesToUpdate.stream()
                 .map(deviceIndexToUpdate -> existingNicStates
@@ -637,7 +667,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                         .orElse(null))
                 .filter(existingNicState -> existingNicState != null)
 
-                //create NIC patch operation for update
+                // create NIC patch operation for update
                 .map(existingNicState -> updateNICState(context, instance, existingNicState));
         // }}
 
@@ -645,13 +675,15 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         // only add the collections to the delta map in case there is something to add/remove
         if (!networkInterfaceLinksToBeRemoved.isEmpty()) {
             Map<String, Collection<Object>> collectionsToRemoveMap = new HashMap<>();
-            collectionsToRemoveMap.put(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS, networkInterfaceLinksToBeRemoved);
+            collectionsToRemoveMap.put(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS,
+                    networkInterfaceLinksToBeRemoved);
             nicsDeltaMap.put(REMOVE_NIC_STATES, collectionsToRemoveMap);
         }
 
         if (!networkInterfaceLinksToBeAdded.isEmpty()) {
             Map<String, Collection<Object>> collectionsToAddMap = new HashMap<>();
-            collectionsToAddMap.put(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS, networkInterfaceLinksToBeAdded);
+            collectionsToAddMap.put(ComputeState.FIELD_NAME_NETWORK_INTERFACE_LINKS,
+                    networkInterfaceLinksToBeAdded);
             nicsDeltaMap.put(ADD_NIC_STATES, collectionsToAddMap);
         }
 
@@ -659,16 +691,19 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
     }
 
     /**
-     * Set the expiration time of the identified existing NetworkInterfaceState to now so that it is deleted from the systems
+     * Set the expiration time of the identified existing NetworkInterfaceState to now so that it is
+     * deleted from the systems
      */
-    private NetworkInterfaceState deleteNICState(AWSComputeStateCreationContext context, NetworkInterfaceState existingNicState) {
+    private NetworkInterfaceState deleteNICState(AWSComputeStateCreationContext context,
+            NetworkInterfaceState existingNicState) {
         Operation updateNicOperation = createDeleteOperation(this, existingNicState);
         context.enumerationOperations.add(updateNicOperation);
         return existingNicState;
     }
 
     /**
-     * For each NetworkInterfaceState, obtain the corresponding AWS NIC, and generate POST operation to update its private address
+     * For each NetworkInterfaceState, obtain the corresponding AWS NIC, and generate POST operation
+     * to update its private address
      */
     private NetworkInterfaceState updateNICState(AWSComputeStateCreationContext context,
             Instance instance, NetworkInterfaceState existingNicState) {
@@ -676,7 +711,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
         InstanceNetworkInterface awsNic = instance
                 .getNetworkInterfaces()
                 .stream()
-                .filter(currentAwsNic -> currentAwsNic.getAttachment().getDeviceIndex() == existingNicState.deviceIndex)
+                .filter(currentAwsNic -> currentAwsNic.getAttachment()
+                        .getDeviceIndex() == existingNicState.deviceIndex)
                 .findFirst().orElse(null);
 
         // create a new NetworkInterfaceState for updating the address
@@ -686,8 +722,8 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
             for (GroupIdentifier awsSG : awsNic.getGroups()) {
                 // we should have updated the list of SG Ids before this step and should have
                 // ensured that all the SGs exist locally
-                String securityGroupLink = context.request.enumeratedSecurityGroups
-                        .securityGroupStates.get(awsSG.getGroupId());
+                String securityGroupLink = context.request.enumeratedSecurityGroups.securityGroupStates
+                        .get(awsSG.getGroupId());
                 if (securityGroupLink == null || securityGroupLink.isEmpty()) {
                     continue;
                 }
@@ -723,7 +759,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                 exc) -> {
             if (exc != null) {
                 logSevere(() -> String.format("Error creating compute state and the associated"
-                                + " network %s", Utils.toString(exc)));
+                        + " network %s", Utils.toString(exc)));
                 finishWithFailure(context, exc.values().iterator().next());
                 return;
             }
