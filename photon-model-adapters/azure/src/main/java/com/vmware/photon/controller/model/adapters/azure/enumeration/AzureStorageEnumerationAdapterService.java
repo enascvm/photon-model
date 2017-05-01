@@ -38,6 +38,7 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -824,7 +825,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             Query instanceIdFilter = Query.Builder
                     .create(Occurance.SHOULD_OCCUR)
                     .addFieldClause(ResourceGroupState.FIELD_NAME_ID,
-                            container.getValue().getUri().toString())
+                            container.getKey())
                     .build();
             instanceIdFilterParentQuery.addClause(instanceIdFilter);
         }
@@ -866,7 +867,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         DeferredResult.allOf(context.resourceGroupStates
                 .values().stream().map(rg -> {
-                    CloudBlobContainer container = context.storageContainers.get(rg.id);
+                    CloudBlobContainer container = context.storageContainers.remove(rg.id);
                     return createResourceGroupStateHelper(context, container, rg);
                 }).collect(Collectors.toList()))
                 .whenComplete((r, e) -> {
@@ -964,9 +965,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 Operation.createPatch(context.request.buildUri(rgState.documentSelfLink))
                         .setBody(rgState)
                         .setCompletion((o, e) -> {
-                            // Remove processed resource group states from the map
-                            context.storageContainers.remove(rgState.id);
-
                             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-2765
                             if (e != null) {
                                 logWarning(() -> String.format(
@@ -1115,27 +1113,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     ResourceState.FIELD_NAME_ID,
                     context.storageBlobs.values().stream()
                             .map(sb -> QuerySpecification.toMatchValue(sb.getUri()))
-                            .collect(Collectors.toSet()),
-                    Occurance.MUST_NOT_OCCUR);
+                            .collect(Collectors.toSet()));
         }
 
         String blobProperty = QuerySpecification
                 .buildCompositeFieldName(DiskState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AZURE_STORAGE_TYPE);
-        Query.Builder typeFilterQuery = Query.Builder
-                .create(Occurance.MUST_OCCUR);
 
-        Query blobFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
-                .addFieldClause(blobProperty, AZURE_STORAGE_BLOBS)
-                .build();
-
-        Query diskFilter = Query.Builder.create(Occurance.SHOULD_OCCUR)
-                .addFieldClause(blobProperty, AZURE_STORAGE_DISKS)
-                .build();
-        typeFilterQuery.addClause(blobFilter);
-        typeFilterQuery.addClause(diskFilter);
-
-        qBuilder.addClause(typeFilterQuery.build());
+        qBuilder.addInClause(blobProperty, Arrays.asList(AZURE_STORAGE_BLOBS,AZURE_STORAGE_DISKS));
 
         QueryStrategy<DiskState> queryLocalStates = new QueryByPages<>(
                 getHost(),
@@ -1178,7 +1163,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
         DeferredResult.allOf(
                 context.diskStates.entrySet().stream().map(dse -> {
-                    ListBlobItem blob = context.storageBlobs.get(dse.getKey());
+                    ListBlobItem blob = context.storageBlobs.remove(dse.getKey());
                     if (blob == null) {
                         logWarning("No blob found for local state: %s", dse.getKey());
                         return DeferredResult.completed((Operation) null);
@@ -1258,8 +1243,6 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 Operation.createPatch(context.request.buildUri(diskState.documentSelfLink))
                         .setBody(diskState)
                         .setCompletion((completedOp, failure) -> {
-                            // Remove processed disk states from the map
-                            context.storageBlobs.remove(diskState.id);
 
                             if (failure != null) {
                                 // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-2765
