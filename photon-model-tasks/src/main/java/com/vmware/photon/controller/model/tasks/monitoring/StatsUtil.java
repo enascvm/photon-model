@@ -30,28 +30,12 @@ public class StatsUtil {
     public static final String SEPARATOR = "_";
 
     /**
-     * Builds a metric key for given resource link, metric name and timestamp.
-     */
-    public static String getMetricKey(String resourceLink, String metricName,
-            Long sourceTimeMicrosUtc) {
-        return UriUtils.getLastPathSegment(resourceLink) + SEPARATOR + metricName + SEPARATOR
-                + sourceTimeMicrosUtc;
-    }
-
-    /**
      * Builds a metric key for given resource link and timestamp.
      */
     public static String getMetricKey(String resourceLink,
             Long sourceTimeMicrosUtc) {
         return UriUtils.getLastPathSegment(resourceLink) + SEPARATOR +
                 + sourceTimeMicrosUtc;
-    }
-
-    /**
-     * Builds a metric key for given resource link and metric name.
-     */
-    public static String getMetricKeyPrefix(String resourceLink, String metricName) {
-        return UriUtils.getLastPathSegment(resourceLink) + SEPARATOR + metricName;
     }
 
     /**
@@ -62,40 +46,16 @@ public class StatsUtil {
 
         String[] linkFragments = metricLink.split(SEPARATOR);
 
-        if (linkFragments.length != 3) {
+        if (linkFragments.length != 2) {
             throw new IllegalArgumentException("Incorrect metric key format "
                     + Arrays.toString(linkFragments)
-                    + ". Expected resource-id_metricName_timestamp.");
+                    + ". Expected resource-id_timestamp.");
         }
 
         MetricKeyComponents metricKeyComponents = new MetricKeyComponents();
         metricKeyComponents.resourceId = linkFragments[0];
-        metricKeyComponents.metricName = linkFragments[1];
-        metricKeyComponents.timestamp = linkFragments[2];
+        metricKeyComponents.timestamp = linkFragments[1];
         return metricKeyComponents;
-    }
-
-    /**
-     * Returns the metric name for given metric link.
-     */
-    public static String getMetricName(String metricLink) {
-        MetricKeyComponents metricKeyComponents = getMetricLinkFragments(metricLink);
-
-        // Return the second string in the array.
-        String metricName = metricKeyComponents.metricName;
-        if (metricName.contains(SEPARATOR)) {
-            throw new IllegalArgumentException(
-                    "Metric name '" + metricName + "'should not contain '" + SEPARATOR + "'");
-        }
-        return metricName;
-    }
-
-    /**
-     * Returns the metric key prefix.
-     */
-    public static String getMetricLinkPrefix(String metricLink) {
-        MetricKeyComponents metricKeyComponents = getMetricLinkFragments(metricLink);
-        return metricKeyComponents.resourceId + SEPARATOR + metricKeyComponents.metricName;
     }
 
     /**
@@ -125,7 +85,6 @@ public class StatsUtil {
 
     private static class MetricKeyComponents {
         public String resourceId;
-        public String metricName;
         @SuppressWarnings("unused")
         public String timestamp;
     }

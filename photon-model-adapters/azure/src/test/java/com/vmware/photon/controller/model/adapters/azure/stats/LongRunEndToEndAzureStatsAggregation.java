@@ -26,7 +26,6 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.resourceStatsCollection;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.runEnumeration;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
-import static com.vmware.photon.controller.model.tasks.monitoring.StatsUtil.getMetricKeyPrefix;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -46,8 +45,8 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
-import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
-import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService.ResourceAggregateMetric;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -65,6 +64,7 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
+import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm;
@@ -180,7 +180,7 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
         // As no stats collection is performed yet, ResourceAggregateMetric document count will be 0.
         resourceStatsAggregation(this.host, computeHost.resourcePoolLink);
         ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
-                ResourceAggregateMetricService.FACTORY_LINK));
+                ResourceMetricsService.FACTORY_LINK));
         assertEquals(0, aggrRes.documentLinks.size());
 
         // perform enumeration on given Azure endpoint.
@@ -220,7 +220,7 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
 
                 ServiceDocumentQueryResult aggrResult = this.host
                         .getExpandedFactoryState(UriUtils.buildUri(this.host,
-                                ResourceAggregateMetricService.FACTORY_LINK));
+                                ResourceMetricsService.FACTORY_LINK));
                 // check compute resource has stats generated for all the metric keys
                 checkInMemoryStatsPresent(res);
                 // check expiration time for aggregate metric documents
@@ -268,8 +268,8 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
                 + TimeUnit.DAYS.toMicros(DEFAULT_RETENTION_LIMIT_DAYS);
 
         for (Object aggrDocument : aggrResult.documents.values()) {
-            ResourceAggregateMetric aggrMetric = Utils
-                    .fromJson(aggrDocument, ResourceAggregateMetric.class);
+            ResourceMetrics aggrMetric = Utils
+                    .fromJson(aggrDocument, ResourceMetrics.class);
             // Make sure all the documents have expiration time set.
             assertTrue("Expiration time is not correctly set.",
                     aggrMetric.documentExpirationTimeMicros < expectedExpirationTime);
@@ -311,11 +311,13 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
                 QuerySpecification querySpec = new QuerySpecification();
 
                 querySpec.query = QueryTask.Query.Builder.create()
-                        .addKindFieldClause(ResourceAggregateMetric.class)
+                        .addKindFieldClause(ResourceMetrics.class)
                         .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                                UriUtils.buildUriPath(ResourceAggregateMetricService.FACTORY_LINK,
-                                        getMetricKeyPrefix(computeResourceLink, metricName)),
+                                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, computeResourceLink),
                                 QueryTerm.MatchType.PREFIX)
+                        .addRangeClause(QuerySpecification
+                                .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, metricName),
+                                NumericRange.createDoubleRange(0.0, Double.MAX_VALUE, true, true))
                         .build();
 
                 QueryTask qt = QueryTask.Builder
@@ -341,8 +343,8 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
                 + TimeUnit.DAYS.toMicros(DEFAULT_RETENTION_LIMIT_DAYS);
 
         for (Object aggrDocument : results) {
-            ResourceAggregateMetric aggrMetric = Utils
-                    .fromJson(aggrDocument, ResourceAggregateMetric.class);
+            ResourceMetrics aggrMetric = Utils
+                    .fromJson(aggrDocument, ResourceMetrics.class);
 
             // Make sure all the documents have expiration time set.
             assertTrue("Expiration time is not correctly set.",
@@ -353,11 +355,7 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
             // count = num of resources: one value for each resource
             // sum = null: not specified in the aggregate type set
 
-            assertNotNull("Time bin avg value is not set", aggrMetric.timeBin.avg);
-            assertNotNull("Time bin max value is not set", aggrMetric.timeBin.max);
-            assertNotNull("Time bin min value is not set", aggrMetric.timeBin.min);
-            assertNotNull("Time bin sum value is not set", aggrMetric.timeBin.sum);
-            assertNotNull("Time bin count value is not set", aggrMetric.timeBin.count);
+            assertNotNull("Value is not set", aggrMetric.entries.get(0));
         }
     }
 

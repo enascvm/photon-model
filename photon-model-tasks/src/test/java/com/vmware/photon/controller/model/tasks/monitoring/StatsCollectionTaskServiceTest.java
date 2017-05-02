@@ -201,18 +201,22 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
         // check that all the stats retuned from the mock stats adapter are
         // persisted at a per metric level along with the last collection run time
         for (String computeLink : computeLinks) {
-            ResourceMetrics metric = getResourceMetrics(verificationHost, computeLink, MockStatsAdapter.KEY_1);
+            ResourceMetrics metric = getResourceMetrics(verificationHost, computeLink,
+                    MockStatsAdapter.KEY_1);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_1 +
                     " should not be null ", metric);
             assertEquals(metric.entries.size(), 1);
 
-            ResourceMetrics metric2 = getResourceMetrics(verificationHost, computeLink, MockStatsAdapter.KEY_2);
+            ResourceMetrics metric2 = getResourceMetrics(verificationHost, computeLink,
+                    MockStatsAdapter.KEY_2);
             assertNotNull("The resource metric for" + MockStatsAdapter.KEY_2 +
                     "should not be null ", metric2);
             assertEquals(metric2.entries.size(), 1);
-            String lastSuccessfulRunMetricKey = StatsUtil.getMetricKeyPrefix(MockStatsAdapter.SELF_LINK,
-                    PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME);
-            ResourceMetrics metricLastRun = getResourceMetrics(verificationHost, computeLink, lastSuccessfulRunMetricKey);
+            String lastSuccessfulRunMetricKey = UriUtils
+                    .getLastPathSegment(MockStatsAdapter.SELF_LINK) + StatsUtil.SEPARATOR
+                    + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
+            ResourceMetrics metricLastRun = getResourceMetrics(verificationHost, computeLink,
+                    lastSuccessfulRunMetricKey);
             assertNotNull("The resource metric for" + lastSuccessfulRunMetricKey
                     + " should not be null ", metricLastRun);
 
@@ -230,13 +234,18 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                     .orderAscending(ServiceDocument.FIELD_NAME_SELF_LINK, TypeName.STRING)
                     .setQuery(
                             Query.Builder.create().addKindFieldClause(ResourceMetrics.class)
-                            .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, UriUtils.getLastPathSegment(computeLink)),
-                                MatchType.PREFIX)
-                            .addRangeClause( QuerySpecification.buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES,
-                                    MockStatsAdapter.KEY_1),
-                                NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true))
-                                    .build()).build();
+                                    .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
+                                            UriUtils.buildUriPath(
+                                                    ResourceMetricsService.FACTORY_LINK,
+                                                    UriUtils.getLastPathSegment(computeLink)),
+                                            MatchType.PREFIX)
+                                    .addRangeClause(QuerySpecification.buildCompositeFieldName(
+                                            ResourceMetrics.FIELD_NAME_ENTRIES,
+                                            MockStatsAdapter.KEY_1),
+                                            NumericRange.createDoubleRange(Double.MIN_VALUE,
+                                                    Double.MAX_VALUE, true, true))
+                                    .build())
+                    .build();
             verificationHost.createQueryTaskService(qt, false, true, qt, null);
 
             ResourceMetrics prevMetric = null;
@@ -249,16 +258,14 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                     continue;
                 }
 
-                assertTrue(prevMetric.timestampMicrosUtc <
-                        metric.timestampMicrosUtc);
+                assertTrue(prevMetric.timestampMicrosUtc < metric.timestampMicrosUtc);
             }
         }
 
         // verify that the aggregation tasks have been deleted
         this.host.waitFor("Timeout waiting for task to expire", () -> {
-            ServiceDocumentQueryResult collectRes =
-                    this.host.getFactoryState(UriUtils.buildUri(
-                        this.host, StatsCollectionTaskService.FACTORY_LINK));
+            ServiceDocumentQueryResult collectRes = this.host.getFactoryState(UriUtils.buildUri(
+                    this.host, StatsCollectionTaskService.FACTORY_LINK));
             if (collectRes.documentLinks.size() == 0) {
                 return true;
             }
@@ -384,7 +391,8 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
      * Sorts the documents by documentSelfLink.
      * Returns the first document.
      */
-    private ResourceMetrics getResourceMetrics(VerificationHost host, String resourceLink, String metricKey) {
+    private ResourceMetrics getResourceMetrics(VerificationHost host, String resourceLink,
+            String metricKey) {
         QueryTask qt = QueryTask.Builder
                 .createDirectTask()
                 .addOption(QueryOption.TOP_RESULTS)
@@ -396,11 +404,13 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 .addOption(QueryOption.SORT)
                 .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK, TypeName.STRING)
                 .setQuery(Query.Builder.create()
-                            .addKindFieldClause(ResourceMetrics.class)
-                            .addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
+                        .addKindFieldClause(ResourceMetrics.class)
+                        .addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
                                 ResourceMetrics.PROPERTY_RESOURCE_LINK, resourceLink)
-                            .addRangeClause( QuerySpecification.buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, metricKey),
-                                NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true))
+                        .addRangeClause(QuerySpecification.buildCompositeFieldName(
+                                ResourceMetrics.FIELD_NAME_ENTRIES, metricKey),
+                                NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE,
+                                        true, true))
                         .build())
                 .build();
         host.createQueryTaskService(qt, false, true, qt, null);
@@ -468,7 +478,8 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 // was populated in the in memory stats
                 for (ServiceStat stat : resStats.entries.values()) {
                     if (stat.name
-                            .startsWith(UriUtils.getLastPathSegment(CustomStatsAdapter.SELF_LINK))) {
+                            .startsWith(
+                                    UriUtils.getLastPathSegment(CustomStatsAdapter.SELF_LINK))) {
                         returnStatus = true;
                         break;
                     }
