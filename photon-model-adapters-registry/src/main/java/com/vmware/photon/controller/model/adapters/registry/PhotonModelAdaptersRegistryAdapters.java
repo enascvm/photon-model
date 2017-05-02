@@ -31,8 +31,12 @@ public class PhotonModelAdaptersRegistryAdapters {
 
     public static void startServices(ServiceHost host) {
         try {
-            host.startFactory(new PhotonModelAdaptersRegistryService());
-            host.startFactory(ResourceOperationSpecService.class, ResourceOperationSpecFactoryService::new);
+            host.startFactory(
+                    PhotonModelAdaptersRegistryService.class,
+                    PhotonModelAdaptersRegistryFactoryService::new);
+            host.startFactory(
+                    ResourceOperationSpecService.class,
+                    ResourceOperationSpecFactoryService::new);
         } catch (Exception e) {
             host.log(Level.WARNING, "Error on start adapter registry related services. %s",
                     Utils.toString(e));

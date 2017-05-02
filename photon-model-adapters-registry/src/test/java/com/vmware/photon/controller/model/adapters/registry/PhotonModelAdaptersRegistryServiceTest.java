@@ -127,6 +127,47 @@ public class PhotonModelAdaptersRegistryServiceTest extends BaseAdaptersRegistry
                 k2Config.getAsJsonPrimitive(PhotonModelAdapterConfig.FIELD_NAME_ID).getAsString());
     }
 
+    @Test
+    public void testCreateDeleteCreate() {
+        PhotonModelAdapterConfig config = getPhotonModelAdapterConfig(
+                "testCreateDeleteCreate",
+                "Test CreateDelete Create",
+                "testCreateDeleteCreate.png",
+                AdapterTypePath.ENUMERATION_ADAPTER.key,
+                AdapterTypePath.INSTANCE_ADAPTER.key,
+                AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
+
+        this.logger.info("register: " + config);
+        Operation registerOp = super.host.waitForResponse(
+                Operation.createPost(
+                        super.host,
+                        PhotonModelAdaptersRegistryService.FACTORY_LINK)
+                        .setBody(config)
+        );
+        Assert.assertNotNull(registerOp);
+        PhotonModelAdapterConfig body = registerOp.getBody(PhotonModelAdapterConfig.class);
+
+        this.logger.info("delete: " + body.documentSelfLink);
+        Operation deleteAdapterConfig = super.host.waitForResponse(
+                Operation.createDelete(super.host, body.documentSelfLink));
+        Assert.assertEquals(200, deleteAdapterConfig.getStatusCode());
+
+        this.logger.info("get: " + body.documentSelfLink);
+        Operation getAdapterConfig = super.host.waitForResponse(
+                Operation.createGet(super.host, body.documentSelfLink));
+        Assert.assertEquals(404, getAdapterConfig.getStatusCode());
+
+        {
+            this.logger.info("register again: " + config);
+            registerOp = super.host.waitForResponse(Operation.createPost(
+                    super.host,
+                    PhotonModelAdaptersRegistryService.FACTORY_LINK)
+                    .setBody(config));
+            Assert.assertNotNull(registerOp);
+            Assert.assertEquals(200, registerOp.getStatusCode());
+        }
+    }
+
     private PhotonModelAdapterConfig getPhotonModelAdapterConfig(
             String id,
             String name,
