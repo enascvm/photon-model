@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model;
 
-import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 
 import com.vmware.xenon.common.Operation;
@@ -28,14 +27,11 @@ import com.vmware.xenon.common.UriUtils;
 public class PhotonModelMetricServices {
 
     public static final String[] LINKS = {
-            ResourceMetricsService.FACTORY_LINK,
-            ResourceAggregateMetricService.FACTORY_LINK };
+            ResourceMetricsService.FACTORY_LINK};
 
     public static void startServices(ServiceHost host) throws Throwable {
         host.startFactory(ResourceMetricsService.class, ResourceMetricsService::createFactory);
         setFactoryToAvailable(host, ResourceMetricsService.FACTORY_LINK);
-        host.startFactory(ResourceAggregateMetricService.class, ResourceAggregateMetricService::createFactory);
-        setFactoryToAvailable(host, ResourceAggregateMetricService.FACTORY_LINK);
     }
 
     /** @see #setFactoryToAvailable(ServiceHost, String, Operation.CompletionHandler) */
