@@ -396,10 +396,12 @@ public class TestAWSSetupUtils {
     public static void tearDownTestDisk(
             AmazonEC2AsyncClient client, VerificationHost host,
             Map<String, Object> awsTestContext, boolean isMock) {
-        if (!isMock && !vpcIdExists(client, AWS_DEFAULT_DISK_ID)) {
+        if (!isMock && !volumeIdExists(client, AWS_DEFAULT_DISK_ID)) {
             final String diskId = (String) awsTestContext.get(DISK_KEY);
-            final String snapshotId = (String) awsTestContext.get(SNAPSHOT_KEY);
             deleteVolume(client, diskId);
+        }
+        if (!isMock && !snapshotIdExists(client, AWS_DEFAULT_SNAPSHOT_ID)) {
+            final String snapshotId = (String) awsTestContext.get(SNAPSHOT_KEY);
             deleteSnapshot(client, snapshotId);
         }
     }
@@ -1382,6 +1384,32 @@ public class TestAWSSetupUtils {
     }
 
     public static String provisionAWSVMWithEC2Client(VerificationHost host, AmazonEC2Client client,
+            String ami, String subnetId, String securityGroupId) {
+
+        RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
+                .withSubnetId(subnetId)
+                .withImageId(ami)
+                .withInstanceType(instanceType_t2_micro)
+                .withMinCount(1).withMaxCount(1)
+                .withSecurityGroupIds(securityGroupId);
+
+        // handler invoked once the EC2 runInstancesAsync commands completes
+        RunInstancesResult result = null;
+        try {
+            result = client.runInstances(runInstancesRequest);
+        } catch (Exception e) {
+            host.log(Level.SEVERE, "Error encountered in provisioning machine on AWS",
+                    Utils.toString(e));
+        }
+        assertNotNull(result);
+        assertNotNull(result.getReservation());
+        assertNotNull(result.getReservation().getInstances());
+        assertEquals(1, result.getReservation().getInstances().size());
+
+        return result.getReservation().getInstances().get(0).getInstanceId();
+    }
+
+    public static String provisionAWSEBSVMWithEC2Client(VerificationHost host, AmazonEC2Client client,
             String ami, String subnetId, String securityGroupId, BlockDeviceMapping blockDeviceMapping) {
 
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()

@@ -46,6 +46,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetu
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getComputeByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.getNICByAWSId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.instanceType_t2_micro;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSEBSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionAWSVMWithEC2Client;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.provisionMachine;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
@@ -79,6 +80,7 @@ import com.amazonaws.services.ec2.model.Tag;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -209,17 +211,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
         this.awsTestContext = new HashMap<>();
         setUpTestVpc(this.client, this.awsTestContext, this.isMock);
-        setUpTestVolume(this.host, this.client, this.awsTestContext, this.isMock);
         this.vpcId = (String) this.awsTestContext.get(TestAWSSetupUtils.VPC_KEY);
         this.subnetId = (String) this.awsTestContext.get(TestAWSSetupUtils.SUBNET_KEY);
         this.securityGroupId = (String) this.awsTestContext.get(TestAWSSetupUtils.SECURITY_GROUP_KEY);
         this.singleNicSpec = (AwsNicSpecs) this.awsTestContext.get(TestAWSSetupUtils.NIC_SPECS_KEY);
-
-        this.snapshotId = (String) this.awsTestContext.get(TestAWSSetupUtils.SNAPSHOT_KEY);
-        this.ebsBlockDevice = new EbsBlockDevice().withSnapshotId(this.snapshotId);
-        this.blockDeviceMapping = new BlockDeviceMapping().withDeviceName(BLOCK_DEVICE_NAME)
-                .withEbs(this.ebsBlockDevice);
-        this.diskId = (String) this.awsTestContext.get(TestAWSSetupUtils.DISK_KEY);
 
         try {
             PhotonModelServices.startServices(this.host);
@@ -248,7 +243,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         }
         tearDownAwsVMs();
         tearDownTestVpc(this.client, this.host, this.awsTestContext, this.isMock);
-        tearDownTestDisk(this.client, this.host, this.awsTestContext, this.isMock);
         this.client.shutdown();
         setAwsClientMockInfo(false, null);
     }
@@ -535,11 +529,11 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName.getMethodName());
 
         String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI,
-                this.subnetId, this.securityGroupId, this.blockDeviceMapping);
+                this.subnetId, this.securityGroupId);
         this.instancesToCleanUp.add(linuxVMId);
 
         String windowsVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_WINDOWS_AMI,
-                this.subnetId, this.securityGroupId, this.blockDeviceMapping);
+                this.subnetId, this.securityGroupId);
         this.instancesToCleanUp.add(windowsVMId);
 
         waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
@@ -575,7 +569,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         this.host.log("Running test: " + this.currentTestName.getMethodName());
 
         String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI,
-                this.subnetId, this.securityGroupId, this.blockDeviceMapping);
+                this.subnetId, this.securityGroupId);
         this.instancesToCleanUp.add(linuxVMId);
 
         waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
@@ -604,11 +598,17 @@ public class TestAWSEnumerationTask extends BasicTestCase {
 
     }
 
-    @Test
+    @Ignore("VSYM-6430")
     public void testTagEnumeration() throws Throwable {
         if (this.isMock) {
             return;
         }
+        setUpTestVolume(this.host, this.client, this.awsTestContext, this.isMock);
+        this.snapshotId = (String) this.awsTestContext.get(TestAWSSetupUtils.SNAPSHOT_KEY);
+        this.ebsBlockDevice = new EbsBlockDevice().withSnapshotId(this.snapshotId);
+        this.blockDeviceMapping = new BlockDeviceMapping().withDeviceName(BLOCK_DEVICE_NAME)
+                .withEbs(this.ebsBlockDevice);
+        this.diskId = (String) this.awsTestContext.get(TestAWSSetupUtils.DISK_KEY);
 
         this.host.log("Running test: " + this.currentTestName.getMethodName());
 
@@ -631,7 +631,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         diskTags.add(new Tag(INITIAL_DISK_TAG, INITIAL_DISK_TAG));
 
         try {
-            String linuxVMId1 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI,
+            String linuxVMId1 = provisionAWSEBSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI,
                     this.subnetId, this.securityGroupId, this.blockDeviceMapping);
             this.instancesToCleanUp.add(linuxVMId1);
             waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
@@ -650,7 +650,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
                     TEST_CASE_INITIAL);
 
-            String linuxVMId2 = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI,
+            String linuxVMId2 = provisionAWSEBSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI,
                     this.subnetId, this.securityGroupId, this.blockDeviceMapping);
             this.instancesToCleanUp.add(linuxVMId2);
             waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
@@ -776,6 +776,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             unTagResources(this.client, subnetTags, this.subnetId);
             // un-tag default Disk
             unTagResources(this.client, diskTags, this.diskId);
+            tearDownTestDisk(this.client, this.host, this.awsTestContext, this.isMock);
         }
     }
 
