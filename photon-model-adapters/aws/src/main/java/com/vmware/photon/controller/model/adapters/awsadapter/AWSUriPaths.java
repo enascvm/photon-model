@@ -37,6 +37,8 @@ public class AWSUriPaths {
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_FIREWALL_ADAPTER = AdapterTypePath.FIREWALL_ADAPTER
             .adapterLink(EndpointType.aws.name());
+    public static final String AWS_LOAD_BALANCER_ADAPTER = AdapterTypePath.LOAD_BALANCER_ADAPTER
+            .adapterLink(EndpointType.aws.name());
     public static final String AWS_STATS_ADAPTER = AdapterTypePath.STATS_ADAPTER
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_COST_STATS_ADAPTER = PROVISIONING_AWS

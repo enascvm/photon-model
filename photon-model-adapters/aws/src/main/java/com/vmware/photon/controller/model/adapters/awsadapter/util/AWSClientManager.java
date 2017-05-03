@@ -32,6 +32,7 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClient;
 import com.amazonaws.services.cloudwatch.model.DescribeAlarmsRequest;
 import com.amazonaws.services.cloudwatch.model.DescribeAlarmsResult;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
 import com.amazonaws.services.s3.transfer.TransferManager;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -54,10 +55,12 @@ public class AWSClientManager {
     private LRUCache<String, AmazonEC2AsyncClient> ec2ClientCache;
     private LRUCache<String, AmazonCloudWatchAsyncClient> cloudWatchClientCache;
     private LRUCache<String, TransferManager> s3ClientCache;
+    private LRUCache<String, AmazonElasticLoadBalancingAsyncClient> loadBalancingClientCache;
     private LRUCache<URI, ExecutorService> executorCache;
 
     private LRUCache<String, Long> invalidEc2Clients;
-    private LRUCache<String, Long> invalidcloudWatchClients;
+    private LRUCache<String, Long> invalidCloudWatchClients;
+    private LRUCache<String, Long> invalidLoadBalancingClients;
     public static final String AWS_RETRY_AFTER_INTERVAL_MINUTES = UriPaths.PROPERTY_PREFIX + "AWSClientManager.retryInterval";
     private static final int DEFAULT_RETRY_AFTER_INTERVAL_MINUTES = 60;
     private static final int RETRY_AFTER_INTERVAL_MINUTES =
@@ -78,11 +81,17 @@ public class AWSClientManager {
         case CLOUD_WATCH:
             this.cloudWatchClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
                     CLIENT_CACHE_MAX_SIZE);
-            this.invalidcloudWatchClients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
+            this.invalidCloudWatchClients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
                     CLIENT_CACHE_MAX_SIZE);
             return;
         case S3:
             this.s3ClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE, CLIENT_CACHE_MAX_SIZE);
+            return;
+        case LOAD_BALANCING:
+            this.loadBalancingClientCache = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
+                    CLIENT_CACHE_MAX_SIZE);
+            this.invalidLoadBalancingClients = new LRUCache<>(CLIENT_CACHE_INITIAL_SIZE,
+                    CLIENT_CACHE_MAX_SIZE);
             return;
         default:
             String msg = "The specified AWS client type " + awsClientType
@@ -168,7 +177,7 @@ public class AWSClientManager {
                     "This client manager supports only AWS " + this.awsClientType + " clients.");
         }
         String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
-        if (isInvalidClient(this.invalidcloudWatchClients, cacheKey)) {
+        if (isInvalidClient(this.invalidCloudWatchClients, cacheKey)) {
             failConsumer.accept(new IllegalStateException("Invalid cloud watch client for key: " + cacheKey));
             return null;
         }
@@ -201,7 +210,7 @@ public class AWSClientManager {
 
     public synchronized void markCloudWatchClientInvalid(StatelessService service, String cacheKey) {
         service.logWarning("Marking cloudwatch client cache entry invalid for key: " + cacheKey);
-        this.invalidcloudWatchClients.put(cacheKey, Utils.getNowMicrosUtc());
+        this.invalidCloudWatchClients.put(cacheKey, Utils.getNowMicrosUtc());
         this.cloudWatchClientCache.remove(cacheKey);
     }
 
@@ -226,6 +235,58 @@ public class AWSClientManager {
             failConsumer.accept(t);
             return null;
         }
+    }
+
+    /**
+     * Get or create a ElasticLoadBalancing Client instance that will be used to create/delete
+     * load balancers from AWS.
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     * @param service The stateless service for which the operation is being performed.
+     * @return
+     */
+    public synchronized AmazonElasticLoadBalancingAsyncClient getOrCreateLoadBalancingClient(
+            AuthCredentialsServiceState credentials,
+            String regionId, StatelessService service, boolean isMock,
+            Consumer<Throwable> failConsumer) {
+        if (this.awsClientType != AwsClientType.LOAD_BALANCING) {
+            throw new UnsupportedOperationException(
+                    "This client manager supports only AWS " + this.awsClientType + " clients.");
+        }
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
+        if (isInvalidClient(this.invalidLoadBalancingClients, cacheKey)) {
+            failConsumer.accept(new IllegalStateException(
+                    "Invalid load balancing client for key: " + cacheKey));
+            return null;
+        }
+        AmazonElasticLoadBalancingAsyncClient amazonLoadBalancingClient = null;
+        if (this.loadBalancingClientCache.containsKey(cacheKey)) {
+            return this.loadBalancingClientCache.get(cacheKey);
+        }
+        try {
+            amazonLoadBalancingClient = AWSUtils.getLoadBalancingAsyncClient(credentials,
+                    regionId, getExecutor(service.getHost()));
+            this.loadBalancingClientCache.put(cacheKey, amazonLoadBalancingClient);
+        } catch (Throwable e) {
+            service.logSevere(e);
+            failConsumer.accept(e);
+        }
+        return amazonLoadBalancingClient;
+    }
+
+    /**
+     * Marks an ElasticLoadBalancing client as invalid.
+     *
+     * @param service The stateless service for which the operation is being performed.
+     * @param credentials The auth credentials to be used for the client creation
+     * @param regionId The region of the AWS client
+     */
+    public synchronized void markLoadBalancingClientInvalid(StatelessService service,
+            AuthCredentialsServiceState credentials, String regionId) {
+        String cacheKey = createCredentialRegionCacheKey(credentials, regionId);
+        service.logWarning("Marking load balancing client cache entry invalid for key: " + cacheKey);
+        this.invalidLoadBalancingClients.put(cacheKey, Utils.getNowMicrosUtc());
+        this.loadBalancingClientCache.remove(cacheKey);
     }
 
     /**
@@ -281,6 +342,11 @@ public class AWSClientManager {
         case S3:
             this.s3ClientCache.values().forEach(c -> c.shutdownNow());
             this.s3ClientCache.clear();
+            break;
+
+        case LOAD_BALANCING:
+            this.loadBalancingClientCache.values().forEach(c -> c.shutdown());
+            this.loadBalancingClientCache.clear();
             break;
 
         default:
@@ -357,6 +423,11 @@ public class AWSClientManager {
         case S3:
             if (this.s3ClientCache != null) {
                 return this.s3ClientCache.size();
+            }
+            break;
+        case LOAD_BALANCING:
+            if (this.loadBalancingClientCache != null) {
+                return this.loadBalancingClientCache.size();
             }
             break;
         default:

@@ -30,6 +30,7 @@ public class UriPaths {
     public static final String RESOURCES_NETWORK_INTERFACE_DESCRIPTIONS = RESOURCES + "/network-interfaces-descriptions";
     public static final String RESOURCES_SUBNETS = RESOURCES + "/sub-networks";
     public static final String RESOURCES_SECURITY_GROUPS = RESOURCES + "/security-groups";
+    public static final String RESOURCES_LOAD_BALANCERS = RESOURCES + "/load-balancers";
 
     public static final String RESOURCES_IMAGES = RESOURCES + "/images";
 
@@ -42,6 +43,7 @@ public class UriPaths {
         NETWORK_ADAPTER("networkAdapter", "network-adapter"),
         SUBNET_ADAPTER("subnetAdapter", "sub-network-adapter"),
         FIREWALL_ADAPTER("firewallAdapter", "firewall-adapter"),
+        LOAD_BALANCER_ADAPTER("loadBalancerAdapter", "load-balancer-adapter"),
         STATS_ADAPTER("statsAdapter", "stats-adapter"),
         BOOT_ADAPTER("bootAdapter", "boot-adapter"),
         POWER_ADAPTER("powerAdapter", "power-adapter"),

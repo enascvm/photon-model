@@ -28,6 +28,7 @@ import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
+import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
@@ -78,6 +79,9 @@ public class MockAdapter {
 
         host.startService(new MockNetworkInstanceSuccessAdapter());
         host.startService(new MockNetworkInstanceFailureAdapter());
+
+        host.startService(new MockLoadBalancerInstanceSuccessAdapter());
+        host.startService(new MockLoadBalancerInstanceFailureAdapter());
 
         host.startService(new MockSubnetInstanceSuccessAdapter());
         host.startService(new MockSubnetInstanceFailureAdapter());
@@ -461,6 +465,71 @@ public class MockAdapter {
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
                         provisionNetworkTaskState));
+                op.complete();
+                break;
+            default:
+                super.handleRequest(op);
+            }
+        }
+    }
+
+    /**
+     * Mock load balancer instance adapter that always succeeds.
+     */
+    public static class MockLoadBalancerInstanceSuccessAdapter extends
+            StatelessService {
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_load_balancer_service_success_adapter";
+
+        @Override
+        public void handleRequest(Operation op) {
+            if (!op.hasBody()) {
+                op.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+            switch (op.getAction()) {
+            case PATCH:
+                LoadBalancerInstanceRequest request = op
+                        .getBody(LoadBalancerInstanceRequest.class);
+                ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState provisionLoadBalancerTaskState =
+                        new ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState();
+                provisionLoadBalancerTaskState.taskInfo = new TaskState();
+                provisionLoadBalancerTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
+                sendRequest(Operation.createPatch(
+                        request.taskReference).setBody(
+                        provisionLoadBalancerTaskState));
+                op.complete();
+                break;
+            default:
+                super.handleRequest(op);
+            }
+        }
+    }
+
+    /**
+     * Mock load balancer instance adapter that always fails.
+     */
+    public static class MockLoadBalancerInstanceFailureAdapter extends
+            StatelessService {
+        public static final String SELF_LINK = UriPaths.PROVISIONING
+                + "/mock_load_balancer_service_failure_adapter";
+
+        @Override
+        public void handleRequest(Operation op) {
+            if (!op.hasBody()) {
+                op.fail(new IllegalArgumentException("body is required"));
+                return;
+            }
+            switch (op.getAction()) {
+            case PATCH:
+                LoadBalancerInstanceRequest request = op
+                        .getBody(LoadBalancerInstanceRequest.class);
+                ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState provisionLoadBalancerTaskState =
+                        new ProvisionLoadBalancerTaskService.ProvisionLoadBalancerTaskState();
+                provisionLoadBalancerTaskState.taskInfo = createFailedTaskInfo();
+                sendRequest(Operation.createPatch(
+                        request.taskReference).setBody(
+                        provisionLoadBalancerTaskState));
                 op.complete();
                 break;
             default:

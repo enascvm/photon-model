@@ -135,7 +135,7 @@ public class AWSConstants {
 
     // AWS client types
     public enum AwsClientType {
-        EC2, CLOUD_WATCH, S3
+        EC2, CLOUD_WATCH, S3, LOAD_BALANCING
     }
 
     // AWS Error codes {{

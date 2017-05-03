@@ -20,6 +20,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.FirewallService;
 import com.vmware.photon.controller.model.resources.ImageService;
+import com.vmware.photon.controller.model.resources.LoadBalancerService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkService;
@@ -32,7 +33,6 @@ import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
-
 import com.vmware.xenon.common.ServiceHost;
 
 /**
@@ -57,7 +57,8 @@ public class PhotonModelServices {
             InMemoryResourceMetricService.FACTORY_LINK,
             EndpointService.FACTORY_LINK,
             ImageService.FACTORY_LINK,
-            TagService.FACTORY_LINK };
+            TagService.FACTORY_LINK,
+            LoadBalancerService.FACTORY_LINK };
 
     public static void startServices(ServiceHost host) throws Throwable {
         host.startFactory(new ComputeDescriptionService());
@@ -78,5 +79,6 @@ public class PhotonModelServices {
         host.startFactory(new ImageService());
         host.startFactory(new InMemoryResourceMetricService());
         host.startFactory(TagService.class, TagFactoryService::new);
+        host.startFactory(new LoadBalancerService());
     }
 }

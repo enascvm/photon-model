@@ -82,6 +82,8 @@ import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagDescription;
 import com.amazonaws.services.ec2.model.Vpc;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.Bucket;
@@ -119,6 +121,7 @@ public class AWSUtils {
     public static final String DEFAULT_PROTOCOL = "tcp";
     public static final String AWS_MOCK_EC2_ENDPOINT = "/aws-mock/ec2-endpoint/";
     public static final String AWS_MOCK_CLOUDWATCH_ENDPOINT = "/aws-mock/cloudwatch/";
+    public static final String AWS_MOCK_LOAD_BALANCING_ENDPOINT = "/aws-mock/load-balancing-endpoint/";
     public static final String AWS_REGION_HEADER = "region";
 
     /**
@@ -330,6 +333,36 @@ public class AWSUtils {
                 .withShutDownThreadPools(false);
 
         return transferManagerBuilder.build();
+    }
+
+    public static AmazonElasticLoadBalancingAsyncClient getLoadBalancingAsyncClient(
+            AuthCredentialsServiceState credentials, String region,
+            ExecutorService executorService) {
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
+                new AWSStaticCredentialsProvider(new BasicAWSCredentials(credentials.privateKeyId,
+                        EncryptionUtils.decrypt(credentials.privateKey)));
+
+        AmazonElasticLoadBalancingAsyncClientBuilder amazonElasticLoadBalancingAsyncClientBuilder =
+                AmazonElasticLoadBalancingAsyncClientBuilder.standard()
+                        .withCredentials(awsStaticCredentialsProvider)
+                        .withExecutorFactory(() -> executorService);
+
+        if (region == null) {
+            region = Regions.DEFAULT_REGION.getName();
+        }
+
+        if (isAwsClientMock()) {
+            AwsClientBuilder.EndpointConfiguration endpointConfiguration =
+                    new AwsClientBuilder.EndpointConfiguration(
+                            getAWSMockHost() + AWS_MOCK_LOAD_BALANCING_ENDPOINT, region);
+            amazonElasticLoadBalancingAsyncClientBuilder
+                    .setEndpointConfiguration(endpointConfiguration);
+        } else {
+            amazonElasticLoadBalancingAsyncClientBuilder.setRegion(region);
+        }
+
+        return (AmazonElasticLoadBalancingAsyncClient) amazonElasticLoadBalancingAsyncClientBuilder
+                .build();
     }
 
     /**
