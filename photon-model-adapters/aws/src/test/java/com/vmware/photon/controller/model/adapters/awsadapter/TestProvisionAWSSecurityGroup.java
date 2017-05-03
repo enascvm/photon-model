@@ -17,27 +17,33 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
+import static com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.NETWORK_STATE_ID_PROP_NAME;
 
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
+import com.amazonaws.services.ec2.model.SecurityGroup;
+import com.amazonaws.services.ec2.model.Vpc;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
+import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSNetworkClient;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-import com.vmware.photon.controller.model.tasks.ProvisionFirewallTaskService;
-import com.vmware.photon.controller.model.tasks.ProvisionFirewallTaskService.ProvisionFirewallTaskState;
+import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService;
+import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.ProvisionSecurityGroupTaskState;
 import com.vmware.xenon.common.CommandLineArgumentParser;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
@@ -48,23 +54,25 @@ import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.TenantService;
 
-public class TestProvisionAWSFirewall {
+public class TestProvisionAWSSecurityGroup {
 
     /*
-     * This test requires the following 3 command line variables. If they are not present the tests
+     * This test requires the following 4 command line variables. If they are not present the tests
      * will be ignored. Pass them into the test with the -Dxenon.variable=value syntax i.e
-     * -Dxenon.subnet="10.1.0.0/16"
+     * -Dxenon.region="us-east-1"
      *
      * privateKey & privateKeyId are credentials to an AWS VPC account region is the ec2 region
-     * where the tests should be run (us-east-1) subnet is the RFC-1918 subnet of the default VPC
+     * where the tests should be run (us-east-1), vpcId is the id of one of the VPCs
      */
     public String privateKey;
     public String privateKeyId;
     public String region;
-    public String subnet;
+    public String vpcId;
 
     private VerificationHost host;
-    private URI provisionFirewallFactory;
+    private URI provisionSecurityGroupFactory;
+    private AWSNetworkClient netClient;
+    private Vpc vpc;
 
     @Before
     public void setUp() throws Exception {
@@ -72,7 +80,7 @@ public class TestProvisionAWSFirewall {
 
         // ignore if any of the required properties are missing
         org.junit.Assume.assumeTrue(
-                TestUtils.isNull(this.privateKey, this.privateKeyId, this.region, this.subnet));
+                TestUtils.isNull(this.privateKey, this.privateKeyId, this.region, this.vpcId));
         this.host = VerificationHost.create(0);
         try {
             this.host.start();
@@ -81,11 +89,17 @@ public class TestProvisionAWSFirewall {
             PhotonModelTaskServices.startServices(this.host);
             // start the aws fw service
             this.host.startService(
-                    Operation.createPost(UriUtils.buildUri(this.host, AWSFirewallService.class)),
-                    new AWSFirewallService());
+                    Operation.createPost(UriUtils.buildUri(this.host, AWSSecurityGroupService.class)),
+                    new AWSSecurityGroupService());
 
-            this.provisionFirewallFactory = UriUtils.buildUri(this.host,
-                    ProvisionFirewallTaskService.FACTORY_LINK);
+            this.provisionSecurityGroupFactory = UriUtils.buildUri(this.host,
+                    ProvisionSecurityGroupTaskService.FACTORY_LINK);
+
+            this.netClient = new AWSNetworkClient(
+                    TestUtils.getClient(this.privateKeyId, this.privateKey, this.region, false));
+
+            this.vpc = this.netClient.getVPC(this.vpcId);
+            assertNotNull(this.vpc);
         } catch (Throwable e) {
             throw new Exception(e);
         }
@@ -102,7 +116,7 @@ public class TestProvisionAWSFirewall {
     }
 
     @Test
-    public void testProvisionAWSFirewall() throws Throwable {
+    public void testProvisionAWSSecurityGroup() throws Throwable {
         // create credentials
         Operation authResponse = new Operation();
         TestUtils.postCredentials(this.host, authResponse, this.privateKey, this.privateKeyId);
@@ -113,52 +127,54 @@ public class TestProvisionAWSFirewall {
         TestUtils.postResourcePool(this.host, poolResponse);
         ResourcePoolState pool = poolResponse.getBody(ResourcePoolState.class);
 
-        // create fw service
+        // create sg service
         Operation securityGroupResponse = new Operation();
         SecurityGroupState initialSecurityGroupState = buildSecurityGroupState();
         initialSecurityGroupState.ingress = getGlobalSSHRule();
         initialSecurityGroupState.egress = getGlobalSSHRule();
-        initialSecurityGroupState.egress.get(0).ipRangeCidr = this.subnet;
+        initialSecurityGroupState.egress.get(0).ipRangeCidr = this.vpc.getCidrBlock();
         initialSecurityGroupState.authCredentialsLink = creds.documentSelfLink;
         initialSecurityGroupState.authCredentialsLink = creds.documentSelfLink;
         initialSecurityGroupState.resourcePoolLink = pool.documentSelfLink;
         initialSecurityGroupState.regionId = this.region;
         initialSecurityGroupState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
-                AWSUriPaths.AWS_FIREWALL_ADAPTER,
+                AWSUriPaths.AWS_SECURITY_GROUP_ADAPTER,
                 null);
 
         TestUtils.postSecurityGroup(this.host, initialSecurityGroupState, securityGroupResponse);
         SecurityGroupState securityGroupState = securityGroupResponse.getBody(SecurityGroupState
                 .class);
 
-        // set up firewall task state
-        ProvisionFirewallTaskState task = new ProvisionFirewallTaskState();
-        task.requestType = FirewallInstanceRequest.InstanceRequestType.CREATE;
-        task.firewallDescriptionLink = securityGroupState.documentSelfLink;
+        // set up security group task state
+        ProvisionSecurityGroupTaskState task = new ProvisionSecurityGroupTaskState();
+        task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.CREATE;
+        task.securityGroupDescriptionLink = securityGroupState.documentSelfLink;
+        task.customProperties = new HashMap<>();
+        task.customProperties.put(NETWORK_STATE_ID_PROP_NAME, this.vpcId);
 
         Operation provision = new Operation();
-        provisionFirewall(task, provision);
-        ProvisionFirewallTaskState ps = provision.getBody(ProvisionFirewallTaskState.class);
+        provisionSecurityGroup(task, provision);
+        ProvisionSecurityGroupTaskState ps = provision.getBody(ProvisionSecurityGroupTaskState.class);
         waitForTaskCompletion(this.host, UriUtils.buildUri(this.host, ps.documentSelfLink));
         validateAWSArtifacts(securityGroupState.documentSelfLink, creds);
 
         // reuse previous task, but switch to a delete
-        task.requestType = FirewallInstanceRequest.InstanceRequestType.DELETE;
+        task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.DELETE;
         Operation remove = new Operation();
-        provisionFirewall(task, remove);
-        ProvisionFirewallTaskState removeTask = remove.getBody(ProvisionFirewallTaskState.class);
+        provisionSecurityGroup(task, remove);
+        ProvisionSecurityGroupTaskState removeTask = remove.getBody(ProvisionSecurityGroupTaskState.class);
         waitForTaskCompletion(this.host, UriUtils.buildUri(this.host, removeTask.documentSelfLink));
 
         // verify custom property is now set to no value
-        SecurityGroupState removedFW = getSecurityGroupState(securityGroupState.documentSelfLink);
-        assertTrue(removedFW.customProperties.get(AWSFirewallService.SECURITY_GROUP_ID)
+        SecurityGroupState removedSG = getSecurityGroupState(securityGroupState.documentSelfLink);
+        assertTrue(removedSG.customProperties.get(AWSSecurityGroupService.SECURITY_GROUP_ID)
                 .equalsIgnoreCase(AWSUtils.NO_VALUE));
 
     }
 
     @Test
-    public void testInvalidAuthAWSFirewall() throws Throwable {
+    public void testInvalidAuthAWSSecurityGroup() throws Throwable {
         // create credentials
         Operation authResponse = new Operation();
         TestUtils.postCredentials(this.host, authResponse, this.privateKey, "invalid");
@@ -169,7 +185,7 @@ public class TestProvisionAWSFirewall {
         TestUtils.postResourcePool(this.host, poolResponse);
         ResourcePoolState pool = poolResponse.getBody(ResourcePoolState.class);
 
-        // create fw service
+        // create sq service
         Operation securityGroupResponse = new Operation();
         SecurityGroupState securityGroupInitialState = buildSecurityGroupState();
         securityGroupInitialState.ingress = getGlobalSSHRule();
@@ -179,53 +195,61 @@ public class TestProvisionAWSFirewall {
         securityGroupInitialState.regionId = this.region;
         securityGroupInitialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
-                AWSUriPaths.AWS_FIREWALL_ADAPTER,
+                AWSUriPaths.AWS_SECURITY_GROUP_ADAPTER,
                 null);
 
         TestUtils.postSecurityGroup(this.host, securityGroupInitialState, securityGroupResponse);
         SecurityGroupState securityGroupState = securityGroupResponse.getBody(SecurityGroupState.class);
 
-        // set up firewall task state
-        ProvisionFirewallTaskState task = new ProvisionFirewallTaskState();
-        task.requestType = FirewallInstanceRequest.InstanceRequestType.CREATE;
-        task.firewallDescriptionLink = securityGroupState.documentSelfLink;
+        // set up security group task state
+        ProvisionSecurityGroupTaskState task = new ProvisionSecurityGroupTaskState();
+        task.requestType = SecurityGroupInstanceRequest.InstanceRequestType.CREATE;
+        task.securityGroupDescriptionLink = securityGroupState.documentSelfLink;
+        task.customProperties = new HashMap<>();
+        task.customProperties.put(NETWORK_STATE_ID_PROP_NAME, this.vpcId);
 
         Operation provision = new Operation();
-        provisionFirewall(task, provision);
-        ProvisionFirewallTaskState ps = provision.getBody(ProvisionFirewallTaskState.class);
+        provisionSecurityGroup(task, provision);
+        ProvisionSecurityGroupTaskState ps = provision.getBody(ProvisionSecurityGroupTaskState.class);
         waitForTaskFailure(this.host, UriUtils.buildUri(this.host, ps.documentSelfLink));
 
     }
 
-    private void validateAWSArtifacts(String firewallDescriptionLink,
+    private void validateAWSArtifacts(String securityGroupDescriptionLink,
             AuthCredentialsServiceState creds) throws Throwable {
 
-        SecurityGroupState securityGroup = getSecurityGroupState(firewallDescriptionLink);
+        SecurityGroupState securityGroup = getSecurityGroupState(securityGroupDescriptionLink);
 
-        AWSFirewallService fwSVC = new AWSFirewallService();
+        AWSSecurityGroupService fwSVC = new AWSSecurityGroupService();
         AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(creds, this.region, getExecutor());
         // if any artifact is not present then an error will be thrown
-        assertNotNull(fwSVC.getSecurityGroupByID(client,
-                securityGroup.customProperties.get(AWSFirewallService.SECURITY_GROUP_ID)));
+        SecurityGroup sg = fwSVC.getSecurityGroupByID(client,
+                securityGroup.customProperties.get(AWSSecurityGroupService.SECURITY_GROUP_ID));
+        assertNotNull(sg);
+        assertNotNull(sg.getIpPermissions());
+        assertTrue(sg.getIpPermissions().size() == 1);
+        assertNotNull(sg.getIpPermissionsEgress());
+        // there are two egress rules (one that was added as part of this test, and the default one)
+        assertTrue(sg.getIpPermissionsEgress().size() == 2);
     }
 
-    private SecurityGroupState getSecurityGroupState(String firewallLink) throws Throwable {
+    private SecurityGroupState getSecurityGroupState(String securityGroupLink) throws Throwable {
         Operation response = new Operation();
-        getFirewallState(firewallLink, response);
+        getSecurityGroupState(securityGroupLink, response);
         return response.getBody(SecurityGroupState.class);
     }
 
-    private void provisionFirewall(ProvisionFirewallTaskState ps, Operation response)
+    private void provisionSecurityGroup(ProvisionSecurityGroupTaskState ps, Operation response)
             throws Throwable {
         this.host.testStart(1);
-        Operation startPost = Operation.createPost(this.provisionFirewallFactory)
+        Operation startPost = Operation.createPost(this.provisionSecurityGroupFactory)
                 .setBody(ps)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         this.host.failIteration(e);
                         return;
                     }
-                    response.setBody(o.getBody(ProvisionFirewallTaskState.class));
+                    response.setBody(o.getBody(ProvisionSecurityGroupTaskState.class));
                     this.host.completeIteration();
                 });
         this.host.send(startPost);
@@ -233,11 +257,11 @@ public class TestProvisionAWSFirewall {
 
     }
 
-    private void getFirewallState(String firewallLink, Operation response) throws Throwable {
+    private void getSecurityGroupState(String securityGroupLink, Operation response) throws Throwable {
 
         this.host.testStart(1);
-        URI firewallURI = UriUtils.buildUri(this.host, firewallLink);
-        Operation startGet = Operation.createGet(firewallURI)
+        URI securityGroupURI = UriUtils.buildUri(this.host, securityGroupLink);
+        Operation startGet = Operation.createGet(securityGroupURI)
                 .setCompletion((o, e) -> {
                     if (e != null) {
                         this.host.failIteration(e);
@@ -255,6 +279,7 @@ public class TestProvisionAWSFirewall {
         URI tenantFactoryURI = UriUtils.buildFactoryUri(this.host, TenantService.class);
         SecurityGroupState securityGroup = new SecurityGroupState();
         securityGroup.id = UUID.randomUUID().toString();
+        securityGroup.name = "test-sg-" + securityGroup.id;
 
         securityGroup.tenantLinks = new ArrayList<>();
         securityGroup.tenantLinks.add(UriUtils.buildUriPath(tenantFactoryURI.getPath(), "tenantA"));
@@ -266,11 +291,11 @@ public class TestProvisionAWSFirewall {
 
         Date expiration = host.getTestExpiration();
 
-        ProvisionFirewallTaskState provisioningTask;
+        ProvisionSecurityGroupTaskState provisioningTask;
 
         do {
             provisioningTask = host.getServiceState(null,
-                    ProvisionFirewallTaskState.class,
+                    ProvisionSecurityGroupTaskState.class,
                     provisioningTaskUri);
 
             if (provisioningTask.taskInfo.stage == TaskState.TaskStage.FAILED) {
@@ -295,11 +320,11 @@ public class TestProvisionAWSFirewall {
 
         Date expiration = host.getTestExpiration();
 
-        ProvisionFirewallTaskState provisioningTask;
+        ProvisionSecurityGroupTaskState provisioningTask;
 
         do {
             provisioningTask = host.getServiceState(null,
-                    ProvisionFirewallTaskState.class,
+                    ProvisionSecurityGroupTaskState.class,
                     provisioningTaskUri);
 
             if (provisioningTask.taskInfo.stage == TaskState.TaskStage.FAILED) {

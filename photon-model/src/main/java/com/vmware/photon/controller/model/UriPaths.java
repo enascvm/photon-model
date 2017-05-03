@@ -42,7 +42,7 @@ public class UriPaths {
         INSTANCE_ADAPTER("instanceAdapter", "instance-adapter"),
         NETWORK_ADAPTER("networkAdapter", "network-adapter"),
         SUBNET_ADAPTER("subnetAdapter", "sub-network-adapter"),
-        FIREWALL_ADAPTER("firewallAdapter", "firewall-adapter"),
+        SECURITY_GROUP_ADAPTER("securityGroupAdapter", "security-group-adapter"),
         LOAD_BALANCER_ADAPTER("loadBalancerAdapter", "load-balancer-adapter"),
         STATS_ADAPTER("statsAdapter", "stats-adapter"),
         BOOT_ADAPTER("bootAdapter", "boot-adapter"),

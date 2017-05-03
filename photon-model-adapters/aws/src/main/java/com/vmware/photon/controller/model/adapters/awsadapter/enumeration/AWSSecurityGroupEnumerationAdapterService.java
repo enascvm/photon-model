@@ -13,7 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
-import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths.AWS_FIREWALL_ADAPTER;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths.AWS_SECURITY_GROUP_ADAPTER;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -185,7 +185,7 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                 stateHolder.localState.resourcePoolLink = this.request.parentCompute.resourcePoolLink;
                 stateHolder.localState.instanceAdapterReference = AdapterUriUtil
                         .buildAdapterUri(this.service.getHost(),
-                                AWS_FIREWALL_ADAPTER);
+                                AWS_SECURITY_GROUP_ADAPTER);
             }
             stateHolder.localState.id = remoteResource.getGroupId();
             stateHolder.localState.name = remoteResource.getGroupName();

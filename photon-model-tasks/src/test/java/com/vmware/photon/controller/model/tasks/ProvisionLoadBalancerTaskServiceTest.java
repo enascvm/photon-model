@@ -41,7 +41,7 @@ import com.vmware.xenon.common.UriUtils;
 @RunWith(ProvisionLoadBalancerTaskServiceTest.class)
 @SuiteClasses({ ProvisionLoadBalancerTaskServiceTest.ConstructorTest.class,
         ProvisionLoadBalancerTaskServiceTest.HandleStartTest.class,
-        ProvisionFirewallTaskServiceTest.HandlePatchTest.class })
+        ProvisionLoadBalancerTaskServiceTest.HandlePatchTest.class })
 public class ProvisionLoadBalancerTaskServiceTest extends Suite {
 
     public ProvisionLoadBalancerTaskServiceTest(Class<?> klass, RunnerBuilder builder)

@@ -44,7 +44,7 @@ public class AWSAdapters {
             AWSImageEnumerationAdapterService.SELF_LINK,
             AWSEndpointAdapterService.SELF_LINK,
             AWSPowerService.SELF_LINK,
-            AWSFirewallService.SELF_LINK,
+            AWSSecurityGroupService.SELF_LINK,
             AWSMissingResourcesEnumerationService.SELF_LINK};
 
     /**
@@ -68,7 +68,7 @@ public class AWSAdapters {
             host.startService(new AWSImageEnumerationAdapterService());
             host.startService(new AWSEndpointAdapterService());
             host.startService(new AWSPowerService());
-            host.startService(new AWSFirewallService());
+            host.startService(new AWSSecurityGroupService());
             host.startService(new AWSMissingResourcesEnumerationService());
             EndpointAdapterUtils.registerEndpointAdapters(
                     host, EndpointType.aws, LINKS, AWSUriPaths.AWS_ADAPTER_LINK_TYPES);

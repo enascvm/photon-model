@@ -28,36 +28,39 @@ import org.junit.runners.Suite.SuiteClasses;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
-import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.tasks.MockAdapter.MockSecurityGroupInstanceFailureAdapter;
+import com.vmware.photon.controller.model.tasks.MockAdapter.MockSecurityGroupInstanceSuccessAdapter;
+import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.ProvisionSecurityGroupTaskState;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 
 /**
- * This class implements tests for the {@link ProvisionFirewallTaskService}
+ * This class implements tests for the {@link ProvisionSecurityGroupTaskService}
  * class.
  */
-@RunWith(ProvisionFirewallTaskServiceTest.class)
-@SuiteClasses({ ProvisionFirewallTaskServiceTest.ConstructorTest.class,
-        ProvisionFirewallTaskServiceTest.HandleStartTest.class,
-        ProvisionFirewallTaskServiceTest.HandlePatchTest.class })
-public class ProvisionFirewallTaskServiceTest extends Suite {
+@RunWith(ProvisionSecurityGroupTaskServiceTest.class)
+@SuiteClasses({ ProvisionSecurityGroupTaskServiceTest.ConstructorTest.class,
+        ProvisionSecurityGroupTaskServiceTest.HandleStartTest.class,
+        ProvisionSecurityGroupTaskServiceTest.HandlePatchTest.class })
+public class ProvisionSecurityGroupTaskServiceTest extends Suite {
 
-    public ProvisionFirewallTaskServiceTest(Class<?> klass,
+    public ProvisionSecurityGroupTaskServiceTest(Class<?> klass,
             RunnerBuilder builder) throws InitializationError {
         super(klass, builder);
     }
 
-    private static ProvisionFirewallTaskService.ProvisionFirewallTaskState buildValidStartState(
+    private static ProvisionSecurityGroupTaskState buildValidStartState(
             BaseModelTest test,
-            FirewallInstanceRequest.InstanceRequestType requestType,
+            SecurityGroupInstanceRequest.InstanceRequestType requestType,
             boolean success) throws Throwable {
-        ProvisionFirewallTaskService.ProvisionFirewallTaskState startState = new ProvisionFirewallTaskService.ProvisionFirewallTaskState();
+        ProvisionSecurityGroupTaskState startState = new ProvisionSecurityGroupTaskState();
 
         SecurityGroupState securityGroupState = new SecurityGroupState();
         securityGroupState.authCredentialsLink = "authCredentialsLink";
@@ -66,10 +69,10 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
         securityGroupState.resourcePoolLink = "/resourcePoolLink";
         if (success) {
             securityGroupState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
-                    MockAdapter.MockFirewallInstanceSuccessAdapter.SELF_LINK);
+                    MockSecurityGroupInstanceSuccessAdapter.SELF_LINK);
         } else {
             securityGroupState.instanceAdapterReference = UriUtils.buildUri(test.getHost(),
-                    MockAdapter.MockFirewallInstanceFailureAdapter.SELF_LINK);
+                    MockSecurityGroupInstanceFailureAdapter.SELF_LINK);
         }
         securityGroupState.id = UUID.randomUUID().toString();
         ArrayList<Rule> rules = new ArrayList<>();
@@ -84,26 +87,26 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
         SecurityGroupState returnState = test.postServiceSynchronously(
                 SecurityGroupService.FACTORY_LINK, securityGroupState, SecurityGroupState.class);
         startState.requestType = requestType;
-        startState.firewallDescriptionLink = returnState.documentSelfLink;
+        startState.securityGroupDescriptionLink = returnState.documentSelfLink;
 
         startState.isMockRequest = true;
 
         return startState;
     }
 
-    private static ProvisionFirewallTaskService.ProvisionFirewallTaskState postAndWaitForService(
+    private static ProvisionSecurityGroupTaskState postAndWaitForService(
             BaseModelTest test,
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState startState)
+            ProvisionSecurityGroupTaskState startState)
             throws Throwable {
-        ProvisionFirewallTaskService.ProvisionFirewallTaskState returnState = test
+        ProvisionSecurityGroupTaskState returnState = test
                 .postServiceSynchronously(
-                        ProvisionFirewallTaskService.FACTORY_LINK,
+                        ProvisionSecurityGroupTaskService.FACTORY_LINK,
                         startState,
-                        ProvisionFirewallTaskService.ProvisionFirewallTaskState.class);
+                        ProvisionSecurityGroupTaskState.class);
 
-        ProvisionFirewallTaskService.ProvisionFirewallTaskState completeState = test
+        ProvisionSecurityGroupTaskState completeState = test
                 .waitForServiceState(
-                        ProvisionFirewallTaskService.ProvisionFirewallTaskState.class,
+                        ProvisionSecurityGroupTaskState.class,
                         returnState.documentSelfLink,
                         state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
                                 .ordinal());
@@ -120,11 +123,11 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
      * This class implements tests for the constructor.
      */
     public static class ConstructorTest {
-        private ProvisionFirewallTaskService provisionFirewallTaskService;
+        private ProvisionSecurityGroupTaskService provisionSecurityGroupTaskService;
 
         @Before
         public void setupTest() {
-            this.provisionFirewallTaskService = new ProvisionFirewallTaskService();
+            this.provisionSecurityGroupTaskService = new ProvisionSecurityGroupTaskService();
         }
 
         @Test
@@ -133,30 +136,30 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
                     Service.ServiceOption.REPLICATION,
                     Service.ServiceOption.OWNER_SELECTION);
 
-            assertThat(this.provisionFirewallTaskService.getOptions(),
+            assertThat(this.provisionSecurityGroupTaskService.getOptions(),
                     is(expected));
-            assertThat(this.provisionFirewallTaskService.getProcessingStage(),
+            assertThat(this.provisionSecurityGroupTaskService.getProcessingStage(),
                     is(Service.ProcessingStage.CREATED));
         }
     }
 
     /**
      * This class implements tests for the
-     * {@link ProvisionFirewallTaskService#handleStart} method.
+     * {@link ProvisionSecurityGroupTaskService#handleStart} method.
      */
     public static class HandleStartTest extends BaseModelTest {
         @Override
         protected void startRequiredServices() throws Throwable {
-            ProvisionFirewallTaskServiceTest.startFactoryServices(this);
+            ProvisionSecurityGroupTaskServiceTest.startFactoryServices(this);
             super.startRequiredServices();
         }
 
         @Test
-        public void testValidateProvisionFirewallTaskService() throws Throwable {
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState startState = buildValidStartState(
-                    this, FirewallInstanceRequest.InstanceRequestType.CREATE,
+        public void testValidateProvisionSecurityGroupTaskService() throws Throwable {
+            ProvisionSecurityGroupTaskState startState = buildValidStartState(
+                    this, SecurityGroupInstanceRequest.InstanceRequestType.CREATE,
                     true);
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState completeState = postAndWaitForService(
+            ProvisionSecurityGroupTaskState completeState = postAndWaitForService(
                     this, startState);
             assertThat(completeState.taskInfo.stage,
                     is(TaskState.TaskStage.FINISHED));
@@ -164,47 +167,47 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
 
         @Test
         public void testMissingValue() throws Throwable {
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState invalidRequestType = buildValidStartState(
+            ProvisionSecurityGroupTaskState invalidRequestType = buildValidStartState(
                     this,
-                    FirewallInstanceRequest.InstanceRequestType.CREATE, true);
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState invalidFirewallDescriptionLink = buildValidStartState(
+                    SecurityGroupInstanceRequest.InstanceRequestType.CREATE, true);
+            ProvisionSecurityGroupTaskState invalidSecurityGroupDescriptionLink = buildValidStartState(
                     this,
-                    FirewallInstanceRequest.InstanceRequestType.CREATE, true);
+                    SecurityGroupInstanceRequest.InstanceRequestType.CREATE, true);
 
             invalidRequestType.requestType = null;
-            invalidFirewallDescriptionLink.firewallDescriptionLink = null;
+            invalidSecurityGroupDescriptionLink.securityGroupDescriptionLink = null;
 
             this.postServiceSynchronously(
-                            ProvisionFirewallTaskService.FACTORY_LINK,
+                            ProvisionSecurityGroupTaskService.FACTORY_LINK,
                             invalidRequestType,
-                            ProvisionFirewallTaskService.ProvisionFirewallTaskState.class,
+                            ProvisionSecurityGroupTaskState.class,
                             IllegalArgumentException.class);
             this.postServiceSynchronously(
-                            ProvisionFirewallTaskService.FACTORY_LINK,
-                            invalidFirewallDescriptionLink,
-                            ProvisionFirewallTaskService.ProvisionFirewallTaskState.class,
+                            ProvisionSecurityGroupTaskService.FACTORY_LINK,
+                            invalidSecurityGroupDescriptionLink,
+                            ProvisionSecurityGroupTaskState.class,
                             IllegalArgumentException.class);
         }
     }
 
     /**
      * This class implements tests for the
-     * {@link ProvisionFirewallTaskService#handlePatch} method.
+     * {@link ProvisionSecurityGroupTaskService#handlePatch} method.
      */
     public static class HandlePatchTest extends BaseModelTest {
         @Override
         protected void startRequiredServices() throws Throwable {
-            ProvisionFirewallTaskServiceTest.startFactoryServices(this);
+            ProvisionSecurityGroupTaskServiceTest.startFactoryServices(this);
             super.startRequiredServices();
         }
 
         @Test
-        public void testCreateFirewallSuccess() throws Throwable {
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState startState = buildValidStartState(
-                    this, FirewallInstanceRequest.InstanceRequestType.CREATE,
+        public void testCreateSecurityGroupSuccess() throws Throwable {
+            ProvisionSecurityGroupTaskState startState = buildValidStartState(
+                    this, SecurityGroupInstanceRequest.InstanceRequestType.CREATE,
                     true);
 
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState completeState = postAndWaitForService(
+            ProvisionSecurityGroupTaskState completeState = postAndWaitForService(
                     this, startState);
 
             assertThat(completeState.taskInfo.stage,
@@ -212,12 +215,12 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
         }
 
         @Test
-        public void testDeleteFirewallSuccess() throws Throwable {
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState startState = buildValidStartState(
-                    this, FirewallInstanceRequest.InstanceRequestType.DELETE,
+        public void testDeleteSecurityGroupSuccess() throws Throwable {
+            ProvisionSecurityGroupTaskState startState = buildValidStartState(
+                    this, SecurityGroupInstanceRequest.InstanceRequestType.DELETE,
                     true);
 
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState completeState = postAndWaitForService(
+            ProvisionSecurityGroupTaskState completeState = postAndWaitForService(
                     this, startState);
 
             assertThat(completeState.taskInfo.stage,
@@ -226,11 +229,11 @@ public class ProvisionFirewallTaskServiceTest extends Suite {
 
         @Test
         public void testCreateSecurityGroupServiceAdapterFailure() throws Throwable {
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState startState = buildValidStartState(
-                    this, FirewallInstanceRequest.InstanceRequestType.CREATE,
+            ProvisionSecurityGroupTaskState startState = buildValidStartState(
+                    this, SecurityGroupInstanceRequest.InstanceRequestType.CREATE,
                     false);
 
-            ProvisionFirewallTaskService.ProvisionFirewallTaskState completeState = postAndWaitForService(
+            ProvisionSecurityGroupTaskState completeState = postAndWaitForService(
                     this, startState);
             assertThat(completeState.taskInfo.stage,
                     is(TaskState.TaskStage.FAILED));

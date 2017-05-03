@@ -13,10 +13,12 @@
 
 package com.vmware.photon.controller.model.adapterapi;
 
+import java.util.Map;
+
 /**
- * Request to create/destroy a firewall instance on a given compute.
+ * Request to create/destroy a security group instance on a given compute.
  */
-public class FirewallInstanceRequest extends ResourceRequest {
+public class SecurityGroupInstanceRequest extends ResourceRequest {
 
     /**
      * Instance Request type.
@@ -26,7 +28,7 @@ public class FirewallInstanceRequest extends ResourceRequest {
     }
 
     /**
-     * Destroy or create a network instance on the given compute.
+     * Destroy or create a security group instance on the given compute.
      */
     public InstanceRequestType requestType;
 
@@ -36,7 +38,12 @@ public class FirewallInstanceRequest extends ResourceRequest {
     public String authCredentialsLink;
 
     /**
-     * The resource pool the network exists in.
+     * The resource pool the security group exists in.
      */
     public String resourcePoolLink;
+
+    /**
+     * Custom properties related to the security group instance.
+     */
+    public Map<String, String> customProperties;
 }

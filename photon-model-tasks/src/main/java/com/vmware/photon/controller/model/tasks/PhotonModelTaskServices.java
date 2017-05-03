@@ -38,7 +38,7 @@ public class PhotonModelTaskServices {
             ProvisionSubnetTaskService.FACTORY_LINK,
             ProvisionLoadBalancerTaskService.FACTORY_LINK,
             SnapshotTaskService.FACTORY_LINK,
-            ProvisionFirewallTaskService.FACTORY_LINK,
+            ProvisionSecurityGroupTaskService.FACTORY_LINK,
             StatsCollectionTaskService.FACTORY_LINK,
             SingleResourceStatsCollectionTaskService.FACTORY_LINK,
             StatsAggregationTaskService.FACTORY_LINK,
@@ -72,8 +72,8 @@ public class PhotonModelTaskServices {
                 () -> TaskFactoryService.create(ProvisionLoadBalancerTaskService.class));
         host.startFactory(SnapshotTaskService.class,
                 () -> TaskFactoryService.create(SnapshotTaskService.class));
-        host.startFactory(ProvisionFirewallTaskService.class,
-                () -> TaskFactoryService.create(ProvisionFirewallTaskService.class));
+        host.startFactory(ProvisionSecurityGroupTaskService.class,
+                () -> TaskFactoryService.create(ProvisionSecurityGroupTaskService.class));
         host.startFactory(EndpointAllocationTaskService.class,
                 () -> TaskFactoryService.create(EndpointAllocationTaskService.class));
         host.startFactory(EndpointRemovalTaskService.class,

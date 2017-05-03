@@ -58,6 +58,8 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchAsyncClientBuilder;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClient;
 import com.amazonaws.services.ec2.AmazonEC2AsyncClientBuilder;
+import com.amazonaws.services.ec2.model.AmazonEC2Exception;
+import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupEgressRequest;
 import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
@@ -78,6 +80,8 @@ import com.amazonaws.services.ec2.model.InstanceState;
 import com.amazonaws.services.ec2.model.InstanceStateChange;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.IpRange;
+import com.amazonaws.services.ec2.model.RevokeSecurityGroupEgressRequest;
+import com.amazonaws.services.ec2.model.RevokeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.TagDescription;
@@ -91,6 +95,8 @@ import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.transfer.TransferManager;
 import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
 
+import org.apache.commons.collections.CollectionUtils;
+
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSInstanceContext.AWSNicContext;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
@@ -98,6 +104,7 @@ import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterR
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
@@ -119,10 +126,14 @@ public class AWSUtils {
             2376, 2375, 1 };
     public static final String DEFAULT_ALLOWED_NETWORK = "0.0.0.0/0";
     public static final String DEFAULT_PROTOCOL = "tcp";
+    public static final String ALL_TRAFFIC = "*";
     public static final String AWS_MOCK_EC2_ENDPOINT = "/aws-mock/ec2-endpoint/";
     public static final String AWS_MOCK_CLOUDWATCH_ENDPOINT = "/aws-mock/cloudwatch/";
     public static final String AWS_MOCK_LOAD_BALANCING_ENDPOINT = "/aws-mock/load-balancing-endpoint/";
     public static final String AWS_REGION_HEADER = "region";
+
+    public static final String SECURITY_GROUP_RULE_NOT_FOUND = "InvalidPermission.NotFound";
+    public static final String SECURITY_GROUP_RULE_DUPLICATE = "InvalidPermission.Duplicate";
 
     /**
      * Flag to use aws-mock, will be set in test files. Aws-mock is a open-source tool for testing
@@ -569,7 +580,7 @@ public class AWSUtils {
         String groupId;
         try {
             groupId = createSecurityGroup(amazonEC2Client, vpc.getVpcId());
-            updateIngressRules(amazonEC2Client, groupId,
+            addIngressRules(amazonEC2Client, groupId,
                     getDefaultRules(vpc.getCidrBlock()));
         } catch (AmazonServiceException t) {
             if (t.getMessage().contains(
@@ -604,7 +615,7 @@ public class AWSUtils {
             }
 
             groupId = createSecurityGroup(aws.amazonEC2Client, vpcId);
-            updateIngressRules(aws.amazonEC2Client, groupId,
+            addIngressRules(aws.amazonEC2Client, groupId,
                     getDefaultRules(subnetCidr));
         } catch (AmazonServiceException t) {
             if (t.getMessage().contains(
@@ -704,14 +715,49 @@ public class AWSUtils {
 
     public static void updateIngressRules(AmazonEC2AsyncClient client,
             List<Rule> rules, String groupId) {
-        updateIngressRules(client, groupId, buildRules(rules));
+        addIngressRules(client, groupId, buildRules(rules.stream().filter(r -> r.access.equals
+                (Access.Allow)).collect(Collectors.toList())));
+        removeIngressRules(client, groupId, buildRules(rules.stream().filter(r -> r.access.equals
+                (Access.Deny)).collect(Collectors.toList())));
     }
 
-    public static void updateIngressRules(AmazonEC2AsyncClient client, String groupId,
+    public static void addIngressRules(AmazonEC2AsyncClient client, String groupId,
             List<IpPermission> rules) {
-        AuthorizeSecurityGroupIngressRequest req = new AuthorizeSecurityGroupIngressRequest()
-                .withGroupId(groupId).withIpPermissions(rules);
-        client.authorizeSecurityGroupIngress(req);
+        if (CollectionUtils.isNotEmpty(rules)) {
+            AuthorizeSecurityGroupIngressRequest req = new AuthorizeSecurityGroupIngressRequest()
+                    .withGroupId(groupId).withIpPermissions(rules);
+            try {
+                client.authorizeSecurityGroupIngress(req);
+            } catch (AmazonEC2Exception e) {
+                if (e.getErrorCode().equals(SECURITY_GROUP_RULE_DUPLICATE)) {
+                    Utils.log(AWSUtils.class, AWSUtils.class.getSimpleName(),
+                            Level.WARNING, () -> String
+                                    .format("Ingress rules already exist: %s", Utils.toString(e)));
+                } else {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    public static void removeIngressRules(AmazonEC2AsyncClient client, String groupId,
+            List<IpPermission> rules) {
+        if (CollectionUtils.isNotEmpty(rules)) {
+            RevokeSecurityGroupIngressRequest req = new RevokeSecurityGroupIngressRequest()
+                    .withGroupId(groupId).withIpPermissions(rules);
+            try {
+                client.revokeSecurityGroupIngress(req);
+            } catch (AmazonEC2Exception e) {
+                if (e.getErrorCode().equals(SECURITY_GROUP_RULE_NOT_FOUND)) {
+                    Utils.log(AWSUtils.class, AWSUtils.class.getSimpleName(),
+                            Level.WARNING, () -> String
+                                    .format("Ingress rules cannot be removed because they do not "
+                                                    + "exist: %s", Utils.toString(e)));
+                } else {
+                    throw e;
+                }
+            }
+        }
     }
 
     public static IpPermission createRule(int port) {
@@ -722,6 +768,8 @@ public class AWSUtils {
             String protocol) {
 
         IpRange ipRange = new IpRange().withCidrIp(subnet);
+
+        protocol = protocol.equals(ALL_TRAFFIC) ? "-1" : protocol;
 
         return new IpPermission()
                 .withIpProtocol(protocol)
@@ -894,4 +942,52 @@ public class AWSUtils {
         }
 
     }
+
+    public static void updateEgressRules(AmazonEC2AsyncClient client,
+            List<Rule> rules, String groupId) {
+        addEgressRules(client, groupId, buildRules(rules.stream().filter(r -> r.access.equals(
+                Access.Allow)).collect(Collectors.toList())));
+        removeEgressRules(client, groupId, buildRules(rules.stream().filter(r -> r.access.equals(
+                Access.Deny)).collect(Collectors.toList())));
+    }
+
+    public static void addEgressRules(AmazonEC2AsyncClient client, String groupId,
+            List<IpPermission> rules) {
+        if (CollectionUtils.isNotEmpty(rules)) {
+            AuthorizeSecurityGroupEgressRequest req = new AuthorizeSecurityGroupEgressRequest()
+                    .withGroupId(groupId).withIpPermissions(rules);
+            try {
+                client.authorizeSecurityGroupEgress(req);
+            } catch (AmazonEC2Exception e) {
+                if (e.getErrorCode().equals(SECURITY_GROUP_RULE_DUPLICATE)) {
+                    Utils.log(AWSSecurityGroupService.class, AWSSecurityGroupService.class.getSimpleName(),
+                            Level.WARNING, () -> String
+                                    .format("Egress rules already exist: %s", Utils.toString(e)));
+                } else {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    public static void removeEgressRules(AmazonEC2AsyncClient client, String groupId,
+            List<IpPermission> rules) {
+        if (CollectionUtils.isNotEmpty(rules)) {
+            RevokeSecurityGroupEgressRequest req = new RevokeSecurityGroupEgressRequest()
+                    .withGroupId(groupId).withIpPermissions(rules);
+            try {
+                client.revokeSecurityGroupEgress(req);
+            } catch (AmazonEC2Exception e) {
+                if (e.getErrorCode().equals(SECURITY_GROUP_RULE_NOT_FOUND)) {
+                    Utils.log(AWSSecurityGroupService.class, AWSSecurityGroupService.class.getSimpleName(),
+                            Level.WARNING, () -> String
+                                    .format("Egress rules cannot be removed because they do not "
+                                            + "exist: %s", Utils.toString(e)));
+                } else {
+                    throw e;
+                }
+            }
+        }
+    }
+
 }

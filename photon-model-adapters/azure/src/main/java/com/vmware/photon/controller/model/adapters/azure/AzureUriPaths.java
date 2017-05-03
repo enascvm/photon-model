@@ -60,7 +60,7 @@ public class AzureUriPaths {
     public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
             .adapterLink(EndpointType.azure.name());
 
-    public static final String AZURE_FIREWALL_ADAPTER = AdapterTypePath.FIREWALL_ADAPTER
+    public static final String AZURE_FIREWALL_ADAPTER = AdapterTypePath.SECURITY_GROUP_ADAPTER
             .adapterLink(EndpointType.azure.name());
 
     public static final String AZURE_POWER_ADAPTER = AdapterTypePath.POWER_ADAPTER
@@ -79,7 +79,7 @@ public class AzureUriPaths {
         adapterLinksByType.put(AZURE_ENUMERATION_ADAPTER, AdapterTypePath.ENUMERATION_ADAPTER);
         adapterLinksByType.put(AZURE_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER);
         adapterLinksByType.put(AZURE_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER);
-        adapterLinksByType.put(AZURE_FIREWALL_ADAPTER, AdapterTypePath.FIREWALL_ADAPTER);
+        adapterLinksByType.put(AZURE_FIREWALL_ADAPTER, AdapterTypePath.SECURITY_GROUP_ADAPTER);
         adapterLinksByType.put(AZURE_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER);
         adapterLinksByType.put(AZURE_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER);
 

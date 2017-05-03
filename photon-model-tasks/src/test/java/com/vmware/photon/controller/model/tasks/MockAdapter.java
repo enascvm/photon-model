@@ -26,10 +26,10 @@ import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceReq
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
-import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
 import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.NetworkInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.SnapshotRequest;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
@@ -40,6 +40,7 @@ import com.vmware.photon.controller.model.support.CertificateInfo;
 import com.vmware.photon.controller.model.support.CertificateInfoServiceErrorResponse;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.ImageEnumerationTaskState;
+import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.ProvisionSecurityGroupTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionSubnetTaskService.ProvisionSubnetTaskState;
 import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
 import com.vmware.xenon.common.Operation;
@@ -86,8 +87,8 @@ public class MockAdapter {
         host.startService(new MockSubnetInstanceSuccessAdapter());
         host.startService(new MockSubnetInstanceFailureAdapter());
 
-        host.startService(new MockFirewallInstanceSuccessAdapter());
-        host.startService(new MockFirewallInstanceFailureAdapter());
+        host.startService(new MockSecurityGroupInstanceSuccessAdapter());
+        host.startService(new MockSecurityGroupInstanceFailureAdapter());
 
         host.startService(new MockSuccessEndpointAdapter(test));
         host.startService(new MockUntrustedCertEndpointAdapter());
@@ -601,12 +602,12 @@ public class MockAdapter {
     }
 
     /**
-     * Mock firewall instance adapter that always succeeds.
+     * Mock security group instance adapter that always succeeds.
      */
-    public static class MockFirewallInstanceSuccessAdapter extends
+    public static class MockSecurityGroupInstanceSuccessAdapter extends
             StatelessService {
         public static final String SELF_LINK = UriPaths.PROVISIONING
-                + "/mock_firewall_service_success_adapter";
+                + "/mock_security_group_service_success_adapter";
 
         @Override
         public void handleRequest(Operation op) {
@@ -616,14 +617,14 @@ public class MockAdapter {
             }
             switch (op.getAction()) {
             case PATCH:
-                FirewallInstanceRequest request = op
-                        .getBody(FirewallInstanceRequest.class);
-                ProvisionFirewallTaskService.ProvisionFirewallTaskState provisionFirewallTaskState = new ProvisionFirewallTaskService.ProvisionFirewallTaskState();
-                provisionFirewallTaskState.taskInfo = new TaskState();
-                provisionFirewallTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
+                SecurityGroupInstanceRequest request = op
+                        .getBody(SecurityGroupInstanceRequest.class);
+                ProvisionSecurityGroupTaskState provisionSecurityGroupTaskState = new ProvisionSecurityGroupTaskState();
+                provisionSecurityGroupTaskState.taskInfo = new TaskState();
+                provisionSecurityGroupTaskState.taskInfo.stage = TaskState.TaskStage.FINISHED;
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                        provisionFirewallTaskState));
+                        provisionSecurityGroupTaskState));
                 op.complete();
                 break;
             default:
@@ -633,12 +634,12 @@ public class MockAdapter {
     }
 
     /**
-     * Mock firewall instance adapter that always fails.
+     * Mock security group instance adapter that always fails.
      */
-    public static class MockFirewallInstanceFailureAdapter extends
+    public static class MockSecurityGroupInstanceFailureAdapter extends
             StatelessService {
         public static final String SELF_LINK = UriPaths.PROVISIONING
-                + "/mock_firewall_service_failure_adapter";
+                + "/mock_security_group_service_failure_adapter";
 
         @Override
         public void handleRequest(Operation op) {
@@ -648,13 +649,13 @@ public class MockAdapter {
             }
             switch (op.getAction()) {
             case PATCH:
-                FirewallInstanceRequest request = op
-                        .getBody(FirewallInstanceRequest.class);
-                ProvisionFirewallTaskService.ProvisionFirewallTaskState provisionFirewallTaskState = new ProvisionFirewallTaskService.ProvisionFirewallTaskState();
-                provisionFirewallTaskState.taskInfo = createFailedTaskInfo();
+                SecurityGroupInstanceRequest request = op
+                        .getBody(SecurityGroupInstanceRequest.class);
+                ProvisionSecurityGroupTaskState provisionSecurityGroupTaskState = new ProvisionSecurityGroupTaskState();
+                provisionSecurityGroupTaskState.taskInfo = createFailedTaskInfo();
                 sendRequest(Operation.createPatch(
                         request.taskReference).setBody(
-                        provisionFirewallTaskState));
+                        provisionSecurityGroupTaskState));
                 op.complete();
                 break;
             default:

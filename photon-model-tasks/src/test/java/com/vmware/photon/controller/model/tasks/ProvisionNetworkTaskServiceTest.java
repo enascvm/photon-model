@@ -42,7 +42,7 @@ import com.vmware.xenon.common.UriUtils;
 @RunWith(ProvisionNetworkTaskServiceTest.class)
 @SuiteClasses({ ProvisionNetworkTaskServiceTest.ConstructorTest.class,
         ProvisionNetworkTaskServiceTest.HandleStartTest.class,
-        ProvisionFirewallTaskServiceTest.HandlePatchTest.class })
+        ProvisionSecurityGroupTaskServiceTest.HandlePatchTest.class })
 public class ProvisionNetworkTaskServiceTest extends Suite {
 
     public ProvisionNetworkTaskServiceTest(Class<?> klass, RunnerBuilder builder)

@@ -13,44 +13,54 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.EXPAND;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyIndexingOption.FIXED_ITEM_NAME;
+import static com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption.OPTIONAL;
+
 import java.util.List;
+import java.util.Map;
 
 import com.vmware.photon.controller.model.UriPaths;
-import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest;
-import com.vmware.photon.controller.model.adapterapi.FirewallInstanceRequest.InstanceRequestType;
+import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest;
+import com.vmware.photon.controller.model.adapterapi.SecurityGroupInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
+import com.vmware.photon.controller.model.tasks.ProvisionSecurityGroupTaskService.ProvisionSecurityGroupTaskState;
+import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.TaskService;
 
 /**
- * Provision firewall task service.
+ * Provision security group task service.
  */
-public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallTaskService.ProvisionFirewallTaskState> {
-    public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/firewall-allocation-tasks";
+public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecurityGroupTaskState> {
+    public static final String FACTORY_LINK = UriPaths.PROVISIONING + "/security-group-tasks";
+
+    public static final String NETWORK_STATE_ID_PROP_NAME = "__networkStateId";
 
     /**
      * Substages of the tasks.
      */
     public enum SubStage {
-        CREATED, PROVISIONING_FIREWALL, FINISHED, FAILED
+        CREATED, PROVISIONING_SECURITY_GROUP, FINISHED, FAILED
     }
 
     /**
-     * Represents state of a firewall task.
+     * Represents state of a security group task.
      */
-    public static class ProvisionFirewallTaskState extends TaskService.TaskServiceState {
+    public static class ProvisionSecurityGroupTaskState extends TaskService.TaskServiceState {
         public InstanceRequestType requestType;
 
         /**
-         * The description of the firewall instance being realized.
+         * The description of the security group instance being realized.
          */
-        public String firewallDescriptionLink;
+        public String securityGroupDescriptionLink;
 
         /**
-         * Tracks the sub stage (creating network or firewall). Set by the
+         * Tracks the sub stage (creating network or security group). Set by the
          * run-time.
          */
         public SubStage taskSubStage;
@@ -66,21 +76,33 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
          */
         public List<String> tenantLinks;
 
+        /**
+         * Custom properties associated with the task
+         */
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        @PropertyOptions(usage = { OPTIONAL }, indexing = { EXPAND, FIXED_ITEM_NAME })
+        public Map<String, String> customProperties;
+
+        /**
+         * A callback to the initiated task.
+         */
+        public ServiceTaskCallback<?> serviceTaskCallback;
+
         public void validate() throws Exception {
             if (this.requestType == null) {
                 throw new IllegalArgumentException("requestType required");
             }
 
-            if (this.firewallDescriptionLink == null
-                    || this.firewallDescriptionLink.isEmpty()) {
+            if (this.securityGroupDescriptionLink == null
+                    || this.securityGroupDescriptionLink.isEmpty()) {
                 throw new IllegalArgumentException(
-                        "firewallDescriptionLink required");
+                        "securityGroupDescriptionLink required");
             }
         }
     }
 
-    public ProvisionFirewallTaskService() {
-        super(ProvisionFirewallTaskState.class);
+    public ProvisionSecurityGroupTaskService() {
+        super(ProvisionSecurityGroupTaskState.class);
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
     }
@@ -92,8 +114,8 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
             return;
         }
 
-        ProvisionFirewallTaskState state = start
-                .getBody(ProvisionFirewallTaskState.class);
+        ProvisionSecurityGroupTaskState state = start
+                .getBody(ProvisionSecurityGroupTaskState.class);
         try {
             state.validate();
         } catch (Exception e) {
@@ -116,9 +138,9 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
             return;
         }
 
-        ProvisionFirewallTaskState currState = getState(patch);
-        ProvisionFirewallTaskState patchState = patch
-                .getBody(ProvisionFirewallTaskState.class);
+        ProvisionSecurityGroupTaskState currState = getState(patch);
+        ProvisionSecurityGroupTaskState patchState = patch
+                .getBody(ProvisionSecurityGroupTaskState.class);
 
         if (TaskState.isFailed(patchState.taskInfo)) {
             currState.taskInfo = patchState.taskInfo;
@@ -129,8 +151,8 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
             currState.taskSubStage = nextStage(currState);
 
             handleSubStages(currState);
-            logInfo(() -> String.format("%s %s on %s started", "Firewall",
-                    currState.requestType.toString(), currState.firewallDescriptionLink));
+            logInfo(() -> String.format("%s %s on %s started", "Security Group",
+                    currState.requestType.toString(), currState.securityGroupDescriptionLink));
             break;
 
         case STARTED:
@@ -140,7 +162,8 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
             SubStage nextStage = nextStage(currState);
             if (nextStage == SubStage.FINISHED) {
                 currState.taskInfo.stage = TaskState.TaskStage.FINISHED;
-                logInfo(() -> "Rask is complete");
+                logInfo(() -> "Task is complete");
+                notifyParentTask(currState);
             } else {
                 sendSelfPatch(TaskState.TaskStage.CREATED, null);
             }
@@ -148,6 +171,7 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
         case FAILED:
             logWarning(() -> String.format("Task failed with %s",
                     Utils.toJsonHtml(currState.taskInfo.failure)));
+            notifyParentTask(currState);
             break;
         case CANCELLED:
             break;
@@ -158,7 +182,7 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
         patch.complete();
     }
 
-    private SubStage nextStage(ProvisionFirewallTaskState state) {
+    private SubStage nextStage(ProvisionSecurityGroupTaskState state) {
         return state.requestType == InstanceRequestType.CREATE ? nextSubStageOnCreate(state.taskSubStage)
                 : nextSubstageOnDelete(state.taskSubStage);
     }
@@ -170,17 +194,17 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
     // deletes follow the inverse order;
     private SubStage nextSubstageOnDelete(SubStage currStage) {
         if (currStage == SubStage.CREATED) {
-            return SubStage.PROVISIONING_FIREWALL;
-        } else if (currStage == SubStage.PROVISIONING_FIREWALL) {
+            return SubStage.PROVISIONING_SECURITY_GROUP;
+        } else if (currStage == SubStage.PROVISIONING_SECURITY_GROUP) {
             return SubStage.FINISHED;
         } else {
             return SubStage.values()[currStage.ordinal() + 1];
         }
     }
 
-    private void handleSubStages(ProvisionFirewallTaskState currState) {
+    private void handleSubStages(ProvisionSecurityGroupTaskState currState) {
         switch (currState.taskSubStage) {
-        case PROVISIONING_FIREWALL:
+        case PROVISIONING_SECURITY_GROUP:
             patchAdapter(currState);
             break;
         case FINISHED:
@@ -193,26 +217,27 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
         }
     }
 
-    private FirewallInstanceRequest toReq(SecurityGroupState securityGroupState,
-            ProvisionFirewallTaskState taskState) {
-        FirewallInstanceRequest req = new FirewallInstanceRequest();
+    private SecurityGroupInstanceRequest toReq(SecurityGroupState securityGroupState,
+            ProvisionSecurityGroupTaskState taskState) {
+        SecurityGroupInstanceRequest req = new SecurityGroupInstanceRequest();
         req.requestType = taskState.requestType;
         req.resourceReference = UriUtils.buildUri(this.getHost(),
-                taskState.firewallDescriptionLink);
+                taskState.securityGroupDescriptionLink);
         req.authCredentialsLink = securityGroupState.authCredentialsLink;
         req.resourcePoolLink = securityGroupState.resourcePoolLink;
         req.taskReference = this.getUri();
         req.isMockRequest = taskState.isMockRequest;
+        req.customProperties = taskState.customProperties;
 
         return req;
     }
 
-    private void patchAdapter(ProvisionFirewallTaskState taskState) {
+    private void patchAdapter(ProvisionSecurityGroupTaskState taskState) {
 
         sendRequest(Operation
                 .createGet(
                         UriUtils.buildUri(this.getHost(),
-                                taskState.firewallDescriptionLink))
+                                taskState.securityGroupDescriptionLink))
                 .setCompletion(
                         (o, e) -> {
                             if (e != null) {
@@ -221,7 +246,7 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
                             }
                             SecurityGroupState securityGroupState = o
                                     .getBody(SecurityGroupState.class);
-                            FirewallInstanceRequest req = toReq(securityGroupState,
+                            SecurityGroupInstanceRequest req = toReq(securityGroupState,
                                     taskState);
 
                             sendRequest(Operation
@@ -240,7 +265,7 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
     }
 
     private void sendSelfPatch(TaskState.TaskStage stage, Throwable e) {
-        ProvisionFirewallTaskState body = new ProvisionFirewallTaskState();
+        ProvisionSecurityGroupTaskState body = new ProvisionSecurityGroupTaskState();
         body.taskInfo = new TaskState();
         if (e == null) {
             body.taskInfo.stage = stage;
@@ -251,5 +276,23 @@ public class ProvisionFirewallTaskService extends TaskService<ProvisionFirewallT
         }
 
         sendSelfPatch(body);
+    }
+
+    private void notifyParentTask(ProvisionSecurityGroupTaskState currentState) {
+        if (currentState.serviceTaskCallback == null) {
+            return;
+        }
+
+        ServiceTaskCallbackResponse<?> parentPatchBody;
+        if (currentState.taskInfo.stage == TaskState.TaskStage.FAILED &&
+                currentState.taskInfo.failure != null) {
+            parentPatchBody = currentState.serviceTaskCallback
+                    .getFailedResponse(currentState.taskInfo.failure);
+        } else {
+            parentPatchBody = currentState.serviceTaskCallback.getFinishedResponse();
+        }
+
+        sendRequest(Operation.createPatch(this, currentState.serviceTaskCallback.serviceSelfLink)
+                .setBody(parentPatchBody));
     }
 }
