@@ -22,6 +22,7 @@ import com.vmware.photon.controller.model.adapters.azure.enumeration
         .AzureSubscriptionsEnumerationService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureSubnetService;
+import com.vmware.photon.controller.model.adapters.azure.power.AzurePowerService;
 import com.vmware.photon.controller.model.adapters.azure.stats.AzureComputeHostStatsGatherer;
 import com.vmware.photon.controller.model.adapters.azure.stats.AzureComputeHostStorageStatsGatherer;
 import com.vmware.photon.controller.model.adapters.azure.stats.AzureComputeStatsGatherer;
@@ -48,7 +49,8 @@ public class AzureAdapters {
             AzureComputeHostStatsGatherer.SELF_LINK,
             AzureComputeHostStorageStatsGatherer.SELF_LINK,
             AzureEndpointAdapterService.SELF_LINK,
-            AzureSubscriptionsEnumerationService.SELF_LINK };
+            AzureSubscriptionsEnumerationService.SELF_LINK,
+            AzurePowerService.SELF_LINK };
 
     /**
      * The link of Azure configuration registered in {@link PhotonModelAdaptersRegistryService
@@ -70,7 +72,7 @@ public class AzureAdapters {
             host.startService(new AzureComputeHostStorageStatsGatherer());
             host.startService(new AzureEndpointAdapterService());
             host.startService(new AzureSubscriptionsEnumerationService());
-
+            host.startService(new AzurePowerService());
 
             EndpointAdapterUtils.registerEndpointAdapters(
                     host, EndpointType.azure, LINKS, AzureUriPaths.AZURE_ADAPTER_LINK_TYPES);

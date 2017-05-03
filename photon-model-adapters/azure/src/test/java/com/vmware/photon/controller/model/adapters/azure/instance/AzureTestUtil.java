@@ -321,6 +321,16 @@ public class AzureTestUtil {
         return response.getBody();
     }
 
+    public static VirtualMachine getAzureVirtualMachineWithExtension(
+            ComputeManagementClient computeManagementClient,
+            String resourceGroupName, String vmName, String expand) throws Exception {
+        ServiceResponse<VirtualMachine> response = computeManagementClient
+                .getVirtualMachinesOperations().get(resourceGroupName, vmName, expand);
+
+        return response.getBody();
+    }
+
+
     public static NetworkSecurityGroup getAzureSecurityGroup(
             NetworkManagementClient networkManagementClient, String resourceGroupName,
             String securityGroupName) throws Exception {
@@ -541,6 +551,9 @@ public class AzureTestUtil {
         // set the create service to the azure instance service
         azureVMDesc.instanceAdapterReference = UriUtils.buildUri(host,
                 AzureUriPaths.AZURE_INSTANCE_ADAPTER);
+
+        azureVMDesc.powerAdapterReference = UriUtils.buildUri(host,
+                AzureUriPaths.AZURE_POWER_ADAPTER);
 
         azureVMDesc = TestUtils.doPost(host, azureVMDesc, ComputeDescription.class,
                         UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));

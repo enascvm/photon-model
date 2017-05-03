@@ -63,6 +63,9 @@ public class AzureUriPaths {
     public static final String AZURE_FIREWALL_ADAPTER = AdapterTypePath.FIREWALL_ADAPTER
             .adapterLink(EndpointType.azure.name());
 
+    public static final String AZURE_POWER_ADAPTER = AdapterTypePath.POWER_ADAPTER
+            .adapterLink(EndpointType.azure.name());
+
     /**
      * Map an adapter link to its {@link AdapterTypePath adapter type}.
      */
@@ -78,6 +81,7 @@ public class AzureUriPaths {
         adapterLinksByType.put(AZURE_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER);
         adapterLinksByType.put(AZURE_FIREWALL_ADAPTER, AdapterTypePath.FIREWALL_ADAPTER);
         adapterLinksByType.put(AZURE_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER);
+        adapterLinksByType.put(AZURE_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER);
 
         AZURE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }
