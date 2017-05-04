@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.stats;
+package com.vmware.photon.controller.model.adapters.azure.ea.stats;
 
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createDoubleRange;
 import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buildCompositeFieldName;

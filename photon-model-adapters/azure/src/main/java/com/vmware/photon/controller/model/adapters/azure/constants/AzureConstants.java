@@ -36,6 +36,17 @@ public class AzureConstants {
     public static final String AZURE_STORAGE_TYPE = "storageType";
     public static final String AZURE_PROVISIONING_PERMISSION = "provisioningPermission";
 
+    // Azure EA
+    public static final String AZURE_ENROLLMENT_NUMBER_KEY = "enrollmentNumber";
+    public static final String AZURE_SUBSCRIPTION_ID_KEY = "subscriptionId";
+    public static final String AZURE_ACCOUNT_ID = "accountId";
+    public static final String AZURE_EA_BASE_URI = "https://ea.azure.com";
+    public static final String AZURE_EA_USAGE_REPORTS_URI = AZURE_EA_BASE_URI
+            + "/rest/{enrollmentNumber}/usage-reports";
+    //Bearer <apiKey>
+    public static final String AZURE_EA_AUTHORIZATION_HEADER_FORMAT = "Bearer %s";
+
+
     // Azure Namespace
     public static final String COMPUTE_NAMESPACE = "Microsoft.Compute";
     public static final String STORAGE_NAMESPACE = "Microsoft.Storage";

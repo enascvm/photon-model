@@ -62,6 +62,9 @@ public class AzureUriPaths {
     public static final String AZURE_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
             .adapterLink(EndpointType.azure.name());
 
+    public static final String AZURE_EA_ENDPOINT_CONFIG_ADAPTER = AdapterTypePath.ENDPOINT_CONFIG_ADAPTER
+            .adapterLink(EndpointType.azure_ea.name());
+
     public static final String AZURE_FIREWALL_ADAPTER = AdapterTypePath.SECURITY_GROUP_ADAPTER
             .adapterLink(EndpointType.azure.name());
 
@@ -88,4 +91,14 @@ public class AzureUriPaths {
         AZURE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }
 
+    public static final Map<String, String> AZURE_EA_ADAPTER_LINK_TYPES;
+
+    static {
+        Map<String, String>  azureEaLinksByType = new HashMap<>();
+        azureEaLinksByType.put(AZURE_COST_STATS_ADAPTER, AdapterTypePath.COST_STATS_ADAPTER.key);
+        azureEaLinksByType.put(AZURE_EA_ENDPOINT_CONFIG_ADAPTER,
+                AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
+
+        AZURE_EA_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(azureEaLinksByType);
+    }
 }

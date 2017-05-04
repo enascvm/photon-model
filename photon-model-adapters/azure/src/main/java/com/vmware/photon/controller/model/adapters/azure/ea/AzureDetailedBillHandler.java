@@ -11,12 +11,11 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.utils;
+package com.vmware.photon.controller.model.adapters.azure.ea;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.NO_OF_DAYS_MARGIN_FOR_AZURE_TO_UPDATE_BILL_IN_MILLIS;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.DATE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.DATE;
 
 import java.io.IOException;
 import java.util.Arrays;

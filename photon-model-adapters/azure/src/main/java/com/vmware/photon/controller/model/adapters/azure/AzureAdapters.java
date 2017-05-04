@@ -19,7 +19,6 @@ import com.vmware.photon.controller.model.adapters.azure.d2o.AzureLifecycleOpera
 import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService;
-import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureSubscriptionsEnumerationService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureSubnetService;
 import com.vmware.photon.controller.model.adapters.azure.power.AzurePowerService;
@@ -49,7 +48,6 @@ public class AzureAdapters {
             AzureComputeHostStatsGatherer.SELF_LINK,
             AzureComputeHostStorageStatsGatherer.SELF_LINK,
             AzureEndpointAdapterService.SELF_LINK,
-            AzureSubscriptionsEnumerationService.SELF_LINK,
             AzurePowerService.SELF_LINK,
             AzureLifecycleOperationService.SELF_LINK };
 
@@ -72,7 +70,6 @@ public class AzureAdapters {
             host.startService(new AzureComputeHostStatsGatherer());
             host.startService(new AzureComputeHostStorageStatsGatherer());
             host.startService(new AzureEndpointAdapterService());
-            host.startService(new AzureSubscriptionsEnumerationService());
             host.startService(new AzurePowerService());
             host.startService(new AzureLifecycleOperationService());
 
@@ -84,5 +81,4 @@ public class AzureAdapters {
                     Utils.toString(e));
         }
     }
-
 }

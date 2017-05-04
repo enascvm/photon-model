@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.enumeration;
+package com.vmware.photon.controller.model.adapters.azure.ea.enumeration;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -27,24 +27,22 @@ import com.vmware.photon.controller.model.adapterapi.ResourceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
-import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
+import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService
-        .ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
@@ -79,28 +77,37 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
     }
 
     protected enum AzureCostComputeEnumerationStages {
-        GET_RESOURCE_DESCRIPTION, FETCH_EXISTING_RESOURCES, CREATE_RESOURCES, COMPLETED
+        FETCH_EXISTING_RESOURCES, CREATE_RESOURCES, COMPLETED
     }
 
-    protected static class AzureSubscriptionsEnumerationContext {
-        protected ComputeStateWithDescription computeDescription;
-        protected AuthCredentialsServiceState authCredentials;
-        protected AzureSubscriptionsEnumerationRequest resourceRequest;
+    protected static class AzureSubscriptionsEnumerationContext
+            extends BaseAdapterContext<AzureSubscriptionsEnumerationContext> {
         protected AzureCostComputeEnumerationStages stage;
         protected Map<String, AzureSubscription> idToSubscription;
-        protected Operation parentOperation;
 
         public AzureSubscriptionsEnumerationContext(
+                StatelessService service,
                 AzureSubscriptionsEnumerationRequest resourceRequest, Operation parentOp) {
-            this.resourceRequest = resourceRequest;
+            super(service, resourceRequest);
             // If azureSubscriptions is null or empty don't do anything
-            if (this.resourceRequest.azureSubscriptions == null
-                    || this.resourceRequest.azureSubscriptions.isEmpty()) {
+            if (resourceRequest.azureSubscriptions == null
+                    || resourceRequest.azureSubscriptions.isEmpty()) {
                 this.stage = AzureCostComputeEnumerationStages.COMPLETED;
             } else {
-                this.stage = AzureCostComputeEnumerationStages.GET_RESOURCE_DESCRIPTION;
+                this.idToSubscription = resourceRequest.azureSubscriptions
+                        .stream().collect(Collectors.toMap(subscription -> subscription.entityId,
+                                subscription -> subscription));
+                this.stage = AzureCostComputeEnumerationStages.FETCH_EXISTING_RESOURCES;
             }
-            this.parentOperation = parentOp;
+            this.operation = parentOp;
+        }
+
+        @Override
+        protected URI getParentAuthRef(AzureSubscriptionsEnumerationContext context) {
+            // This is overridden to eventually allow this service to run remotely and work on
+            // PhotonModel resources residing in a remote host
+            return UriUtils.buildUri(context.service.getHost(),
+                    context.parent.description.authCredentialsLink);
         }
     }
 
@@ -117,19 +124,23 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
             op.complete();
             return;
         }
-        AzureSubscriptionsEnumerationContext azureCostComputeenumerationContext =
-                new AzureSubscriptionsEnumerationContext(request, op);
-        handleAzureCostComputeEnumerationRequest(azureCostComputeenumerationContext);
+        AzureSubscriptionsEnumerationContext azureSubscriptionsEnumerationContext =
+                new AzureSubscriptionsEnumerationContext(this, request, op);
+
+        azureSubscriptionsEnumerationContext.populateBaseContext(BaseAdapterStage.PARENTDESC)
+                .whenComplete((c, e) -> {
+                    if (e != null) {
+                        getFailureConsumer(azureSubscriptionsEnumerationContext).accept(e);
+                        return;
+                    }
+                    handleAzureSubscriptionsEnumerationRequest(azureSubscriptionsEnumerationContext);
+                });
     }
 
-    private void handleAzureCostComputeEnumerationRequest(
+    private void handleAzureSubscriptionsEnumerationRequest(
             AzureSubscriptionsEnumerationContext enumerationContext) {
         try {
             switch (enumerationContext.stage) {
-            case GET_RESOURCE_DESCRIPTION:
-                getResourceDescription(enumerationContext,
-                        AzureCostComputeEnumerationStages.FETCH_EXISTING_RESOURCES);
-                break;
             case FETCH_EXISTING_RESOURCES:
                 fetchExistingResources(enumerationContext,
                         AzureCostComputeEnumerationStages.CREATE_RESOURCES);
@@ -139,7 +150,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                         AzureCostComputeEnumerationStages.COMPLETED);
                 break;
             case COMPLETED:
-                enumerationContext.parentOperation.complete();
+                enumerationContext.operation.complete();
                 break;
             default:
                 logSevere(
@@ -152,40 +163,12 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         }
     }
 
-    private void getResourceDescription(AzureSubscriptionsEnumerationContext enumerationContext,
-                                        AzureCostComputeEnumerationStages nextStage) {
-        Consumer<Operation> onSuccess = (descriptionOp) -> {
-            enumerationContext.computeDescription = descriptionOp
-                    .getBody(ComputeStateWithDescription.class);
-
-            Consumer<Operation> onAuthCredentialsSuccess = (authCredentialsOp) -> {
-                enumerationContext.authCredentials = authCredentialsOp
-                        .getBody(AuthCredentialsServiceState.class);
-                enumerationContext.stage = nextStage;
-                handleAzureCostComputeEnumerationRequest(enumerationContext);
-            };
-            AdapterUtils.getServiceState(this,
-                    enumerationContext.computeDescription.description.authCredentialsLink,
-                    onAuthCredentialsSuccess, getFailureConsumer(enumerationContext));
-        };
-
-        URI computeDescUri = UriUtils.extendUriWithQuery(
-                enumerationContext.resourceRequest.resourceReference,
-                UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString());
-        AdapterUtils.getServiceState(this, computeDescUri, onSuccess,
-                getFailureConsumer(enumerationContext));
-    }
-
     private void fetchExistingResources(AzureSubscriptionsEnumerationContext enumerationContext,
                                         AzureCostComputeEnumerationStages nextStage) {
-        enumerationContext.idToSubscription = enumerationContext.resourceRequest.azureSubscriptions
-                .stream().collect(Collectors.toMap(subscription -> subscription.entityId,
-                        subscription -> subscription));
-
         Consumer<AzureSubscriptionsEnumerationContext> queryCompletionConsumer =
                 (AzureSubscriptionsEnumerationContext enumContext) -> {
                     enumContext.stage = nextStage;
-                    handleAzureCostComputeEnumerationRequest(enumContext);
+                    handleAzureSubscriptionsEnumerationRequest(enumContext);
                 };
 
         Consumer<Collection<ComputeState>> queryResultsConsumer =
@@ -208,7 +191,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                 .addOption(QueryOption.EXPAND_CONTENT)
                 .setResultLimit(QueryUtils.DEFAULT_RESULT_LIMIT)
                 .setQuery(azureComputesQuery).build();
-        queryTask.tenantLinks = enumerationContext.computeDescription.tenantLinks;
+        queryTask.tenantLinks = enumerationContext.parent.tenantLinks;
 
         QueryUtils.startQueryTask(this, queryTask)
                 .whenComplete((responseTask, t) -> {
@@ -269,7 +252,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                         EndpointType.azure.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY,
-                        enumerationContext.authCredentials.privateKeyId)
+                        enumerationContext.parentAuth.privateKeyId)
                 .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
                 .build();
         return azureSubscriptionComputesQuery;
@@ -323,7 +306,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
                     .collect(Collectors.toList());
             joinOperationAndSendRequest(createComputeOps, enumerationContext, (costComputeCtx) -> {
                 enumerationContext.stage = nextStage;
-                handleAzureCostComputeEnumerationRequest(enumerationContext);
+                handleAzureSubscriptionsEnumerationRequest(enumerationContext);
             });
         });
     }
@@ -369,10 +352,10 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
             AzureSubscriptionsEnumerationContext enumerationContext,
             AzureSubscription subscription) {
         ComputeDescription cd = new ComputeDescription();
-        cd.tenantLinks = enumerationContext.computeDescription.tenantLinks;
-        cd.endpointLink = enumerationContext.computeDescription.endpointLink;
+        cd.tenantLinks = enumerationContext.parent.tenantLinks;
+        cd.endpointLink = enumerationContext.parent.endpointLink;
         cd.name = String.format(COMPUTES_NAME_FORMAT,
-                enumerationContext.computeDescription.description.name,
+                enumerationContext.parent.description.name,
                 subscription.entityId);
         cd.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         cd.id = UUID.randomUUID().toString();
@@ -389,9 +372,9 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         ComputeState cs = new ComputeState();
         cs.id = UUID.randomUUID().toString();
         cs.name = String.format(COMPUTES_NAME_FORMAT,
-                enumerationContext.computeDescription.name, subscription.entityId);
-        cs.tenantLinks = enumerationContext.computeDescription.tenantLinks;
-        cs.endpointLink = enumerationContext.computeDescription.endpointLink;
+                enumerationContext.parent.name, subscription.entityId);
+        cs.tenantLinks = enumerationContext.parent.tenantLinks;
+        cs.endpointLink = enumerationContext.parent.endpointLink;
         cs.customProperties = getPropertiesMap(enumerationContext, subscription);
         cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         cs.type = ComputeType.VM_HOST;
@@ -406,7 +389,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         properties.put(AzureCostConstants.AZURE_SUBSCRIPTION_ID_KEY,
                 subscription.entityId);
         properties.put(AzureCostConstants.AZURE_ENROLLMENT_NUMBER_KEY,
-                enumerationContext.authCredentials.privateKeyId);
+                enumerationContext.parentAuth.privateKeyId);
         properties.put(AzureCostConstants.AZURE_ACCOUNT_ID,
                 subscription.parentEntityId);
         properties.put(EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
@@ -418,7 +401,7 @@ public class AzureSubscriptionsEnumerationService extends StatelessService {
         return ((t) -> {
             logSevere(() -> String.format("Azure Cost Compute enumeration failed at %s due to %s",
                     statsData.stage.toString(), Utils.toString(t)));
-            statsData.parentOperation.fail(t);
+            statsData.operation.fail(t);
         });
     }
 }

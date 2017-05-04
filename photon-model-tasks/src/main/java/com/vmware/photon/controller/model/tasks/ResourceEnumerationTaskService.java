@@ -207,6 +207,12 @@ public class ResourceEnumerationTaskService extends TaskService<ResourceEnumerat
 
             ComputeStateWithDescription csd = o
                     .getBody(ComputeStateWithDescription.class);
+
+            if (csd.description.enumerationAdapterReference == null) {
+                // no enumeration adapter associated with this resource, just patch completion
+                sendSelfFinishedPatch(state);
+                return;
+            }
             sendRequest(Operation
                     .createPatch(csd.description.enumerationAdapterReference)
                     .setBody(req));

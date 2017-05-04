@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.stats;
+package com.vmware.photon.controller.model.adapters.azure.ea.stats;
 
 import java.io.File;
 import java.io.FileReader;
@@ -59,18 +59,16 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.Comput
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
-import com.vmware.photon.controller.model.adapters.azure.enumeration
-        .AzureSubscriptionsEnumerationService;
-import com.vmware.photon.controller.model.adapters.azure.enumeration
-        .AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
+import com.vmware.photon.controller.model.adapters.azure.ea.AzureCostStatsServiceHelper;
+import com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler;
+import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionsEnumerationService;
+import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureErrorResponse;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureService;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.EaSummarizedBillElement;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.OldApi;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.OldEaSummarizedBillElement;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureCostStatsServiceHelper;
-import com.vmware.photon.controller.model.adapters.azure.utils.AzureDetailedBillHandler;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureStatsNormalizer;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
@@ -80,10 +78,8 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
-import com.vmware.photon.controller.model.tasks.monitoring
-        .SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
-import com.vmware.photon.controller.model.tasks.monitoring
-        .SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceStatsCollectionTaskState;
+import com.vmware.photon.controller.model.tasks.monitoring.SingleResourceStatsCollectionTaskService.SingleResourceTaskCollectionStage;
 
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.OperationContext;

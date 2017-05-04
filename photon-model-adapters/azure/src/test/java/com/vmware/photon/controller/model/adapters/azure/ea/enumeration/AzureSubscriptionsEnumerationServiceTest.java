@@ -11,14 +11,10 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.enumeration;
+package com.vmware.photon.controller.model.adapters.azure.ea.enumeration;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
-import static com.vmware.photon.controller.model.adapters.azure.constants
-        .AzureConstants.AZURE_TENANT_ID;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -38,23 +34,19 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureCostConstants;
-import com.vmware.photon.controller.model.adapters.azure.enumeration
-        .AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
+import com.vmware.photon.controller.model.adapters.azure.ea.AzureEaAdapters;
+import com.vmware.photon.controller.model.adapters.azure.ea.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.azure.model.cost.AzureSubscription;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
-import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService
-        .ComputeDescription.ComputeType;
+import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService;
-import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService
-        .EndpointAllocationTaskState;
+import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
@@ -82,11 +74,10 @@ public class AzureSubscriptionsEnumerationServiceTest {
     private static final String SUBSCRIPTION_ID_2 = "subscriptionId2";
     private static final String ACCOUNT_ID_1 = "accountId1";
     private static final String ACCOUNT_ID_2 = "accountId2";
-    private static final String CLIENT_ID = "100"; // Azure EA account enrollment number
-    private static final String CLIENT_KEY = "clientKey";
+    // Azure EA account enrollment number
+    private static final String ENROLLMENT_NUMNBER = "100";
+    private static final String API_KEY = "clientKey";
     private static final String TENANT_ID = "tenantId";
-    private static final String SUBSCRIPTION_ID = "subscriptionId";
-    private static final String REGION = "westus";
 
     @Before
     public void setUp() throws Exception {
@@ -99,13 +90,13 @@ public class AzureSubscriptionsEnumerationServiceTest {
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
-            AzureAdapters.startServices(this.host);
+            AzureEaAdapters.startServices(this.host);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
-            this.host.waitForServiceAvailable(AzureAdapters.LINKS);
+            this.host.waitForServiceAvailable(AzureEaAdapters.LINKS);
 
             this.host.setTimeoutSeconds(600);
 
@@ -140,15 +131,12 @@ public class AzureSubscriptionsEnumerationServiceTest {
 
     private EndpointService.EndpointState createEndpointState() {
         EndpointService.EndpointState endpoint = new EndpointService.EndpointState();
-        endpoint.endpointType = PhotonModelConstants.EndpointType.azure.name();
-        endpoint.name = PhotonModelConstants.EndpointType.azure.name();
+        endpoint.endpointType = EndpointType.azure_ea.name();
+        endpoint.name = EndpointType.azure_ea.name();
 
         endpoint.endpointProperties = new HashMap<>();
-        endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, CLIENT_ID);
-        endpoint.endpointProperties.put(PRIVATE_KEY_KEY, CLIENT_KEY);
-        endpoint.endpointProperties.put(AZURE_TENANT_ID, TENANT_ID);
-        endpoint.endpointProperties.put(USER_LINK_KEY, SUBSCRIPTION_ID);
-        endpoint.endpointProperties.put(REGION_KEY, REGION);
+        endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, ENROLLMENT_NUMNBER);
+        endpoint.endpointProperties.put(PRIVATE_KEY_KEY, API_KEY);
         return endpoint;
     }
 
@@ -189,7 +177,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
         createAzureCostComputesForSubscriptions(subscriptions);
 
         // Query for Azure Computes created with CLIENT_ID as enrollment Number
-        QueryTask task = createQueryTaskForAzureComputes(CLIENT_ID,
+        QueryTask task = createQueryTaskForAzureComputes(ENROLLMENT_NUMNBER,
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
 
@@ -202,7 +190,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
         createAzureCostComputesForSubscriptions(Collections.singletonList(subscription));
 
         // Query for Azure Computes created with CLIENT_ID as enrollment Number
-        QueryTask task = createQueryTaskForAzureComputes(CLIENT_ID,
+        QueryTask task = createQueryTaskForAzureComputes(ENROLLMENT_NUMNBER,
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
 
@@ -218,7 +206,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
                 .fromJson(queryTaskResponse.results.documents.values().iterator().next(),
                         ComputeState.class);
         assertPropertiesOfComputeState(cs,
-                CLIENT_ID, SUBSCRIPTION_ID_2,
+                ENROLLMENT_NUMNBER, SUBSCRIPTION_ID_2,
                 ACCOUNT_ID_2, this.compute.endpointLink, this.compute.tenantLinks);
 
         this.createdComputeLinks.add(cs.documentSelfLink);
@@ -239,7 +227,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
         createAzureCostComputesForSubscriptions(Collections.singletonList(subscription));
 
         // Query for Azure Computes created with CLIENT_ID as enrollment Number
-        QueryTask task = createQueryTaskForAzureComputes(CLIENT_ID,
+        QueryTask task = createQueryTaskForAzureComputes(ENROLLMENT_NUMNBER,
                 Collections.singletonList(TENANT_ID));
         QueryTask queryTaskResponse = executQuerySynchronously(task);
         assertQueryTaskResponse(queryTaskResponse, 1);
@@ -249,7 +237,7 @@ public class AzureSubscriptionsEnumerationServiceTest {
                 .fromJson(queryTaskResponse.results.documents.values().iterator().next(),
                         ComputeState.class);
         assertPropertiesOfComputeState(cs,
-                CLIENT_ID, SUBSCRIPTION_ID_1, ACCOUNT_ID_1,
+                ENROLLMENT_NUMNBER, SUBSCRIPTION_ID_1, ACCOUNT_ID_1,
                 this.compute.endpointLink, this.compute.tenantLinks);
 
         this.createdComputeLinks.add(cs.documentSelfLink);

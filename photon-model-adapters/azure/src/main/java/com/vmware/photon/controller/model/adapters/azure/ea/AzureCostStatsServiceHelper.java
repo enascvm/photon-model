@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.utils;
+package com.vmware.photon.controller.model.adapters.azure.ea;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureConstants.AUTH_HEADER_BEARER_PREFIX;
@@ -57,70 +57,38 @@ import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.UNKNOWN_SUBSCRIPTION;
 import static com.vmware.photon.controller.model.adapters.azure.constants
         .AzureCostConstants.USAGE_API_KEY_JSON_EXPIRES_KEY;
-import static com.vmware.photon.controller.model.adapters.azure.stats
-        .AzureCostStatsService.DEFAULT_CURRENCY_VALUE;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.ACCOUNT_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.ACCOUNT_OWNER_ID;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.ADDITIONAL_INFO;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.CONSUMED_QUANTITY;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.CONSUMED_SERVICE;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.COST_CENTER;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.DATE;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.DAY;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.DEPARTMENT_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.EXTENDED_COST;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.INSTANCE_ID;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.METER_CATEGORY;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.METER_ID;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.METER_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.METER_REGION;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.METER_SUB_CATEGORY;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.MONTH;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.PRODUCT;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.RESOURCE_GROUP;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.RESOURCE_LOCATION;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.RESOURCE_RATE;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.SERVICE_ADMINISTRATOR_ID;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.SERVICE_INFO_1;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.SERVICE_INFO_2;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.STORE_SERVICE_IDENTIFIER;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_GUID;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_ID;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.TAGS;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.UNIT_OF_MEASURE;
-import static com.vmware.photon.controller.model.adapters.azure.utils
-        .AzureDetailedBillHandler.BillHeaders.YEAR;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.ACCOUNT_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.ACCOUNT_OWNER_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.ADDITIONAL_INFO;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.CONSUMED_QUANTITY;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.CONSUMED_SERVICE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.COST_CENTER;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.DATE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.DAY;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.DEPARTMENT_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.EXTENDED_COST;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.INSTANCE_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_CATEGORY;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_REGION;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.METER_SUB_CATEGORY;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.MONTH;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.PRODUCT;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.RESOURCE_GROUP;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.RESOURCE_LOCATION;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.RESOURCE_RATE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SERVICE_ADMINISTRATOR_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SERVICE_INFO_1;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SERVICE_INFO_2;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.STORE_SERVICE_IDENTIFIER;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_GUID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_ID;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.SUBSCRIPTION_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.TAGS;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.UNIT_OF_MEASURE;
+import static com.vmware.photon.controller.model.adapters.azure.ea.AzureDetailedBillHandler.BillHeaders.YEAR;
+import static com.vmware.photon.controller.model.adapters.azure.ea.stats.AzureCostStatsService.DEFAULT_CURRENCY_VALUE;
 
 import java.io.FileWriter;
 import java.io.IOException;

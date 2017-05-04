@@ -108,7 +108,8 @@ public class PhotonModelConstants {
         aws("AWS"),
         azure("Azure"),
         gpc("GCP"),
-        vsphere("vSphere");
+        vsphere("vSphere"),
+        azure_ea("Azure-EA");
 
         private final String value;
 

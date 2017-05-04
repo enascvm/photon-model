@@ -273,6 +273,34 @@ public class ResourceEnumerationTaskServiceTest extends Suite {
         }
 
         @Test
+        public void testMissingEnumerationAdapterReferencesSuccess() throws Throwable {
+            ComputeDescriptionService.ComputeDescription cd = ComputeDescriptionServiceTest
+                    .buildValidStartState();
+            cd.enumerationAdapterReference = null;
+            cd = this.postServiceSynchronously(
+                    ComputeDescriptionService.FACTORY_LINK, cd,
+                    ComputeDescriptionService.ComputeDescription.class);
+            ComputeService.ComputeStateWithDescription computeHost = createCompute(
+                    this, cd);
+
+            ResourceEnumerationTaskState enumState = buildValidStartState(computeHost);
+            ResourceEnumerationTaskService.ResourceEnumerationTaskState startState = this
+                    .postServiceSynchronously(
+                            ResourceEnumerationTaskService.FACTORY_LINK,
+                            enumState,
+                            ResourceEnumerationTaskService.ResourceEnumerationTaskState.class);
+
+            ResourceEnumerationTaskService.ResourceEnumerationTaskState newState = this
+                    .waitForServiceState(
+                            ResourceEnumerationTaskService.ResourceEnumerationTaskState.class,
+                            startState.documentSelfLink,
+                            state -> TaskState.TaskStage.FINISHED.ordinal() <= state.taskInfo.stage
+                                    .ordinal());
+            assertThat(newState.taskInfo.stage,
+                    is(TaskState.TaskStage.FINISHED));
+        }
+
+        @Test
         public void testFailure() throws Throwable {
             ComputeDescriptionService.ComputeDescription cd = createComputeDescription(
                     this,
