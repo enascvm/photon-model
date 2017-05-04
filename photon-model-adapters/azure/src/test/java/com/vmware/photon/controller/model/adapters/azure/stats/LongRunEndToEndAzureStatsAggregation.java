@@ -181,7 +181,8 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
         assertEquals(0, aggrRes.documentLinks.size());
 
         // perform enumeration on given Azure endpoint.
-        runEnumeration(this.host, computeHost.documentSelfLink, computeHost.resourcePoolLink, this.isMock);
+        runEnumeration(this.host, computeHost.documentSelfLink, computeHost.resourcePoolLink,
+                endpointState, this.isMock);
 
         // periodically perform stats collection and aggregation on given Azure endpoint
         runStatsCollectionAndAggregationLogNodeStatsPeriodically();

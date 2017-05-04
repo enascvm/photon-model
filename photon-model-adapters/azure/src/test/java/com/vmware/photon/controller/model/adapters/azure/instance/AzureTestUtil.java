@@ -1096,9 +1096,11 @@ public class AzureTestUtil {
      * Runs azure enumeration.
      */
     public static void runEnumeration(VerificationHost host, String hostSelfLink,
-            String resourcePoolLink, boolean isMock) throws Throwable {
+            String resourcePoolLink, EndpointState endpointState, boolean isMock) throws Throwable {
         ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
 
+        enumerationTaskState.endpointLink = endpointState.documentSelfLink;
+        enumerationTaskState.tenantLinks = endpointState.tenantLinks;
         enumerationTaskState.parentComputeLink = hostSelfLink;
         enumerationTaskState.enumerationAction = EnumerationAction.START;
         enumerationTaskState.adapterManagementReference = UriUtils

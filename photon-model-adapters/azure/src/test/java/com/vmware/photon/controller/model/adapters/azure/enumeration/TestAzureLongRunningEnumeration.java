@@ -37,6 +37,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.getAzureVirtualNetwork;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.initializeNicSpecs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.randomString;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.runEnumeration;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualMachine;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.updateAzureVirtualNetwork;
@@ -45,7 +46,6 @@ import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createS
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,7 +75,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
@@ -110,9 +109,6 @@ import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
 import com.vmware.photon.controller.model.tasks.ProvisioningUtils;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
-import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
@@ -415,7 +411,8 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
         if (this.isMock) {
 
-            runEnumeration();
+            runEnumeration(this.host, computeHost.documentSelfLink, computeHost.resourcePoolLink,
+                    endpointState, this.isMock);
 
             for (int i = 0; i < numOfVMsToTest; i++) {
                 deleteVMs(this.host, this.vmStates.get(i).documentSelfLink, this.isMock, 1);
@@ -535,7 +532,8 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                     .beginDelete(azureVMNames.get(i), azureVMNames.get(i));
         }
 
-        runEnumeration();
+        runEnumeration(this.host, computeHost.documentSelfLink, computeHost.resourcePoolLink,
+                endpointState, this.isMock);
 
         for (int i = 0; i < numOfVMsToTest; i++) {
             assertResourceExists(this.host, ComputeService.FACTORY_LINK, azureVMNames.get(i), false);
@@ -633,7 +631,8 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     private ScheduledFuture<?> runEnumerationAndLogNodeStatsPeriodically() {
         return this.host.getScheduledExecutor().scheduleAtFixedRate(() -> {
             try {
-                runEnumeration();
+                runEnumeration(this.host, computeHost.documentSelfLink, computeHost.resourcePoolLink,
+                        endpointState, this.isMock);
                 this.numOfEnumerationsRan++;
 
                 // Print node memory usage
@@ -931,44 +930,6 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                 createDefaultVMResource(this.host, staleVMName, computeHost, endpointState, nicSpecs.get(j));
             }
         }
-    }
-
-    /**
-     * Runs an enumeration cycle.
-     */
-    private void runEnumeration() throws Throwable {
-        this.host.log(Level.INFO, "===== Running Enumeration =====");
-
-        ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
-
-        enumerationTaskState.endpointLink = endpointState.documentSelfLink;
-        enumerationTaskState.tenantLinks = endpointState.tenantLinks;
-        enumerationTaskState.parentComputeLink = computeHost.documentSelfLink;
-        enumerationTaskState.enumerationAction = EnumerationAction.START;
-        enumerationTaskState.adapterManagementReference = UriUtils
-                .buildUri(AzureEnumerationAdapterService.SELF_LINK);
-        enumerationTaskState.resourcePoolLink = computeHost.resourcePoolLink;
-        if (this.isMock) {
-            enumerationTaskState.options = EnumSet.of(TaskOption.IS_MOCK);
-        }
-
-        ResourceEnumerationTaskState enumTask = TestUtils
-                .doPost(this.host, enumerationTaskState, ResourceEnumerationTaskState.class,
-                        UriUtils.buildUri(this.host, ResourceEnumerationTaskService.FACTORY_LINK));
-
-        this.host.waitFor("Error waiting for enumeration task", () -> {
-            try {
-                ResourceEnumerationTaskState state = this.host
-                        .waitForFinishedTask(ResourceEnumerationTaskState.class,
-                                enumTask.documentSelfLink);
-                if (state != null) {
-                    return true;
-                }
-            } catch (Throwable e) {
-                return false;
-            }
-            return false;
-        });
     }
 
     /**

@@ -20,11 +20,11 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultComputeHost;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultEndpointState;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultResourcePool;
-import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.resourceStatsCollection;
+import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.runEnumeration;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
 import java.net.URI;
-import java.util.EnumSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
@@ -35,9 +35,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
-import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
@@ -47,12 +45,6 @@ import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
-import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService.ResourceEnumerationTaskState;
-import com.vmware.photon.controller.model.tasks.TaskOption;
-import com.vmware.photon.controller.model.tasks.TestUtils;
-import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService;
-import com.vmware.photon.controller.model.tasks.monitoring.StatsCollectionTaskService.StatsCollectionTaskState;
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -61,7 +53,6 @@ import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.ServiceStats.ServiceStat;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
-import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
@@ -90,11 +81,11 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
     private static final int MEMORY_THRESHOLD_WARNING = 60;
     private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 1;
 
+    public boolean isMock = true;
     public String clientID = "clientID";
     public String clientKey = "clientKey";
     public String subscriptionId = "subscriptionId";
     public String tenantId = "tenantId";
-    public boolean isMock = true;
 
     // object counts
     public int vmCount = 0;
@@ -171,7 +162,8 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
      */
     @Test
     public void testStatsCollection() throws Throwable {
-        runEnumeration();
+        runEnumeration(this.host, computeHost.documentSelfLink, computeHost.resourcePoolLink,
+                endpointState, this.isMock);
 
         ServiceDocumentQueryResult result = queryDocumentsAndAssertExpectedCount(
                 this.host, this.vmCount, ComputeService.FACTORY_LINK, false);
@@ -214,43 +206,6 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
     }
 
     /**
-     * Runs enumeration.
-     * @throws Throwable
-     */
-    private void runEnumeration() throws Throwable {
-        ResourceEnumerationTaskState enumerationTaskState = new ResourceEnumerationTaskState();
-
-        enumerationTaskState.endpointLink = endpointState.documentSelfLink;
-        enumerationTaskState.tenantLinks = endpointState.tenantLinks;
-        enumerationTaskState.parentComputeLink = computeHost.documentSelfLink;
-        enumerationTaskState.enumerationAction = EnumerationAction.START;
-        enumerationTaskState.adapterManagementReference = UriUtils
-                .buildUri(AzureEnumerationAdapterService.SELF_LINK);
-        enumerationTaskState.resourcePoolLink = computeHost.resourcePoolLink;
-        if (this.isMock) {
-            enumerationTaskState.options = EnumSet.of(TaskOption.IS_MOCK);
-        }
-
-        ResourceEnumerationTaskState enumTask = TestUtils
-                .doPost(this.host, enumerationTaskState, ResourceEnumerationTaskState.class,
-                        UriUtils.buildUri(this.host, ResourceEnumerationTaskService.FACTORY_LINK));
-
-        this.host.waitFor("Error waiting for enumeration task", () -> {
-            try {
-                ResourceEnumerationTaskState state = this.host
-                        .waitForFinishedTask(ResourceEnumerationTaskState.class,
-                                enumTask.documentSelfLink);
-                if (state != null) {
-                    return true;
-                }
-            } catch (Throwable e) {
-                return false;
-            }
-            return false;
-        });
-    }
-
-    /**
      * Runs stats collection task, verifies stats collection is done correctly and logs node stats periodically.
      */
     private void runStatsCollectionPeriodicallyAndCollectNodeStats() {
@@ -260,8 +215,7 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
                 this.host.log(Level.INFO, "Collecting stats for VM and Compute Host");
                 if (this.enumeratedComputeLink != null) {
                     this.host.waitFor("Error waiting for stats collection...", () -> {
-                        resourceStatsCollection(host, null,
-                                this.isMock ? EnumSet.of(TaskOption.IS_MOCK) : null);
+                        resourceStatsCollection(this.host, this.isMock, computeHost.resourcePoolLink);
                         logNodeStats(this.host.getServiceStats(this.nodeStatsUri));
                         verifyStatsCollection(this.enumeratedComputeLink);
                         verifyStatsCollection(computeHost.documentSelfLink);
@@ -300,49 +254,6 @@ public class TestAzureStatsCollection extends BasicReusableHostTestCase {
 
         this.host.log(this.loggingLevelForMemory, STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT
                 + SEPARATOR + this.availableMemoryPercentage);
-    }
-
-    /**
-     * Waits for stats collection task to be finished.
-     * @param host
-     * @param peerURI
-     * @param options
-     * @throws Throwable
-     */
-    public void resourceStatsCollection(VerificationHost host, URI peerURI,
-                                               EnumSet<TaskOption> options) throws Throwable {
-        StatsCollectionTaskState statsTask = performResourceStatsCollection(
-                host, options);
-
-        // Wait for the stats collection task to be completed.
-        host.waitForFinishedTask(StatsCollectionTaskState.class,
-                createServiceURI(host, peerURI, statsTask.documentSelfLink));
-    }
-
-    /**
-     * Performs stats collection for given resourcePoolLink.
-     * @param host
-     * @param options
-     */
-    public StatsCollectionTaskState performResourceStatsCollection(
-            VerificationHost host, EnumSet<TaskOption> options)
-            throws Throwable {
-
-        StatsCollectionTaskState statsCollectionTaskState =
-                new StatsCollectionTaskState();
-
-        statsCollectionTaskState.resourcePoolLink = computeHost.resourcePoolLink;
-        statsCollectionTaskState.options = EnumSet.noneOf(TaskOption.class);
-
-        if (options != null) {
-            statsCollectionTaskState.options = options;
-        }
-
-        URI uri = UriUtils.buildUri(host, StatsCollectionTaskService.FACTORY_LINK);
-        StatsCollectionTaskState statsTask = TestUtils.doPost(
-                host, statsCollectionTaskState, StatsCollectionTaskState.class, uri);
-
-        return statsTask;
     }
 
     /**
