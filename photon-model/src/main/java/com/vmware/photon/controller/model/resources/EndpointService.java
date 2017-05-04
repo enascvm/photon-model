@@ -45,7 +45,8 @@ public class EndpointService extends StatefulService {
         public static final String FIELD_NAME_ENDPOINT_PROPERTIES = "endpointProperties";
 
         @Documentation(description = "Endpoint type of the endpoint instance,e.g. aws,azure,...")
-        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, REQUIRED }, indexing = PropertyIndexingOption.CASE_INSENSITIVE)
+        @PropertyOptions(usage = { SINGLE_ASSIGNMENT, REQUIRED },
+                indexing = { PropertyIndexingOption.CASE_INSENSITIVE, PropertyIndexingOption.SORT })
         public String endpointType;
 
         @Documentation(description = "The link to the credentials to authenticate against this endpoint.")
