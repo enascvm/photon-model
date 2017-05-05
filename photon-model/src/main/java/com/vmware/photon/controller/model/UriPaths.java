@@ -31,6 +31,7 @@ public class UriPaths {
     public static final String RESOURCES_SUBNETS = RESOURCES + "/sub-networks";
     public static final String RESOURCES_SECURITY_GROUPS = RESOURCES + "/security-groups";
     public static final String RESOURCES_LOAD_BALANCERS = RESOURCES + "/load-balancers";
+    public static final String RESOURCES_LOAD_BALANCER_DESCRIPTIONS = RESOURCES + "/load-balancer-descriptions";
 
     public static final String RESOURCES_IMAGES = RESOURCES + "/images";
 

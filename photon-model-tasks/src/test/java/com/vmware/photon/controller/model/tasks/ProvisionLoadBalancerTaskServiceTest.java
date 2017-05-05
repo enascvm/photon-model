@@ -17,6 +17,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 import java.util.EnumSet;
+import java.util.HashSet;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -28,9 +29,11 @@ import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.LoadBalancerService;
 import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
+import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
@@ -58,7 +61,10 @@ public class ProvisionLoadBalancerTaskServiceTest extends Suite {
         state.name = "load-balancer-name";
         state.endpointLink = EndpointService.FACTORY_LINK + "/my-endpoint";
         state.regionId = "regionId";
-        state.zoneId = "zoneId";
+        state.computeLinks = new HashSet<>();
+        state.computeLinks.add(ComputeService.FACTORY_LINK + "/a-compute");
+        state.subnetLinks = new HashSet<>();
+        state.subnetLinks.add(SubnetService.FACTORY_LINK + "/a-subnet");
         state.protocol = "HTTP";
         state.port = 80;
         state.instanceProtocol = "HTTP";

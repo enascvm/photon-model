@@ -34,7 +34,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
+import com.vmware.photon.controller.model.resources.LoadBalancerDescriptionService.LoadBalancerDescription;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -42,50 +42,49 @@ import com.vmware.xenon.services.common.QueryTask;
 import com.vmware.xenon.services.common.TenantService;
 
 /**
- * This class implements tests for the {@link LoadBalancerService} class.
+ * This class implements tests for the {@link LoadBalancerDescriptionService} class.
  */
-@RunWith(LoadBalancerServiceTest.class)
-@SuiteClasses({ LoadBalancerServiceTest.ConstructorTest.class,
-        LoadBalancerServiceTest.HandleStartTest.class,
-        LoadBalancerServiceTest.HandlePatchTest.class,
-        LoadBalancerServiceTest.QueryTest.class })
-public class LoadBalancerServiceTest extends Suite {
+@RunWith(LoadBalancerDescriptionServiceTest.class)
+@SuiteClasses({ LoadBalancerDescriptionServiceTest.ConstructorTest.class,
+        LoadBalancerDescriptionServiceTest.HandleStartTest.class,
+        LoadBalancerDescriptionServiceTest.HandlePatchTest.class,
+        LoadBalancerDescriptionServiceTest.QueryTest.class })
+public class LoadBalancerDescriptionServiceTest extends Suite {
 
-    public LoadBalancerServiceTest(Class<?> klass, RunnerBuilder builder)
+    public LoadBalancerDescriptionServiceTest(Class<?> klass, RunnerBuilder builder)
             throws InitializationError {
         super(klass, builder);
     }
 
-    private static LoadBalancerState buildValidStartState() {
-        LoadBalancerState loadBalancerState = new LoadBalancerState();
-        loadBalancerState.descriptionLink = LoadBalancerDescriptionService.FACTORY_LINK + "/lb-desc";
-        loadBalancerState.id = UUID.randomUUID().toString();
-        loadBalancerState.name = "networkName";
-        loadBalancerState.endpointLink = EndpointService.FACTORY_LINK + "/my-endpoint";
-        loadBalancerState.computeLinks = new HashSet<>();
-        loadBalancerState.computeLinks.add(ComputeService.FACTORY_LINK + "/a-compute");
-        loadBalancerState.subnetLinks = new HashSet<>();
-        loadBalancerState.subnetLinks.add(SubnetService.FACTORY_LINK + "/a-subnet");
-        loadBalancerState.regionId = "regionId";
-        loadBalancerState.protocol = "HTTP";
-        loadBalancerState.port = 80;
-        loadBalancerState.instanceProtocol = "HTTP";
-        loadBalancerState.instancePort = 80;
-        loadBalancerState.tenantLinks = new ArrayList<>();
-        loadBalancerState.tenantLinks.add("tenant-linkA");
+    private static LoadBalancerDescription buildValidStartState() {
+        LoadBalancerDescription state = new LoadBalancerDescription();
+        state.id = UUID.randomUUID().toString();
+        state.name = "networkName";
+        state.endpointLink = EndpointService.FACTORY_LINK + "/my-endpoint";
+        state.computeDescriptionLink = ComputeDescriptionService.FACTORY_LINK + "/a-compute-desc";
+        state.subnetLinks = new HashSet<>();
+        state.subnetLinks.add(SubnetService.FACTORY_LINK + "/a-subnet");
+        state.regionId = "regionId";
+        state.protocol = "HTTP";
+        state.port = 80;
+        state.instanceProtocol = "HTTP";
+        state.instancePort = 80;
+        state.tenantLinks = new ArrayList<>();
+        state.tenantLinks.add("tenant-linkA");
 
-        return loadBalancerState;
+        return state;
     }
 
     /**
      * This class implements tests for the constructor.
      */
     public static class ConstructorTest {
-        private LoadBalancerService loadBalancerService = new LoadBalancerService();
+        private LoadBalancerDescriptionService loadBalancerDescriptionService =
+                new LoadBalancerDescriptionService();
 
         @Before
         public void setupTest() {
-            this.loadBalancerService = new LoadBalancerService();
+            this.loadBalancerDescriptionService = new LoadBalancerDescriptionService();
         }
 
         @Test
@@ -96,7 +95,7 @@ public class LoadBalancerServiceTest extends Suite {
                     Service.ServiceOption.REPLICATION,
                     Service.ServiceOption.OWNER_SELECTION,
                     Service.ServiceOption.IDEMPOTENT_POST);
-            assertThat(this.loadBalancerService.getOptions(), is(expected));
+            assertThat(this.loadBalancerDescriptionService.getOptions(), is(expected));
         }
     }
 
@@ -106,10 +105,10 @@ public class LoadBalancerServiceTest extends Suite {
     public static class HandleStartTest extends BaseModelTest {
         @Test
         public void testValidStartState() throws Throwable {
-            LoadBalancerState startState = buildValidStartState();
-            LoadBalancerState returnState = postServiceSynchronously(
-                    LoadBalancerService.FACTORY_LINK,
-                    startState, LoadBalancerState.class);
+            LoadBalancerDescription startState = buildValidStartState();
+            LoadBalancerDescription returnState = postServiceSynchronously(
+                    LoadBalancerDescriptionService.FACTORY_LINK,
+                    startState, LoadBalancerDescription.class);
 
             assertNotNull(returnState);
             assertThat(returnState.id, is(startState.id));
@@ -122,49 +121,50 @@ public class LoadBalancerServiceTest extends Suite {
 
         @Test
         public void testDuplicatePost() throws Throwable {
-            LoadBalancerState startState = buildValidStartState();
-            LoadBalancerState returnState = postServiceSynchronously(
-                    LoadBalancerService.FACTORY_LINK,
-                    startState, LoadBalancerState.class);
+            LoadBalancerDescription startState = buildValidStartState();
+            LoadBalancerDescription returnState = postServiceSynchronously(
+                    LoadBalancerDescriptionService.FACTORY_LINK,
+                    startState, LoadBalancerDescription.class);
 
             assertNotNull(returnState);
             assertThat(returnState.name, is(startState.name));
             startState.name = "new-name";
-            returnState = postServiceSynchronously(LoadBalancerService.FACTORY_LINK,
-                    startState, LoadBalancerState.class);
+            returnState = postServiceSynchronously(LoadBalancerDescriptionService.FACTORY_LINK,
+                    startState, LoadBalancerDescription.class);
             assertThat(returnState.name, is(startState.name));
         }
 
         @Test
         public void testInvalidValues() throws Throwable {
-            LoadBalancerState missingRegionId = buildValidStartState();
-            LoadBalancerState missingEndpointLink = buildValidStartState();
-            LoadBalancerState missingComputeLinks = buildValidStartState();
-            LoadBalancerState missingSubnetLinks = buildValidStartState();
-            LoadBalancerState missingProtocol = buildValidStartState();
-            LoadBalancerState missingPort = buildValidStartState();
-            LoadBalancerState missingInstanceProtocol = buildValidStartState();
-            LoadBalancerState missingInstancePort = buildValidStartState();
-            LoadBalancerState invalidPort = buildValidStartState();
-            LoadBalancerState invalidInstancePort = buildValidStartState();
+            LoadBalancerDescription missingRegionId = buildValidStartState();
+            LoadBalancerDescription missingEndpointLink = buildValidStartState();
+            LoadBalancerDescription missingComputeDescriptionLink = buildValidStartState();
+            LoadBalancerDescription missingSubnetLinks = buildValidStartState();
+            LoadBalancerDescription missingProtocol = buildValidStartState();
+            LoadBalancerDescription missingPort = buildValidStartState();
+            LoadBalancerDescription missingInstanceProtocol = buildValidStartState();
+            LoadBalancerDescription missingInstancePort = buildValidStartState();
+            LoadBalancerDescription invalidPort = buildValidStartState();
+            LoadBalancerDescription invalidInstancePort = buildValidStartState();
 
             missingRegionId.regionId = null;
             missingEndpointLink.endpointLink = null;
-            missingComputeLinks.computeLinks = null;
+            missingComputeDescriptionLink.computeDescriptionLink = null;
             missingSubnetLinks.subnetLinks = null;
             missingProtocol.protocol = null;
             missingPort.port = null;
             missingInstanceProtocol.instanceProtocol = null;
             missingInstancePort.instancePort = null;
-            invalidPort.port = LoadBalancerService.MIN_PORT_NUMBER - 1;
-            invalidInstancePort.instancePort = LoadBalancerService.MAX_PORT_NUMBER + 1;
+            invalidPort.port = LoadBalancerDescriptionService.MIN_PORT_NUMBER - 1;
+            invalidInstancePort.instancePort = LoadBalancerDescriptionService.MAX_PORT_NUMBER + 1;
 
-            LoadBalancerState[] states = { missingRegionId, missingEndpointLink,
-                    missingComputeLinks, missingSubnetLinks,  missingProtocol, missingPort,
-                    missingInstanceProtocol, missingInstancePort, invalidPort, invalidInstancePort };
-            for (LoadBalancerState state : states) {
-                postServiceSynchronously(LoadBalancerService.FACTORY_LINK,
-                        state, LoadBalancerState.class,
+            LoadBalancerDescription[] states = { missingRegionId, missingEndpointLink,
+                    missingComputeDescriptionLink, missingSubnetLinks,  missingProtocol,
+                    missingPort, missingInstanceProtocol, missingInstancePort, invalidPort,
+                    invalidInstancePort };
+            for (LoadBalancerDescription state : states) {
+                postServiceSynchronously(LoadBalancerDescriptionService.FACTORY_LINK,
+                        state, LoadBalancerDescription.class,
                         IllegalArgumentException.class);
             }
         }
@@ -176,18 +176,17 @@ public class LoadBalancerServiceTest extends Suite {
     public static class HandlePatchTest extends BaseModelTest {
         @Test
         public void testPatch() throws Throwable {
-            LoadBalancerState startState = buildValidStartState();
+            LoadBalancerDescription startState = buildValidStartState();
 
-            LoadBalancerState returnState = postServiceSynchronously(
-                    LoadBalancerService.FACTORY_LINK,
-                    startState, LoadBalancerState.class);
+            LoadBalancerDescription returnState = postServiceSynchronously(
+                    LoadBalancerDescriptionService.FACTORY_LINK,
+                    startState, LoadBalancerDescription.class);
 
-            LoadBalancerState patchState = new LoadBalancerState();
-            patchState.descriptionLink = LoadBalancerDescriptionService.FACTORY_LINK + "/new-desc";
+            LoadBalancerDescription patchState = new LoadBalancerDescription();
             patchState.name = "patchNetworkName";
             patchState.endpointLink = EndpointService.FACTORY_LINK + "/new-endpoint";
-            patchState.computeLinks = new HashSet<>();
-            patchState.computeLinks.add(ComputeService.FACTORY_LINK + "/b-compute");
+            patchState.computeDescriptionLink = ComputeDescriptionService.FACTORY_LINK
+                    + "/b-compute-desc";
             patchState.subnetLinks = new HashSet<>();
             patchState.subnetLinks.add(SubnetService.FACTORY_LINK + "/b-subnet");
             patchState.customProperties = new HashMap<>();
@@ -197,17 +196,15 @@ public class LoadBalancerServiceTest extends Suite {
             patchState.groupLinks = new HashSet<String>();
             patchState.groupLinks.add("group1");
             patchState.regionId = "new-region";
-            patchServiceSynchronously(returnState.documentSelfLink,
-                    patchState);
+            patchServiceSynchronously(returnState.documentSelfLink, patchState);
 
             returnState = getServiceSynchronously(
                     returnState.documentSelfLink,
-                    LoadBalancerState.class);
+                    LoadBalancerDescription.class);
 
-            assertThat(returnState.descriptionLink, is(startState.descriptionLink)); // no change
             assertThat(returnState.name, is(patchState.name));
-            assertThat(returnState.endpointLink, is(startState.endpointLink)); // no change
-            assertThat(returnState.computeLinks.size(), is(2));
+            assertThat(returnState.endpointLink, is(patchState.endpointLink));
+            assertThat(returnState.computeDescriptionLink, is(patchState.computeDescriptionLink));
             assertThat(returnState.subnetLinks.size(), is(2));
             assertThat(returnState.customProperties,
                     is(patchState.customProperties));
@@ -223,21 +220,21 @@ public class LoadBalancerServiceTest extends Suite {
     public static class QueryTest extends BaseModelTest {
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            LoadBalancerState LoadBalancerState = buildValidStartState();
+            LoadBalancerDescription LoadBalancerDescription = buildValidStartState();
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
-            LoadBalancerState.tenantLinks = new ArrayList<>();
-            LoadBalancerState.tenantLinks.add(UriUtils.buildUriPath(
+            LoadBalancerDescription.tenantLinks = new ArrayList<>();
+            LoadBalancerDescription.tenantLinks.add(UriUtils.buildUriPath(
                     tenantUri.getPath(), "tenantA"));
-            LoadBalancerState startState = postServiceSynchronously(
-                    LoadBalancerService.FACTORY_LINK,
-                    LoadBalancerState, LoadBalancerState.class);
+            LoadBalancerDescription startState = postServiceSynchronously(
+                    LoadBalancerDescriptionService.FACTORY_LINK,
+                    LoadBalancerDescription, LoadBalancerDescription.class);
 
-            String kind = Utils.buildKind(LoadBalancerState.class);
+            String kind = Utils.buildKind(LoadBalancerDescription.class);
             String propertyName = QueryTask.QuerySpecification
                     .buildCollectionItemName(ResourceState.FIELD_NAME_TENANT_LINKS);
 
             QueryTask q = createDirectQueryTask(kind, propertyName,
-                    LoadBalancerState.tenantLinks.get(0));
+                    LoadBalancerDescription.tenantLinks.get(0));
             q = querySynchronously(q);
             assertNotNull(q.results.documentLinks);
             assertThat(q.results.documentCount, is(1L));

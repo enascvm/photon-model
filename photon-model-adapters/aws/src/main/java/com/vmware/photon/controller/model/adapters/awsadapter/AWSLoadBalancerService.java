@@ -17,22 +17,24 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCli
 
 import java.net.URI;
 import java.util.Arrays;
+import java.util.stream.Collectors;
 
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
 import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerRequest;
 import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerResult;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerResult;
+import com.amazonaws.services.elasticloadbalancing.model.Instance;
 import com.amazonaws.services.elasticloadbalancing.model.Listener;
 import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerRequest;
+import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerResult;
 
 import com.vmware.photon.controller.model.adapterapi.LoadBalancerInstanceRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSDeferredResultAsyncHandler;
 import com.vmware.photon.controller.model.adapters.util.TaskManager;
-import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
-import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerState;
+import com.vmware.photon.controller.model.resources.LoadBalancerService.LoadBalancerStateExpanded;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
@@ -51,8 +53,7 @@ public class AWSLoadBalancerService extends StatelessService {
 
         final LoadBalancerInstanceRequest request;
 
-        LoadBalancerState loadBalancerState;
-        EndpointState endpointState;
+        LoadBalancerStateExpanded loadBalancerStateExpanded;
         AuthCredentialsServiceState credentials;
 
         AmazonElasticLoadBalancingAsyncClient client;
@@ -119,38 +120,25 @@ public class AWSLoadBalancerService extends StatelessService {
     private DeferredResult<AWSLoadBalancerContext> populateContext(AWSLoadBalancerContext context) {
         return DeferredResult.completed(context)
                 .thenCompose(this::getLoadBalancerState)
-                .thenCompose(this::getEndpointState)
                 .thenCompose(this::getCredentials)
                 .thenCompose(this::getAWSClient);
     }
 
     private DeferredResult<AWSLoadBalancerContext> getLoadBalancerState(AWSLoadBalancerContext context) {
-        return this.sendWithDeferredResult(
-                Operation.createGet(context.request.resourceReference), LoadBalancerState.class)
-                .thenApply(loadBalancerState -> {
-                    context.loadBalancerState = loadBalancerState;
-                    return context;
-                });
-    }
-
-    private DeferredResult<AWSLoadBalancerContext> getEndpointState(AWSLoadBalancerContext context) {
-        if (context.loadBalancerState.endpointLink == null) {
-            return DeferredResult.failed(
-                    new IllegalStateException("No endpoint link found in resource "
-                            + context.loadBalancerState.documentSelfLink));
-        }
-
-        URI uri = context.request.buildUri(context.loadBalancerState.endpointLink);
-        return this.sendWithDeferredResult(
-                Operation.createGet(uri), EndpointState.class)
-                .thenApply(endpointState -> {
-                    context.endpointState = endpointState;
+        return this
+                .sendWithDeferredResult(
+                        Operation.createGet(LoadBalancerStateExpanded.buildUri(
+                                context.request.resourceReference)),
+                        LoadBalancerStateExpanded.class)
+                .thenApply(state -> {
+                    context.loadBalancerStateExpanded = state;
                     return context;
                 });
     }
 
     private DeferredResult<AWSLoadBalancerContext> getCredentials(AWSLoadBalancerContext context) {
-        URI uri = context.request.buildUri(context.endpointState.authCredentialsLink);
+        URI uri = context.request
+                .buildUri(context.loadBalancerStateExpanded.endpointState.authCredentialsLink);
         return this.sendWithDeferredResult(
                 Operation.createGet(uri), AuthCredentialsServiceState.class)
                 .thenApply(authCredentialsServiceState -> {
@@ -162,7 +150,7 @@ public class AWSLoadBalancerService extends StatelessService {
     private DeferredResult<AWSLoadBalancerContext> getAWSClient(AWSLoadBalancerContext context) {
         DeferredResult<AWSLoadBalancerContext> r = new DeferredResult<>();
         context.client = this.clientManager.getOrCreateLoadBalancingClient(context.credentials,
-                context.loadBalancerState.regionId, this, context.request.isMockRequest,
+                context.loadBalancerStateExpanded.regionId, this, context.request.isMockRequest,
                 (t) -> r.fail(t));
         if (context.client != null) {
             r.complete(context);
@@ -181,7 +169,8 @@ public class AWSLoadBalancerService extends StatelessService {
                 // TODO
             } else {
                 execution = execution
-                        .thenCompose(this::createLoadBalancer);
+                        .thenCompose(this::createLoadBalancer)
+                        .thenCompose(this::assignInstances);
             }
 
             return execution;
@@ -203,11 +192,10 @@ public class AWSLoadBalancerService extends StatelessService {
 
     private DeferredResult<AWSLoadBalancerContext> createLoadBalancer(
             AWSLoadBalancerContext context) {
-
         CreateLoadBalancerRequest request = buildCreationRequest(context);
 
         String message = "Create a new AWS Load Balancer with name ["
-                + context.loadBalancerState.name + "].";
+                + context.loadBalancerStateExpanded.name + "].";
         AWSDeferredResultAsyncHandler<CreateLoadBalancerRequest, CreateLoadBalancerResult> handler =
                 new AWSDeferredResultAsyncHandler<CreateLoadBalancerRequest,
                         CreateLoadBalancerResult>(this, message) {
@@ -224,39 +212,63 @@ public class AWSLoadBalancerService extends StatelessService {
                 .thenApply(ignore -> context);
     }
 
+    private DeferredResult<AWSLoadBalancerContext> assignInstances(AWSLoadBalancerContext context) {
+        RegisterInstancesWithLoadBalancerRequest request = buildInstanceRegistrationRequest(context);
+
+        String message = "Registering instances to AWS Load Balancer with name ["
+                + context.loadBalancerStateExpanded.name + "].";
+        AWSDeferredResultAsyncHandler<RegisterInstancesWithLoadBalancerRequest, RegisterInstancesWithLoadBalancerResult> handler =
+                new AWSDeferredResultAsyncHandler<RegisterInstancesWithLoadBalancerRequest,
+                RegisterInstancesWithLoadBalancerResult>(this, message) {
+                    @Override
+                    protected DeferredResult<RegisterInstancesWithLoadBalancerResult> consumeSuccess(
+                            RegisterInstancesWithLoadBalancerRequest request,
+                            RegisterInstancesWithLoadBalancerResult result) {
+                        return DeferredResult.completed(result);
+                    }
+                };
+
+        context.client.registerInstancesWithLoadBalancerAsync(request, handler);
+        return handler.toDeferredResult()
+                .thenApply(ignore -> context);
+    }
+
     private CreateLoadBalancerRequest buildCreationRequest(AWSLoadBalancerContext context) {
         Listener listener = new Listener()
-                .withProtocol(context.loadBalancerState.protocol)
-                .withLoadBalancerPort(context.loadBalancerState.port)
-                .withInstanceProtocol(context.loadBalancerState.instanceProtocol)
-                .withInstancePort(context.loadBalancerState.instancePort);
+                .withProtocol(context.loadBalancerStateExpanded.protocol)
+                .withLoadBalancerPort(context.loadBalancerStateExpanded.port)
+                .withInstanceProtocol(context.loadBalancerStateExpanded.instanceProtocol)
+                .withInstancePort(context.loadBalancerStateExpanded.instancePort);
 
         CreateLoadBalancerRequest request = new CreateLoadBalancerRequest()
-                .withLoadBalancerName(context.loadBalancerState.name)
+                .withLoadBalancerName(context.loadBalancerStateExpanded.name)
                 .withListeners(Arrays.asList(listener))
-                .withAvailabilityZones(context.loadBalancerState.zoneId); // TODO: subnet
+                .withSubnets(context.loadBalancerStateExpanded.subnets.stream()
+                        .map(subnet -> subnet.id).collect(Collectors.toList()));
 
         // TODO .withSchema internal vs. internet-facing
 
         return request;
     }
 
-    @SuppressWarnings("unused")
-    private RegisterInstancesWithLoadBalancerRequest buildRegistrationRequest(
+    private RegisterInstancesWithLoadBalancerRequest buildInstanceRegistrationRequest(
             AWSLoadBalancerContext context) {
-        RegisterInstancesWithLoadBalancerRequest request = new RegisterInstancesWithLoadBalancerRequest()
-                .withInstances();
-        // TODO add instances
-        return request;
+        RegisterInstancesWithLoadBalancerRequest request =
+                new RegisterInstancesWithLoadBalancerRequest();
+
+        return request.withLoadBalancerName(context.loadBalancerStateExpanded.name)
+                .withInstances(context.loadBalancerStateExpanded.computes.stream()
+                        .map(compute -> new Instance(compute.id))
+                        .collect(Collectors.toList()));
     }
 
     private DeferredResult<AWSLoadBalancerContext> deleteLoadBalancer(
             AWSLoadBalancerContext context) {
         DeleteLoadBalancerRequest request = new DeleteLoadBalancerRequest()
-                .withLoadBalancerName(context.loadBalancerState.name);
+                .withLoadBalancerName(context.loadBalancerStateExpanded.name);
 
-        String message = "Delete AWS Load Balancer with name [" + context.loadBalancerState.name
-                + "].";
+        String message = "Delete AWS Load Balancer with name ["
+                + context.loadBalancerStateExpanded.name + "].";
         AWSDeferredResultAsyncHandler<DeleteLoadBalancerRequest, DeleteLoadBalancerResult> handler =
                 new AWSDeferredResultAsyncHandler<DeleteLoadBalancerRequest,
                         DeleteLoadBalancerResult>(this, message) {
@@ -276,7 +288,8 @@ public class AWSLoadBalancerService extends StatelessService {
             AWSLoadBalancerContext context) {
         return this
                 .sendWithDeferredResult(
-                        Operation.createDelete(this, context.loadBalancerState.documentSelfLink))
+                        Operation.createDelete(this,
+                                context.loadBalancerStateExpanded.documentSelfLink))
                 .thenApply(operation -> context);
     }
 }

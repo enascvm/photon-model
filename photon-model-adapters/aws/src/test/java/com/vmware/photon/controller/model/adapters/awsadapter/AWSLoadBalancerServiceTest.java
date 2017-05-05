@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNull;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClient;
 import com.amazonaws.services.elasticloadbalancing.model.DeleteLoadBalancerRequest;
@@ -58,7 +59,6 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
     public String secretKey = "test123";
     public String accessKey = "blas123";
     public String regionId = TestAWSSetupUtils.regionId;
-    public String availabilityZoneIdentifier = "a";
     private int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
     public boolean isMock = true;
     private AmazonElasticLoadBalancingAsyncClient client;
@@ -159,7 +159,8 @@ public class AWSLoadBalancerServiceTest extends BaseModelTest {
         state.name = name;
         state.endpointLink = this.endpointState.documentSelfLink;
         state.regionId = this.regionId;
-        state.zoneId = this.regionId + this.availabilityZoneIdentifier;
+        state.computeLinks = new HashSet<>();
+        state.subnetLinks = new HashSet<>();
         state.protocol = "HTTP";
         state.port = 80;
         state.instanceProtocol = "HTTP";
