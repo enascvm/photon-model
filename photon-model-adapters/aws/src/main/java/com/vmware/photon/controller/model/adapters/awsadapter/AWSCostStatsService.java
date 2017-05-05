@@ -13,6 +13,9 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ACCOUNT_IS_AUTO_DISCOVERED;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_LINKED_ACCOUNT_IDS;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -37,8 +40,10 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.amazonaws.event.ProgressEvent;
 import com.amazonaws.event.ProgressEventType;
@@ -145,7 +150,6 @@ public class AWSCostStatsService extends StatelessService {
         protected String accountId;
 
         protected boolean isSecondPass = false;
-        protected Set<String> missingLinkedAccountIds = new HashSet<>();
 
         protected AWSCostStatsCreationContext(ComputeStatsRequest statsRequest) {
             this.statsRequest = statsRequest;
@@ -256,7 +260,35 @@ public class AWSCostStatsService extends StatelessService {
 
     private void createMissingResourcesComputes(AWSCostStatsCreationContext context,
             AWSCostStatsCreationStages next) {
-        if (context.missingLinkedAccountIds.isEmpty() || context.isSecondPass) {
+
+        String linkedAccountsCsv = context.computeDesc.customProperties.get(AWS_LINKED_ACCOUNT_IDS);
+        if (context.isSecondPass || linkedAccountsCsv == null || linkedAccountsCsv.isEmpty()) {
+            context.stage = next;
+            handleCostStatsCreationRequest(context);
+            return;
+        }
+
+        // Following function tells whether the computes of a particular account contain an
+        // auto-discovered compute under the primary account's endpoint.
+        Function<List<ComputeState>, Boolean> hasAutoDiscoveredCompute = (computes) -> {
+            if (CollectionUtils.isEmpty(computes)) {
+                return false;
+            }
+            return computes.stream()
+                    .filter(c -> context.computeDesc.endpointLink.equals(c.endpointLink)
+                            && Boolean.valueOf(c.customProperties.get(ACCOUNT_IS_AUTO_DISCOVERED)))
+                    .count() != 0;
+        };
+        Set<String> existingLinkedAccountIds = context.awsAccountIdToComputeStates.entrySet()
+                .stream().filter(e -> hasAutoDiscoveredCompute.apply(e.getValue()))
+                .map(e -> e.getKey())
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<String> missingLinkedAccountIds = Stream.of(linkedAccountsCsv.split(","))
+                .filter(id -> !existingLinkedAccountIds.contains(id))
+                .collect(Collectors.toList());
+
+        if (CollectionUtils.isEmpty(missingLinkedAccountIds)) {
             context.stage = next;
             handleCostStatsCreationRequest(context);
             return;
@@ -264,7 +296,7 @@ public class AWSCostStatsService extends StatelessService {
 
         AWSMissingResourcesEnumerationService.Request request = new
                 AWSMissingResourcesEnumerationService.Request();
-        request.missingLinkedAccountIds = context.missingLinkedAccountIds;
+        request.missingLinkedAccountIds = missingLinkedAccountIds;
         request.primaryAccountCompute = context.computeDesc;
 
         Operation op = Operation.createPost(
@@ -280,7 +312,6 @@ public class AWSCostStatsService extends StatelessService {
                     context.stage = AWSCostStatsCreationStages.QUERY_LINKED_ACCOUNTS;
                     context.isSecondPass = true;
                     context.billMonthToDownload = null;
-                    context.missingLinkedAccountIds.clear();
                     context.awsInstanceLinksById.clear();
                     handleCostStatsCreationRequest(context);
                 });
@@ -694,9 +725,6 @@ public class AWSCostStatsService extends StatelessService {
         if ((accountComputeStates == null) || accountComputeStates.isEmpty()) {
             logFine(() -> "AWS account with ID '%s' is not configured yet. Not creating cost"
                     + " metrics for the same.");
-            if (isCurrentMonth(billMonth)) {
-                statsData.missingLinkedAccountIds.add(awsAccountDetailDto.id);
-            }
             return;
         }
         // We use root compute state representing this account to save the account level stats
