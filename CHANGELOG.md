@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.15-SNAPSHOT
+
+
 ## 0.6.14
 
 * Enable sorting for endpoint type's in EndpointState
