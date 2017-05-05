@@ -1,6 +1,14 @@
 # CHANGELOG
 
-## 0.6.14-SNAPSHOT
+## 0.6.14
+
+* Enable sorting for endpoint type's in EndpointState
+* AutoDiscover linked accounts for the configured primary accounts
+* Added support for Power On and Off operations for Azure adapter.
+* Add adapters information to the ComputeStates
+* VSYM-5810: Adding capability to create computes for Subscriptions under Azure EA account to store the cost stats against them.
+* Bump Bouncycastle dependency to 1.56
+* Unify ComputeState and ComputeDescription content during enumeration
 
 ## 0.6.13
 
