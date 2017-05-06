@@ -69,22 +69,22 @@ public class AWSUriPaths {
             .adapterLink(EndpointType.aws.name());
     public static final String AWS_MISSING_RESOURCES_SERVICE = PROVISIONING_AWS + "/missing_resources_enumeration";
     /**
-     * Map an adapter link to its {@link AdapterTypePath adapter type}.
+     * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.
      */
-    public static final Map<String, AdapterTypePath> AWS_ADAPTER_LINK_TYPES;
+    public static final Map<String, String> AWS_ADAPTER_LINK_TYPES;
 
     static {
-        Map<String, AdapterTypePath> adapterLinksByType = new HashMap<>();
+        Map<String, String> adapterLinksByType = new HashMap<>();
 
-        adapterLinksByType.put(AWS_INSTANCE_ADAPTER, AdapterTypePath.INSTANCE_ADAPTER);
-        adapterLinksByType.put(AWS_NETWORK_ADAPTER, AdapterTypePath.NETWORK_ADAPTER);
-        adapterLinksByType.put(AWS_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER);
-        adapterLinksByType.put(AWS_SECURITY_GROUP_ADAPTER, AdapterTypePath.SECURITY_GROUP_ADAPTER);
-        adapterLinksByType.put(AWS_STATS_ADAPTER, AdapterTypePath.STATS_ADAPTER);
-        adapterLinksByType.put(AWS_ENUMERATION_ADAPTER, AdapterTypePath.ENUMERATION_ADAPTER);
-        adapterLinksByType.put(AWS_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER);
-        adapterLinksByType.put(AWS_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER);
-        adapterLinksByType.put(AWS_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER);
+        adapterLinksByType.put(AWS_INSTANCE_ADAPTER, AdapterTypePath.INSTANCE_ADAPTER.key);
+        adapterLinksByType.put(AWS_NETWORK_ADAPTER, AdapterTypePath.NETWORK_ADAPTER.key);
+        adapterLinksByType.put(AWS_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER.key);
+        adapterLinksByType.put(AWS_SECURITY_GROUP_ADAPTER, AdapterTypePath.SECURITY_GROUP_ADAPTER.key);
+        adapterLinksByType.put(AWS_STATS_ADAPTER, AdapterTypePath.STATS_ADAPTER.key);
+        adapterLinksByType.put(AWS_ENUMERATION_ADAPTER, AdapterTypePath.ENUMERATION_ADAPTER.key);
+        adapterLinksByType.put(AWS_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
+        adapterLinksByType.put(AWS_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
+        adapterLinksByType.put(AWS_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER.key);
 
         AWS_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }

@@ -42,20 +42,20 @@ public class VSphereUriPaths {
     public static final String DVS_NETWORK_SERVICE = PROVISIONING + "/dvs-network-adapter";
 
     /**
-     * Map an adapter link to its {@link AdapterTypePath adapter type}.
+     * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.
      */
-    public static final Map<String, AdapterTypePath> VSPHERE_ADAPTER_LINK_TYPES;
+    public static final Map<String, String> VSPHERE_ADAPTER_LINK_TYPES;
 
     static {
-        Map<String, AdapterTypePath> adapterLinksByType = new HashMap<>();
+        Map<String, String> adapterLinksByType = new HashMap<>();
 
-        adapterLinksByType.put(INSTANCE_SERVICE, AdapterTypePath.INSTANCE_ADAPTER);
-        adapterLinksByType.put(DVS_NETWORK_SERVICE, AdapterTypePath.SUBNET_ADAPTER);
-        adapterLinksByType.put(STATS_SERVICE, AdapterTypePath.STATS_ADAPTER);
-        adapterLinksByType.put(ENUMERATION_SERVICE, AdapterTypePath.ENUMERATION_ADAPTER);
-        adapterLinksByType.put(IMAGE_ENUMERATION_SERVICE, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER);
-        adapterLinksByType.put(ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER);
-        adapterLinksByType.put(POWER_SERVICE, AdapterTypePath.POWER_ADAPTER);
+        adapterLinksByType.put(INSTANCE_SERVICE, AdapterTypePath.INSTANCE_ADAPTER.key);
+        adapterLinksByType.put(DVS_NETWORK_SERVICE, AdapterTypePath.SUBNET_ADAPTER.key);
+        adapterLinksByType.put(STATS_SERVICE, AdapterTypePath.STATS_ADAPTER.key);
+        adapterLinksByType.put(ENUMERATION_SERVICE, AdapterTypePath.ENUMERATION_ADAPTER.key);
+        adapterLinksByType.put(IMAGE_ENUMERATION_SERVICE, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
+        adapterLinksByType.put(ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
+        adapterLinksByType.put(POWER_SERVICE, AdapterTypePath.POWER_ADAPTER.key);
 
         VSPHERE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }

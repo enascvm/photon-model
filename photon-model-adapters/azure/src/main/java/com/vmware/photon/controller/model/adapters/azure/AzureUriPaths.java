@@ -67,21 +67,21 @@ public class AzureUriPaths {
             .adapterLink(EndpointType.azure.name());
 
     /**
-     * Map an adapter link to its {@link AdapterTypePath adapter type}.
+     * Map an adapter link to its adapter key. See {@link AdapterTypePath#key}.
      */
-    public static final Map<String, AdapterTypePath> AZURE_ADAPTER_LINK_TYPES;
+    public static final Map<String, String> AZURE_ADAPTER_LINK_TYPES;
 
     static {
-        Map<String, AdapterTypePath> adapterLinksByType = new HashMap<>();
+        Map<String, String> adapterLinksByType = new HashMap<>();
 
-        adapterLinksByType.put(AZURE_INSTANCE_ADAPTER, AdapterTypePath.INSTANCE_ADAPTER);
-        adapterLinksByType.put(AZURE_STATS_ADAPTER, AdapterTypePath.STATS_ADAPTER);
-        adapterLinksByType.put(AZURE_ENUMERATION_ADAPTER, AdapterTypePath.ENUMERATION_ADAPTER);
-        adapterLinksByType.put(AZURE_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER);
-        adapterLinksByType.put(AZURE_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER);
-        adapterLinksByType.put(AZURE_FIREWALL_ADAPTER, AdapterTypePath.SECURITY_GROUP_ADAPTER);
-        adapterLinksByType.put(AZURE_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER);
-        adapterLinksByType.put(AZURE_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER);
+        adapterLinksByType.put(AZURE_INSTANCE_ADAPTER, AdapterTypePath.INSTANCE_ADAPTER.key);
+        adapterLinksByType.put(AZURE_STATS_ADAPTER, AdapterTypePath.STATS_ADAPTER.key);
+        adapterLinksByType.put(AZURE_ENUMERATION_ADAPTER, AdapterTypePath.ENUMERATION_ADAPTER.key);
+        adapterLinksByType.put(AZURE_IMAGE_ENUMERATION_ADAPTER, AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key);
+        adapterLinksByType.put(AZURE_ENDPOINT_CONFIG_ADAPTER, AdapterTypePath.ENDPOINT_CONFIG_ADAPTER.key);
+        adapterLinksByType.put(AZURE_FIREWALL_ADAPTER, AdapterTypePath.SECURITY_GROUP_ADAPTER.key);
+        adapterLinksByType.put(AZURE_SUBNET_ADAPTER, AdapterTypePath.SUBNET_ADAPTER.key);
+        adapterLinksByType.put(AZURE_POWER_ADAPTER, AdapterTypePath.POWER_ADAPTER.key);
 
         AZURE_ADAPTER_LINK_TYPES = Collections.unmodifiableMap(adapterLinksByType);
     }

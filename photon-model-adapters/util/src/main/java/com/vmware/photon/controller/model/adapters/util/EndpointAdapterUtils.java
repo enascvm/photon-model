@@ -26,7 +26,6 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
-import com.vmware.photon.controller.model.UriPaths.AdapterTypePath;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.RequestType;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryService;
@@ -51,30 +50,28 @@ public class EndpointAdapterUtils {
 
     /**
      * Register end-point adapters into End-point Adapters Registry.
-     *
      * @param host
-     *            The host the end-point is running on.
+     *         The host the end-point is running on.
      * @param endpointType
-     *            The type of the end-point.
+     *         The type of the end-point.
      * @param startedAdapterLinks
-     *            The array of started adapter links.
+     *         The array of started adapter links.
      * @param adapterLinksToRegister
-     *            Map of adapter links (to be registered) to their {@link AdapterTypePath adapter
-     *            type}.
-     *
+     *         Map of adapter links (to be registered) to their adapter type key. e.g for
+     *         standard adapters this is {@link com.vmware.photon.controller.model.UriPaths.AdapterTypePath#key}
      * @see #handleEndpointRegistration(ServiceHost, EndpointType, Consumer)
      */
     public static void registerEndpointAdapters(
             ServiceHost host,
             EndpointType endpointType,
             String[] startedAdapterLinks,
-            Map<String, AdapterTypePath> adapterLinksToRegister) {
+            Map<String, String> adapterLinksToRegister) {
 
         // Count all adapters - both FAILED and STARTED
         AtomicInteger adaptersCountDown = new AtomicInteger(startedAdapterLinks.length);
 
         // Keep started adapters only...
-        // - key = adapter type (AdapterTypePath.key)
+        // - key = adapter type ket (e.g. AdapterTypePath.key)
         // - value = adapter URI
         Map<String, String> startedAdapters = new ConcurrentHashMap<>();
 
@@ -90,11 +87,11 @@ public class EndpointAdapterUtils {
                 host.log(Level.FINE, "Starting '%s' adapter [%s]: SUCCESS",
                         endpointType, adapterPath);
 
-                AdapterTypePath adapterTypeToRegister = adapterLinksToRegister.get(adapterPath);
+                String adapterKey = adapterLinksToRegister.get(adapterPath);
 
-                if (adapterTypeToRegister != null) {
+                if (adapterKey != null) {
                     startedAdapters.put(
-                            adapterTypeToRegister.key,
+                            adapterKey,
                             AdapterUriUtil.buildAdapterUri(host, adapterPath).toString());
                 }
             }
@@ -121,17 +118,16 @@ public class EndpointAdapterUtils {
     /**
      * Enhance end-point config with all adapters that are to be published/registered to End-point
      * Adapters Registry.
-     *
      * @param host
-     *            The host the end-point is running on.
+     *         The host the end-point is running on.
      * @param endpointType
-     *            The type of the end-point.
+     *         The type of the end-point.
      * @param endpointConfigEnhancer
-     *            Optional {@link PhotonModelAdapterConfig} enhance logic specific to the end-point
-     *            type. The config passed to the callback is pre-populated with id, name and
-     *            documentSelfLink (all set with {@code endpointType} param). The enhancer might
-     *            populate the config with the links of end-point adapters. Once enhanced the config
-     *            is posted to the {@link PhotonModelAdaptersRegistryService Adapters Registry}.
+     *         Optional {@link PhotonModelAdapterConfig} enhance logic specific to the end-point
+     *         type. The config passed to the callback is pre-populated with id, name and
+     *         documentSelfLink (all set with {@code endpointType} param). The enhancer might
+     *         populate the config with the links of end-point adapters. Once enhanced the config is
+     *         posted to the {@link PhotonModelAdaptersRegistryService Adapters Registry}.
      */
     public static void handleEndpointRegistration(
             ServiceHost host,
