@@ -84,7 +84,7 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
         public Map<String, String> customProperties;
 
         /**
-         * A callback to the initiated task.
+         * A callback to the initiating task.
          */
         public ServiceTaskCallback<?> serviceTaskCallback;
 
@@ -284,8 +284,7 @@ public class ProvisionSecurityGroupTaskService extends TaskService<ProvisionSecu
         }
 
         ServiceTaskCallbackResponse<?> parentPatchBody;
-        if (currentState.taskInfo.stage == TaskState.TaskStage.FAILED &&
-                currentState.taskInfo.failure != null) {
+        if (currentState.taskInfo.stage == TaskState.TaskStage.FAILED) {
             parentPatchBody = currentState.serviceTaskCallback
                     .getFailedResponse(currentState.taskInfo.failure);
         } else {

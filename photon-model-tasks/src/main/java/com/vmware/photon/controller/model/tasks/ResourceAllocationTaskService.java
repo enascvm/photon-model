@@ -265,7 +265,7 @@ public class ResourceAllocationTaskService
         case PROVISIONING_VM_GUESTS:
             // intentional fall through
         case PROVISIONING_CONTAINERS:
-            doComputeResourceProvisioning(currentState, desc, null);
+            doComputeResourceProvisioning(currentState, desc);
             break;
         case FAILED:
             break;
@@ -462,15 +462,11 @@ public class ResourceAllocationTaskService
 
     private void doComputeResourceProvisioning(
             ResourceAllocationTaskState currentState,
-            ComputeDescriptionService.ComputeDescription desc,
-            String subTaskLink) {
+            ComputeDescriptionService.ComputeDescription desc) {
         Collection<String> parentLinks = currentState.parentLinks;
 
-        if (subTaskLink == null) {
-            // recurse after creating a sub task
-            createSubTaskForProvisionCallbacks(currentState, desc);
-            return;
-        }
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
+        callback.onSuccessFinishTask();
 
         // for human debugging reasons only, prefix the compute host resource id
         // with the allocation
@@ -485,7 +481,7 @@ public class ResourceAllocationTaskService
         Iterator<String> parentIterator = null;
 
         logFine(() -> String.format("Creating %d provision tasks, reporting through sub task %s",
-                currentState.resourceCount, subTaskLink));
+                currentState.resourceCount, callback.serviceSelfLink));
         String name;
         if (currentState.customProperties != null
                 && currentState.customProperties.get(CUSTOM_DISPLAY_NAME) != null) {
@@ -528,7 +524,7 @@ public class ResourceAllocationTaskService
             // When all provision tasks have PATCHed the sub task to FINISHED,
             // it will issue a
             // single PATCH to us, with stage = FINISHED
-            provisionTaskState.parentTaskLink = subTaskLink;
+            provisionTaskState.serviceTaskCallback = callback;
             provisionTaskState.isMockRequest = currentState.isMockRequest;
             provisionTaskState.taskSubStage = ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage.CREATING_HOST;
             provisionTaskState.tenantLinks = currentState.tenantLinks;
@@ -548,42 +544,6 @@ public class ResourceAllocationTaskService
                         return;
                     }));
         }
-    }
-
-    /**
-     * we create a sub task that will track the ProvisionComputeHostTask completions.
-     */
-    private void createSubTaskForProvisionCallbacks(
-            ResourceAllocationTaskState currentState,
-            ComputeDescriptionService.ComputeDescription desc) {
-
-        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
-        callback.onSuccessFinishTask();
-
-        SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<>();
-        subTaskInitState.errorThreshold = currentState.errorThreshold;
-        // tell the sub task with what to patch us, on completion
-        subTaskInitState.serviceTaskCallback = callback;
-        subTaskInitState.completionsRemaining = currentState.resourceCount;
-        subTaskInitState.tenantLinks = currentState.tenantLinks;
-        Operation startPost = Operation
-                .createPost(this, SubTaskService.FACTORY_LINK)
-                .setBody(subTaskInitState)
-                .setCompletion(
-                        (o, e) -> {
-                            if (e != null) {
-                                logWarning(() -> String.format("Failure creating sub task: %s",
-                                        Utils.toString(e)));
-                                sendFailureSelfPatch(e);
-                                return;
-                            }
-                            SubTaskService.SubTaskState<?> body = o
-                                    .getBody(SubTaskService.SubTaskState.class);
-                            // continue, passing the sub task link
-                            doComputeResourceProvisioning(currentState, desc,
-                                    body.documentSelfLink);
-                        });
-        sendRequest(startPost);
     }
 
     // Create all the dependencies, then create the compute document. createDisk

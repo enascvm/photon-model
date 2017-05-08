@@ -27,7 +27,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.BootDevice;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState.SubStage;
-import com.vmware.photon.controller.model.tasks.SubTaskService.SubTaskState;
+import com.vmware.photon.controller.model.tasks.ServiceTaskCallback.ServiceTaskCallbackResponse;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Operation.CompletionHandler;
 import com.vmware.xenon.common.ServiceDocument;
@@ -57,7 +57,6 @@ public class ProvisionComputeTaskService
             extends com.vmware.xenon.services.common.TaskService.TaskServiceState {
 
         public static final long DEFAULT_EXPIRATION_MICROS = TimeUnit.HOURS.toMicros(1);
-        public static final String FIELD_NAME_PARENT_TASK_LINK = "parentTaskLink";
 
         /**
          * SubStage.
@@ -95,9 +94,9 @@ public class ProvisionComputeTaskService
         public URI bootAdapterReference;
 
         /**
-         * Link that initiated this task.
+         * A callback to the initiating task.
          */
-        public String parentTaskLink;
+        public ServiceTaskCallback<?> serviceTaskCallback;
 
         /**
          * Value indicating whether the service should treat this as a mock
@@ -252,21 +251,20 @@ public class ProvisionComputeTaskService
     }
 
     private void notifyParentTask(ProvisionComputeTaskState currentState) {
-        if (currentState.parentTaskLink == null) {
+        if (currentState.serviceTaskCallback == null) {
             return;
         }
 
-        logFine(() -> String.format("Patching parent task %s", currentState.parentTaskLink));
-        ProvisionComputeTaskState parentPatchBody = new ProvisionComputeTaskState();
-        parentPatchBody.taskInfo = currentState.taskInfo;
-        sendRequest(Operation.createPatch(this, currentState.parentTaskLink)
-                .setBody(parentPatchBody)
-                .setCompletion((op, ex) -> {
-                    if (ex != null) {
-                        logSevere(() -> String.format("Patching parent task failed with %s",
-                                Utils.toJsonHtml(ex)));
-                    }
-                }));
+        ServiceTaskCallbackResponse<?> parentPatchBody;
+        if (currentState.taskInfo.stage == TaskState.TaskStage.FAILED) {
+            parentPatchBody = currentState.serviceTaskCallback
+                    .getFailedResponse(currentState.taskInfo.failure);
+        } else {
+            parentPatchBody = currentState.serviceTaskCallback.getFinishedResponse();
+        }
+
+        sendRequest(Operation.createPatch(this, currentState.serviceTaskCallback.serviceSelfLink)
+                .setBody(parentPatchBody));
     }
 
     private void processNextSubStage(ProvisionComputeTaskState updatedState) {
@@ -395,7 +393,7 @@ public class ProvisionComputeTaskService
                     if (e != null) {
                         // the compute host is co-located so it is unexpected
                         // that it failed the GET
-                        logWarning(() -> String.format("GET to %s failed:", o.getUri(),
+                        logWarning(() -> String.format("GET to %s failed: %s", o.getUri(),
                                 Utils.toString(e)));
                         failTask(e);
                         return;
