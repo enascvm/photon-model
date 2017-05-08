@@ -15,7 +15,10 @@ package com.vmware.photon.controller.model.monitoring;
 
 import java.util.Map;
 
+import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
+
 import com.vmware.photon.controller.model.UriPaths;
+import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 
 import com.vmware.xenon.common.FactoryService;
@@ -46,6 +49,8 @@ public class ResourceMetricsService extends StatefulService {
     public static class ResourceMetrics extends ServiceDocument {
         public static final String FIELD_NAME_ENTRIES = "entries";
         public static final String FIELD_NAME_TIMESTAMP = "timestampMicrosUtc";
+        public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
+        public static final String PROPERTY_RESOURCE_LINK = "resourceLink";
 
         @Documentation(description = "Map of datapoints. The key represents the metric name and the value"
                 + "represents the the metric value")
@@ -55,6 +60,13 @@ public class ResourceMetricsService extends StatefulService {
         @Documentation(description = "timestamp associated with this metric entry")
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         public Long timestampMicrosUtc;
+
+        @PropertyOptions(indexing = {
+                PropertyIndexingOption.CASE_INSENSITIVE,
+                PropertyIndexingOption.EXPAND,
+                PropertyIndexingOption.FIXED_ITEM_NAME })
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_15)
+        public Map<String, String> customProperties;
     }
 
     @Override

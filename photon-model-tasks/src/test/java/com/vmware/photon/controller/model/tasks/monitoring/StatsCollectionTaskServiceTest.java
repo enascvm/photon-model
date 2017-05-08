@@ -397,9 +397,8 @@ public class StatsCollectionTaskServiceTest extends BaseModelTest {
                 .orderDescending(ServiceDocument.FIELD_NAME_SELF_LINK, TypeName.STRING)
                 .setQuery(Query.Builder.create()
                             .addKindFieldClause(ResourceMetrics.class)
-                            .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, UriUtils.getLastPathSegment(resourceLink)),
-                                MatchType.PREFIX)
+                            .addCompositeFieldClause(ResourceMetrics.FIELD_NAME_CUSTOM_PROPERTIES,
+                                ResourceMetrics.PROPERTY_RESOURCE_LINK, resourceLink)
                             .addRangeClause( QuerySpecification.buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, metricKey),
                                 NumericRange.createDoubleRange(Double.MIN_VALUE, Double.MAX_VALUE, true, true))
                         .build())

@@ -492,6 +492,9 @@ public class SingleResourceStatsCollectionTaskService
             metricsObjToUpdate.entries = new HashMap<>();
             metricsObjToUpdate.timestampMicrosUtc = serviceStat.sourceTimeMicrosUtc;
             metricsObjToUpdate.documentExpirationTimeMicros = expirationTime;
+            metricsObjToUpdate.customProperties = new HashMap<>();
+            metricsObjToUpdate.customProperties
+                    .put(ResourceMetrics.PROPERTY_RESOURCE_LINK, computeLink);
             metricsList.add(metricsObjToUpdate);
         }
         metricsObjToUpdate.entries.put(metricName, serviceStat.latestValue);
