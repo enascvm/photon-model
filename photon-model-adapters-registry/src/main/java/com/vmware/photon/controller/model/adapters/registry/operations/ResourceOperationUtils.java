@@ -14,7 +14,9 @@
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
 import java.net.URI;
+import java.util.List;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
@@ -24,7 +26,9 @@ import javax.script.ScriptException;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
+import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
@@ -39,6 +43,9 @@ import com.vmware.xenon.services.common.QueryTask.Query;
 public class ResourceOperationUtils {
     public static final String SCRIPT_ENGINE_NAME_JS = "js";
     public static final String SCRIPT_CONTEXT_RESOURCE = "resource";
+
+    public static final String COMPUTE_KIND = Utils.buildKind(ComputeState.class);
+    public static final String NETWORK_KIND = Utils.buildKind(NetworkState.class);
 
     /**
      * Lookup for {@link ResourceOperationSpec} by given {@code endpointType},
@@ -62,36 +69,71 @@ public class ResourceOperationUtils {
             ResourceType resourceType,
             String operation) {
 
-        Query query = Query.Builder.create()
+        return lookUp(host, refererURI, endpointType, resourceType, operation).thenApply(specs -> {
+            if (specs.isEmpty()) {
+                return null;
+            } else {
+                ResourceOperationSpec spec = specs.iterator().next();
+                if (specs.size() > 1) {
+                    Utils.log(ResourceOperationUtils.class, "lookUpByEndpointType",
+                            Level.SEVERE,
+                            "Multiple specs for endpointType: %s, resourceType: %s and "
+                                    + "operation: %s. Will use the first one: %s",
+                            endpointType, resourceType, operation, spec);
+
+                }
+                return spec;
+            }
+        });
+    }
+
+    /**
+     * Lookup for {@link ResourceOperationSpec}s by given {@code endpointType},
+     * {@code resourceType} and optionally {@code operation}
+     * <p>
+     * If operation not specified then return all resource operation specs for the given
+     * {@code endpointType} and {@code resourceType}
+     * @param host
+     *         host to use to create operation
+     * @param refererURI
+     *         the referer to use when send the operation
+     * @param endpointType
+     *         the resource's endpoint type
+     * @param resourceType
+     *         the resource type
+     * @param operation
+     *         optional operation id argument
+     * @return
+     */
+    private static DeferredResult<List<ResourceOperationSpec>> lookUp(
+            ServiceHost host,
+            URI refererURI,
+            String endpointType,
+            ResourceType resourceType,
+            String operation) {
+
+        Query.Builder builder = Query.Builder.create()
                 .addKindFieldClause(ResourceOperationSpec.class)
                 .addFieldClause(
                         ResourceOperationSpec.FIELD_NAME_ENDPOINT_TYPE,
                         endpointType)
                 .addFieldClause(
                         ResourceOperationSpec.FIELD_NAME_RESOURCE_TYPE,
-                        resourceType)
-                .addFieldClause(
-                        ResourceOperationSpec.FIELD_NAME_OPERATION,
-                        operation)
-                .build();
+                        resourceType);
+        if (operation != null) {
+            builder.addFieldClause(
+                    ResourceOperationSpec.FIELD_NAME_OPERATION,
+                    operation);
+        }
+        Query query = builder.build();
 
         QueryTop<ResourceOperationSpec> top = new QueryTop<>(
-                host, query, ResourceOperationSpec.class, null)
-                .setMaxResultsLimit(5);
+                host, query, ResourceOperationSpec.class, null);
+        if (operation != null) {
+            top.setMaxResultsLimit(3);
+        }
         top.setReferer(refererURI);
-        ResourceOperationSpec[] spec = new ResourceOperationSpec[1];
-        return top.queryDocuments(ros -> {
-            if (spec[0] == null) {
-                spec[0] = ros;
-            } else {
-                Utils.log(ResourceOperationUtils.class, "lookUpByEndpointType",
-                        Level.SEVERE,
-                        "Multiple specs for endpointType: %s, resourceType: %s and "
-                                + "operation: %s. First one: %s, current: %s",
-                        endpointType, resourceType, operation,
-                        spec[0], ros);
-            }
-        }).thenApply(aVoid -> spec[0]);
+        return top.collectDocuments(Collectors.toList());
     }
 
     /**
@@ -121,6 +163,35 @@ public class ResourceOperationUtils {
                 .thenCompose(o -> lookUpByEndpointType(host, refererURI,
                         (o.getBody(EndpointState.class)).endpointType,
                         resourceType, operation)
+                );
+    }
+
+    public static <T extends ResourceState> DeferredResult<List<ResourceOperationSpec>> lookupByResourceState(
+            ServiceHost host,
+            URI refererURI,
+            T resourceState) {
+        AssertUtil.assertNotNull(resourceState, "'resourceState' must be set.");
+        String endpointLink;
+        ResourceType resourceType;
+        if (resourceState instanceof ComputeState) {
+            ComputeState compute = (ComputeState) resourceState;
+            endpointLink = compute.endpointLink;
+            resourceType = ResourceType.COMPUTE;
+        } else if (resourceState instanceof NetworkState) {
+            NetworkState network = (NetworkState) resourceState;
+            endpointLink = network.endpointLink;
+            resourceType = ResourceType.NETWORK;
+        } else {
+            throw new IllegalArgumentException("Unsupported resource state: "
+                    + resourceState.getClass().getName());
+        }
+        AssertUtil.assertNotNull(endpointLink, "'endpointLink' must be set.");
+
+        return host.sendWithDeferredResult(Operation.createGet(host, endpointLink)
+                .setReferer(refererURI))
+                .thenCompose(o -> lookUp(host, refererURI,
+                        (o.getBody(EndpointState.class)).endpointType,
+                        resourceType, null)
                 );
     }
 

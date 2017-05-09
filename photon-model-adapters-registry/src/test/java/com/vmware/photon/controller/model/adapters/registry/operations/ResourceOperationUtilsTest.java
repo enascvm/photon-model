@@ -13,16 +13,14 @@
 
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
+import static com.vmware.photon.controller.model.adapters.registry.operations.BaseResourceOperationTest.createComputeState;
+import static com.vmware.photon.controller.model.adapters.registry.operations.BaseResourceOperationTest.createResourceOperationSpec;
 import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.SCRIPT_CONTEXT_RESOURCE;
-
-import java.net.URI;
-import java.util.HashMap;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceOperationSpec;
-import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationSpecService.ResourceType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 
 public class ResourceOperationUtilsTest {
@@ -103,29 +101,8 @@ public class ResourceOperationUtilsTest {
         ComputeState computeState = createComputeState("testIsAvailable_changeContextFromScript");
 
         String originalValue = computeState.hostName;
-        boolean ret = ResourceOperationUtils.isAvailable(computeState, spec);
+        ResourceOperationUtils.isAvailable(computeState, spec);
         Assert.assertEquals(originalValue, computeState.hostName);
     }
 
-    private ComputeState createComputeState(String hostName) {
-        ComputeState computeState = new ComputeState();
-        computeState.cpuCount = 4L;
-        computeState.cpuMhzPerCore = 1000L;
-        computeState.hostName = hostName;
-        computeState.customProperties = new HashMap<>();
-        computeState.customProperties.put("p1", "v1");
-        computeState.customProperties.put("p2", "v2");
-        return computeState;
-    }
-
-    private ResourceOperationSpec createResourceOperationSpec() {
-        ResourceOperationSpec spec = new ResourceOperationSpec();
-        spec.resourceType = ResourceType.COMPUTE;
-        spec.operation = "operation";
-        spec.name = "name";
-        spec.endpointType = "endpointType";
-        spec.description = "description";
-        spec.adapterReference = URI.create("uri");
-        return spec;
-    }
 }
