@@ -15,11 +15,11 @@ package com.vmware.photon.controller.model.adapters.azure;
 
 import java.util.logging.Level;
 
+import com.vmware.photon.controller.model.adapters.azure.d2o.AzureLifecycleOperationService;
 import com.vmware.photon.controller.model.adapters.azure.endpoint.AzureEndpointAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureEnumerationAdapterService;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureImageEnumerationAdapterService;
-import com.vmware.photon.controller.model.adapters.azure.enumeration
-        .AzureSubscriptionsEnumerationService;
+import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureSubscriptionsEnumerationService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureInstanceService;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureSubnetService;
 import com.vmware.photon.controller.model.adapters.azure.power.AzurePowerService;
@@ -50,7 +50,8 @@ public class AzureAdapters {
             AzureComputeHostStorageStatsGatherer.SELF_LINK,
             AzureEndpointAdapterService.SELF_LINK,
             AzureSubscriptionsEnumerationService.SELF_LINK,
-            AzurePowerService.SELF_LINK };
+            AzurePowerService.SELF_LINK,
+            AzureLifecycleOperationService.SELF_LINK };
 
     /**
      * The link of Azure configuration registered in {@link PhotonModelAdaptersRegistryService
@@ -73,6 +74,7 @@ public class AzureAdapters {
             host.startService(new AzureEndpointAdapterService());
             host.startService(new AzureSubscriptionsEnumerationService());
             host.startService(new AzurePowerService());
+            host.startService(new AzureLifecycleOperationService());
 
             EndpointAdapterUtils.registerEndpointAdapters(
                     host, EndpointType.azure, LINKS, AzureUriPaths.AZURE_ADAPTER_LINK_TYPES);
@@ -82,4 +84,5 @@ public class AzureAdapters {
                     Utils.toString(e));
         }
     }
+
 }

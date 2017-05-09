@@ -63,6 +63,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.ResourceGroupStateType;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -122,11 +123,13 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
             if (computeHost == null) {
                 PhotonModelServices.startServices(this.host);
                 PhotonModelMetricServices.startServices(this.host);
+                PhotonModelAdaptersRegistryAdapters.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
                 AzureAdapters.startServices(this.host);
 
                 this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+                this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
                 this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
                 // TODO: VSYM-992 - improve test/fix arbitrary timeout

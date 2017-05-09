@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.registry.operations;
 
 import java.net.URI;
+import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -33,6 +34,10 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.Operation.CompletionHandler;
+import com.vmware.xenon.common.OperationJoin;
+import com.vmware.xenon.common.OperationJoin.JoinedCompletionHandler;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceHost;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query;
@@ -248,4 +253,61 @@ public class ResourceOperationUtils {
         }
         return false;
     }
+
+    /**
+     * A generic utility method to register any Day 2 Operation service/adapter with the framework
+     * as a ResourceOperationSpecService. It accepts a list of {@code specs} which a service can
+     * handle as input and submits them to the ResourceOperationSpecService's Factory. This call
+     * should generally be part of handleStart method of the adapter/service, preferably near the
+     * end after any service specification configuration settings.
+     *
+     * @param service
+     *        the resourceOperation service/adapter
+     * @param specs
+     *        list of intended the ResourceOperationSpec's to register with the service
+     * @param handler
+     *        the operation completion handler for making the success/failure actions
+     */
+    public static void registerResourceOperation(Service service,
+            Collection<ResourceOperationSpec> specs, CompletionHandler handler) {
+        if (specs == null || specs.isEmpty()) {
+            service.getHost().log(Level.FINE,
+                    "No ResourceOperationSpec to register by %s",
+                    service.getSelfLink());
+            handler.handle(null, null);
+            return;
+        }
+        service.getHost().registerForServiceAvailability((op, ex) -> {
+            if (ex != null) {
+                service.getHost().log(Level.SEVERE, Utils.toString(ex));
+                handler.handle(op, ex);
+            } else {
+                List<Operation> operations = specs.stream()
+                        .map(spec -> createOperation(service, spec))
+                        .collect(Collectors.toList());
+
+                JoinedCompletionHandler jh = (ops, err) -> {
+                    if (err != null) {
+                        service.getHost().log(Level.SEVERE, "Error: %s", Utils.toString(err));
+                        handler.handle(ops.values().iterator().next(),
+                                err.values().iterator().next());
+                    } else {
+                        service.getHost().log(Level.FINE,
+                                "Successfully registered operations.");
+                        handler.handle(null, null);
+                    }
+                };
+                OperationJoin.create(operations).setCompletion(jh).sendWith(service);
+            }
+        }, ResourceOperationSpecService.FACTORY_LINK);
+    }
+
+    private static Operation createOperation(Service service, ResourceOperationSpec spec) {
+        service.getHost().log(Level.FINE,
+                "Going to register Resource Operation name=%s, operation='%s'",
+                spec.name, spec.operation);
+        return Operation.createPost(service, ResourceOperationSpecService.FACTORY_LINK)
+                .setBody(spec);
+    }
+
 }

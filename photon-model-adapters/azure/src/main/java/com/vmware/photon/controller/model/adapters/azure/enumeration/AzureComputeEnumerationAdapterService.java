@@ -1355,8 +1355,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         .equals(AzureConstants.AZURE_VM_POWER_STATE_RUNNING)) {
                     computeState.powerState = PowerState.ON;
                 } else if (status.getCode()
-                        .equals(AzureConstants.AZURE_VM_POWER_STATE_DEALLOCATED)) {
+                        .equals(AzureConstants.AZURE_VM_POWER_STATE_STOPPED)) {
                     computeState.powerState = PowerState.OFF;
+                } else if (status.getCode()
+                        .equals(AzureConstants.AZURE_VM_POWER_STATE_DEALLOCATED)) {
+                    computeState.powerState = PowerState.SUSPEND;
                 }
             }
             if (computeState.customProperties == null) {

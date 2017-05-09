@@ -31,14 +31,15 @@ import retrofit2.Retrofit;
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.BaseAdapterStage;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext.DefaultAdapterContext;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.Operation;
-import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.Utils;
 
 /**
  * Adapter to power on/power off a VM instance on Azure.
@@ -46,6 +47,22 @@ import com.vmware.xenon.common.StatelessService;
 public class AzurePowerService extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_POWER_ADAPTER;
+
+    private static class AzurePowerDataHolder {
+
+        final ComputePowerRequest pr;
+
+        ComputeManagementClient client;
+        OkHttpClient httpClient;
+        AzurePowerService service;
+        String vmName;
+        String rgName;
+
+        public AzurePowerDataHolder(AzurePowerService service, ComputePowerRequest pr) {
+            this.pr = pr;
+            this.service = service;
+        }
+    }
 
     private ExecutorService executorService;
 
@@ -72,9 +89,10 @@ public class AzurePowerService extends StatelessService {
         }
 
         ComputePowerRequest pr = op.getBody(ComputePowerRequest.class);
+        AzurePowerDataHolder dh = new AzurePowerDataHolder(this, pr);
         op.complete();
         if (pr.isMockRequest) {
-            updateComputeState(pr, new DefaultAdapterContext(this, pr));
+            updateComputeState(dh, new DefaultAdapterContext(this, pr));
         } else {
             new DefaultAdapterContext(this, pr)
                     .populateBaseContext(BaseAdapterStage.VMDESC)
@@ -82,8 +100,8 @@ public class AzurePowerService extends StatelessService {
                         if (e != null) {
                             c.taskManager.patchTaskToFailure(e);
                             this.logSevere(
-                                    "Error while population base context during Azure power operation",
-                                    e.getMessage());
+                                    "Error populating base context during Azure power state operation %s for resource %s failed with error %s",
+                                    pr.powerState, pr.resourceReference, Utils.toString(e));
                             return;
                         }
                         String clientId = c.parentAuth.privateKeyId;
@@ -95,71 +113,65 @@ public class AzurePowerService extends StatelessService {
                                 clientId, tenantId, clientKey,
                                 AzureEnvironment.AZURE);
 
-                        OkHttpClient httpClient = new OkHttpClient();
-                        OkHttpClient.Builder clientBuilder = httpClient.newBuilder();
+                        dh.httpClient = new OkHttpClient();
+                        OkHttpClient.Builder clientBuilder = dh.httpClient.newBuilder();
 
-                        ComputeManagementClient client = new ComputeManagementClientImpl(
+                        dh.client = new ComputeManagementClientImpl(
                                 AzureConstants.BASE_URI, credentials, clientBuilder,
                                 getRetrofitBuilder());
-                        client.setSubscriptionId(c.parentAuth.userLink);
-                        applyPowerOperation(client, pr, c);
+                        dh.client.setSubscriptionId(c.parentAuth.userLink);
+                        dh.vmName = c.child.name != null ? c.child.name : c.child.id;
+                        dh.rgName = getResourceGroupName(c);
+                        applyPowerOperation(dh, c);
                     });
         }
     }
 
-    private void applyPowerOperation(ComputeManagementClient client, ComputePowerRequest pr,
-            DefaultAdapterContext c) {
-        switch (pr.powerState) {
+    private void applyPowerOperation(AzurePowerDataHolder dh, DefaultAdapterContext c) {
+        switch (dh.pr.powerState) {
         case OFF:
-            powerOff(client, pr, c);
+            powerOff(dh, c);
             break;
         case ON:
-            powerOn(client, pr, c);
+            powerOn(dh, c);
             break;
         case UNKNOWN:
         default:
             c.taskManager.patchTaskToFailure(
                     new IllegalArgumentException("Unsupported power state transition requested."));
         }
-
     }
 
-    private void powerOff(ComputeManagementClient client, ComputePowerRequest pr,
-            DefaultAdapterContext c) {
-        OperationContext opContext = OperationContext.getOperationContext();
-        String vmName = c.child.name != null ? c.child.name : c.child.id;
-        client.getVirtualMachinesOperations().powerOffAsync(getResourceGroupName(c), vmName,
+    private void powerOff(AzurePowerDataHolder dh, DefaultAdapterContext c) {
+        dh.client.getVirtualMachinesOperations().powerOffAsync(dh.rgName, dh.vmName,
                 new ServiceCallback<Void>() {
                     @Override
                     public void failure(Throwable paramThrowable) {
-                        OperationContext.restoreOperationContext(opContext);
                         c.taskManager.patchTaskToFailure(paramThrowable);
+                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
                     }
 
                     @Override
                     public void success(ServiceResponse<Void> paramServiceResponse) {
-                        OperationContext.restoreOperationContext(opContext);
-                        updateComputeState(pr, c);
+                        updateComputeState(dh, c);
+                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
                     }
                 });
     }
 
-    private void powerOn(ComputeManagementClient client, ComputePowerRequest pr,
-            DefaultAdapterContext c) {
-        OperationContext opContext = OperationContext.getOperationContext();
-        String vmName = c.child.name != null ? c.child.name : c.child.id;
-        client.getVirtualMachinesOperations().startAsync(getResourceGroupName(c), vmName,
+    private void powerOn(AzurePowerDataHolder dh, DefaultAdapterContext c) {
+        dh.client.getVirtualMachinesOperations().startAsync(dh.rgName, dh.vmName,
                 new ServiceCallback<Void>() {
                     @Override
                     public void failure(Throwable paramThrowable) {
-                        OperationContext.restoreOperationContext(opContext);
                         c.taskManager.patchTaskToFailure(paramThrowable);
+                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
                     }
 
                     @Override
                     public void success(ServiceResponse<Void> paramServiceResponse) {
-                        OperationContext.restoreOperationContext(opContext);
-                        updateComputeState(pr, c);
+                        updateComputeState(dh, c);
+                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
                     }
                 });
     }
@@ -182,10 +194,10 @@ public class AzurePowerService extends StatelessService {
         return resourceGroupName;
     }
 
-    private void updateComputeState(ComputePowerRequest pr, DefaultAdapterContext c) {
+    private void updateComputeState(AzurePowerDataHolder dh, DefaultAdapterContext c) {
         ComputeState state = new ComputeState();
-        state.powerState = pr.powerState;
-        Operation.createPatch(pr.resourceReference)
+        state.powerState = dh.pr.powerState;
+        Operation.createPatch(dh.pr.resourceReference)
                 .setBody(state)
                 .setCompletion((o, e) -> {
                     if (e != null) {

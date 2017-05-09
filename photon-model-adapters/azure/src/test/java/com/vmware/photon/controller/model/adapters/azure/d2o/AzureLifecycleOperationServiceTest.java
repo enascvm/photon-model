@@ -11,11 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package com.vmware.photon.controller.model.adapters.azure.power;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
+package com.vmware.photon.controller.model.adapters.azure.d2o;
 
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.DEFAULT_NIC_SPEC;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.createDefaultAuthCredentials;
@@ -26,7 +22,6 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.deleteVMs;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.generateName;
 
-import java.net.URI;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -35,8 +30,6 @@ import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 import com.microsoft.azure.credentials.AzureEnvironment;
 import com.microsoft.azure.management.compute.ComputeManagementClient;
 import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
-import com.microsoft.azure.management.compute.models.InstanceViewStatus;
-import com.microsoft.azure.management.compute.models.VirtualMachine;
 
 import org.junit.After;
 import org.junit.Before;
@@ -47,15 +40,12 @@ import org.junit.rules.TestName;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
-import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
-import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
-import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperation;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
-import com.vmware.photon.controller.model.resources.ComputeService.PowerState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ResourcePoolService.ResourcePoolState;
 import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
@@ -73,7 +63,7 @@ import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
-public class AzurePowerServiceTest extends BasicReusableHostTestCase {
+public class AzureLifecycleOperationServiceTest extends BasicReusableHostTestCase {
 
     // SHARED Compute Host / End-point between test runs. {{
     private static ComputeState computeHost;
@@ -81,7 +71,6 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
     // Every test in addition might change it.
     private static String azureVMName = generateName("testPower-");
     // }}
-    private static final String EXPAND_INSTANCE_VIEW_PARAM = "instanceView";
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -107,8 +96,8 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
              */
             if (computeHost == null) {
                 PhotonModelServices.startServices(this.host);
-                PhotonModelMetricServices.startServices(this.host);
                 PhotonModelAdaptersRegistryAdapters.startServices(this.host);
+                PhotonModelMetricServices.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
                 AzureAdapters.startServices(this.host);
 
@@ -173,7 +162,7 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
     }
 
     @Test
-    @Ignore("This tests takes longer execution time as it involves provision-poweroff-poweron-decomission VM"
+    @Ignore("Azure provision and decommission is taking significant amount of time"
             + "and could potentially delay the pre-flights or cause timeouts. Suitable for manual execution.")
     public void test() throws Throwable {
 
@@ -182,32 +171,19 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
 
         kickOffProvisionTask();
 
-        ComputeDescription computeHostDesc = this.host.getServiceState(null,
-                ComputeDescription.class,
-                UriUtils.buildUri(this.host, this.vmState.descriptionLink));
+        triggerRestart();
 
-        assertNotNull(computeHostDesc.powerAdapterReference);
-
-        // by default new VM should be ON state
-        assertVmCurrentPowerState(PowerState.ON);
-
-        triggerPowerChange(PowerState.OFF, computeHostDesc.powerAdapterReference);
-
-        assertVmCurrentPowerState(PowerState.OFF);
-
-        triggerPowerChange(PowerState.ON, computeHostDesc.powerAdapterReference);
-
-        assertVmCurrentPowerState(PowerState.ON);
+        triggerSuspend();
     }
 
-    private void triggerPowerChange(PowerState powerState, URI powerAdapterReference) {
+    private void triggerRestart() {
         String taskLink = UUID.randomUUID().toString();
 
-        ComputePowerRequest powerRequest = new ComputePowerRequest();
-        powerRequest.isMockRequest = this.isMock;
-        powerRequest.powerState = powerState;
-        powerRequest.resourceReference = UriUtils.buildUri(this.host, this.vmState.documentSelfLink);
-        powerRequest.taskReference = UriUtils.buildUri(this.host, taskLink);
+        ResourceOperationRequest request = new ResourceOperationRequest();
+        request.isMockRequest = this.isMock;
+        request.operation = ResourceOperation.RESTART.operation;
+        request.resourceReference = UriUtils.buildUri(this.host, this.vmState.documentSelfLink);
+        request.taskReference = UriUtils.buildUri(this.host, taskLink);
         TestContext ctx = this.host.testCreate(2);
         createTaskResultListener(this.host, taskLink, (u) -> {
             if (u.getAction() != Action.PATCH) {
@@ -223,8 +199,9 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
             return true;
         });
 
-        Operation powerOp = Operation.createPatch(powerAdapterReference)
-                .setBody(powerRequest)
+        Operation restartOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, AzureLifecycleOperationService.SELF_LINK))
+                .setBody(request)
                 .setReferer("/tests")
                 .setCompletion((o, e) -> {
                     if (e != null) {
@@ -233,39 +210,46 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
                     }
                     ctx.completeIteration();
                 });
-        this.host.send(powerOp);
+        this.host.send(restartOp);
         ctx.await();
     }
 
-    private void assertVmCurrentPowerState(PowerState powerState) {
-        if (this.isMock) { // return. Nothing provisioned on Azure so nothing to check
-            return;
-        }
+    private void triggerSuspend() {
+        String taskLink = UUID.randomUUID().toString();
 
-        try {
-            PowerState vmPowerState = PowerState.UNKNOWN;
-            VirtualMachine vm = AzureTestUtil
-                    .getAzureVirtualMachineWithExtension(
-                            this.computeManagementClient,
-                            azureVMName,
-                            azureVMName, EXPAND_INSTANCE_VIEW_PARAM);
-
-            for (InstanceViewStatus status : vm.getInstanceView().getStatuses()) {
-                if (status.getCode()
-                        .equals(AzureConstants.AZURE_VM_POWER_STATE_RUNNING)) {
-                    vmPowerState = PowerState.ON;
-                } else if (status.getCode()
-                        .equals(AzureConstants.AZURE_VM_POWER_STATE_STOPPED)) {
-                    vmPowerState = PowerState.OFF;
-                }
+        ResourceOperationRequest request = new ResourceOperationRequest();
+        request.isMockRequest = this.isMock;
+        request.operation = ResourceOperation.SUSPEND.operation;
+        request.resourceReference = UriUtils.buildUri(this.host, this.vmState.documentSelfLink);
+        request.taskReference = UriUtils.buildUri(this.host, taskLink);
+        TestContext ctx = this.host.testCreate(2);
+        createTaskResultListener(this.host, taskLink, (u) -> {
+            if (u.getAction() != Action.PATCH) {
+                return false;
             }
+            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
+            if (TaskState.isFailed(response.taskInfo)) {
+                ctx.failIteration(
+                        new IllegalStateException(response.taskInfo.failure.message));
+            } else if (TaskState.isFinished(response.taskInfo)) {
+                ctx.completeIteration();
+            }
+            return true;
+        });
 
-            assertEquals("VM current power state does not match expected value.",
-                    powerState, vmPowerState);
-        } catch (Exception e) {
-            fail("Unable to verify current Machine Power state on Azure");
-            e.printStackTrace();
-        }
+        Operation restartOp = Operation
+                .createPatch(UriUtils.buildUri(this.host, AzureLifecycleOperationService.SELF_LINK))
+                .setBody(request)
+                .setReferer("/tests2")
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        ctx.failIteration(e);
+                        return;
+                    }
+                    ctx.completeIteration();
+                });
+        this.host.send(restartOp);
+        ctx.await();
     }
 
     private void kickOffProvisionTask() throws Throwable {

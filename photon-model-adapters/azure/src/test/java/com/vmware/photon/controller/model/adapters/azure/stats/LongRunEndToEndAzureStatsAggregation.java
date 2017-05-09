@@ -44,6 +44,7 @@ import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService.ResourceAggregateMetric;
@@ -123,12 +124,14 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
             if (computeHost == null) {
                 PhotonModelServices.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
+                PhotonModelAdaptersRegistryAdapters.startServices(this.host);
                 PhotonModelMetricServices.startServices(this.host);
                 AzureAdapters.startServices(this.host);
 
                 this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
+                this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
                 this.host.waitForServiceAvailable(AzureAdapters.LINKS);
                 this.host.setTimeoutSeconds(600);
 

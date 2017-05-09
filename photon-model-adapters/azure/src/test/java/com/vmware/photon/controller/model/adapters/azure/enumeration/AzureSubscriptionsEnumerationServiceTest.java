@@ -42,6 +42,7 @@ import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest;
 import com.vmware.photon.controller.model.adapters.azure.enumeration.AzureSubscriptionsEnumerationService.AzureSubscriptionsEnumerationRequest.AzureSubscription;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -95,12 +96,14 @@ public class AzureSubscriptionsEnumerationServiceTest {
             this.host.start();
             PhotonModelServices.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
+            PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
             AzureAdapters.startServices(this.host);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelMetricServices.LINKS);
+            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
             this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
             this.host.setTimeoutSeconds(600);

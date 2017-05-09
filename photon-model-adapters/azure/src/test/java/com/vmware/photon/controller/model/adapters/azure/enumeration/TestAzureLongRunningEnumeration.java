@@ -81,6 +81,7 @@ import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstant
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.AzureNicSpecs.NetSpec;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryStrategy;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
@@ -233,6 +234,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
         nicSpecs = new ArrayList<>();
     }
 
+    @Override
     @Before
     public void setUp() throws Exception {
         for (int i = 0; i < numOfVMsToTest; i++) {
@@ -251,10 +253,12 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
             if (computeHost == null) {
                 PhotonModelServices.startServices(this.host);
                 PhotonModelTaskServices.startServices(this.host);
+                PhotonModelAdaptersRegistryAdapters.startServices(this.host);
                 AzureAdapters.startServices(this.host);
 
                 this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
                 this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+                this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
                 this.host.waitForServiceAvailable(AzureAdapters.LINKS);
 
                 // TODO: VSYM-992 - improve test/fix arbitrary timeout
