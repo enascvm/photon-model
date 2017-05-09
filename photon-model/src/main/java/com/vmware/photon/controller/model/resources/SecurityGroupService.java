@@ -14,10 +14,12 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
@@ -27,7 +29,7 @@ import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
-
+import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -66,12 +68,19 @@ public class SecurityGroupService extends StatefulService {
          * which either equal the name or the ProtocolNumber of the choice
          */
         public static Protocol fromString(String s) {
-            for (Protocol choice : values()) {
-                if (s.equals(choice.getName()) || s.equals(String.format("{0}", choice.getProtocolNumber()))) {
-                    return choice;
+            AssertUtil.assertNotNull(s, "'protocol' must not be null");
+            Predicate<Protocol> namePredicate = protocol -> protocol.getName().equals(s);
+            Predicate<Protocol> protocolNumberPredicate = protocol -> {
+                try {
+                    return protocol.getProtocolNumber() == Integer.parseInt(s);
+                } catch (NumberFormatException e) {
+                    return false;
                 }
-            }
-            return null;
+            };
+            Predicate<Protocol> fullPredicate = namePredicate.or(protocolNumberPredicate);
+            return Arrays.stream(values())
+                    .filter(fullPredicate)
+                    .findFirst().orElse(null);
         }
     }
 

@@ -34,6 +34,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.SecurityGroupService.Protocol;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
@@ -100,6 +101,14 @@ public class SecurityGroupServiceTest extends Suite {
         out.ports = "1-65535";
         out.access = Access.Deny;
         rules.add(out);
+
+        Rule outWithProtocolNumber = new Rule();
+        outWithProtocolNumber.name = "outWithProtocolNumber";
+        outWithProtocolNumber.protocol = String.valueOf(Protocol.ANY.getProtocolNumber());
+        outWithProtocolNumber.ipRangeCidr = "0.0.0.0/0";
+        outWithProtocolNumber.ports = "1-65535";
+        outWithProtocolNumber.access = Access.Deny;
+        rules.add(outWithProtocolNumber);
         return rules;
     }
 
@@ -151,6 +160,8 @@ public class SecurityGroupServiceTest extends Suite {
                     is(getAllowIngressRules().get(0).name));
             assertThat(returnState.egress.get(0).name, is(getAllowEgressRules()
                     .get(0).name));
+            assertThat(returnState.egress.get(1).name, is(getAllowEgressRules()
+                    .get(1).name));
         }
 
         @Test
