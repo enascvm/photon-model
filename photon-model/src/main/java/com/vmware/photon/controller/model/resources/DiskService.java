@@ -14,6 +14,8 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -24,10 +26,13 @@ import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.OperationJoin;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
 import com.vmware.xenon.common.StatefulService;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 
 /**
@@ -254,6 +259,48 @@ public class DiskService extends StatefulService {
                 public URI contentsReference;
             }
         }
+
+        @Override
+        public void copyTo(ResourceState target) {
+            super.copyTo(target);
+            if (target instanceof DiskState) {
+                DiskState targetState = (DiskState) target;
+                targetState.zoneId = this.zoneId;
+                targetState.regionId = this.regionId;
+                targetState.descriptionLink = this.descriptionLink;
+                targetState.storageDescriptionLink = this.storageDescriptionLink;
+                targetState.resourcePoolLink = this.resourcePoolLink;
+                targetState.authCredentialsLink = this.authCredentialsLink;
+                targetState.sourceImageReference = this.sourceImageReference;
+                targetState.imageLink = this.imageLink;
+                targetState.type = this.type;
+                targetState.status = this.status;
+                targetState.capacityMBytes = this.capacityMBytes;
+                targetState.persistent = this.persistent;
+                targetState.encrypted = this.encrypted;
+                targetState.constraint = this.constraint;
+                targetState.bootOrder = this.bootOrder;
+                targetState.bootArguments = this.bootArguments;
+                targetState.bootConfig = this.bootConfig;
+                targetState.customizationServiceReference = this.customizationServiceReference;
+                targetState.currencyUnit = this.currencyUnit;
+                targetState.creationTimeMicros = this.creationTimeMicros;
+                targetState.computeHostLink = this.computeHostLink;
+                targetState.endpointLink = this.endpointLink;
+            }
+        }
+    }
+
+    public static class DiskStateExpanded extends DiskState {
+        /**
+         * Storage Description instance related to this disk. It will be not null, if there is a
+         * valid {@link #storageDescriptionLink}.
+         */
+        public StorageDescription storageDescription;
+
+        public static URI buildUri(URI diskStateUri) {
+            return UriUtils.buildExpandLinksQueryUri(diskStateUri);
+        }
     }
 
     public DiskService() {
@@ -290,6 +337,45 @@ public class DiskService extends StatefulService {
             put.complete();
         } catch (Throwable t) {
             put.fail(t);
+        }
+    }
+
+    @Override
+    public void handleGet(Operation get) {
+        DiskState currentState = getState(get);
+        boolean doExpand = get.getUri().getQuery() != null &&
+                UriUtils.hasODataExpandParamValue(get.getUri());
+
+        if (!doExpand) {
+            get.setBody(currentState).complete();
+            return;
+        }
+
+        DiskStateExpanded diskStateExpanded = new DiskStateExpanded();
+        currentState.copyTo(diskStateExpanded);
+
+        List<Operation> getOps = new ArrayList<>(1);
+        if (currentState.storageDescriptionLink != null) {
+            getOps.add(Operation.createGet(this, currentState.storageDescriptionLink)
+                    .setReferer(this.getUri())
+                    .setCompletion((o, e) -> {
+                        if (e == null) {
+                            diskStateExpanded.storageDescription = o.getBody(StorageDescription.class);
+                        }
+                    }));
+        }
+
+        if (!getOps.isEmpty()) {
+            OperationJoin.create(getOps)
+                    .setCompletion((ops, exs) -> {
+                        if (exs != null) {
+                            get.fail(exs.values().iterator().next());
+                        } else {
+                            get.setBody(diskStateExpanded).complete();
+                        }
+                    }).sendWith(this);
+        } else {
+            get.setBody(diskStateExpanded).complete();
         }
     }
 

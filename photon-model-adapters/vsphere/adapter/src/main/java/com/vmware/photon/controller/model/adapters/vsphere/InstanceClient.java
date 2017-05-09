@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 
+import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.adapters.vsphere.ProvisionContext.NetworkInterfaceStateWithDetails;
 import com.vmware.photon.controller.model.adapters.vsphere.network.DvsProperties;
 import com.vmware.photon.controller.model.adapters.vsphere.network.NsxProperties;
@@ -56,8 +57,8 @@ import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiClient;
 import com.vmware.photon.controller.model.adapters.vsphere.vapi.VapiConnection;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeStateWithDescription;
-import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
+import com.vmware.photon.controller.model.resources.DiskService.DiskStateExpanded;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
@@ -74,6 +75,9 @@ import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.MethodFault;
 import com.vmware.vim25.OvfNetworkMapping;
 import com.vmware.vim25.RuntimeFaultFaultMsg;
+import com.vmware.vim25.SharesInfo;
+import com.vmware.vim25.SharesLevel;
+import com.vmware.vim25.StorageIOAllocationInfo;
 import com.vmware.vim25.TaskInfo;
 import com.vmware.vim25.TaskInfoState;
 import com.vmware.vim25.VAppPropertyInfo;
@@ -90,6 +94,7 @@ import com.vmware.vim25.VirtualDisk;
 import com.vmware.vim25.VirtualDiskFlatVer2BackingInfo;
 import com.vmware.vim25.VirtualDiskMode;
 import com.vmware.vim25.VirtualDiskSpec;
+import com.vmware.vim25.VirtualDiskType;
 import com.vmware.vim25.VirtualE1000;
 import com.vmware.vim25.VirtualEthernetCard;
 import com.vmware.vim25.VirtualEthernetCardDistributedVirtualPortBackingInfo;
@@ -138,11 +143,18 @@ public class InstanceClient extends BaseHelper {
 
     private static final String CLONE_STRATEGY_LINKED = "LINKED";
 
+    // Storage Related constants
+    private static final String DISK_MODE_INDEPENDENT = "INDEPENDENT";
+    private static final String PROVISION_TYPE = "provisioningType";
+    private static final String SHARES_LEVEL = "sharesLevel";
+    private static final String SHARES = "shares";
+    private static final String LIMIT_IOPS = "limit";
+
     private static final Map<String, Lock> lockPerUri = new ConcurrentHashMap<>();
     private static final VirtualMachineGuestOsIdentifier DEFAULT_GUEST_ID = VirtualMachineGuestOsIdentifier.OTHER_GUEST_64;
     private final ComputeStateWithDescription state;
     private final ComputeStateWithDescription parent;
-    private final List<DiskState> disks;
+    private final List<DiskStateExpanded> disks;
     private final List<NetworkInterfaceStateWithDetails> nics;
     private final ManagedObjectReference placementTarget;
     private final String targetDatacenterPath;
@@ -156,7 +168,7 @@ public class InstanceClient extends BaseHelper {
     public InstanceClient(Connection connection,
             ComputeStateWithDescription resource,
             ComputeStateWithDescription parent,
-            List<DiskState> disks,
+            List<DiskStateExpanded> disks,
             List<NetworkInterfaceStateWithDetails> nics,
             ManagedObjectReference placementTarget,
             String targetDatacenterPath)
@@ -243,7 +255,7 @@ public class InstanceClient extends BaseHelper {
 
         if (this.disks != null && this.disks.size() > 0) {
             // Find whether it has HDD disk
-            DiskState bootDisk = findBootDisk();
+            DiskStateExpanded bootDisk = findBootDisk();
             if (bootDisk != null && bootDisk.capacityMBytes > 0) {
                 // If there are nics, then devices would have already retrieved, so that it
                 // can avoid one more network call.
@@ -390,7 +402,8 @@ public class InstanceClient extends BaseHelper {
         }
 
         ManagedObjectReference folder = getVmFolder();
-        ManagedObjectReference ds = getDatastore();
+        DiskStateExpanded bootDisk = findBootDisk();
+        ManagedObjectReference ds = getDataStoreForDisk(bootDisk);
         ManagedObjectReference resourcePool = getResourcePool();
 
         String vmName = "pmt-" + deployer.getRetriever().hash(ovfUri);
@@ -639,7 +652,7 @@ public class InstanceClient extends BaseHelper {
         int scsiUnit = findFreeUnit(scsiController, devices.getVirtualDevice());
 
         List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
-        DiskState bootDisk = findBootDisk();
+        DiskStateExpanded bootDisk = findBootDisk();
         if (bootDisk != null) {
             if (vd == null) {
                 String datastoreName = this.get.entityProp(datastore, VimPath.ds_summary_name);
@@ -738,7 +751,7 @@ public class InstanceClient extends BaseHelper {
      *
      * @return
      */
-    private DiskState findBootDisk() {
+    private DiskStateExpanded findBootDisk() {
         if (this.disks == null) {
             return null;
         }
@@ -753,7 +766,7 @@ public class InstanceClient extends BaseHelper {
      * Creates disks and attaches them to the vm created by {@link #createInstance()}. The given
      * diskStates are enriched with data from vSphere and can be patched back to xenon.
      */
-    public void attachDisks(List<DiskState> diskStates) throws Exception {
+    public void attachDisks(List<DiskStateExpanded> diskStates) throws Exception {
         if (isOvfDeploy()) {
             return;
         }
@@ -763,7 +776,7 @@ public class InstanceClient extends BaseHelper {
         }
 
         EnumSet<DiskType> notSupportedTypes = EnumSet.of(DiskType.SSD, DiskType.NETWORK);
-        List<DiskState> unsupportedDisks = diskStates.stream()
+        List<DiskStateExpanded> unsupportedDisks = diskStates.stream()
                 .filter(d -> notSupportedTypes.contains(d.type))
                 .collect(Collectors.toList());
         if (!unsupportedDisks.isEmpty()) {
@@ -791,9 +804,9 @@ public class InstanceClient extends BaseHelper {
         List<VirtualDeviceConfigSpec> newDisks = new ArrayList<>();
 
         boolean cdromAdded = false;
-        DiskState bootDisk = null;
+        DiskStateExpanded bootDisk = null;
 
-        for (DiskState ds : diskStates) {
+        for (DiskStateExpanded ds : diskStates) {
             String diskPath = VimUtils.uriToDatastorePath(ds.sourceImageReference);
 
             if (ds.type == DiskType.HDD) {
@@ -806,7 +819,7 @@ public class InstanceClient extends BaseHelper {
                 } else {
                     String diskName = makePathToVmdkFile(ds.id, dir);
                     VirtualDeviceConfigSpec hdd = createHdd(scsiController.getKey(),
-                            scsiUnit, ds, diskName, getDatastore());
+                            scsiUnit, ds, diskName, getDataStoreForDisk(ds));
                     newDisks.add(hdd);
                 }
                 scsiUnit = nextUnitNumber(scsiUnit);
@@ -875,7 +888,7 @@ public class InstanceClient extends BaseHelper {
      * greater then the existing size of the disk
      */
     private VirtualDeviceConfigSpec getBootDiskCustomizeConfigSpec(ManagedObjectReference vm,
-            DiskState bootDisk, ArrayOfVirtualDevice devices)
+            DiskStateExpanded bootDisk, ArrayOfVirtualDevice devices)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg, FinderException {
         if (devices == null) {
             devices = this.get.entityProp(vm, VimPath.vm_config_hardware_device);
@@ -897,7 +910,7 @@ public class InstanceClient extends BaseHelper {
         return VimUtils.waitTaskEnd(this.connection, task);
     }
 
-    private VirtualDeviceConfigSpec createFullCloneAndAttach(String sourcePath, DiskState ds,
+    private VirtualDeviceConfigSpec createFullCloneAndAttach(String sourcePath, DiskStateExpanded ds,
             String dir, VirtualDevice scsiController, int unitNumber)
             throws Exception {
 
@@ -927,13 +940,16 @@ public class InstanceClient extends BaseHelper {
         }
 
         VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
-        backing.setDiskMode(VirtualDiskMode.PERSISTENT.value());
-        backing.setThinProvisioned(true);
+        backing.setDiskMode(getDiskMode(ds));
+        VirtualDiskType provisionType = getDiskProvisioningType(ds);
+        backing.setThinProvisioned(provisionType == VirtualDiskType.THIN);
+        backing.setEagerlyScrub(provisionType == VirtualDiskType.EAGER_ZEROED_THICK);
         backing.setFileName(destName);
-        backing.setDatastore(getDatastore());
+        backing.setDatastore(getDataStoreForDisk(ds));
 
         VirtualDisk disk = new VirtualDisk();
         disk.setBacking(backing);
+        disk.setStorageIOAllocation(getStorageIOAllocationInfo(ds));
         disk.setControllerKey(scsiController.getKey());
         disk.setUnitNumber(unitNumber);
         disk.setKey(-1);
@@ -1077,19 +1093,22 @@ public class InstanceClient extends BaseHelper {
         return unitNumber + 1;
     }
 
-    private VirtualDeviceConfigSpec createHdd(Integer controllerKey, int unitNumber, DiskState ds,
+    private VirtualDeviceConfigSpec createHdd(Integer controllerKey, int unitNumber, DiskStateExpanded ds,
             String diskName, ManagedObjectReference datastore)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
 
         VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
-        backing.setDiskMode(VirtualDiskMode.PERSISTENT.value());
-        backing.setThinProvisioned(true);
+        backing.setDiskMode(getDiskMode(ds));
+        VirtualDiskType provisionType = getDiskProvisioningType(ds);
+        backing.setThinProvisioned(provisionType == VirtualDiskType.THIN);
+        backing.setEagerlyScrub(provisionType == VirtualDiskType.EAGER_ZEROED_THICK);
         backing.setFileName(diskName);
         backing.setDatastore(datastore);
 
         VirtualDisk disk = new VirtualDisk();
         disk.setCapacityInKB(toKb(ds.capacityMBytes));
         disk.setBacking(backing);
+        disk.setStorageIOAllocation(getStorageIOAllocationInfo(ds));
         disk.setControllerKey(controllerKey);
         disk.setUnitNumber(unitNumber);
         disk.setKey(-1);
@@ -1102,19 +1121,20 @@ public class InstanceClient extends BaseHelper {
         return change;
     }
 
-    private VirtualDeviceConfigSpec resizeHdd(VirtualDisk sysdisk, DiskState ds)
+    private VirtualDeviceConfigSpec resizeHdd(VirtualDisk sysdisk, DiskStateExpanded ds)
             throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
 
         VirtualDiskFlatVer2BackingInfo oldbacking = (VirtualDiskFlatVer2BackingInfo) sysdisk
                 .getBacking();
         VirtualDiskFlatVer2BackingInfo backing = new VirtualDiskFlatVer2BackingInfo();
-        backing.setDiskMode(oldbacking.getDiskMode());
-        backing.setThinProvisioned(true);
+        backing.setDiskMode(getDiskMode(ds));
+        backing.setThinProvisioned(oldbacking.isThinProvisioned());
         backing.setFileName(oldbacking.getFileName());
 
         VirtualDisk disk = new VirtualDisk();
         disk.setCapacityInKB(toKb(ds.capacityMBytes));
         disk.setBacking(backing);
+        disk.setStorageIOAllocation(getStorageIOAllocationInfo(ds));
         disk.setControllerKey(sysdisk.getControllerKey());
         disk.setUnitNumber(sysdisk.getUnitNumber());
         disk.setKey(sysdisk.getKey());
@@ -1253,7 +1273,7 @@ public class InstanceClient extends BaseHelper {
             return false;
         }
 
-        DiskState bootDisk = findBootDisk();
+        DiskStateExpanded bootDisk = findBootDisk();
 
         if (bootDisk == null) {
             return false;
@@ -1323,7 +1343,7 @@ public class InstanceClient extends BaseHelper {
             return false;
         }
 
-        DiskState bootDisk = findBootDisk();
+        DiskStateExpanded bootDisk = findBootDisk();
 
         if (bootDisk == null) {
             return false;
@@ -1461,7 +1481,7 @@ public class InstanceClient extends BaseHelper {
         return customizationsApplied;
     }
 
-    private String getFileItemByPath(DiskState bootDisk, String fileName) {
+    private String getFileItemByPath(DiskStateExpanded bootDisk, String fileName) {
         if (bootDisk != null && bootDisk.bootConfig != null && bootDisk.bootConfig.files != null) {
             for (FileEntry e : bootDisk.bootConfig.files) {
                 if (Objects.equals(fileName, e.path)) {
@@ -1631,6 +1651,86 @@ public class InstanceClient extends BaseHelper {
     }
 
     /**
+     * Disk mode is determined based on the disk state properties.
+     */
+    private String getDiskMode(DiskStateExpanded diskState) {
+        List<Constraint.Condition> conditions =
+                diskState.constraint != null ? diskState.constraint.conditions : null;
+        boolean isIndependent = false;
+        if (conditions != null) {
+            isIndependent = conditions.stream()
+                    .filter(c -> DISK_MODE_INDEPENDENT.equals(c.expression.propertyName)).count() > 0;
+        }
+
+        if (diskState.persistent == null) {
+            return isIndependent ?
+                    VirtualDiskMode.INDEPENDENT_PERSISTENT.value() :
+                    VirtualDiskMode.PERSISTENT.value();
+        } else {
+            return diskState.persistent ?
+                    (isIndependent ?
+                            VirtualDiskMode.INDEPENDENT_PERSISTENT.value() :
+                            VirtualDiskMode.PERSISTENT.value()) :
+                    (isIndependent ?
+                            VirtualDiskMode.INDEPENDENT_NONPERSISTENT.value() :
+                            VirtualDiskMode.NONPERSISTENT.value());
+        }
+    }
+
+    private VirtualDiskType getDiskProvisioningType(DiskStateExpanded diskState) throws
+            IllegalArgumentException {
+        return diskState.customProperties != null
+                && diskState.customProperties.get(PROVISION_TYPE) != null ?
+                VirtualDiskType.fromValue(diskState.customProperties.get(PROVISION_TYPE)) :
+                VirtualDiskType.THIN;
+    }
+
+    /**
+     * Constructs storage IO allocation if this is not already dictated by the storage policy
+     * that is chosen.
+     */
+    private StorageIOAllocationInfo getStorageIOAllocationInfo(DiskStateExpanded diskState) throws
+            NumberFormatException {
+        if (diskState.customProperties != null) {
+            StorageIOAllocationInfo allocationInfo = new StorageIOAllocationInfo();
+            String sharesLevel = diskState.customProperties.getOrDefault(SHARES_LEVEL,
+                    SharesLevel.NORMAL.value());
+            SharesInfo sharesInfo = new SharesInfo();
+            sharesInfo.setLevel(SharesLevel.fromValue(sharesLevel));
+            if (sharesInfo.getLevel() == SharesLevel.CUSTOM) {
+                // Set shares value
+                String sharesVal = diskState.customProperties.get(SHARES);
+                if (sharesVal == null || sharesVal.isEmpty()) {
+                    // Reset to normal as nothing is specified for the shares
+                    sharesInfo.setLevel(SharesLevel.NORMAL);
+                } else {
+                    sharesInfo.setShares(Integer.parseInt(sharesVal));
+                }
+            }
+            allocationInfo.setShares(sharesInfo);
+            String limitIops = diskState.customProperties.get(LIMIT_IOPS);
+            if (limitIops != null && !limitIops.isEmpty()) {
+                allocationInfo.setLimit(Long.parseLong(limitIops));
+            }
+            return allocationInfo;
+        }
+        return null;
+    }
+
+    /**
+     * If there is a datastore that is specified for the disk in custom properties, then it will
+     * be used, otherwise fall back to default datastore selection.
+     */
+    private ManagedObjectReference getDataStoreForDisk(DiskStateExpanded diskState)
+            throws FinderException, InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        ManagedObjectReference datastore = null;
+        if (diskState.storageDescription != null && diskState.storageDescription.id != null) {
+            datastore = this.finder.datastore(diskState.storageDescription.id).object;
+        }
+        return datastore != null ? datastore : getDatastore();
+    }
+
+    /**
      * Finds the datastore to use for the VM from the ComputeState.description.datastoreId.
      *
      * @return
@@ -1672,7 +1772,7 @@ public class InstanceClient extends BaseHelper {
         return this.get.entityProp(target, VimPath.res_datastore);
     }
 
-    public ManagedObjectReference getResourcePool()
+    private ManagedObjectReference getResourcePool()
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         if (this.resourcePool != null) {
             return this.resourcePool;
@@ -1698,7 +1798,7 @@ public class InstanceClient extends BaseHelper {
         return this.resourcePool;
     }
 
-    public ManagedObjectReference getHost()
+    private ManagedObjectReference getHost()
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         if (this.host != null) {
             return this.host;

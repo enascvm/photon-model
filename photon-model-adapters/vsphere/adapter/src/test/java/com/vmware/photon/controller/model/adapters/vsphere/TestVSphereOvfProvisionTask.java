@@ -36,6 +36,7 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootCo
 import com.vmware.photon.controller.model.resources.DiskService.DiskState.BootConfig.FileEntry;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.NetworkService;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
@@ -178,6 +179,15 @@ public class TestVSphereOvfProvisionTask extends BaseVSphereAdapterTest {
         res.id = res.name = "boot-disk";
         res.sourceImageReference = URI.create("file:///dev/null");
 
+        // Create storage description
+        StorageDescriptionService.StorageDescription sd = new StorageDescriptionService
+                .StorageDescription();
+        sd.id = sd.name = this.dataStoreId;
+        sd = TestUtils.doPost(this.host, sd,
+                StorageDescriptionService.StorageDescription.class,
+                UriUtils.buildUri(this.host, StorageDescriptionService.FACTORY_LINK));
+
+        res.storageDescriptionLink = sd.documentSelfLink;
         res.bootConfig = new BootConfig();
         res.bootConfig.files = new FileEntry[] { new FileEntry(), new FileEntry() };
         res.bootConfig.files[0].path = "user-data";

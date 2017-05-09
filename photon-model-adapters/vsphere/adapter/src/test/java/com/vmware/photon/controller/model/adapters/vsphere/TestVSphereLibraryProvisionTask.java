@@ -13,13 +13,19 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.ComputeProperties;
+import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.BasicConnection;
 import com.vmware.photon.controller.model.adapters.vsphere.util.connection.GetMoRef;
@@ -39,6 +45,12 @@ import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.Imag
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.TaskOption;
 import com.vmware.photon.controller.model.tasks.TestUtils;
+import com.vmware.vim25.InvalidPropertyFaultMsg;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
+import com.vmware.vim25.SharesLevel;
+import com.vmware.vim25.VirtualDisk;
+import com.vmware.vim25.VirtualDiskFlatVer2BackingInfo;
+import com.vmware.vim25.VirtualDiskType;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -103,8 +115,19 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
         BasicConnection connection = createConnection();
         GetMoRef get = new GetMoRef(connection);
         verifyDiskSize(vm, get, HDD_DISK_SIZE);
+        verifyDiskProperties(vm, get);
 
         deleteVmAndWait(vm);
+    }
+
+    private void verifyDiskProperties(ComputeState vm, GetMoRef get)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        VirtualDisk vd = fetchVirtualDisk(vm, get);
+        assertEquals(SharesLevel.CUSTOM.value(), vd.getStorageIOAllocation().getShares().getLevel().value());
+        Long limitIops = 50L;
+        assertEquals(limitIops, vd.getStorageIOAllocation().getLimit());
+        VirtualDiskFlatVer2BackingInfo backing = (VirtualDiskFlatVer2BackingInfo) vd.getBacking();
+        assertTrue(backing.isThinProvisioned());
     }
 
     private ComputeState createVmState(ComputeDescription vmDescription, String imageLink) throws Throwable {
@@ -123,8 +146,13 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
         computeState.networkInterfaceLinks = new ArrayList<>(1);
 
         computeState.diskLinks = new ArrayList<>(1);
+        Constraint constraint = new Constraint();
+        List<Constraint.Condition> conditions = new ArrayList<>();
+        conditions.add(Constraint.Condition.forTag("INDEPENDENT", null,
+                Constraint.Condition.Enforcement.SOFT, QueryTask.Query.Occurance.MUST_OCCUR));
+        constraint.conditions = conditions;
         computeState.diskLinks.add(createDisk("boot", DiskService.DiskType.HDD, null,
-                HDD_DISK_SIZE).documentSelfLink);
+                HDD_DISK_SIZE, buildCustomProperties(), constraint).documentSelfLink);
 
         CustomProperties.of(computeState)
                 .put(ComputeProperties.RESOURCE_GROUP_NAME, this.vcFolder)
@@ -135,6 +163,17 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
                 ComputeState.class,
                 UriUtils.buildUri(this.host, ComputeService.FACTORY_LINK));
         return returnState;
+    }
+
+    private HashMap<String, String> buildCustomProperties() {
+        HashMap<String, String> customProperties = new HashMap<>();
+
+        customProperties.put(PROVISION_TYPE, VirtualDiskType.THIN.value());
+        customProperties.put(SHARES_LEVEL, SharesLevel.CUSTOM.value());
+        customProperties.put(SHARES, "3000");
+        customProperties.put(LIMIT_IOPS, "50");
+
+        return customProperties;
     }
 
     private String selectPlacement() {

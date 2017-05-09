@@ -311,7 +311,7 @@ public class VSphereAdapterInstanceService extends StatelessService {
         return Operation.createPatch(this, doc.documentSelfLink).setBody(doc);
     }
 
-    private OperationJoin createDiskPatch(List<DiskState> disks) {
+    private OperationJoin createDiskPatch(List<DiskService.DiskStateExpanded> disks) {
         if (disks == null || disks.isEmpty()) {
             return null;
         }

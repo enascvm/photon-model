@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -37,6 +38,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TestName;
 
+import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -114,6 +116,12 @@ public class BaseVSphereAdapterTest {
     public String networkId = System.getProperty(TestProperties.VC_NETWORK_ID);
 
     public String vcFolder = System.getProperty(TestProperties.VC_FOLDER);
+
+    protected static final String DATASTORE = "datastore";
+    protected static final String PROVISION_TYPE = "provisioningType";
+    protected static final String SHARES_LEVEL = "sharesLevel";
+    protected static final String SHARES = "shares";
+    protected static final String LIMIT_IOPS = "limit";
 
     protected VerificationHost host;
     protected AuthCredentialsServiceState auth;
@@ -502,14 +510,18 @@ public class BaseVSphereAdapterTest {
      * Create a new disk state to attach it to the virual machine.
      */
     protected DiskService.DiskState createDisk(String alias, DiskService.DiskType type,
-            URI sourceImageReference, long capacityMBytes) throws Throwable {
+            URI sourceImageReference, long capacityMBytes, HashMap<String, String>
+            customProperties, Constraint constraint) throws Throwable {
         DiskService.DiskState res = new DiskService.DiskState();
         res.capacityMBytes = capacityMBytes;
         res.bootOrder = 1;
         res.type = type;
         res.id = res.name = "disk-" + alias;
+        res.constraint = constraint;
 
         res.sourceImageReference = sourceImageReference;
+
+        res.customProperties = customProperties;
         return doPost(this.host, res,
                 DiskService.DiskState.class,
                 UriUtils.buildUri(this.host, DiskService.FACTORY_LINK));
@@ -520,13 +532,22 @@ public class BaseVSphereAdapterTest {
      */
     protected void verifyDiskSize(ComputeState vm, GetMoRef get, long size)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
+        VirtualDisk vd = fetchVirtualDisk(vm, get);
+
+        long diskSizeinMb = vd.getCapacityInBytes() / 1024 / 1024;
+        assertEquals(size, diskSizeinMb);
+    }
+
+    /**
+     * Get the reference to Virtual Disk from VM.
+     */
+    protected VirtualDisk fetchVirtualDisk(ComputeState vm, GetMoRef get)
+            throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         ManagedObjectReference vmMoRef = CustomProperties.of(vm).getMoRef(MOREF);
         ArrayOfVirtualDevice devices = get.entityProp(vmMoRef, VimPath.vm_config_hardware_device);
         VirtualDisk vd = devices.getVirtualDevice().stream()
                 .filter(d -> d instanceof VirtualDisk)
                 .map(d -> (VirtualDisk) d).findFirst().orElse(null);
-
-        long diskSizeinMb = vd.getCapacityInBytes() / 1024 / 1024;
-        assertEquals(size, diskSizeinMb);
+        return vd;
     }
 }
