@@ -37,7 +37,8 @@ public class VSphereAdapters {
             DatacenterEnumeratorService.SELF_LINK,
             VSphereEndpointAdapterService.SELF_LINK,
             DvsNetworkService.SELF_LINK,
-            VSphereAdapterImageEnumerationService.SELF_LINK
+            VSphereAdapterImageEnumerationService.SELF_LINK,
+            VSphereAdapterD2PowerOpsService.SELF_LINK
     };
 
     /**
@@ -59,6 +60,7 @@ public class VSphereAdapters {
         host.startService(new VSphereEndpointAdapterService());
         host.startService(new DvsNetworkService());
         host.startService(new VSphereAdapterImageEnumerationService());
+        host.startService(new VSphereAdapterD2PowerOpsService());
 
         EndpointAdapterUtils.registerEndpointAdapters(
                 host,

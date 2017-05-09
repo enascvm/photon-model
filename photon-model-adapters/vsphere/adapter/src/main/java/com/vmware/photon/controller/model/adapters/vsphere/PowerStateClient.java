@@ -83,11 +83,29 @@ public class PowerStateClient extends BaseHelper {
         }
     }
 
+    /**
+     *
+     * @param vm
+     *
+     * @throws Exception
+     */
+    public void rebootVM(ManagedObjectReference vm) throws Exception {
+        getVimPort().rebootGuest(vm);
+    }
+
     private void awaitTaskEnd(ManagedObjectReference task) throws Exception {
         TaskInfo taskInfo = VimUtils.waitTaskEnd(this.connection, task);
         if (taskInfo.getState() == TaskInfoState.ERROR) {
             VimUtils.rethrow(taskInfo.getError());
         }
+    }
+
+    /**
+     * @param vm
+     * @throws Exception
+     */
+    public void suspendVM(ManagedObjectReference vm, long politenessDeadlineMicros) throws Exception {
+        changePowerState(vm, PowerState.SUSPEND, null, politenessDeadlineMicros);
     }
 
     private void hardPowerOff(ManagedObjectReference vm) throws Exception {

@@ -74,48 +74,45 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
 
     @Test
     public void deployFromLibrary() throws Throwable {
-        if (isMock()) {
+
+        ComputeState vm = provisionVMAndGetState();
+        if (vm == null) {
             return;
         }
-
-        // Create a resource pool where the VM will be housed
-        this.resourcePool = createResourcePool();
-        this.auth = createAuth();
-
-        this.computeHostDescription = createComputeDescription();
-        this.computeHost = createComputeHost(this.computeHostDescription);
-
-        EndpointState ep = new EndpointState();
-        ep.id = nextName("endpoint");
-        ep.endpointType = EndpointType.vsphere.name();
-        ep.name = ep.id;
-        ep.authCredentialsLink = this.auth.documentSelfLink;
-        ep.computeLink = this.computeHost.documentSelfLink;
-        ep.computeDescriptionLink = this.computeHostDescription.documentSelfLink;
-        ep.resourcePoolLink = this.resourcePool.documentSelfLink;
-
-        this.endpoint = TestUtils.doPost(this.host, ep, EndpointState.class,
-                UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
-
-        enumerateComputes(this.computeHost);
-        doRefresh();
-        snapshotFactoryState("libDeploy", ImageService.class);
-
-        String imageLink = findImage();
-        ComputeDescription desc = createVmDescription();
-        ComputeState vm = createVmState(desc, imageLink);
-
-        // kick off a provision task to do the actual VM creation
-        ProvisionComputeTaskState outTask = createProvisionTask(vm);
-        awaitTaskEnd(outTask);
-
-        vm = getComputeState(vm);
 
         // Verify that the disk is resized
         BasicConnection connection = createConnection();
         GetMoRef get = new GetMoRef(connection);
         verifyDiskSize(vm, get, HDD_DISK_SIZE);
         verifyDiskProperties(vm, get);
+
+        deleteVmAndWait(vm);
+    }
+
+    @Test
+    public void deployFromLibraryWithReboot() throws Throwable {
+        ComputeState vm = provisionVMAndGetState();
+        if (vm == null) {
+            return;
+        }
+        // test reboot resource operation
+        rebootVSphereVMAndWait(vm);
+        // Verify that the disk is resized
+        BasicConnection connection = createConnection();
+        GetMoRef get = new GetMoRef(connection);
+        verifyDiskSize(vm, get, HDD_DISK_SIZE);
+
+        deleteVmAndWait(vm);
+    }
+
+    @Test
+    public void deployFromLibraryAndSuspendVM() throws Throwable {
+        ComputeState vm = provisionVMAndGetState();
+        if (vm == null) {
+            return;
+        }
+        // test suspend resource operation
+        suspendVSphereVM(vm);
 
         deleteVmAndWait(vm);
     }
@@ -245,5 +242,44 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
                         ImageEnumerationTaskService.FACTORY_LINK));
 
         this.host.waitForFinishedTask(ImageEnumerationTaskState.class, outTask.documentSelfLink);
+    }
+
+    private ComputeState provisionVMAndGetState() throws Throwable {
+        if (isMock()) {
+            return null;
+        }
+
+        // Create a resource pool where the VM will be housed
+        this.resourcePool = createResourcePool();
+        this.auth = createAuth();
+
+        this.computeHostDescription = createComputeDescription();
+        this.computeHost = createComputeHost(this.computeHostDescription);
+
+        EndpointState ep = new EndpointState();
+        ep.id = nextName("endpoint");
+        ep.endpointType = EndpointType.vsphere.name();
+        ep.name = ep.id;
+        ep.authCredentialsLink = this.auth.documentSelfLink;
+        ep.computeLink = this.computeHost.documentSelfLink;
+        ep.computeDescriptionLink = this.computeHostDescription.documentSelfLink;
+        ep.resourcePoolLink = this.resourcePool.documentSelfLink;
+
+        this.endpoint = TestUtils.doPost(this.host, ep, EndpointState.class,
+                UriUtils.buildUri(this.host, EndpointService.FACTORY_LINK));
+
+        enumerateComputes(this.computeHost);
+        doRefresh();
+        snapshotFactoryState("libDeploy", ImageService.class);
+
+        String imageLink = findImage();
+        ComputeDescription desc = createVmDescription();
+        ComputeState vm = createVmState(desc, imageLink);
+
+        // kick off a provision task to do the actual VM creation
+        ProvisionComputeTaskState outTask = createProvisionTask(vm);
+        awaitTaskEnd(outTask);
+
+        return getComputeState(vm);
     }
 }

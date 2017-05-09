@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 
 import org.junit.After;
 import org.junit.Before;
@@ -42,7 +43,9 @@ import com.vmware.photon.controller.model.Constraint;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
+import com.vmware.photon.controller.model.adapterapi.ResourceOperationResponse;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
+import com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationRequest;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimPath;
@@ -86,11 +89,15 @@ import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.VirtualDisk;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.QueryResultsProcessor;
+import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.StatefulService;
+import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
+import com.vmware.xenon.common.test.TestContext;
 import com.vmware.xenon.common.test.VerificationHost;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -342,6 +349,130 @@ public class BaseVSphereAdapterTest {
                         ResourceRemovalTaskService.FACTORY_LINK));
 
         awaitTaskEnd(outDelete);
+    }
+
+    protected void rebootVSphereVMAndWait(ComputeState computeState) {
+        String taskLink = UUID.randomUUID().toString();
+
+        ResourceOperationRequest rebootVMRequest = getResourceOperationRequest("Reboot",
+                computeState.documentSelfLink, taskLink);
+
+        TestContext ctx = this.host.testCreate(1);
+        createTaskResultListener(this.host, taskLink, (u) -> {
+            if (u.getAction() != Service.Action.PATCH) {
+                return false;
+            }
+            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
+            if (TaskState.isFailed(response.taskInfo)) {
+                ctx.failIteration(
+                        new IllegalStateException(response.taskInfo.failure.message));
+            } else {
+                ctx.completeIteration();
+            }
+            return true;
+        });
+        TestContext ctx2 = this.host.testCreate(1);
+        Operation rebootOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+                .setBody(rebootVMRequest)
+                .setReferer(this.host.getReferer())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        ctx2.failIteration(e);
+                        return;
+                    }
+                    ctx2.completeIteration();
+                });
+        this.host.send(rebootOp);
+        ctx2.await();
+        ComputeState[] cState = new ComputeState[1];
+
+        this.host.waitFor("Reboot request failed", () -> {
+            cState[0] = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, computeState.documentSelfLink));
+            if (cState[0].powerState.equals(ComputeService.PowerState.ON)) {
+                return true;
+            } else {
+                return false;
+            }
+        });
+        assertEquals(ComputeService.PowerState.ON, cState[0].powerState);
+        assertNotNull(cState[0].address);
+    }
+
+    protected void suspendVSphereVM(ComputeState computeState) {
+        String taskLink = UUID.randomUUID().toString();
+
+        ResourceOperationRequest suspendVMRequest = getResourceOperationRequest("Suspend",
+                computeState.documentSelfLink, taskLink);
+
+        TestContext ctx = this.host.testCreate(1);
+        createTaskResultListener(this.host, taskLink, (u) -> {
+            if (u.getAction() != Service.Action.PATCH) {
+                return false;
+            }
+            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
+            if (TaskState.isFailed(response.taskInfo)) {
+                ctx.failIteration(
+                        new IllegalStateException(response.taskInfo.failure.message));
+            } else {
+                ctx.completeIteration();
+            }
+            return true;
+        });
+        TestContext ctx2 = this.host.testCreate(1);
+        Operation suspendOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+                .setBody(suspendVMRequest)
+                .setReferer(this.host.getReferer())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        ctx2.failIteration(e);
+                        return;
+                    }
+                    ctx2.completeIteration();
+                });
+        this.host.send(suspendOp);
+        ctx2.await();
+
+        ComputeState[] cstate = new ComputeState[1];
+
+        this.host.waitFor("Suspend request failed", () -> {
+            cstate[0] = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, computeState.documentSelfLink));
+            if ( cstate[0].powerState.equals(ComputeService.PowerState.SUSPEND)) {
+                return true;
+            } else {
+                return false;
+            }
+        });
+        assertEquals(ComputeService.PowerState.SUSPEND, cstate[0].powerState);
+    }
+
+    private ResourceOperationRequest getResourceOperationRequest(String operation, String documentSelfLink, String taskLink) {
+        ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
+        resourceOperationRequest.operation = operation;
+        resourceOperationRequest.isMockRequest = isMock();
+        resourceOperationRequest.resourceReference = UriUtils.buildUri(this.host, documentSelfLink);
+        resourceOperationRequest.taskReference = UriUtils.buildUri(this.host, taskLink);
+        resourceOperationRequest.payload = new HashMap<>();
+        return resourceOperationRequest;
+    }
+
+    private void createTaskResultListener(VerificationHost host, String taskLink,
+                                          Function<Operation, Boolean> h) {
+        StatelessService service = new StatelessService() {
+            @Override
+            public void handleRequest(Operation update) {
+                if (!h.apply(update)) {
+                    super.handleRequest(update);
+                }
+            }
+        };
+
+        Operation startOp = Operation
+                .createPost(host, taskLink)
+                .setCompletion(this.host.getCompletion())
+                .setReferer(this.host.getReferer());
+        this.host.startService(startOp, service);
     }
 
     protected URI getAdapterManagementReference() {
