@@ -143,14 +143,14 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
         // Map AWS VPC id to network state for discovered VPCs
         public Map<String, NetworkState> vpcs = new HashMap<>();
         // Map for local network states. key = vpc-id, value = NetworkState.documentSelfLink
-        public Map<String, String> localNetworkStateMap = new HashMap<>();
+        public Map<String, NetworkState> localNetworkStateMap = new HashMap<>();
 
         // Map AWS Subnet id to AWS Subnet object
         public Map<String, Subnet> awsSubnets = new HashMap<>();
         // Map AWS Subnet id to subnet state for discovered Subnets
         public Map<String, SubnetStateWithParentVpcId> subnets = new HashMap<>();
         // Map for local subnet states. key = subnet-id, value = SubnetState.documentSelfLink
-        public Map<String, String> localSubnetStateMap = new HashMap<>();
+        public Map<String, SubnetState> localSubnetStateMap = new HashMap<>();
 
         static class SubnetStateWithParentVpcId {
             String parentVpcId;
@@ -363,7 +363,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         for (Object s : qrt.results.documents.values()) {
                             NetworkState networkState = Utils.fromJson(s, NetworkState.class);
                             context.localNetworkStateMap
-                                    .put(networkState.id, networkState.documentSelfLink);
+                                    .put(networkState.id, networkState);
                         }
                     }
 
@@ -416,7 +416,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         for (Object s : queryTask.results.documents.values()) {
                             SubnetState subnetState = Utils.fromJson(s, SubnetState.class);
                             context.localSubnetStateMap.put(subnetState.id,
-                                    subnetState.documentSelfLink);
+                                    subnetState);
                         }
                     }
                     logFine(() -> String.format("%d subnet states found.",
@@ -474,7 +474,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                 .collect(Collectors.toList());
         allNetworkAndSubnetsTags.addAll(context.awsSubnets.values().stream()
                 // Create only the tags for the new subnets
-                .filter(subnet -> !context.localSubnetStateMap.containsKey(subnet.getVpcId()))
+                .filter(subnet -> !context.localSubnetStateMap.containsKey(subnet.getSubnetId()))
                 .flatMap(subnet -> subnet.getTags().stream())
                 .collect(Collectors.toList()));
 
@@ -515,11 +515,11 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             List<DeferredResult<Set<String>>> updateNetwOrSubnTagLinksOps = new ArrayList<>();
             // update tag links for the existing NetworkStates
             for (String vpcId : context.awsVpcs.keySet()) {
-                if (!context.vpcs.containsKey(vpcId)) {
+                if (!context.localNetworkStateMap.containsKey(vpcId)) {
                     continue; // this is not a network to update
                 }
                 Vpc vpc = context.awsVpcs.get(vpcId);
-                NetworkState existingNetworkState = context.vpcs.get(vpcId);
+                NetworkState existingNetworkState = context.localNetworkStateMap.get(vpcId);
                 Map<String, String> remoteTags = new HashMap<>();
                 for (Tag awsVpcTag : vpc.getTags()) {
                     if (!awsVpcTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
@@ -531,11 +531,11 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             }
             // update tag links for the existing SubnetStates
             for (String subnetId : context.awsSubnets.keySet()) {
-                if (!context.subnets.containsKey(subnetId)) {
+                if (!context.localSubnetStateMap.containsKey(subnetId)) {
                     continue; // this is not a subnet to update
                 }
                 Subnet subnet = context.awsSubnets.get(subnetId);
-                SubnetState existingSubnetState = context.subnets.get(subnetId).subnetState;
+                SubnetState existingSubnetState = context.localSubnetStateMap.get(subnetId);
                 Map<String, String> remoteTags = new HashMap<>();
                 for (Tag awsSubnetTag : subnet.getTags()) {
                     if (!awsSubnetTag.getKey().equals(AWSConstants.AWS_TAG_NAME)) {
@@ -546,7 +546,8 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
                         .add(updateLocalTagStates(this, existingSubnetState, remoteTags));
             }
 
-            return DeferredResult.allOf(updateNetwOrSubnTagLinksOps).thenApply(gnore -> context);
+            return DeferredResult.allOf(updateNetwOrSubnTagLinksOps)
+                    .thenApply(ignore -> context);
         }
     }
 
@@ -573,7 +574,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             final Operation networkStateOp;
             if (context.localNetworkStateMap.containsKey(remoteVPCId)) {
                 // If the local network state already exists for the VPC -> Update it.
-                networkState.documentSelfLink = context.localNetworkStateMap.get(remoteVPCId);
+                networkState.documentSelfLink = context.localNetworkStateMap.get(remoteVPCId).documentSelfLink;
                 // don't overwrite resourcePoolLink
                 networkState.resourcePoolLink = null;
 
@@ -644,7 +645,7 @@ public class AWSNetworkStateEnumerationAdapterService extends StatelessService {
             final Operation subnetStateOp;
             if (context.localSubnetStateMap.containsKey(remoteSubnetId)) {
                 // If the local subnet state already exists for the Subnet -> Update it.
-                subnetState.documentSelfLink = context.localSubnetStateMap.get(remoteSubnetId);
+                subnetState.documentSelfLink = context.localSubnetStateMap.get(remoteSubnetId).documentSelfLink;
 
                 subnetStateOp = createPatchOperation(this,
                         subnetState, subnetState.documentSelfLink);

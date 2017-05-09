@@ -65,9 +65,20 @@ public class AWSNetworkUtils {
         if (vpc == null) {
             throw new IllegalArgumentException("Cannot map VPC to network state for null instance");
         }
+
         NetworkState networkState = new NetworkState();
         networkState.id = vpc.getVpcId();
-        networkState.name = vpc.getVpcId();
+
+        // calculate vpc name
+        if (vpc.getTags() == null) {
+            networkState.name = vpc.getVpcId();
+        } else {
+            networkState.name = vpc.getTags().stream()
+                    .filter(tag -> !tag.getKey().equals(AWS_TAG_NAME))
+                    .map(tag -> tag.getValue()).findFirst()
+                    .orElse(vpc.getVpcId());
+        }
+
         networkState.subnetCIDR = vpc.getCidrBlock();
         networkState.regionId = regionId;
         networkState.resourcePoolLink = resourcePoolLink;

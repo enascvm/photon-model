@@ -81,7 +81,6 @@ import com.amazonaws.services.ec2.model.Tag;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -98,7 +97,6 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService;
-import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -583,7 +581,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         assertEquals(OSType.WINDOWS.toString(), winOSType);
     }
 
-    @Ignore("VSYM-6430")
+    @Test
     public void testTagEnumeration() throws Throwable {
         if (this.isMock) {
             return;
@@ -703,9 +701,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                             NetworkService.FACTORY_LINK, NetworkState.class);
             NetworkState defaultNetworkState = allNetworkStatesMap.get(this.vpcId);
             // ensure one link is deleted and one new is added to the network state
-            // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-6337
-            // activate the following assert once VSYM-6337 is fixed.
-            // assertEquals(1, defaultNetworkState.tagLinks.size());
+            assertEquals("Wrong number of network tag links found.", 1, defaultNetworkState.tagLinks.size());
 
             // validate subnet tags
             Map<String, SubnetState> allSubnetStatesMap =
@@ -713,17 +709,16 @@ public class TestAWSEnumerationTask extends BasicTestCase {
                             SubnetService.FACTORY_LINK, SubnetState.class);
             SubnetState defaultSubnetState = allSubnetStatesMap.get(this.subnetId);
             // ensure one link is deleted and one new is added to the subnet state
-            // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-6337
-            // activate the following assert once VSYM-6337 is fixed.
-            // assertEquals(1, defaultSubnetState.tagLinks.size());
+            assertEquals("Wrong number of subnet tag links found.", 1, defaultSubnetState.tagLinks.size());
 
             // validate disk tags
-            Map<String, DiskState> allDiskStatesMap =
-                    ProvisioningUtils.<DiskState> getResourceStates(this.host,
-                            DiskService.FACTORY_LINK, DiskState.class);
-            DiskState defaultDiskState = allDiskStatesMap.get(this.diskId);
+            // commented until https://jira-hzn.eng.vmware.com/browse/VSYM-6337 is fixed
+            //Map<String, DiskState> allDiskStatesMap =
+            //        ProvisioningUtils.<DiskState> getResourceStates(this.host,
+            //                DiskService.FACTORY_LINK, DiskState.class);
+            //DiskState defaultDiskState = allDiskStatesMap.get(this.diskId);
             // ensure one link is deleted and one new is added to the disk state
-            assertEquals(1, defaultDiskState.tagLinks.size());
+            //assertEquals("Wrong number of disk tag links found.", 1, defaultDiskState.tagLinks.size());
 
             // validate vm tags
             Map<Tag, String> vmTagLinks = new HashMap<>();

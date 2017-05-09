@@ -155,10 +155,12 @@ public class TagsUtil {
             tagLinksToAdd = new HashSet<>(remoteTagStates.keySet());
 
             if (localState.tagLinks != null) {
+                // currently existing links should not be post for adding again
                 tagLinksToAdd.removeAll(localState.tagLinks);
                 resultTagLinks.addAll(localState.tagLinks);
             }
 
+            // the result list will contain both the currently existing links, and the newly added ones
             resultTagLinks.addAll(tagLinksToAdd);
 
             // not existing locally tags should be created
@@ -180,12 +182,13 @@ public class TagsUtil {
             // all local tag links which do not have remote correspondents and are external will be
             // removed from the currentState's tagLinks list
             Set<String> tagLinksToRemove = new HashSet<>();
-            if (currentTagLinks == null) {
+            if (localState.tagLinks == null) {
                 removeAllExternalTagLinksDR = DeferredResult.completed(tagLinksToRemove);
             } else {
-                tagLinksToRemove.addAll(currentTagLinks);
+                tagLinksToRemove.addAll(localState.tagLinks);
                 tagLinksToRemove.removeAll(remoteTagStates.keySet());
 
+                // the result should not contain the local tags which are removed remotely
                 resultTagLinks.removeAll(tagLinksToRemove);
 
                 if (tagLinksToRemove.isEmpty()) {
@@ -297,11 +300,11 @@ public class TagsUtil {
         ServiceStateCollectionUpdateRequest updateTagLinksRequest = ServiceStateCollectionUpdateRequest
                 .create(collectionsToAddMap, collectionsToRemoveMap);
 
-        Operation createPatch = Operation.createPatch(service, currentStateSelfLink)
+        Operation updatePatch = Operation.createPatch(service, currentStateSelfLink)
                 .setBody(updateTagLinksRequest)
                 .setReferer(service.getUri());
 
-        return service.sendWithDeferredResult(createPatch).thenApply(ignore -> (Void) null);
+        return service.sendWithDeferredResult(updatePatch).thenApply(ignore -> (Void) null);
     }
 
 }
