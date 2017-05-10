@@ -48,6 +48,8 @@ import org.junit.rules.TestName;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
+import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService.ResourceAggregateMetric;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService.ResourceMetrics;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
@@ -193,7 +195,7 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
         // As no stats collection is performed yet, ResourceAggregateMetric document count will be 0.
         resourceStatsAggregation(this.host, this.computeHost.resourcePoolLink);
         ServiceDocumentQueryResult aggrRes = this.host.getFactoryState(UriUtils.buildUri(this.host,
-                ResourceMetricsService.FACTORY_LINK));
+                ResourceAggregateMetricService.FACTORY_LINK));
         assertEquals(0, aggrRes.documentLinks.size());
 
         // perform enumeration on given AWS endpoint.
@@ -233,7 +235,7 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
 
                 ServiceDocumentQueryResult aggrResult = this.host
                         .getExpandedFactoryState(UriUtils.buildUri(this.host,
-                                ResourceMetricsService.FACTORY_LINK));
+                                ResourceAggregateMetricService.FACTORY_LINK));
                 // check compute resource has stats generated for all metric keys
                 checkInMemoryStatsPresent(res);
                 // check expiration time for all resource aggregate metric documents
@@ -281,8 +283,8 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
                 + TimeUnit.DAYS.toMicros(DEFAULT_RETENTION_LIMIT_DAYS);
 
         for (Object aggrDocument : aggrResult.documents.values()) {
-            ResourceMetrics aggrMetric = Utils
-                    .fromJson(aggrDocument, ResourceMetrics.class);
+            ResourceAggregateMetric aggrMetric = Utils
+                    .fromJson(aggrDocument, ResourceAggregateMetric.class);
             // Make sure all the documents have expiration time set.
             assertTrue("Expiration time is not correctly set.",
                     aggrMetric.documentExpirationTimeMicros < expectedExpirationTime);
@@ -332,9 +334,9 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
                 QueryTask.QuerySpecification querySpec = new QueryTask.QuerySpecification();
 
                 querySpec.query = QueryTask.Query.Builder.create()
-                        .addKindFieldClause(ResourceMetrics.class)
+                        .addKindFieldClause(ResourceAggregateMetric.class)
                         .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK,
+                                UriUtils.buildUriPath(ResourceAggregateMetricService.FACTORY_LINK,
                                         getMetricKeyPrefix(computeResourceLink, metricName)),
                                 QueryTask.QueryTerm.MatchType.PREFIX)
                         .build();
@@ -363,8 +365,8 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
         boolean estimatedChargeFound = false;
 
         for (Object aggrDocument : results) {
-            ResourceMetrics aggrMetric = Utils
-                    .fromJson(aggrDocument, ResourceMetrics.class);
+            ResourceAggregateMetric aggrMetric = Utils
+                    .fromJson(aggrDocument, ResourceAggregateMetric.class);
 
             // Make sure all the documents have expiration time set.
             assertTrue("Expiration time is not correctly set.",
@@ -375,7 +377,11 @@ public class LongRunEndToEndStatsAggregationTest extends BasicTestCase {
             // count = num of resources: one value for each resource
             // sum = null: not specified in the aggregate type set
 
-            assertNotNull("Value is not set", aggrMetric.entries.get(0));
+            assertNotNull("Time bin avg value is not set", aggrMetric.timeBin.avg);
+            assertNotNull("Time bin max value is not set", aggrMetric.timeBin.max);
+            assertNotNull("Time bin min value is not set", aggrMetric.timeBin.min);
+            assertNotNull("Time bin sum value is not set", aggrMetric.timeBin.sum);
+            assertNotNull("Time bin count value is not set", aggrMetric.timeBin.count);
         }
         assertTrue(estimatedChargeFound);
     }

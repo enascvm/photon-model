@@ -21,7 +21,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
-import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
+import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -129,7 +129,7 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
                 StatsAggregationTaskState.class);
         this.host.waitFor("Error waiting for stats", () -> {
             ServiceDocumentQueryResult aggrRes = verificationHost.getFactoryState(UriUtils.buildUri(verificationHost,
-                        ResourceMetricsService.FACTORY_LINK));
+                        ResourceAggregateMetricService.FACTORY_LINK));
             // Expect 0 stats because they're not collected yet
             if (aggrRes.documentCount == 0) {
                 return true;
@@ -144,8 +144,6 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
                 StatsCollectionTaskService.FACTORY_LINK, collectionTaskState,
                 StatsCollectionTaskState.class);
 
-        int numberOfRawMetrics = this.numResources * 4;
-
         // kick off an aggregation task
         aggregationTaskState = new StatsAggregationTaskState();
         aggregationTaskState.query =  taskQuery;
@@ -155,8 +153,8 @@ public class StatsAggregationTaskServiceTest extends BaseModelTest {
                 StatsAggregationTaskState.class);
         this.host.waitFor("Error waiting for stats", () -> {
             ServiceDocumentQueryResult aggrRes = verificationHost.getFactoryState(UriUtils.buildUri(verificationHost,
-                        ResourceMetricsService.FACTORY_LINK));
-            if (aggrRes.documentCount ==  this.numResources + numberOfRawMetrics) {
+                        ResourceAggregateMetricService.FACTORY_LINK));
+            if (aggrRes.documentCount ==  this.numResources) {
                 return true;
             }
             return false;

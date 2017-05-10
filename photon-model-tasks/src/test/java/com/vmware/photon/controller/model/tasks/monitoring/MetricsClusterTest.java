@@ -27,6 +27,7 @@ import org.junit.Test;
 
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.monitoring.ResourceAggregateMetricService;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
@@ -91,6 +92,7 @@ public class MetricsClusterTest extends BaseModelTest {
         this.host.waitForServiceAvailable(StatsAggregationTaskService.FACTORY_LINK);
         this.host.waitForServiceAvailable(SingleResourceStatsAggregationTaskService.FACTORY_LINK);
         this.host.waitForServiceAvailable(ResourceMetricsService.FACTORY_LINK);
+        this.host.waitForServiceAvailable(ResourceAggregateMetricService.FACTORY_LINK);
         this.host.waitForServiceAvailable(MockStatsAdapter.SELF_LINK);
     }
 
@@ -132,8 +134,6 @@ public class MetricsClusterTest extends BaseModelTest {
         postServiceSynchronously(
                 StatsCollectionTaskService.FACTORY_LINK, collectionTaskState,
                 StatsCollectionTaskState.class);
-
-        int numberOfRawMetrics = this.numResources * 4;
 
         // verify that the collection tasks have been deleted
         this.host.waitFor("Timeout waiting for task to expire", () -> {
@@ -179,22 +179,22 @@ public class MetricsClusterTest extends BaseModelTest {
 
         this.host.waitFor("Error waiting for stats", () -> {
             ServiceDocumentQueryResult aggrRes = this.metricHost.getFactoryState(UriUtils.buildUri(this.metricHost,
-                        ResourceMetricsService.FACTORY_LINK));
-            if (aggrRes.documentCount ==  (this.numResources + numberOfRawMetrics)) {
+                        ResourceAggregateMetricService.FACTORY_LINK));
+            if (aggrRes.documentCount ==  this.numResources) {
                 return true;
             }
             return false;
         });
 
         // Get a Count on this.host() for Aggregate metrics
-        Long resourceHostAggregateMetricCount = this.getDocumentCount(this.host, ResourceMetricsService.FACTORY_LINK);
+        Long resourceHostAggregateMetricCount = this.getDocumentCount(this.host, ResourceAggregateMetricService.FACTORY_LINK);
         // Get a Count on this.metricHost() for Aggregate Metrics
-        Long metricHostAggregateMetricCount = this.getDocumentCount(this.metricHost, ResourceMetricsService.FACTORY_LINK);
+        Long metricHostAggregateMetricCount = this.getDocumentCount(this.metricHost, ResourceAggregateMetricService.FACTORY_LINK);
 
         // Count should be 0 on this.host()
         assertEquals(0, resourceHostAggregateMetricCount.intValue());
         // Count should be something on this.metricHost()
-        assertEquals((this.numResources + numberOfRawMetrics), metricHostAggregateMetricCount.intValue());
+        assertEquals(this.numResources, metricHostAggregateMetricCount.intValue());
     }
 
     private Long getDocumentCount(VerificationHost host, String factoryLink) {
