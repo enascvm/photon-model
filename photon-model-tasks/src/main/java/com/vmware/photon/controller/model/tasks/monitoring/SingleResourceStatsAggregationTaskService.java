@@ -391,7 +391,8 @@ public class SingleResourceStatsAggregationTaskService extends
                                 .setResultLimit(1)
                                 .setQuery(builder.build()).build())
                         .setConnectionSharing(true);
-                logInfo(() -> String.format("Invoking a query to obtain last rollup time for %s ", currentState.resourceLink));
+                logInfo(() -> String.format("Invoking a query to obtain last rollup time for %s ",
+                        StatsUtil.getMetricKeyPrefix(currentState.resourceLink, rollupKey)));
                 operations.add(op);
             }
         }
@@ -1077,7 +1078,8 @@ public class SingleResourceStatsAggregationTaskService extends
             resourceMetrics.entries = new HashMap<>();
             resourceMetrics.entries.put(aggregateEntries.getKey(), 0.0);
             resourceMetrics.timestampMicrosUtc = aggregateMetricLastRollUpTime;
-            resourceMetrics.documentSelfLink = StatsUtil.getMetricKey(currentState.resourceLink, Utils.getNowMicrosUtc());
+            resourceMetrics.documentSelfLink = StatsUtil.getMetricKey(currentState.resourceLink,
+                    aggregateEntries.getKey(), Utils.getNowMicrosUtc());
 
             operations.add(Operation
                     .createPost(UriUtils.buildUri(

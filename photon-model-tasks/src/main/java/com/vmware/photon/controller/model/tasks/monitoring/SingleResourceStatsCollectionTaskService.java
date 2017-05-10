@@ -615,8 +615,8 @@ public class SingleResourceStatsCollectionTaskService
      */
     public String getLastCollectionMetricKeyForAdapterLink(String statsAdapterLink,
             boolean appendBucketSuffix) {
-        String lastSuccessfulRunMetricKey = UriUtils.getLastPathSegment(statsAdapterLink) + StatsUtil.SEPARATOR
-                + PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME;
+        String lastSuccessfulRunMetricKey = StatsUtil.getMetricKeyPrefix(statsAdapterLink,
+                PhotonModelConstants.LAST_SUCCESSFUL_STATS_COLLECTION_TIME);
         if (appendBucketSuffix) {
             lastSuccessfulRunMetricKey = lastSuccessfulRunMetricKey + StatsConstants.MIN_SUFFIX;
         }

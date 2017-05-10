@@ -26,6 +26,7 @@ import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTe
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.resourceStatsCollection;
 import static com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil.runEnumeration;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.createServiceURI;
+import static com.vmware.photon.controller.model.tasks.monitoring.StatsUtil.getMetricKeyPrefix;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -63,7 +64,6 @@ import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 import com.vmware.xenon.services.common.QueryTask;
-import com.vmware.xenon.services.common.QueryTask.NumericRange;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification;
 import com.vmware.xenon.services.common.QueryTask.QuerySpecification.QueryOption;
 import com.vmware.xenon.services.common.QueryTask.QueryTerm;
@@ -310,11 +310,9 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
                 querySpec.query = QueryTask.Query.Builder.create()
                         .addKindFieldClause(ResourceMetrics.class)
                         .addFieldClause(ServiceDocument.FIELD_NAME_SELF_LINK,
-                                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK, computeResourceLink),
+                                UriUtils.buildUriPath(ResourceMetricsService.FACTORY_LINK,
+                                        getMetricKeyPrefix(computeResourceLink, metricName)),
                                 QueryTerm.MatchType.PREFIX)
-                        .addRangeClause(QuerySpecification
-                                .buildCompositeFieldName(ResourceMetrics.FIELD_NAME_ENTRIES, metricName),
-                                NumericRange.createDoubleRange(0.0, Double.MAX_VALUE, true, true))
                         .build();
 
                 QueryTask qt = QueryTask.Builder
