@@ -287,7 +287,7 @@ public class ProvisionSubnetTaskService extends TaskService<ProvisionSubnetTaskS
             parentPatchBody = currentState.serviceTaskCallback.getFinishedResponse();
         }
 
-        sendRequest(Operation.createPatch(this, currentState.serviceTaskCallback.serviceSelfLink)
+        sendRequest(Operation.createPatch(currentState.serviceTaskCallback.serviceURI)
                 .setBody(parentPatchBody));
     }
 }

@@ -465,7 +465,8 @@ public class ResourceAllocationTaskService
             ComputeDescriptionService.ComputeDescription desc) {
         Collection<String> parentLinks = currentState.parentLinks;
 
-        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback
+                .create(UriUtils.buildPublicUri(getHost(), getSelfLink()));
         callback.onSuccessFinishTask();
 
         // for human debugging reasons only, prefix the compute host resource id
@@ -481,7 +482,7 @@ public class ResourceAllocationTaskService
         Iterator<String> parentIterator = null;
 
         logFine(() -> String.format("Creating %d provision tasks, reporting through sub task %s",
-                currentState.resourceCount, callback.serviceSelfLink));
+                currentState.resourceCount, callback.serviceURI));
         String name;
         if (currentState.customProperties != null
                 && currentState.customProperties.get(CUSTOM_DISPLAY_NAME) != null) {

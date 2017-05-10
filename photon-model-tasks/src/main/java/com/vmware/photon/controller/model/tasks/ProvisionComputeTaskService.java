@@ -263,7 +263,7 @@ public class ProvisionComputeTaskService
             parentPatchBody = currentState.serviceTaskCallback.getFinishedResponse();
         }
 
-        sendRequest(Operation.createPatch(this, currentState.serviceTaskCallback.serviceSelfLink)
+        sendRequest(Operation.createPatch(currentState.serviceTaskCallback.serviceURI)
                 .setBody(parentPatchBody));
     }
 
@@ -417,7 +417,8 @@ public class ProvisionComputeTaskService
             ProvisionComputeTaskState.SubStage nextStage,
             ProvisionComputeTaskState currentState) {
 
-        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback
+                .create(UriUtils.buildPublicUri(getHost(), getSelfLink()));
         callback.onSuccessTo(nextStage);
 
         SubTaskService.SubTaskState<SubStage> subTaskInitState = new SubTaskService.SubTaskState<>();

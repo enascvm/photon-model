@@ -217,7 +217,7 @@ public class StatsAggregationTaskService extends TaskService<StatsAggregationTas
     private void createSubTask(List<String> computeResources, String nextPageLink,
             StatsAggregationTaskState currentState) {
         ServiceTaskCallback<StatsAggregationStage> callback = ServiceTaskCallback
-                .create(getSelfLink());
+                .create(UriUtils.buildPublicUri(getHost(), getSelfLink()));
         if (nextPageLink != null) {
             callback.onSuccessTo(StatsAggregationStage.GET_RESOURCES)
                     .addProperty(PROP_NEXT_PAGE_LINK, nextPageLink);

@@ -371,7 +371,8 @@ public class ResourceRemovalTaskService
     private void createSubTaskForDeleteCallbacks(ResourceRemovalTaskState currentState,
             QueryTask queryTask, Consumer<String> subTaskLinkConsumer) {
 
-        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback.create(getSelfLink());
+        ServiceTaskCallback<SubStage> callback = ServiceTaskCallback
+                .create(UriUtils.buildPublicUri(getHost(), getSelfLink()));
         if (queryTask.results.nextPageLink != null) {
             callback.onSuccessTo(SubStage.ISSUE_ADAPTER_DELETES)
                     .addProperty(ResourceRemovalTaskState.FIELD_NAME_NEXT_PAGE_LINK,

@@ -305,7 +305,7 @@ public class StatsCollectionTaskService extends TaskService<StatsCollectionTaskS
     private void createSubTask(List<String> computeResources, String nextPageLink,
             StatsCollectionTaskState currentState) {
         ServiceTaskCallback<StatsCollectionStage> callback = ServiceTaskCallback
-                .create(getSelfLink());
+                .create(UriUtils.buildPublicUri(getHost(), getSelfLink()));
         if (nextPageLink != null) {
             callback.onSuccessTo(StatsCollectionStage.GET_RESOURCES)
                     .addProperty(PROP_NEXT_PAGE_LINK, nextPageLink);

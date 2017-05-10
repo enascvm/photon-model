@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.tasks;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -38,20 +39,20 @@ public class ServiceTaskCallback<E extends Enum<E>> {
 
     private Map<String, String> customProperties;
 
-    public String serviceSelfLink;
+    public URI serviceURI;
 
     protected ServiceTaskCallback() {
         // GSON serialization constructor
     }
 
-    private ServiceTaskCallback(String serviceSelfLink) {
-        this.serviceSelfLink = serviceSelfLink;
+    private ServiceTaskCallback(URI serviceURI) {
+        this.serviceURI = serviceURI;
         this.stageComplete = TaskStage.STARTED;
         this.stageFailed = TaskStage.FAILED;
     }
 
-    public static <E extends Enum<E>> ServiceTaskCallback<E> create(String serviceSelfLink) {
-        return new ServiceTaskCallback<>(serviceSelfLink);
+    public static <E extends Enum<E>> ServiceTaskCallback<E> create(URI serviceURI) {
+        return new ServiceTaskCallback<>(serviceURI);
     }
 
     public ServiceTaskCallback<E> onSuccessFinishTask() {

@@ -218,7 +218,8 @@ public class SnapshotTaskService extends TaskService<SnapshotTaskService.Snapsho
     private void createSubTaskForSnapshotCallback(SnapshotTaskState currentState) {
         SubTaskService.SubTaskState subTaskInitState = new SubTaskService.SubTaskState();
         // tell the sub task with what to patch us, on completion
-        subTaskInitState.serviceTaskCallback = ServiceTaskCallback.create(getSelfLink())
+        subTaskInitState.serviceTaskCallback = ServiceTaskCallback
+                .create(UriUtils.buildPublicUri(getHost(), getSelfLink()))
                 .onSuccessFinishTask();
         Operation startPost = Operation
                 .createPost(this, SubTaskService.FACTORY_LINK)
