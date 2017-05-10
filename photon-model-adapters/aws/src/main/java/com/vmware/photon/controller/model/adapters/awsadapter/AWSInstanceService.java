@@ -200,56 +200,64 @@ public class AWSInstanceService extends StatelessService {
      */
     private void handleAllocation(AWSInstanceContext context) {
         logFine(() -> String.format("Transition to: %s", context.stage));
-        switch (context.stage) {
-        case PROVISIONTASK:
-            getProvisioningTaskReference(context, AWSInstanceStage.CLIENT);
-            break;
-        case CLIENT:
-            Consumer<Throwable> c = t -> {
-                if (context.computeRequest.requestType == InstanceRequestType.VALIDATE_CREDENTIALS) {
-                    context.operation.fail(t);
-                } else {
-                    context.taskManager.patchTaskToFailure(t);
+        try {
+            switch (context.stage) {
+            case PROVISIONTASK:
+                getProvisioningTaskReference(context, AWSInstanceStage.CLIENT);
+                break;
+            case CLIENT:
+                Consumer<Throwable> c = t -> {
+                    if (context.computeRequest.requestType
+                            == InstanceRequestType.VALIDATE_CREDENTIALS) {
+                        context.operation.fail(t);
+                    } else {
+                        context.taskManager.patchTaskToFailure(t);
+                    }
+                };
+                context.amazonEC2Client = this.clientManager
+                        .getOrCreateEC2Client(context.parentAuth,
+                                getRequestRegionId(context), this, c);
+                if (context.amazonEC2Client == null) {
+                    return;
                 }
-            };
-            context.amazonEC2Client = this.clientManager.getOrCreateEC2Client(context.parentAuth,
-                    getRequestRegionId(context), this, c);
-            if (context.amazonEC2Client == null) {
-                return;
-            }
-            // now that we have a client lets move onto the next step
-            switch (context.computeRequest.requestType) {
-            case CREATE:
-                handleAllocation(context, AWSInstanceStage.POPULATE_CONTEXT);
+                // now that we have a client lets move onto the next step
+                switch (context.computeRequest.requestType) {
+                case CREATE:
+                    handleAllocation(context, AWSInstanceStage.POPULATE_CONTEXT);
+                    break;
+                case DELETE:
+                    handleAllocation(context, AWSInstanceStage.DELETE);
+                    break;
+                case VALIDATE_CREDENTIALS:
+                    validateAWSCredentials(context);
+                    break;
+                default:
+                    handleError(context,
+                            new IllegalStateException("Unknown AWS provisioning stage: "
+                                    + context.computeRequest.requestType));
+                }
                 break;
             case DELETE:
-                handleAllocation(context, AWSInstanceStage.DELETE);
+                deleteInstance(context);
                 break;
-            case VALIDATE_CREDENTIALS:
-                validateAWSCredentials(context);
+            case POPULATE_CONTEXT:
+                context.populateContext()
+                        .whenComplete(thenAllocation(context, AWSInstanceStage.CREATE));
+                break;
+            case CREATE:
+                createInstance(context);
+                break;
+            case ERROR:
+                finishExceptionally(context);
                 break;
             default:
-                handleError(context, new IllegalStateException("Unknown AWS provisioning stage: "
-                        + context.computeRequest.requestType));
+                handleError(context,
+                        new IllegalStateException("Unknown AWS context stage: " + context.stage));
+                break;
             }
-            break;
-        case DELETE:
-            deleteInstance(context);
-            break;
-        case POPULATE_CONTEXT:
-            context.populateContext()
-                    .whenComplete(thenAllocation(context, AWSInstanceStage.CREATE));
-            break;
-        case CREATE:
-            createInstance(context);
-            break;
-        case ERROR:
-            finishExceptionally(context);
-            break;
-        default:
-            handleError(context,
-                    new IllegalStateException("Unknown AWS context stage: " + context.stage));
-            break;
+        } catch (Throwable e) {
+            // NOTE: Do not use handleError(err) cause that might result in endless recursion.
+            finishExceptionally(context, e);
         }
     }
 
@@ -341,8 +349,8 @@ public class AWSInstanceService extends StatelessService {
         if (bootDisk.capacityMBytes > 0) {
             DescribeImagesRequest imagesDescriptionRequest = new DescribeImagesRequest();
             imagesDescriptionRequest.withImageIds(imageId.toString());
-            DescribeImagesResult imagesDescriptionResult = aws.amazonEC2Client
-                    .describeImages(imagesDescriptionRequest);
+            DescribeImagesResult imagesDescriptionResult =
+                    aws.amazonEC2Client.describeImages(imagesDescriptionRequest);
 
             if (imagesDescriptionResult.getImages().size() != 1) {
                 handleError(aws, new IllegalStateException("AWS ImageId is not available"));
@@ -622,7 +630,7 @@ public class AWSInstanceService extends StatelessService {
                                                 exc));
                             } else {
                                 AWSInstanceService.this.logInfo(() -> String.format("Deleting"
-                                        + " subnets 'created-by' [%s]: SUCCESS",
+                                                + " subnets 'created-by' [%s]: SUCCESS",
                                         this.context.computeRequest.resourceLink()));
 
                                 this.context.taskManager.finishTask();
@@ -675,7 +683,7 @@ public class AWSInstanceService extends StatelessService {
         private DeferredResult<ResourceState> deleteAWSSubnet(ResourceState stateToDelete) {
 
             AWSInstanceService.this.logInfo(() -> String.format("Deleting AWS Subnet [%s]"
-                    + " 'created-by' [%s]", stateToDelete.id,
+                            + " 'created-by' [%s]", stateToDelete.id,
                     this.context.computeRequest.resourceLink()));
 
             DeleteSubnetRequest req = new DeleteSubnetRequest().withSubnetId(stateToDelete.id);
@@ -720,7 +728,7 @@ public class AWSInstanceService extends StatelessService {
             }
 
             AWSInstanceService.this.logInfo(() -> String.format("Deleting Subnet state [%s]"
-                    + " 'created-by' [%s]", stateToDelete.documentSelfLink,
+                            + " 'created-by' [%s]", stateToDelete.documentSelfLink,
                     this.context.computeRequest.resourceLink()));
 
             Operation delOp = Operation.createDelete(AWSInstanceService.this,

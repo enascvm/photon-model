@@ -409,7 +409,7 @@ public class AzureInstanceService extends StatelessService {
             default:
                 throw new IllegalStateException("Unknown stage: " + ctx.stage);
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // NOTE: Do not use handleError(err) cause that might result in endless recursion.
             ctx.error = e;
             errorHandler(ctx);
