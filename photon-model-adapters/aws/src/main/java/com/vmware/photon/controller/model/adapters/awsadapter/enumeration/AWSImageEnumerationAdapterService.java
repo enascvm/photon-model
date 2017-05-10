@@ -44,6 +44,7 @@ import com.vmware.photon.controller.model.tasks.ImageEnumerationTaskService.Imag
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.StatelessService;
+import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 
 /**
@@ -85,14 +86,16 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
 
             super(service, request.resourceReference, ImageState.class, ImageService.FACTORY_LINK);
 
+            this.taskManager = new TaskManager(this.service,
+                    request.taskReference,
+                    request.resourceLink());
+
+            this.request = request;
+
             if (request.requestType == ImageEnumerateRequestType.PUBLIC) {
                 // Public/Shared images should NOT consider tenantLinks and endpointLink
                 setApplyInfraFields(false);
             }
-
-            this.request = request;
-            this.taskManager = new TaskManager(this.service, request.taskReference,
-                    request.resourceLink());
         }
 
         /**
@@ -208,12 +211,13 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                 return DeferredResult.completed(this.awsImages);
             }
 
+            boolean isPublic = this.request.requestType == ImageEnumerateRequestType.PUBLIC;
+
             DescribeImagesRequest request = new DescribeImagesRequest()
                     .withFilters(new Filter(AWSConstants.AWS_IMAGE_STATE_FILTER)
                             .withValues(AWSConstants.AWS_IMAGE_STATE_AVAILABLE))
                     .withFilters(new Filter(AWSConstants.AWS_IMAGE_IS_PUBLIC_FILTER)
-                            .withValues(Boolean.toString(
-                                    this.request.requestType == ImageEnumerateRequestType.PUBLIC)));
+                            .withValues(Boolean.toString(isPublic)));
 
             if (this.imageEnumTaskState.filter != null
                     && !this.imageEnumTaskState.filter.isEmpty()) {
@@ -278,9 +282,20 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
             return DeferredResult.completed(holder);
         }
 
+        /**
+         * <ul>
+         * <li>During PUBLIC image enum explicitly set {@code imageType}.</li>
+         * <li>During PRIVATE image enum setting of {@code tenantLinks} and {@code endpointType} (by
+         * default logic) is enough.</li>
+         * </ul>
+         */
         @Override
         protected void customizeLocalStatesQuery(Builder qBuilder) {
-            // No need to customize image query. Default impl is enough.
+            if (this.request.requestType == ImageEnumerateRequestType.PUBLIC) {
+                qBuilder.addFieldClause(
+                        ImageState.FIELD_NAME_ENDPOINT_TYPE,
+                        this.endpointState.endpointType);
+            }
         }
     }
 
@@ -340,11 +355,11 @@ public class AWSImageEnumerationAdapterService extends StatelessService {
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
-                        completeWithSuccess(ctx);
                         logFine(() -> ctx.request.requestType + " image enumeration: COMPLETED");
+                        completeWithSuccess(ctx);
                     } else {
+                        logSevere(() -> String.format("%s image enumeration: FAILED with %s", ctx.request.requestType, Utils.toString(e)));
                         completeWithFailure(ctx, e);
-                        logFine(() -> ctx.request.requestType + " image enumeration: FAILED");
                     }
                 });
     }

@@ -64,6 +64,26 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
     public static final String SELF_LINK = AzureUriPaths.AZURE_IMAGE_ENUMERATION_ADAPTER;
 
+    public static final String DEFAUL_IMAGES_SOURCE_PROPERTY = "photon-model.adapter.azure.images.default.source";
+
+    /**
+     * Public JSON file of default Azure images.
+     */
+    public static final String DEFAUL_IMAGES_SOURCE_VALUE = "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/master/arm-compute/quickstart-templates/aliases.json";
+
+    public static final String DEFAUL_IMAGES_ENABLED_PROPERTY = "photon-model.adapter.azure.images.default.enabled";
+
+    public static String getDefaultImagesSource() {
+        return System.getProperty(DEFAUL_IMAGES_SOURCE_PROPERTY, DEFAUL_IMAGES_SOURCE_VALUE);
+    }
+
+    public static Boolean getDefaultImagesEnabled() {
+        String enabled = System.getProperty(DEFAUL_IMAGES_ENABLED_PROPERTY,
+                Boolean.TRUE.toString());
+
+        return Boolean.valueOf(enabled);
+    }
+
     /**
      * {@link EndpointEnumerationProcess} specialization that loads Azure
      * {@link VirtualMachineImage}s into {@link ImageState} store.
@@ -118,8 +138,10 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             super(service, request.resourceReference, ImageState.class, ImageService.FACTORY_LINK);
 
-            this.taskManager = new TaskManager(this.service, request.taskReference,
+            this.taskManager = new TaskManager(this.service,
+                    request.taskReference,
                     request.resourceLink());
+
             this.request = request;
 
             if (request.requestType == ImageEnumerateRequestType.PUBLIC) {
@@ -212,12 +234,17 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         private DeferredResult<RemoteResourcesPage> loadDefaultImagesPage() {
 
+            final String msg = "Enumerating Default Azure images";
+
+            if (getDefaultImagesEnabled() == false) {
+                this.service.logFine(() -> msg + ": DISABLED");
+                return null;
+            }
+
             if (this.azureDefaultImages != null) {
                 // Already loaded.
                 return null;
             }
-
-            final String msg = "Enumerating Default Azure images";
 
             this.azureDefaultImages = new DefaultImagesLoader(this);
 
@@ -320,9 +347,20 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             return DeferredResult.completed(holder);
         }
 
+        /**
+         * <ul>
+         * <li>During PUBLIC image enum explicitly set {@code imageType}.</li>
+         * <li>During PRIVATE image enum setting of {@code tenantLinks} and {@code endpointType} (by
+         * default logic) is enough.</li>
+         * </ul>
+         */
         @Override
         protected void customizeLocalStatesQuery(Builder qBuilder) {
-            // No need to customize image query. Default impl is enough.
+            if (this.request.requestType == ImageEnumerateRequestType.PUBLIC) {
+                qBuilder.addFieldClause(
+                        ImageState.FIELD_NAME_ENDPOINT_TYPE,
+                        this.endpointState.endpointType);
+            }
         }
 
         static VirtualMachineImageResource[] createImageFilter(String filter) {
@@ -414,22 +452,23 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         if (ctx.request.requestType == ImageEnumerateRequestType.PRIVATE) {
             // So far PRIVATE image enumeration is not supported.
             // Complete the task with FINISHED
-            logFine(() -> "Private image enumeration: SKIPPED");
+            logFine(() -> ctx.request.requestType + " image enumeration: SKIPPED");
             completeWithSuccess(ctx);
             return;
         }
 
-        logFine(() -> "Public image enumeration: STARTED");
+        logFine(() -> ctx.request.requestType + " image enumeration: STARTED");
         // Start PUBLIC image enumeration process...
         ctx.enumerate()
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
+                        logFine(() -> ctx.request.requestType + " image enumeration: COMPLETED");
                         completeWithSuccess(ctx);
-                        logFine(() -> "Public image enumeration: COMPLETED");
                     } else {
+                        logSevere(() -> String.format("%s image enumeration: FAILED with %s",
+                                ctx.request.requestType, Utils.toString(e)));
                         completeWithFailure(ctx, e);
-                        logFine(() -> "Public image enumeration: FAILED");
                     }
                 });
     }
@@ -552,9 +591,6 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
      */
     private static class DefaultImagesLoader {
 
-        private static final URI ALIASES_JSON_URI = URI.create(
-                "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/master/arm-compute/quickstart-templates/aliases.json");
-
         /**
          * Represents the inner most JSON node in the JSON file.
          */
@@ -593,8 +629,10 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
          */
         public DeferredResult<List<VirtualMachineImage>> load() {
 
+            URI defaultImagesSource = URI.create(getDefaultImagesSource());
+
             return this.ctx.service
-                    .sendWithDeferredResult(Operation.createGet(ALIASES_JSON_URI), String.class)
+                    .sendWithDeferredResult(Operation.createGet(defaultImagesSource), String.class)
                     .thenApply(this::parseJson)
                     .thenApply(this::toVirtualMachineImages);
         }

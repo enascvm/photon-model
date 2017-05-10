@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.tasks.ProvisioningUtils.queryDocumentsAndAssertExpectedCount;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -34,6 +33,7 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -45,6 +45,7 @@ import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTemplate;
+import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.ImageService;
 import com.vmware.photon.controller.model.resources.ImageService.ImageState;
@@ -78,6 +79,9 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
     private static final String AMAZON_PUBLIC_IMAGE_FILTER = "Amazon-Linux_WordPress";
 
     private static final boolean EXACT_COUNT = true;
+
+    private static final boolean PUBLIC = true;
+    private static final boolean PRIVATE = false;
 
     @Rule
     public TestName currentTestName = new TestName();
@@ -136,26 +140,20 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
      * by-me;imageId=ami-2929923f;sort=name
      */
     @Test
+    @Ignore("https://jira-hzn.eng.vmware.com/browse/VCOM-832")
     public void testPrivateImageEnumeration_single() throws Throwable {
 
         Assume.assumeFalse(this.isMock);
 
         final EndpointState endpointState = createEndpointState();
 
-        ImageState staleImageState = createImageState(endpointState, false);
-
-        kickOffImageEnumeration(endpointState, false, AMAZON_PRIVATE_IMAGE_FILTER);
+        kickOffImageEnumeration(endpointState, PRIVATE, AMAZON_PRIVATE_IMAGE_FILTER);
 
         // Validate 1 image state is CREATED
         ServiceDocumentQueryResult images = queryDocumentsAndAssertExpectedCount(
                 getHost(), 1,
                 ImageService.FACTORY_LINK,
                 EXACT_COUNT);
-
-        // Validate 1 stale image state is DELETED
-        Assert.assertTrue("Dummy image should have been deleted.",
-                !images.documentLinks
-                        .contains(staleImageState.documentSelfLink));
 
         ImageState image = Utils.fromJson(
                 images.documents.values().iterator().next(),
@@ -183,6 +181,62 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         Assert.assertEquals("photon-model-test-doNOTdelete", nameTag.value);
     }
 
+    /**
+     * Validate that during enum only images from 'endpointLink' are deleted.
+     */
+    @Test
+    @Ignore("https://jira-hzn.eng.vmware.com/browse/VCOM-832")
+    public void testPrivateImageEnumeration_delete() throws Throwable {
+
+        testImageEnumeration_delete(PRIVATE, AMAZON_PRIVATE_IMAGE_FILTER);
+    }
+
+    private void testImageEnumeration_delete(boolean isPublic, String imageFilter) throws Throwable {
+
+        Assume.assumeFalse(this.isMock);
+
+        // Pre-create public and private image in different endpoint {{
+        // Those images should not be touched by this image enum.
+        EndpointState azureEndpointState = createDummyEndpointState(EndpointType.azure);
+        ImageState azurePublicImageState = createImageState(azureEndpointState, PUBLIC);
+        ImageState azurePrivateImageState = createImageState(azureEndpointState, PRIVATE);
+        // }}
+
+        EndpointState endpointState = createEndpointState();
+
+        // Create one stale image that should be deleted by this enumeration
+        ImageState staleImageState = createImageState(endpointState, isPublic);
+
+        // Validate the 3 image states are preCREATED: 1 stale and 2 vSphere
+        int preCreatedCount = 1 + 2;
+        queryDocumentsAndAssertExpectedCount(
+                getHost(), preCreatedCount, ImageService.FACTORY_LINK, EXACT_COUNT);
+
+        // Under TESTING
+        kickOffImageEnumeration(endpointState, isPublic, imageFilter);
+
+        // Validate 1 image state is CREATED and the 2 vSphere are UNtouched
+        int postEnumCount = 1 + 2;
+        ServiceDocumentQueryResult imagesAfterEnum = queryDocumentsAndAssertExpectedCount(
+                getHost(),
+                postEnumCount,
+                ImageService.FACTORY_LINK,
+                EXACT_COUNT);
+
+        // Validate 1 stale image state is DELETED
+        Assert.assertFalse("Dummy image should have been deleted.",
+                imagesAfterEnum.documentLinks.contains(staleImageState.documentSelfLink));
+
+        // Validate vSphere images are untouched
+        Assert.assertTrue("Private images from other endpoints should not have been deleted.",
+                imagesAfterEnum.documentLinks
+                        .contains(azurePrivateImageState.documentSelfLink));
+        Assert.assertTrue("Public images from other endpoints should not have been deleted.",
+                imagesAfterEnum.documentLinks
+                        .contains(azurePublicImageState.documentSelfLink));
+    }
+
+
     @Test
     public void testPublicImageEnumeration_single() throws Throwable {
 
@@ -199,20 +253,13 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                     "=== First enumeration should create a single '%s' image",
                     AMAZON_PUBLIC_IMAGE_FILTER);
 
-            ImageState staleImageState = createImageState(endpointState, true);
-
-            kickOffImageEnumeration(endpointState, true, AMAZON_PUBLIC_IMAGE_FILTER);
+            kickOffImageEnumeration(endpointState, PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER);
 
             if (!this.isMock) {
                 // Validate 1 image state is CREATED
                 imagesAfterFirstEnum = queryDocumentsAndAssertExpectedCount(getHost(), 1,
                         ImageService.FACTORY_LINK,
                         EXACT_COUNT);
-
-                // Validate 1 stale image state is DELETED
-                Assert.assertTrue("Dummy image should have been deleted.",
-                        !imagesAfterFirstEnum.documentLinks
-                                .contains(staleImageState.documentSelfLink));
 
                 imageAfterFirstEnum = Utils.fromJson(
                         imagesAfterFirstEnum.documents.values().iterator().next(),
@@ -238,7 +285,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
                 updateImageState(imagesAfterFirstEnum.documentLinks.get(0));
             }
 
-            kickOffImageEnumeration(endpointState, true, AMAZON_PUBLIC_IMAGE_FILTER);
+            kickOffImageEnumeration(endpointState, PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER);
 
             if (!this.isMock) {
                 // Validate 1 image state is UPDATED (and the local update above is overridden)
@@ -264,6 +311,15 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         }
     }
 
+    /**
+     * Validate that during enum only images of this 'endpointType' are deleted.
+     */
+    @Test
+    public void testPublicImageEnumeration_delete() throws Throwable {
+
+        testImageEnumeration_delete(PUBLIC, AMAZON_PUBLIC_IMAGE_FILTER);
+    }
+
     @Test
     public void testPublicImageEnumeration_all() throws Throwable {
 
@@ -275,7 +331,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         // Important: MUST share same Endpoint between the two enum runs.
         final EndpointState endpointState = createEndpointState();
 
-        ImageEnumerationTaskState task = kickOffImageEnumeration(endpointState, true, null);
+        ImageEnumerationTaskState task = kickOffImageEnumeration(endpointState, PUBLIC, null);
 
         // Validate at least 50K image states are created
 
@@ -340,7 +396,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
         ImageEnumerationTaskState taskState = new ImageEnumerationTaskState();
 
-        if (isPublic) {
+        if (isPublic == PUBLIC) {
             taskState.endpointType = endpointState.endpointType;
         } else {
             taskState.endpointLink = endpointState.documentSelfLink;
@@ -368,7 +424,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
         ImageState image = new ImageState();
 
-        if (isPublic) {
+        if (isPublic == PUBLIC) {
             image.endpointType = endpoint.endpointType;
         } else {
             image.endpointLink = endpoint.documentSelfLink;
@@ -377,12 +433,10 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
         image.id = "dummy-" + this.currentTestName.getMethodName();
 
-        image = postServiceSynchronously(
+        return postServiceSynchronously(
                 ImageService.FACTORY_LINK,
                 image,
                 ImageState.class);
-
-        return image;
     }
 
     private ImageState updateImageState(String imageToUpdateSelfLink) throws Throwable {
@@ -400,16 +454,15 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
 
     private EndpointState createEndpointState() throws Throwable {
 
-        final EndpointState endpoint;
+        EndpointType endpointType = EndpointType.aws;
+
+        EndpointState endpoint;
         {
             endpoint = new EndpointState();
 
-            endpoint.endpointType = EndpointType.aws.name();
-            endpoint.id = EndpointType.aws.name() + "-id";
-            endpoint.name = EndpointType.aws.name() + "-name";
-
-            endpoint.tenantLinks = new ArrayList<>();
-            endpoint.tenantLinks.add(EndpointType.aws.name() + "-tenant");
+            endpoint.endpointType = endpointType.name();
+            endpoint.id = endpointType.name() + "-id";
+            endpoint.name = endpointType.name() + "-name";
 
             endpoint.endpointProperties = new HashMap<>();
             endpoint.endpointProperties.put(PRIVATE_KEY_KEY, this.secretKey);
@@ -424,11 +477,27 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         allocateEndpoint.taskInfo = new TaskState();
         allocateEndpoint.taskInfo.isDirect = true;
 
+        allocateEndpoint.tenantLinks = Arrays.asList(endpointType.name() + "-tenant");
+
         allocateEndpoint = TestUtils.doPost(this.host, allocateEndpoint,
                 EndpointAllocationTaskState.class,
                 UriUtils.buildUri(this.host, EndpointAllocationTaskService.FACTORY_LINK));
 
         return allocateEndpoint.endpointState;
     }
+
+    private EndpointState createDummyEndpointState(EndpointType endpointType) throws Throwable {
+
+        EndpointState endpoint = new EndpointState();
+
+        endpoint.endpointType = endpointType.name();
+        endpoint.id = endpointType.name() + "-id";
+        endpoint.name = endpointType.name() + "-name";
+
+        return TestUtils.doPost(host, endpoint, EndpointState.class,
+                UriUtils.buildUri(host, EndpointService.FACTORY_LINK));
+    }
+
+
 
 }

@@ -153,8 +153,6 @@ public class QueryUtils {
     public abstract static class QueryTemplate<T extends ServiceDocument>
             implements QueryStrategy<T> {
 
-        protected URI referer;
-
         /**
          * Wait\Block for query logic to complete.
          * <p>
@@ -169,7 +167,9 @@ public class QueryUtils {
         protected final Class<T> documentClass;
         protected final List<String> tenantLinks;
 
-        protected Level level = Level.FINE;
+        protected URI referer;
+
+        protected Level level = Level.INFO;
         protected String msg;
 
         /**
@@ -219,6 +219,8 @@ public class QueryUtils {
             this.documentClass = documentClass;
             this.tenantLinks = tenantLinks;
 
+            setReferer(this.host.getUri());
+
             {
                 // Wrap original query...
                 Query.Builder qBuilder = Query.Builder.create().addClause(query);
@@ -230,9 +232,7 @@ public class QueryUtils {
                 this.query = qBuilder.build();
             }
 
-            this.msg = this.getClass().getSimpleName() + " for " + documentClass.getSimpleName()
-                    + "s";
-            this.referer = this.host.getUri();
+            this.msg = getClass().getSimpleName() + " for " + documentClass.getSimpleName() + "s";
         }
 
         /**

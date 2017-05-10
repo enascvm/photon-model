@@ -476,18 +476,24 @@ public class AzureTestUtil {
     public static EndpointState createDefaultEndpointState(VerificationHost host, String authLink)
             throws Throwable {
 
+        return createEndpointState(host, authLink, EndpointType.azure);
+    }
+
+    public static EndpointState createEndpointState(VerificationHost host, String authLink, EndpointType endpointType)
+            throws Throwable {
+
         EndpointState endpoint = new EndpointState();
 
-        endpoint.endpointType = EndpointType.azure.name();
-        endpoint.id = EndpointType.azure.name() + "-id";
-        endpoint.name = EndpointType.azure.name() + "-name";
+        endpoint.endpointType = endpointType.name();
+        endpoint.id = endpointType.name() + "-id";
+        endpoint.name = endpointType.name() + "-name";
 
         endpoint.authCredentialsLink = authLink;
 
         // Skipping region (EndpointConfigRequest.REGION_KEY) should fall back to default region
         endpoint.endpointProperties = Collections.emptyMap();
 
-        endpoint.tenantLinks = Collections.singletonList(EndpointType.azure.name() + "-tenant");
+        endpoint.tenantLinks = Collections.singletonList(endpointType.name() + "-tenant");
 
         return TestUtils.doPost(host, endpoint, EndpointState.class,
                 UriUtils.buildUri(host, EndpointService.FACTORY_LINK));

@@ -609,7 +609,7 @@ public abstract class EndpointEnumerationProcess<T extends EndpointEnumerationPr
                     .whenComplete((o, e) -> {
                         final String message = "Delete stale %s state";
                         if (e != null) {
-                            context.service.logWarning(message + ": ERROR - %s",
+                            context.service.logWarning(message + ": FAILED with %s",
                                     ls.documentSelfLink, Utils.toString(e));
                         } else {
                             context.service.log(Level.FINEST, message + ": SUCCESS",
