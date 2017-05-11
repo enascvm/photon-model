@@ -1,7 +1,15 @@
 # CHANGELOG
 
-## 0.6.15-SNAPSHOT
+## 0.6.15
 
+* Change serviceSelfLink to serviceURI in ServiceTaskCallback
+* Add resourcelink as custom property in Resource-metrics document
+* Always create linked account computes
+* Change EndpointAdapterUtils.registerEndpointAdapters so that it is 
+  possible to register custom adapters as well, not only those declared 
+  in UriPaths.AdapterTypePath.
+* Introduce data schema and data field to allow schema definition
+* Introducing LoadBalancerDescription
 
 ## 0.6.14
 
