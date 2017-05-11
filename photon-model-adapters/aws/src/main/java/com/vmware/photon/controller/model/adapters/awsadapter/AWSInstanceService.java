@@ -20,7 +20,6 @@ import static com.vmware.photon.controller.model.constants.PhotonModelConstants.
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
 
 import java.io.UnsupportedEncodingException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -301,7 +300,7 @@ public class AWSInstanceService extends StatelessService {
             return;
         }
 
-        DiskState bootDisk = aws.childDisks.get(DiskType.HDD);
+        final DiskState bootDisk = aws.childDisks.get(DiskType.HDD);
         if (bootDisk == null) {
             aws.taskManager
                     .patchTaskToFailure(new IllegalStateException("AWS bootDisk not specified"));
@@ -311,12 +310,6 @@ public class AWSInstanceService extends StatelessService {
         if (bootDisk.bootConfig != null && bootDisk.bootConfig.files.length > 1) {
             aws.taskManager.patchTaskToFailure(
                     new IllegalStateException("Only 1 configuration file allowed"));
-            return;
-        }
-
-        URI imageId = bootDisk.sourceImageReference;
-        if (imageId == null) {
-            handleError(aws, new IllegalStateException("AWS ImageId not specified"));
             return;
         }
 
@@ -341,14 +334,16 @@ public class AWSInstanceService extends StatelessService {
         }
 
         RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
-                .withImageId(imageId.toString()).withInstanceType(instanceType)
-                .withMinCount(1).withMaxCount(1)
+                .withImageId(aws.bootDiskImageNativeId)
+                .withInstanceType(instanceType)
+                .withMinCount(1)
+                .withMaxCount(1)
                 .withMonitoring(true);
 
         //If specified, honour the specified boot disk size.
         if (bootDisk.capacityMBytes > 0) {
             DescribeImagesRequest imagesDescriptionRequest = new DescribeImagesRequest();
-            imagesDescriptionRequest.withImageIds(imageId.toString());
+            imagesDescriptionRequest.withImageIds(aws.bootDiskImageNativeId);
             DescribeImagesResult imagesDescriptionResult =
                     aws.amazonEC2Client.describeImages(imagesDescriptionRequest);
 
@@ -394,7 +389,7 @@ public class AWSInstanceService extends StatelessService {
         }
 
         String message = "[AWSInstanceService] Sending run instance request for instance id: "
-                + imageId
+                + aws.bootDiskImageNativeId
                 + ", instance type: " + instanceType
                 + ", parent task id: " + aws.computeRequest.taskReference;
         this.logInfo(() -> message);

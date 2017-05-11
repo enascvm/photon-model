@@ -103,6 +103,8 @@ public class AWSInstanceContext
 
     public Map<DiskType, DiskState> childDisks = new HashMap<>();
 
+    public String bootDiskImageNativeId;
+
     public long taskExpirationMicros;
 
     public AWSInstanceContext(StatelessService service, ComputeInstanceRequest computeRequest) {
@@ -121,6 +123,8 @@ public class AWSInstanceContext
     /**
      * Populate context with VPC, Subnet and Security Group objects from AWS.
      *
+     * @see #getDiskStates(AWSInstanceContext)
+     * @see #getBootDiskImageNativeId(AWSInstanceContext)
      * @see #getVPCs(AWSInstanceContext)
      * @see #getSubnets(AWSInstanceContext)
      * @see #getSecurityGroups(AWSInstanceContext)
@@ -133,6 +137,8 @@ public class AWSInstanceContext
         return DeferredResult.completed(context)
 
                 .thenCompose(this::getDiskStates).thenApply(log("getDiskStates"))
+                .thenCompose(this::getBootDiskImageNativeId)
+                .thenApply(log("getBootDiskImageNativeId"))
 
                 .thenCompose(this::getVPCs).thenApply(log("getVPCs"))
 
@@ -498,8 +504,8 @@ public class AWSInstanceContext
 
             for (SecurityGroupState missingSGState : missingSecurityGroupStates) {
 
-                DeferredResult<Void> createSGWithRulesDR =
-                        createSecurityGroup(context, nicCtx, missingSGState)
+                DeferredResult<Void> createSGWithRulesDR = createSecurityGroup(context, nicCtx,
+                        missingSGState)
                                 .thenCompose(ignore -> createIngressRules(context, nicCtx,
                                         missingSGState))
                                 .thenCompose(ignore -> createEgressRules(context, nicCtx,
@@ -685,6 +691,22 @@ public class AWSInstanceContext
                     }
                     return context;
                 });
+    }
+
+    /**
+     * @see #getImageNativeId(DiskState)
+     */
+    private DeferredResult<AWSInstanceContext> getBootDiskImageNativeId(
+            AWSInstanceContext context) {
+
+        DiskState bootDisk = context.childDisks.get(DiskType.HDD);
+
+        return context.getImageNativeId(bootDisk).thenApply(imageNativeId -> {
+
+            context.bootDiskImageNativeId = imageNativeId;
+
+            return context;
+        });
     }
 
 }

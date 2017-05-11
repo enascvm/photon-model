@@ -119,6 +119,8 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ImageService;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
@@ -812,12 +814,23 @@ public class TestAWSSetupUtils {
         // Step 3: create boot disk
         List<String> vmDisks = new ArrayList<>();
 
+        ImageState bootImage;
+        {
+            bootImage = new ImageState();
+            bootImage.id = imageId;
+            bootImage.endpointType = endpointState.endpointType;
+
+            bootImage = TestUtils.doPost(host, bootImage, ImageState.class,
+                    UriUtils.buildUri(host, ImageService.FACTORY_LINK));
+        }
+
         DiskState rootDisk = new DiskState();
         rootDisk.id = UUID.randomUUID().toString();
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.name = DEFAULT_ROOT_DISK_NAME;
         rootDisk.type = DiskType.HDD;
-        rootDisk.sourceImageReference = URI.create(imageId);
+        rootDisk.sourceImageReference = URI.create(imageId + "dummy");
+        rootDisk.imageLink = bootImage.documentSelfLink;
         rootDisk.bootConfig = new DiskState.BootConfig();
         rootDisk.bootConfig.label = DEFAULT_CONFIG_LABEL;
         DiskState.BootConfig.FileEntry file = new DiskState.BootConfig.FileEntry();

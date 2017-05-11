@@ -2,6 +2,10 @@
 
 ## 0.6.16-SNAPSHOT
 
+* Enhance DiskState with imageLink pointing to the ImageState to be used to
+  to create an instance of this disk. Set either this property in case
+  the ImageState is already present in the system (as a result of image enumeration)
+  or set current sourceImageReference to point to the native/raw image
 
 ## 0.6.15
 
