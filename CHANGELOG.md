@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.16-SNAPSHOT
+
+
 ## 0.6.15
 
 * Change serviceSelfLink to serviceURI in ServiceTaskCallback
