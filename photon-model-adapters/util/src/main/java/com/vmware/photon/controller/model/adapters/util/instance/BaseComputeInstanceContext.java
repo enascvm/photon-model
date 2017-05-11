@@ -22,6 +22,8 @@ import java.util.stream.Collectors;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
 import com.vmware.photon.controller.model.adapters.util.BaseAdapterContext;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceStateWithDescription;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
@@ -129,7 +131,6 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
     /**
      * Populate this context. Right now its main focus is to populate NIC related states.
-     * <p>
      * <p>
      * Notes:
      * <ul>
@@ -271,9 +272,9 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
         List<DeferredResult<Void>> getSecurityGroupDR = context.nics.stream()
                 .filter(nicContext ->
-                        // Only those that have at least 1 security group.
-                        nicContext.nicStateWithDesc.securityGroupLinks != null
-                                && !nicContext.nicStateWithDesc.securityGroupLinks.isEmpty())
+                // Only those that have at least 1 security group.
+                nicContext.nicStateWithDesc.securityGroupLinks != null
+                        && !nicContext.nicStateWithDesc.securityGroupLinks.isEmpty())
                 .flatMap(nicContext -> nicContext.nicStateWithDesc.securityGroupLinks.stream()
                         .map(securityGroupLink -> {
                             Operation op = Operation.createGet(
@@ -282,8 +283,8 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
 
                             return context.service
                                     .sendWithDeferredResult(op, SecurityGroupState.class)
-                                    .thenAccept(securityGroupState ->
-                                            nicContext.securityGroupStates.add(securityGroupState));
+                                    .thenAccept(securityGroupState -> nicContext.securityGroupStates
+                                            .add(securityGroupState));
                         }))
                 .collect(Collectors.toList());
 
@@ -337,6 +338,38 @@ public class BaseComputeInstanceContext<T extends BaseComputeInstanceContext<T, 
             }
             return context;
         });
+    }
+
+    /**
+     * Helper method to load image native id either from {@code ImageState.id} that is pointed by
+     * {@code bootDisk.imageLink} or directly from {@code bootDisk.sourceImageReference}.
+     */
+    public DeferredResult<String> getImageNativeId(DiskState bootDisk) {
+
+        if (bootDisk == null) {
+            return DeferredResult.failed(new IllegalStateException("bootDisk should be specified"));
+        }
+
+        if (bootDisk.sourceImageReference == null && bootDisk.imageLink == null) {
+            return DeferredResult.failed(new IllegalStateException(
+                    "Either bootDisk.sourceImageReference or bootDisk.imageLink should be specified"));
+        }
+
+        final DeferredResult<String> imageNativeIdDR;
+
+        if (bootDisk.imageLink != null) {
+            // Either get 'image native id' from ImageState.id as pointed by 'bootDisk.imageLink'
+            Operation getImageStateOp = Operation.createGet(this.service.getHost(), bootDisk.imageLink);
+
+            imageNativeIdDR = this.service
+                    .sendWithDeferredResult(getImageStateOp, ImageState.class)
+                    .thenApply(imageState -> imageState.id);
+        } else {
+            // Or use directly 'bootDisk.sourceImageReference' as 'image native id'
+            imageNativeIdDR = DeferredResult.completed(bootDisk.sourceImageReference.toString());
+        }
+
+        return imageNativeIdDR;
     }
 
 }

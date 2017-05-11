@@ -101,8 +101,21 @@ public class DiskService extends StatefulService {
         /**
          * URI reference to the source image used to create an instance of this
          * disk service.
+         *
+         * <p>Set either this or {@link #imageLink} property. If both are set {@link #imageLink} has
+         * precedence.
          */
         public URI sourceImageReference;
+
+        /**
+         * Self-link to the {@link com.vmware.photon.controller.model.resources.ImageService.ImageState image}
+         * used to create an instance of this disk service.
+         *
+         * <p>Set either this or {@link #sourceImageReference} property. If both are set this
+         * property has precedence.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_16)
+        public String imageLink;
 
         /**
          * Type of this disk service instance.
