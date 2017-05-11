@@ -75,20 +75,21 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
      */
     protected Throwable consumeError(Throwable exc) {
         if (exc instanceof CloudException) {
-            CloudException azureExc = (CloudException) exc;
-            CloudError body = azureExc.getBody();
+            final CloudException azureExc = (CloudException) exc;
+            final CloudError body = azureExc.getBody();
+
             if (body != null) {
-                String code = body.getCode();
+                final String code = body.getCode();
+
                 if (RESOURCE_NOT_FOUND.equalsIgnoreCase(code)
                         || NOT_FOUND.equalsIgnoreCase(code)) {
                     return RECOVERED;
-                } else if (INVALID_PARAMETER.equals(code)) {
-                    String invalidParameterMsg = String.format(
-                            "Invalid parameter. %s",
-                            body.getMessage());
+                }
 
-                    IllegalStateException e = new IllegalStateException(invalidParameterMsg, exc);
-                    return e;
+                if (INVALID_PARAMETER.equals(code)) {
+                    String msg = String.format("Invalid parameter. %s", body.getMessage());
+
+                    return new IllegalStateException(msg, azureExc);
                 }
             }
         }
@@ -97,6 +98,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
 
     @Override
     protected final void onError(final Throwable exc) {
+
         final Throwable consumedError;
 
         // First delegate to descendants to process exc
@@ -120,6 +122,7 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
                 this.service.logFine(() -> String.format("%s: SUCCESS with error. Details: %s",
                         this.message, Utils.toString(exc)));
             }
+
             toDeferredResult().complete(null);
         } else {
             if (this.service != null) {
@@ -127,16 +130,18 @@ public abstract class AzureDeferredResultServiceCallback<RES> extends AzureAsync
                         .format("%s: FAILED. Details: %s", this.message,
                                 Utils.toString(consumedError)));
             }
+
             toDeferredResult().fail(consumedError);
         }
     }
 
     @Override
     protected final void onSuccess(ServiceResponse<RES> result) {
-        DeferredResult<RES> consumeSuccess;
         if (this.service != null) {
-            this.service.logFine(() -> String.format("%s : SUCCESS", this.message));
+            this.service.logFine(() -> String.format("%s: SUCCESS", this.message));
         }
+
+        DeferredResult<RES> consumeSuccess;
         try {
             // First delegate to descendants to process result
             consumeSuccess = consumeSuccess(result.getBody());

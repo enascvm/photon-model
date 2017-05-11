@@ -109,7 +109,6 @@ import com.microsoft.rest.ServiceCallback;
 import com.microsoft.rest.ServiceResponse;
 
 import okhttp3.OkHttpClient;
-
 import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
@@ -299,9 +298,9 @@ public class AzureInstanceService extends StatelessService {
                 } else {
                     handleError(ctx, exc);
                 }
-                return;
+            } else {
+                handleAllocation(ctx, next);
             }
-            handleAllocation(ctx, next);
         };
     }
 
@@ -359,7 +358,8 @@ public class AzureInstanceService extends StatelessService {
                 createResourceGroup(ctx, AzureInstanceStage.GET_DISK_OS_FAMILY);
                 break;
             case GET_DISK_OS_FAMILY:
-                differentiateVMImages(ctx, AzureInstanceStage.INIT_STORAGE);
+                differentiateVMImages(ctx)
+                        .whenComplete(thenAllocation(ctx, AzureInstanceStage.INIT_STORAGE));
                 break;
             case INIT_STORAGE:
                 createStorageAccount(ctx, AzureInstanceStage.POPULATE_NIC_CONTEXT);
@@ -1266,7 +1266,7 @@ public class AzureInstanceService extends StatelessService {
                         } else {
                             cs.customProperties = ctx.child.customProperties;
                         }
-                        cs.customProperties.put(RESOURCE_GROUP_NAME,ctx.resourceGroup.getName());
+                        cs.customProperties.put(RESOURCE_GROUP_NAME, ctx.resourceGroup.getName());
 
                         Operation.CompletionHandler completionHandler = (ox,
                                 exc) -> {
@@ -1678,90 +1678,111 @@ public class AzureInstanceService extends StatelessService {
     /**
      * Differentiate between Windows and Linux Images
      */
-    private void differentiateVMImages(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
-        DiskState bootDisk = ctx.bootDisk;
-        if (bootDisk == null) {
-            handleError(ctx, new IllegalStateException("Azure bootDisk not specified"));
-            return;
-        }
-        URI imageId = ctx.bootDisk.sourceImageReference;
-        if (imageId == null) {
-            handleError(ctx, new IllegalStateException("Azure image reference not specified"));
-            return;
-        }
-        ImageReference imageReference = getImageReference(
-                ctx.bootDisk.sourceImageReference.toString());
+    private DeferredResult<AzureInstanceContext> differentiateVMImages(AzureInstanceContext ctx) {
 
-        if (AzureConstants.AZURE_URN_VERSION_LATEST.equalsIgnoreCase(imageReference.getVersion())) {
-            logFine(() -> String.format("Getting the latest version for %s:%s:%s",
-                    imageReference.getPublisher(), imageReference.getOffer(),
-                    imageReference.getSku()));
-            // Get the latest version based on the provided publisher, offer and SKU (filter = null,
-            // top = 1, orderBy = name desc)
+        return ctx.getImageNativeId(ctx.bootDisk)
+                .thenApply(imageReferenceStr -> {
+                    // Convert Azure image ref string to object
+                    ctx.imageReference = getImageReference(imageReferenceStr);
+                    return ctx;
+                })
+                .thenCompose(this::getLatestVirtualMachineImage)
+                .thenCompose(this::getVirtualMachineImage);
+    }
+
+    /**
+     * Get the LATEST VirtualMachineImage using publisher, offer and SKU.
+     */
+    private DeferredResult<AzureInstanceContext> getLatestVirtualMachineImage(
+            AzureInstanceContext ctx) {
+
+        if (AzureConstants.AZURE_URN_VERSION_LATEST
+                .equalsIgnoreCase(ctx.imageReference.getVersion())) {
+
+            String msg = String.format("Getting latest Azure image by %s:%s:%s",
+                    ctx.imageReference.getPublisher(),
+                    ctx.imageReference.getOffer(),
+                    ctx.imageReference.getSku());
+
+            AzureDeferredResultServiceCallback<List<VirtualMachineImageResource>> callback = new AzureDeferredResultServiceCallback<List<VirtualMachineImageResource>>(
+                    ctx.service, msg) {
+                @Override
+                protected DeferredResult<List<VirtualMachineImageResource>> consumeSuccess(
+                        List<VirtualMachineImageResource> imageResources) {
+                    return DeferredResult.completed(imageResources);
+                }
+            };
+
             getComputeManagementClient(ctx).getVirtualMachineImagesOperations().listAsync(
-                    ctx.resourceGroup.getLocation(), imageReference.getPublisher(),
-                    imageReference.getOffer(), imageReference.getSku(),
-                    null, 1, AzureConstants.ORDER_BY_VM_IMAGE_RESOURCE_NAME_DESC,
-                    new AzureAsyncCallback<List<VirtualMachineImageResource>>() {
+                    ctx.resourceGroup.getLocation(),
+                    ctx.imageReference.getPublisher(),
+                    ctx.imageReference.getOffer(),
+                    ctx.imageReference.getSku(),
+                    null,
+                    1,
+                    AzureConstants.ORDER_BY_VM_IMAGE_RESOURCE_NAME_DESC,
+                    callback);
 
-                        @Override
-                        public void onError(Throwable e) {
-                            handleError(ctx, new IllegalStateException(e.getLocalizedMessage()));
-                        }
+            return callback.toDeferredResult().thenCompose(imageResources -> {
 
-                        @Override
-                        public void onSuccess(
-                                ServiceResponse<List<VirtualMachineImageResource>> result) {
-                            List<VirtualMachineImageResource> resource = result.getBody();
-                            if (resource == null || resource.get(0) == null) {
-                                handleError(ctx,
-                                        new IllegalStateException("No latest version found"));
-                                return;
-                            }
-                            // Get the first object because the request asks only for one object
-                            // (top = 1)
-                            // We don't care what version we use to get the VirtualMachineImage
-                            String version = resource.get(0).getName();
-                            getVirtualMachineImage(ctx, nextStage, version, imageReference);
-                        }
-                    });
-        } else {
-            getVirtualMachineImage(ctx, nextStage, imageReference.getVersion(), imageReference);
+                if (imageResources == null
+                        || imageResources.isEmpty()
+                        || imageResources.get(0) == null) {
+                    return DeferredResult
+                            .failed(new IllegalStateException("No latest version found"));
+                }
+
+                // Update 'latest'-version with actual version
+                ctx.imageReference.setVersion(imageResources.get(0).getName());
+
+                return DeferredResult.completed(ctx);
+
+            });
         }
+
+        return DeferredResult.completed(ctx);
     }
 
     /**
      * Get the VirtualMachineImage using publisher, offer, SKU and version.
      */
-    private void getVirtualMachineImage(AzureInstanceContext ctx,
-            AzureInstanceStage nextStage, String version, ImageReference imageReference) {
+    private DeferredResult<AzureInstanceContext> getVirtualMachineImage(AzureInstanceContext ctx) {
 
-        logFine(() -> String.format("URN of the OS - %s:%s:%s:%s", imageReference.getPublisher(),
-                imageReference.getOffer(), imageReference.getSku(), version));
+        String msg = String.format("Getting Azure image by %s:%s:%s:%s",
+                ctx.imageReference.getPublisher(),
+                ctx.imageReference.getOffer(),
+                ctx.imageReference.getSku(),
+                ctx.imageReference.getVersion());
+
+        AzureDeferredResultServiceCallback<VirtualMachineImage> callback = new AzureDeferredResultServiceCallback<VirtualMachineImage>(
+                ctx.service, msg) {
+            @Override
+            protected DeferredResult<VirtualMachineImage> consumeSuccess(
+                    VirtualMachineImage image) {
+                return DeferredResult.completed(image);
+            }
+        };
+
         getComputeManagementClient(ctx).getVirtualMachineImagesOperations().getAsync(
-                ctx.resourceGroup.getLocation(), imageReference.getPublisher(),
-                imageReference.getOffer(), imageReference.getSku(), version,
-                new AzureAsyncCallback<VirtualMachineImage>() {
-                    @Override
-                    public void onError(Throwable e) {
-                        handleError(ctx, new IllegalStateException(e.getLocalizedMessage()));
-                    }
+                ctx.resourceGroup.getLocation(),
+                ctx.imageReference.getPublisher(),
+                ctx.imageReference.getOffer(),
+                ctx.imageReference.getSku(),
+                ctx.imageReference.getVersion(),
+                callback);
 
-                    @Override
-                    public void onSuccess(ServiceResponse<VirtualMachineImage> result) {
-                        VirtualMachineImage image = result.getBody();
-                        if (image == null || image.getOsDiskImage() == null) {
-                            handleError(ctx, new IllegalStateException("OS Disk Image not found."));
-                            return;
-                        }
-                        // Get the operating system family
-                        ctx.operatingSystemFamily = image.getOsDiskImage().getOperatingSystem();
-                        logFine(() -> String.format("Retrieved the operating system family - %s",
-                                ctx.operatingSystemFamily));
-                        ctx.imageReference = imageReference;
-                        handleAllocation(ctx, nextStage);
-                    }
-                });
+        return callback.toDeferredResult().thenCompose(image -> {
+
+            if (image == null || image.getOsDiskImage() == null) {
+                return DeferredResult
+                        .failed(new IllegalStateException("OS Disk Image not found."));
+            }
+
+            // Get the operating system family
+            ctx.operatingSystemFamily = image.getOsDiskImage().getOperatingSystem();
+
+            return DeferredResult.completed(ctx);
+        });
     }
 
     private void enableMonitoring(AzureInstanceContext ctx, AzureInstanceStage nextStage) {

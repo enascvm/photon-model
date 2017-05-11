@@ -93,6 +93,8 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ImageService;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.IpAssignment;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceDescriptionService.NetworkInterfaceDescription;
@@ -558,6 +560,16 @@ public class AzureTestUtil {
         azureVMDesc = TestUtils.doPost(host, azureVMDesc, ComputeDescription.class,
                         UriUtils.buildUri(host, ComputeDescriptionService.FACTORY_LINK));
 
+        ImageState bootImage;
+        {
+            bootImage = new ImageState();
+            bootImage.id = IMAGE_REFERENCE;
+            bootImage.endpointType = endpointState.endpointType;
+
+            bootImage = TestUtils.doPost(host, bootImage, ImageState.class,
+                    UriUtils.buildUri(host, ImageService.FACTORY_LINK));
+        }
+
         List<String> vmDisks = new ArrayList<>();
 
         DiskState rootDisk = new DiskState();
@@ -566,7 +578,10 @@ public class AzureTestUtil {
         rootDisk.documentSelfLink = rootDisk.id;
         rootDisk.type = DiskType.HDD;
         rootDisk.capacityMBytes = AZURE_CUSTOM_OSDISK_SIZE; // Custom OSDisk size of 32 GBs
-        rootDisk.sourceImageReference = URI.create(IMAGE_REFERENCE);
+        // Set both sourceImageReference and imageLink. Still imageLink should be used. {{
+        rootDisk.sourceImageReference = URI.create(IMAGE_REFERENCE + "dummy");
+        rootDisk.imageLink = bootImage.documentSelfLink;
+        // }}
         rootDisk.bootOrder = 1;
 
         rootDisk.endpointLink = endpointState.documentSelfLink;
