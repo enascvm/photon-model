@@ -102,9 +102,8 @@ public class TestAWSMissingEnumerationResourcesService extends BaseModelTest {
     private void getLinkedAccountComputeDescs(Request request, int expectedCount) {
         this.host.waitFor("Timeout waiting for getLinkedAccountComputeDescriptions()", () -> {
 
-            ServiceDocumentQueryResult result = this.host
-                    .createAndWaitSimpleDirectQuery(getQuerySpecForComputeDesc(request),
-                            expectedCount, expectedCount);
+            ServiceDocumentQueryResult result = this.host.createAndWaitSimpleDirectQuery(
+                    getQuerySpecForComputeDesc(request), expectedCount, expectedCount);
             Collection<Object> values = result.documents.values();
             if (values.size() != expectedCount) {
                 return false;

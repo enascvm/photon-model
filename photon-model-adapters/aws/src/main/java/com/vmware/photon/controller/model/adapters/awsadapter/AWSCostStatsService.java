@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ACCOUNT_IS_AUTO_DISCOVERED;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_ACCOUNT_ID_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_LINKED_ACCOUNT_IDS;
 
 import java.io.IOException;
@@ -27,7 +28,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -321,37 +321,20 @@ public class AWSCostStatsService extends StatelessService {
     protected void getAccountDescription(AWSCostStatsCreationContext statsData,
             AWSCostStatsCreationStages next) {
         Consumer<Operation> onSuccess = (op) -> {
-            statsData.computeDesc = op.getBody(ComputeStateWithDescription.class);
-            String accountId = statsData.computeDesc.customProperties
-                    .getOrDefault(AWSConstants.AWS_ACCOUNT_ID_KEY, null);
-            if (accountId == null || statsData.computeDesc.endpointLink == null) {
-                logWarning(() -> String.format("Account ID or endpoint link is not set for compute state '%s'. Not"
-                        + " collecting cost stats.", statsData.computeDesc.documentSelfLink));
+            ComputeStateWithDescription compute = op.getBody(ComputeStateWithDescription.class);
+            statsData.computeDesc = compute;
+            String accountId = compute.customProperties.get(AWS_ACCOUNT_ID_KEY);
+            if (compute.type != ComputeType.VM_HOST || compute.parentLink != null
+                    || compute.endpointLink == null || accountId == null) {
+                logWarning(() -> String.format("AWS Cost collection is not supported for this "
+                                + "compute type or the compute is missing mandatory properties: %s",
+                        compute.documentSelfLink));
                 postAccumulatedCostStats(statsData, true);
                 return;
             }
             statsData.accountId = accountId;
-            Consumer<List<ComputeState>> queryResultConsumer = (accountComputeStates) -> {
-                accountComputeStates = accountComputeStates.stream()
-                        .filter(c -> c.endpointLink != null && c.endpointLink.equals(statsData.computeDesc.endpointLink))
-                        .collect(Collectors.toList());
-                statsData.awsAccountIdToComputeStates.put(accountId, accountComputeStates);
-                ComputeState primaryComputeState = findRootAccountComputeState(accountComputeStates);
-                if (statsData.computeDesc.documentSelfLink
-                        .equals(primaryComputeState.documentSelfLink)) {
-                    // The Cost stats adapter will be configured for all compute states corresponding to an account (one per region).
-                    // We want to run only once corresponding to the primary compute state.
-                    getParentAuth(statsData, next);
-                } else {
-                    logFine(() -> String.format("Compute state '%s' is not primary for account '%s'."
-                                    + " Not collecting cost stats.",
-                            statsData.computeDesc.documentSelfLink, accountId));
-                    postAccumulatedCostStats(statsData, true);
-                    return;
-                }
-            };
-            sendRequest(createQueryForComputeStatesByAccount(statsData, accountId,
-                    queryResultConsumer));
+            statsData.awsAccountIdToComputeStates.put(accountId, Collections.singletonList(compute));
+            getParentAuth(statsData, next);
         };
         URI computeUri = UriUtils.extendUriWithQuery(statsData.statsRequest.resourceReference,
                 UriUtils.URI_PARAM_ODATA_EXPAND, Boolean.TRUE.toString());
@@ -385,10 +368,10 @@ public class AWSCostStatsService extends StatelessService {
             String billsBucketName = statsData.computeDesc.customProperties
                     .getOrDefault(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY, null);
             try {
-                if (billsBucketName == null) {
+                if (billsBucketName == null || billsBucketName.isEmpty()) {
                     billsBucketName = AWSUtils.autoDiscoverBillsBucketName(
                             statsData.s3Client.getAmazonS3Client(), statsData.accountId);
-                    if (billsBucketName == null) {
+                    if (billsBucketName == null || billsBucketName.isEmpty()) {
                         logWarning(() -> String.format("Bills Bucket name is not configured for "
                                         + "account '%s'. Not collecting cost stats.",
                                 statsData.computeDesc.documentSelfLink));
@@ -408,21 +391,12 @@ public class AWSCostStatsService extends StatelessService {
         });
     }
 
-    private ComputeState findRootAccountComputeState(List<ComputeState> accountComputeStates) {
-        return accountComputeStates.stream()
-                .filter(c -> c.parentLink == null && c.endpointLink != null)
-                .min(Comparator.comparing(c -> c.creationTimeMicros)).get();
-    }
-
     private Map<String, ComputeState> findRootAccountComputeStateByEndpoint(
             List<ComputeState> accountComputeStates) {
         return accountComputeStates.stream()
-                .filter(c -> c.parentLink == null && c.endpointLink != null)
                 .collect(Collectors.groupingBy(c -> c.endpointLink))
                 .entrySet().stream()
-                // For each endpoint, find the oldest compute state
-                .collect(Collectors.toMap(e -> e.getKey(),
-                        e -> e.getValue().stream().min(Comparator.comparing(c -> c.creationTimeMicros)).get()));
+                .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().get(0)));
     }
 
     /**
@@ -435,15 +409,16 @@ public class AWSCostStatsService extends StatelessService {
      * @return operation object representing the query
      */
     protected Operation createQueryForComputeStatesByAccount(AWSCostStatsCreationContext context,
-            String accountId,
-            Consumer<List<ComputeState>> queryResultConsumer) {
+            String accountId, Consumer<List<ComputeState>> queryResultConsumer) {
         Query awsAccountsQuery = Query.Builder.create().addKindFieldClause(ComputeState.class)
+                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
                         EndpointAllocationTaskService.CUSTOM_PROP_ENPOINT_TYPE,
                         PhotonModelConstants.EndpointType.aws.name())
                 .addCompositeFieldClause(ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        AWSConstants.AWS_ACCOUNT_ID_KEY, accountId)
-                .addFieldClause(ComputeState.FIELD_NAME_TYPE, ComputeType.VM_HOST)
+                        AWS_ACCOUNT_ID_KEY, accountId)
+                .addInCollectionItemClause(ComputeState.FIELD_NAME_TENANT_LINKS,
+                        context.computeDesc.tenantLinks)
                 .build();
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .addOption(QueryOption.EXPAND_CONTENT)
@@ -462,7 +437,7 @@ public class AWSCostStatsService extends StatelessService {
                     List<ComputeState> accountComputeStates = responseTask.results.documents
                             .values().stream()
                             .map(s -> Utils.fromJson(s, ComputeState.class))
-                            .filter(cs -> cs.endpointLink != null)
+                            .filter(cs -> cs.parentLink == null && cs.endpointLink != null)
                             .collect(Collectors.toList());
                     queryResultConsumer.accept(accountComputeStates);
                 });
@@ -932,8 +907,9 @@ public class AWSCostStatsService extends StatelessService {
         exception.printStackTrace(new PrintWriter(error));
         if (isCurrentMonth(statsData.billMonthToDownload)) {
             // Abort if the current month's bill is NOT available.
-            logSevere(() -> "Current month's bill is not available in the AWS S3 bucket. "
-                    + error.toString());
+            logSevere(() -> String.format("Current month's bill is not available for %s,"
+                            + "Check bucket preferences and  User permissions : %s",
+                            statsData.computeDesc.documentSelfLink, error.toString()));
             getFailureConsumer(statsData).accept(exception);
         } else {
             // Ignore if bill(s) of previous month(s) are not available.

@@ -69,6 +69,7 @@ public class MockCostStatsAdapterService extends AWSCostStatsService {
                 .put(AWSConstants.AWS_ACCOUNT_ID_KEY, "account1Id");
         account1ComputeState.description = new ComputeDescription();
         account1ComputeState.description.statsAdapterReferences = statsAdapterReferences;
+        account1ComputeState.tenantLinks = Collections.singletonList("tenant-1");
         statsData.computeDesc = account1ComputeState;
         statsData.awsAccountIdToComputeStates.put(TestAWSCostAdapterService.account1Id,
                 Collections.singletonList(account1ComputeState));

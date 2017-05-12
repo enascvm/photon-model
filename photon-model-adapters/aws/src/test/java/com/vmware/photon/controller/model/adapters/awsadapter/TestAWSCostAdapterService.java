@@ -21,6 +21,7 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.MockCostSta
 import static com.vmware.xenon.services.common.QueryTask.NumericRange.createDoubleRange;
 import static com.vmware.xenon.services.common.QueryTask.QuerySpecification.buildCompositeFieldName;
 
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -137,6 +138,7 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         EndpointAllocationTaskState endpointAllocationTaskState =
                 new EndpointAllocationTaskState();
         endpointAllocationTaskState.endpointState = endpointState;
+        endpointAllocationTaskState.tenantLinks = Collections.singletonList("tenant-1");
         EndpointAllocationTaskState returnState = postServiceSynchronously(
                 EndpointAllocationTaskService.FACTORY_LINK,
                 endpointAllocationTaskState,
