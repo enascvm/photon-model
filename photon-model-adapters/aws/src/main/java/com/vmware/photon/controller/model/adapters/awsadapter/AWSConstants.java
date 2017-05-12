@@ -118,6 +118,9 @@ public class AWSConstants {
     public static final String SERVICE_MONTHLY_OTHER_COST = "Service.%s.MonthlyOtherCost";
     public static final String SERVICE_RESERVED_RECURRING_COST = "Service.%s.ReservedRecurringCost";
 
+    //All properties related to the aws storage
+    public static final String DEVICE_TYPE = "deviceType";
+
     // AWS Metric Unit related constants
     public static final String UNIT_COUNT = "Count";
     public static final String UNIT_BYTES = "Bytes";
@@ -137,6 +140,13 @@ public class AWSConstants {
     // AWS client types
     public enum AwsClientType {
         EC2, CLOUD_WATCH, S3, LOAD_BALANCING
+    }
+
+    /**
+     * supported aws device types.
+     */
+    public static enum AWSStorageType {
+        EBS, EFS, INSTANCE_STORE
     }
 
     // AWS Error codes {{

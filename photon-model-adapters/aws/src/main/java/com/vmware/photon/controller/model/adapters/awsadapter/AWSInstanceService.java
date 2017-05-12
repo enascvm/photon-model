@@ -13,8 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWSStorageType;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_DEPENDENCY_VIOLATION_ERROR_CODE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_TYPE;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
@@ -88,6 +92,10 @@ import com.vmware.xenon.services.common.QueryTask.Query.Builder;
 public class AWSInstanceService extends StatelessService {
 
     public static final String SELF_LINK = AWSUriPaths.AWS_INSTANCE_ADAPTER;
+
+
+
+
 
     private AWSClientManager clientManager;
 
@@ -341,7 +349,7 @@ public class AWSInstanceService extends StatelessService {
                 .withMonitoring(true);
 
         //If specified, honour the specified boot disk size.
-        if (bootDisk.capacityMBytes > 0) {
+        if (bootDisk.capacityMBytes > 0  || bootDisk.customProperties != null) {
             DescribeImagesRequest imagesDescriptionRequest = new DescribeImagesRequest();
             imagesDescriptionRequest.withImageIds(aws.bootDiskImageNativeId);
             DescribeImagesResult imagesDescriptionResult =
@@ -360,13 +368,38 @@ public class AWSInstanceService extends StatelessService {
                     .findAny()
                     .orElse(null);
 
-            if (rootDeviceMapping.getEbs() != null) {
-                rootDeviceMapping.getEbs().setVolumeSize((int) bootDisk.capacityMBytes / 1024);
-                rootDeviceMapping.getEbs().setEncrypted(null);
+            String deviceType = bootDisk.customProperties.containsKey(DEVICE_TYPE) ?
+                    bootDisk.customProperties.get(DEVICE_TYPE) : null;
+            AWSStorageType storageType = deviceType != null ?
+                    AWSStorageType.valueOf(deviceType.toUpperCase()) : null;
+
+            if (rootDeviceMapping.getEbs() != null && storageType == AWSStorageType.EBS) {
+                if (bootDisk.capacityMBytes > 0) {
+                    rootDeviceMapping.getEbs().setVolumeSize((int) bootDisk.capacityMBytes / 1024);
+                    rootDeviceMapping.getEbs().setEncrypted(null);
+                }
+                if (bootDisk.customProperties.containsKey(VOLUME_TYPE)) {
+                    String rootVolumeType = rootDeviceMapping.getEbs().getVolumeType();
+                    if (!rootVolumeType.equals(bootDisk.customProperties.get(VOLUME_TYPE))) {
+                        rootDeviceMapping.getEbs()
+                                .setVolumeType(bootDisk.customProperties.get(VOLUME_TYPE));
+                    }
+                }
+                if (bootDisk.customProperties.containsKey(DISK_IOPS)) {
+                    try {
+                        int iops = Integer.parseInt(bootDisk.customProperties.get(DISK_IOPS));
+                        rootDeviceMapping.getEbs().setIops(iops);
+                    } catch (Exception e) {
+                        handleError(aws, e);
+                        return;
+                    }
+                }
                 runInstancesRequest.withBlockDeviceMappings(blockDeviceMappings);
             } else {
                 handleError(aws,
-                        new IllegalStateException("Size of non ebs boot disk cannot be modified"));
+                        new IllegalStateException(String.format("Properties of boot disk cannot "
+                                        + "be modified. Reason: Unsupported boot device type %s",
+                                deviceType)));
                 return;
             }
         }

@@ -59,6 +59,7 @@ import com.amazonaws.services.ec2.model.InstanceNetworkInterface;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.Tag;
+import com.amazonaws.services.ec2.model.Volume;
 
 import org.junit.After;
 import org.junit.Before;
@@ -628,8 +629,18 @@ public class TestAWSProvisionTask {
         DescribeVolumesResult describeVolumesResult = client
                 .describeVolumes(describeVolumesRequest);
 
-        assertEquals("Boot Disk size in the local system is not matching the boot disk size of "
-                        + "compute provisioned in aws", diskState.capacityMBytes,
-                describeVolumesResult.getVolumes().get(0).getSize() * 1024);
+        Volume bootVolume = describeVolumesResult.getVolumes().get(0);
+
+        assertEquals("Boot Disk capacity in diskstate is not matching the boot disk size of the "
+                        + "vm launched in aws", diskState.capacityMBytes, bootVolume.getSize() * 1024);
+
+        assertEquals(
+                "Boot disk type in diskstate is not same as the type of the volume attached to the VM",
+                diskState.customProperties.get("volumeType"), bootVolume.getVolumeType());
+
+        assertEquals(
+                "Boot disk iops in diskstate is the same as the iops of the volume attached to the VM",
+                Integer.parseInt(diskState.customProperties.get("iops")),
+                bootVolume.getIops().intValue());
     }
 }
