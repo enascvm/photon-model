@@ -1743,7 +1743,7 @@ public class TestAWSSetupUtils {
             }
 
             host.log(Level.INFO, "Waiting for EC2 instance deletion");
-            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
+            Thread.sleep(TimeUnit.SECONDS.toMillis(10));
             return false;
         });
 

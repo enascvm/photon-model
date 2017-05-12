@@ -69,6 +69,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -150,7 +151,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     private static final String VM_NAME = "TestAWSEnumerationTask-create";
     private static final String VM_STOPPED_NAME = "TestAWSEnumerationTask-stop";
     private static final String VM_UPDATED_NAME = "TestAWSEnumerationTask-update";
-    private static final int DEFAULT_TIMOUT_SECONDS = 200;
+    private static final int DEFAULT_TIMOUT_SECONDS = 300;
 
     public static final String VM_TAG_KEY_1 = "key1";
     public static final String VM_TAG_KEY_2 = "key2";
@@ -521,7 +522,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
     }
 
     @Test
-    public void testOSTypeEnumeration() throws Throwable {
+    public void testOSTypeEnumerationAndDisplayNameEnumeration() throws Throwable {
         if (this.isMock) {
             return;
         }
@@ -535,42 +536,6 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         String windowsVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_WINDOWS_AMI,
                 this.subnetId, this.securityGroupId);
         this.instancesToCleanUp.add(windowsVMId);
-
-        waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
-
-        enumerateResources(this.host, this.computeHost, this.endpointState, this.isMock,
-                TEST_CASE_INITIAL);
-
-        ComputeState linuxCompute = getComputeByAWSId(this.host, linuxVMId);
-        assertNotNull(linuxCompute);
-        assertEquals(ComputeType.VM_GUEST, linuxCompute.type);
-        assertEquals(ComputeDescription.ENVIRONMENT_NAME_AWS, linuxCompute.environmentName);
-        assertNotNull(linuxCompute.customProperties);
-        String linuxOSType = linuxCompute.customProperties.get(CUSTOM_OS_TYPE);
-        assertNotNull(linuxOSType);
-        assertEquals(OSType.LINUX.toString(), linuxOSType);
-
-        ComputeState winCompute = getComputeByAWSId(this.host, windowsVMId);
-        assertNotNull(winCompute);
-        assertEquals(ComputeType.VM_GUEST, winCompute.type);
-        assertEquals(ComputeDescription.ENVIRONMENT_NAME_AWS, winCompute.environmentName);
-        assertNotNull(winCompute.customProperties);
-        String winOSType = winCompute.customProperties.get(CUSTOM_OS_TYPE);
-        assertNotNull(winOSType);
-        assertEquals(OSType.WINDOWS.toString(), winOSType);
-    }
-
-    @Test
-    public void testDisplayNameEnumeration() throws Throwable {
-        if (this.isMock) {
-            return;
-        }
-
-        this.host.log("Running test: " + this.currentTestName.getMethodName());
-
-        String linuxVMId = provisionAWSVMWithEC2Client(this.host, this.client, EC2_LINUX_AMI,
-                this.subnetId, this.securityGroupId);
-        this.instancesToCleanUp.add(linuxVMId);
 
         waitForProvisioningToComplete(this.instancesToCleanUp, this.host, this.client, ZERO);
 
@@ -596,6 +561,23 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         // Validate this instance's host name after update
         validateHostName(linuxVMId);
 
+        ComputeState linuxCompute = getComputeByAWSId(this.host, linuxVMId);
+        assertNotNull(linuxCompute);
+        assertEquals(ComputeType.VM_GUEST, linuxCompute.type);
+        assertEquals(ComputeDescription.ENVIRONMENT_NAME_AWS, linuxCompute.environmentName);
+        assertNotNull(linuxCompute.customProperties);
+        String linuxOSType = linuxCompute.customProperties.get(CUSTOM_OS_TYPE);
+        assertNotNull(linuxOSType);
+        assertEquals(OSType.LINUX.toString(), linuxOSType);
+
+        ComputeState winCompute = getComputeByAWSId(this.host, windowsVMId);
+        assertNotNull(winCompute);
+        assertEquals(ComputeType.VM_GUEST, winCompute.type);
+        assertEquals(ComputeDescription.ENVIRONMENT_NAME_AWS, winCompute.environmentName);
+        assertNotNull(winCompute.customProperties);
+        String winOSType = winCompute.customProperties.get(CUSTOM_OS_TYPE);
+        assertNotNull(winOSType);
+        assertEquals(OSType.WINDOWS.toString(), winOSType);
     }
 
     @Ignore("VSYM-6430")
@@ -698,10 +680,10 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             ServiceDocumentQueryResult serviceDocumentQueryResult = queryDocumentsAndAssertExpectedCount(
                     this.host, allTagsNumber, TagService.FACTORY_LINK, false);
 
-            Map<String, TagState> tagsMap = serviceDocumentQueryResult.documents.entrySet()
-                    .stream().collect(
-                            Collectors.toMap(entry -> entry.getKey(),
-                                    entry -> Utils.fromJson(entry.getValue(), TagState.class)));
+            Map<String, TagState> tagsMap = new HashMap<>();
+            for (Entry<String, Object> entry : serviceDocumentQueryResult.documents.entrySet()) {
+                tagsMap.put(entry.getKey(), Utils.fromJson(entry.getValue(), TagState.class));
+            }
 
             // validate security group tags
             Map<String, SecurityGroupState> allSecurityGroupStatesMap =
@@ -967,6 +949,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             this.host.log("Deleting %d instance created from the test ",
                     this.instancesToCleanUp.size());
             if (this.instancesToCleanUp.size() >= 0) {
+                deleteVMsUsingEC2Client(this.client, this.host, this.instancesToCleanUp);
                 deleteVMsOnThisEndpoint(this.host, this.isMock,
                         this.computeHost.documentSelfLink, this.instancesToCleanUp);
                 // Check that all the instances that are required to be deleted are in
