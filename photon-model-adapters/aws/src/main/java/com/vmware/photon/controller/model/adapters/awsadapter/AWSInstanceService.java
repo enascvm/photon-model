@@ -368,24 +368,28 @@ public class AWSInstanceService extends StatelessService {
                     .findAny()
                     .orElse(null);
 
-            String deviceType = bootDisk.customProperties.containsKey(DEVICE_TYPE) ?
-                    bootDisk.customProperties.get(DEVICE_TYPE) : null;
-            AWSStorageType storageType = deviceType != null ?
-                    AWSStorageType.valueOf(deviceType.toUpperCase()) : null;
+            String deviceType = bootDisk.customProperties != null &&
+                    bootDisk.customProperties.containsKey(DEVICE_TYPE) ?
+                    bootDisk.customProperties.get(DEVICE_TYPE) : AWSStorageType.EBS.name();
+            AWSStorageType storageType = AWSStorageType.valueOf(deviceType.toUpperCase());
 
             if (rootDeviceMapping.getEbs() != null && storageType == AWSStorageType.EBS) {
                 if (bootDisk.capacityMBytes > 0) {
                     rootDeviceMapping.getEbs().setVolumeSize((int) bootDisk.capacityMBytes / 1024);
                     rootDeviceMapping.getEbs().setEncrypted(null);
                 }
-                if (bootDisk.customProperties.containsKey(VOLUME_TYPE)) {
+                if (bootDisk.customProperties != null &&
+                        bootDisk.customProperties.containsKey(VOLUME_TYPE)) {
+
                     String rootVolumeType = rootDeviceMapping.getEbs().getVolumeType();
                     if (!rootVolumeType.equals(bootDisk.customProperties.get(VOLUME_TYPE))) {
                         rootDeviceMapping.getEbs()
                                 .setVolumeType(bootDisk.customProperties.get(VOLUME_TYPE));
                     }
                 }
-                if (bootDisk.customProperties.containsKey(DISK_IOPS)) {
+                if (bootDisk.customProperties != null &&
+                        bootDisk.customProperties.containsKey(DISK_IOPS)) {
+
                     try {
                         int iops = Integer.parseInt(bootDisk.customProperties.get(DISK_IOPS));
                         rootDeviceMapping.getEbs().setIops(iops);
@@ -396,11 +400,10 @@ public class AWSInstanceService extends StatelessService {
                 }
                 runInstancesRequest.withBlockDeviceMappings(blockDeviceMappings);
             } else {
-                handleError(aws,
-                        new IllegalStateException(String.format("Properties of boot disk cannot "
-                                        + "be modified. Reason: Unsupported boot device type %s",
-                                deviceType)));
-                return;
+                runInstancesRequest.withBlockDeviceMappings(blockDeviceMappings);
+
+                this.logWarning(() -> "[AWSInstanceService] Properties of boot disk are not "
+                        + "modified.");
             }
         }
 
