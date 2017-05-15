@@ -53,6 +53,7 @@ import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.BaseLineState;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
@@ -141,6 +142,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
             PhotonModelServices.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
+            PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             AWSAdapters.startServices(this.host);
             // start the aws mock stats service
             this.host.startService(
@@ -149,6 +151,7 @@ public class TestAWSEnumerationAtScale extends BasicReusableHostTestCase {
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
             this.host.waitForServiceAvailable(AWSAdapters.LINKS);
             this.host.waitForServiceAvailable(AWSMockStatsService.SELF_LINK);
 

@@ -73,6 +73,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse;
 import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.ComputeStats;
 import com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AwsNicSpecs;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
@@ -153,12 +154,14 @@ public class TestAWSProvisionTask {
             PhotonModelServices.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
+            PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             AWSAdapters.startServices(this.host);
 
             this.host.setTimeoutSeconds(600);
 
             this.host.waitForServiceAvailable(PhotonModelServices.LINKS);
             this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
             this.host.waitForServiceAvailable(AWSAdapters.LINKS);
         } catch (Throwable e) {
             throw new Exception(e);

@@ -39,6 +39,7 @@ import com.vmware.photon.controller.model.adapterapi.ComputeStatsResponse.Comput
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSCsvBillParser;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSStatsNormalizer;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.monitoring.ResourceMetricsService;
@@ -86,12 +87,14 @@ public class TestAWSCostAdapterService extends BaseModelTest {
         CommandLineArgumentParser.parseFromProperties(this);
         super.startRequiredServices();
         PhotonModelTaskServices.startServices(this.host);
+        PhotonModelAdaptersRegistryAdapters.startServices(this.host);
         AWSAdapters.startServices(this.host);
         this.host.startService(
                 Operation.createPost(
                         UriUtils.buildUri(this.host, MockCostStatsAdapterService.class)),
                 new MockCostStatsAdapterService());
         this.host.waitForServiceAvailable(PhotonModelTaskServices.LINKS);
+        this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
         this.host.waitForServiceAvailable(AWSAdapters.LINKS);
         this.host.setTimeoutSeconds(900);
         if (this.isMock) {

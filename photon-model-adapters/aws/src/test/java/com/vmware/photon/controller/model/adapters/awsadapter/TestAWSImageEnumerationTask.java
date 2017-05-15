@@ -128,7 +128,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         getHost().waitForServiceAvailable(PhotonModelTaskServices.LINKS);
 
         PhotonModelAdaptersRegistryAdapters.startServices(getHost());
-
+        getHost().waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
         AWSAdapters.startServices(getHost());
 
         getHost().waitForServiceAvailable(AWSAdapters.CONFIG_LINK);

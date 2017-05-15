@@ -45,7 +45,8 @@ public class AWSAdapters {
             AWSEndpointAdapterService.SELF_LINK,
             AWSPowerService.SELF_LINK,
             AWSSecurityGroupService.SELF_LINK,
-            AWSMissingResourcesEnumerationService.SELF_LINK};
+            AWSMissingResourcesEnumerationService.SELF_LINK,
+            AWSRebootService.SELF_LINK};
 
     /**
      * The link of AWS configuration registered in {@link PhotonModelAdaptersRegistryService
@@ -70,6 +71,7 @@ public class AWSAdapters {
             host.startService(new AWSPowerService());
             host.startService(new AWSSecurityGroupService());
             host.startService(new AWSMissingResourcesEnumerationService());
+            host.startService(new AWSRebootService());
             EndpointAdapterUtils.registerEndpointAdapters(
                     host, EndpointType.aws, LINKS, AWSUriPaths.AWS_ADAPTER_LINK_TYPES);
 

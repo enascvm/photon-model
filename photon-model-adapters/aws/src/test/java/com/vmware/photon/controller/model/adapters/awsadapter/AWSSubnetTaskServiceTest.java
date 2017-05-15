@@ -53,6 +53,7 @@ import org.junit.Test;
 import com.vmware.photon.controller.model.PhotonModelMetricServices;
 import com.vmware.photon.controller.model.PhotonModelServices;
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest.InstanceRequestType;
+import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants.EndpointType;
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
 import com.vmware.photon.controller.model.resources.EndpointService;
@@ -93,6 +94,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
             PhotonModelServices.startServices(this.host);
             PhotonModelMetricServices.startServices(this.host);
             PhotonModelTaskServices.startServices(this.host);
+            PhotonModelAdaptersRegistryAdapters.startServices(this.host);
             AWSAdapters.startServices(this.host);
 
             AuthCredentialsServiceState creds = new AuthCredentialsServiceState();
@@ -101,7 +103,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
             this.client = AWSUtils.getAsyncClient(creds, this.regionId, getExecutor());
 
             this.host.setTimeoutSeconds(this.timeoutSeconds);
-
+            this.host.waitForServiceAvailable(PhotonModelAdaptersRegistryAdapters.LINKS);
             this.host.waitForServiceAvailable(AWSAdapters.LINKS);
 
             deleteAwsSubnet();
