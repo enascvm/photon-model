@@ -46,6 +46,8 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.EndpointService;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ImageService;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.NetworkService;
 import com.vmware.photon.controller.model.resources.NetworkService.NetworkState;
 import com.vmware.photon.controller.model.tasks.EndpointAllocationTaskService.EndpointAllocationTaskState;
@@ -262,6 +264,7 @@ public class EndpointRemovalTaskServiceTest extends Suite {
             List<String> tenantLinks) throws Throwable {
         createComputeState(test, endpointLink, tenantLinks);
         createDiskState(test, endpointLink, tenantLinks);
+        createPrivateImageState(test, endpointLink, tenantLinks);
         createNetworkState(test, endpointLink, tenantLinks);
         createAuthCredentials(test, endpointLink, tenantLinks);
     }
@@ -289,6 +292,15 @@ public class EndpointRemovalTaskServiceTest extends Suite {
         d.tenantLinks = tenantLinks;
         d.endpointLink = endpointLink;
         test.postServiceSynchronously(DiskService.FACTORY_LINK, d, DiskState.class);
+    }
+
+    private static void createPrivateImageState(BaseModelTest test, String endpointLink,
+            List<String> tenantLinks) throws Throwable {
+        ImageState image = new ImageState();
+        image.name = "disk";
+        image.tenantLinks = tenantLinks;
+        image.endpointLink = endpointLink;
+        test.postServiceSynchronously(ImageService.FACTORY_LINK, image, ImageState.class);
     }
 
     private static void createNetworkState(BaseModelTest test, String endpointLink,
