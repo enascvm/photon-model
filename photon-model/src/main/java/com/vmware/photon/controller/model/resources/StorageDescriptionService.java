@@ -92,6 +92,13 @@ public class StorageDescriptionService extends StatefulService {
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
         public String endpointLink;
+
+        /**
+         * Indicates whether this storage description supports encryption or not.
+         */
+        @Since(ReleaseConstants.RELEASE_VERSION_0_6_16)
+        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
+        public Boolean supportsEncryption;
     }
 
     @Override
