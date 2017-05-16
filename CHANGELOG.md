@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 0.6.17-SNAPSHOT
+
+
 ## 0.6.16
 
 * Delete Private images upon endpoint deletion.
