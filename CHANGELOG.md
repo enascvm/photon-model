@@ -1,11 +1,17 @@
 # CHANGELOG
 
-## 0.6.16-SNAPSHOT
+## 0.6.16
 
+* Delete Private images upon endpoint deletion.
+* Removed ResourceAggregateMetricService.
+* Storage description encryption support.
+* Added Day 2 Resource Operation for Restart and Suspend in Azure using ResourceOperationSpecService.
+* Add ability to run cost adapters remotely, will query and post resources
+  to a remote photon-model specified as system property.
 * Enhance DiskState with imageLink pointing to the ImageState to be used to
   to create an instance of this disk. Set either this property in case
   the ImageState is already present in the system (as a result of image enumeration)
-  or set current sourceImageReference to point to the native/raw image
+  or set current sourceImageReference to point to the native/raw image.
 
 ## 0.6.15
 
