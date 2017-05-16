@@ -27,11 +27,13 @@ import static com.vmware.xenon.common.UriUtils.buildUri;
 import static com.vmware.xenon.common.UriUtils.buildUriPath;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
@@ -47,8 +49,11 @@ import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersR
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.query.QueryStrategy;
+import com.vmware.photon.controller.model.query.QueryUtils;
+import com.vmware.photon.controller.model.query.QueryUtils.QueryByPages;
 import com.vmware.photon.controller.model.query.QueryUtils.QueryTop;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
+import com.vmware.photon.controller.model.resources.ImageService.ImageState;
 import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.FactoryService;
@@ -56,6 +61,7 @@ import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.TaskState;
 import com.vmware.xenon.common.TaskState.TaskStage;
+import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask.Query;
 import com.vmware.xenon.services.common.QueryTask.Query.Occurance;
@@ -358,7 +364,7 @@ public class ImageEnumerationTaskService
             sendWithDeferredResult(Operation.createDelete(getUri()))
                     .whenComplete((o, e) -> {
                         if (e != null) {
-                            logSevere(() -> String.format("Self-delete upon %s stage: FAILED - %s",
+                            logSevere(() -> String.format("Self-delete upon %s stage: FAILED with %s",
                                     taskState.taskInfo.stage, Utils.toString(e)));
                         } else {
                             logFine(() -> String.format("Self-delete upon %s stage: SUCCESS",
@@ -379,23 +385,34 @@ public class ImageEnumerationTaskService
         DeferredResult.completed(context)
                 // get the EndpointState from ImageEnumerationTaskState#endpointLink
                 .thenCompose(this::getEndpointState)
-                // get the 'image-enumeration' URI for passed end-point
-                .thenCompose(this::getImageEnumerationAdapterReference)
-                // call 'image-enumeration' adapter
-                .thenCompose(this::callImageEnumerationAdapter)
+
+                .thenCompose(ctx -> {
+                    if (ctx.endpointState == null) {
+                        // If no end-points are found then delete all public images of this EP type
+                        logFine(() -> String.format(
+                                "NO '%s' endpoints found so skip the enumeration and delete Public images",
+                                context.taskState.endpointType));
+
+                        return DeferredResult.completed(ctx)
+                                .thenCompose(this::deletePublicImagesByEndpointType)
+                                .thenCompose(this::sendSelfFinishedPatchDR);
+                    }
+
+                    return DeferredResult.completed(ctx)
+                            // get the 'image-enumeration' URI for passed end-point
+                            .thenCompose(this::getImageEnumerationAdapterReference)
+                            // call 'image-enumeration' adapter
+                            .thenCompose(this::callImageEnumerationAdapter);
+                })
+
                 .whenComplete((op, exc) -> {
                     if (exc != null) {
-                        if (exc.getCause() instanceof EndpointStatesNotFound) {
-                            logFine("SUCCESS: NO endpoints found so skip the enumeration");
-                            sendSelfFinishedPatch(taskState);
-                        } else {
-                            // If any of above steps failed sendSelfFailurePatch
-                            logFine(() -> String.format(
-                                    "FAILED: sendImageEnumerationAdapterRequest - %s",
-                                    Utils.toString(exc.getCause())));
+                        // If any of above steps failed sendSelfFailurePatch
+                        logFine(() -> String.format(
+                                "FAILED: sendImageEnumerationAdapterRequest - %s",
+                                Utils.toString(exc.getCause())));
 
-                            sendSelfFailurePatch(taskState, exc.getCause().getMessage());
-                        }
+                        sendSelfFailurePatch(taskState, exc.getCause().getMessage());
                     } else {
                         logFine("SUCCESS: sendImageEnumerationAdapterRequest");
                     }
@@ -449,24 +466,9 @@ public class ImageEnumerationTaskService
     private DeferredResult<SendImageEnumerationAdapterContext> getEndpointStateByType(
             SendImageEnumerationAdapterContext ctx) {
 
-        Query.Builder endpointsByTypeQuery = Query.Builder.create()
-                .addKindFieldClause(EndpointState.class)
-                .addCaseInsensitiveFieldClause(
-                        EndpointState.FIELD_NAME_ENDPOINT_TYPE,
-                        ctx.taskState.endpointType,
-                        MatchType.TERM,
-                        Occurance.MUST_OCCUR);
-
-        if (!isNullOrEmpty(ctx.taskState.regionId)) {
-            endpointsByTypeQuery.addCompositeFieldClause(
-                    EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
-                    EndpointConfigRequest.REGION_KEY,
-                    ctx.taskState.regionId);
-        }
-
         QueryStrategy<EndpointState> queryEndpointsByType = new QueryTop<>(
                 getHost(),
-                endpointsByTypeQuery.build(),
+                endpointsByTypeQuery(ctx).build(),
                 EndpointState.class,
                 null).setMaxResultsLimit(1);
 
@@ -491,22 +493,10 @@ public class ImageEnumerationTaskService
                         "SUCCESS: NO EndpointState for (type=%s,region=%s)",
                         ctx.taskState.endpointType,
                         regionStr));
-
-                // Throw an error to break/exit outer DeferredResult chain.
-                throw new EndpointStatesNotFound();
             }
 
             return ctx;
         });
-    }
-
-    /**
-     * Indicates no end-points are currently registered into the system. Thrown by
-     * {@code ImageEnumerationTaskService#sendImageEnumerationAdapterRequest(ImageEnumerationTaskState)}
-     * to terminate execution chain.
-     */
-    @SuppressWarnings("serial")
-    private static final class EndpointStatesNotFound extends RuntimeException {
     }
 
     /**
@@ -559,7 +549,7 @@ public class ImageEnumerationTaskService
             return DeferredResult.failed(new IllegalStateException(
                     String.format("No '%s' URI registered by '%s' end-point.",
                             AdapterTypePath.IMAGE_ENUMERATION_ADAPTER.key,
-                            ctx.endpointState.endpointType)));
+                            ctx.taskState.endpointType)));
         }
 
         // Create 'image-enumeration' adapter request
@@ -592,6 +582,85 @@ public class ImageEnumerationTaskService
         });
     }
 
+    private Query.Builder endpointsByTypeQuery(SendImageEnumerationAdapterContext ctx) {
+
+        Query.Builder endpointsByTypeQuery = Query.Builder.create()
+                .addKindFieldClause(EndpointState.class)
+                .addCaseInsensitiveFieldClause(
+                        EndpointState.FIELD_NAME_ENDPOINT_TYPE,
+                        ctx.taskState.endpointType,
+                        MatchType.TERM,
+                        Occurance.MUST_OCCUR);
+
+        if (!isNullOrEmpty(ctx.taskState.regionId)) {
+            endpointsByTypeQuery.addCompositeFieldClause(
+                    EndpointState.FIELD_NAME_ENDPOINT_PROPERTIES,
+                    EndpointConfigRequest.REGION_KEY,
+                    ctx.taskState.regionId);
+        }
+
+        return endpointsByTypeQuery;
+    }
+
+    private Query.Builder publicImagesByEndpointTypeQuery(SendImageEnumerationAdapterContext ctx) {
+
+        Query.Builder imagesByEndpointsTypeQuery = Query.Builder.create()
+                .addKindFieldClause(ImageState.class)
+                .addCaseInsensitiveFieldClause(
+                        ImageState.FIELD_NAME_ENDPOINT_TYPE,
+                        ctx.taskState.endpointType,
+                        MatchType.TERM,
+                        Occurance.MUST_OCCUR);
+
+        if (!isNullOrEmpty(ctx.taskState.regionId)) {
+            imagesByEndpointsTypeQuery.addFieldClause(
+                    ImageState.FIELD_NAME_REGION_ID,
+                    ctx.taskState.regionId);
+        }
+
+        return imagesByEndpointsTypeQuery;
+    }
+
+    private DeferredResult<SendImageEnumerationAdapterContext> deletePublicImagesByEndpointType(
+            SendImageEnumerationAdapterContext ctx) {
+
+        QueryByPages<ImageState> queryAll = new QueryByPages<ImageState>(
+                getHost(),
+                publicImagesByEndpointTypeQuery(ctx).build(),
+                ImageState.class,
+                null /* tenants */);
+        queryAll.setMaxPageSize(QueryUtils.DEFAULT_MAX_RESULT_LIMIT);
+
+        final List<DeferredResult<Operation>> deleteDRs = new ArrayList<>();
+
+        queryAll.queryLinks(imageLink -> {
+            Operation delOp = Operation.createDelete(UriUtils.buildUri(getHost(), imageLink));
+
+            DeferredResult<Operation> delDR = sendWithDeferredResult(delOp)
+                    .whenComplete((op, e) -> {
+                        final String msg = "Deleting '%s' public image state [%s]";
+                        if (e != null) {
+                            // Be tolerant on individual images delete
+                            log(Level.WARNING, () -> String.format(msg + ": FAILED with %s",
+                                    ctx.taskState.endpointType, imageLink, Utils.toString(e)));
+                        } else {
+                            log(Level.FINEST, () -> String.format(msg + ": SUCCESS",
+                                    ctx.taskState.endpointType, imageLink));
+                        }
+                    });
+
+            deleteDRs.add(delDR);
+        });
+
+        return DeferredResult.allOf(deleteDRs).thenApply(ignore -> ctx);
+    }
+
+    private DeferredResult<SendImageEnumerationAdapterContext> sendSelfFinishedPatchDR(
+            SendImageEnumerationAdapterContext ctx) {
+
+        sendSelfFinishedPatch(ctx.taskState);
+        return DeferredResult.completed(ctx);
+    }
     /**
      * @see ImageEnumerationTaskService#sendImageEnumerationAdapterRequest(ImageEnumerationTaskState)
      */
