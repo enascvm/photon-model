@@ -15,7 +15,9 @@ package com.vmware.photon.controller.model.resources;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -32,6 +34,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -53,8 +56,8 @@ public class StorageDescriptionServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static StorageDescriptionService.StorageDescription buildValidStartState() {
-        StorageDescriptionService.StorageDescription storageState = new StorageDescriptionService.StorageDescription();
+    private static StorageDescription buildValidStartState() {
+        StorageDescription storageState = new StorageDescription();
         storageState.id = UUID.randomUUID().toString();
         storageState.name = "storageName";
         storageState.tenantLinks = new ArrayList<>();
@@ -95,10 +98,10 @@ public class StorageDescriptionServiceTest extends Suite {
     public static class HandleStartTest extends BaseModelTest {
         @Test
         public void testValidStartState() throws Throwable {
-            StorageDescriptionService.StorageDescription startState = buildValidStartState();
-            StorageDescriptionService.StorageDescription returnState = postServiceSynchronously(
+            StorageDescription startState = buildValidStartState();
+            StorageDescription returnState = postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK,
-                            startState, StorageDescriptionService.StorageDescription.class);
+                            startState, StorageDescription.class);
 
             assertNotNull(returnState);
             assertThat(returnState.id, is(startState.id));
@@ -114,16 +117,16 @@ public class StorageDescriptionServiceTest extends Suite {
 
         @Test
         public void testDuplicatePost() throws Throwable {
-            StorageDescriptionService.StorageDescription startState = buildValidStartState();
-            StorageDescriptionService.StorageDescription returnState = postServiceSynchronously(
+            StorageDescription startState = buildValidStartState();
+            StorageDescription returnState = postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK,
-                            startState, StorageDescriptionService.StorageDescription.class);
+                            startState, StorageDescription.class);
 
             assertNotNull(returnState);
             assertThat(returnState.name, is(startState.name));
             startState.name = "new-name";
             returnState = postServiceSynchronously(StorageDescriptionService.FACTORY_LINK,
-                            startState, StorageDescriptionService.StorageDescription.class);
+                            startState, StorageDescription.class);
             assertThat(returnState.name, is(startState.name));
         }
 
@@ -132,18 +135,18 @@ public class StorageDescriptionServiceTest extends Suite {
             postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK,
                     null,
-                    StorageDescriptionService.StorageDescription.class,
+                    StorageDescription.class,
                     IllegalArgumentException.class);
         }
 
         @Test
         public void testMissingId() throws Throwable {
-            StorageDescriptionService.StorageDescription startState = buildValidStartState();
+            StorageDescription startState = buildValidStartState();
             startState.id = null;
 
-            StorageDescriptionService.StorageDescription returnState = postServiceSynchronously(
+            StorageDescription returnState = postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK, startState,
-                    StorageDescriptionService.StorageDescription.class);
+                    StorageDescription.class);
 
             assertNotNull(returnState);
             assertNotNull(returnState.id);
@@ -151,12 +154,37 @@ public class StorageDescriptionServiceTest extends Suite {
 
         @Test
         public void testMissingName() throws Throwable {
-            StorageDescriptionService.StorageDescription startState = buildValidStartState();
+            StorageDescription startState = buildValidStartState();
             startState.name = null;
 
             postServiceSynchronously(StorageDescriptionService.FACTORY_LINK,
-                    startState, StorageDescriptionService.StorageDescription.class,
+                    startState, StorageDescription.class,
                     IllegalArgumentException.class);
+        }
+
+        @Test
+        public void testMissingCreationTimeMicros() throws Throwable {
+            StorageDescription startState = buildValidStartState();
+            startState.creationTimeMicros = null;
+
+            StorageDescription returnState = postServiceSynchronously(
+                    StorageDescriptionService.FACTORY_LINK, startState, StorageDescription.class);
+
+            assertNotNull(returnState);
+            assertNull(returnState.creationTimeMicros);
+        }
+
+        @Test
+        public void testProvidedCreationTimeMicros() throws Throwable {
+            StorageDescription startState = buildValidStartState();
+            startState.creationTimeMicros = Long.MIN_VALUE;
+
+            StorageDescription returnState = postServiceSynchronously(
+                    StorageDescriptionService.FACTORY_LINK, startState, StorageDescription.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.creationTimeMicros);
+            assertEquals(Long.MIN_VALUE, returnState.creationTimeMicros.longValue());
         }
     }
 
@@ -166,13 +194,13 @@ public class StorageDescriptionServiceTest extends Suite {
     public static class HandlePatchTest extends BaseModelTest {
         @Test
         public void testPatch() throws Throwable {
-            StorageDescriptionService.StorageDescription startState = buildValidStartState();
+            StorageDescription startState = buildValidStartState();
 
-            StorageDescriptionService.StorageDescription returnState = postServiceSynchronously(
+            StorageDescription returnState = postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK,
-                            startState, StorageDescriptionService.StorageDescription.class);
+                            startState, StorageDescription.class);
 
-            StorageDescriptionService.StorageDescription patchState = new StorageDescriptionService.StorageDescription();
+            StorageDescription patchState = new StorageDescription();
             patchState.name = "patchStorageName";
             patchState.customProperties = new HashMap<>();
             patchState.customProperties.put("patchKey", "patchValue");
@@ -185,7 +213,7 @@ public class StorageDescriptionServiceTest extends Suite {
 
             returnState = getServiceSynchronously(
                     returnState.documentSelfLink,
-                    StorageDescriptionService.StorageDescription.class);
+                    StorageDescription.class);
 
             assertThat(returnState.name,
                     is(patchState.name));
@@ -202,114 +230,114 @@ public class StorageDescriptionServiceTest extends Suite {
 
         @Test
         public void testPatchRegionId() throws Throwable {
-            StorageDescriptionService.StorageDescription startState = buildValidStartState();
+            StorageDescription startState = buildValidStartState();
             startState.regionId = "startRegionId";
 
-            StorageDescriptionService.StorageDescription returnState = postServiceSynchronously(
+            StorageDescription returnState = postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK, startState,
-                    StorageDescriptionService.StorageDescription.class);
+                    StorageDescription.class);
 
-            StorageDescriptionService.StorageDescription patchState = new StorageDescriptionService.StorageDescription();
+            StorageDescription patchState = new StorageDescription();
             patchState.regionId = null;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             assertThat(returnState.regionId, is("startRegionId"));
             patchState.regionId = "startRegionId";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             assertThat(returnState.regionId, is("startRegionId"));
             patchState.regionId = "patchRegionId";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             assertThat(returnState.regionId, is("patchRegionId"));
         }
 
         @Test
         public void testPatchName() throws Throwable {
-            StorageDescriptionService.StorageDescription startState = buildValidStartState();
+            StorageDescription startState = buildValidStartState();
             startState.name = "startName";
 
-            StorageDescriptionService.StorageDescription returnState = postServiceSynchronously(
+            StorageDescription returnState = postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK, startState,
-                    StorageDescriptionService.StorageDescription.class);
+                    StorageDescription.class);
 
-            StorageDescriptionService.StorageDescription patchState = new StorageDescriptionService.StorageDescription();
+            StorageDescription patchState = new StorageDescription();
             patchState.name = null;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             assertThat(returnState.name, is("startName"));
             patchState.name = "startName";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             assertThat(returnState.name, is("startName"));
             patchState.name = "patchName";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             assertThat(returnState.name, is("patchName"));
         }
 
         @Test
         public void testPatchType() throws Throwable {
-            StorageDescriptionService.StorageDescription startState = buildValidStartState();
+            StorageDescription startState = buildValidStartState();
             startState.type = "startType";
 
-            StorageDescriptionService.StorageDescription returnState = postServiceSynchronously(
+            StorageDescription returnState = postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK, startState,
-                    StorageDescriptionService.StorageDescription.class);
+                    StorageDescription.class);
 
-            StorageDescriptionService.StorageDescription patchState = new StorageDescriptionService.StorageDescription();
+            StorageDescription patchState = new StorageDescription();
             patchState.type = null;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             assertThat(returnState.type, is("startType"));
             patchState.type = "startType";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             assertThat(returnState.type, is("startType"));
             patchState.type = "patchType";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             assertThat(returnState.type, is("patchType"));
         }
 
         @Test
         public void testPatchCustomProperties() throws Throwable {
-            StorageDescriptionService.StorageDescription startState = buildValidStartState();
+            StorageDescription startState = buildValidStartState();
             startState.customProperties = new HashMap<>();
             startState.customProperties.put("cp1-key", "cp1-value");
 
-            StorageDescriptionService.StorageDescription returnState = postServiceSynchronously(
+            StorageDescription returnState = postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK, startState,
-                    StorageDescriptionService.StorageDescription.class);
+                    StorageDescription.class);
 
-            StorageDescriptionService.StorageDescription patchState = new StorageDescriptionService.StorageDescription();
+            StorageDescription patchState = new StorageDescription();
             patchState.customProperties = new HashMap<>();
             patchState.customProperties.put("cp2-key", "cp2-value");
 
@@ -317,7 +345,7 @@ public class StorageDescriptionServiceTest extends Suite {
                     patchState);
 
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, StorageDescriptionService.StorageDescription.class);
+                    returnState.documentSelfLink, StorageDescription.class);
             HashMap<Object, Object> expectedCustomProperties = new HashMap<>();
             expectedCustomProperties.putAll(startState.customProperties);
             expectedCustomProperties.putAll(patchState.customProperties);
@@ -332,16 +360,16 @@ public class StorageDescriptionServiceTest extends Suite {
     public static class QueryTest extends BaseModelTest {
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            StorageDescriptionService.StorageDescription storageState = buildValidStartState();
+            StorageDescription storageState = buildValidStartState();
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
             storageState.tenantLinks = new ArrayList<>();
             storageState.tenantLinks.add(UriUtils.buildUriPath(
                     tenantUri.getPath(), "tenantA"));
-            StorageDescriptionService.StorageDescription startState = postServiceSynchronously(
+            StorageDescription startState = postServiceSynchronously(
                     StorageDescriptionService.FACTORY_LINK,
-                            storageState, StorageDescriptionService.StorageDescription.class);
+                            storageState, StorageDescription.class);
 
-            String kind = Utils.buildKind(StorageDescriptionService.StorageDescription.class);
+            String kind = Utils.buildKind(StorageDescription.class);
             String propertyName = QueryTask.QuerySpecification
                     .buildCollectionItemName(ResourceState.FIELD_NAME_TENANT_LINKS);
 

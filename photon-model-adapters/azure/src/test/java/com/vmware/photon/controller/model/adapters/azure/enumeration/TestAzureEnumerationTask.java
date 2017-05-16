@@ -16,6 +16,7 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import static com.vmware.photon.controller.model.ModelUtils.createSecurityGroup;
@@ -453,6 +454,11 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
         for (Entry<String, Object> key : result.documents.entrySet()) {
             ComputeState document = Utils.fromJson(key.getValue(), ComputeState.class);
+            if (document.type == ComputeType.VM_GUEST) {
+                assertNotNull(document.creationTimeMicros);
+            } else if (document.type == ComputeType.VM_HOST) {
+                assertNull(document.creationTimeMicros);
+            }
             if (!document.documentSelfLink.equals(computeHost.documentSelfLink)
                     && !document.documentSelfLink.equals(this.vmState.documentSelfLink)
                     && document.id.toLowerCase()

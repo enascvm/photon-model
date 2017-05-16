@@ -18,7 +18,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -188,16 +188,7 @@ public class ComputeServiceTest extends Suite {
                     ComputeService.FACTORY_LINK, startState, ComputeService.ComputeState.class);
 
             assertNotNull(returnState);
-            assertNotNull(returnState.creationTimeMicros);
-            assertTrue(
-                    String.format("launchtime (%s) should be before now (%s)",
-                            returnState.creationTimeMicros,
-                            Utils.getNowMicrosUtc()),
-                    returnState.creationTimeMicros <= Utils.getNowMicrosUtc());
-            assertTrue(
-                    String.format("launchtime (%s) should be after testStartTime (%s)",
-                            returnState.creationTimeMicros, this.startTimeMicros),
-                    returnState.creationTimeMicros >= this.startTimeMicros);
+            assertNull(returnState.creationTimeMicros);
         }
 
         @Test

@@ -145,6 +145,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         EnumerationStages stage;
         String enumNextPageLink;
         Map<String, StorageAccount> storageAccountsToUpdateCreate = new ConcurrentHashMap<>();
+        Map<String, StorageDescription> storageDescriptionsForPatching = new ConcurrentHashMap<>();
         Set<String> storageAccountIds = new HashSet<>();
         Map<String, StorageDescription> storageDescriptions = new ConcurrentHashMap<>();
         Map<String, String> storageConnectionStrings = new ConcurrentHashMap<>();
@@ -177,6 +178,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         GET_LOCAL_STORAGE_ACCOUNTS,
         UPDATE_STORAGE_DESCRIPTIONS,
         CREATE_STORAGE_DESCRIPTIONS,
+        PATCH_ADDITIONAL_STORAGE_DESCRIPTION_FIELDS,
         DELETE_STORAGE_DESCRIPTIONS,
         GET_STORAGE_CONTAINERS,
         GET_LOCAL_STORAGE_CONTAINERS,
@@ -341,7 +343,10 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             updateStorageDescriptions(context, StorageEnumStages.CREATE_STORAGE_DESCRIPTIONS);
             break;
         case CREATE_STORAGE_DESCRIPTIONS:
-            createStorageDescriptions(context, StorageEnumStages.DELETE_STORAGE_DESCRIPTIONS);
+            createStorageDescriptions(context, StorageEnumStages.PATCH_ADDITIONAL_STORAGE_DESCRIPTION_FIELDS);
+            break;
+        case PATCH_ADDITIONAL_STORAGE_DESCRIPTION_FIELDS:
+            patchAdditionalFields(context, StorageEnumStages.DELETE_STORAGE_DESCRIPTIONS);
             break;
         case DELETE_STORAGE_DESCRIPTIONS:
             deleteStorageDescription(context, StorageEnumStages.GET_STORAGE_CONTAINERS);
@@ -568,6 +573,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     storageDescriptionToUpdate.endpointLink = sd.endpointLink;
                     storageDescriptionToUpdate.tenantLinks = sd.tenantLinks;
 
+                    context.storageDescriptionsForPatching.put(sd.id, sd);
                     return storageDescriptionToUpdate;
                 })
                 .map(sd -> Operation.createPatch(this, sd.documentSelfLink)
@@ -652,9 +658,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     context.storageConnectionStrings.put(storageAccount.id, connectionString);
                     return auth;
                 })
-                .thenApply(auth -> AzureUtils.constructStorageDescription(getHost(),
-                        context.parentCompute, context.request, storageAccount,
-                        auth.documentSelfLink))
+                .thenApply(auth -> {
+                    StorageDescription storageDesc = AzureUtils.constructStorageDescription(
+                            context.parentCompute, context.request, storageAccount, auth.documentSelfLink);
+                    context.storageDescriptionsForPatching.put(storageDesc.id, storageDesc);
+                    return storageDesc;
+                })
                 .thenCompose(sd -> sendWithDeferredResult(Operation
                         .createPost(
                                 context.request.buildUri(StorageDescriptionService.FACTORY_LINK))
@@ -665,6 +674,73 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                                         storageAccount.name, Utils.toJsonHtml(e));
                             }
                         }), StorageDescription.class));
+    }
+
+    /**
+     * Patch additional values to storage description fetched from azure's storage account.
+     */
+    private void patchAdditionalFields(StorageEnumContext context, StorageEnumStages next) {
+        if (context.storageDescriptionsForPatching.size() == 0) {
+            logFine(() -> "No storage accounts need to be patched.");
+            context.subStage = next;
+            handleSubStage(context);
+            return;
+        }
+
+        // Patching power state and network Information. Hence 2.
+        // If we patch more fields, this number should be increased accordingly.
+        StorageManagementClient storageManagementClient = getStorageManagementClient(context);
+        StorageAccountsOperations stOps = storageManagementClient
+                .getStorageAccountsOperations();
+        DeferredResult.allOf(context.storageDescriptionsForPatching
+                .values().stream()
+                .map(storageDescription -> patchStorageDetails(stOps, storageDescription))
+                .map(dr -> dr.thenCompose(storageDescription -> sendWithDeferredResult(
+                        Operation.createPatch(
+                                context.request.buildUri(storageDescription.documentSelfLink))
+                                .setBody(storageDescription)
+                                .setCompletion((o, e) -> {
+                                    if (e != null) {
+                                        logWarning(() -> String.format(
+                                                "Error updating Storage:[%s], reason: %s",
+                                                storageDescription.name, e));
+                                    }
+                                }))))
+                .collect(Collectors.toList()))
+                .whenComplete((all, e) -> {
+                    if (e != null) {
+                        logWarning(() -> String.format("Error: %s", e));
+                    }
+                    context.subStage = next;
+                    handleSubStage(context);
+                });
+
+    }
+
+    private DeferredResult<StorageDescription> patchStorageDetails(StorageAccountsOperations stOps,
+            StorageDescription storageDescription) {
+        String resourceGroupName = getResourceGroupName(storageDescription.id);
+        String storageName = storageDescription.name;
+        AzureDeferredResultServiceCallback<com.microsoft.azure.management.storage.models.StorageAccount> handler =
+                new AzureDeferredResultServiceCallback<com.microsoft.azure.management.storage.models.StorageAccount>(
+                        this, "Load storage account view:" + storageName) {
+                    @Override
+                    protected DeferredResult<com.microsoft.azure.management.storage.models.StorageAccount> consumeSuccess(
+                            com.microsoft.azure.management.storage.models.StorageAccount sa) {
+                        logFine(() -> String
+                                .format("Retrieved instance view for storage account [%s].",
+                                        storageName));
+                        return DeferredResult.completed(sa);
+                    }
+                };
+        stOps.getPropertiesAsync(resourceGroupName, storageName, handler);
+        return handler.toDeferredResult().thenApply(sa -> {
+            if (sa.getCreationTime() != null) {
+                storageDescription.creationTimeMicros = TimeUnit.MILLISECONDS
+                        .toMicros(sa.getCreationTime().getMillis());
+            }
+            return storageDescription;
+        });
     }
 
     /*

@@ -249,7 +249,7 @@ public class AzureUtils {
     public static StorageDescription constructStorageDescription(ServiceHost host,
             String serviceSelfLink, StorageAccount sa,
             AzureInstanceContext ctx, StorageAccountKeys keys) {
-        return constructStorageDescription(
+        return constructStorageDescription(sa,
                 host, serviceSelfLink,
                 ctx.parent.endpointLink, ctx.parent.tenantLinks,
                 ctx.parent.resourcePoolLink, ctx.parent.documentSelfLink,
@@ -263,7 +263,7 @@ public class AzureUtils {
             ComputeEnumerateResourceRequest request,
             com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount storageAccount,
             StorageAccountKeys keys) {
-        return constructStorageDescription(host,
+        return constructStorageDescription(null, host,
                 serviceSelfLink, request.endpointLink,
                 parentCompute.tenantLinks, request.resourcePoolLink,
                 parentCompute.documentSelfLink, storageAccount.id, storageAccount.name,
@@ -292,8 +292,10 @@ public class AzureUtils {
         return host.sendWithDeferredResult(storageAuthOp, AuthCredentialsServiceState.class);
     }
 
-    public static StorageDescription constructStorageDescription(ServiceHost host, ComputeStateWithDescription parentCompute, ComputeEnumerateResourceRequest request,
-            com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount storageAccount,String keysAuthLink) {
+    public static StorageDescription constructStorageDescription(
+            ComputeStateWithDescription parentCompute, ComputeEnumerateResourceRequest request,
+            com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount storageAccount,
+            String keysAuthLink) {
 
         StorageDescription storageDescription = new StorageDescription();
         storageDescription.id = storageAccount.id;
@@ -311,7 +313,7 @@ public class AzureUtils {
         return storageDescription;
     }
 
-    private static StorageDescription constructStorageDescription(ServiceHost host,
+    private static StorageDescription constructStorageDescription(StorageAccount sa, ServiceHost host,
             String serviceSelfLink, String endpointLink, List<String> tenantLinks,
             String resourcePoolLink, String parentComputeSelfLink,
             String saId, String saName, String saLocation, String saUri,
@@ -350,6 +352,10 @@ public class AzureUtils {
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
         storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI, saUri);
         storageDescription.tenantLinks = tenantLinks;
+        if (sa != null && sa.getCreationTime() != null) {
+            storageDescription.creationTimeMicros = TimeUnit.MILLISECONDS
+                    .toMicros(sa.getCreationTime().getMillis());
+        }
         return storageDescription;
     }
 }

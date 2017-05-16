@@ -1244,7 +1244,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // Create compute state
         ComputeState computeState = new ComputeState();
         computeState.documentSelfLink = UUID.randomUUID().toString();
-        computeState.creationTimeMicros = Utils.getNowMicrosUtc();
         computeState.id = virtualMachine.id.toLowerCase();
         computeState.name = virtualMachine.name;
         computeState.regionId = virtualMachine.location;

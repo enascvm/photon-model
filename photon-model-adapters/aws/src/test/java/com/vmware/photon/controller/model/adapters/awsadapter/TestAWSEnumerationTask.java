@@ -567,6 +567,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         assertEquals(ComputeType.VM_GUEST, linuxCompute.type);
         assertEquals(ComputeDescription.ENVIRONMENT_NAME_AWS, linuxCompute.environmentName);
         assertNotNull(linuxCompute.customProperties);
+        assertNotNull(linuxCompute.creationTimeMicros);
         String linuxOSType = linuxCompute.customProperties.get(CUSTOM_OS_TYPE);
         assertNotNull(linuxOSType);
         assertEquals(OSType.LINUX.toString(), linuxOSType);
@@ -576,6 +577,7 @@ public class TestAWSEnumerationTask extends BasicTestCase {
         assertEquals(ComputeType.VM_GUEST, winCompute.type);
         assertEquals(ComputeDescription.ENVIRONMENT_NAME_AWS, winCompute.environmentName);
         assertNotNull(winCompute.customProperties);
+        assertNotNull(winCompute.creationTimeMicros);
         String winOSType = winCompute.customProperties.get(CUSTOM_OS_TYPE);
         assertNotNull(winOSType);
         assertEquals(OSType.WINDOWS.toString(), winOSType);

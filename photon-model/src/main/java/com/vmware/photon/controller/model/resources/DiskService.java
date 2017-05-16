@@ -199,12 +199,6 @@ public class DiskService extends StatefulService {
         public String currencyUnit;
 
         /**
-         * Disk creation time in micros since epoch.
-         */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public Long creationTimeMicros;
-
-        /**
          * Link to the compute host the disk belongs to. This property is not used to associate the
          * diskState with it's compute (VM). That association happens through the compute's
          * diskLinks property.
@@ -284,7 +278,6 @@ public class DiskService extends StatefulService {
                 targetState.bootConfig = this.bootConfig;
                 targetState.customizationServiceReference = this.customizationServiceReference;
                 targetState.currencyUnit = this.currencyUnit;
-                targetState.creationTimeMicros = this.creationTimeMicros;
                 targetState.computeHostLink = this.computeHostLink;
                 targetState.endpointLink = this.endpointLink;
             }
@@ -389,10 +382,6 @@ public class DiskService extends StatefulService {
     }
 
     private void validateState(DiskState state) {
-        if (state.creationTimeMicros == null) {
-            state.creationTimeMicros = Utils.getNowMicrosUtc();
-        }
-
         Utils.validateState(getStateDescription(), state);
 
         if (state.name == null) {

@@ -17,6 +17,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -34,6 +35,7 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 
 import com.vmware.photon.controller.model.helpers.BaseModelTest;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.xenon.common.Service;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
@@ -54,9 +56,9 @@ public class DiskServiceTest extends Suite {
         super(klass, builder);
     }
 
-    private static DiskService.DiskState buildValidStartState()
+    private static DiskState buildValidStartState()
             throws Throwable {
-        DiskService.DiskState disk = new DiskService.DiskState();
+        DiskState disk = new DiskState();
 
         disk.id = UUID.randomUUID().toString();
         disk.type = DiskService.DiskType.HDD;
@@ -99,10 +101,10 @@ public class DiskServiceTest extends Suite {
 
         @Test
         public void testValidStartState() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState startState = buildValidStartState();
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
             assertNotNull(returnState);
             assertThat(returnState.id, is(startState.id));
@@ -114,29 +116,29 @@ public class DiskServiceTest extends Suite {
 
         @Test
         public void testDuplicatePost() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState startState = buildValidStartState();
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
             assertNotNull(returnState);
             assertThat(returnState.name, is(startState.name));
             startState.name = "new-name";
             returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
             assertThat(returnState.name, is(startState.name));
 
         }
 
         @Test
         public void testMissingId() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.id = null;
 
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
             assertNotNull(returnState);
             assertNotNull(returnState.id);
@@ -144,26 +146,26 @@ public class DiskServiceTest extends Suite {
 
         @Test
         public void testMissingName() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.name = null;
 
             postServiceSynchronously(DiskService.FACTORY_LINK,
-                    startState, DiskService.DiskState.class,
+                    startState, DiskState.class,
                     IllegalArgumentException.class);
         }
 
         public void testCapacityLessThanOneMB(Long capacityMBytes)
                 throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.capacityMBytes = 0L;
             startState.sourceImageReference = new URI(
                     "http://sourceImageReference");
             startState.customizationServiceReference = new URI(
                     "http://customizationServiceReference");
 
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
             assertNotNull(returnState);
         }
@@ -171,45 +173,70 @@ public class DiskServiceTest extends Suite {
         @Test
         public void testMissingTwoReferencesWhenCapacityLessThanOneMB()
                 throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.capacityMBytes = 0;
             startState.sourceImageReference = null;
             startState.customizationServiceReference = null;
 
             postServiceSynchronously(DiskService.FACTORY_LINK,
-                    startState, DiskService.DiskState.class,
+                    startState, DiskState.class,
                     IllegalArgumentException.class);
         }
 
         @Test
         public void testMissingStatus() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.status = null;
 
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
             assertNotNull(returnState);
             assertThat(returnState.status, is(DiskService.DiskStatus.DETACHED));
         }
 
         public void testMissingPathInFileEntry(String path) throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
-            startState.bootConfig = new DiskService.DiskState.BootConfig();
-            startState.bootConfig.files = new DiskService.DiskState.BootConfig.FileEntry[1];
-            startState.bootConfig.files[0] = new DiskService.DiskState.BootConfig.FileEntry();
+            DiskState startState = buildValidStartState();
+            startState.bootConfig = new DiskState.BootConfig();
+            startState.bootConfig.files = new DiskState.BootConfig.FileEntry[1];
+            startState.bootConfig.files[0] = new DiskState.BootConfig.FileEntry();
             startState.bootConfig.files[0].path = null;
 
             postServiceSynchronously(DiskService.FACTORY_LINK,
-                    startState, DiskService.DiskState.class,
+                    startState, DiskState.class,
                     IllegalArgumentException.class);
             startState.bootConfig.files[0].path = "";
 
             postServiceSynchronously(DiskService.FACTORY_LINK,
-                    startState, DiskService.DiskState.class,
+                    startState, DiskState.class,
                     IllegalArgumentException.class);
 
+        }
+
+        @Test
+        public void testMissingCreationTimeMicros() throws Throwable {
+            DiskState startState = buildValidStartState();
+            startState.creationTimeMicros = null;
+
+            DiskState returnState = postServiceSynchronously(
+                    DiskService.FACTORY_LINK, startState, DiskState.class);
+
+            assertNotNull(returnState);
+            assertNull(returnState.creationTimeMicros);
+        }
+
+        @Test
+        public void testProvidedCreationTimeMicros() throws Throwable {
+            DiskState startState = buildValidStartState();
+            startState.creationTimeMicros = Long.MIN_VALUE;
+
+            DiskState returnState = postServiceSynchronously(
+                    DiskService.FACTORY_LINK, startState, DiskState.class);
+
+            assertNotNull(returnState);
+            assertNotNull(returnState.creationTimeMicros);
+            assertEquals(Long.MIN_VALUE, returnState.creationTimeMicros.longValue());
         }
     }
 
@@ -220,149 +247,149 @@ public class DiskServiceTest extends Suite {
 
         @Test
         public void testPatchZoneId() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.zoneId = "startZoneId";
 
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
-            DiskService.DiskState patchState = new DiskService.DiskState();
+            DiskState patchState = new DiskState();
             patchState.zoneId = null;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.zoneId, is("startZoneId"));
             patchState.zoneId = "startZoneId";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.zoneId, is("startZoneId"));
             patchState.zoneId = "patchZoneId";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.zoneId, is("patchZoneId"));
 
         }
 
         @Test
         public void testPatchName() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.name = "startName";
 
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
-            DiskService.DiskState patchState = new DiskService.DiskState();
+            DiskState patchState = new DiskState();
             patchState.name = null;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.name, is("startName"));
             patchState.name = "startName";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.name, is("startName"));
             patchState.name = "patchName";
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.name, is("patchName"));
 
         }
 
         @Test
         public void testPatchStatus() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.status = DiskService.DiskStatus.DETACHED;
 
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
-            DiskService.DiskState patchState = new DiskService.DiskState();
+            DiskState patchState = new DiskState();
             patchState.status = null;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.status, is(DiskService.DiskStatus.DETACHED));
             patchState.status = DiskService.DiskStatus.DETACHED;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.status, is(DiskService.DiskStatus.DETACHED));
             patchState.status = DiskService.DiskStatus.ATTACHED;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.status, is(DiskService.DiskStatus.ATTACHED));
         }
 
         @Test
         public void testPatchCapacityMBytes() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.capacityMBytes = 100L;
 
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
-            DiskService.DiskState patchState = new DiskService.DiskState();
+            DiskState patchState = new DiskState();
             patchState.capacityMBytes = 0;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.capacityMBytes, is(100L));
             patchState.capacityMBytes = 100L;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.capacityMBytes, is(100L));
             patchState.capacityMBytes = 200L;
 
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.capacityMBytes, is(200L));
         }
 
         @Test
         public void testPatchCustomProperties() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.customProperties = new HashMap<>();
             startState.customProperties.put("cp1-key", "cp1-value");
 
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
-            DiskService.DiskState patchState = new DiskService.DiskState();
+            DiskState patchState = new DiskState();
             patchState.customProperties = new HashMap<>();
             patchState.customProperties.put("cp2-key", "cp2-value");
 
@@ -370,7 +397,7 @@ public class DiskServiceTest extends Suite {
                     patchState);
 
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             HashMap<Object, Object> expectedCustomProperties = new HashMap<>();
             expectedCustomProperties.putAll(startState.customProperties);
             expectedCustomProperties.putAll(patchState.customProperties);
@@ -380,7 +407,7 @@ public class DiskServiceTest extends Suite {
 
         @Test
         public void testPatchOtherFields() throws Throwable {
-            DiskService.DiskState startState = buildValidStartState();
+            DiskState startState = buildValidStartState();
             startState.regionId = "data-center-id1";
             startState.resourcePoolLink = "resource-pool-link1";
             startState.authCredentialsLink = "auth-credentials-link1";
@@ -392,11 +419,11 @@ public class DiskServiceTest extends Suite {
             startState.bootArguments = new String[] { "boot-argument1" };
             startState.currencyUnit = "currency-unit1";
 
-            DiskService.DiskState returnState = postServiceSynchronously(
+            DiskState returnState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, startState,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
-            DiskService.DiskState patchState = new DiskService.DiskState();
+            DiskState patchState = new DiskState();
             patchState.regionId = "data-center-id2";
             patchState.resourcePoolLink = "resource-pool-link2";
             patchState.authCredentialsLink = "auth-credentials-link2";
@@ -412,7 +439,7 @@ public class DiskServiceTest extends Suite {
             patchServiceSynchronously(returnState.documentSelfLink,
                     patchState);
             returnState = getServiceSynchronously(
-                    returnState.documentSelfLink, DiskService.DiskState.class);
+                    returnState.documentSelfLink, DiskState.class);
             assertThat(returnState.regionId, is(startState.regionId));
             assertThat(returnState.resourcePoolLink,
                     is(startState.resourcePoolLink));
@@ -434,18 +461,18 @@ public class DiskServiceTest extends Suite {
     public static class QueryTest extends BaseModelTest {
         @Test
         public void testTenantLinksQuery() throws Throwable {
-            DiskService.DiskState disk = buildValidStartState();
+            DiskState disk = buildValidStartState();
 
             URI tenantUri = UriUtils.buildFactoryUri(this.host, TenantService.class);
             disk.tenantLinks = new ArrayList<>();
             disk.tenantLinks.add(UriUtils.buildUriPath(tenantUri.getPath(),
                     "tenantA"));
 
-            DiskService.DiskState startState = postServiceSynchronously(
+            DiskState startState = postServiceSynchronously(
                     DiskService.FACTORY_LINK, disk,
-                    DiskService.DiskState.class);
+                    DiskState.class);
 
-            String kind = Utils.buildKind(DiskService.DiskState.class);
+            String kind = Utils.buildKind(DiskState.class);
             String propertyName = QueryTask.QuerySpecification
                     .buildCollectionItemName(ResourceState.FIELD_NAME_TENANT_LINKS);
 

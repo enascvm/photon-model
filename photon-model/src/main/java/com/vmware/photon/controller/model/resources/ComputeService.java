@@ -284,12 +284,6 @@ public class ComputeService extends StatefulService {
         public List<String> networkInterfaceLinks;
 
         /**
-         * Compute creation time in micros since epoch.
-         */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        public Long creationTimeMicros;
-
-        /**
          * Link to the cloud account endpoint the compute belongs to.
          */
         @Since(ReleaseConstants.RELEASE_VERSION_0_5_7)
@@ -332,7 +326,6 @@ public class ComputeService extends StatefulService {
             chsWithDesc.resourcePoolLink = currentState.resourcePoolLink;
             chsWithDesc.adapterManagementReference = currentState.adapterManagementReference;
             chsWithDesc.networkInterfaceLinks = currentState.networkInterfaceLinks;
-            chsWithDesc.creationTimeMicros = currentState.creationTimeMicros;
             chsWithDesc.description = desc;
             chsWithDesc.descriptionLink = desc.documentSelfLink;
             chsWithDesc.regionId = currentState.regionId;
@@ -421,10 +414,6 @@ public class ComputeService extends StatefulService {
             throw (new IllegalArgumentException("body is required"));
         }
         ComputeState state = op.getBody(ComputeState.class);
-        if (state.creationTimeMicros == null) {
-            state.creationTimeMicros = Utils.getNowMicrosUtc();
-        }
-
         if (state.lifecycleState == null) {
             state.lifecycleState = LifecycleState.READY;
         }
@@ -507,6 +496,12 @@ public class ComputeService extends StatefulService {
                         }
                     }
                 }
+            }
+
+            if (patchBody.creationTimeMicros != null && currentState.creationTimeMicros == null &&
+                    currentState.creationTimeMicros != patchBody.creationTimeMicros) {
+                currentState.creationTimeMicros = patchBody.creationTimeMicros;
+                hasStateChanged = true;
             }
 
             if (patchBody.networkInterfaceLinks != null) {

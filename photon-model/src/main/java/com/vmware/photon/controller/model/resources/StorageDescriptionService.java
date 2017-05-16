@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.resources;
 
 import java.net.URI;
+import java.util.function.Function;
 
 import com.esotericsoftware.kryo.serializers.VersionFieldSerializer.Since;
 
@@ -137,7 +138,17 @@ public class StorageDescriptionService extends StatefulService {
     @Override
     public void handlePatch(Operation patch) {
         StorageDescription currentState = getState(patch);
+        Function<Operation, Boolean> customPatchHandler = t -> {
+            boolean hasStateChanged = false;
+            StorageDescription patchBody = patch.getBody(StorageDescription.class);
+            if (patchBody.creationTimeMicros != null && currentState.creationTimeMicros == null &&
+                    currentState.creationTimeMicros != patchBody.creationTimeMicros) {
+                currentState.creationTimeMicros = patchBody.creationTimeMicros;
+                hasStateChanged = true;
+            }
+            return hasStateChanged;
+        };
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
-                StorageDescription.class, null);
+                StorageDescription.class, customPatchHandler);
     }
 }

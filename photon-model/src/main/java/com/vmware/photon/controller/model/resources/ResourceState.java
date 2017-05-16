@@ -103,6 +103,13 @@ public class ResourceState extends ServiceDocument {
     @UsageOption(option = PropertyUsageOption.LINKS)
     public Set<String> tagLinks;
 
+    /**
+     * Resource creation time in micros since epoch.
+     */
+    @UsageOption(option = PropertyUsageOption.OPTIONAL)
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_17)
+    public Long creationTimeMicros;
+
     public void copyTo(ResourceState target) {
         super.copyTo(target);
 
@@ -112,6 +119,7 @@ public class ResourceState extends ServiceDocument {
         target.tenantLinks = this.tenantLinks;
         target.groupLinks = this.groupLinks;
         target.tagLinks = this.tagLinks;
+        target.creationTimeMicros = this.creationTimeMicros;
     }
 
 }
