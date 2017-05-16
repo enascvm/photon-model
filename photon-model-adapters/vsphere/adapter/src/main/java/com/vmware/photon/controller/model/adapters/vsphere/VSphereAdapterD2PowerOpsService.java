@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.vsphere;
 
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.logging.Level;
@@ -171,9 +173,9 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
 
     private Collection<ResourceOperationSpecService.ResourceOperationSpec> getResourceOperationSpecs() {
         ResourceOperationSpecService.ResourceOperationSpec operationSpec1 = getResourceOperationSpec(ResourceOperation.REBOOT,
-                ".powerState.equals('ON')"); //TODO: replace the targetCriteria String here later
+                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
         ResourceOperationSpecService.ResourceOperationSpec operationSpec2 = getResourceOperationSpec(ResourceOperation.SUSPEND,
-                ".powerState.equals('ON')"); //TODO: replace the targetCriteria String here later
+                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
         return Arrays.asList(operationSpec1, operationSpec2);
     }
 

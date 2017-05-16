@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.d2o;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -86,8 +87,9 @@ public class AzureLifecycleOperationService extends StatelessService {
         CompletionHandler completionHandler = (op, exc) -> {
             if (exc != null) {
                 startPost.fail(exc);
+            } else {
+                startPost.complete();
             }
-            startPost.complete();
         };
         ResourceOperationUtils.registerResourceOperation(this,
                 getResourceOperationSpecs(), completionHandler);
@@ -102,8 +104,7 @@ public class AzureLifecycleOperationService extends StatelessService {
         spec1.operation = ResourceOperation.RESTART.operation;
         spec1.name = ResourceOperation.RESTART.displayName;
         spec1.description = ResourceOperation.RESTART.description;
-        spec1.targetCriteria = ResourceOperationUtils.SCRIPT_CONTEXT_RESOURCE +
-                ".powerState.equals('ON')";
+        spec1.targetCriteria = TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria();
         specs.add(spec1);
         ResourceOperationSpec spec2 = new ResourceOperationSpec();
         spec2.adapterReference = AdapterUriUtil.buildAdapterUri(getHost(), SELF_LINK);
@@ -112,8 +113,7 @@ public class AzureLifecycleOperationService extends StatelessService {
         spec2.operation = ResourceOperation.SUSPEND.operation;
         spec2.name = ResourceOperation.SUSPEND.displayName;
         spec2.description = ResourceOperation.SUSPEND.description;
-        spec2.targetCriteria = ResourceOperationUtils.SCRIPT_CONTEXT_RESOURCE +
-                ".powerState.equals('ON')";
+        spec2.targetCriteria = TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria();
         specs.add(spec2);
         return specs;
     }

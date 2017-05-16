@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import static com.vmware.photon.controller.model.adapters.registry.operations.ResourceOperationUtils.TargetCriteria;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -140,9 +142,7 @@ public class AWSRebootService extends StatelessService {
         spec.operation = ResourceOperation.REBOOT.operation;
         spec.name = ResourceOperation.REBOOT.displayName;
         spec.description = ResourceOperation.REBOOT.description;
-        // 15 May 2017 - Modified for now to avoid merge conflicts
-        // TODO by Komal : convert to "ResourceOperation.REBOOT.targetCriteria"
-        spec.targetCriteria = ResourceOperationUtils.SCRIPT_CONTEXT_RESOURCE + ".powerState.equals('ON')";
+        spec.targetCriteria = TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria();
         specs.add(spec);
         return specs;
     }

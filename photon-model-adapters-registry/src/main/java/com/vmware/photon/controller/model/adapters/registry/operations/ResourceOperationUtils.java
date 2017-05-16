@@ -52,6 +52,20 @@ public class ResourceOperationUtils {
     public static final String COMPUTE_KIND = Utils.buildKind(ComputeState.class);
     public static final String NETWORK_KIND = Utils.buildKind(NetworkState.class);
 
+    public static enum TargetCriteria {
+        RESOURCE_POWER_STATE_ON("resource.powerState.equals('ON')");
+
+        private final String criteria;
+
+        private TargetCriteria(String criteria) {
+            this.criteria = criteria;
+        }
+
+        public String getCriteria() {
+            return this.criteria;
+        }
+    }
+
     /**
      * Lookup for {@link ResourceOperationSpec} by given {@code endpointType},
      * {@code resourceType} and {@code operation}
