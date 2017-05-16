@@ -564,6 +564,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     storageDescriptionToUpdate.endpointLink = sd.endpointLink;
                     storageDescriptionToUpdate.tenantLinks = sd.tenantLinks;
                     storageDescriptionToUpdate.regionId = storageAccount.location;
+                    // Check if SSE (encryption) is enable on azure storage account
+                    storageDescriptionToUpdate.supportsEncryption = storageAccount.properties
+                            .encryption != null ? storageAccount.properties
+                            .encryption.services.blob.enabled : false;
+                    //Set type of azure storage account
+                    storageDescriptionToUpdate.type = storageAccount.sku.name;
 
                     context.storageDescriptionsForPatching.put(sd.id, sd);
                     return storageDescriptionToUpdate;

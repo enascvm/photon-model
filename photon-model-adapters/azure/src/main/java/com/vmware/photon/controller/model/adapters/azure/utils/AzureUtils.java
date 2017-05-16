@@ -249,25 +249,10 @@ public class AzureUtils {
     public static StorageDescription constructStorageDescription(ServiceHost host,
             String serviceSelfLink, StorageAccountInner sa,
             AzureInstanceContext ctx, StorageAccountListKeysResultInner keys) {
-        return constructStorageDescription(sa,
-                host, serviceSelfLink,
-                ctx.parent.endpointLink, ctx.parent.tenantLinks,
-                ctx.parent.resourcePoolLink, ctx.parent.documentSelfLink,
-                ctx.storage.id(), ctx.storage.name(),
-                ctx.storage.location(),
-                null, keys);
+        return constructStorageDescription(sa, host, serviceSelfLink, ctx.parent, ctx.storage,
+                keys);
     }
 
-    public static StorageDescription constructStorageDescription(ServiceHost host,
-            String serviceSelfLink, ComputeStateWithDescription parentCompute,
-            ComputeEnumerateResourceRequest request, StorageAccountInner storageAccount,
-            StorageAccountListKeysResultInner keys) {
-        return constructStorageDescription(null, host,
-                serviceSelfLink, request.endpointLink,
-                parentCompute.tenantLinks, request.resourcePoolLink,
-                parentCompute.documentSelfLink, storageAccount.id(), storageAccount.name(),
-                storageAccount.location(), storageAccount.primaryEndpoints().blob(), keys);
-    }
 
     public static DeferredResult<AuthCredentialsServiceState> storeKeys(ServiceHost host,
             StorageAccountListKeysResultInner keys, String endpointLink, List<String> tenantLinks) {
@@ -310,13 +295,16 @@ public class AzureUtils {
                 .put(AZURE_STORAGE_ACCOUNT_URI, storageAccount.properties.primaryEndpoints.blob);
         storageDescription.tenantLinks = parentCompute.tenantLinks;
         storageDescription.regionId = storageAccount.location;
+        storageDescription.type = storageAccount.sku.name; // Set type of azure storage account
+        storageDescription.supportsEncryption = storageAccount.properties.encryption != null ?
+                storageAccount.properties.encryption.services.blob.enabled : false; //check if
+        // SSE is enabled on Azure storage account
         return storageDescription;
     }
 
     private static StorageDescription constructStorageDescription(StorageAccountInner sa, ServiceHost host,
-            String serviceSelfLink, String endpointLink, List<String> tenantLinks,
-            String resourcePoolLink, String parentComputeSelfLink,
-            String saId, String saName, String saLocation, String saUri,
+            String serviceSelfLink, ComputeStateWithDescription parent,
+            StorageAccountInner contextStorage,
             StorageAccountListKeysResultInner keys) {
         AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
         storageAuth.documentSelfLink = UUID.randomUUID().toString();
@@ -324,10 +312,10 @@ public class AzureUtils {
         for (StorageAccountKey key : keys.keys()) {
             storageAuth.customProperties.put(getStorageAccountKeyName(storageAuth.customProperties), key.value());
         }
-        storageAuth.tenantLinks = tenantLinks;
-        if (endpointLink != null) {
+        storageAuth.tenantLinks = parent.tenantLinks;
+        if (parent.endpointLink != null) {
             storageAuth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
-                    endpointLink);
+                    parent.endpointLink);
         }
 
         Operation storageAuthOp = Operation
@@ -339,18 +327,19 @@ public class AzureUtils {
         String storageAuthLink = UriUtils.buildUriPath(AuthCredentialsService.FACTORY_LINK,
                 storageAuth.documentSelfLink);
         StorageDescription storageDescription = new StorageDescription();
-        storageDescription.id = saId;
-        storageDescription.regionId = saLocation;
-        storageDescription.name = saName;
+        storageDescription.id = contextStorage.id();
+        storageDescription.regionId = contextStorage.location();
+        storageDescription.name = contextStorage.name();
         storageDescription.authCredentialsLink = storageAuthLink;
-        storageDescription.resourcePoolLink = resourcePoolLink;
+        storageDescription.resourcePoolLink = parent.resourcePoolLink;
         storageDescription.documentSelfLink = UUID.randomUUID().toString();
-        storageDescription.endpointLink = endpointLink;
-        storageDescription.computeHostLink = parentComputeSelfLink;
+        storageDescription.endpointLink = parent.endpointLink;
+        storageDescription.computeHostLink = parent.documentSelfLink;
         storageDescription.customProperties = new HashMap<>();
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
-        storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI, saUri);
-        storageDescription.tenantLinks = tenantLinks;
+        storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI, null);
+        storageDescription.tenantLinks = parent.tenantLinks;
+        storageDescription.type = contextStorage.sku().name().toString();
         if (sa != null && sa.creationTime() != null) {
             storageDescription.creationTimeMicros = TimeUnit.MILLISECONDS
                     .toMicros(sa.creationTime().getMillis());

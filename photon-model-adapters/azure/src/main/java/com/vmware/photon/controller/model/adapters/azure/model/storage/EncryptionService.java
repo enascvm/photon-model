@@ -13,20 +13,12 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model.storage;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
- * Describes properties of a storage account.
+ * Defines if a particular azure storage account service supports encryption or not
  */
-public class Properties {
+public class EncryptionService {
 
-    public String creationTime;
-    public PrimaryEndpoints primaryEndpoints;
-    public String primaryLocation;
-    public String provisioningState;
-    public String statusOfPrimary;
-    //defines encryption properties related to this storage account
-    public Encryption encryption;
-    private Map<String, Object> additionalProperties = new HashMap<String, Object>();
+    public boolean enabled;
+    public String lastEnabledTime;
+
 }

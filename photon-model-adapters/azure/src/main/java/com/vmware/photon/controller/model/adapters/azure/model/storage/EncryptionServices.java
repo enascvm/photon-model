@@ -13,20 +13,15 @@
 
 package com.vmware.photon.controller.model.adapters.azure.model.storage;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
- * Describes properties of a storage account.
+ * Holds encryption status of the 4 services available in an Azure Storage account
+ * We are interested in the blob storage to know if the VHD file corresponding to disk
+ * is also encrypted
  */
-public class Properties {
+public class EncryptionServices {
 
-    public String creationTime;
-    public PrimaryEndpoints primaryEndpoints;
-    public String primaryLocation;
-    public String provisioningState;
-    public String statusOfPrimary;
-    //defines encryption properties related to this storage account
-    public Encryption encryption;
-    private Map<String, Object> additionalProperties = new HashMap<String, Object>();
+    public EncryptionService blob;
+    public EncryptionService file;
+    public EncryptionService queue;
+    public EncryptionService table;
 }
