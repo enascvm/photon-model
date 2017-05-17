@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
-import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.WINDOWS_PLATFORM;
@@ -202,7 +201,6 @@ public class AWSEnumerationUtils {
         computeState.powerState = AWSUtils.mapToPowerState(instance.getState());
 
         computeState.customProperties = new HashMap<>();
-        computeState.customProperties.put(REGION_ID, regionId);
         computeState.customProperties.put(CUSTOM_OS_TYPE,
                 getNormalizedOSType(instance));
         computeState.customProperties.put(SOURCE_TASK_LINK,

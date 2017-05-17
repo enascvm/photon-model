@@ -164,9 +164,8 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
                     ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                     this.request.parentCompute.documentSelfLink);
-            qBuilder.addCompositeFieldClause(
-                    ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                    ComputeProperties.REGION_ID, this.request.regionId);
+            qBuilder.addFieldClause(
+                    SecurityGroupState.FIELD_NAME_REGION_ID, this.request.regionId);
         }
 
         @Override
@@ -205,9 +204,6 @@ public class AWSSecurityGroupEnumerationAdapterService extends StatelessService 
             stateHolder.localState.customProperties.put(
                     ComputeProperties.COMPUTE_HOST_LINK_PROP_NAME,
                     this.request.parentCompute.documentSelfLink);
-            stateHolder.localState.customProperties.put(
-                    ComputeProperties.REGION_ID,
-                    this.regionId);
 
             if (remoteResource.getTags() != null) {
 

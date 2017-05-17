@@ -716,6 +716,7 @@ public class ResourceAllocationTaskService
         nic.tagLinks = nid.tagLinks;
         nic.tenantLinks = state.tenantLinks;
         nic.endpointLink = nid.endpointLink;
+        nic.regionId = nid.regionId;
         nic.customProperties = nid.customProperties;
 
         return nic;

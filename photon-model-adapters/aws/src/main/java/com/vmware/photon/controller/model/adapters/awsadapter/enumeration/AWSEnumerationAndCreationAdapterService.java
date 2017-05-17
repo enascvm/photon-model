@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
-import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryPageSize;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
@@ -296,7 +295,6 @@ public class AWSEnumerationAndCreationAdapterService extends StatelessService {
             if (computeState.customProperties == null) {
                 computeState.customProperties = new HashMap<>();
             }
-            computeState.customProperties.put(REGION_ID, this.context.request.regionId);
             computeState.customProperties.put(SOURCE_TASK_LINK,
                     ResourceEnumerationTaskService.FACTORY_LINK);
 

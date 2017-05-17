@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapters.vsphere.VSphereEndpointAdapterService.HOST_NAME_KEY;
 
 import java.net.MalformedURLException;
@@ -73,6 +72,7 @@ public class TestVSphereEndpointService extends BaseVSphereAdapterTest {
         EndpointService.EndpointState endpoint = new EndpointService.EndpointState();
         endpoint.endpointType = PhotonModelConstants.EndpointType.vsphere.name();
         endpoint.name = PhotonModelConstants.EndpointType.vsphere.name();
+        endpoint.regionId = this.datacenterId;
 
         endpoint.endpointProperties = new HashMap<>();
         endpoint.endpointProperties.put(PRIVATE_KEYID_KEY,
@@ -81,8 +81,6 @@ public class TestVSphereEndpointService extends BaseVSphereAdapterTest {
                 vcPassword != null ? vcPassword : "password");
         endpoint.endpointProperties.put(HOST_NAME_KEY,
                 vcUrl != null ? URI.create(vcUrl).toURL().getHost() : "hostname");
-        endpoint.endpointProperties.put(REGION_KEY,
-                datacenterId != null ? datacenterId : "datacenter");
         return endpoint;
     }
 }

@@ -15,7 +15,6 @@ package com.vmware.photon.controller.model.adapters.azure.endpoint;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.USER_LINK_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 
@@ -100,13 +99,13 @@ public class TestAzureEndpointAdapterService extends BasicReusableHostTestCase {
         EndpointService.EndpointState endpoint = new EndpointService.EndpointState();
         endpoint.endpointType = PhotonModelConstants.EndpointType.azure.name();
         endpoint.name = PhotonModelConstants.EndpointType.azure.name();
+        endpoint.regionId = this.region;
 
         endpoint.endpointProperties = new HashMap<>();
         endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, this.clientID);
         endpoint.endpointProperties.put(PRIVATE_KEY_KEY, this.clientKey);
         endpoint.endpointProperties.put(AZURE_TENANT_ID, this.tenantId);
         endpoint.endpointProperties.put(USER_LINK_KEY, this.subscriptionId);
-        endpoint.endpointProperties.put(REGION_KEY, this.region);
         return endpoint;
     }
 

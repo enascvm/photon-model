@@ -136,7 +136,6 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
 
         @Test
         public void testInvalidValues() throws Throwable {
-            LoadBalancerDescription missingRegionId = buildValidStartState();
             LoadBalancerDescription missingEndpointLink = buildValidStartState();
             LoadBalancerDescription missingComputeDescriptionLink = buildValidStartState();
             LoadBalancerDescription missingSubnetLinks = buildValidStartState();
@@ -147,7 +146,6 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             LoadBalancerDescription invalidPort = buildValidStartState();
             LoadBalancerDescription invalidInstancePort = buildValidStartState();
 
-            missingRegionId.regionId = null;
             missingEndpointLink.endpointLink = null;
             missingComputeDescriptionLink.computeDescriptionLink = null;
             missingSubnetLinks.subnetLinks = null;
@@ -158,7 +156,7 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
             invalidPort.port = LoadBalancerDescriptionService.MIN_PORT_NUMBER - 1;
             invalidInstancePort.instancePort = LoadBalancerDescriptionService.MAX_PORT_NUMBER + 1;
 
-            LoadBalancerDescription[] states = { missingRegionId, missingEndpointLink,
+            LoadBalancerDescription[] states = { missingEndpointLink,
                     missingComputeDescriptionLink, missingSubnetLinks,  missingProtocol,
                     missingPort, missingInstanceProtocol, missingInstancePort, invalidPort,
                     invalidInstancePort };
@@ -210,7 +208,8 @@ public class LoadBalancerDescriptionServiceTest extends Suite {
                     is(patchState.customProperties));
             assertThat(returnState.tenantLinks.size(), is(2));
             assertEquals(returnState.groupLinks, patchState.groupLinks);
-            assertEquals(returnState.regionId, patchState.regionId);
+            // region ID should not be updated
+            assertEquals(returnState.regionId, startState.regionId);
         }
     }
 

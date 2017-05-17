@@ -55,7 +55,6 @@ public class ComputeDescriptionService extends StatefulService {
         public static final String FIELD_NAME_RESOURCE_POOL_ID = "resourcePoolId";
         public static final String FIELD_NAME_SUPPORTED_CHILDREN = "supportedChildren";
         public static final String FIELD_NAME_ZONE_ID = "zoneId";
-        public static final String FIELD_NAME_REGION_ID = "regionId";
         public static final String FIELD_NAME_CUSTOM_PROPERTIES = "customProperties";
         public static final String FIELD_NAME_ENVIRONMENT_NAME = "environmentName";
         public static final String ENVIRONMENT_NAME_ON_PREMISE = "On premise";
@@ -77,12 +76,6 @@ public class ComputeDescriptionService extends StatefulService {
             OS_ON_PHYSICAL,
             ZONE
         }
-
-        /**
-         * Region identifier of this description service instance.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String regionId;
 
         /**
          * Identifier of the zone associated with this compute host.

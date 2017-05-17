@@ -239,14 +239,6 @@ public class ComputeService extends StatefulService {
         public PowerState powerState;
 
         /**
-         * Region identifier of this compute instance.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        @UsageOption(option = PropertyUsageOption.OPTIONAL)
-        @Since(ReleaseConstants.RELEASE_VERSION_0_6_11)
-        public String regionId;
-
-        /**
          * Identifier of the zone associated with this compute instance.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)

@@ -327,7 +327,8 @@ public class SecurityGroupServiceTest extends Suite {
                     returnState.documentSelfLink,
                     SecurityGroupService.SecurityGroupState.class);
 
-            assertThat(returnState.regionId, is(patchState.regionId));
+            // region ID should not be updated
+            assertThat(returnState.regionId, is(startState.regionId));
             assertThat(returnState.authCredentialsLink,
                     is(patchState.authCredentialsLink));
             assertThat(returnState.resourcePoolLink,

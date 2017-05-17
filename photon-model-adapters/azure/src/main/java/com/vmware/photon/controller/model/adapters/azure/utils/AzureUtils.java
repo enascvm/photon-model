@@ -310,6 +310,7 @@ public class AzureUtils {
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
         storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI, storageAccount.properties.primaryEndpoints.blob);
         storageDescription.tenantLinks = parentCompute.tenantLinks;
+        storageDescription.regionId = storageAccount.location;
         return storageDescription;
     }
 

@@ -42,7 +42,6 @@ public class ImageService extends StatefulService {
     public static class ImageState extends ResourceState {
 
         public static final String FIELD_NAME_DESCRIPTION = "description";
-        public static final String FIELD_NAME_REGION_ID = "regionId";
         public static final String FIELD_NAME_OS_FAMILY = "osFamily";
         public static final String FIELD_NAME_ENDPOINT_TYPE = "endpointType";
 
@@ -59,12 +58,6 @@ public class ImageService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         @PropertyOptions(indexing = PropertyIndexingOption.CASE_INSENSITIVE)
         public String osFamily;
-
-        /**
-         * Optional region identifier of the image indicating where the image is available.
-         */
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String regionId;
 
         /**
          * Optional link to the {@code EndpointState} the image belongs to. Leave blank to indicate

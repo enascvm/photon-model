@@ -220,7 +220,7 @@ public class StorageDescriptionServiceTest extends Suite {
             assertThat(returnState.customProperties,
                     is(patchState.customProperties));
             assertThat(returnState.regionId,
-                    is(patchState.regionId));
+                    is(startState.regionId));
             assertThat(returnState.authCredentialsLink,
                     is(patchState.authCredentialsLink));
             assertThat(returnState.resourcePoolLink,
@@ -258,7 +258,7 @@ public class StorageDescriptionServiceTest extends Suite {
                     patchState);
             returnState = getServiceSynchronously(
                     returnState.documentSelfLink, StorageDescription.class);
-            assertThat(returnState.regionId, is("patchRegionId"));
+            assertThat(returnState.regionId, is("startRegionId"));
         }
 
         @Test

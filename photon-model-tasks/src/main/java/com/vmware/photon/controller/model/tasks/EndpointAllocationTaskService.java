@@ -803,6 +803,7 @@ public class EndpointAllocationTaskService
         cd.endpointLink = state.documentSelfLink;
         cd.authCredentialsLink = state.authCredentialsLink;
         cd.name = state.name;
+        cd.regionId = state.regionId;
         cd.id = UUID.randomUUID().toString();
         cd.customProperties = new HashMap<>();
         if (state.customProperties != null) {
@@ -819,6 +820,7 @@ public class EndpointAllocationTaskService
         computeHost.name = state.name;
         computeHost.tenantLinks = state.tenantLinks;
         computeHost.endpointLink = state.documentSelfLink;
+        computeHost.regionId = state.regionId;
         computeHost.customProperties = new HashMap<>();
         if (state.customProperties != null) {
             computeHost.customProperties.putAll(state.customProperties);

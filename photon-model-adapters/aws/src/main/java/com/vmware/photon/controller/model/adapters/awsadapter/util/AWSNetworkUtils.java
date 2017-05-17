@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.util;
 
-import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils.getTagValue;
 
@@ -88,7 +87,6 @@ public class AWSNetworkUtils {
         networkState.tenantLinks = tenantLinks;
         networkState.customProperties = new HashMap<>();
         networkState.customProperties.put("defaultInstance", String.valueOf(vpc.isDefault()));
-        networkState.customProperties.put(REGION_ID, regionId);
         return networkState;
     }
 
@@ -112,7 +110,7 @@ public class AWSNetworkUtils {
         subnetState.tenantLinks = tenantLinks;
         subnetState.endpointLink = endpointLink;
         subnetState.customProperties = new HashMap<>();
-        subnetState.customProperties.put(REGION_ID, regionId);
+        subnetState.regionId = regionId;
 
         if (!subnet.getTags().isEmpty()) {
 
@@ -164,9 +162,7 @@ public class AWSNetworkUtils {
 
         if (regionId != null) {
             query.addBooleanClause(Query.Builder.create()
-                    .addCompositeFieldClause(
-                            ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                            REGION_ID, regionId).build());
+                    .addFieldClause(NetworkState.FIELD_NAME_REGION_ID, regionId).build());
         }
 
         if (tenantLinks != null && !tenantLinks.isEmpty()) {

@@ -137,7 +137,6 @@ public class LoadBalancerServiceTest extends Suite {
 
         @Test
         public void testInvalidValues() throws Throwable {
-            LoadBalancerState missingRegionId = buildValidStartState();
             LoadBalancerState missingEndpointLink = buildValidStartState();
             LoadBalancerState missingComputeLinks = buildValidStartState();
             LoadBalancerState missingSubnetLinks = buildValidStartState();
@@ -148,7 +147,6 @@ public class LoadBalancerServiceTest extends Suite {
             LoadBalancerState invalidPort = buildValidStartState();
             LoadBalancerState invalidInstancePort = buildValidStartState();
 
-            missingRegionId.regionId = null;
             missingEndpointLink.endpointLink = null;
             missingComputeLinks.computeLinks = null;
             missingSubnetLinks.subnetLinks = null;
@@ -159,7 +157,7 @@ public class LoadBalancerServiceTest extends Suite {
             invalidPort.port = LoadBalancerService.MIN_PORT_NUMBER - 1;
             invalidInstancePort.instancePort = LoadBalancerService.MAX_PORT_NUMBER + 1;
 
-            LoadBalancerState[] states = { missingRegionId, missingEndpointLink,
+            LoadBalancerState[] states = { missingEndpointLink,
                     missingComputeLinks, missingSubnetLinks,  missingProtocol, missingPort,
                     missingInstanceProtocol, missingInstancePort, invalidPort, invalidInstancePort };
             for (LoadBalancerState state : states) {
@@ -213,7 +211,8 @@ public class LoadBalancerServiceTest extends Suite {
                     is(patchState.customProperties));
             assertThat(returnState.tenantLinks.size(), is(2));
             assertEquals(returnState.groupLinks, patchState.groupLinks);
-            assertEquals(returnState.regionId, patchState.regionId);
+            // region ID should not be updated
+            assertEquals(returnState.regionId, startState.regionId);
         }
     }
 

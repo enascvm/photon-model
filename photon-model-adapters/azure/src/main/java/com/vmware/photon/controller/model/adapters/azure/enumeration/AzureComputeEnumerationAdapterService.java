@@ -1108,6 +1108,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                         state.subnetLink = subnetPerNicId.get(rnic.getId());
                         state.endpointLink = ctx.request.endpointLink;
                         state.tenantLinks = ctx.parentCompute.tenantLinks;
+                        state.regionId = rnic.getLocation();
 
                         NicMetadata nicMeta = new NicMetadata();
                         nicMeta.macAddress = rnic.getMacAddress();

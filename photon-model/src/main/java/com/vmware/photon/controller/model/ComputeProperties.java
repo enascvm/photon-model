@@ -69,8 +69,6 @@ public class ComputeProperties {
 
     public static final String FIELD_VIRTUAL_GATEWAY = "__virtualGateway";
 
-    public static final String REGION_ID = "__regionId";
-
     /**
      * A key for the custom properties which indicates if the resource is for infrastructure use
      * only (the value is set to "true" in this case).

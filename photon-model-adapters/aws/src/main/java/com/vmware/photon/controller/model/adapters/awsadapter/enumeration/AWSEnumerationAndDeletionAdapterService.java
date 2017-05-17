@@ -33,7 +33,6 @@ import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Reservation;
 
-import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
@@ -291,6 +290,8 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
                 .addKindFieldClause(ComputeState.class)
                 .addFieldClause(ComputeState.FIELD_NAME_PARENT_LINK,
                         context.request.original.resourceLink())
+                .addFieldClause(ComputeState.FIELD_NAME_REGION_ID,
+                        context.request.regionId)
                 .addInClause(ComputeState.FIELD_NAME_LIFECYCLE_STATE,
                         Arrays.asList(LifecycleState.PROVISIONING.toString(),
                                 LifecycleState.RETIRED.toString()),
@@ -298,9 +299,6 @@ public class AWSEnumerationAndDeletionAdapterService extends StatelessService {
 
         addScopeCriteria(qBuilder, ComputeState.class, context);
 
-        qBuilder.addCompositeFieldClause(
-                ResourceState.FIELD_NAME_CUSTOM_PROPERTIES,
-                ComputeProperties.REGION_ID, context.request.regionId);
         QueryTask queryTask = QueryTask.Builder.createDirectTask()
                 .setQuery(qBuilder.build())
                 .addOption(QueryOption.EXPAND_CONTENT)

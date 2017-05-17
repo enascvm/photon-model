@@ -29,6 +29,7 @@ import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.photon.controller.model.util.AssertUtil;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
@@ -98,14 +99,6 @@ public class SecurityGroupService extends StatefulService {
      */
     public static class SecurityGroupState extends ResourceState {
         public static final String FIELD_NAME_AUTH_CREDENTIAL_LINK = "authCredentialsLink";
-        public static final String FIELD_NAME_REGION_ID = "regionId";
-
-        /**
-         * Region identifier of this security group service instance.
-         */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String regionId;
 
         /**
          * Link to secrets. Required
@@ -221,6 +214,13 @@ public class SecurityGroupService extends StatefulService {
     }
 
     @Override
+    public void handlePost(Operation post) {
+        SecurityGroupState returnState = processInput(post);
+        setState(post, returnState);
+        post.complete();
+    }
+
+    @Override
     public void handlePatch(Operation patch) {
         SecurityGroupState currentState = getState(patch);
         Function<Operation, Boolean> customPatchHandler = t -> {
@@ -286,6 +286,7 @@ public class SecurityGroupService extends StatefulService {
 
     private void validateState(SecurityGroupState state) {
         Utils.validateState(getStateDescription(), state);
+        PhotonModelUtils.validateRegionId(state);
 
         if (state.regionId.isEmpty()) {
             throw new IllegalArgumentException("regionId required");

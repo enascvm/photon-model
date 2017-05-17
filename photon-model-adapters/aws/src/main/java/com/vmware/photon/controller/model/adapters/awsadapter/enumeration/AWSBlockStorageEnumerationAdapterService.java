@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter.enumeration;
 
-import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_TAG_NAME;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_ENCRYPTED_FLAG;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
@@ -678,7 +677,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
 
             mapAttachmentState(diskState, volume);
             mapDiskType(diskState, volume);
-            mapCustomProperties(diskState, volume, regionId);
+            mapCustomProperties(diskState, volume);
             return diskState;
 
         }
@@ -687,7 +686,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
          * Method for mapping additionl properties in the EBS volume to the local diskstate. For e.g. snapshotID, iops,
          * encrypted etc.
          */
-        private void mapCustomProperties(DiskState diskState, Volume volume, String regionId) {
+        private void mapCustomProperties(DiskState diskState, Volume volume) {
             diskState.customProperties = new HashMap<>();
             if (volume.getSnapshotId() != null) {
                 diskState.customProperties.put(SNAPSHOT_ID, volume.getSnapshotId());
@@ -699,7 +698,6 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 diskState.customProperties.put(DISK_ENCRYPTED_FLAG,
                         volume.getEncrypted().toString());
             }
-            diskState.customProperties.put(REGION_ID, regionId);
             diskState.customProperties.put(VOLUME_TYPE,
                     volume.getVolumeType());
             diskState.customProperties.put(SOURCE_TASK_LINK,
@@ -754,6 +752,8 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                     .addKindFieldClause(DiskState.class)
                     .addFieldClause(DiskState.FIELD_NAME_AUTH_CREDENTIALS_LINK,
                             this.context.parentAuth.documentSelfLink)
+                    .addFieldClause(DiskState.FIELD_NAME_REGION_ID,
+                            this.context.request.regionId)
                     .addRangeClause(DiskState.FIELD_NAME_UPDATE_TIME_MICROS,
                             NumericRange
                                     .createLessThanRange(this.context.enumerationStartTimeInMicros))
@@ -764,12 +764,6 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
 
             addScopeCriteria(qBuilder, DiskState.class, this.context);
 
-            String regionId = this.context.request.regionId;
-            if (regionId != null) {
-                qBuilder.addCompositeFieldClause(
-                        ComputeState.FIELD_NAME_CUSTOM_PROPERTIES,
-                        REGION_ID, regionId);
-            }
             QueryTask q = QueryTask.Builder.createDirectTask()
                     .addOption(QueryOption.EXPAND_CONTENT)
                     .setQuery(qBuilder.build())

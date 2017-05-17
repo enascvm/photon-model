@@ -45,13 +45,6 @@ public class FirewallService extends StatefulService {
     public static class FirewallState extends ResourceState {
 
         /**
-         * Region identifier of this firewall service instance.
-         */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String regionId;
-
-        /**
          * Link to secrets. Required
          */
         @UsageOption(option = PropertyUsageOption.REQUIRED)

@@ -38,6 +38,7 @@ public class ResourceState extends ServiceDocument {
     public static final String FIELD_NAME_GROUP_LINKS = "groupLinks";
     public static final String FIELD_NAME_TAG_LINKS = "tagLinks";
     public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
+    public static final String FIELD_NAME_REGION_ID = "regionId";
 
     /**
      * Identifier of this resource instance
@@ -110,6 +111,13 @@ public class ResourceState extends ServiceDocument {
     @Since(ReleaseConstants.RELEASE_VERSION_0_6_17)
     public Long creationTimeMicros;
 
+    /**
+     * Identifier of the region associated with this resource instance.
+     */
+    @UsageOption(option = PropertyUsageOption.OPTIONAL)
+    @Since(ReleaseConstants.RELEASE_VERSION_0_6_17)
+    public String regionId;
+
     public void copyTo(ResourceState target) {
         super.copyTo(target);
 
@@ -120,6 +128,7 @@ public class ResourceState extends ServiceDocument {
         target.groupLinks = this.groupLinks;
         target.tagLinks = this.tagLinks;
         target.creationTimeMicros = this.creationTimeMicros;
+        target.regionId = this.regionId;
     }
 
 }

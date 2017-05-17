@@ -211,7 +211,8 @@ public class ImageServiceTest extends Suite {
 
             assertEquals(patchState.name, returnState.name);
             assertEquals(patchState.description, returnState.description);
-            assertEquals(patchState.regionId, returnState.regionId);
+            // region ID should not be updated
+            assertEquals(this.startState.regionId, returnState.regionId);
             assertEquals(patchState.osFamily, returnState.osFamily);
 
             assertEquals(patchState.customProperties, returnState.customProperties);

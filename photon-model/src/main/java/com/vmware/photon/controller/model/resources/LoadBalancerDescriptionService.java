@@ -20,6 +20,7 @@ import java.util.UUID;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.PhotonModelConstants;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -35,7 +36,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
     public static final String FACTORY_LINK = UriPaths.RESOURCES_LOAD_BALANCER_DESCRIPTIONS;
 
     public static final String FIELD_NAME_ENDPOINT_LINK = PhotonModelConstants.FIELD_NAME_ENDPOINT_LINK;
-    public static final String FIELD_NAME_REGION_ID = "regionId";
     public static final String FIELD_NAME_COMPUTE_DESCRIPTION_LINK = "computeDescriptionLink";
     public static final String FIELD_NAME_SUBNET_LINKS = "subnetLinks";
     public static final String FIELD_NAME_PROTOCOL = "protocol";
@@ -56,13 +56,6 @@ public class LoadBalancerDescriptionService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String endpointLink;
-
-        /**
-         * Region identifier of this service instance.
-         */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String regionId;
 
         /**
          * Link to the description of the instance cluster.
@@ -136,6 +129,13 @@ public class LoadBalancerDescriptionService extends StatefulService {
         put.complete();
     }
 
+    @Override
+    public void handlePost(Operation post) {
+        LoadBalancerDescription returnState = processInput(post);
+        setState(post, returnState);
+        post.complete();
+    }
+
     private LoadBalancerDescription processInput(Operation op) {
         if (!op.hasBody()) {
             throw (new IllegalArgumentException("body is required"));
@@ -154,6 +154,7 @@ public class LoadBalancerDescriptionService extends StatefulService {
 
     private void validateState(LoadBalancerDescription state) {
         Utils.validateState(getStateDescription(), state);
+        PhotonModelUtils.validateRegionId(state);
         if (state.port < MIN_PORT_NUMBER || state.port > MAX_PORT_NUMBER) {
             throw new IllegalArgumentException("Invalid load balancer port number.");
         }

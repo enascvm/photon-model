@@ -127,4 +127,10 @@ public class PhotonModelUtils {
         // normal PUT is not supported
         put.fail(Operation.STATUS_CODE_BAD_METHOD);
     }
+
+    public static void validateRegionId(ResourceState resourceState) {
+        if (resourceState.regionId == null) {
+            throw (new IllegalArgumentException("regionId is required"));
+        }
+    }
 }

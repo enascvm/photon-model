@@ -155,6 +155,11 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         Map<String, ResourceGroupState> resourceGroupStates = new ConcurrentHashMap<>();
         // Storage blob specific properties
         Map<String, ListBlobItem> storageBlobs = new ConcurrentHashMap<>();
+        // stores mapping of ListBlobItem URI and StorageAccount
+        Map<String, StorageAccount> storageAccountBlobUriMap = new ConcurrentHashMap<>();
+        // stores mapping of StorageAccount id and its StorageAccount
+        Map<String, StorageAccount> storageAccountMap = new ConcurrentHashMap<>();
+
         List<String> blobIds = new ArrayList<>();
         Map<String, DiskState> diskStates = new ConcurrentHashMap<>();
         // Azure clients
@@ -424,6 +429,8 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
         }
 
         context.storageAccountsToUpdateCreate.clear();
+        context.storageAccountBlobUriMap.clear();
+        context.storageAccountMap.clear();
 
         Operation operation = Operation.createGet(uri);
         operation.addRequestHeader(Operation.ACCEPT_HEADER, Operation.MEDIA_TYPE_APPLICATION_JSON);
@@ -465,6 +472,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                 String id = storageAccount.id;
                 context.storageAccountsToUpdateCreate.put(id, storageAccount);
                 context.storageAccountIds.add(id);
+                context.storageAccountMap.put(id, storageAccount);
             }
 
             logFine(() -> String.format("Processing %d storage accounts",
@@ -572,6 +580,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                     storageDescriptionToUpdate.documentSelfLink = sd.documentSelfLink;
                     storageDescriptionToUpdate.endpointLink = sd.endpointLink;
                     storageDescriptionToUpdate.tenantLinks = sd.tenantLinks;
+                    storageDescriptionToUpdate.regionId = storageAccount.location;
 
                     context.storageDescriptionsForPatching.put(sd.id, sd);
                     return storageDescriptionToUpdate;
@@ -852,6 +861,12 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
                             for (ListBlobItem blobItem : blobsSegment.getResults()) {
                                 String blobId = blobItem.getUri().toString();
                                 context.storageBlobs.put(blobId, blobItem);
+                                // populate mapping of blob uri and storage account for all storage
+                                // accounts as new disks can be added to already existing blobs
+                                StorageAccount blobStorageAccount = context.storageAccountMap.get(id);
+                                if (blobStorageAccount != null) {
+                                    context.storageAccountBlobUriMap.put(blobId, blobStorageAccount);
+                                }
                                 context.blobIds.add(blobId);
                             }
                         } while (nextBlobResults != null);
@@ -1360,6 +1375,7 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
 
     private DiskState createDiskStateObject(StorageEnumContext context, ListBlobItem blob,
             String containerLink, DiskState oldDiskState) {
+
         DiskState diskState = new DiskState();
         diskState.name = UriUtils.getLastPathSegment(blob.getUri());
         if (containerLink != null) {
@@ -1388,9 +1404,14 @@ public class AzureStorageEnumerationAdapterService extends StatelessService {
             }
             diskState.id = oldDiskState.id;
             diskState.documentSelfLink = oldDiskState.documentSelfLink;
+            diskState.regionId = oldDiskState.regionId;
         } else {
+            StorageAccount storageAccount = context.storageAccountBlobUriMap.get(blob.getUri().toString());
             diskState.id = blob.getUri().toString();
             diskState.documentSelfLink = UUID.randomUUID().toString();
+            if (storageAccount != null) {
+                diskState.regionId = storageAccount.location;
+            }
         }
         return diskState;
     }

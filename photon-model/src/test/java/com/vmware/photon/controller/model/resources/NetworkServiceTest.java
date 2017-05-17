@@ -213,7 +213,8 @@ public class NetworkServiceTest extends Suite {
             assertThat(returnState.subnetCIDR, is(patchState.subnetCIDR));
             assertThat(returnState.customProperties,
                     is(patchState.customProperties));
-            assertThat(returnState.regionId, is(patchState.regionId));
+            // region ID should not be updated
+            assertThat(returnState.regionId, is(startState.regionId));
             assertThat(returnState.authCredentialsLink,
                     is(patchState.authCredentialsLink));
             assertThat(returnState.resourcePoolLink,

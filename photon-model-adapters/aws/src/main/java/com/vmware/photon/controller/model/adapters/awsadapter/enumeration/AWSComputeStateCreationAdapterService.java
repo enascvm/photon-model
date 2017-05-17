@@ -424,6 +424,7 @@ public class AWSComputeStateCreationAdapterService extends StatelessService {
                     .get(awsNic.getSubnetId());
             nicState.tenantLinks = context.request.tenantLinks;
             nicState.endpointLink = context.request.endpointLink;
+            nicState.regionId = context.request.regionId;
 
             if (context.request.enumeratedSecurityGroups != null) {
                 for (GroupIdentifier awsSG : awsNic.getGroups()) {

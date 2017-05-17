@@ -519,6 +519,7 @@ public class BaseVSphereAdapterTest {
         computeState.resourcePoolLink = this.resourcePool.documentSelfLink;
         computeState.adapterManagementReference = getAdapterManagementReference();
         computeState.tenantLinks = Collections.singletonList("/a/tenant");
+        computeState.regionId = computeHostDescription.regionId;
 
         ComputeState returnState = TestUtils.doPost(this.host, computeState,
                 ComputeState.class,

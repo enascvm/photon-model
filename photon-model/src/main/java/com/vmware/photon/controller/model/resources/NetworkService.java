@@ -23,6 +23,7 @@ import org.apache.commons.net.util.SubnetUtils;
 import com.vmware.photon.controller.model.ServiceUtils;
 import com.vmware.photon.controller.model.UriPaths;
 import com.vmware.photon.controller.model.constants.ReleaseConstants;
+import com.vmware.photon.controller.model.resources.util.PhotonModelUtils;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceDocument;
 import com.vmware.xenon.common.ServiceDocumentDescription.PropertyUsageOption;
@@ -41,7 +42,6 @@ public class NetworkService extends StatefulService {
      */
     public static class NetworkState extends ResourceState {
         public static final String FIELD_NAME_ADAPTER_MANAGEMENT_REFERENCE = "adapterManagementReference";
-        public static final String FIELD_NAME_REGION_ID = "regionId";
         public static final String FIELD_NAME_AUTH_CREDENTIALS_LINK = "authCredentialsLink";
 
         /**
@@ -50,13 +50,6 @@ public class NetworkService extends StatefulService {
         @UsageOption(option = PropertyUsageOption.REQUIRED)
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String subnetCIDR;
-
-        /**
-         * Region identifier of this description service instance.
-         */
-        @UsageOption(option = PropertyUsageOption.REQUIRED)
-        @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
-        public String regionId;
 
         /**
          * Link to secrets. Required
@@ -131,10 +124,22 @@ public class NetworkService extends StatefulService {
 
     public void validateState(NetworkState state) {
         Utils.validateState(getStateDescription(), state);
+        PhotonModelUtils.validateRegionId(state);
 
         // do we have a subnet in CIDR notation
         // creating new SubnetUtils to validate
         new SubnetUtils(state.subnetCIDR);
+    }
+
+    @Override
+    public void handlePost(Operation post) {
+        try {
+            NetworkState returnState = processInput(post);
+            setState(post, returnState);
+            post.complete();
+        } catch (Throwable t) {
+            post.fail(t);
+        }
     }
 
     @Override

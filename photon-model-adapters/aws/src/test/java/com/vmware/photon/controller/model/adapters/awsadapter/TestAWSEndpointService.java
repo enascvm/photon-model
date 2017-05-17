@@ -18,7 +18,6 @@ import static org.junit.Assert.assertNotNull;
 
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEYID_KEY;
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.PRIVATE_KEY_KEY;
-import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.REGION_KEY;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.setAwsClientMockInfo;
 
 import java.util.EnumSet;
@@ -134,8 +133,8 @@ public class TestAWSEndpointService extends BasicReusableHostTestCase {
         EndpointState endpoint = new EndpointState();
         endpoint.endpointType = EndpointType.aws.name();
         endpoint.name = EndpointType.aws.name();
+        endpoint.regionId = this.regionId;
         endpoint.endpointProperties = new HashMap<>();
-        endpoint.endpointProperties.put(REGION_KEY, this.regionId);
         endpoint.endpointProperties.put(PRIVATE_KEY_KEY, this.secretKey);
         endpoint.endpointProperties.put(PRIVATE_KEYID_KEY, this.accessKey);
         return endpoint;

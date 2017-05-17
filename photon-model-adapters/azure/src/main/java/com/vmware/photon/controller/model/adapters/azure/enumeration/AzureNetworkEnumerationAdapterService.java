@@ -13,7 +13,6 @@
 
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
-import static com.vmware.photon.controller.model.ComputeProperties.REGION_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.DEFAULT_INSTANCE_ADAPTER_REFERENCE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VIRTUAL_NETWORKS_URI;
@@ -527,7 +526,7 @@ public class AzureNetworkEnumerationAdapterService extends StatelessService {
         subnetState.supportPublicIpAddress = true;
 
         subnetState.customProperties = new HashMap<>();
-        subnetState.customProperties.put(REGION_ID, location);
+        subnetState.regionId = location;
         if (AzureConstants.GATEWAY_SUBNET_NAME.equalsIgnoreCase(subnet.name)) {
             // This is a subnet gateway. Mark it for infrastructure use only.
             subnetState.customProperties.put(ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME,
