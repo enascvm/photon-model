@@ -16,7 +16,6 @@ package com.vmware.photon.controller.model.adapters.azure.utils;
 import java.util.concurrent.TimeUnit;
 
 import com.microsoft.rest.ServiceCallback;
-import com.microsoft.rest.ServiceResponse;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.ExponentialRetryStrategy;
@@ -132,9 +131,9 @@ public abstract class AzureDecommissionCallback extends AzureDeferredResultServi
         }
 
         @Override
-        public void onSuccess(ServiceResponse<Boolean> result) {
+        public void onSuccess(Boolean result) {
             AzureDecommissionCallback.this
-                    .waitDecommissionToSucceed(result.getBody());
+                    .waitDecommissionToSucceed(result);
         }
     }
 }

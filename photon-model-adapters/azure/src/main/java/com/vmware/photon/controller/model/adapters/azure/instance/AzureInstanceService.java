@@ -14,15 +14,12 @@
 package com.vmware.photon.controller.model.adapters.azure.instance;
 
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_INBOUND;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_OUTBOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_RG_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_TYPE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.COMPUTE_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_PARAMETER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.INVALID_RESOURCE_GROUP;
@@ -33,7 +30,9 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_NOT_FOUND;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_ACCOUNT_ALREADY_EXIST;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.STORAGE_NAMESPACE;
+import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.buildRestClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
+import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.currentKeyCount;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CLOUD_CONFIG_DEFAULT_FILE_INDEX;
 import static com.vmware.xenon.common.Operation.STATUS_CODE_UNAUTHORIZED;
@@ -61,55 +60,57 @@ import java.util.stream.Collectors;
 
 import com.microsoft.azure.CloudError;
 import com.microsoft.azure.CloudException;
+import com.microsoft.azure.SubResource;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
-import com.microsoft.azure.management.compute.models.HardwareProfile;
-import com.microsoft.azure.management.compute.models.ImageReference;
-import com.microsoft.azure.management.compute.models.NetworkInterfaceReference;
-import com.microsoft.azure.management.compute.models.NetworkProfile;
-import com.microsoft.azure.management.compute.models.OSDisk;
-import com.microsoft.azure.management.compute.models.OSProfile;
-import com.microsoft.azure.management.compute.models.StorageProfile;
-import com.microsoft.azure.management.compute.models.VirtualHardDisk;
-import com.microsoft.azure.management.compute.models.VirtualMachine;
-import com.microsoft.azure.management.compute.models.VirtualMachineImage;
-import com.microsoft.azure.management.compute.models.VirtualMachineImageResource;
-import com.microsoft.azure.management.network.NetworkInterfacesOperations;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.NetworkManagementClientImpl;
-import com.microsoft.azure.management.network.NetworkSecurityGroupsOperations;
-import com.microsoft.azure.management.network.PublicIPAddressesOperations;
-import com.microsoft.azure.management.network.VirtualNetworksOperations;
-import com.microsoft.azure.management.network.models.AddressSpace;
-import com.microsoft.azure.management.network.models.NetworkInterface;
-import com.microsoft.azure.management.network.models.NetworkInterfaceIPConfiguration;
-import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
-import com.microsoft.azure.management.network.models.PublicIPAddress;
-import com.microsoft.azure.management.network.models.SecurityRule;
-import com.microsoft.azure.management.network.models.Subnet;
-import com.microsoft.azure.management.network.models.VirtualNetwork;
-import com.microsoft.azure.management.resources.ResourceGroupsOperations;
-import com.microsoft.azure.management.resources.ResourceManagementClient;
-import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
-import com.microsoft.azure.management.resources.SubscriptionClient;
-import com.microsoft.azure.management.resources.SubscriptionClientImpl;
-import com.microsoft.azure.management.resources.models.Provider;
-import com.microsoft.azure.management.resources.models.ResourceGroup;
-import com.microsoft.azure.management.resources.models.Subscription;
-import com.microsoft.azure.management.storage.StorageAccountsOperations;
-import com.microsoft.azure.management.storage.StorageManagementClient;
-import com.microsoft.azure.management.storage.StorageManagementClientImpl;
-import com.microsoft.azure.management.storage.models.AccountType;
-import com.microsoft.azure.management.storage.models.ProvisioningState;
-import com.microsoft.azure.management.storage.models.StorageAccount;
-import com.microsoft.azure.management.storage.models.StorageAccountCreateParameters;
-import com.microsoft.azure.management.storage.models.StorageAccountKeys;
+import com.microsoft.azure.management.compute.CachingTypes;
+import com.microsoft.azure.management.compute.DiskCreateOptionTypes;
+import com.microsoft.azure.management.compute.HardwareProfile;
+import com.microsoft.azure.management.compute.NetworkProfile;
+import com.microsoft.azure.management.compute.OSDisk;
+import com.microsoft.azure.management.compute.OSProfile;
+import com.microsoft.azure.management.compute.StorageProfile;
+import com.microsoft.azure.management.compute.VirtualHardDisk;
+import com.microsoft.azure.management.compute.VirtualMachineSizeTypes;
+import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
+import com.microsoft.azure.management.compute.implementation.NetworkInterfaceReferenceInner;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineImageInner;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineImageResourceInner;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
+import com.microsoft.azure.management.network.AddressSpace;
+import com.microsoft.azure.management.network.IPAllocationMethod;
+import com.microsoft.azure.management.network.SecurityRuleAccess;
+import com.microsoft.azure.management.network.SecurityRuleDirection;
+import com.microsoft.azure.management.network.SecurityRuleProtocol;
+import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPConfigurationInner;
+import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
+import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
+import com.microsoft.azure.management.network.implementation.PublicIPAddressInner;
+import com.microsoft.azure.management.network.implementation.PublicIPAddressesInner;
+import com.microsoft.azure.management.network.implementation.SecurityRuleInner;
+import com.microsoft.azure.management.network.implementation.SubnetInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworksInner;
+import com.microsoft.azure.management.resources.implementation.ProviderInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupsInner;
+import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
+import com.microsoft.azure.management.resources.implementation.SubscriptionClientImpl;
+import com.microsoft.azure.management.resources.implementation.SubscriptionInner;
+import com.microsoft.azure.management.storage.Kind;
+import com.microsoft.azure.management.storage.ProvisioningState;
+import com.microsoft.azure.management.storage.Sku;
+import com.microsoft.azure.management.storage.SkuName;
+import com.microsoft.azure.management.storage.StorageAccountKey;
+import com.microsoft.azure.management.storage.implementation.StorageAccountCreateParametersInner;
+import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
+import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
+import com.microsoft.azure.management.storage.implementation.StorageAccountsInner;
+import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 import com.microsoft.rest.ServiceCallback;
-import com.microsoft.rest.ServiceResponse;
-
-import okhttp3.OkHttpClient;
-import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest.InstanceRequestType;
@@ -158,15 +159,7 @@ public class AzureInstanceService extends StatelessService {
     // TODO VSYM-322: Remove unused default properties from AzureInstanceService
     // Name prefixes
     private static final String NICCONFIG_NAME_PREFIX = "nicconfig";
-
-    private static final String PRIVATE_IP_ALLOCATION_METHOD = "Dynamic";
-
     private static final String DEFAULT_GROUP_PREFIX = "group";
-
-    private static final String DEFAULT_VM_SIZE = "Basic_A0";
-    private static final String OS_DISK_CREATION_OPTION = "fromImage";
-
-    private static final AccountType DEFAULT_STORAGE_ACCOUNT_TYPE = AccountType.STANDARD_LRS;
     private static final String VHD_URI_FORMAT = "https://%s.blob.core.windows.net/vhds/%s.vhd";
     private static final String BOOT_DISK_SUFFIX = "-boot-disk";
 
@@ -283,7 +276,7 @@ public class AzureInstanceService extends StatelessService {
      * .
      */
     private BiConsumer<AzureInstanceContext, Throwable> thenAllocation(AzureInstanceContext ctx,
-            AzureInstanceStage next, String namespace) {
+                                                                       AzureInstanceStage next, String namespace) {
         return (ignoreCtx, exc) -> {
             // NOTE: In case of error 'ignoreCtx' is null so use passed context!
             if (exc != null) {
@@ -300,7 +293,7 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private BiConsumer<AzureInstanceContext, Throwable> thenAllocation(AzureInstanceContext ctx,
-            AzureInstanceStage next) {
+                                                                       AzureInstanceStage next) {
         return thenAllocation(ctx, next, null);
     }
 
@@ -318,15 +311,6 @@ public class AzureInstanceService extends StatelessService {
                 if (ctx.credentials == null) {
                     ctx.credentials = getAzureConfig(ctx.parentAuth);
                 }
-
-                // Creating a shared singleton Http client instance
-                // Reference
-                // https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
-                // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
-                ctx.httpClient = new OkHttpClient();
-                ctx.clientBuilder = ctx.httpClient.newBuilder().connectTimeout(30,
-                        TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS);
-
                 // now that we have a client lets move onto the next step
                 switch (ctx.computeRequest.requestType) {
                 case CREATE:
@@ -423,12 +407,10 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        SubscriptionClient subscriptionClient = new SubscriptionClientImpl(
-                AzureConstants.BASE_URI, ctx.credentials, ctx.clientBuilder,
-                getRetrofitBuilder());
+        SubscriptionClientImpl subscriptionClient = new SubscriptionClientImpl(ctx.credentials);
 
-        subscriptionClient.getSubscriptionsOperations().getAsync(
-                ctx.parentAuth.userLink, new ServiceCallback<Subscription>() {
+        subscriptionClient.subscriptions().getAsync(
+                ctx.parentAuth.userLink, new ServiceCallback<SubscriptionInner>() {
                     @Override
                     public void failure(Throwable e) {
                         // Azure doesn't send us any meaningful status code to work with
@@ -439,10 +421,9 @@ public class AzureInstanceService extends StatelessService {
                     }
 
                     @Override
-                    public void success(ServiceResponse<Subscription> result) {
-                        Subscription subscription = result.getBody();
+                    public void success(SubscriptionInner result) {
                         logFine(() -> String.format("Got subscription %s with id %s",
-                                subscription.getDisplayName(), subscription.getId()));
+                                result.displayName(), result.id()));
                         ctx.operation.complete();
                     }
                 });
@@ -460,8 +441,8 @@ public class AzureInstanceService extends StatelessService {
             throw new IllegalArgumentException("Resource group name is required");
         }
 
-        ResourceGroupsOperations azureClient = getResourceManagementClient(ctx)
-                .getResourceGroupsOperations();
+        ResourceGroupsInner azureClient = getResourceManagementClientImpl(ctx)
+                .resourceGroups();
 
         String msg = "Deleting resource group [" + rgName + "] for [" + ctx.vmName + "] VM";
 
@@ -472,15 +453,15 @@ public class AzureInstanceService extends StatelessService {
                 exc = super.consumeError(exc);
                 if (exc instanceof CloudException) {
                     CloudException azureExc = (CloudException) exc;
-                    CloudError body = azureExc.getBody();
+                    CloudError body = azureExc.body();
 
-                    String code = body.getCode();
+                    String code = body.code();
                     if (RESOURCE_GROUP_NOT_FOUND.equals(code)) {
                         return RECOVERED;
                     } else if (INVALID_RESOURCE_GROUP.equals(code)) {
                         String invalidParameterMsg = String.format(
                                 "Invalid resource group parameter. %s",
-                                body.getMessage());
+                                body.message());
 
                         IllegalStateException e = new IllegalStateException(invalidParameterMsg,
                                 exc);
@@ -530,12 +511,12 @@ public class AzureInstanceService extends StatelessService {
 
         // CREATE request has resulted in RG creation -> clear RG and its content.
 
-        String rgName = ctx.resourceGroup.getName();
+        String rgName = ctx.resourceGroup.name();
 
         String msg = "Rollback provisioning for [" + ctx.vmName + "] Azure VM";
 
-        ResourceGroupsOperations azureClient = getResourceManagementClient(ctx)
-                .getResourceGroupsOperations();
+        ResourceGroupsInner azureClient = getResourceManagementClientImpl(ctx)
+                .resourceGroups();
 
         AzureDecommissionCallback callback = new AzureDecommissionCallback(
                 this, msg) {
@@ -570,33 +551,31 @@ public class AzureInstanceService extends StatelessService {
     private void finishWithFailure(AzureInstanceContext ctx) {
         // Report the error back to the caller
         ctx.taskManager.patchTaskToFailure(ctx.error);
-
-        cleanUpHttpClient(this, ctx.httpClient);
+        cleanUpHttpClient(ctx.restClient.httpClient());
     }
 
     private void finishWithSuccess(AzureInstanceContext ctx) {
         // Report the success back to the caller
         ctx.taskManager.finishTask();
-
-        cleanUpHttpClient(this, ctx.httpClient);
+        cleanUpHttpClient(ctx.restClient.httpClient());
     }
 
     private void createResourceGroup(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
 
         String resourceGroupName = getResourceGroupName(ctx);
 
-        ResourceGroup resourceGroup = new ResourceGroup();
-        resourceGroup.setLocation(ctx.child.description.regionId);
+        ResourceGroupInner resourceGroup = new ResourceGroupInner();
+        resourceGroup.withLocation(ctx.child.description.regionId);
 
         String msg = "Creating Azure Resource Group [" + resourceGroupName + "] for [" + ctx.vmName
                 + "] VM";
 
-        getResourceManagementClient(ctx).getResourceGroupsOperations().createOrUpdateAsync(
+        getResourceManagementClientImpl(ctx).resourceGroups().createOrUpdateAsync(
                 resourceGroupName,
                 resourceGroup,
-                new TransitionToCallback<ResourceGroup>(ctx, nextStage, msg) {
+                new TransitionToCallback<ResourceGroupInner>(ctx, nextStage, msg) {
                     @Override
-                    CompletionStage<ResourceGroup> handleSuccess(ResourceGroup rg) {
+                    CompletionStage<ResourceGroupInner> handleSuccess(ResourceGroupInner rg) {
                         this.ctx.resourceGroup = rg;
                         return CompletableFuture.completedFuture(rg);
                     }
@@ -651,34 +630,34 @@ public class AzureInstanceService extends StatelessService {
         if (ctx.storageAccountName == null) {
             // In case SA is not provided in the request, use request VA resource group
             ctx.storageAccountName = String.valueOf(System.currentTimeMillis()) + "st";
-            ctx.storageAccountRGName = ctx.resourceGroup.getName();
+            ctx.storageAccountRGName = ctx.resourceGroup.name();
 
             return DeferredResult.completed(ctx);
         }
 
         // Use shared RG. In case not provided in the bootDisk properties, use the default one
-        final ResourceGroup sharedSARG = new ResourceGroup();
-        sharedSARG.setLocation(ctx.child.description.regionId);
+        final ResourceGroupInner sharedSARG = new ResourceGroupInner();
+        sharedSARG.withLocation(ctx.child.description.regionId);
 
         String msg = "Create/Update SA Resource Group [" + ctx.storageAccountRGName + "] for ["
                 + ctx.vmName + "] VM";
 
-        AzureDeferredResultServiceCallback<ResourceGroup> handler = new AzureDeferredResultServiceCallback<ResourceGroup>(
+        AzureDeferredResultServiceCallback<ResourceGroupInner> handler = new AzureDeferredResultServiceCallback<ResourceGroupInner>(
                 this, msg) {
             @Override
             protected Throwable consumeError(Throwable exc) {
                 exc = super.consumeError(exc);
                 if (exc instanceof CloudException) {
                     CloudException azureExc = (CloudException) exc;
-                    CloudError body = azureExc.getBody();
+                    CloudError body = azureExc.body();
                     if (body != null) {
-                        String code = body.getCode();
+                        String code = body.code();
                         if (RESOURCE_GROUP_NOT_FOUND.equals(code)) {
                             return RECOVERED;
                         } else if (INVALID_RESOURCE_GROUP.equals(code)) {
                             String invalidParameterMsg = String.format(
                                     "Invalid resource group parameter. %s",
-                                    body.getMessage());
+                                    body.message());
 
                             IllegalStateException e = new IllegalStateException(invalidParameterMsg,
                                     exc);
@@ -690,13 +669,13 @@ public class AzureInstanceService extends StatelessService {
             }
 
             @Override
-            protected DeferredResult<ResourceGroup> consumeSuccess(ResourceGroup rg) {
+            protected DeferredResult<ResourceGroupInner> consumeSuccess(ResourceGroupInner rg) {
                 return DeferredResult.completed(rg);
             }
         };
 
-        getResourceManagementClient(ctx)
-                .getResourceGroupsOperations()
+        getResourceManagementClientImpl(ctx)
+                .resourceGroups()
                 .createOrUpdateAsync(ctx.storageAccountRGName, sharedSARG, handler);
 
         return handler.toDeferredResult().thenApply(ignore -> ctx);
@@ -704,17 +683,17 @@ public class AzureInstanceService extends StatelessService {
 
     private void createStorageAccount(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
 
-        StorageAccountCreateParameters storageParameters = new StorageAccountCreateParameters();
-        storageParameters.setLocation(ctx.child.description.regionId);
-
-        String accountType = ctx.bootDisk.customProperties
-                .getOrDefault(AZURE_STORAGE_ACCOUNT_TYPE, DEFAULT_STORAGE_ACCOUNT_TYPE.toValue());
-        storageParameters.setAccountType(AccountType.fromValue(accountType));
-
+        StorageAccountCreateParametersInner storageParameters = new StorageAccountCreateParametersInner();
+        storageParameters.withLocation(ctx.child.description.regionId);
+        storageParameters.withKind(Kind.STORAGE);
+        Sku sku = new Sku();
+        sku.withName(SkuName.STANDARD_LRS);
+        storageParameters.withSku(sku);
+        storageParameters.withKind(Kind.STORAGE);
         String msg = "Creating Azure Storage Account for [" + ctx.vmName + "] VM";
 
-        StorageAccountsOperations azureSAClient = getStorageManagementClient(ctx)
-                .getStorageAccountsOperations();
+        StorageAccountsInner azureSAClient = getStorageManagementClientImpl(ctx)
+                .storageAccounts();
 
         StorageAccountAsyncHandler handler = new StorageAccountAsyncHandler(ctx, azureSAClient,
                 this, msg);
@@ -741,7 +720,7 @@ public class AzureInstanceService extends StatelessService {
         }
 
         // Get NICs with not existing subnets
-        List<Subnet> subnetsToCreate = ctx.nics.stream()
+        List<SubnetInner> subnetsToCreate = ctx.nics.stream()
                 .filter(nicCtx -> nicCtx.subnet == null)
                 .map(nicCtx -> newAzureSubnet(nicCtx))
                 .collect(Collectors.toList());
@@ -757,26 +736,26 @@ public class AzureInstanceService extends StatelessService {
     private void createNetwork(
             AzureInstanceContext ctx,
             AzureInstanceStage nextStage,
-            List<Subnet> subnetsToCreate) {
+            List<SubnetInner> subnetsToCreate) {
 
         // All NICs MUST be at the same vNet (no cross vNet VMs),
         // so we select the Primary vNet.
         final AzureNicContext primaryNic = ctx.getPrimaryNic();
 
-        final VirtualNetwork vNetToCreate = newAzureVirtualNetwork(
+        final VirtualNetworkInner vNetToCreate = newAzureVirtualNetwork(
                 ctx, primaryNic, subnetsToCreate);
 
         final String vNetName = primaryNic.networkState.name;
 
         final String vNetRGName = primaryNic.networkRGState != null
                 ? primaryNic.networkRGState.name
-                : ctx.resourceGroup.getName();
+                : ctx.resourceGroup.name();
 
-        VirtualNetworksOperations azureClient = getNetworkManagementClient(ctx)
-                .getVirtualNetworksOperations();
+        VirtualNetworksInner azureClient = getNetworkManagementClientImpl(ctx)
+                .virtualNetworks();
 
-        final String subnetNames = vNetToCreate.getSubnets().stream()
-                .map(Subnet::getName)
+        final String subnetNames = vNetToCreate.subnets().stream()
+                .map(SubnetInner::name)
                 .collect(Collectors.joining(","));
 
         final String msg = "Creating Azure vNet-Subnet [v=" + vNetName + "; s="
@@ -784,17 +763,17 @@ public class AzureInstanceService extends StatelessService {
                 + "] for ["
                 + ctx.vmName + "] VM";
 
-        AzureProvisioningCallback<VirtualNetwork> handler = new AzureProvisioningCallback<VirtualNetwork>(
+        AzureProvisioningCallback<VirtualNetworkInner> handler = new AzureProvisioningCallback<VirtualNetworkInner>(
                 this, msg) {
 
             @Override
-            protected DeferredResult<VirtualNetwork> consumeProvisioningSuccess(
-                    VirtualNetwork vNet) {
+            protected DeferredResult<VirtualNetworkInner> consumeProvisioningSuccess(
+                    VirtualNetworkInner vNet) {
                 // Populate NICs with Azure Subnet
                 for (AzureNicContext nicCtx : ctx.nics) {
                     if (nicCtx.subnet == null) {
-                        nicCtx.subnet = vNet.getSubnets().stream()
-                                .filter(subnet -> subnet.getName()
+                        nicCtx.subnet = vNet.subnets().stream()
+                                .filter(subnet -> subnet.name()
                                         .equals(nicCtx.subnetState.name))
                                 .findFirst().get();
                     }
@@ -803,11 +782,11 @@ public class AzureInstanceService extends StatelessService {
             }
 
             @Override
-            protected String getProvisioningState(VirtualNetwork vNet) {
+            protected String getProvisioningState(VirtualNetworkInner vNet) {
                 // Return first NOT Succeeded state,
                 // or PROVISIONING_STATE_SUCCEEDED if all are Succeeded
-                String subnetPS = vNet.getSubnets().stream()
-                        .map(Subnet::getProvisioningState)
+                String subnetPS = vNet.subnets().stream()
+                        .map(SubnetInner::provisioningState)
                         // Get if any is NOT Succeeded...
                         .filter(ps -> !PROVISIONING_STATE_SUCCEEDED.equalsIgnoreCase(ps))
                         // ...and return it.
@@ -815,18 +794,18 @@ public class AzureInstanceService extends StatelessService {
                         // Otherwise consider all are Succeeded
                         .orElse(PROVISIONING_STATE_SUCCEEDED);
 
-                if (PROVISIONING_STATE_SUCCEEDED.equals(vNet.getProvisioningState())
+                if (PROVISIONING_STATE_SUCCEEDED.equals(vNet.provisioningState())
                         && PROVISIONING_STATE_SUCCEEDED.equals(subnetPS)) {
 
                     return PROVISIONING_STATE_SUCCEEDED;
                 }
-                return vNet.getProvisioningState() + ":" + subnetPS;
+                return vNet.provisioningState() + ":" + subnetPS;
             }
 
             @Override
             protected Runnable checkProvisioningStateCall(
-                    ServiceCallback<VirtualNetwork> checkProvisioningStateCallback) {
-                return () -> azureClient.getAsync(
+                    ServiceCallback<VirtualNetworkInner> checkProvisioningStateCallback) {
+                return () -> azureClient.getByResourceGroupAsync(
                         vNetRGName,
                         vNetName,
                         null /* expand */,
@@ -844,19 +823,19 @@ public class AzureInstanceService extends StatelessService {
     /**
      * Converts Photon model constructs to underlying Azure VirtualNetwork model.
      */
-    private VirtualNetwork newAzureVirtualNetwork(
+    private VirtualNetworkInner newAzureVirtualNetwork(
             AzureInstanceContext ctx,
             AzureNicContext nicCtx,
-            List<Subnet> subnetsToCreate) {
+            List<SubnetInner> subnetsToCreate) {
 
-        VirtualNetwork vNet = new VirtualNetwork();
-        vNet.setLocation(ctx.resourceGroup.getLocation());
+        VirtualNetworkInner vNet = new VirtualNetworkInner();
+        vNet.withLocation(ctx.resourceGroup.location());
 
-        vNet.setAddressSpace(new AddressSpace());
-        vNet.getAddressSpace()
-                .setAddressPrefixes(Collections.singletonList(nicCtx.networkState.subnetCIDR));
+        AddressSpace addressSpace = new AddressSpace()
+                .withAddressPrefixes(Collections.singletonList(nicCtx.networkState.subnetCIDR));
+        vNet.withAddressSpace(addressSpace);
 
-        vNet.setSubnets(subnetsToCreate);
+        vNet.withSubnets(subnetsToCreate);
 
         return vNet;
     }
@@ -864,11 +843,11 @@ public class AzureInstanceService extends StatelessService {
     /**
      * Converts Photon model constructs to underlying Azure VirtualNetwork-Subnet model.
      */
-    private Subnet newAzureSubnet(AzureNicContext nicCtx) {
+    private SubnetInner newAzureSubnet(AzureNicContext nicCtx) {
 
-        Subnet subnet = new Subnet();
-        subnet.setName(nicCtx.subnetState.name);
-        subnet.setAddressPrefix(nicCtx.subnetState.subnetCIDR);
+        SubnetInner subnet = new SubnetInner();
+        subnet.withName(nicCtx.subnetState.name);
+        subnet.withAddressPrefix(nicCtx.subnetState.subnetCIDR);
 
         return subnet;
     }
@@ -892,35 +871,36 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        PublicIPAddressesOperations azureClient = getNetworkManagementClient(ctx)
-                .getPublicIPAddressesOperations();
+        PublicIPAddressesInner azureClient = getNetworkManagementClientImpl(ctx)
+                .publicIPAddresses();
 
-        final PublicIPAddress publicIPAddress = newAzurePublicIPAddress(ctx, nicCtx);
+        final PublicIPAddressInner publicIPAddress = newAzurePublicIPAddress(ctx, nicCtx);
 
         final String publicIPName = ctx.vmName + "-pip";
-        final String publicIPRGName = ctx.resourceGroup.getName();
+        final String publicIPRGName = ctx.resourceGroup.name();
 
         String msg = "Creating Azure Public IP [" + publicIPName + "] for [" + ctx.vmName + "] VM";
 
-        AzureProvisioningCallback<PublicIPAddress> handler = new AzureProvisioningCallback<PublicIPAddress>(
+        AzureProvisioningCallback<PublicIPAddressInner> handler = new AzureProvisioningCallback<PublicIPAddressInner>(
                 this, msg) {
             @Override
-            protected DeferredResult<PublicIPAddress> consumeProvisioningSuccess(
-                    PublicIPAddress publicIP) {
+            protected DeferredResult<PublicIPAddressInner> consumeProvisioningSuccess(
+                    PublicIPAddressInner publicIP) {
                 nicCtx.publicIP = publicIP;
+                nicCtx.publicIPSubResource = new SubResource().withId(nicCtx.publicIP.id());
 
                 return DeferredResult.completed(publicIP);
             }
 
             @Override
-            protected String getProvisioningState(PublicIPAddress publicIP) {
-                return publicIP.getProvisioningState();
+            protected String getProvisioningState(PublicIPAddressInner publicIP) {
+                return publicIP.provisioningState();
             }
 
             @Override
             protected Runnable checkProvisioningStateCall(
-                    ServiceCallback<PublicIPAddress> checkProvisioningStateCallback) {
-                return () -> azureClient.getAsync(
+                    ServiceCallback<PublicIPAddressInner> checkProvisioningStateCallback) {
+                return () -> azureClient.getByResourceGroupAsync(
                         publicIPRGName,
                         publicIPName,
                         null /* expand */,
@@ -938,34 +918,34 @@ public class AzureInstanceService extends StatelessService {
     /**
      * Converts Photon model constructs to underlying Azure PublicIPAddress model.
      */
-    private PublicIPAddress newAzurePublicIPAddress(
+    private PublicIPAddressInner newAzurePublicIPAddress(
             AzureInstanceContext ctx,
             AzureNicContext nicCtx) {
 
-        PublicIPAddress publicIPAddress = new PublicIPAddress();
-        publicIPAddress.setLocation(ctx.resourceGroup.getLocation());
+        PublicIPAddressInner publicIPAddress = new PublicIPAddressInner();
+        publicIPAddress.withLocation(ctx.resourceGroup.location());
         publicIPAddress
-                .setPublicIPAllocationMethod(nicCtx.nicStateWithDesc.description.assignment.name());
+                .withPublicIPAllocationMethod(new IPAllocationMethod(nicCtx.nicStateWithDesc.description.assignment.name()));
 
         return publicIPAddress;
     }
 
     private void createSecurityGroupsIfNotExist(AzureInstanceContext ctx,
-            AzureInstanceStage nextStage) {
+                                                AzureInstanceStage nextStage) {
 
         if (ctx.nics.isEmpty()) {
             handleAllocation(ctx, nextStage);
             return;
         }
 
-        List<DeferredResult<NetworkSecurityGroup>> createSGDR = ctx.nics.stream()
+        List<DeferredResult<NetworkSecurityGroupInner>> createSGDR = ctx.nics.stream()
                 .filter(nicCtx -> (
                         // Security Group is requested but no existing security group is mapped.
                         nicCtx.securityGroupStates != null && nicCtx.securityGroupStates.size() == 1
                                 && nicCtx.securityGroup == null))
                 .map(nicCtx -> {
                     SecurityGroupState sgState = nicCtx.securityGroupStates.get(0);
-                    NetworkSecurityGroup nsg = newAzureSecurityGroup(ctx, sgState);
+                    NetworkSecurityGroupInner nsg = newAzureSecurityGroup(ctx, sgState);
                     return createSecurityGroup(ctx, nicCtx, nsg);
                 })
                 .collect(Collectors.toList());
@@ -980,70 +960,70 @@ public class AzureInstanceService extends StatelessService {
                 });
     }
 
-    private NetworkSecurityGroup newAzureSecurityGroup(AzureInstanceContext ctx,
-            SecurityGroupState sg) {
+    private NetworkSecurityGroupInner newAzureSecurityGroup(AzureInstanceContext ctx,
+                                                            SecurityGroupState sg) {
 
         if (sg == null) {
             throw new IllegalStateException("SecurityGroup state should not be null.");
         }
 
-        List<SecurityRule> securityRules = new ArrayList<>();
+        List<SecurityRuleInner> securityRules = new ArrayList<>();
         final AtomicInteger priority = new AtomicInteger(1000);
         if (sg.ingress != null) {
             sg.ingress.forEach(rule -> securityRules.add(newAzureSecurityRule(rule,
-                    AZURE_SECURITY_GROUP_DIRECTION_INBOUND, priority.getAndIncrement())));
+                    SecurityRuleDirection.INBOUND, priority.getAndIncrement())));
         }
 
         priority.set(1000);
         if (sg.egress != null) {
             sg.egress.forEach(rule -> securityRules.add(newAzureSecurityRule(rule,
-                    AZURE_SECURITY_GROUP_DIRECTION_OUTBOUND, priority.getAndIncrement())));
+                    SecurityRuleDirection.OUTBOUND, priority.getAndIncrement())));
         }
 
-        NetworkSecurityGroup nsg = new NetworkSecurityGroup();
-        nsg.setLocation(ctx.resourceGroup.getLocation());
-        nsg.setSecurityRules(securityRules);
+        NetworkSecurityGroupInner nsg = new NetworkSecurityGroupInner();
+        nsg.withLocation(ctx.resourceGroup.location());
+        nsg.withSecurityRules(securityRules);
 
         return nsg;
     }
 
-    private SecurityRule newAzureSecurityRule(Rule rule, String direction, int priority) {
-        SecurityRule sr = new SecurityRule();
-        sr.setPriority(priority);
-        sr.setAccess(rule.access.name());
-        sr.setDirection(direction);
-        if (AZURE_SECURITY_GROUP_DIRECTION_INBOUND.equalsIgnoreCase(direction)) {
-            sr.setSourceAddressPrefix(rule.ipRangeCidr);
-            sr.setDestinationAddressPrefix(SecurityGroupService.ANY);
+    private SecurityRuleInner newAzureSecurityRule(Rule rule, SecurityRuleDirection direction, int priority) {
+        SecurityRuleInner sr = new SecurityRuleInner();
+        sr.withPriority(priority);
+        sr.withAccess(SecurityRuleAccess.ALLOW);
+        sr.withDirection(direction);
+        if (SecurityRuleDirection.INBOUND.equals(direction)) {
+            sr.withSourceAddressPrefix(rule.ipRangeCidr);
+            sr.withDestinationAddressPrefix(SecurityGroupService.ANY);
 
-            sr.setSourcePortRange(rule.ports);
-            sr.setDestinationPortRange(SecurityGroupService.ANY);
+            sr.withSourcePortRange(rule.ports);
+            sr.withDestinationPortRange(SecurityGroupService.ANY);
         } else {
-            sr.setSourceAddressPrefix(SecurityGroupService.ANY);
-            sr.setDestinationAddressPrefix(rule.ipRangeCidr);
+            sr.withSourceAddressPrefix(SecurityGroupService.ANY);
+            sr.withDestinationAddressPrefix(rule.ipRangeCidr);
 
-            sr.setSourcePortRange(SecurityGroupService.ANY);
-            sr.setDestinationPortRange(rule.ports);
+            sr.withSourcePortRange(SecurityGroupService.ANY);
+            sr.withDestinationPortRange(rule.ports);
         }
-        sr.setName(rule.name);
-        sr.setProtocol(rule.protocol);
+        sr.withName(rule.name);
+        sr.withProtocol(SecurityRuleProtocol.ASTERISK);
 
         return sr;
     }
 
-    private DeferredResult<NetworkSecurityGroup> createSecurityGroup(
+    private DeferredResult<NetworkSecurityGroupInner> createSecurityGroup(
             AzureInstanceContext ctx,
             AzureNicContext nicCtx,
-            NetworkSecurityGroup securityGroupToCreate) {
+            NetworkSecurityGroupInner securityGroupToCreate) {
 
-        NetworkSecurityGroupsOperations azureClient = getNetworkManagementClient(ctx)
-                .getNetworkSecurityGroupsOperations();
+        NetworkSecurityGroupsInner azureClient = getNetworkManagementClientImpl(ctx)
+                .networkSecurityGroups();
 
         final String nsgName = nicCtx.securityGroupState().name;
 
         final String nsgRGName = nicCtx.securityGroupRGState != null
                 ? nicCtx.securityGroupRGState.name
-                : ctx.resourceGroup.getName();
+                : ctx.resourceGroup.name();
 
         final String msg = "Create Azure Security Group["
                 + nsgRGName + "/" + nsgName
@@ -1051,21 +1031,22 @@ public class AzureInstanceService extends StatelessService {
                 + ctx.vmName
                 + "] VM";
 
-        AzureProvisioningCallback<NetworkSecurityGroup> handler = new AzureProvisioningCallback<NetworkSecurityGroup>(
+        AzureProvisioningCallback<NetworkSecurityGroupInner> handler = new AzureProvisioningCallback<NetworkSecurityGroupInner>(
                 this, msg) {
             @Override
-            protected DeferredResult<NetworkSecurityGroup> consumeProvisioningSuccess(
-                    NetworkSecurityGroup securityGroup) {
+            protected DeferredResult<NetworkSecurityGroupInner> consumeProvisioningSuccess(
+                    NetworkSecurityGroupInner securityGroup) {
 
                 nicCtx.securityGroup = securityGroup;
+                nicCtx.securityGroupSubResource = new SubResource().withId(securityGroup.id());
 
                 return DeferredResult.completed(securityGroup);
             }
 
             @Override
             protected Runnable checkProvisioningStateCall(
-                    ServiceCallback<NetworkSecurityGroup> checkProvisioningStateCallback) {
-                return () -> azureClient.getAsync(
+                    ServiceCallback<NetworkSecurityGroupInner> checkProvisioningStateCallback) {
+                return () -> azureClient.getByResourceGroupAsync(
                         nsgRGName,
                         nsgName,
                         null /* expand */,
@@ -1073,8 +1054,8 @@ public class AzureInstanceService extends StatelessService {
             }
 
             @Override
-            protected String getProvisioningState(NetworkSecurityGroup body) {
-                return body.getProvisioningState();
+            protected String getProvisioningState(NetworkSecurityGroupInner body) {
+                return body.provisioningState();
             }
         };
 
@@ -1092,26 +1073,25 @@ public class AzureInstanceService extends StatelessService {
 
         // Shared state between multi async calls {{
         AzureCallContext callContext = AzureCallContext.newBatchCallContext(ctx.nics.size());
-        NetworkInterfacesOperations azureClient = getNetworkManagementClient(ctx)
-                .getNetworkInterfacesOperations();
+        NetworkInterfacesInner azureClient = getNetworkManagementClientImpl(ctx)
+                .networkInterfaces();
         // }}
 
         for (AzureNicContext nicCtx : ctx.nics) {
-
-            final NetworkInterface nic = newAzureNetworkInterface(ctx, nicCtx);
+            final NetworkInterfaceInner nic = newAzureNetworkInterface(ctx, nicCtx);
 
             final String nicName = nicCtx.nicStateWithDesc.name;
 
             String msg = "Creating Azure NIC [" + nicName + "] for [" + ctx.vmName + "] VM";
 
             azureClient.createOrUpdateAsync(
-                    ctx.resourceGroup.getName(),
+                    ctx.resourceGroup.name(),
                     nicName,
                     nic,
-                    new TransitionToCallback<NetworkInterface>(ctx, nextStage, callContext, msg) {
+                    new TransitionToCallback<NetworkInterfaceInner>(ctx, nextStage, callContext, msg) {
                         @Override
-                        protected CompletionStage<NetworkInterface> handleSuccess(
-                                NetworkInterface nic) {
+                        protected CompletionStage<NetworkInterfaceInner> handleSuccess(
+                                NetworkInterfaceInner nic) {
                             nicCtx.nic = nic;
                             return CompletableFuture.completedFuture(nic);
                         }
@@ -1126,7 +1106,7 @@ public class AzureInstanceService extends StatelessService {
         // same VM resource.
         cs.id = AzureUtils.getVirtualMachineId(
                 ctx.parentAuth.userLink,
-                ctx.resourceGroup.getName(),
+                ctx.resourceGroup.name(),
                 ctx.vmName);
 
         sendWithDeferredResult(
@@ -1145,21 +1125,22 @@ public class AzureInstanceService extends StatelessService {
     /**
      * Converts Photon model constructs to underlying Azure NetworkInterface model.
      */
-    private NetworkInterface newAzureNetworkInterface(
+    private NetworkInterfaceInner newAzureNetworkInterface(
             AzureInstanceContext ctx,
             AzureNicContext nicCtx) {
 
-        NetworkInterfaceIPConfiguration ipConfig = new NetworkInterfaceIPConfiguration();
-        ipConfig.setName(generateName(NICCONFIG_NAME_PREFIX));
-        ipConfig.setPrivateIPAllocationMethod(PRIVATE_IP_ALLOCATION_METHOD);
-        ipConfig.setSubnet(nicCtx.subnet);
-        ipConfig.setPublicIPAddress(nicCtx.publicIP);
+        NetworkInterfaceIPConfigurationInner ipConfig = new NetworkInterfaceIPConfigurationInner();
+        ipConfig.withName(generateName(NICCONFIG_NAME_PREFIX));
+        ipConfig.withPrivateIPAllocationMethod(IPAllocationMethod.DYNAMIC);
+        ipConfig.withSubnet(nicCtx.subnet);
+        ipConfig.withPublicIPAddress(nicCtx.publicIPSubResource);
 
-        NetworkInterface nic = new NetworkInterface();
-        nic.setLocation(ctx.resourceGroup.getLocation());
-        nic.setIpConfigurations(new ArrayList<>());
-        nic.getIpConfigurations().add(ipConfig);
-        nic.setNetworkSecurityGroup(nicCtx.securityGroup);
+        NetworkInterfaceInner nic = new NetworkInterfaceInner();
+        nic.withLocation(ctx.resourceGroup.location());
+        List<NetworkInterfaceIPConfigurationInner> ipConfigurationList = new ArrayList<NetworkInterfaceIPConfigurationInner>();
+        ipConfigurationList.add(ipConfig);
+        nic.withIpConfigurations(ipConfigurationList);
+        nic.withNetworkSecurityGroup(nicCtx.securityGroupSubResource);
 
         return nic;
     }
@@ -1185,46 +1166,47 @@ public class AzureInstanceService extends StatelessService {
             cloudConfig = bootDisk.bootConfig.files[CLOUD_CONFIG_DEFAULT_FILE_INDEX].contents;
         }
 
-        VirtualMachine request = new VirtualMachine();
-        request.setLocation(ctx.resourceGroup.getLocation());
+        VirtualMachineInner request = new VirtualMachineInner();
+        request.withLocation(ctx.resourceGroup.location());
 
         // Set OS profile.
         OSProfile osProfile = new OSProfile();
         String vmName = ctx.vmName;
-        osProfile.setComputerName(vmName);
+        osProfile.withComputerName(vmName);
         if (ctx.childAuth != null) {
-            osProfile.setAdminUsername(ctx.childAuth.userEmail);
-            osProfile.setAdminPassword(EncryptionUtils.decrypt(ctx.childAuth.privateKey));
+            osProfile.withAdminUsername(ctx.childAuth.userEmail);
+            osProfile.withAdminPassword(EncryptionUtils.decrypt(ctx.childAuth.privateKey));
         }
         if (cloudConfig != null) {
             try {
-                osProfile.setCustomData(Base64.getEncoder()
+                osProfile.withCustomData(Base64.getEncoder()
                         .encodeToString(cloudConfig.getBytes(Utils.CHARSET)));
             } catch (UnsupportedEncodingException e) {
                 logWarning(() -> "Error encoding user data");
                 return;
             }
         }
-        request.setOsProfile(osProfile);
+        request.withOsProfile(osProfile);
 
         // Set hardware profile.
         HardwareProfile hardwareProfile = new HardwareProfile();
-        hardwareProfile.setVmSize(
-                description.instanceType != null ? description.instanceType : DEFAULT_VM_SIZE);
-        request.setHardwareProfile(hardwareProfile);
+        hardwareProfile.withVmSize(
+                description.instanceType != null ? new VirtualMachineSizeTypes(description.instanceType)
+                        : VirtualMachineSizeTypes.BASIC_A0);
+        request.withHardwareProfile(hardwareProfile);
 
         // Set storage profile.
         VirtualHardDisk vhd = new VirtualHardDisk();
         String vhdName = getVHDName(vmName);
-        vhd.setUri(String.format(VHD_URI_FORMAT, ctx.storageAccountName, vhdName));
+        vhd.withUri(String.format(VHD_URI_FORMAT, ctx.storageAccountName, vhdName));
 
         OSDisk osDisk = new OSDisk();
-        osDisk.setName(vmName);
-        osDisk.setVhd(vhd);
-        osDisk.setCaching(bootDisk.customProperties.get(AZURE_OSDISK_CACHING));
+        osDisk.withName(vmName);
+        osDisk.withVhd(vhd);
+        osDisk.withCaching(CachingTypes.fromString(bootDisk.customProperties.get(AZURE_OSDISK_CACHING)));
         // We don't support Attach option which allows to use a specialized disk to create the
         // virtual machine.
-        osDisk.setCreateOption(OS_DISK_CREATION_OPTION);
+        osDisk.withCreateOption(DiskCreateOptionTypes.FROM_IMAGE);
         if (ctx.bootDisk.capacityMBytes > 31744
                 && ctx.bootDisk.capacityMBytes < AZURE_MAXIMUM_OS_DISK_SIZE_MB) { // In case
             // custom boot disk size is set then use that value. If value more than maximum
@@ -1232,7 +1214,7 @@ public class AzureInstanceService extends StatelessService {
             int diskSizeInGB = (int) ctx.bootDisk.capacityMBytes / 1024; // Converting MBs to GBs
             // and
             // casting as int
-            osDisk.setDiskSizeGB(diskSizeInGB);
+            osDisk.withDiskSizeGB(diskSizeInGB);
         } else {
             logInfo(String.format("Proceeding with Default OS Disk Size defined by VHD %s",
                     vhdName));
@@ -1240,29 +1222,29 @@ public class AzureInstanceService extends StatelessService {
 
         StorageProfile storageProfile = new StorageProfile();
         // Currently we only support platform images.
-        storageProfile.setImageReference(ctx.imageReference);
-        storageProfile.setOsDisk(osDisk);
-        request.setStorageProfile(storageProfile);
+        storageProfile.withImageReference(ctx.imageReference);
+        storageProfile.withOsDisk(osDisk);
+        request.withStorageProfile(storageProfile);
 
         // Set network profile {{
         NetworkProfile networkProfile = new NetworkProfile();
-        networkProfile.setNetworkInterfaces(new ArrayList<>());
+        networkProfile.withNetworkInterfaces(new ArrayList<>());
 
         for (AzureNicContext nicCtx : ctx.nics) {
-            NetworkInterfaceReference nicRef = new NetworkInterfaceReference();
-            nicRef.setId(nicCtx.nic.getId());
+            NetworkInterfaceReferenceInner nicRef = new NetworkInterfaceReferenceInner();
+            nicRef.withId(nicCtx.nic.id());
             // NOTE: First NIC is marked as Primary.
-            nicRef.setPrimary(networkProfile.getNetworkInterfaces().isEmpty());
+            nicRef.withPrimary(networkProfile.networkInterfaces().isEmpty());
 
-            networkProfile.getNetworkInterfaces().add(nicRef);
+            networkProfile.networkInterfaces().add(nicRef);
         }
-        request.setNetworkProfile(networkProfile);
+        request.withNetworkProfile(networkProfile);
 
         logFine(() -> String.format("Creating virtual machine with name [%s]", vmName));
 
-        getComputeManagementClient(ctx).getVirtualMachinesOperations().createOrUpdateAsync(
-                ctx.resourceGroup.getName(), vmName, request,
-                new AzureAsyncCallback<VirtualMachine>() {
+        getComputeManagementClientImpl(ctx).virtualMachines().createOrUpdateAsync(
+                ctx.resourceGroup.name(), vmName, request,
+                new AzureAsyncCallback<VirtualMachineInner>() {
                     @Override
                     public void onError(Throwable e) {
                         handleCloudError(
@@ -1271,13 +1253,12 @@ public class AzureInstanceService extends StatelessService {
                     }
 
                     @Override
-                    public void onSuccess(ServiceResponse<VirtualMachine> result) {
-                        VirtualMachine vm = result.getBody();
-                        logFine(() -> String.format("Successfully created vm [%s]", vm.getName()));
+                    public void onSuccess(VirtualMachineInner result) {
+                        logFine(() -> String.format("Successfully created vm [%s]", result.name()));
 
                         ComputeState cs = new ComputeState();
                         // Azure for some case changes the case of the vm id.
-                        ctx.vmId = vm.getId().toLowerCase();
+                        ctx.vmId = result.id().toLowerCase();
                         cs.id = ctx.vmId;
                         cs.type = ComputeType.VM_GUEST;
                         cs.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
@@ -1287,10 +1268,10 @@ public class AzureInstanceService extends StatelessService {
                         } else {
                             cs.customProperties = ctx.child.customProperties;
                         }
-                        cs.customProperties.put(RESOURCE_GROUP_NAME, ctx.resourceGroup.getName());
+                        cs.customProperties.put(RESOURCE_GROUP_NAME, ctx.resourceGroup.name());
 
                         Operation.CompletionHandler completionHandler = (ox,
-                                exc) -> {
+                                                                         exc) -> {
                             if (exc != null) {
                                 handleError(ctx, exc);
                                 return;
@@ -1317,13 +1298,13 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        NetworkManagementClient client = getNetworkManagementClient(ctx);
+        NetworkManagementClientImpl client = getNetworkManagementClientImpl(ctx);
 
-        client.getPublicIPAddressesOperations().getAsync(
-                ctx.resourceGroup.getName(),
-                ctx.getPrimaryNic().publicIP.getName(),
+        client.publicIPAddresses().getByResourceGroupAsync(
+                ctx.resourceGroup.name(),
+                ctx.getPrimaryNic().publicIP.name(),
                 null /* expand */,
-                new AzureAsyncCallback<PublicIPAddress>() {
+                new AzureAsyncCallback<PublicIPAddressInner>() {
 
                     @Override
                     public void onError(Throwable e) {
@@ -1331,8 +1312,8 @@ public class AzureInstanceService extends StatelessService {
                     }
 
                     @Override
-                    public void onSuccess(ServiceResponse<PublicIPAddress> result) {
-                        ctx.getPrimaryNic().publicIP = result.getBody();
+                    public void onSuccess(PublicIPAddressInner result) {
+                        ctx.getPrimaryNic().publicIP = result;
 
                         OperationJoin operationJoin = OperationJoin
                                 .create(patchComputeState(ctx), patchNICState(ctx))
@@ -1351,7 +1332,7 @@ public class AzureInstanceService extends StatelessService {
 
                         ComputeState computeState = new ComputeState();
 
-                        computeState.address = ctx.getPrimaryNic().publicIP.getIpAddress();
+                        computeState.address = ctx.getPrimaryNic().publicIP.ipAddress();
 
                         return Operation.createPatch(ctx.computeRequest.resourceReference)
                                 .setBody(computeState)
@@ -1369,7 +1350,7 @@ public class AzureInstanceService extends StatelessService {
 
                         NetworkInterfaceState primaryNicState = new NetworkInterfaceState();
 
-                        primaryNicState.address = ctx.getPrimaryNic().publicIP.getIpAddress();
+                        primaryNicState.address = ctx.getPrimaryNic().publicIP.ipAddress();
 
                         URI primaryNicUri = UriUtils.buildUri(getHost(),
                                 ctx.getPrimaryNic().nicStateWithDesc.documentSelfLink);
@@ -1392,27 +1373,26 @@ public class AzureInstanceService extends StatelessService {
      * Gets the storage keys from azure and patches the credential state.
      */
     private void getStorageKeys(AzureInstanceContext ctx, AzureInstanceStage nextStage) {
-        StorageManagementClient client = getStorageManagementClient(ctx);
+        StorageManagementClientImpl client = getStorageManagementClientImpl(ctx);
 
-        client.getStorageAccountsOperations().listKeysAsync(ctx.storageAccountRGName,
-                ctx.storageAccountName, new AzureAsyncCallback<StorageAccountKeys>() {
+        client.storageAccounts().listKeysAsync(ctx.storageAccountRGName,
+                ctx.storageAccountName, new AzureAsyncCallback<StorageAccountListKeysResultInner>() {
                     @Override
                     public void onError(Throwable e) {
                         handleError(ctx, e);
                     }
 
                     @Override
-                    public void onSuccess(ServiceResponse<StorageAccountKeys> result) {
+                    public void onSuccess(StorageAccountListKeysResultInner result) {
                         logFine(() -> String.format("Retrieved the storage account keys for storage"
                                 + " account [%s].", ctx.storageAccountName));
-                        StorageAccountKeys keys = result.getBody();
-                        String key1 = keys.getKey1();
-                        String key2 = keys.getKey2();
 
                         AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
                         storageAuth.customProperties = new HashMap<>();
-                        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1, key1);
-                        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2, key2);
+                        for (StorageAccountKey key : result.keys()) {
+                            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY
+                                    + Integer.toString(currentKeyCount(storageAuth.customProperties) + 1), key.value());
+                        }
                         Operation patchStorageDescriptionWithKeys = Operation
                                 .createPost(getHost(), AuthCredentialsService.FACTORY_LINK)
                                 .setBody(storageAuth).setCompletion((o, e) -> {
@@ -1446,18 +1426,18 @@ public class AzureInstanceService extends StatelessService {
         return vmName + BOOT_DISK_SUFFIX;
     }
 
-    private ImageReference getImageReference(String imageId) {
+    private ImageReferenceInner getImageReference(String imageId) {
         String[] imageIdParts = imageId.split(":");
         if (imageIdParts.length != 4) {
             throw new IllegalArgumentException("Azure image ID should be of the format "
                     + "<publisher>:<offer>:<sku>:<version>");
         }
 
-        ImageReference imageReference = new ImageReference();
-        imageReference.setPublisher(imageIdParts[0]);
-        imageReference.setOffer(imageIdParts[1]);
-        imageReference.setSku(imageIdParts[2]);
-        imageReference.setVersion(imageIdParts[3]);
+        ImageReferenceInner imageReference = new ImageReferenceInner();
+        imageReference.withPublisher(imageIdParts[0]);
+        imageReference.withOffer(imageIdParts[1]);
+        imageReference.withSku(imageIdParts[2]);
+        imageReference.withVersion(imageIdParts[3]);
 
         return imageReference;
     }
@@ -1470,18 +1450,18 @@ public class AzureInstanceService extends StatelessService {
      * through next specific error handler.
      */
     private void handleCloudError(String msg, AzureInstanceContext ctx, String namespace,
-            Throwable e) {
+                                  Throwable e) {
         if (e instanceof CloudException) {
             CloudException ce = (CloudException) e;
-            CloudError body = ce.getBody();
+            CloudError body = ce.body();
             if (body != null) {
-                String code = body.getCode();
+                String code = body.code();
                 if (MISSING_SUBSCRIPTION_CODE.equals(code)) {
                     registerSubscription(ctx, namespace);
                     return;
                 } else if (INVALID_PARAMETER.equals(code) || INVALID_RESOURCE_GROUP.equals(code)) {
                     String invalidParameterMsg = String.format("%s Invalid parameter. %s",
-                            msg, body.getMessage());
+                            msg, body.message());
 
                     e = new IllegalStateException(invalidParameterMsg, ctx.error);
                     handleError(ctx, e);
@@ -1493,18 +1473,17 @@ public class AzureInstanceService extends StatelessService {
     }
 
     private void registerSubscription(AzureInstanceContext ctx, String namespace) {
-        ResourceManagementClient client = getResourceManagementClient(ctx);
-        client.getProvidersOperations().registerAsync(namespace,
-                new AzureAsyncCallback<Provider>() {
+        ResourceManagementClientImpl client = getResourceManagementClientImpl(ctx);
+        client.providers().registerAsync(namespace,
+                new AzureAsyncCallback<ProviderInner>() {
                     @Override
                     public void onError(Throwable e) {
                         handleError(ctx, e);
                     }
 
                     @Override
-                    public void onSuccess(ServiceResponse<Provider> result) {
-                        Provider provider = result.getBody();
-                        String registrationState = provider.getRegistrationState();
+                    public void onSuccess(ProviderInner result) {
+                        String registrationState = result.registrationState();
                         if (!PROVIDER_REGISTRED_STATE.equalsIgnoreCase(registrationState)) {
                             logInfo(() -> String.format("%s namespace registration in %s state",
                                     namespace, registrationState));
@@ -1514,14 +1493,14 @@ public class AzureInstanceService extends StatelessService {
                             return;
                         }
                         logFine(() -> String.format("Successfully registered namespace [%s]",
-                                provider.getNamespace()));
+                                result.namespace()));
                         handleAllocation(ctx);
                     }
                 });
     }
 
     private void getSubscriptionState(AzureInstanceContext ctx,
-            String namespace, long retryExpiration) {
+                                      String namespace, long retryExpiration) {
         if (Utils.getNowMicrosUtc() > retryExpiration) {
             String msg = String.format("Subscription for %s namespace did not reach %s state",
                     namespace, PROVIDER_REGISTRED_STATE);
@@ -1529,20 +1508,19 @@ public class AzureInstanceService extends StatelessService {
             return;
         }
 
-        ResourceManagementClient client = getResourceManagementClient(ctx);
+        ResourceManagementClientImpl client = getResourceManagementClientImpl(ctx);
 
         getHost().schedule(
-                () -> client.getProvidersOperations().getAsync(namespace,
-                        new AzureAsyncCallback<Provider>() {
+                () -> client.providers().getAsync(namespace,
+                        new AzureAsyncCallback<ProviderInner>() {
                             @Override
                             public void onError(Throwable e) {
                                 handleError(ctx, e);
                             }
 
                             @Override
-                            public void onSuccess(ServiceResponse<Provider> result) {
-                                Provider provider = result.getBody();
-                                String registrationState = provider.getRegistrationState();
+                            public void onSuccess(ProviderInner result) {
+                                String registrationState = result.registrationState();
                                 if (!PROVIDER_REGISTRED_STATE.equalsIgnoreCase(registrationState)) {
                                     logInfo(() -> String.format(
                                             "%s namespace registration in %s state",
@@ -1552,7 +1530,7 @@ public class AzureInstanceService extends StatelessService {
                                 }
                                 logFine(() -> String.format(
                                         "Successfully registered namespace [%s]",
-                                        provider.getNamespace()));
+                                        result.namespace()));
                                 handleAllocation(ctx);
                             }
                         }),
@@ -1581,12 +1559,6 @@ public class AzureInstanceService extends StatelessService {
         return (t) -> handleError(ctx, t);
     }
 
-    private Retrofit.Builder getRetrofitBuilder() {
-        Retrofit.Builder builder = new Retrofit.Builder();
-        builder.callbackExecutor(this.executorService);
-        return builder;
-    }
-
     private String generateName(String prefix) {
         return prefix + randomString(5);
     }
@@ -1600,45 +1572,49 @@ public class AzureInstanceService extends StatelessService {
         return stringBuilder.toString();
     }
 
-    private ResourceManagementClient getResourceManagementClient(AzureInstanceContext ctx) {
+    private ResourceManagementClientImpl getResourceManagementClientImpl(AzureInstanceContext ctx) {
         if (ctx.resourceManagementClient == null) {
-            ResourceManagementClient client = new ResourceManagementClientImpl(
-                    AzureConstants.BASE_URI, ctx.credentials, ctx.clientBuilder,
-                    getRetrofitBuilder());
-            client.setSubscriptionId(ctx.parentAuth.userLink);
+            if (ctx.restClient == null) {
+                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
+            }
+            ResourceManagementClientImpl client = new ResourceManagementClientImpl(ctx.restClient)
+                    .withSubscriptionId(ctx.parentAuth.userLink);
             ctx.resourceManagementClient = client;
         }
         return ctx.resourceManagementClient;
     }
 
-    public NetworkManagementClient getNetworkManagementClient(AzureInstanceContext ctx) {
+    public NetworkManagementClientImpl getNetworkManagementClientImpl(AzureInstanceContext ctx) {
         if (ctx.networkManagementClient == null) {
-            NetworkManagementClient client = new NetworkManagementClientImpl(
-                    AzureConstants.BASE_URI, ctx.credentials, ctx.clientBuilder,
-                    getRetrofitBuilder());
-            client.setSubscriptionId(ctx.parentAuth.userLink);
+            if (ctx.restClient == null) {
+                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
+            }
+            NetworkManagementClientImpl client = new NetworkManagementClientImpl(ctx.restClient)
+                    .withSubscriptionId(ctx.parentAuth.userLink);
             ctx.networkManagementClient = client;
         }
         return ctx.networkManagementClient;
     }
 
-    private StorageManagementClient getStorageManagementClient(AzureInstanceContext ctx) {
+    private StorageManagementClientImpl getStorageManagementClientImpl(AzureInstanceContext ctx) {
         if (ctx.storageManagementClient == null) {
-            StorageManagementClient client = new StorageManagementClientImpl(
-                    AzureConstants.BASE_URI, ctx.credentials, ctx.clientBuilder,
-                    getRetrofitBuilder());
-            client.setSubscriptionId(ctx.parentAuth.userLink);
+            if (ctx.restClient == null) {
+                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
+            }
+            StorageManagementClientImpl client = new StorageManagementClientImpl(ctx.restClient)
+                    .withSubscriptionId(ctx.parentAuth.userLink);
             ctx.storageManagementClient = client;
         }
         return ctx.storageManagementClient;
     }
 
-    private ComputeManagementClient getComputeManagementClient(AzureInstanceContext ctx) {
+    private ComputeManagementClientImpl getComputeManagementClientImpl(AzureInstanceContext ctx) {
         if (ctx.computeManagementClient == null) {
-            ComputeManagementClient client = new ComputeManagementClientImpl(
-                    AzureConstants.BASE_URI, ctx.credentials, ctx.clientBuilder,
-                    getRetrofitBuilder());
-            client.setSubscriptionId(ctx.parentAuth.userLink);
+            if (ctx.restClient == null) {
+                ctx.restClient = buildRestClient(ctx.credentials, this.executorService);
+            }
+            ComputeManagementClientImpl client = new ComputeManagementClientImpl(ctx.restClient)
+                    .withSubscriptionId(ctx.parentAuth.userLink);
             ctx.computeManagementClient = client;
         }
         return ctx.computeManagementClient;
@@ -1718,27 +1694,27 @@ public class AzureInstanceService extends StatelessService {
             AzureInstanceContext ctx) {
 
         if (AzureConstants.AZURE_URN_VERSION_LATEST
-                .equalsIgnoreCase(ctx.imageReference.getVersion())) {
+                .equalsIgnoreCase(ctx.imageReference.version())) {
 
             String msg = String.format("Getting latest Azure image by %s:%s:%s",
-                    ctx.imageReference.getPublisher(),
-                    ctx.imageReference.getOffer(),
-                    ctx.imageReference.getSku());
+                    ctx.imageReference.publisher(),
+                    ctx.imageReference.offer(),
+                    ctx.imageReference.sku());
 
-            AzureDeferredResultServiceCallback<List<VirtualMachineImageResource>> callback = new AzureDeferredResultServiceCallback<List<VirtualMachineImageResource>>(
+            AzureDeferredResultServiceCallback<List<VirtualMachineImageResourceInner>> callback = new AzureDeferredResultServiceCallback<List<VirtualMachineImageResourceInner>>(
                     ctx.service, msg) {
                 @Override
-                protected DeferredResult<List<VirtualMachineImageResource>> consumeSuccess(
-                        List<VirtualMachineImageResource> imageResources) {
+                protected DeferredResult<List<VirtualMachineImageResourceInner>> consumeSuccess(
+                        List<VirtualMachineImageResourceInner> imageResources) {
                     return DeferredResult.completed(imageResources);
                 }
             };
 
-            getComputeManagementClient(ctx).getVirtualMachineImagesOperations().listAsync(
-                    ctx.resourceGroup.getLocation(),
-                    ctx.imageReference.getPublisher(),
-                    ctx.imageReference.getOffer(),
-                    ctx.imageReference.getSku(),
+            getComputeManagementClientImpl(ctx).virtualMachineImages().listAsync(
+                    ctx.resourceGroup.location(),
+                    ctx.imageReference.publisher(),
+                    ctx.imageReference.offer(),
+                    ctx.imageReference.sku(),
                     null,
                     1,
                     AzureConstants.ORDER_BY_VM_IMAGE_RESOURCE_NAME_DESC,
@@ -1754,7 +1730,7 @@ public class AzureInstanceService extends StatelessService {
                 }
 
                 // Update 'latest'-version with actual version
-                ctx.imageReference.setVersion(imageResources.get(0).getName());
+                ctx.imageReference.withVersion(imageResources.get(0).name());
 
                 return DeferredResult.completed(ctx);
 
@@ -1770,37 +1746,37 @@ public class AzureInstanceService extends StatelessService {
     private DeferredResult<AzureInstanceContext> getVirtualMachineImage(AzureInstanceContext ctx) {
 
         String msg = String.format("Getting Azure image by %s:%s:%s:%s",
-                ctx.imageReference.getPublisher(),
-                ctx.imageReference.getOffer(),
-                ctx.imageReference.getSku(),
-                ctx.imageReference.getVersion());
+                ctx.imageReference.publisher(),
+                ctx.imageReference.offer(),
+                ctx.imageReference.sku(),
+                ctx.imageReference.version());
 
-        AzureDeferredResultServiceCallback<VirtualMachineImage> callback = new AzureDeferredResultServiceCallback<VirtualMachineImage>(
+        AzureDeferredResultServiceCallback<VirtualMachineImageInner> callback = new AzureDeferredResultServiceCallback<VirtualMachineImageInner>(
                 ctx.service, msg) {
             @Override
-            protected DeferredResult<VirtualMachineImage> consumeSuccess(
-                    VirtualMachineImage image) {
+            protected DeferredResult<VirtualMachineImageInner> consumeSuccess(
+                    VirtualMachineImageInner image) {
                 return DeferredResult.completed(image);
             }
         };
 
-        getComputeManagementClient(ctx).getVirtualMachineImagesOperations().getAsync(
-                ctx.resourceGroup.getLocation(),
-                ctx.imageReference.getPublisher(),
-                ctx.imageReference.getOffer(),
-                ctx.imageReference.getSku(),
-                ctx.imageReference.getVersion(),
+        getComputeManagementClientImpl(ctx).virtualMachineImages().getAsync(
+                ctx.resourceGroup.location(),
+                ctx.imageReference.publisher(),
+                ctx.imageReference.offer(),
+                ctx.imageReference.sku(),
+                ctx.imageReference.version(),
                 callback);
 
         return callback.toDeferredResult().thenCompose(image -> {
 
-            if (image == null || image.getOsDiskImage() == null) {
+            if (image == null || image.osDiskImage() == null) {
                 return DeferredResult
                         .failed(new IllegalStateException("OS Disk Image not found."));
             }
 
             // Get the operating system family
-            ctx.operatingSystemFamily = image.getOsDiskImage().getOperatingSystem();
+            ctx.operatingSystemFamily = image.osDiskImage().operatingSystem().name();
 
             return DeferredResult.completed(ctx);
         });
@@ -1845,7 +1821,7 @@ public class AzureInstanceService extends StatelessService {
                     Operation.MEDIA_TYPE_APPLICATION_JSON);
             try {
                 operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                        AzureConstants.AUTH_HEADER_BEARER_PREFIX + credentials.getToken());
+                        AzureConstants.AUTH_HEADER_BEARER_PREFIX + credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
             } catch (Exception ex) {
                 handleError(ctx, ex);
                 return;
@@ -1891,14 +1867,14 @@ public class AzureInstanceService extends StatelessService {
         return resourceGroupName;
     }
 
-    public class StorageAccountAsyncHandler extends AzureProvisioningCallback<StorageAccount> {
+    public class StorageAccountAsyncHandler extends AzureProvisioningCallback<StorageAccountInner> {
 
         private AzureInstanceContext ctx;
-        private StorageAccountsOperations azureSAClient;
+        private StorageAccountsInner azureSAClient;
 
         public StorageAccountAsyncHandler(AzureInstanceContext ctx,
-                StorageAccountsOperations azureSAClient,
-                StatelessService service, String message) {
+                                          StorageAccountsInner azureSAClient,
+                                          StatelessService service, String message) {
             super(service, message);
             this.ctx = ctx;
             this.azureSAClient = azureSAClient;
@@ -1910,7 +1886,7 @@ public class AzureInstanceService extends StatelessService {
             if (exc instanceof CloudException) {
                 CloudException azureExc = (CloudException) exc;
                 if (STORAGE_ACCOUNT_ALREADY_EXIST
-                        .equalsIgnoreCase(azureExc.getBody().getCode())) {
+                        .equalsIgnoreCase(azureExc.body().code())) {
                     return RECOVERED;
                 }
             }
@@ -1918,8 +1894,8 @@ public class AzureInstanceService extends StatelessService {
         }
 
         @Override
-        protected DeferredResult<StorageAccount> consumeProvisioningSuccess(
-                StorageAccount sa) {
+        protected DeferredResult<StorageAccountInner> consumeProvisioningSuccess(
+                StorageAccountInner sa) {
             this.ctx.storage = sa;
 
             return createStorageDescription(this.ctx)
@@ -1949,29 +1925,29 @@ public class AzureInstanceService extends StatelessService {
         private DeferredResult<StorageDescription> createStorageDescription(
                 AzureInstanceContext ctx) {
 
-            String msg = "Getting Azure StorageAccountKeys for [" + ctx.storage.getName()
+            String msg = "Getting Azure StorageAccountKeys for [" + ctx.storage.name()
                     + "] Storage Account";
-            AzureDeferredResultServiceCallback<StorageAccountKeys> handler = new AzureDeferredResultServiceCallback<StorageAccountKeys>(
+            AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner> handler = new AzureDeferredResultServiceCallback<StorageAccountListKeysResultInner>(
                     this.service, msg) {
 
                 @Override
                 protected Throwable consumeError(Throwable exc) {
                     return new IllegalStateException(String.format(
                             "Getting Azure StorageAccountKeys for [%s] Storage Account: FAILED. Details: %s",
-                            ctx.storage.getName(), exc.getMessage()));
+                            ctx.storage.name(), exc.getMessage()));
                 }
 
                 @Override
-                protected DeferredResult<StorageAccountKeys> consumeSuccess(
-                        StorageAccountKeys body) {
+                protected DeferredResult<StorageAccountListKeysResultInner> consumeSuccess(
+                        StorageAccountListKeysResultInner body) {
                     logFine(() -> String.format(
                             "Getting Azure StorageAccountKeys for [%s] Storage Account: SUCCESS",
-                            ctx.storage.getName()));
+                            ctx.storage.name()));
                     return DeferredResult.completed(body);
                 }
             };
 
-            this.azureSAClient.listKeysAsync(ctx.storageAccountRGName, ctx.storage.getName(),
+            this.azureSAClient.listKeysAsync(ctx.storageAccountRGName, ctx.storage.name(),
                     handler);
 
             return handler.toDeferredResult()
@@ -1994,8 +1970,8 @@ public class AzureInstanceService extends StatelessService {
         }
 
         @Override
-        protected String getProvisioningState(StorageAccount sa) {
-            ProvisioningState provisioningState = sa.getProvisioningState();
+        protected String getProvisioningState(StorageAccountInner sa) {
+            ProvisioningState provisioningState = sa.provisioningState();
 
             // For some reason SA.provisioningState is null, so consider it CREATING.
             if (provisioningState == null) {
@@ -2007,8 +1983,8 @@ public class AzureInstanceService extends StatelessService {
 
         @Override
         protected Runnable checkProvisioningStateCall(
-                ServiceCallback<StorageAccount> checkProvisioningStateCallback) {
-            return () -> this.azureSAClient.getPropertiesAsync(
+                ServiceCallback<StorageAccountInner> checkProvisioningStateCallback) {
+            return () -> this.azureSAClient.getByResourceGroupAsync(
                     this.ctx.storageAccountRGName,
                     this.ctx.storageAccountName,
                     checkProvisioningStateCallback);
@@ -2107,7 +2083,7 @@ public class AzureInstanceService extends StatelessService {
         }
 
         @Override
-        public final void onSuccess(ServiceResponse<T> result) {
+        public final void onSuccess(T result) {
 
             if (this.callCtx.hasAnyFailed.get()) {
                 AzureInstanceService.this.logFine(this.msg + ": SUCCESS. Still batch calls have "
@@ -2118,7 +2094,7 @@ public class AzureInstanceService extends StatelessService {
             AzureInstanceService.this.logFine(this.msg + ": SUCCESS");
 
             // First delegate to descendants to process result body
-            CompletionStage<T> handleSuccess = handleSuccess(result.getBody());
+            CompletionStage<T> handleSuccess = handleSuccess(result);
 
             // Then transition upon completion
             handleSuccess.whenComplete((body, exc) -> {

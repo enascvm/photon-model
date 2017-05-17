@@ -18,7 +18,6 @@ import static com.vmware.photon.controller.model.adapters.azure.constants.AzureC
 import java.util.concurrent.TimeUnit;
 
 import com.microsoft.rest.ServiceCallback;
-import com.microsoft.rest.ServiceResponse;
 
 import com.vmware.photon.controller.model.adapters.azure.AzureAsyncCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.FixedRetryStrategy;
@@ -140,9 +139,9 @@ public abstract class AzureProvisioningCallback<RES>
         }
 
         @Override
-        public void onSuccess(ServiceResponse<RES> result) {
+        public void onSuccess(RES result) {
             AzureProvisioningCallback.this
-                    .waitProvisioningToSucceed(result.getBody());
+                    .waitProvisioningToSucceed(result);
         }
     }
 }

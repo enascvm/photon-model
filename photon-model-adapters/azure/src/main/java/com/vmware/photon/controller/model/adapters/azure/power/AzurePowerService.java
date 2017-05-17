@@ -17,16 +17,12 @@ import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROU
 
 import java.util.concurrent.ExecutorService;
 
+import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
+import com.microsoft.azure.management.Azure;
+import com.microsoft.azure.management.compute.implementation.OperationStatusResponseInner;
+import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceCallback;
-import com.microsoft.rest.ServiceResponse;
-
-import okhttp3.OkHttpClient;
-
-import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.ComputePowerRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
@@ -49,11 +45,9 @@ public class AzurePowerService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_POWER_ADAPTER;
 
     private static class AzurePowerDataHolder {
-
         final ComputePowerRequest pr;
-
-        ComputeManagementClient client;
-        OkHttpClient httpClient;
+        Azure azureClient;
+        RestClient restClient;
         AzurePowerService service;
         String vmName;
         String rgName;
@@ -113,13 +107,9 @@ public class AzurePowerService extends StatelessService {
                                 clientId, tenantId, clientKey,
                                 AzureEnvironment.AZURE);
 
-                        dh.httpClient = new OkHttpClient();
-                        OkHttpClient.Builder clientBuilder = dh.httpClient.newBuilder();
-
-                        dh.client = new ComputeManagementClientImpl(
-                                AzureConstants.BASE_URI, credentials, clientBuilder,
-                                getRetrofitBuilder());
-                        dh.client.setSubscriptionId(c.parentAuth.userLink);
+                        dh.restClient = AzureUtils.buildRestClient(credentials, this.executorService);
+                        dh.azureClient = Azure.authenticate(dh.restClient, tenantId)
+                                .withSubscription(c.parentAuth.userLink);
                         dh.vmName = c.child.name != null ? c.child.name : c.child.id;
                         dh.rgName = getResourceGroupName(c);
                         applyPowerOperation(dh, c);
@@ -143,43 +133,36 @@ public class AzurePowerService extends StatelessService {
     }
 
     private void powerOff(AzurePowerDataHolder dh, DefaultAdapterContext c) {
-        dh.client.getVirtualMachinesOperations().powerOffAsync(dh.rgName, dh.vmName,
-                new ServiceCallback<Void>() {
-                    @Override
-                    public void failure(Throwable paramThrowable) {
-                        c.taskManager.patchTaskToFailure(paramThrowable);
-                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
-                    }
+        dh.azureClient.virtualMachines().inner().powerOffAsync(dh.rgName,dh.vmName,new ServiceCallback<OperationStatusResponseInner>() {
+            @Override
+            public void failure(Throwable paramThrowable) {
+                c.taskManager.patchTaskToFailure(paramThrowable);
+                AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+            }
 
-                    @Override
-                    public void success(ServiceResponse<Void> paramServiceResponse) {
-                        updateComputeState(dh, c);
-                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
-                    }
-                });
+            @Override
+            public void success(OperationStatusResponseInner paramServiceResponse) {
+                updateComputeState(dh,c);
+                AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+            }
+        });
     }
 
     private void powerOn(AzurePowerDataHolder dh, DefaultAdapterContext c) {
-        dh.client.getVirtualMachinesOperations().startAsync(dh.rgName, dh.vmName,
-                new ServiceCallback<Void>() {
-                    @Override
-                    public void failure(Throwable paramThrowable) {
-                        c.taskManager.patchTaskToFailure(paramThrowable);
-                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
-                    }
+        dh.azureClient.virtualMachines().inner().startAsync(dh.rgName, dh.vmName,
+                    new ServiceCallback<OperationStatusResponseInner>() {
+                        @Override
+                        public void failure(Throwable paramThrowable) {
+                            c.taskManager.patchTaskToFailure(paramThrowable);
+                            AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                        }
 
-                    @Override
-                    public void success(ServiceResponse<Void> paramServiceResponse) {
-                        updateComputeState(dh, c);
-                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
-                    }
-                });
-    }
-
-    private Retrofit.Builder getRetrofitBuilder() {
-        Retrofit.Builder builder = new Retrofit.Builder();
-        builder.callbackExecutor(this.executorService);
-        return builder;
+                        @Override
+                        public void success(OperationStatusResponseInner paramServiceResponse) {
+                            updateComputeState(dh, c);
+                            AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
+                        }
+                    });
     }
 
     private String getResourceGroupName(DefaultAdapterContext ctx) {

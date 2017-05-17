@@ -20,7 +20,7 @@ import com.vmware.photon.controller.model.resources.DiskService;
  * Azure related constants.
  */
 public class AzureConstants {
-    public static final String BASE_URI = "https://management.azure.com/";
+    public static final String AZURE_CORE_MANAGEMENT_URI = "https://management.azure.com/";
     public static final String AZURE_TENANT_ID = "azureTenantId";
     public static final String AZURE_RESOURCE_GROUP_NAME = "azureResourceGroupName";
     public static final String AZURE_OSDISK_CACHING = "azureOsDiskCaching";
@@ -29,11 +29,11 @@ public class AzureConstants {
     public static final String AZURE_STORAGE_ACCOUNT_RG_NAME = "azureSAResourceGroupName";
     public static final String AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME = "default-rg"; // in case none is specified
     public static final String AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK = "azureDiagnosticStorageAccountLink";
+    public static final String AZURE_STORAGE_ACCOUNT_KEY = "azureStorageAccountKey";
     public static final String AZURE_STORAGE_ACCOUNT_KEY1 = "azureStorageAccountKey1";
     public static final String AZURE_STORAGE_ACCOUNT_KEY2 = "azureStorageAccountKey2";
     public static final String AZURE_STORAGE_ACCOUNT_URI = "storageAccountUri";
     public static final String AZURE_STORAGE_TYPE = "storageType";
-    public static final String AZURE_SUBSCRIPTION_STATUS_ACTIVE = "Enabled";
     public static final String AZURE_PROVISIONING_PERMISSION = "provisioningPermission";
 
     // Azure EA
@@ -67,8 +67,6 @@ public class AzureConstants {
     public static final String AZURE_VM_PROVISIONING_STATE_SUCCEEDED = "ProvisioningState/succeeded";
     public static final String PROVISIONING_STATE_SUCCEEDED = "Succeeded";
     public static final String PROVIDER_REGISTRED_STATE = "REGISTERED";
-    public static final String LINUX_OPERATING_SYSTEM = "Linux";
-    public static final String WINDOWS_OPERATING_SYSTEM = "Windows";
     public static final String AZURE_URN_VERSION_LATEST = "latest";
     public static final String ORDER_BY_VM_IMAGE_RESOURCE_NAME_DESC = "name desc";
     public static final String DEFAULT_ADMIN_USER = "azureuser";
@@ -76,9 +74,6 @@ public class AzureConstants {
 
     // Azure Generic Security Group constants
     public static final int AZURE_SECURITY_GROUP_PRIORITY = 1000;
-    public static final String AZURE_SECURITY_GROUP_PROTOCOL = "TCP";
-    public static final String AZURE_SECURITY_GROUP_DIRECTION_INBOUND = "Inbound";
-    public static final String AZURE_SECURITY_GROUP_DIRECTION_OUTBOUND = "Outbound";
     public static final String AZURE_SECURITY_GROUP_ACCESS = "Allow";
     public static final String AZURE_SECURITY_GROUP_SOURCE_ADDRESS_PREFIX = "*";
     public static final String AZURE_SECURITY_GROUP_SOURCE_PORT_RANGE = "*";
@@ -86,13 +81,7 @@ public class AzureConstants {
 
     // Azure Linux Security Group constants
     public static final String AZURE_LINUX_SECURITY_GROUP_NAME = "default-allow-all";
-    public static final String AZURE_LINUX_SECURITY_GROUP_DESCRIPTION = "Allow ALL";
     public static final String AZURE_LINUX_SECURITY_GROUP_DESTINATION_PORT_RANGE = "*";
-
-    // Azure Windows Security Group constants
-    public static final String AZURE_WINDOWS_SECURITY_GROUP_NAME = "default-allow-rdp";
-    public static final String AZURE_WINDOWS_SECURITY_GROUP_DESCRIPTION = "Allow RDP (TCP/3389)";
-    public static final String AZURE_WINDOWS_SECURITY_GROUP_DESTINATION_PORT_RANGE = "3389";
 
     // Monitoring Constants
     public static final String DIAGNOSTIC_SETTINGS_JSON_FILE_NAME = "diagnosticSettings.json";
@@ -138,11 +127,6 @@ public class AzureConstants {
     public static final String STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=http;" +
                     "AccountName=%s;" +
                     "AccountKey=%s;";
-
-    // Virtual Machine REST constants
-    public static final String VM_REST_API_VERSION = "2016-03-30";
-    public static final String LIST_VM_URI = BASE_URI_FOR_REST
-            + "/subscriptions/{subscriptionId}/providers/Microsoft.Compute/virtualMachines";
 
     //Storage accounts REST constants
     public static final String STORAGE_ACCOUNT_REST_API_VERSION = "2016-01-01";

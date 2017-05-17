@@ -16,19 +16,14 @@ package com.vmware.photon.controller.model.adapters.azure.utils;
 import java.util.concurrent.ExecutorService;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.NetworkManagementClientImpl;
-import com.microsoft.azure.management.resources.ResourceManagementClient;
-import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
-import com.microsoft.azure.management.storage.StorageManagementClient;
-import com.microsoft.azure.management.storage.StorageManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 
-import okhttp3.OkHttpClient;
-import retrofit2.Retrofit;
+import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
+import com.microsoft.rest.RestClient;
+
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
 
 /**
@@ -42,15 +37,14 @@ public class AzureSdkClients implements AutoCloseable {
 
     // Used to create Azure SDK clients {{
     private final ApplicationTokenCredentials azureCredentials;
-    private final OkHttpClient httpClient;
-    private final OkHttpClient.Builder httpClientBuilder;
     // }}
 
     // Azure SDK clients being used {{
-    private ComputeManagementClient computeManagementClient;
-    private ResourceManagementClient resourceManagementClient;
-    private NetworkManagementClient networkManagementClient;
-    private StorageManagementClient storageManagementClient;
+    private RestClient restClient;
+    private ComputeManagementClientImpl computeManagementClient;
+    private ResourceManagementClientImpl resourceManagementClient;
+    private NetworkManagementClientImpl networkManagementClient;
+    private StorageManagementClientImpl storageManagementClient;
     // }}
 
     public AzureSdkClients(
@@ -62,60 +56,40 @@ public class AzureSdkClients implements AutoCloseable {
 
         this.azureCredentials = AzureUtils.getAzureConfig(authentication);
 
-        // Creating a shared singleton Http client instance Reference
-        // https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
-        // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
-        this.httpClient = new OkHttpClient();
-        this.httpClientBuilder = this.httpClient.newBuilder();
+        this.restClient = AzureUtils.buildRestClient(this.azureCredentials, this.executorService);
     }
 
-    public synchronized ComputeManagementClient getComputeManagementClient() {
+    public synchronized ComputeManagementClientImpl getComputeManagementClientImpl() {
         if (this.computeManagementClient == null) {
-            this.computeManagementClient = new ComputeManagementClientImpl(
-                    AzureConstants.BASE_URI,
-                    this.azureCredentials,
-                    this.httpClientBuilder,
-                    newRetrofitBuilder());
-            this.computeManagementClient.setSubscriptionId(this.authentication.userLink);
+            this.computeManagementClient = new ComputeManagementClientImpl(this.azureCredentials)
+                    .withSubscriptionId(this.authentication.userLink);
         }
 
         return this.computeManagementClient;
     }
 
-    public synchronized NetworkManagementClient getNetworkManagementClient() {
+    public synchronized NetworkManagementClientImpl getNetworkManagementClientImpl() {
         if (this.networkManagementClient == null) {
-            this.networkManagementClient = new NetworkManagementClientImpl(
-                    AzureConstants.BASE_URI,
-                    this.azureCredentials,
-                    this.httpClientBuilder,
-                    newRetrofitBuilder());
-            this.networkManagementClient.setSubscriptionId(this.authentication.userLink);
+            this.networkManagementClient = new NetworkManagementClientImpl(this.azureCredentials)
+                    .withSubscriptionId(this.authentication.userLink);
         }
 
         return this.networkManagementClient;
     }
 
-    public synchronized StorageManagementClient getStorageManagementClient() {
+    public synchronized StorageManagementClientImpl getStorageManagementClientImpl() {
         if (this.storageManagementClient == null) {
-            this.storageManagementClient = new StorageManagementClientImpl(
-                    AzureConstants.BASE_URI,
-                    this.azureCredentials,
-                    this.httpClientBuilder,
-                    newRetrofitBuilder());
-            this.storageManagementClient.setSubscriptionId(this.authentication.userLink);
+            this.storageManagementClient = new StorageManagementClientImpl(this.azureCredentials)
+                    .withSubscriptionId(this.authentication.userLink);
         }
 
         return this.storageManagementClient;
     }
 
-    public synchronized ResourceManagementClient getResourceManagementClient() {
+    public synchronized ResourceManagementClientImpl getResourceManagementClientImpl() {
         if (this.resourceManagementClient == null) {
-            this.resourceManagementClient = new ResourceManagementClientImpl(
-                    AzureConstants.BASE_URI,
-                    this.azureCredentials,
-                    this.httpClientBuilder,
-                    newRetrofitBuilder());
-            this.resourceManagementClient.setSubscriptionId(this.authentication.userLink);
+            this.resourceManagementClient = new ResourceManagementClientImpl(this.azureCredentials)
+                    .withSubscriptionId(this.authentication.userLink);
         }
 
         return this.resourceManagementClient;
@@ -123,18 +97,10 @@ public class AzureSdkClients implements AutoCloseable {
 
     @Override
     public void close() {
-        AzureUtils.cleanUpHttpClient(null, this.httpClient);
-
         this.computeManagementClient = null;
         this.resourceManagementClient = null;
         this.networkManagementClient = null;
         this.storageManagementClient = null;
+        AzureUtils.cleanUpHttpClient(this.restClient.httpClient());
     }
-
-    private Retrofit.Builder newRetrofitBuilder() {
-        Retrofit.Builder builder = new Retrofit.Builder();
-        builder.callbackExecutor(this.executorService);
-        return builder;
-    }
-
 }

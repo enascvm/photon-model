@@ -15,7 +15,7 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.azure.AzureUriPaths.AZURE_FIREWALL_ADAPTER;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_INBOUND;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_NETWORK_SECURITY_GROUP_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.NETWORK_REST_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
 
+import com.microsoft.azure.management.network.SecurityRuleDirection;
 import org.apache.commons.net.util.SubnetUtils;
 
 import com.vmware.photon.controller.model.ComputeProperties;
@@ -111,7 +112,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                     Operation.MEDIA_TYPE_APPLICATION_JSON);
             try {
                 operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                        AUTH_HEADER_BEARER_PREFIX + this.credentials.getToken());
+                        AUTH_HEADER_BEARER_PREFIX + this.credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
             } catch (Exception ex) {
                 return DeferredResult.failed(ex);
             }
@@ -220,7 +221,7 @@ public class AzureSecurityGroupEnumerationAdapterService extends StatelessServic
                 final List<SecurityGroupState.Rule> rulesList;
                 String ports;
 
-                if (AZURE_SECURITY_GROUP_DIRECTION_INBOUND.equalsIgnoreCase(
+                if (SecurityRuleDirection.INBOUND.toString().equalsIgnoreCase(
                         securityRule.properties.direction)) {
                     // ingress rule.
                     rule.ipRangeCidr = securityRule.properties.sourceAddressPrefix;

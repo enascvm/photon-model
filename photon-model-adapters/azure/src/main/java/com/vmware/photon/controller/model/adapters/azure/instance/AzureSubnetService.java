@@ -18,18 +18,15 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.NetworkManagementClientImpl;
-import com.microsoft.azure.management.network.SubnetsOperations;
-import com.microsoft.azure.management.network.models.Subnet;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.implementation.SubnetInner;
+import com.microsoft.azure.management.network.implementation.SubnetsInner;
+
+import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceCallback;
-import okhttp3.OkHttpClient;
-import okhttp3.OkHttpClient.Builder;
-import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapterapi.SubnetInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureProvisioningCallback;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
@@ -62,8 +59,8 @@ public class AzureSubnetService extends StatelessService {
 
         EndpointState endpoint;
         AuthCredentialsServiceState authentication;
-        SubnetsOperations azureClient;
-        OkHttpClient httpClient;
+        RestClient restClient;
+        SubnetsInner azureClient;
 
         SubnetState subnetState;
         NetworkState parentNetwork;
@@ -114,7 +111,6 @@ public class AzureSubnetService extends StatelessService {
         DeferredResult.completed(context)
                 .thenCompose(this::populateContext)
                 .thenCompose(this::handleSubnetInstanceRequest)
-                .thenCompose(this::cleanUpAzureHttpClient)
                 .whenComplete((o, e) -> {
                     // Once done patch the calling task with correct stage.
                     if (e == null) {
@@ -234,83 +230,64 @@ public class AzureSubnetService extends StatelessService {
         // https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
         // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
         if (ctx.azureClient == null) {
-            ctx.azureClient = getNetworkManagementClient(ctx).getSubnetsOperations();
+            ctx.azureClient = getNetworkManagementClientImpl(ctx).subnets();
         }
 
         return DeferredResult.completed(ctx);
     }
 
     private DeferredResult<AzureSubnetContext> createSubnet(AzureSubnetContext context) {
-        Subnet subnet = new Subnet();
-        subnet.setName(context.subnetState.name);
-        subnet.setAddressPrefix(context.subnetState.subnetCIDR);
+        SubnetInner subnet = new SubnetInner();
+        subnet.withName(context.subnetState.name);
+        subnet.withAddressPrefix(context.subnetState.subnetCIDR);
 
         String rgName = context.parentNetworkResourceGroupName;
         String vNetName = context.parentNetwork.name;
 
-        final String msg = "Creating Azure Subnet [" + subnet.getName()
+        final String msg = "Creating Azure Subnet [" + subnet.name()
                 + "] in vNet [" + vNetName
                 + "] in resource group [" + rgName + "].";
-        AzureProvisioningCallback<Subnet> handler = new AzureProvisioningCallback<Subnet>(
+        AzureProvisioningCallback<SubnetInner> handler = new AzureProvisioningCallback<SubnetInner>(
                 this, msg) {
 
             @Override
-            protected DeferredResult<Subnet> consumeProvisioningSuccess(Subnet subnet) {
+            protected DeferredResult<SubnetInner> consumeProvisioningSuccess(SubnetInner subnet) {
                 // Populate the subnet id with Azure Subnet ID
-                context.subnetState.id = subnet.getId();
+                context.subnetState.id = subnet.id();
                 return DeferredResult.completed(subnet);
             }
 
             @Override
-            protected String getProvisioningState(Subnet subnet) {
-                return subnet.getProvisioningState();
+            protected String getProvisioningState(SubnetInner subnet) {
+                return subnet.provisioningState();
             }
 
             @Override
             protected Runnable checkProvisioningStateCall(
-                    ServiceCallback<Subnet> checkProvisioningStateCallback) {
+                    ServiceCallback<SubnetInner> checkProvisioningStateCallback) {
                 return () -> context.azureClient.getAsync(
                         rgName,
                         vNetName,
-                        subnet.getName(),
+                        subnet.name(),
                         null /* expand */,
                         checkProvisioningStateCallback);
             }
         };
 
-        context.azureClient.createOrUpdateAsync(rgName, vNetName, subnet.getName(),
+        context.azureClient.createOrUpdateAsync(rgName, vNetName, subnet.name(),
                 subnet, handler);
 
         return handler.toDeferredResult()
                 .thenApply(ignore -> context);
     }
 
-    private DeferredResult<AzureSubnetContext> cleanUpAzureHttpClient(AzureSubnetContext context) {
-        if (context.httpClient != null) {
-            AzureUtils.cleanUpHttpClient(this, context.httpClient);
-            context.httpClient = null;
-        }
-        return DeferredResult.completed(context);
-    }
-
-    private NetworkManagementClient getNetworkManagementClient(AzureSubnetContext ctx) {
+    private NetworkManagementClientImpl getNetworkManagementClientImpl(AzureSubnetContext ctx) {
         ApplicationTokenCredentials credentials =
                 AzureUtils.getAzureConfig(ctx.authentication);
-
-        ctx.httpClient = new OkHttpClient();
-        Builder clientBuilder = ctx.httpClient.newBuilder();
-
-        NetworkManagementClient client = new NetworkManagementClientImpl(
-                AzureConstants.BASE_URI, credentials, clientBuilder,
-                getRetrofitBuilder());
-        client.setSubscriptionId(ctx.authentication.userLink);
+        ctx.restClient = AzureUtils.buildRestClient(credentials, this.executorService);
+        NetworkManagementClientImpl client = new NetworkManagementClientImpl(ctx.restClient)
+                .withSubscriptionId(ctx.authentication.userLink);
         return client;
-    }
-
-    private Retrofit.Builder getRetrofitBuilder() {
-        Retrofit.Builder builder = new Retrofit.Builder();
-        builder.callbackExecutor(this.executorService);
-        return builder;
     }
 
     private DeferredResult<AzureSubnetContext> updateSubnetState(AzureSubnetContext context) {
@@ -348,5 +325,13 @@ public class AzureSubnetService extends StatelessService {
         return this.sendWithDeferredResult(
                 Operation.createDelete(this, context.subnetState.documentSelfLink))
                 .thenApply(operation -> context);
+    }
+
+    private DeferredResult<AzureSubnetContext> cleanUpAzureHttpClient(AzureSubnetContext context) {
+        if (context.restClient.httpClient() != null) {
+            AzureUtils.cleanUpHttpClient(context.restClient.httpClient());
+            context.restClient = null;
+        }
+        return DeferredResult.completed(context);
     }
 }

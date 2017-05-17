@@ -13,6 +13,7 @@
 
 package com.vmware.photon.controller.model.adapters.azure.stats;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK;
 
 import java.io.IOException;
@@ -86,7 +87,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
     private static final String COUNTER_NAME_KEY = "CounterName";
     private static final String TIMESTAMP = "Timestamp";
     public static final String[] METRIC_NAMES = { AzureConstants.CPU_UTILIZATION,
-        AzureConstants.PERCENT_MEMORY_USED};
+            AzureConstants.PERCENT_MEMORY_USED};
 
     private ExecutorService executorService;
 
@@ -202,7 +203,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                 ((throwable) -> {
                     if (throwable instanceof ServiceNotFoundException) {
                         logInfo(() -> String.format("Skipping stats collection - storage account"
-                                        + " not found for [%s]", statsData.computeDesc.name));
+                                + " not found for [%s]", statsData.computeDesc.name));
                         patchEmptyResponse(statsData);
                         return;
                     }
@@ -252,8 +253,6 @@ public class AzureComputeStatsGatherer extends StatelessService {
 
     /**
      * Get the metric definitions from Azure using the Endpoint "/metricDefinitions"
-     * The request and response of the API is as described in
-     * {@link https://msdn.microsoft.com/en-us/library/azure/dn931939.aspx} Insights REST.
      *
      * @param statsData
      * @throws URISyntaxException
@@ -276,7 +275,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
         Operation operation = Operation.createGet(uri);
         operation.addRequestHeader(Operation.ACCEPT_HEADER, Operation.MEDIA_TYPE_APPLICATION_JSON);
         operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                AzureConstants.AUTH_HEADER_BEARER_PREFIX + statsData.credentials.getToken());
+                AzureConstants.AUTH_HEADER_BEARER_PREFIX + statsData.credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
         operation.setCompletion((op, ex) -> {
             if (ex != null) {
                 statsData.taskManager.patchTaskToFailure(ex);
@@ -397,7 +396,7 @@ public class AzureComputeStatsGatherer extends StatelessService {
                 respBody.statsAdapterReference = UriUtils.buildUri(getHost(), SELF_LINK);
                 this.service.sendRequest(
                         Operation.createPatch(this.statsData.statsRequest.taskReference)
-                        .setBody(respBody));
+                                .setBody(respBody));
             }
         }
     }

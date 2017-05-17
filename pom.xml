@@ -314,9 +314,9 @@
         <configuration>
           <target>1.8</target>
           <source>1.8</source>
+          <showWarnings>true</showWarnings>
           <compilerId>javac</compilerId>
           <compilerArgs>
-            <arg>-Werror</arg>
             <arg>-Xlint</arg>
           </compilerArgs>
           <showWarnings>true</showWarnings>

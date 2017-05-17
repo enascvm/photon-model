@@ -53,23 +53,32 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import com.microsoft.azure.CloudException;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.models.VirtualMachine;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.models.AddressSpace;
-import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
-import com.microsoft.azure.management.network.models.PublicIPAddress;
-import com.microsoft.azure.management.network.models.SecurityRule;
-import com.microsoft.azure.management.network.models.SubResource;
-import com.microsoft.azure.management.network.models.Subnet;
-import com.microsoft.azure.management.network.models.VirtualNetwork;
-import com.microsoft.azure.management.network.models.VirtualNetworkGateway;
-import com.microsoft.azure.management.network.models.VirtualNetworkGatewayIPConfiguration;
-import com.microsoft.azure.management.network.models.VirtualNetworkGatewaySku;
-import com.microsoft.azure.management.resources.ResourceManagementClient;
-import com.microsoft.azure.management.resources.models.ResourceGroup;
+import com.microsoft.azure.SubResource;
+import com.microsoft.azure.management.compute.CachingTypes;
+import com.microsoft.azure.management.compute.InstanceViewTypes;
+import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
+import com.microsoft.azure.management.network.AddressSpace;
+import com.microsoft.azure.management.network.IPAllocationMethod;
+import com.microsoft.azure.management.network.SecurityRuleAccess;
+import com.microsoft.azure.management.network.SecurityRuleDirection;
+import com.microsoft.azure.management.network.SecurityRuleProtocol;
+import com.microsoft.azure.management.network.VirtualNetworkGatewaySku;
+import com.microsoft.azure.management.network.VirtualNetworkGatewaySkuName;
+import com.microsoft.azure.management.network.VirtualNetworkGatewaySkuTier;
+import com.microsoft.azure.management.network.VirtualNetworkGatewayType;
+import com.microsoft.azure.management.network.VpnType;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
+import com.microsoft.azure.management.network.implementation.PublicIPAddressInner;
+import com.microsoft.azure.management.network.implementation.SecurityRuleInner;
+import com.microsoft.azure.management.network.implementation.SubnetInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworkGatewayIPConfigurationInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworkGatewayInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
+import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 import com.microsoft.rest.ServiceCallback;
-import com.microsoft.rest.ServiceResponse;
 
 import com.vmware.photon.controller.model.ComputeProperties;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
@@ -110,7 +119,6 @@ import com.vmware.photon.controller.model.resources.ResourceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule;
-import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState.Rule.Access;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
 import com.vmware.photon.controller.model.resources.SubnetService;
@@ -147,7 +155,7 @@ public class AzureTestUtil {
     public static final String AZURE_ADMIN_PASSWORD = "Pa$$word1";
 
     // This instance size DOES support 2 NICs! If you change it please correct NUMBER_OF_NICS.
-    public static final String AZURE_VM_SIZE = "Standard_A3";
+    public static final String AZURE_VM_SIZE = "STANDARD_A3";
 
     public static final String IMAGE_REFERENCE = "Canonical:UbuntuServer:14.04.3-LTS:latest";
 
@@ -187,10 +195,6 @@ public class AzureTestUtil {
     private static final String AZURE_GATEWAY_CIDR = "172.16.128.0/18";
     private static final String AZURE_GATEWAY_IP_CONFIGURATION_NAME = "gateway-ipconfig";
     private static final String AZURE_GATEWAY_PUBLIC_IP_NAME = "gateway-pip";
-    private static final String AZURE_GATEWAY_IP_ALLOCATION_METHOD = "Dynamic";
-    private static final String AZURE_GATEWAY_SKU = "Standard";
-    private static final String AZURE_GATEWAY_TYPE = "Vpn";
-    private static final String AZURE_GATEWAY_VPN_TYPE = "RouteBased";
 
     static {
         DEFAULT_NIC_SPEC = initializeNicSpecs(null /* prefix */ , false /* assignGateway */,
@@ -203,7 +207,7 @@ public class AzureTestUtil {
                 true /* assignPublicIpAddress */);
     }
 
-    public static final String DEFAULT_OS_DISK_CACHING = "None";
+    public static final CachingTypes DEFAULT_OS_DISK_CACHING = CachingTypes.NONE;
 
     public static class AzureNicSpecs {
 
@@ -226,21 +230,23 @@ public class AzureTestUtil {
             public final String zoneId;
             public final String ipConfigurationName;
             public final String publicIpName;
-            public final String ipAllocationMethod;
-            public final String sku;
-            public final String type;
-            public final String vpnType;
+            public final IPAllocationMethod ipAllocationMethod;
+            public final VirtualNetworkGatewaySkuName skuName;
+            public final VirtualNetworkGatewaySkuTier skuTier;
+            public final VirtualNetworkGatewayType type;
+            public final VpnType vpnType;
 
             public GatewaySpec(String name, String cidr, String zoneId, String ipConfigurationName,
-                    String publicIpName, String ipAllocationMethod, String sku, String type,
-                    String vpnType) {
+                    String publicIpName, IPAllocationMethod ipAllocationMethod, VirtualNetworkGatewaySkuName skuName,
+                               VirtualNetworkGatewaySkuTier skuTier, VirtualNetworkGatewayType type, VpnType vpnType) {
                 this.name = name;
                 this.cidr = cidr;
                 this.zoneId = zoneId;
                 this.ipConfigurationName = ipConfigurationName;
                 this.publicIpName = publicIpName;
                 this.ipAllocationMethod = ipAllocationMethod;
-                this.sku = sku;
+                this.skuName = skuName;
+                this.skuTier = skuTier;
                 this.type = type;
                 this.vpnType = vpnType;
             }
@@ -281,10 +287,11 @@ public class AzureTestUtil {
                 AZURE_RESOURCE_GROUP_LOCATION,
                 AZURE_GATEWAY_IP_CONFIGURATION_NAME,
                 AZURE_GATEWAY_PUBLIC_IP_NAME,
-                AZURE_GATEWAY_IP_ALLOCATION_METHOD,
-                AZURE_GATEWAY_SKU,
-                AZURE_GATEWAY_TYPE,
-                AZURE_GATEWAY_VPN_TYPE) : null;
+                IPAllocationMethod.DYNAMIC,
+                VirtualNetworkGatewaySkuName.STANDARD,
+                VirtualNetworkGatewaySkuTier.STANDARD,
+                VirtualNetworkGatewayType.VPN,
+                VpnType.ROUTE_BASED) : null;
 
         return new AzureNicSpecs(network, subnets, gateway, assignPublicIpAddress);
     }
@@ -305,83 +312,83 @@ public class AzureTestUtil {
         return returnPool;
     }
 
-    public static VirtualNetwork getAzureVirtualNetwork(
-            NetworkManagementClient networkManagementClient, String resourceGroupName,
+    public static VirtualNetworkInner getAzureVirtualNetwork(
+            NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
             String virtualNetworkName) throws Exception {
-        ServiceResponse<VirtualNetwork> response = networkManagementClient
-                .getVirtualNetworksOperations().get(resourceGroupName, virtualNetworkName, null);
+        VirtualNetworkInner response = networkManagementClient
+                .virtualNetworks().getByResourceGroup(resourceGroupName, virtualNetworkName, null);
 
-        return response.getBody();
+        return response;
     }
 
-    public static VirtualMachine getAzureVirtualMachine(
-            ComputeManagementClient computeManagementClient,
+    public static VirtualMachineInner getAzureVirtualMachine(
+            ComputeManagementClientImpl computeManagementClient,
             String resourceGroupName, String vmName) throws Exception {
-        ServiceResponse<VirtualMachine> response = computeManagementClient
-                .getVirtualMachinesOperations().get(resourceGroupName, vmName, null);
+        VirtualMachineInner response = computeManagementClient
+                .virtualMachines().getByResourceGroup(resourceGroupName, vmName, null);
 
-        return response.getBody();
+        return response;
     }
 
-    public static VirtualMachine getAzureVirtualMachineWithExtension(
-            ComputeManagementClient computeManagementClient,
-            String resourceGroupName, String vmName, String expand) throws Exception {
-        ServiceResponse<VirtualMachine> response = computeManagementClient
-                .getVirtualMachinesOperations().get(resourceGroupName, vmName, expand);
+    public static VirtualMachineInner getAzureVirtualMachineWithExtension(
+            ComputeManagementClientImpl computeManagementClient,
+            String resourceGroupName, String vmName, InstanceViewTypes expand) throws Exception {
+        VirtualMachineInner response = computeManagementClient
+                .virtualMachines().getByResourceGroup(resourceGroupName, vmName, expand);
 
-        return response.getBody();
+        return response;
     }
 
 
-    public static NetworkSecurityGroup getAzureSecurityGroup(
-            NetworkManagementClient networkManagementClient, String resourceGroupName,
+    public static NetworkSecurityGroupInner getAzureSecurityGroup(
+            NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
             String securityGroupName) throws Exception {
-        ServiceResponse<NetworkSecurityGroup> response = networkManagementClient
-                .getNetworkSecurityGroupsOperations()
-                .get(resourceGroupName, securityGroupName, null);
+        NetworkSecurityGroupInner response = networkManagementClient
+                .networkSecurityGroups()
+                .getByResourceGroup(resourceGroupName, securityGroupName, null);
 
-        return response.getBody();
+        return response;
     }
 
-    public static VirtualNetwork updateAzureVirtualNetwork(
-            NetworkManagementClient networkManagementClient, String resourceGroupName,
-            String virtualNetworkName, VirtualNetwork parameters) throws Exception {
-        ServiceResponse<VirtualNetwork> response = networkManagementClient
-                .getVirtualNetworksOperations()
+    public static VirtualNetworkInner updateAzureVirtualNetwork(
+            NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
+            String virtualNetworkName, VirtualNetworkInner parameters) throws Exception {
+        VirtualNetworkInner response = networkManagementClient
+                .virtualNetworks()
                 .createOrUpdate(resourceGroupName, virtualNetworkName, parameters);
 
-        return response.getBody();
+        return response;
     }
 
-    public static NetworkSecurityGroup updateAzureSecurityGroup(
-            NetworkManagementClient networkManagementClient, String resourceGroupName,
-            String networkSecurityGroupName, NetworkSecurityGroup parameters) throws Exception {
-        ServiceResponse<NetworkSecurityGroup> response = networkManagementClient
-                .getNetworkSecurityGroupsOperations()
+    public static NetworkSecurityGroupInner updateAzureSecurityGroup(
+            NetworkManagementClientImpl networkManagementClient, String resourceGroupName,
+            String networkSecurityGroupName, NetworkSecurityGroupInner parameters) throws Exception {
+        NetworkSecurityGroupInner response = networkManagementClient
+                .networkSecurityGroups()
                 .createOrUpdate(resourceGroupName, networkSecurityGroupName, parameters);
 
-        return response.getBody();
+        return response;
     }
 
-    public static VirtualMachine updateAzureVirtualMachine(
-            ComputeManagementClient computeManagementClient, String resourceGroupName,
-            String vmName, VirtualMachine parameters) throws Exception {
-        ServiceResponse<VirtualMachine> response = computeManagementClient
-                .getVirtualMachinesOperations()
+    public static VirtualMachineInner updateAzureVirtualMachine(
+            ComputeManagementClientImpl computeManagementClient, String resourceGroupName,
+            String vmName, VirtualMachineInner parameters) throws Exception {
+        VirtualMachineInner response = computeManagementClient
+                .virtualMachines()
                 .createOrUpdate(resourceGroupName, vmName, parameters);
 
-        return response.getBody();
+        return response;
     }
 
-    public static int getAzureVMCount(ComputeManagementClient computeManagementClient)
+    public static int getAzureVMCount(ComputeManagementClientImpl computeManagementClient)
             throws Exception {
-        ServiceResponse<List<VirtualMachine>> response = computeManagementClient
-                .getVirtualMachinesOperations().listAll();
+        List<VirtualMachineInner> response = computeManagementClient
+                .virtualMachines().list();
 
         int count = 0;
-        for (VirtualMachine virtualMachine : response.getBody()) {
+        for (VirtualMachineInner virtualMachine : response) {
             if (AzureComputeEnumerationAdapterService.AZURE_VM_TERMINATION_STATES
-                    .contains(virtualMachine.getProvisioningState())) {
+                    .contains(virtualMachine.provisioningState())) {
                 continue;
             }
             count++;
@@ -594,7 +601,7 @@ public class AzureTestUtil {
         rootDisk.tenantLinks = endpointState.tenantLinks;
 
         rootDisk.customProperties = new HashMap<>();
-        rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING);
+        rootDisk.customProperties.put(AZURE_OSDISK_CACHING, DEFAULT_OS_DISK_CACHING.name());
 
         rootDisk.customProperties.put(AzureConstants.AZURE_STORAGE_ACCOUNT_NAME,
                 (azureVMName + "sa").replace("-", "").toLowerCase());
@@ -887,52 +894,55 @@ public class AzureTestUtil {
      * <p>
      * NOTE2: Since this is SHARED vNet it's not deleted after the test.
      */
-    public static ResourceGroup createResourceGroupWithSharedNetwork(
-            ResourceManagementClient resourceManagementClient,
-            NetworkManagementClient networkManagementClient,
+    public static ResourceGroupInner createResourceGroupWithSharedNetwork(
+            ResourceManagementClientImpl resourceManagementClient,
+            NetworkManagementClientImpl networkManagementClient,
             AzureNicSpecs nicSpecs) throws Throwable {
 
         // Create the shared RG itself
-        ResourceGroup sharedNetworkRGParams = new ResourceGroup();
-        sharedNetworkRGParams.setName(AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME);
-        sharedNetworkRGParams.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+        ResourceGroupInner sharedNetworkRGParams = new ResourceGroupInner();
+        sharedNetworkRGParams.withName(AZURE_SHARED_NETWORK_RESOURCE_GROUP_NAME);
+        sharedNetworkRGParams.withLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
 
-        ResourceGroup sharedNetworkRG = resourceManagementClient.getResourceGroupsOperations()
-                .createOrUpdate(sharedNetworkRGParams.getName(), sharedNetworkRGParams).getBody();
+        ResourceGroupInner sharedNetworkRG = resourceManagementClient.resourceGroups()
+                .createOrUpdate(sharedNetworkRGParams.name(), sharedNetworkRGParams);
 
         // Create shared vNet-Subnet-Gateway under shared RG
-        createAzureVirtualNetwork(sharedNetworkRG.getName(), nicSpecs,
+        createAzureVirtualNetwork(sharedNetworkRG.name(), nicSpecs,
                 networkManagementClient);
 
         // Create shared NSG under shared RG
-        createAzureNetworkSecurityGroup(sharedNetworkRG.getName(), networkManagementClient);
+        createAzureNetworkSecurityGroup(sharedNetworkRG.name(), networkManagementClient);
 
         return sharedNetworkRG;
     }
 
     private static void createAzureVirtualNetwork(String resourceGroupName,
             AzureNicSpecs nicSpecs,
-            NetworkManagementClient networkManagementClient) throws Exception {
+            NetworkManagementClientImpl networkManagementClient) throws Exception {
 
         try {
-            VirtualNetwork vNet = new VirtualNetwork();
-            vNet.setLocation(nicSpecs.network.zoneId);
+            VirtualNetworkInner vNet = new VirtualNetworkInner();
+            vNet.withLocation(nicSpecs.network.zoneId);
 
-            vNet.setAddressSpace(new AddressSpace());
-            vNet.getAddressSpace().setAddressPrefixes(
+            AddressSpace addressSpace = new AddressSpace();
+            addressSpace.withAddressPrefixes(
                     Collections.singletonList(nicSpecs.network.cidr));
+            vNet.withAddressSpace(addressSpace);
 
-            vNet.setSubnets(new ArrayList<>());
+            List<SubnetInner> subnetList = new ArrayList<>();
 
             for (int i = 0; i < nicSpecs.subnets.size(); i++) {
-                Subnet subnet = new Subnet();
-                subnet.setName(nicSpecs.subnets.get(i).name);
-                subnet.setAddressPrefix(nicSpecs.subnets.get(i).cidr);
+                SubnetInner subnet = new SubnetInner();
+                subnet.withName(nicSpecs.subnets.get(i).name);
+                subnet.withAddressPrefix(nicSpecs.subnets.get(i).cidr);
 
-                vNet.getSubnets().add(subnet);
+                subnetList.add(subnet);
             }
 
-            networkManagementClient.getVirtualNetworksOperations().createOrUpdate(
+            vNet.withSubnets(subnetList);
+
+            networkManagementClient.virtualNetworks().createOrUpdate(
                     resourceGroupName, nicSpecs.network.name, vNet);
 
             addAzureGatewayToVirtualNetwork(resourceGroupName, nicSpecs, networkManagementClient);
@@ -942,33 +952,33 @@ public class AzureTestUtil {
              * CloudException is thrown if the vNet already exists and we are trying to do an
              * update, because there are objects (GatewaySubnet) attached to it
              */
-            assertTrue(ex.getBody().getCode().equals("InUseSubnetCannotBeDeleted"));
+            assertTrue(ex.body().code().equals("InUseSubnetCannotBeDeleted"));
         }
     }
 
     private static void createAzureNetworkSecurityGroup(String resourceGroupName,
-            NetworkManagementClient networkManagementClient) throws Exception {
+            NetworkManagementClientImpl networkManagementClient) throws Exception {
 
-        final NetworkSecurityGroup sharedNSG = new NetworkSecurityGroup();
-        sharedNSG.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+        final NetworkSecurityGroupInner sharedNSG = new NetworkSecurityGroupInner();
+        sharedNSG.withLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
 
-        SecurityRule sr = new SecurityRule();
-        sr.setPriority(AzureConstants.AZURE_SECURITY_GROUP_PRIORITY);
-        sr.setAccess(Access.Allow.name());
-        sr.setDirection(AzureConstants.AZURE_SECURITY_GROUP_DIRECTION_INBOUND);
-        sr.setSourceAddressPrefix(AzureConstants.AZURE_SECURITY_GROUP_SOURCE_ADDRESS_PREFIX);
-        sr.setDestinationAddressPrefix(
+        SecurityRuleInner sr = new SecurityRuleInner();
+        sr.withPriority(AzureConstants.AZURE_SECURITY_GROUP_PRIORITY);
+        sr.withAccess(SecurityRuleAccess.ALLOW);
+        sr.withDirection(SecurityRuleDirection.INBOUND);
+        sr.withSourceAddressPrefix(AzureConstants.AZURE_SECURITY_GROUP_SOURCE_ADDRESS_PREFIX);
+        sr.withDestinationAddressPrefix(
                 AzureConstants.AZURE_SECURITY_GROUP_DESTINATION_ADDRESS_PREFIX);
 
-        sr.setSourcePortRange(AzureConstants.AZURE_SECURITY_GROUP_SOURCE_PORT_RANGE);
-        sr.setDestinationPortRange(
+        sr.withSourcePortRange(AzureConstants.AZURE_SECURITY_GROUP_SOURCE_PORT_RANGE);
+        sr.withDestinationPortRange(
                 AzureConstants.AZURE_LINUX_SECURITY_GROUP_DESTINATION_PORT_RANGE);
-        sr.setName(AzureConstants.AZURE_LINUX_SECURITY_GROUP_NAME);
-        sr.setProtocol(AzureConstants.AZURE_SECURITY_GROUP_PROTOCOL);
+        sr.withName(AzureConstants.AZURE_LINUX_SECURITY_GROUP_NAME);
+        sr.withProtocol(SecurityRuleProtocol.TCP);
 
-        sharedNSG.setSecurityRules(Collections.singletonList(sr));
+        sharedNSG.withSecurityRules(Collections.singletonList(sr));
 
-        networkManagementClient.getNetworkSecurityGroupsOperations()
+        networkManagementClient.networkSecurityGroups()
                 .createOrUpdate(resourceGroupName, AzureTestUtil.AZURE_SECURITY_GROUP_NAME,
                         sharedNSG);
     }
@@ -977,62 +987,60 @@ public class AzureTestUtil {
      * Adds Gateway to Virtual Network in Azure
      */
     private static void addAzureGatewayToVirtualNetwork(String resourceGroupName,
-            AzureNicSpecs nicSpecs, NetworkManagementClient networkManagementClient)
+            AzureNicSpecs nicSpecs, NetworkManagementClientImpl networkManagementClient)
             throws CloudException, IOException, InterruptedException {
 
         // create Gateway Subnet
-        Subnet gatewaySubnetParams = new Subnet();
-        gatewaySubnetParams.setName(nicSpecs.gateway.name);
-        gatewaySubnetParams.setAddressPrefix(nicSpecs.gateway.cidr);
-        Subnet gatewaySubnet = networkManagementClient
-                .getSubnetsOperations()
+        SubnetInner gatewaySubnetParams = new SubnetInner();
+        gatewaySubnetParams.withName(nicSpecs.gateway.name);
+        gatewaySubnetParams.withAddressPrefix(nicSpecs.gateway.cidr);
+        SubnetInner gatewaySubnet = networkManagementClient
+                .subnets()
                 .createOrUpdate(resourceGroupName, nicSpecs.network.name,
                         AzureConstants.GATEWAY_SUBNET_NAME,
-                        gatewaySubnetParams)
-                .getBody();
+                        gatewaySubnetParams);
 
         // create Public IP
-        PublicIPAddress publicIPAddressParams = new PublicIPAddress();
-        publicIPAddressParams.setPublicIPAllocationMethod(nicSpecs.gateway.ipAllocationMethod);
-        publicIPAddressParams.setLocation(nicSpecs.gateway.zoneId);
+        PublicIPAddressInner publicIPAddressParams = new PublicIPAddressInner();
+        publicIPAddressParams.withPublicIPAllocationMethod(IPAllocationMethod.DYNAMIC);
+        publicIPAddressParams.withLocation(nicSpecs.gateway.zoneId);
 
-        PublicIPAddress publicIPAddress = networkManagementClient
-                .getPublicIPAddressesOperations()
+        PublicIPAddressInner publicIPAddress = networkManagementClient
+                .publicIPAddresses()
                 .createOrUpdate(resourceGroupName, nicSpecs.gateway.publicIpName,
-                        publicIPAddressParams)
-                .getBody();
+                        publicIPAddressParams);
 
         SubResource publicIPSubResource = new SubResource();
-        publicIPSubResource.setId(publicIPAddress.getId());
+        publicIPSubResource.withId(publicIPAddress.id());
 
         // create IP Configuration
-        VirtualNetworkGatewayIPConfiguration ipConfiguration = new VirtualNetworkGatewayIPConfiguration();
-        ipConfiguration.setName(nicSpecs.gateway.ipConfigurationName);
-        ipConfiguration.setSubnet(gatewaySubnet);
-        ipConfiguration.setPrivateIPAllocationMethod(nicSpecs.gateway.ipAllocationMethod);
+        VirtualNetworkGatewayIPConfigurationInner ipConfiguration = new VirtualNetworkGatewayIPConfigurationInner();
+        ipConfiguration.withName(nicSpecs.gateway.ipConfigurationName);
+        ipConfiguration.withSubnet(gatewaySubnet);
+        ipConfiguration.withPrivateIPAllocationMethod(IPAllocationMethod.DYNAMIC);
 
-        ipConfiguration.setPublicIPAddress(publicIPSubResource);
+        ipConfiguration.withPublicIPAddress(publicIPSubResource);
 
         // create Virtual Network Gateway
-        VirtualNetworkGateway virtualNetworkGateway = new VirtualNetworkGateway();
-        virtualNetworkGateway.setGatewayType(nicSpecs.gateway.type);
-        virtualNetworkGateway.setVpnType(nicSpecs.gateway.vpnType);
+        VirtualNetworkGatewayInner virtualNetworkGateway = new VirtualNetworkGatewayInner();
+        virtualNetworkGateway.withGatewayType(VirtualNetworkGatewayType.VPN);
+        virtualNetworkGateway.withVpnType(VpnType.ROUTE_BASED);
         VirtualNetworkGatewaySku vNetGatewaySku = new VirtualNetworkGatewaySku();
-        vNetGatewaySku.setName(nicSpecs.gateway.sku);
-        vNetGatewaySku.setTier(nicSpecs.gateway.sku);
-        vNetGatewaySku.setCapacity(2);
-        virtualNetworkGateway.setSku(vNetGatewaySku);
-        virtualNetworkGateway.setLocation(AZURE_RESOURCE_GROUP_LOCATION);
+        vNetGatewaySku.withName(VirtualNetworkGatewaySkuName.STANDARD);
+        vNetGatewaySku.withTier(VirtualNetworkGatewaySkuTier.STANDARD);
+        vNetGatewaySku.withCapacity(2);
+        virtualNetworkGateway.withSku(vNetGatewaySku);
+        virtualNetworkGateway.withLocation(AZURE_RESOURCE_GROUP_LOCATION);
 
-        List<VirtualNetworkGatewayIPConfiguration> ipConfigurations = new ArrayList<>();
+        List<VirtualNetworkGatewayIPConfigurationInner> ipConfigurations = new ArrayList<>();
         ipConfigurations.add(ipConfiguration);
-        virtualNetworkGateway.setIpConfigurations(ipConfigurations);
+        virtualNetworkGateway.withIpConfigurations(ipConfigurations);
 
         // Call the async variant because the virtual network gateway provisioning depends on
         // the public IP address assignment which is time-consuming operation
-        networkManagementClient.getVirtualNetworkGatewaysOperations().createOrUpdateAsync(
+        networkManagementClient.virtualNetworkGateways().createOrUpdateAsync(
                 resourceGroupName, nicSpecs.gateway.name, virtualNetworkGateway,
-                new ServiceCallback<VirtualNetworkGateway>() {
+                new ServiceCallback<VirtualNetworkGatewayInner>() {
                     @Override
                     public void failure(Throwable throwable) {
                         throw new RuntimeException(
@@ -1041,7 +1049,7 @@ public class AzureTestUtil {
 
                     @Override
                     public void success(
-                            ServiceResponse<VirtualNetworkGateway> serviceResponse) {
+                            VirtualNetworkGatewayInner response) {
 
                     }
                 });

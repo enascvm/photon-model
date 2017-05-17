@@ -15,17 +15,13 @@ package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CUSTOM_OS_TYPE;
 import static com.vmware.photon.controller.model.ComputeProperties.RESOURCE_GROUP_NAME;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_OSDISK_CACHING;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_RESOURCE_GROUP_NAME;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LINUX_OPERATING_SYSTEM;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_VM_URI;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.VM_REST_API_VERSION;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.WINDOWS_OPERATING_SYSTEM;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.getQueryResultLimit;
+import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.buildRestClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.cleanUpHttpClient;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getAzureConfig;
 import static com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils.getResourceGroupName;
@@ -52,34 +48,33 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+import com.microsoft.azure.Page;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
-import com.microsoft.azure.management.compute.VirtualMachinesOperations;
-import com.microsoft.azure.management.compute.models.ImageReference;
-import com.microsoft.azure.management.compute.models.InstanceViewStatus;
-import com.microsoft.azure.management.compute.models.NetworkInterfaceReference;
-import com.microsoft.azure.management.network.NetworkInterfacesOperations;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.NetworkManagementClientImpl;
-import com.microsoft.azure.management.network.models.NetworkInterface;
-import com.microsoft.azure.management.network.models.NetworkInterfaceIPConfiguration;
+import com.microsoft.azure.management.Azure;
+import com.microsoft.azure.management.compute.InstanceViewStatus;
+import com.microsoft.azure.management.compute.InstanceViewTypes;
+import com.microsoft.azure.management.compute.OperatingSystemTypes;
+import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
+import com.microsoft.azure.management.compute.implementation.NetworkInterfaceReferenceInner;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
+import com.microsoft.azure.management.compute.implementation.VirtualMachinesInner;
+import com.microsoft.azure.management.network.PublicIPAddress;
+import com.microsoft.azure.management.network.implementation.NetworkInterfaceIPConfigurationInner;
+import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
+import com.microsoft.azure.management.network.implementation.NetworkInterfacesInner;
 
-import okhttp3.OkHttpClient;
+import com.microsoft.rest.RestClient;
 
 import org.apache.commons.lang3.tuple.Pair;
 
-import retrofit2.Retrofit;
+import rx.functions.Action1;
 
 import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapterapi.ComputeEnumerateResourceRequest;
 import com.vmware.photon.controller.model.adapterapi.EnumerationAction;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
-import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachine;
-import com.vmware.photon.controller.model.adapters.azure.model.vm.VirtualMachineListResult;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
-import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.AdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.enums.EnumerationStages;
@@ -125,7 +120,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     public static final String SELF_LINK = AzureUriPaths.AZURE_COMPUTE_ENUMERATION_ADAPTER;
     public static final List<String> AZURE_VM_TERMINATION_STATES = Arrays.asList("Deleting",
             "Deleted");
-    private static final String EXPAND_INSTANCE_VIEW_PARAM = "instanceView";
     private ExecutorService executorService;
 
     /**
@@ -137,8 +131,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // stages
         // are successfully completed.
         public Operation operation;
-        public OkHttpClient.Builder clientBuilder;
-        public OkHttpClient httpClient;
         ComputeEnumerateResourceRequest request;
         ComputeStateWithDescription parentCompute;
         EnumerationStages stage;
@@ -149,7 +141,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         String enumNextPageLink;
         // Substage specific fields
         ComputeEnumerationSubStages subStage;
-        Map<String, VirtualMachine> virtualMachines = new ConcurrentHashMap<>();
+        Map<String, VirtualMachineInner> virtualMachines = new ConcurrentHashMap<>();
         Map<String, ComputeState> computeStates = new ConcurrentHashMap<>();
         Map<String, DiskState> diskStates = new ConcurrentHashMap<>();
         Map<String, StorageDescription> storageDescriptions = new ConcurrentHashMap<>();
@@ -161,8 +153,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // Azure specific fields
         ApplicationTokenCredentials credentials;
         // Azure clients
-        NetworkManagementClient networkClient;
-        ComputeManagementClient computeClient;
+        Azure azure;
+        RestClient restClient;
 
         EnumerationContext(ComputeEnumerateAdapterRequest request, Operation op) {
             this.request = request.original;
@@ -257,19 +249,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     return;
                 }
             }
-            if (ctx.httpClient == null) {
-                try {
-                    // Creating a shared singleton Http client instance
-                    // Reference
-                    // https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.html
-                    // TODO: https://github.com/Azure/azure-sdk-for-java/issues/1000
-                    ctx.httpClient = new OkHttpClient();
-                    ctx.clientBuilder = ctx.httpClient.newBuilder();
-                } catch (Exception e) {
-                    handleError(ctx, e);
-                    return;
-                }
-            }
             ctx.stage = EnumerationStages.ENUMERATE;
             handleEnumeration(ctx);
             break;
@@ -303,13 +282,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         case FINISHED:
             logInfo(() -> String.format("Azure compute enumeration finished for %s",
                     ctx.request.getEnumKey()));
-            cleanUpHttpClient(this, ctx.httpClient);
+            cleanUpHttpClient(ctx.restClient.httpClient());
             ctx.operation.complete();
             break;
         case ERROR:
             logWarning(() -> String.format("Azure compute enumeration error for %s",
                     ctx.request.getEnumKey()));
-            cleanUpHttpClient(this, ctx.httpClient);
+            cleanUpHttpClient(ctx.restClient.httpClient());
             ctx.operation.fail(ctx.error);
             break;
         default:
@@ -317,7 +296,6 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                     ctx.stage.toString());
             logSevere(() -> msg);
             ctx.error = new IllegalStateException(msg);
-            cleanUpHttpClient(this, ctx.httpClient);
             ctx.operation.fail(ctx.error);
         }
     }
@@ -536,75 +514,63 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
      */
     private void getVmList(EnumerationContext ctx, ComputeEnumerationSubStages next) {
         logFine(() -> "Enumerating VMs from Azure");
-        String uriStr = ctx.enumNextPageLink;
-        URI uri;
 
-        if (uriStr == null) {
-            uriStr = AdapterUriUtil.expandUriPathTemplate(LIST_VM_URI, ctx.parentAuth.userLink);
-            uri = UriUtils.extendUriWithQuery(UriUtils.buildUri(uriStr),
-                    QUERY_PARAM_API_VERSION, VM_REST_API_VERSION);
-        } else {
-            uri = UriUtils.buildUri(uriStr);
-        }
-
-        Operation operation = Operation.createGet(uri);
-        operation.addRequestHeader(Operation.ACCEPT_HEADER, Operation.MEDIA_TYPE_APPLICATION_JSON);
-        operation.addRequestHeader(Operation.CONTENT_TYPE_HEADER,
-                Operation.MEDIA_TYPE_APPLICATION_JSON);
-        try {
-            operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                    AUTH_HEADER_BEARER_PREFIX + ctx.credentials.getToken());
-        } catch (Exception ex) {
-            this.handleError(ctx, ex);
-            return;
-        }
+        Azure azureClient = getAzureClient(ctx);
 
         ctx.virtualMachines.clear();
-        operation.setCompletion((op, er) -> {
-            if (er != null) {
-                op.complete();
-                handleError(ctx, er);
-                return;
-            }
 
-            VirtualMachineListResult results = op.getBody(VirtualMachineListResult.class);
-            op.complete();
+        if (ctx.enumNextPageLink == null) {
+            azureClient.virtualMachines().inner().listAsync()
+                    .subscribe(vmEnumerationCompletion(ctx, next));
+        } else {
+            azureClient.virtualMachines().inner().listNextAsync(ctx.enumNextPageLink)
+                    .subscribe(vmEnumerationCompletion(ctx, next));
+        }
+    }
 
-            List<VirtualMachine> virtualMachines = results.value;
+    /**
+     * Completion handler for VM enumeration call.
+     * For async calls to list VMs, Azure returns Observable<Page<VirtualMachineInner>>. The following
+     * completion subscribes to the Observable and Overrides call(<T>) to include logic to process pages of VMs
+     * when we receive them.
+     */
+    private Action1<Page<VirtualMachineInner>> vmEnumerationCompletion(EnumerationContext ctx,
+                                                                    ComputeEnumerationSubStages next) {
+        Action1<Page<VirtualMachineInner>> enumerationCompletion = new Action1<Page<VirtualMachineInner>>() {
+            @Override
+            public void call(Page<VirtualMachineInner> virtualMachineInnerPage) {
+                List<VirtualMachineInner> virtualMachineInners = virtualMachineInnerPage.items();
+                ctx.enumNextPageLink = virtualMachineInnerPage.nextPageLink();
 
-            // If there are no VMs in Azure we directly skip over to deletion phase.
-            if (virtualMachines == null || virtualMachines.size() == 0) {
-                ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
-                handleSubStage(ctx);
-                return;
-            }
-
-            ctx.enumNextPageLink = results.nextLink;
-
-            logInfo(() -> String.format("Retrieved %d VMs from Azure", virtualMachines.size()));
-            logFine(() -> String.format("Next page link %s", ctx.enumNextPageLink));
-
-            for (VirtualMachine virtualMachine : virtualMachines) {
-                // We don't want to process VMs that are being terminated.
-                if (AZURE_VM_TERMINATION_STATES
-                        .contains(virtualMachine.properties.provisioningState)) {
-                    logFine(() -> String.format("Not processing %s", virtualMachine.id));
-                    continue;
+                if (virtualMachineInners == null || virtualMachineInners.size() == 0) {
+                    ctx.subStage = ComputeEnumerationSubStages.DELETE_COMPUTE_STATES;
+                    handleSubStage(ctx);
+                    return;
                 }
 
-                // Azure for some case changes the case of the vm id.
-                String vmId = virtualMachine.id.toLowerCase();
-                ctx.virtualMachines.put(vmId, virtualMachine);
-                ctx.vmIds.add(vmId);
+                logInfo(() -> String.format("Retrieved %d VMs from Azure", virtualMachineInners.size()));
+                logFine(() -> String.format("Next page link %s", ctx.enumNextPageLink));
+
+                for (VirtualMachineInner virtualMachine : virtualMachineInners) {
+                    // We don't want to process VMs that are being terminated.
+                    if (AZURE_VM_TERMINATION_STATES.contains(virtualMachine.provisioningState())) {
+                        logFine(() -> String.format("Not processing %s", virtualMachine.id()));
+                        continue;
+                    }
+                    // Azure for some case changes the case of the vm id.
+                    String vmId = virtualMachine.id().toLowerCase();
+                    ctx.virtualMachines.put(vmId, virtualMachine);
+                    ctx.vmIds.add(vmId);
+                }
+
+                logFine(() -> String.format("Processing %d VMs", ctx.vmIds.size()));
+
+                ctx.subStage = next;
+                handleSubStage(ctx);
             }
+        };
 
-            logFine(() -> String.format("Processing %d VMs", ctx.vmIds.size()));
-
-            ctx.subStage = next;
-            handleSubStage(ctx);
-
-        });
-        sendRequest(operation);
+        return enumerationCompletion;
     }
 
     /**
@@ -663,8 +629,8 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // tags, so filter them out
         List<DeferredResult<Operation>> operations = context.virtualMachines
                 .values()
-                .stream().filter(vm -> vm.tags != null && !vm.tags.isEmpty())
-                .flatMap(vm -> vm.tags.entrySet().stream())
+                .stream().filter(vm -> vm.getTags() != null && !vm.getTags().isEmpty())
+                .flatMap(vm -> vm.getTags().entrySet().stream())
                 .map(entry -> newExternalTagState(entry.getKey(), entry.getValue(),
                         context.parentCompute.tenantLinks))
                 .map(tagState -> sendWithDeferredResult(Operation
@@ -692,12 +658,12 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         }
 
         DeferredResult.allOf(ctx.computeStates.values().stream().map(c -> {
-            VirtualMachine virtualMachine = ctx.virtualMachines.remove(c.id);
+            VirtualMachineInner virtualMachine = ctx.virtualMachines.remove(c.id);
             return Pair.of(c, virtualMachine);
         })
                 .map(p -> {
                     ComputeState cs = p.getLeft();
-                    Map<String, String> tags = p.getRight().tags;
+                    Map<String, String> tags = p.getRight().getTags();
                     DeferredResult<Set<String>> result = DeferredResult.completed(null);
                     if (tags != null && !tags.isEmpty()) {
                         Set<String> tagLinks = cs.tagLinks;
@@ -806,11 +772,11 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .create(Query.Occurance.MUST_OCCUR);
 
         ctx.virtualMachines.keySet().stream().filter(instanceId -> ctx.virtualMachines
-                .get(instanceId).properties.diagnosticsProfile != null)
+                .get(instanceId).diagnosticsProfile() != null)
                 .forEach(instanceId -> {
                     String diagnosticStorageAccountUri = ctx.virtualMachines
-                            .get(instanceId).properties.diagnosticsProfile.getBootDiagnostics()
-                                    .getStorageUri();
+                            .get(instanceId).diagnosticsProfile().bootDiagnostics()
+                                    .storageUri();
 
                     String storageAccountProperty = QuerySpecification
                             .buildCompositeFieldName(
@@ -892,17 +858,17 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         logFine(() -> String.format("%d compute description with states to be created",
                 ctx.virtualMachines.size()));
 
-        Iterator<Entry<String, VirtualMachine>> iterator = ctx.virtualMachines.entrySet()
+        Iterator<Entry<String, VirtualMachineInner>> iterator = ctx.virtualMachines.entrySet()
                 .iterator();
 
         Collection<Operation> opCollection = new ArrayList<>();
         while (iterator.hasNext()) {
-            Entry<String, VirtualMachine> vmEntry = iterator.next();
-            VirtualMachine virtualMachine = vmEntry.getValue();
+            Entry<String, VirtualMachineInner> vmEntry = iterator.next();
+            VirtualMachineInner virtualMachine = vmEntry.getValue();
 
             AuthCredentialsServiceState auth = new AuthCredentialsServiceState();
-            auth.userEmail = virtualMachine.properties.osProfile.getAdminUsername();
-            auth.privateKey = virtualMachine.properties.osProfile.getAdminPassword();
+            auth.userEmail = virtualMachine.osProfile().adminUsername();
+            auth.privateKey = virtualMachine.osProfile().adminPassword();
             auth.documentSelfLink = UUID.randomUUID().toString();
             auth.tenantLinks = ctx.parentCompute.tenantLinks;
             auth.customProperties = new HashMap<>();
@@ -921,19 +887,19 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             // TODO VSYM-631: Match existing descriptions for new VMs discovered on Azure
             ComputeDescription computeDescription = new ComputeDescription();
             computeDescription.id = UUID.randomUUID().toString();
-            computeDescription.name = virtualMachine.name;
-            computeDescription.regionId = virtualMachine.location;
+            computeDescription.name = virtualMachine.name();
+            computeDescription.regionId = virtualMachine.location();
             computeDescription.authCredentialsLink = authLink;
             computeDescription.endpointLink = ctx.request.endpointLink;
             computeDescription.documentSelfLink = computeDescription.id;
             computeDescription.environmentName = ENVIRONMENT_NAME_AZURE;
-            computeDescription.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
+            computeDescription.instanceType = virtualMachine.hardwareProfile().vmSize().toString();
             computeDescription.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
             computeDescription.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
             computeDescription.customProperties = new HashMap<>();
 
             // TODO: https://jira-hzn.eng.vmware.com/browse/VSYM-1268
-            String resourceGroupName = getResourceGroupName(virtualMachine.id);
+            String resourceGroupName = getResourceGroupName(virtualMachine.id());
             computeDescription.customProperties.put(AZURE_RESOURCE_GROUP_NAME,
                     resourceGroupName);
             computeDescription.tenantLinks = ctx.parentCompute.tenantLinks;
@@ -941,7 +907,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             Operation compDescOp = Operation
                     .createPost(getHost(), ComputeDescriptionService.FACTORY_LINK)
                     .setBody(computeDescription);
-            ctx.computeDescriptionIds.put(virtualMachine.name, computeDescription.id);
+            ctx.computeDescriptionIds.put(virtualMachine.name(), computeDescription.id);
             opCollection.add(compDescOp);
         }
 
@@ -968,17 +934,17 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             handleSubStage(ctx);
             return;
         }
-        Iterator<Entry<String, VirtualMachine>> iterator = ctx.virtualMachines.entrySet()
+        Iterator<Entry<String, VirtualMachineInner>> iterator = ctx.virtualMachines.entrySet()
                 .iterator();
 
         Collection<Operation> opCollection = new ArrayList<>();
         while (iterator.hasNext()) {
-            Entry<String, VirtualMachine> vmEntry = iterator.next();
-            VirtualMachine virtualMachine = vmEntry.getValue();
+            Entry<String, VirtualMachineInner> vmEntry = iterator.next();
+            VirtualMachineInner virtualMachine = vmEntry.getValue();
             String diskUri = getVhdUri(virtualMachine);
 
             if (diskUri == null) {
-                logFine(() -> String.format("Disk URI not found for vm: %s", virtualMachine.id));
+                logFine(() -> String.format("Disk URI not found for vm: %s", virtualMachine.id()));
                 continue;
             }
 
@@ -987,15 +953,15 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 logFine(() -> String.format("Disk not found: %s", diskUri));
                 continue;
             }
-            ImageReference imageReference = virtualMachine.properties.storageProfile
-                    .getImageReference();
+            ImageReferenceInner imageReference = virtualMachine.storageProfile()
+                    .imageReference();
             diskToUpdate.sourceImageReference = URI.create(imageReferenceToImageId(imageReference));
             diskToUpdate.bootOrder = 1;
             if (diskToUpdate.customProperties == null) {
                 diskToUpdate.customProperties = new HashMap<>();
             }
             diskToUpdate.customProperties.put(AZURE_OSDISK_CACHING,
-                    virtualMachine.properties.storageProfile.getOsDisk().getCaching());
+                    virtualMachine.storageProfile().osDisk().caching().name());
             Operation diskOp = Operation
                     .createPatch(ctx.request.buildUri(diskToUpdate.documentSelfLink))
                     .setBody(diskToUpdate);
@@ -1030,15 +996,14 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     private void createNetworkInterfaceStates(EnumerationContext ctx,
             ComputeEnumerationSubStages next) {
 
-        NetworkManagementClient client = getNetworkManagementClient(ctx);
-        NetworkInterfacesOperations netOps = client.getNetworkInterfacesOperations();
-
-        List<DeferredResult<Pair<NetworkInterface, String>>> remoteNics = ctx.virtualMachines
+        Azure azureClient = getAzureClient(ctx);
+        NetworkInterfacesInner netOps = azureClient.networkInterfaces().inner();
+        List<DeferredResult<Pair<NetworkInterfaceInner, String>>> remoteNics = ctx.virtualMachines
                 .values().stream()
-                .filter(vm -> vm.properties.networkProfile != null && !vm.properties.networkProfile
-                        .getNetworkInterfaces().isEmpty())
-                .flatMap(vm -> vm.properties.networkProfile.getNetworkInterfaces().stream()
-                        .map(nic -> Pair.of(nic, vm.id)))
+                .filter(vm -> vm.networkProfile() != null && !vm.networkProfile()
+                        .networkInterfaces().isEmpty())
+                .flatMap(vm -> vm.networkProfile().networkInterfaces().stream()
+                        .map(nic -> Pair.of(nic, vm.id())))
                 .map(pair -> loadRemoteNic(pair, netOps))
                 .collect(Collectors.toList());
 
@@ -1053,13 +1018,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
     private DeferredResult<List<NetworkInterfaceState>> doCreateOrUpdateNics(EnumerationContext ctx,
             Map<String, String> subnetPerNicId,
-            List<Pair<NetworkInterface, String>> rnics) {
-        Map<String, Pair<NetworkInterface, String>> remoteStates = rnics.stream()
-                .collect(Collectors.toMap(p -> p.getLeft().getId(), p -> p));
+            List<Pair<NetworkInterfaceInner, String>> rnics) {
+        Map<String, Pair<NetworkInterfaceInner, String>> remoteStates = rnics.stream()
+                .collect(Collectors.toMap(p -> p.getLeft().id(), p -> p));
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(NetworkInterfaceState.class)
                 .addInClause(NetworkInterfaceState.FIELD_NAME_ID,
-                        rnics.stream().map(p -> p.getLeft().getId()).collect(Collectors.toList()));
+                        rnics.stream().map(p -> p.getLeft().id()).collect(Collectors.toList()));
 
         QueryByPages<NetworkInterfaceState> queryLocalStates = new QueryByPages<>(getHost(),
                 qBuilder.build(),
@@ -1072,102 +1037,144 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
                 .thenCompose(lnics -> {
                     List<DeferredResult<NetworkInterfaceState>> ops = new java.util.ArrayList<>();
                     lnics.stream().forEach(nic -> {
-                        Pair<NetworkInterface, String> pair = remoteStates.remove(nic.id);
-                        NetworkInterface rnic = pair.getLeft();
+                        Pair<NetworkInterfaceInner, String> pair = remoteStates.remove(nic.id);
+                        NetworkInterfaceInner rnic = pair.getLeft();
 
-                        nic.name = rnic.getName();
-                        nic.subnetLink = subnetPerNicId.get(rnic.getId());
+                        nic.name = rnic.name();
+                        nic.subnetLink = subnetPerNicId.get(rnic.id());
 
                         NicMetadata nicMeta = new NicMetadata();
                         nicMeta.state = nic;
-                        nicMeta.macAddress = rnic.getMacAddress();
+                        nicMeta.macAddress = rnic.macAddress();
 
-                        List<NetworkInterfaceIPConfiguration> ipConfigurations = rnic
-                                .getIpConfigurations();
+                        List<NetworkInterfaceIPConfigurationInner> ipConfigurations = rnic
+                                .ipConfigurations();
                         if (ipConfigurations != null && !ipConfigurations.isEmpty()) {
-                            NetworkInterfaceIPConfiguration nicIPConf = ipConfigurations.get(0);
-                            nic.address = nicIPConf.getPrivateIPAddress();
-                            nicMeta.publicIp = nicIPConf.getPublicIPAddress() != null
-                                    ? nicIPConf.getPublicIPAddress().getIpAddress() : null;
+                            NetworkInterfaceIPConfigurationInner nicIPConf = ipConfigurations.get(0);
+                            nic.address = nicIPConf.privateIPAddress();
+                            if (nicIPConf.publicIPAddress() == null) {
+                                nicMeta.publicIp = null;
+                                addPatchToNetworkIntefaceService(ctx, ops, nic, rnic, nicMeta);
+                            } else {
+                                // IP address is not directly available in NetworkInterfaceIPConfigurationInner.
+                                // It is available as a SubResource, We use the SubResource ID of IP address from
+                                // NetworkInterfaceIPConfigurationInner to obtain the IP address.
+                                Azure azure = getAzureClient(ctx);
+                                azure.publicIPAddresses().getByIdAsync(nicIPConf.publicIPAddress().id())
+                                        .subscribe(new Action1<PublicIPAddress>() {
+                                            @Override
+                                            public void call(PublicIPAddress publicIPAddress) {
+                                                nicMeta.publicIp = publicIPAddress.ipAddress();
+                                                addPatchToNetworkIntefaceService(ctx, ops, nic, rnic, nicMeta);
+                                            }
+                                        });
+                            }
+                        } else {
+                            addPatchToNetworkIntefaceService(ctx, ops, nic, rnic, nicMeta);
                         }
-
-                        ops.add(sendWithDeferredResult(Operation
-                                .createPatch(ctx.request.buildUri(nic.documentSelfLink))
-                                .setBody(nic), NetworkInterfaceState.class)
-                                        .thenApply(r -> {
-                                            ctx.networkInterfaceIds.put(rnic.getId(), nicMeta);
-                                            return r;
-                                        }));
                     });
 
                     remoteStates.values().stream().forEach(p -> {
-                        NetworkInterface rnic = p.getLeft();
+                        NetworkInterfaceInner rnic = p.getLeft();
                         NetworkInterfaceState state = new NetworkInterfaceState();
-                        state.id = rnic.getId();
-                        state.name = rnic.getName();
-                        state.subnetLink = subnetPerNicId.get(rnic.getId());
+                        state.id = rnic.id();
+                        state.name = rnic.name();
+                        state.subnetLink = subnetPerNicId.get(rnic.id());
                         state.endpointLink = ctx.request.endpointLink;
                         state.tenantLinks = ctx.parentCompute.tenantLinks;
-                        state.regionId = rnic.getLocation();
+                        state.regionId = rnic.location();
 
                         NicMetadata nicMeta = new NicMetadata();
-                        nicMeta.macAddress = rnic.getMacAddress();
+                        nicMeta.macAddress = rnic.macAddress();
 
-                        List<NetworkInterfaceIPConfiguration> ipConfigurations = rnic
-                                .getIpConfigurations();
+                        List<NetworkInterfaceIPConfigurationInner> ipConfigurations = rnic
+                                .ipConfigurations();
                         if (ipConfigurations != null && !ipConfigurations.isEmpty()) {
-                            NetworkInterfaceIPConfiguration nicIPConf = ipConfigurations.get(0);
-                            state.address = nicIPConf.getPrivateIPAddress();
-                            nicMeta.publicIp = nicIPConf.getPublicIPAddress() != null
-                                    ? nicIPConf.getPublicIPAddress().getIpAddress() : null;
+                            NetworkInterfaceIPConfigurationInner nicIPConf = ipConfigurations.get(0);
+                            state.address = nicIPConf.privateIPAddress();
+                            if (nicIPConf.publicIPAddress() == null) {
+                                nicMeta.publicIp = null;
+                                addPostToNetworkInterfaceService(ctx, ops, state, rnic, nicMeta);
+                            } else {
+                                // IP address is not directly available in NetworkInterfaceIPConfigurationInner.
+                                // It is available as a SubResource, We use the SubResource ID of IP address from
+                                // NetworkInterfaceIPConfigurationInner to obtain the IP address.
+                                Azure azure = getAzureClient(ctx);
+                                azure.publicIPAddresses().getByIdAsync(nicIPConf.publicIPAddress().id())
+                                        .subscribe(new Action1<PublicIPAddress>() {
+                                            @Override
+                                            public void call(PublicIPAddress publicIPAddress) {
+                                                nicMeta.publicIp = publicIPAddress.ipAddress();
+                                                addPostToNetworkInterfaceService(ctx, ops, state, rnic, nicMeta);
+                                            }
+                                        });
+                            }
+                        } else {
+                            addPostToNetworkInterfaceService(ctx, ops, state, rnic, nicMeta);
                         }
-
-                        ops.add(sendWithDeferredResult(Operation
-                                .createPost(
-                                        ctx.request.buildUri(NetworkInterfaceService.FACTORY_LINK))
-                                .setBody(state), NetworkInterfaceState.class)
-                                        .thenApply(nic -> {
-                                            nicMeta.state = nic;
-                                            ctx.networkInterfaceIds.put(rnic.getId(), nicMeta);
-                                            return nic;
-                                        }));
                     });
                     return DeferredResult.allOf(ops);
                 });
     }
 
-    private DeferredResult<Pair<NetworkInterface, String>> loadRemoteNic(
-            Pair<NetworkInterfaceReference, String> pair, NetworkInterfacesOperations netOps) {
-        AzureDeferredResultServiceCallback<NetworkInterface> handler = new AzureDeferredResultServiceCallback<NetworkInterface>(
-                this, "Load Nic:" + pair.getLeft().getId()) {
+    private void addPatchToNetworkIntefaceService(EnumerationContext ctx, List<DeferredResult<NetworkInterfaceState>> ops,
+                                               NetworkInterfaceState nic, NetworkInterfaceInner rnic,
+                                               NicMetadata nicMeta) {
+        ops.add(sendWithDeferredResult(Operation
+                .createPatch(ctx.request.buildUri(nic.documentSelfLink))
+                .setBody(nic), NetworkInterfaceState.class)
+                .thenApply(r -> {
+                    ctx.networkInterfaceIds.put(rnic.id(), nicMeta);
+                    return r;
+                }));
+    }
+
+    private void addPostToNetworkInterfaceService(EnumerationContext ctx, List<DeferredResult<NetworkInterfaceState>> ops,
+                                               NetworkInterfaceState state, NetworkInterfaceInner rnic,
+                                               NicMetadata nicMeta) {
+        ops.add(sendWithDeferredResult(Operation
+                .createPost(
+                        ctx.request.buildUri(NetworkInterfaceService.FACTORY_LINK))
+                .setBody(state), NetworkInterfaceState.class)
+                .thenApply(nic -> {
+                    nicMeta.state = nic;
+                    ctx.networkInterfaceIds.put(rnic.id(), nicMeta);
+                    return nic;
+                }));
+    }
+
+    private DeferredResult<Pair<NetworkInterfaceInner, String>> loadRemoteNic(
+            Pair<NetworkInterfaceReferenceInner, String> pair, NetworkInterfacesInner netOps) {
+        AzureDeferredResultServiceCallback<NetworkInterfaceInner> handler = new AzureDeferredResultServiceCallback<NetworkInterfaceInner>(
+                this, "Load Nic:" + pair.getLeft().id()) {
             @Override
-            protected DeferredResult<NetworkInterface> consumeSuccess(
-                    NetworkInterface nic) {
+            protected DeferredResult<NetworkInterfaceInner> consumeSuccess(
+                    NetworkInterfaceInner nic) {
                 return DeferredResult.completed(nic);
             }
         };
-        String networkInterfaceName = UriUtils.getLastPathSegment(pair.getLeft().getId());
-        String nicRG = getResourceGroupName(pair.getLeft().getId());
+        String networkInterfaceName = UriUtils.getLastPathSegment(pair.getLeft().id());
+        String nicRG = getResourceGroupName(pair.getLeft().id());
         String resourceGroupName = getResourceGroupName(pair.getRight());
         if (!resourceGroupName.equalsIgnoreCase(nicRG)) {
             logWarning(
                     "VM resource group %s is different from nic resource group %s, for nic %s",
-                    resourceGroupName, nicRG, pair.getLeft().getId());
+                    resourceGroupName, nicRG, pair.getLeft().id());
         }
-        netOps.getAsync(resourceGroupName, networkInterfaceName, "ipConfigurations/publicIPAddress",
+        netOps.getByResourceGroupAsync(resourceGroupName, networkInterfaceName, "ipConfigurations/publicIPAddress",
                 handler);
         return handler.toDeferredResult()
                 .thenApply(loaded -> Pair.of(loaded, pair.getRight()));
     }
 
     private DeferredResult<Map<String, String>> loadSubnets(EnumerationContext ctx,
-            List<Pair<NetworkInterface, String>> rnics) {
-        Map<String, List<Pair<NetworkInterface, String>>> nicsPerSubnet = rnics.stream()
-                .filter(p -> p.getLeft().getIpConfigurations() != null && !p.getLeft()
-                        .getIpConfigurations().isEmpty())
-                .filter(p -> p.getLeft().getIpConfigurations().get(0).getSubnet() != null)
+            List<Pair<NetworkInterfaceInner, String>> rnics) {
+        Map<String, List<Pair<NetworkInterfaceInner, String>>> nicsPerSubnet = rnics.stream()
+                .filter(p -> p.getLeft().ipConfigurations() != null && !p.getLeft()
+                        .ipConfigurations().isEmpty())
+                .filter(p -> p.getLeft().ipConfigurations().get(0).subnet() != null)
                 .collect(java.util.stream.Collectors.groupingBy(
-                        p -> p.getLeft().getIpConfigurations().get(0).getSubnet().getId()));
+                        p -> p.getLeft().ipConfigurations().get(0).subnet().id()));
 
         Query.Builder qBuilder = Query.Builder.create()
                 .addKindFieldClause(SubnetState.class)
@@ -1183,7 +1190,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         return queryLocalStates
                 .queryDocuments(subnet -> {
                     nicsPerSubnet.get(subnet.id).forEach(p -> subnetLinkPerNicId
-                            .put(p.getLeft().getId(), subnet.documentSelfLink));
+                            .put(p.getLeft().id(), subnet.documentSelfLink));
                 }).thenApply(ignore -> {
                     return subnetLinkPerNicId;
                 });
@@ -1229,7 +1236,7 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         });
     }
 
-    private ComputeState createComputeState(EnumerationContext ctx, VirtualMachine virtualMachine) {
+    private ComputeState createComputeState(EnumerationContext ctx, VirtualMachineInner virtualMachine) {
 
         List<String> vmDisks = new ArrayList<>();
         if (ctx.diskStates != null && ctx.diskStates.size() > 0) {
@@ -1245,32 +1252,34 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
         // Create compute state
         ComputeState computeState = new ComputeState();
         computeState.documentSelfLink = UUID.randomUUID().toString();
-        computeState.id = virtualMachine.id.toLowerCase();
-        computeState.name = virtualMachine.name;
-        computeState.regionId = virtualMachine.location;
+        computeState.id = virtualMachine.id().toLowerCase();
+        computeState.name = virtualMachine.name();
+        computeState.regionId = virtualMachine.location();
 
         computeState.type = ComputeType.VM_GUEST;
         computeState.environmentName = ComputeDescription.ENVIRONMENT_NAME_AZURE;
         computeState.parentLink = ctx.request.resourceLink();
         computeState.descriptionLink = UriUtils
                 .buildUriPath(ComputeDescriptionService.FACTORY_LINK,
-                        ctx.computeDescriptionIds.get(virtualMachine.name));
+                        ctx.computeDescriptionIds.get(virtualMachine.name()));
         computeState.endpointLink = ctx.request.endpointLink;
         computeState.resourcePoolLink = ctx.request.resourcePoolLink;
         computeState.diskLinks = vmDisks;
-        computeState.instanceType = virtualMachine.properties.hardwareProfile.getVmSize();
+        if (virtualMachine.hardwareProfile().vmSize() != null) {
+            computeState.instanceType = virtualMachine.hardwareProfile().vmSize().toString();
+        }
         computeState.instanceAdapterReference = ctx.parentCompute.description.instanceAdapterReference;
         computeState.statsAdapterReference = ctx.parentCompute.description.statsAdapterReference;
 
         computeState.customProperties = new HashMap<>();
         computeState.customProperties.put(CUSTOM_OS_TYPE, getNormalizedOSType(virtualMachine));
 
-        String resourceGroupName = getResourceGroupName(virtualMachine.id);
+        String resourceGroupName = getResourceGroupName(virtualMachine.id());
         computeState.customProperties.put(AZURE_RESOURCE_GROUP_NAME, resourceGroupName);
 
-        if (virtualMachine.properties.diagnosticsProfile != null) {
-            String diagnosticsAccountUri = virtualMachine.properties.diagnosticsProfile
-                    .getBootDiagnostics().getStorageUri();
+        if (virtualMachine.diagnosticsProfile() != null) {
+            String diagnosticsAccountUri = virtualMachine.diagnosticsProfile()
+                    .bootDiagnostics().storageUri();
             StorageDescription storageDesk = ctx.storageDescriptions.get(diagnosticsAccountUri);
             if (storageDesk != null) {
                 computeState.customProperties.put(AZURE_DIAGNOSTIC_STORAGE_ACCOUNT_LINK,
@@ -1278,13 +1287,13 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
             }
         }
         // add tag links
-        setTagLinksToResourceState(computeState, virtualMachine.tags);
+        setTagLinksToResourceState(computeState, virtualMachine.getTags());
         computeState.tenantLinks = ctx.parentCompute.tenantLinks;
 
         List<String> networkLinks = new ArrayList<>();
         NicMetadata nicMeta = ctx.networkInterfaceIds
-                .remove(virtualMachine.properties.networkProfile.getNetworkInterfaces().get(0)
-                        .getId());
+                .remove(virtualMachine.networkProfile().networkInterfaces().get(0)
+                        .id());
         if (nicMeta != null) {
             computeState.address = nicMeta.publicIp;
             computeState.primaryMAC = nicMeta.macAddress;
@@ -1305,9 +1314,9 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
 
         // Patching power state and network Information. Hence 2.
         // If we patch more fields, this number should be increased accordingly.
-        ComputeManagementClient computeClient = getComputeManagementClient(ctx);
-        VirtualMachinesOperations vmOps = computeClient
-                .getVirtualMachinesOperations();
+        Azure azureClient = getAzureClient(ctx);
+        VirtualMachinesInner vmOps = azureClient
+                .virtualMachines().inner();
         DeferredResult.allOf(ctx.computeStatesForPatching
                 .values().stream()
                 .map(c -> patchVMInstanceDetails(ctx, vmOps, c))
@@ -1331,33 +1340,33 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     }
 
     private DeferredResult<ComputeState> patchVMInstanceDetails(EnumerationContext ctx,
-            VirtualMachinesOperations vmOps, ComputeState computeState) {
+                                                                VirtualMachinesInner vmOps, ComputeState computeState) {
 
         String resourceGroupName = getResourceGroupName(computeState.id);
         String vmName = computeState.name;
-        AzureDeferredResultServiceCallback<com.microsoft.azure.management.compute.models.VirtualMachine> handler = new AzureDeferredResultServiceCallback<com.microsoft.azure.management.compute.models.VirtualMachine>(
+        AzureDeferredResultServiceCallback<VirtualMachineInner> handler = new AzureDeferredResultServiceCallback<VirtualMachineInner>(
                 this, "Load virtual machine instance view:" + vmName) {
             @Override
-            protected DeferredResult<com.microsoft.azure.management.compute.models.VirtualMachine> consumeSuccess(
-                    com.microsoft.azure.management.compute.models.VirtualMachine vm) {
+            protected DeferredResult<VirtualMachineInner> consumeSuccess(
+                    VirtualMachineInner vm) {
                 logFine(() -> String.format("Retrieved instance view for vm [%s].", vmName));
                 return DeferredResult.completed(vm);
             }
         };
-        vmOps.getAsync(resourceGroupName, vmName, EXPAND_INSTANCE_VIEW_PARAM, handler);
+        vmOps.getByResourceGroupAsync(resourceGroupName, vmName, InstanceViewTypes.INSTANCE_VIEW, handler);
         return handler.toDeferredResult().thenApply(vm -> {
-            for (InstanceViewStatus status : vm.getInstanceView().getStatuses()) {
-                if (status.getCode()
+            for (InstanceViewStatus status : vm.instanceView().statuses()) {
+                if (status.code()
                         .equals(AzureConstants.AZURE_VM_PROVISIONING_STATE_SUCCEEDED)) {
                     computeState.creationTimeMicros = TimeUnit.MILLISECONDS
-                            .toMicros(status.getTime().getMillis());
-                } else if (status.getCode()
+                            .toMicros(status.time().getMillis());
+                } else if (status.code()
                         .equals(AzureConstants.AZURE_VM_POWER_STATE_RUNNING)) {
                     computeState.powerState = PowerState.ON;
-                } else if (status.getCode()
+                } else if (status.code()
                         .equals(AzureConstants.AZURE_VM_POWER_STATE_STOPPED)) {
                     computeState.powerState = PowerState.OFF;
-                } else if (status.getCode()
+                } else if (status.code()
                         .equals(AzureConstants.AZURE_VM_POWER_STATE_DEALLOCATED)) {
                     computeState.powerState = PowerState.SUSPEND;
                 }
@@ -1384,69 +1393,52 @@ public class AzureComputeEnumerationAdapterService extends StatelessService {
     /**
      * Converts image reference to image identifier.
      */
-    private String imageReferenceToImageId(ImageReference imageReference) {
-        return imageReference.getPublisher() + ":" + imageReference.getOffer() + ":"
-                + imageReference.getSku() + ":" + imageReference.getVersion();
+    private String imageReferenceToImageId(ImageReferenceInner imageReference) {
+        return imageReference.publisher() + ":" + imageReference.offer() + ":"
+                + imageReference.sku() + ":" + imageReference.version();
     }
 
-    private Retrofit.Builder getRetrofitBuilder() {
-        Retrofit.Builder builder = new Retrofit.Builder();
-        builder.callbackExecutor(this.executorService);
-        return builder;
-    }
-
-    private ComputeManagementClient getComputeManagementClient(EnumerationContext ctx) {
-        if (ctx.computeClient == null) {
-            ctx.computeClient = new ComputeManagementClientImpl(
-                    AzureConstants.BASE_URI, ctx.credentials, ctx.clientBuilder,
-                    getRetrofitBuilder());
-            ctx.computeClient.setSubscriptionId(ctx.parentAuth.userLink);
+    private Azure getAzureClient(EnumerationContext ctx) {
+        if (ctx.azure == null) {
+            if (ctx.restClient == null) {
+                ctx.restClient = buildRestClient(ctx.credentials,this.executorService);
+            }
+            ctx.azure = Azure.authenticate(ctx.restClient, ctx.parentAuth.customProperties.get(AZURE_TENANT_ID))
+                    .withSubscription(ctx.parentAuth.userLink);
         }
-        return ctx.computeClient;
-    }
-
-    private NetworkManagementClient getNetworkManagementClient(EnumerationContext ctx) {
-        if (ctx.networkClient == null) {
-            ctx.networkClient = new NetworkManagementClientImpl(
-                    AzureConstants.BASE_URI, ctx.credentials, ctx.clientBuilder,
-                    getRetrofitBuilder());
-            ctx.networkClient.setSubscriptionId(ctx.parentAuth.userLink);
-        }
-        return ctx.networkClient;
+        return ctx.azure;
     }
 
     /**
      * Return Instance normalized OS Type.
      */
-    private String getNormalizedOSType(VirtualMachine vm) {
-        if (vm.properties == null
-                || vm.properties.storageProfile == null
-                || vm.properties.storageProfile.getOsDisk() == null
-                || vm.properties.storageProfile.getOsDisk().getOsType() == null) {
+    private String getNormalizedOSType(VirtualMachineInner vm) {
+        if (vm.storageProfile() == null
+                || vm.storageProfile().osDisk() == null
+                || vm.storageProfile().osDisk().osType() == null) {
             return null;
         }
-        String osType = vm.properties.storageProfile.getOsDisk().getOsType();
-        if (WINDOWS_OPERATING_SYSTEM.equalsIgnoreCase(osType)) {
+        OperatingSystemTypes osType = vm.storageProfile().osDisk().osType();
+        if (OperatingSystemTypes.WINDOWS.equals(osType)) {
             return OSType.WINDOWS.toString();
-        } else if (LINUX_OPERATING_SYSTEM.equalsIgnoreCase(osType)) {
+        } else if (OperatingSystemTypes.LINUX.equals(osType)) {
             return OSType.LINUX.toString();
         } else {
             return null;
         }
     }
 
-    private String getVhdUri(VirtualMachine vm) {
-        if (vm.properties == null
-                || vm.properties.storageProfile == null
-                || vm.properties.storageProfile.getOsDisk() == null
-                || vm.properties.storageProfile.getOsDisk().getVhd() == null
-                || vm.properties.storageProfile.getOsDisk().getVhd().getUri() == null) {
+    private String getVhdUri(VirtualMachineInner vm) {
+        if (vm.storageProfile() == null
+                || vm.storageProfile().osDisk() == null
+                || vm.storageProfile().osDisk().vhd() == null
+                || vm.storageProfile().osDisk().vhd().uri() == null) {
             logWarning(String.format(
                     "Enumeration failed. VM %s has a ManagedDisk configuration, which is currently not supported.",
-                    vm.id));
+                    vm.id()));
             return null;
         }
-        return httpsToHttp(vm.properties.storageProfile.getOsDisk().getVhd().getUri());
+        return httpsToHttp(vm.storageProfile().osDisk().vhd().uri());
     }
 
     /**

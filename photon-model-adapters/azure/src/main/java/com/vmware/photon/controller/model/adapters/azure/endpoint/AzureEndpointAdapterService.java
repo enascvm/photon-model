@@ -21,8 +21,8 @@ import static com.vmware.photon.controller.model.adapterapi.EndpointConfigReques
 import static com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest.ZONE_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTHORIZATION_NAMESPACE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_PROVISIONING_PERMISSION;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_SUBSCRIPTION_STATUS_ACTIVE;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_TENANT_ID;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_PERMISSIONS_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.PROVIDER_REST_API_VERSION;
@@ -41,18 +41,18 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
 
-import com.microsoft.azure.management.resources.SubscriptionClient;
-import com.microsoft.azure.management.resources.SubscriptionClientImpl;
-import com.microsoft.azure.management.resources.models.Subscription;
-import okhttp3.OkHttpClient;
-import retrofit2.Retrofit;
+import com.microsoft.azure.management.resources.SubscriptionState;
+import com.microsoft.azure.management.resources.implementation.SubscriptionClientImpl;
+import com.microsoft.azure.management.resources.implementation.SubscriptionInner;
+
+import com.microsoft.rest.RestClient;
 
 import com.vmware.photon.controller.model.adapterapi.EndpointConfigRequest;
 import com.vmware.photon.controller.model.adapters.azure.AzureUriPaths;
-import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.model.permission.Permission;
 import com.vmware.photon.controller.model.adapters.azure.model.permission.PermissionList;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
+import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
 import com.vmware.photon.controller.model.adapters.util.AdapterUriUtil;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils;
 import com.vmware.photon.controller.model.adapters.util.EndpointAdapterUtils.Retriever;
@@ -116,31 +116,28 @@ public class AzureEndpointAdapterService extends StatelessService {
     private BiConsumer<AuthCredentialsServiceState, BiConsumer<ServiceErrorResponse, Throwable>> validate(
             EndpointConfigRequest body) {
         return (credentials, callback) -> {
-            OkHttpClient httpClient = new OkHttpClient();
+            RestClient restClient = AzureUtils.buildRestClient(getAzureConfig(credentials), this.executorService);
             try {
-                SubscriptionClient subscriptionClient = new SubscriptionClientImpl(
-                        AzureConstants.BASE_URI, getAzureConfig(credentials),
-                        httpClient.newBuilder(),
-                        getRetrofitBuilder());
+                SubscriptionClientImpl subscriptionClient = new SubscriptionClientImpl(restClient);
 
                 String msg = "Getting Azure Subscription [" + credentials.userLink
                         + "] for endpoint validation";
 
-                AzureDeferredResultServiceCallback<Subscription> handler = new AzureDeferredResultServiceCallback<Subscription>(
+                AzureDeferredResultServiceCallback<SubscriptionInner> handler = new AzureDeferredResultServiceCallback<SubscriptionInner>(
                         this, msg) {
                     @Override
-                    protected DeferredResult<Subscription> consumeSuccess(
-                            Subscription subscription) {
+                    protected DeferredResult<SubscriptionInner> consumeSuccess(
+                            SubscriptionInner subscription) {
                         logFine(() -> String.format("Got subscription %s with id %s",
-                                        subscription.getDisplayName(),
-                                        subscription.getId()));
+                                        subscription.displayName(),
+                                        subscription.id()));
 
-                        if (!AZURE_SUBSCRIPTION_STATUS_ACTIVE.equals(subscription.getState())) {
+                        if (!SubscriptionState.ENABLED.equals(subscription.state())) {
                             logFine(() ->
                                     String.format("Subscription with id %s is not in active"
                                             + " state but in %s",
-                                    subscription.getId(),
-                                    subscription.getState()));
+                                    subscription.id(),
+                                    subscription.state()));
                             return DeferredResult.failed(
                                     new IllegalStateException("Subscription is not active"));
                         }
@@ -148,7 +145,7 @@ public class AzureEndpointAdapterService extends StatelessService {
                     }
                 };
 
-                subscriptionClient.getSubscriptionsOperations()
+                subscriptionClient.subscriptions()
                         .getAsync(credentials.userLink, handler);
 
                 String shouldProvision = body.endpointProperties.get(AZURE_PROVISIONING_PERMISSION);
@@ -179,7 +176,8 @@ public class AzureEndpointAdapterService extends StatelessService {
                 rsp.statusCode = STATUS_CODE_UNAUTHORIZED;
                 callback.accept(rsp, e);
             } finally {
-                cleanUpHttpClient(this, httpClient);
+                cleanUpHttpClient(restClient.httpClient());
+
             }
         };
     }
@@ -247,12 +245,6 @@ public class AzureEndpointAdapterService extends StatelessService {
         };
     }
 
-    private Retrofit.Builder getRetrofitBuilder() {
-        Retrofit.Builder builder = new Retrofit.Builder();
-        builder.callbackExecutor(this.executorService);
-        return builder;
-    }
-
     private DeferredResult<PermissionList> getPermissions(
             AuthCredentialsServiceState credentials) {
 
@@ -271,7 +263,7 @@ public class AzureEndpointAdapterService extends StatelessService {
 
         try {
             operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                    AUTH_HEADER_BEARER_PREFIX + getAzureConfig(credentials).getToken());
+                    AUTH_HEADER_BEARER_PREFIX + getAzureConfig(credentials).getToken(AZURE_CORE_MANAGEMENT_URI));
         } catch (IOException e) {
             return DeferredResult.failed(e);
         }

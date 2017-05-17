@@ -21,16 +21,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
+import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
+import com.microsoft.azure.management.Azure;
+import com.microsoft.azure.management.compute.implementation.OperationStatusResponseInner;
+import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceCallback;
-import com.microsoft.rest.ServiceResponse;
 
-import okhttp3.OkHttpClient;
-
-import retrofit2.Retrofit;
 
 import com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureUtils;
@@ -64,8 +61,8 @@ public class AzureLifecycleOperationService extends StatelessService {
 
         final ResourceOperationRequest request;
 
-        ComputeManagementClient client;
-        OkHttpClient httpClient;
+        Azure azureClient;
+        RestClient restClient;
         AzureLifecycleOperationService service;
         String vmName;
         String rgName;
@@ -161,13 +158,10 @@ public class AzureLifecycleOperationService extends StatelessService {
                                 clientId, tenantId, clientKey,
                                 AzureEnvironment.AZURE);
 
-                        dh.httpClient = new OkHttpClient();
-                        OkHttpClient.Builder clientBuilder = dh.httpClient.newBuilder();
+                        dh.restClient = AzureUtils.buildRestClient(credentials, this.executorService);
 
-                        dh.client = new ComputeManagementClientImpl(
-                                AzureConstants.BASE_URI, credentials, clientBuilder,
-                                getRetrofitBuilder());
-                        dh.client.setSubscriptionId(c.parentAuth.userLink);
+                        dh.azureClient = Azure.authenticate(dh.restClient, tenantId)
+                                .withSubscription(c.parentAuth.userLink);
                         dh.vmName = c.child.name != null ? c.child.name : c.child.id;
                         dh.rgName = getResourceGroupName(c);
                         applyResourceOperation(dh, c);
@@ -189,55 +183,49 @@ public class AzureLifecycleOperationService extends StatelessService {
     }
 
     private void restart(AzureLifecycleOpDataHolder dh, DefaultAdapterContext ctx) {
-        dh.client.getVirtualMachinesOperations().restartAsync(dh.rgName, dh.vmName,
-                new ServiceCallback<Void>() {
+        dh.azureClient.virtualMachines().inner().restartAsync(dh.rgName, dh.vmName,
+                new ServiceCallback<OperationStatusResponseInner>() {
                     @Override
                     public void failure(Throwable paramThrowable) {
                         logSevere(
                                 "Error: Azure restart operation failed for resource %s in resourceGroup %s with error %s",
                                 dh.vmName, dh.rgName, Utils.toString(paramThrowable));
                         ctx.taskManager.patchTaskToFailure(paramThrowable);
-                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
+                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
                     }
 
                     @Override
-                    public void success(ServiceResponse<Void> paramServiceResponse) {
+                    public void success(OperationStatusResponseInner paramServiceResponse) {
                         logFine(
                                 "Success: Azure restart operation for resource %s in resourceGroup %s completed successfully.",
                                 dh.vmName, dh.rgName);
                         updateComputeState(dh, ctx);
-                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
+                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
                     }
                 });
     }
 
     private void suspend(AzureLifecycleOpDataHolder dh, DefaultAdapterContext ctx) {
-        dh.client.getVirtualMachinesOperations().deallocateAsync(dh.rgName, dh.vmName,
-                new ServiceCallback<Void>() {
+        dh.azureClient.virtualMachines().inner().deallocateAsync(dh.rgName, dh.vmName,
+                new ServiceCallback<OperationStatusResponseInner>() {
                     @Override
                     public void failure(Throwable paramThrowable) {
                         logSevere(
                                 "Error: Azure deallocate operation failed for resource %s in resourceGroup %s with error %s",
                                 dh.vmName, dh.rgName, Utils.toString(paramThrowable));
                         ctx.taskManager.patchTaskToFailure(paramThrowable);
-                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
+                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
                     }
 
                     @Override
-                    public void success(ServiceResponse<Void> paramServiceResponse) {
+                    public void success(OperationStatusResponseInner paramServiceResponse) {
                         logFine(
                                 "Success: Azure deallocate operation for resource %s in resourceGroup %s completed successfully.",
                                 dh.vmName, dh.rgName);
                         updateComputeState(dh, ctx);
-                        AzureUtils.cleanUpHttpClient(dh.service, dh.httpClient);
+                        AzureUtils.cleanUpHttpClient(dh.restClient.httpClient());
                     }
                 });
-    }
-
-    private Retrofit.Builder getRetrofitBuilder() {
-        Retrofit.Builder builder = new Retrofit.Builder();
-        builder.callbackExecutor(this.executorService);
-        return builder;
     }
 
     private String getResourceGroupName(DefaultAdapterContext ctx) {

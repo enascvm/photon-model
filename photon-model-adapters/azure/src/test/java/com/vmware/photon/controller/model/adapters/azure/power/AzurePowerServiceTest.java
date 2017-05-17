@@ -31,12 +31,12 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.logging.Level;
 
+import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
-import com.microsoft.azure.management.compute.models.InstanceViewStatus;
-import com.microsoft.azure.management.compute.models.VirtualMachine;
+import com.microsoft.azure.management.compute.InstanceViewStatus;
+import com.microsoft.azure.management.compute.InstanceViewTypes;
+import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
 
 import org.junit.After;
 import org.junit.Before;
@@ -62,7 +62,6 @@ import com.vmware.photon.controller.model.tasks.PhotonModelTaskServices;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService;
 import com.vmware.photon.controller.model.tasks.ProvisionComputeTaskService.ProvisionComputeTaskState;
 import com.vmware.photon.controller.model.tasks.TestUtils;
-
 import com.vmware.xenon.common.BasicReusableHostTestCase;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.Service.Action;
@@ -81,7 +80,7 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
     // Every test in addition might change it.
     private static String azureVMName = generateName("testPower-");
     // }}
-    private static final String EXPAND_INSTANCE_VIEW_PARAM = "instanceView";
+    private static final InstanceViewTypes EXPAND_INSTANCE_VIEW_PARAM = InstanceViewTypes.INSTANCE_VIEW;
 
     public String clientID = "clientID";
     public String clientKey = "clientKey";
@@ -90,7 +89,7 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
 
     public boolean isMock = true;
 
-    private ComputeManagementClient computeManagementClient;
+    private ComputeManagementClientImpl computeManagementClient;
     private ComputeState vmState;
 
     @Rule
@@ -141,8 +140,8 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
             if (!this.isMock) {
                 ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
                         this.clientID, this.tenantId, this.clientKey, AzureEnvironment.AZURE);
-                this.computeManagementClient = new ComputeManagementClientImpl(credentials);
-                this.computeManagementClient.setSubscriptionId(this.subscriptionId);
+                this.computeManagementClient = new ComputeManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
             }
 
         } catch (Throwable e) {
@@ -244,17 +243,17 @@ public class AzurePowerServiceTest extends BasicReusableHostTestCase {
 
         try {
             PowerState vmPowerState = PowerState.UNKNOWN;
-            VirtualMachine vm = AzureTestUtil
+            VirtualMachineInner vm = AzureTestUtil
                     .getAzureVirtualMachineWithExtension(
                             this.computeManagementClient,
                             azureVMName,
                             azureVMName, EXPAND_INSTANCE_VIEW_PARAM);
 
-            for (InstanceViewStatus status : vm.getInstanceView().getStatuses()) {
-                if (status.getCode()
+            for (InstanceViewStatus status : vm.instanceView().statuses()) {
+                if (status.code()
                         .equals(AzureConstants.AZURE_VM_POWER_STATE_RUNNING)) {
                     vmPowerState = PowerState.ON;
-                } else if (status.getCode()
+                } else if (status.code()
                         .equals(AzureConstants.AZURE_VM_POWER_STATE_STOPPED)) {
                     vmPowerState = PowerState.OFF;
                 }

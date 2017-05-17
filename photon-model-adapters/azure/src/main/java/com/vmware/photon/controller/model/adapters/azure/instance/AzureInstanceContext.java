@@ -17,22 +17,23 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.microsoft.azure.SubResource;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.models.ImageReference;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.NetworkSecurityGroupsOperations;
-import com.microsoft.azure.management.network.SubnetsOperations;
-import com.microsoft.azure.management.network.models.NetworkInterface;
-import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
-import com.microsoft.azure.management.network.models.PublicIPAddress;
-import com.microsoft.azure.management.network.models.Subnet;
-import com.microsoft.azure.management.resources.ResourceManagementClient;
-import com.microsoft.azure.management.resources.models.ResourceGroup;
-import com.microsoft.azure.management.storage.StorageManagementClient;
-import com.microsoft.azure.management.storage.models.StorageAccount;
+import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.ImageReferenceInner;
+import com.microsoft.azure.management.network.implementation.NetworkInterfaceInner;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupsInner;
+import com.microsoft.azure.management.network.implementation.PublicIPAddressInner;
+import com.microsoft.azure.management.network.implementation.SubnetInner;
+import com.microsoft.azure.management.network.implementation.SubnetsInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
+import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
+import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
+import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 
-import okhttp3.OkHttpClient;
+import com.microsoft.rest.RestClient;
 
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
@@ -61,22 +62,32 @@ public class AzureInstanceContext extends
          * The Azure subnet this NIC is associated to. It is either looked up from Azure or created
          * by this service.
          */
-        public Subnet subnet;
+        public SubnetInner subnet;
 
         /**
          * The actual NIC object in Azure. It is created by this service.
          */
-        public NetworkInterface nic;
+        public NetworkInterfaceInner nic;
 
         /**
          * The public IP assigned to the NIC. It is created by this service.
          */
-        public PublicIPAddress publicIP;
+        public PublicIPAddressInner publicIP;
+
+        /**
+         * The public IP address sub resource ID. Maps an ID string with IP address, required by Azure.
+         */
+        SubResource publicIPSubResource;
 
         /**
          * The security group this NIC is assigned to. It is created by this service.
          */
-        public NetworkSecurityGroup securityGroup;
+        public NetworkSecurityGroupInner securityGroup;
+
+        /**
+         * The security group sub resource ID. Maps an ID string with security group, required by Azure.
+         */
+        SubResource securityGroupSubResource;
 
         /**
          * The resource group state the security group is member of. Optional.
@@ -106,20 +117,19 @@ public class AzureInstanceContext extends
 
     // Azure specific context
     public ApplicationTokenCredentials credentials;
-    public ResourceGroup resourceGroup;
-    public StorageAccount storage;
+    public ResourceGroupInner resourceGroup;
+    public StorageAccountInner storage;
 
     public String storageAccountRGName;
     public String storageAccountName;
-    public ImageReference imageReference;
+    public ImageReferenceInner imageReference;
     public String operatingSystemFamily;
 
-    public ResourceManagementClient resourceManagementClient;
-    public NetworkManagementClient networkManagementClient;
-    public StorageManagementClient storageManagementClient;
-    public ComputeManagementClient computeManagementClient;
-    public OkHttpClient.Builder clientBuilder;
-    public OkHttpClient httpClient;
+    public ResourceManagementClientImpl resourceManagementClient;
+    public NetworkManagementClientImpl networkManagementClient;
+    public StorageManagementClientImpl storageManagementClient;
+    public ComputeManagementClientImpl computeManagementClient;
+    public RestClient restClient;
 
     public AzureInstanceContext(AzureInstanceService service,
             ComputeInstanceRequest computeRequest) {
@@ -166,11 +176,11 @@ public class AzureInstanceContext extends
             return DeferredResult.completed(context);
         }
 
-        SubnetsOperations azureClient = service()
-                .getNetworkManagementClient(context)
-                .getSubnetsOperations();
+        SubnetsInner azureClient = service()
+                .getNetworkManagementClientImpl(context)
+                .subnets();
 
-        List<DeferredResult<Subnet>> getSubnetDRs = context.nics
+        List<DeferredResult<SubnetInner>> getSubnetDRs = context.nics
                 .stream()
                 // Filter only vNet-Subnet with existing RG state
                 .filter(nicCtx -> nicCtx.networkRGState != null)
@@ -183,10 +193,10 @@ public class AzureInstanceContext extends
                             + context.vmName
                             + "] VM";
 
-                    AzureDeferredResultServiceCallback<Subnet> handler = new AzureDeferredResultServiceCallback<Subnet>(
+                    AzureDeferredResultServiceCallback<SubnetInner> handler = new AzureDeferredResultServiceCallback<SubnetInner>(
                             service(), msg) {
                         @Override
-                        protected DeferredResult<Subnet> consumeSuccess(Subnet subnet) {
+                        protected DeferredResult<SubnetInner> consumeSuccess(SubnetInner subnet) {
                             nicCtx.subnet = subnet;
                             return DeferredResult.completed(subnet);
                         }
@@ -224,11 +234,11 @@ public class AzureInstanceContext extends
             return DeferredResult.completed(context);
         }
 
-        NetworkSecurityGroupsOperations azureClient = service()
-                .getNetworkManagementClient(context)
-                .getNetworkSecurityGroupsOperations();
+        NetworkSecurityGroupsInner azureClient = service()
+                .getNetworkManagementClientImpl(context)
+                .networkSecurityGroups();
 
-        List<DeferredResult<NetworkSecurityGroup>> getSecurityGroupDRs = context.nics
+        List<DeferredResult<NetworkSecurityGroupInner>> getSecurityGroupDRs = context.nics
                 .stream()
                 // Filter only SGs with existing RG state
                 .filter(nicCtx -> nicCtx.securityGroupState() != null
@@ -242,16 +252,16 @@ public class AzureInstanceContext extends
                             + context.vmName
                             + "] VM";
 
-                    AzureDeferredResultServiceCallback<NetworkSecurityGroup> handler = new AzureDeferredResultServiceCallback<NetworkSecurityGroup>(
+                    AzureDeferredResultServiceCallback<NetworkSecurityGroupInner> handler = new AzureDeferredResultServiceCallback<NetworkSecurityGroupInner>(
                             service(), msg) {
                         @Override
-                        protected DeferredResult<NetworkSecurityGroup> consumeSuccess(
-                                NetworkSecurityGroup securityGroup) {
+                        protected DeferredResult<NetworkSecurityGroupInner> consumeSuccess(
+                                NetworkSecurityGroupInner securityGroup) {
                             nicCtx.securityGroup = securityGroup;
                             return DeferredResult.completed(securityGroup);
                         }
                     };
-                    azureClient.getAsync(
+                    azureClient.getByResourceGroupAsync(
                             nicCtx.securityGroupRGState.name,
                             sgName,
                             null /* expand */,

@@ -33,24 +33,20 @@ import java.util.EnumSet;
 import java.util.UUID;
 import java.util.logging.Level;
 
-import com.microsoft.azure.CloudException;
+import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.NetworkManagementClientImpl;
-import com.microsoft.azure.management.network.SubnetsOperations;
-import com.microsoft.azure.management.network.VirtualNetworksOperations;
-import com.microsoft.azure.management.network.models.AddressSpace;
-import com.microsoft.azure.management.network.models.Subnet;
-import com.microsoft.azure.management.resources.ResourceGroupsOperations;
-import com.microsoft.azure.management.resources.ResourceManagementClient;
-import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
-import com.microsoft.azure.management.resources.models.ResourceGroup;
-import com.microsoft.rest.ServiceResponse;
-
-import io.netty.handler.codec.http.HttpResponseStatus;
+import com.microsoft.azure.management.network.AddressSpace;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.implementation.SubnetInner;
+import com.microsoft.azure.management.network.implementation.SubnetsInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworksInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupsInner;
+import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
+
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -86,7 +82,7 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
  */
 public class AzureSubnetTaskServiceTest extends BaseModelTest {
 
-    private static final String AZURE_DEFAULT_VPC_CIDR = "172.16.12.0/16";
+    private static final String AZURE_DEFAULT_VPC_CIDR = "172.16.0.0/16";
     private static final String AZURE_NON_EXISTING_SUBNET_CIDR = "172.16.12.0/22";
 
     public boolean isMock = true;
@@ -107,9 +103,9 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
 
     private NetworkState networkState;
 
-    private VirtualNetworksOperations vNetClient;
-    private ResourceGroupsOperations rgOpsClient;
-    private SubnetsOperations subnetsClient;
+    private VirtualNetworksInner vNetClient;
+    private ResourceGroupsInner rgOpsClient;
+    private SubnetsInner subnetsClient;
 
     @Override
     @Before
@@ -152,30 +148,26 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
                     this.clientID,
                     this.tenantId, this.clientKey, AzureEnvironment.AZURE);
 
-            NetworkManagementClient networkManagementClient = new NetworkManagementClientImpl(
-                    credentials);
-            networkManagementClient.setSubscriptionId(this.subscriptionId);
+            NetworkManagementClientImpl networkManagementClient = new NetworkManagementClientImpl(
+                    credentials).withSubscriptionId(this.subscriptionId);
 
-            ResourceManagementClient resourceManagementClient =
-                    new ResourceManagementClientImpl(credentials);
-            resourceManagementClient.setSubscriptionId(this.subscriptionId);
+            ResourceManagementClientImpl resourceManagementClient =
+                    new ResourceManagementClientImpl(credentials).withSubscriptionId(this.subscriptionId);
 
-            this.vNetClient = networkManagementClient.getVirtualNetworksOperations();
-            this.rgOpsClient = resourceManagementClient.getResourceGroupsOperations();
-            this.subnetsClient = networkManagementClient.getSubnetsOperations();
+            this.vNetClient = networkManagementClient.virtualNetworks();
+            this.rgOpsClient = resourceManagementClient.resourceGroups();
+            this.subnetsClient = networkManagementClient.subnets();
 
-            ResourceGroup rg = new ResourceGroup();
-            rg.setName(this.rgName);
-            rg.setLocation(this.regionId);
+            ResourceGroupInner rg = new ResourceGroupInner();
+            rg.withName(this.rgName);
+            rg.withLocation(this.regionId);
             this.rgOpsClient.createOrUpdate(this.rgName, rg);
 
-            com.microsoft.azure.management.network.models.VirtualNetwork vNet = new com.microsoft
-                    .azure.management.network.models.VirtualNetwork();
-            vNet.setId(this.vNetName);
+            VirtualNetworkInner vNet = new VirtualNetworkInner();
             AddressSpace addressSpace = new AddressSpace();
-            addressSpace.setAddressPrefixes(Collections.singletonList(AZURE_DEFAULT_VPC_CIDR));
-            vNet.setAddressSpace(addressSpace);
-            vNet.setLocation(this.regionId);
+            addressSpace.withAddressPrefixes(Collections.singletonList(AZURE_DEFAULT_VPC_CIDR));
+            vNet.withAddressSpace(addressSpace);
+            vNet.withLocation(this.regionId);
             this.vNetClient.createOrUpdate(this.rgName, this.vNetName, vNet);
         }
 
@@ -209,7 +201,7 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
             }
 
             @Override
-            protected void onSuccess(ServiceResponse<Void> result) {
+            protected void onSuccess(Void result) {
                 // Do nothing.
             }
         });
@@ -229,29 +221,26 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
 
         if (!this.isMock) {
             // Verify that the subnet was deleted.
-            ServiceResponse<Subnet> subnetResponse = this.subnetsClient
+            SubnetInner subnetResponse = this.subnetsClient
                     .get(this.rgName, this.vNetName, this.subnetName, null);
 
-            assertEquals(HttpResponseStatus.OK.code(), subnetResponse.getResponse().code());
-            assertEquals(this.subnetName, subnetResponse.getBody().getName());
+            assertEquals(this.subnetName, subnetResponse.name());
         }
     }
 
     @Test
     public void testDeleteSubnet() throws Throwable {
-        Subnet azureSubnet = createAzureSubnet();
+        SubnetInner azureSubnet = createAzureSubnet();
 
-        SubnetState subnetState = createSubnetState(azureSubnet.getId());
+        SubnetState subnetState = createSubnetState(azureSubnet.id());
 
         kickOffSubnetProvision(InstanceRequestType.DELETE, subnetState, TaskStage.FINISHED);
 
         if (!this.isMock) {
             // Verify that the subnet was deleted.
-            try {
-                this.subnetsClient.get(this.rgName, this.vNetName, this.subnetName, null);
-                fail("Subnet should not exists in Azure.");
-            } catch (CloudException ex) {
-                assertEquals(HttpResponseStatus.NOT_FOUND.code(), ex.getResponse().code());
+            SubnetInner subnetInner = this.subnetsClient.get(this.rgName, this.vNetName, this.subnetName, null);
+            if (subnetInner != null) {
+                fail("Subnet should not exist in Azure.");
             }
         }
     }
@@ -275,21 +264,21 @@ public class AzureSubnetTaskServiceTest extends BaseModelTest {
         assertTrue(state.taskInfo.failure.message.contains(STATUS_SUBNET_NOT_VALID));
     }
 
-    private Subnet createAzureSubnet() throws Throwable {
+    private SubnetInner createAzureSubnet() throws Throwable {
 
-        Subnet subnet = new Subnet();
-        subnet.setName(this.subnetName);
-        subnet.setId(UUID.randomUUID().toString());
-        subnet.setAddressPrefix(AZURE_NON_EXISTING_SUBNET_CIDR);
+        SubnetInner subnet = new SubnetInner();
+        subnet.withName(this.subnetName);
+        subnet.withId(UUID.randomUUID().toString());
+        subnet.withAddressPrefix(AZURE_NON_EXISTING_SUBNET_CIDR);
 
         if (this.isMock) {
             return subnet;
         }
 
-        ServiceResponse<Subnet> subnetResponse = this.subnetsClient
+        SubnetInner subnetResponse = this.subnetsClient
                 .createOrUpdate(this.rgName, this.vNetName, this.subnetName, subnet);
 
-        return subnetResponse.getBody();
+        return subnetResponse;
     }
 
     private SubnetState createSubnetState(String id) throws Throwable {

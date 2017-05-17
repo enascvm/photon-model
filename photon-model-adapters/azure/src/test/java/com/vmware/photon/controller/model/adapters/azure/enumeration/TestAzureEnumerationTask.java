@@ -59,19 +59,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
-import com.microsoft.azure.management.compute.models.VirtualMachine;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.NetworkManagementClientImpl;
-import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
-import com.microsoft.azure.management.network.models.VirtualNetwork;
-import com.microsoft.azure.management.resources.ResourceManagementClient;
-import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
-import com.microsoft.azure.management.storage.StorageManagementClient;
-import com.microsoft.azure.management.storage.StorageManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
+import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
+import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -198,10 +194,10 @@ public class TestAzureEnumerationTask extends BaseModelTest {
     private ResourceGroupState resourceGroupState;
     private DiskState diskState;
 
-    private ComputeManagementClient computeManagementClient;
-    private ResourceManagementClient resourceManagementClient;
-    private StorageManagementClient storageManagementClient;
-    private NetworkManagementClient networkManagementClient;
+    private ComputeManagementClientImpl computeManagementClient;
+    private ResourceManagementClientImpl resourceManagementClient;
+    private StorageManagementClientImpl storageManagementClient;
+    private NetworkManagementClientImpl networkManagementClient;
 
     private String enumeratedComputeLink;
 
@@ -271,17 +267,17 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
                         this.clientID,
                         this.tenantId, this.clientKey, AzureEnvironment.AZURE);
-                this.computeManagementClient = new ComputeManagementClientImpl(credentials);
-                this.computeManagementClient.setSubscriptionId(this.subscriptionId);
+                this.computeManagementClient = new ComputeManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
 
-                this.resourceManagementClient = new ResourceManagementClientImpl(credentials);
-                this.resourceManagementClient.setSubscriptionId(this.subscriptionId);
+                this.resourceManagementClient = new ResourceManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
 
-                this.storageManagementClient = new StorageManagementClientImpl(credentials);
-                this.storageManagementClient.setSubscriptionId(this.subscriptionId);
+                this.storageManagementClient = new StorageManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
 
-                this.networkManagementClient = new NetworkManagementClientImpl(credentials);
-                this.networkManagementClient.setSubscriptionId(this.subscriptionId);
+                this.networkManagementClient = new NetworkManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
             }
         } catch (Throwable e) {
             throw new Exception(e);
@@ -334,7 +330,6 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
     @Test
     public void testEnumeration() throws Throwable {
-
         this.storageDescription = createDefaultStorageAccountDescription(this.host,
                 this.mockedStorageAccountName, computeHost, endpointState);
 
@@ -462,7 +457,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
             if (!document.documentSelfLink.equals(computeHost.documentSelfLink)
                     && !document.documentSelfLink.equals(this.vmState.documentSelfLink)
                     && document.id.toLowerCase()
-                            .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
+                    .contains(CUSTOM_DIAGNOSTIC_ENABLED_VM.toLowerCase())) {
                 this.enumeratedComputeLink = document.documentSelfLink;
                 break;
             }
@@ -500,7 +495,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
         }
 
         // delete vm directly on azure
-        this.computeManagementClient.getVirtualMachinesOperations()
+        this.computeManagementClient.virtualMachines()
                 .beginDelete(azureVMName, azureVMName);
 
         runEnumeration();
@@ -509,43 +504,43 @@ public class TestAzureEnumerationTask extends BaseModelTest {
 
         // clean up
         this.vmState = null;
-        this.resourceManagementClient.getResourceGroupsOperations().beginDelete(azureVMName);
+        this.resourceManagementClient.resourceGroups().beginDelete(azureVMName);
     }
 
     // Add tags, that later should be discovered as part of first enumeration cycle.
     private void tagAzureResources() throws Exception {
 
         // tag v-Net
-        VirtualNetwork vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient,
+        VirtualNetworkInner vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient,
                 azureVMName,
                 NIC_SPEC.network.name);
 
         Map<String, String> vmNetwTags = new HashMap<>();
         vmNetwTags.put(NETWORK_TAG_KEY_PREFIX + azureVMName, NETWORK_TAG_VALUE);
-        vmNetwUpdate.setTags(vmNetwTags);
+        vmNetwUpdate.withTags(vmNetwTags);
 
         updateAzureVirtualNetwork(this.networkManagementClient, azureVMName,
                 NIC_SPEC.network.name, vmNetwUpdate);
 
         // tag VM
-        VirtualMachine vmUpdate = getAzureVirtualMachine(
+        VirtualMachineInner vmUpdate = getAzureVirtualMachine(
                 this.computeManagementClient, azureVMName, azureVMName);
 
         Map<String, String> vmTags = new HashMap<>();
         vmTags.put(VM_TAG_KEY_PREFIX + azureVMName, VM_TAG_VALUE);
-        vmUpdate.setTags(vmTags);
+        vmUpdate.withTags(vmTags);
 
         updateAzureVirtualMachine(this.computeManagementClient, azureVMName,
                 azureVMName, vmUpdate);
 
         // tag Security Group
-        NetworkSecurityGroup sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
+        NetworkSecurityGroupInner sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
                 azureVMName, AZURE_SECURITY_GROUP_NAME);
 
         Map<String, String> sgTags = new HashMap<>();
         sgTags.put(SG_TAG_KEY_PREFIX + azureVMName, SG_TAG_VALUE);
-        sgUpdate.setTags(sgTags);
-        sgUpdate.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+        sgUpdate.withTags(sgTags);
+        sgUpdate.withLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
 
         updateAzureSecurityGroup(this.networkManagementClient, azureVMName,
                 AZURE_SECURITY_GROUP_NAME, sgUpdate);
@@ -606,7 +601,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                 qBuilder.build(),
                 TagState.class,
                 null)
-                        .setMaxResultsLimit(expectedTags.size() + 1);
+                .setMaxResultsLimit(expectedTags.size() + 1);
 
         List<TagState> tagStates = waitToComplete(
                 queryLocalTags.collectDocuments(Collectors.toList()));
@@ -879,7 +874,7 @@ public class TestAzureEnumerationTask extends BaseModelTest {
                             assertNotNull("SubnetState custom properties are null.",
                                     subnetState.customProperties);
                             assertEquals("Gateway SubnetState is not marked currectly with "
-                                    + "infrastructure use custom property.",
+                                            + "infrastructure use custom property.",
                                     Boolean.TRUE.toString(),
                                     subnetState.customProperties.get(
                                             ComputeProperties.INFRASTRUCTURE_USE_PROP_NAME));

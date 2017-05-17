@@ -14,7 +14,6 @@
 package com.vmware.photon.controller.model.adapters.azure;
 
 import com.microsoft.rest.ServiceCallback;
-import com.microsoft.rest.ServiceResponse;
 
 import com.vmware.xenon.common.OperationContext;
 import com.vmware.xenon.common.StatelessService;
@@ -22,7 +21,7 @@ import com.vmware.xenon.common.StatelessService;
 /**
  * Operation context aware service callback handler.
  */
-public abstract class AzureAsyncCallback<T> extends ServiceCallback<T> {
+public abstract class AzureAsyncCallback<T> implements ServiceCallback<T> {
     OperationContext opContext;
     protected StatelessService service;
 
@@ -44,7 +43,7 @@ public abstract class AzureAsyncCallback<T> extends ServiceCallback<T> {
     /**
      * Invoked when a service call is successful.
      */
-    protected abstract void onSuccess(ServiceResponse<T> result);
+    protected abstract void onSuccess(T result);
 
     @Override
     public final void failure(Throwable t) {
@@ -53,7 +52,7 @@ public abstract class AzureAsyncCallback<T> extends ServiceCallback<T> {
     }
 
     @Override
-    public final void success(ServiceResponse<T> result) {
+    public final void success(T result) {
         OperationContext.restoreOperationContext(this.opContext);
         onSuccess(result);
     }

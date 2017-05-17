@@ -14,6 +14,7 @@
 package com.vmware.photon.controller.model.adapters.azure.enumeration;
 
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AUTH_HEADER_BEARER_PREFIX;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.LIST_RESOURCE_GROUPS_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.QUERY_PARAM_API_VERSION;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.RESOURCE_GROUP_REST_API_VERSION;
@@ -86,7 +87,7 @@ public class AzureResourceGroupEnumerationAdapterService extends StatelessServic
                     Operation.MEDIA_TYPE_APPLICATION_JSON);
             try {
                 operation.addRequestHeader(Operation.AUTHORIZATION_HEADER,
-                        AUTH_HEADER_BEARER_PREFIX + this.credentials.getToken());
+                        AUTH_HEADER_BEARER_PREFIX + this.credentials.getToken(AZURE_CORE_MANAGEMENT_URI));
             } catch (Exception ex) {
                 return DeferredResult.failed(ex);
             }

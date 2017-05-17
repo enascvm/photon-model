@@ -54,19 +54,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
-import com.microsoft.azure.management.compute.models.VirtualMachine;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.NetworkManagementClientImpl;
-import com.microsoft.azure.management.network.models.NetworkSecurityGroup;
-import com.microsoft.azure.management.network.models.VirtualNetwork;
-import com.microsoft.azure.management.resources.ResourceManagementClient;
-import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
-import com.microsoft.azure.management.storage.StorageManagementClient;
-import com.microsoft.azure.management.storage.StorageManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.network.implementation.NetworkSecurityGroupInner;
+import com.microsoft.azure.management.network.implementation.VirtualNetworkInner;
+import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
+import com.microsoft.azure.management.storage.implementation.StorageManagementClientImpl;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -190,10 +186,10 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     private List<ResourceGroupState> resourceGroupStates = new ArrayList<>();
     private List<DiskState> diskStates = new ArrayList<>();
 
-    private ComputeManagementClient computeManagementClient;
-    private ResourceManagementClient resourceManagementClient;
-    private StorageManagementClient storageManagementClient;
-    private NetworkManagementClient networkManagementClient;
+    private ComputeManagementClientImpl computeManagementClient;
+    private ResourceManagementClientImpl resourceManagementClient;
+    private StorageManagementClientImpl storageManagementClient;
+    private NetworkManagementClientImpl networkManagementClient;
 
     private static List<String> azureVMNames;
     private static List<AzureNicSpecs> nicSpecs;
@@ -293,17 +289,17 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
                 ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
                         this.clientID,
                         this.tenantId, this.clientKey, AzureEnvironment.AZURE);
-                this.computeManagementClient = new ComputeManagementClientImpl(credentials);
-                this.computeManagementClient.setSubscriptionId(this.subscriptionId);
+                this.computeManagementClient = new ComputeManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
 
-                this.resourceManagementClient = new ResourceManagementClientImpl(credentials);
-                this.resourceManagementClient.setSubscriptionId(this.subscriptionId);
+                this.resourceManagementClient = new ResourceManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
 
-                this.storageManagementClient = new StorageManagementClientImpl(credentials);
-                this.storageManagementClient.setSubscriptionId(this.subscriptionId);
+                this.storageManagementClient = new StorageManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
 
-                this.networkManagementClient = new NetworkManagementClientImpl(credentials);
-                this.networkManagementClient.setSubscriptionId(this.subscriptionId);
+                this.networkManagementClient = new NetworkManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
             }
         } catch (Throwable e) {
             throw new Exception(e);
@@ -532,7 +528,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
         for (int i = 0; i < numOfVMsToTest; i++) {
             this.host.log(Level.INFO, "Deleting vm: %s", azureVMNames.get(i));
-            this.computeManagementClient.getVirtualMachinesOperations()
+            this.computeManagementClient.virtualMachines()
                     .beginDelete(azureVMNames.get(i), azureVMNames.get(i));
         }
 
@@ -544,7 +540,7 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
 
             // clean up
             this.vmStates.set(i, null);
-            this.resourceManagementClient.getResourceGroupsOperations().beginDelete(azureVMNames.get(i));
+            this.resourceManagementClient.resourceGroups().beginDelete(azureVMNames.get(i));
             this.host.log(Level.INFO, "Deleting vm resource group %s", azureVMNames.get(i));
         }
 
@@ -760,35 +756,35 @@ public class TestAzureLongRunningEnumeration extends BaseModelTest {
     private void tagAzureResources() throws Exception {
         for (int i = 0; i < numOfVMsToTest; i++) {
             // tag v-Net
-            VirtualNetwork vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient,
+            VirtualNetworkInner vmNetwUpdate = getAzureVirtualNetwork(this.networkManagementClient,
                     azureVMNames.get(i), nicSpecs.get(i).network.name);
 
             Map<String, String> vmNetwTags = new HashMap<>();
             vmNetwTags.put(NETWORK_TAG_KEY_PREFIX + azureVMNames.get(i), NETWORK_TAG_VALUE);
-            vmNetwUpdate.setTags(vmNetwTags);
+            vmNetwUpdate.withTags(vmNetwTags);
 
             updateAzureVirtualNetwork(this.networkManagementClient, azureVMNames.get(i),
                     nicSpecs.get(i).network.name, vmNetwUpdate);
 
             // tag VM
-            VirtualMachine vmUpdate = getAzureVirtualMachine(
+            VirtualMachineInner vmUpdate = getAzureVirtualMachine(
                     this.computeManagementClient, azureVMNames.get(i), azureVMNames.get(i));
 
             Map<String, String> vmTags = new HashMap<>();
             vmTags.put(VM_TAG_KEY_PREFIX + azureVMNames.get(i), VM_TAG_VALUE);
-            vmUpdate.setTags(vmTags);
+            vmUpdate.withTags(vmTags);
 
             updateAzureVirtualMachine(this.computeManagementClient, azureVMNames.get(i),
                     azureVMNames.get(i), vmUpdate);
 
             // tag Security Group
-            NetworkSecurityGroup sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
+            NetworkSecurityGroupInner sgUpdate = getAzureSecurityGroup(this.networkManagementClient,
                     azureVMNames.get(i), AZURE_SECURITY_GROUP_NAME);
 
             Map<String, String> sgTags = new HashMap<>();
             sgTags.put(SG_TAG_KEY_PREFIX + azureVMNames.get(i), SG_TAG_VALUE);
-            sgUpdate.setTags(sgTags);
-            sgUpdate.setLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
+            sgUpdate.withTags(sgTags);
+            sgUpdate.withLocation(AzureTestUtil.AZURE_RESOURCE_GROUP_LOCATION);
 
             updateAzureSecurityGroup(this.networkManagementClient, azureVMNames.get(i),
                     AZURE_SECURITY_GROUP_NAME, sgUpdate);

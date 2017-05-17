@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 import com.google.common.collect.Sets;
 
 import org.apache.commons.lang3.StringUtils;
+
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -37,6 +38,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
+import com.vmware.photon.controller.model.ComputeProperties.OSType;
 import com.vmware.photon.controller.model.adapters.azure.AzureAdapters;
 import com.vmware.photon.controller.model.adapters.azure.instance.AzureTestUtil;
 import com.vmware.photon.controller.model.adapters.registry.PhotonModelAdaptersRegistryAdapters;
@@ -87,6 +89,9 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
 
     private static final boolean PUBLIC = true;
     private static final boolean PRIVATE = false;
+
+    private static final String OS_TYPE_WINDOWS_NAME = OSType.WINDOWS.name();
+    private static final String OS_TYPE_LINUX_NAME = OSType.LINUX.name();
 
     @Rule
     public TestName currentTestName = new TestName();
@@ -316,12 +321,12 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
                         Collectors.groupingBy(imageState -> imageState.osFamily)));
 
         Assert.assertEquals("The OS families of default images enumerated is incorrect",
-                Sets.newHashSet("Linux", "Windows"), imagesByOsFamily.keySet());
+                Sets.newHashSet(OS_TYPE_LINUX_NAME, OS_TYPE_WINDOWS_NAME), imagesByOsFamily.keySet());
 
         Assert.assertEquals("The count of default Linux images enumerated is incorrect",
-                7, imagesByOsFamily.get("Linux").size());
+                7, imagesByOsFamily.get(OS_TYPE_LINUX_NAME).size());
 
-        for (ImageState imageState : imagesByOsFamily.get("Linux")) {
+        for (ImageState imageState : imagesByOsFamily.get(OS_TYPE_LINUX_NAME)) {
             Assert.assertEquals(StringUtils.split(imageState.id, ":").length, 4);
             Assert.assertTrue(imageState.id.endsWith(":latest"));
             Assert.assertNotNull(imageState.regionId);
@@ -330,9 +335,9 @@ public class TestAzureImageEnumerationTask extends BaseModelTest {
         }
 
         Assert.assertEquals("The count of default Windows images enumerated is incorrect",
-                4, imagesByOsFamily.get("Windows").size());
+                4, imagesByOsFamily.get(OS_TYPE_WINDOWS_NAME).size());
 
-        for (ImageState imageState : imagesByOsFamily.get("Windows")) {
+        for (ImageState imageState : imagesByOsFamily.get(OS_TYPE_WINDOWS_NAME)) {
             Assert.assertEquals(StringUtils.split(imageState.id, ":").length, 4);
             Assert.assertTrue(imageState.id.endsWith(":latest"));
             Assert.assertNotNull(imageState.regionId);

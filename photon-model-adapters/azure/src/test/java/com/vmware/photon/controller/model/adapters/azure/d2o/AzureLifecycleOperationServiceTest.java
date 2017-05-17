@@ -26,11 +26,10 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.logging.Level;
 
+import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
 
+import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -79,7 +78,7 @@ public class AzureLifecycleOperationServiceTest extends BasicReusableHostTestCas
 
     public boolean isMock = true;
 
-    private ComputeManagementClient computeManagementClient;
+    private ComputeManagementClientImpl computeManagementClient;
     private ComputeState vmState;
 
     @Rule
@@ -130,8 +129,8 @@ public class AzureLifecycleOperationServiceTest extends BasicReusableHostTestCas
             if (!this.isMock) {
                 ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
                         this.clientID, this.tenantId, this.clientKey, AzureEnvironment.AZURE);
-                this.computeManagementClient = new ComputeManagementClientImpl(credentials);
-                this.computeManagementClient.setSubscriptionId(this.subscriptionId);
+                this.computeManagementClient = new ComputeManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
             }
 
         } catch (Throwable e) {

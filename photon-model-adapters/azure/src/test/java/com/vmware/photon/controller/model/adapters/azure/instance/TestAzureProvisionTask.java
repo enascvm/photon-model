@@ -37,15 +37,13 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.management.compute.ComputeManagementClient;
-import com.microsoft.azure.management.compute.ComputeManagementClientImpl;
-import com.microsoft.azure.management.network.NetworkManagementClient;
-import com.microsoft.azure.management.network.NetworkManagementClientImpl;
-import com.microsoft.azure.management.resources.ResourceManagementClient;
-import com.microsoft.azure.management.resources.ResourceManagementClientImpl;
-import com.microsoft.azure.management.resources.models.ResourceGroup;
+import com.microsoft.azure.management.compute.implementation.ComputeManagementClientImpl;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineInner;
+import com.microsoft.azure.management.network.implementation.NetworkManagementClientImpl;
+import com.microsoft.azure.management.resources.implementation.ResourceGroupInner;
+import com.microsoft.azure.management.resources.implementation.ResourceManagementClientImpl;
 
 import org.junit.After;
 import org.junit.Assume;
@@ -102,9 +100,9 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
     public boolean skipStats = true;
 
     // fields that are used across method calls, stash them as private fields
-    private ComputeManagementClient computeManagementClient;
-    private ResourceManagementClient resourceManagementClient;
-    private NetworkManagementClient networkManagementClient;
+    private ComputeManagementClientImpl computeManagementClient;
+    private ResourceManagementClientImpl resourceManagementClient;
+    private NetworkManagementClientImpl networkManagementClient;
 
     private ComputeState vmState;
 
@@ -157,14 +155,14 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
                 ApplicationTokenCredentials credentials = new ApplicationTokenCredentials(
                         this.clientID, this.tenantId, this.clientKey, AzureEnvironment.AZURE);
 
-                this.computeManagementClient = new ComputeManagementClientImpl(credentials);
-                this.computeManagementClient.setSubscriptionId(this.subscriptionId);
+                this.computeManagementClient = new ComputeManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
 
-                this.resourceManagementClient = new ResourceManagementClientImpl(credentials);
-                this.resourceManagementClient.setSubscriptionId(this.subscriptionId);
+                this.resourceManagementClient = new ResourceManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
 
-                this.networkManagementClient = new NetworkManagementClientImpl(credentials);
-                this.networkManagementClient.setSubscriptionId(this.subscriptionId);
+                this.networkManagementClient = new NetworkManagementClientImpl(credentials)
+                        .withSubscriptionId(this.subscriptionId);
             }
 
 
@@ -269,13 +267,13 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
          * subnet/network. That's why the network is with a !!!FIXED!!! name, and that SAME name is
          * being used by standard provisioning!
          */
-        final ResourceGroup sharedNetworkRG = AzureTestUtil.createResourceGroupWithSharedNetwork
+        final ResourceGroupInner sharedNetworkRG = AzureTestUtil.createResourceGroupWithSharedNetwork
                 (this.resourceManagementClient, this.networkManagementClient,
                         SHARED_NETWORK_NIC_SPEC);
 
         // Create corresponding ResourceGroupState
         ResourceGroupState sharedNetworkRGState = createDefaultResourceGroupState(
-                this.host, sharedNetworkRG.getName(), computeHost, endpointState,
+                this.host, sharedNetworkRG.name(), computeHost, endpointState,
                 ResourceGroupStateType.AzureResourceGroup);
 
         // END of prepare phase.
@@ -419,12 +417,12 @@ public class TestAzureProvisionTask extends BasicReusableHostTestCase {
         }
 
         try {
-            com.microsoft.azure.management.compute.models.VirtualMachine provisionedVM = AzureTestUtil.getAzureVirtualMachine(
+            VirtualMachineInner provisionedVM = AzureTestUtil.getAzureVirtualMachine(
                     this
                             .computeManagementClient,
                     azureVMName,
                     azureVMName);
-            int OSDiskSizeInAzure = provisionedVM.getStorageProfile().getOsDisk().getDiskSizeGB();
+            int OSDiskSizeInAzure = provisionedVM.storageProfile().osDisk().diskSizeGB();
             assertEquals("OS Disk size of the VM in azure does not match with the intended size",
                     AzureTestUtil
                             .AZURE_CUSTOM_OSDISK_SIZE,

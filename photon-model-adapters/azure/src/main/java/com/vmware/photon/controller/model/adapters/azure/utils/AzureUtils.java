@@ -13,15 +13,16 @@
 
 package com.vmware.photon.controller.model.adapters.azure.utils;
 
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_CORE_MANAGEMENT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNTS;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY1;
-import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY2;
+import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_KEY;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_ACCOUNT_URI;
 import static com.vmware.photon.controller.model.adapters.azure.constants.AzureConstants.AZURE_STORAGE_TYPE;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.CUSTOM_PROP_ENDPOINT_LINK;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -29,10 +30,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.credentials.AzureEnvironment;
-import com.microsoft.azure.management.storage.models.StorageAccount;
-import com.microsoft.azure.management.storage.models.StorageAccountKeys;
+import com.microsoft.azure.management.storage.StorageAccountKey;
+import com.microsoft.azure.management.storage.implementation.StorageAccountInner;
+import com.microsoft.azure.management.storage.implementation.StorageAccountListKeysResultInner;
+
+import com.microsoft.azure.serializer.AzureJacksonAdapter;
+import com.microsoft.rest.LogLevel;
+import com.microsoft.rest.RestClient;
+import com.microsoft.rest.ServiceResponseBuilder.Factory;
 
 import okhttp3.OkHttpClient;
 
@@ -47,7 +54,6 @@ import com.vmware.photon.controller.model.security.util.EncryptionUtils;
 import com.vmware.xenon.common.DeferredResult;
 import com.vmware.xenon.common.Operation;
 import com.vmware.xenon.common.ServiceHost;
-import com.vmware.xenon.common.StatelessService;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.services.common.AuthCredentialsService;
 import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsServiceState;
@@ -140,22 +146,6 @@ public class AzureUtils {
             this.delayMillis *= 2;
             return next;
         }
-    }
-
-    /**
-     * Clean up Azure SDK HTTP client.
-     */
-    public static void cleanUpHttpClient(StatelessService service, OkHttpClient httpClient) {
-        if (httpClient == null) {
-            return;
-        }
-
-        httpClient.connectionPool().evictAll();
-        ExecutorService httpClientExecutor = httpClient.dispatcher().executorService();
-        httpClientExecutor.shutdown();
-
-        AdapterUtils.awaitTermination(httpClientExecutor);
-        httpClient = null;
     }
 
     /**
@@ -258,38 +248,37 @@ public class AzureUtils {
     }
 
     public static StorageDescription constructStorageDescription(ServiceHost host,
-            String serviceSelfLink, StorageAccount sa,
-            AzureInstanceContext ctx, StorageAccountKeys keys) {
+            String serviceSelfLink, StorageAccountInner sa,
+            AzureInstanceContext ctx, StorageAccountListKeysResultInner keys) {
         return constructStorageDescription(sa,
                 host, serviceSelfLink,
                 ctx.parent.endpointLink, ctx.parent.tenantLinks,
                 ctx.parent.resourcePoolLink, ctx.parent.documentSelfLink,
-                ctx.storage.getId(), ctx.storage.getName(),
-                ctx.storage.getLocation(),
+                ctx.storage.id(), ctx.storage.name(),
+                ctx.storage.location(),
                 null, keys);
     }
 
     public static StorageDescription constructStorageDescription(ServiceHost host,
             String serviceSelfLink, ComputeStateWithDescription parentCompute,
-            ComputeEnumerateResourceRequest request,
-            com.vmware.photon.controller.model.adapters.azure.model.storage.StorageAccount storageAccount,
-            StorageAccountKeys keys) {
+            ComputeEnumerateResourceRequest request, StorageAccountInner storageAccount,
+            StorageAccountListKeysResultInner keys) {
         return constructStorageDescription(null, host,
                 serviceSelfLink, request.endpointLink,
                 parentCompute.tenantLinks, request.resourcePoolLink,
-                parentCompute.documentSelfLink, storageAccount.id, storageAccount.name,
-                storageAccount.location, storageAccount.properties.primaryEndpoints.blob, keys);
+                parentCompute.documentSelfLink, storageAccount.id(), storageAccount.name(),
+                storageAccount.location(), storageAccount.primaryEndpoints().blob(), keys);
     }
 
     public static DeferredResult<AuthCredentialsServiceState> storeKeys(ServiceHost host,
-            StorageAccountKeys keys, String endpointLink, List<String> tenantLinks) {
+            StorageAccountListKeysResultInner keys, String endpointLink, List<String> tenantLinks) {
         AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
         storageAuth.documentSelfLink = UUID.randomUUID().toString();
         storageAuth.customProperties = new HashMap<>();
-        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1,
-                keys.getKey1());
-        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2,
-                keys.getKey2());
+        for (StorageAccountKey key : keys.keys()) {
+            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY +
+                    Integer.toString(currentKeyCount(storageAuth.customProperties) + 1), key.value());
+        }
         storageAuth.tenantLinks = tenantLinks;
         if (endpointLink != null) {
             storageAuth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
@@ -326,19 +315,18 @@ public class AzureUtils {
         return storageDescription;
     }
 
-    private static StorageDescription constructStorageDescription(StorageAccount sa,
-            ServiceHost host,
+    private static StorageDescription constructStorageDescription(StorageAccountInner sa, ServiceHost host,
             String serviceSelfLink, String endpointLink, List<String> tenantLinks,
             String resourcePoolLink, String parentComputeSelfLink,
             String saId, String saName, String saLocation, String saUri,
-            StorageAccountKeys keys) {
+            StorageAccountListKeysResultInner keys) {
         AuthCredentialsServiceState storageAuth = new AuthCredentialsServiceState();
         storageAuth.documentSelfLink = UUID.randomUUID().toString();
         storageAuth.customProperties = new HashMap<>();
-        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY1,
-                keys.getKey1());
-        storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY2,
-                keys.getKey2());
+        for (StorageAccountKey key : keys.keys()) {
+            storageAuth.customProperties.put(AZURE_STORAGE_ACCOUNT_KEY +
+                    Integer.toString(currentKeyCount(storageAuth.customProperties) + 1), key.value());
+        }
         storageAuth.tenantLinks = tenantLinks;
         if (endpointLink != null) {
             storageAuth.customProperties.put(CUSTOM_PROP_ENDPOINT_LINK,
@@ -366,10 +354,55 @@ public class AzureUtils {
         storageDescription.customProperties.put(AZURE_STORAGE_TYPE, AZURE_STORAGE_ACCOUNTS);
         storageDescription.customProperties.put(AZURE_STORAGE_ACCOUNT_URI, saUri);
         storageDescription.tenantLinks = tenantLinks;
-        if (sa != null && sa.getCreationTime() != null) {
+        if (sa != null && sa.creationTime() != null) {
             storageDescription.creationTimeMicros = TimeUnit.MILLISECONDS
-                    .toMicros(sa.getCreationTime().getMillis());
+                    .toMicros(sa.creationTime().getMillis());
         }
         return storageDescription;
+    }
+
+    public static int currentKeyCount(Map<String, String> map) {
+        int count = 0;
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            if (entry.getKey().startsWith(AZURE_STORAGE_ACCOUNT_KEY)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Create Azure RestClient with specified executor and credentials.
+     * @param credentials Azure credentials
+     * @param executorService Reference to executor
+     * @return Azure RestClient
+     */
+    public static RestClient buildRestClient(ApplicationTokenCredentials credentials, ExecutorService executorService) {
+        RestClient.Builder restClientBuilder = new RestClient.Builder();
+
+        restClientBuilder.withBaseUrl(AZURE_CORE_MANAGEMENT_URI);
+        restClientBuilder.withCredentials(credentials);
+        restClientBuilder.withSerializerAdapter(new AzureJacksonAdapter());
+        restClientBuilder.withLogLevel(LogLevel.NONE);
+        restClientBuilder.withCallbackExecutor(executorService);
+        restClientBuilder.withResponseBuilderFactory(new Factory());
+
+        return restClientBuilder.build();
+    }
+
+    /**
+     * Clean up Azure SDK HTTP client.
+     */
+    public static void cleanUpHttpClient(OkHttpClient httpClient) {
+        if (httpClient == null) {
+            return;
+        }
+
+        httpClient.connectionPool().evictAll();
+        ExecutorService httpClientExecutor = httpClient.dispatcher().executorService();
+        httpClientExecutor.shutdown();
+
+        AdapterUtils.awaitTermination(httpClientExecutor);
+        httpClient = null;
     }
 }

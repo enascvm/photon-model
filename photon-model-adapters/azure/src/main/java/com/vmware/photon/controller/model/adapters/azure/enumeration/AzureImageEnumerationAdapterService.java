@@ -32,12 +32,13 @@ import java.util.stream.Collectors;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.microsoft.azure.CloudException;
-import com.microsoft.azure.management.compute.VirtualMachineImagesOperations;
-import com.microsoft.azure.management.compute.models.OSDiskImage;
-import com.microsoft.azure.management.compute.models.PurchasePlan;
-import com.microsoft.azure.management.compute.models.VirtualMachineImage;
-import com.microsoft.azure.management.compute.models.VirtualMachineImageResource;
+import com.microsoft.azure.management.compute.OSDiskImage;
+import com.microsoft.azure.management.compute.OperatingSystemTypes;
+import com.microsoft.azure.management.compute.PurchasePlan;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineImageInner;
+import com.microsoft.azure.management.compute.implementation.VirtualMachineImageResourceInner;
 
+import com.microsoft.azure.management.compute.implementation.VirtualMachineImagesInner;
 import org.apache.commons.lang3.StringUtils;
 
 import com.vmware.photon.controller.model.adapterapi.ImageEnumerateRequest;
@@ -86,14 +87,14 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
     /**
      * {@link EndpointEnumerationProcess} specialization that loads Azure
-     * {@link VirtualMachineImage}s into {@link ImageState} store.
+     * {@link com.microsoft.azure.management.compute.implementation.VirtualMachineImageInner}s into {@link ImageState} store.
      */
     private static class AzureImageEnumerationContext extends
-            EndpointEnumerationProcess<AzureImageEnumerationContext, ImageState, VirtualMachineImage> {
+            EndpointEnumerationProcess<AzureImageEnumerationContext, ImageState, VirtualMachineImageInner> {
 
         static final String DEFAULT_FILTER_VALUE = "default";
 
-        static final VirtualMachineImageResource[] DEFAULT_IMAGES_FILTER = toImageFilter(
+        static final VirtualMachineImageResourceInner[] DEFAULT_IMAGES_FILTER = toImageFilter(
                 new String[] { DEFAULT_FILTER_VALUE,
                         DEFAULT_FILTER_VALUE,
                         DEFAULT_FILTER_VALUE,
@@ -120,7 +121,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
          * images ONLY</li>
          * </ul>
          */
-        VirtualMachineImageResource[] imageFilter;
+        VirtualMachineImageResourceInner[] imageFilter;
 
         AzureSdkClients azureClient;
 
@@ -263,7 +264,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                     this.service.logWarning(
                             () -> String.format(msg + ": FAILED - %s", Utils.toString(exc)));
                 } else {
-                    for (VirtualMachineImage image : defaultImages) {
+                    for (VirtualMachineImageInner image : defaultImages) {
                         page.resourcesPage.put(toImageReference(image), image);
                     }
 
@@ -278,7 +279,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             final String msg = "Enumerating Azure images by [" +
                     Arrays.asList(this.imageFilter).stream()
-                            .map(VirtualMachineImageResource::getName)
+                            .map(VirtualMachineImageResourceInner::name)
                             .collect(Collectors.joining(":"))
                     + "]";
 
@@ -293,7 +294,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
             if (this.azureStandardImages.hasNext()) {
                 // Consume this page from underlying Iterator
-                for (VirtualMachineImage image : this.azureStandardImages.next()) {
+                for (VirtualMachineImageInner image : this.azureStandardImages.next()) {
                     page.resourcesPage.put(toImageReference(image), image);
                 }
             }
@@ -312,7 +313,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
         @Override
         protected DeferredResult<LocalStateHolder> buildLocalResourceState(
-                VirtualMachineImage remoteImage, ImageState existingImageState) {
+                VirtualMachineImageInner remoteImage, ImageState existingImageState) {
 
             LocalStateHolder holder = new LocalStateHolder();
 
@@ -335,12 +336,12 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             holder.localState.name = toImageReference(remoteImage);
             holder.localState.description = toImageReference(remoteImage);
 
-            if (remoteImage.getOsDiskImage() != null) {
-                holder.localState.osFamily = remoteImage.getOsDiskImage().getOperatingSystem();
+            if (remoteImage.osDiskImage() != null && remoteImage.osDiskImage().operatingSystem() != null) {
+                holder.localState.osFamily = remoteImage.osDiskImage().operatingSystem().name();
             }
 
-            if (remoteImage.getTags() != null) {
-                holder.remoteTags.putAll(remoteImage.getTags());
+            if (remoteImage.tags() != null) {
+                holder.remoteTags.putAll(remoteImage.tags());
             }
 
             return DeferredResult.completed(holder);
@@ -362,7 +363,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             }
         }
 
-        static VirtualMachineImageResource[] createImageFilter(String filter) {
+        static VirtualMachineImageResourceInner[] createImageFilter(String filter) {
 
             if (DEFAULT_FILTER_VALUE.equalsIgnoreCase(filter)) {
                 return DEFAULT_IMAGES_FILTER;
@@ -381,25 +382,25 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             return toImageFilter(strFilters);
         }
 
-        static VirtualMachineImageResource[] toImageFilter(String[] strFilters) {
+        static VirtualMachineImageResourceInner[] toImageFilter(String[] strFilters) {
 
-            VirtualMachineImageResource[] posv = new VirtualMachineImageResource[strFilters.length];
+            VirtualMachineImageResourceInner[] posv = new VirtualMachineImageResourceInner[strFilters.length];
 
             for (int i = 0; i < strFilters.length; i++) {
                 // Create dummy VirtualMachineImageResource with just name being set.
-                posv[i] = new VirtualMachineImageResource();
-                posv[i].setName(strFilters[i]);
+                posv[i] = new VirtualMachineImageResourceInner();
+                posv[i].withName(strFilters[i]);
             }
 
             return posv;
         }
 
-        static String toImageReference(VirtualMachineImage azureImage) {
+        static String toImageReference(VirtualMachineImageInner azureImage) {
 
-            final PurchasePlan plan = azureImage.getPlan();
+            final PurchasePlan plan = azureImage.plan();
 
             return toImageReference(
-                    plan.getPublisher(), plan.getProduct(), plan.getName(), azureImage.getName());
+                    plan.publisher(), plan.product(), plan.name(), azureImage.name());
         }
 
         static String toImageReference(String publisher, String offer, String sku, String version) {
@@ -493,12 +494,6 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
      *
      * An Azure <b>default</b> images loader that reads pre-defined images from a file and exposes
      * them as {@code VirtualMachineImage}s.
-     *
-     * <p>
-     * Here's the content of the file, located at
-     * {@link https://raw.githubusercontent.com/Azure/azure-rest-api-specs/master/arm-compute/quickstart-templates/aliases.json}.
-     *
-     * <pre>
      * {
           "$schema":"http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
           "contentVersion":"1.0.0.0",
@@ -626,7 +621,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
          * <p>
          * The return type is designed to be consistent with {@code StandardImagesLoader}.
          */
-        public DeferredResult<List<VirtualMachineImage>> load() {
+        public DeferredResult<List<VirtualMachineImageInner>> load() {
 
             URI defaultImagesSource = URI.create(getDefaultImagesSource());
 
@@ -672,7 +667,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         /**
          * Convert {@code ImageRef}s to {@code VirtualMachineImage}s.
          */
-        private List<VirtualMachineImage> toVirtualMachineImages(List<ImageRef> imageRefs) {
+        private List<VirtualMachineImageInner> toVirtualMachineImages(List<ImageRef> imageRefs) {
 
             return imageRefs.stream().map(this::toVirtualMachineImage).collect(Collectors.toList());
         }
@@ -680,29 +675,29 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         /**
          * Convert {@code ImageRef} to {@code VirtualMachineImage}.
          */
-        private VirtualMachineImage toVirtualMachineImage(ImageRef imageRef) {
+        private VirtualMachineImageInner toVirtualMachineImage(ImageRef imageRef) {
 
             // Create artificial Azure image object
-            final VirtualMachineImage image = new VirtualMachineImage();
+            final VirtualMachineImageInner image = new VirtualMachineImageInner();
 
-            image.setLocation(this.ctx.regionId);
+            image.withLocation(this.ctx.regionId);
 
-            image.setName(imageRef.version);
+            image.withName(imageRef.version);
 
             {
                 final PurchasePlan plan = new PurchasePlan();
-                plan.setPublisher(imageRef.publisher);
-                plan.setProduct(imageRef.offer);
-                plan.setName(imageRef.sku);
+                plan.withPublisher(imageRef.publisher);
+                plan.withProduct(imageRef.offer);
+                plan.withName(imageRef.sku);
 
-                image.setPlan(plan);
+                image.withPlan(plan);
             }
 
             {
                 final OSDiskImage osDiskImage = new OSDiskImage();
-                osDiskImage.setOperatingSystem(imageRef.osFamily);
+                osDiskImage.withOperatingSystem(OperatingSystemTypes.fromString(imageRef.osFamily.toUpperCase()));
 
-                image.setOsDiskImage(osDiskImage);
+                image.withOsDiskImage(osDiskImage);
             }
 
             return image;
@@ -713,30 +708,30 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
      * An Azure images loader that traverses (in depth) 'publisher-offer-sku-version' hierarchy and
      * exposes {@code VirtualMachineImage}s through an {@code Iterator} interface.
      */
-    private static class StandardImagesLoader implements Iterator<List<VirtualMachineImage>> {
+    private static class StandardImagesLoader implements Iterator<List<VirtualMachineImageInner>> {
 
         static final int DEFAULT_PAGE_SIZE = 100;
 
         final AzureImageEnumerationContext ctx;
         final int pageSize;
 
-        final VirtualMachineImagesOperations imagesOp;
+        final VirtualMachineImagesInner imagesOp;
 
-        private Iterator<VirtualMachineImageResource> publishersIt;
-        private VirtualMachineImageResource currentPublisher;
+        private Iterator<VirtualMachineImageResourceInner> publishersIt;
+        private VirtualMachineImageResourceInner currentPublisher;
 
         // IMPORTANT: Do not use Collections.emptyIterator! We need brand new instance.
-        private Iterator<VirtualMachineImageResource> offersIt = new ArrayList<VirtualMachineImageResource>()
+        private Iterator<VirtualMachineImageResourceInner> offersIt = new ArrayList<VirtualMachineImageResourceInner>()
                 .iterator();
-        private VirtualMachineImageResource currentOffer;
+        private VirtualMachineImageResourceInner currentOffer;
 
-        private Iterator<VirtualMachineImageResource> skusIt = new ArrayList<VirtualMachineImageResource>()
+        private Iterator<VirtualMachineImageResourceInner> skusIt = new ArrayList<VirtualMachineImageResourceInner>()
                 .iterator();
-        private VirtualMachineImageResource currentSku;
+        private VirtualMachineImageResourceInner currentSku;
 
-        private Iterator<VirtualMachineImageResource> versionsIt = new ArrayList<VirtualMachineImageResource>()
+        private Iterator<VirtualMachineImageResourceInner> versionsIt = new ArrayList<VirtualMachineImageResourceInner>()
                 .iterator();
-        private VirtualMachineImageResource currentVersion;
+        private VirtualMachineImageResourceInner currentVersion;
 
         private int pageNumber = -1;
         private int totalNumber = 0;
@@ -747,8 +742,8 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
             this.pageSize = pageSize;
 
             this.imagesOp = ctx.azureClient
-                    .getComputeManagementClient()
-                    .getVirtualMachineImagesOperations();
+                    .getComputeManagementClientImpl()
+                    .virtualMachineImages();
         }
 
         /**
@@ -779,7 +774,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         /**
          * Checks whether passed iterator or any of its underlying iterators has more elements.
          */
-        private boolean hasNext(Iterator<VirtualMachineImageResource> it) {
+        private boolean hasNext(Iterator<VirtualMachineImageResourceInner> it) {
             if (it == this.publishersIt) {
                 return it.hasNext() || hasNext(this.offersIt);
             }
@@ -796,14 +791,14 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
         }
 
         @Override
-        public List<VirtualMachineImage> next() {
+        public List<VirtualMachineImageInner> next() {
 
             if (!hasNext()) {
                 throw new NoSuchElementException(
                         getClass().getSimpleName() + " has already been consumed.");
             }
 
-            List<VirtualMachineImage> page = new ArrayList<>();
+            List<VirtualMachineImageInner> page = new ArrayList<>();
 
             try {
                 while (hasNext(this.publishersIt)) {
@@ -846,7 +841,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
                                 this.currentVersion = this.versionsIt.next();
 
-                                VirtualMachineImage image = loadImage();
+                                VirtualMachineImageInner image = loadImage();
 
                                 page.add(image);
 
@@ -878,13 +873,12 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 return;
             }
 
-            VirtualMachineImageResource publisherFilter = this.ctx.imageFilter[0];
+            VirtualMachineImageResourceInner publisherFilter = this.ctx.imageFilter[0];
 
-            if (publisherFilter.getName().isEmpty()) {
+            if (publisherFilter.name().isEmpty()) {
                 // Get ALL publishers
-                List<VirtualMachineImageResource> publishers = this.imagesOp
-                        .listPublishers(this.ctx.regionId)
-                        .getBody();
+                List<VirtualMachineImageResourceInner> publishers = this.imagesOp
+                        .listPublishers(this.ctx.regionId);
 
                 this.publishersIt = publishers.iterator();
 
@@ -894,7 +888,7 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
                 this.publishersIt = singletonList(publisherFilter).iterator();
 
                 this.ctx.service
-                        .logFine(() -> "publisher-filter = " + publisherFilter.getName());
+                        .logFine(() -> "publisher-filter = " + publisherFilter.name());
             }
         }
 
@@ -903,26 +897,26 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
          */
         private void loadOffers() throws CloudException, IOException {
 
-            VirtualMachineImageResource offerFilter = this.ctx.imageFilter[1];
+            VirtualMachineImageResourceInner offerFilter = this.ctx.imageFilter[1];
 
-            if (offerFilter.getName().isEmpty()) {
+            if (offerFilter.name().isEmpty()) {
                 // Get ALL offers
-                List<VirtualMachineImageResource> offers = this.imagesOp.listOffers(
+                List<VirtualMachineImageResourceInner> offers = this.imagesOp.listOffers(
                         this.ctx.regionId,
-                        this.currentPublisher.getName()).getBody();
+                        this.currentPublisher.name());
 
                 this.offersIt = offers.iterator();
 
                 this.ctx.service.logFine(
-                        () -> "offers (per " + this.currentPublisher.getName() + ") = "
+                        () -> "offers (per " + this.currentPublisher.name() + ") = "
                                 + offers.size());
             } else {
                 // Filter offers
                 this.offersIt = singletonList(offerFilter).iterator();
 
                 this.ctx.service.logFine(
-                        () -> "offer-filter (per " + this.currentPublisher.getName()
-                                + ") = " + offerFilter.getName());
+                        () -> "offer-filter (per " + this.currentPublisher.name()
+                                + ") = " + offerFilter.name());
             }
         }
 
@@ -931,51 +925,51 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
          */
         private void loadSkus() throws CloudException, IOException {
 
-            VirtualMachineImageResource skuFilter = this.ctx.imageFilter[2];
+            VirtualMachineImageResourceInner skuFilter = this.ctx.imageFilter[2];
 
-            if (skuFilter.getName().isEmpty()) {
+            if (skuFilter.name().isEmpty()) {
                 // Get ALL skus
-                List<VirtualMachineImageResource> skus = this.imagesOp.listSkus(
+                List<VirtualMachineImageResourceInner> skus = this.imagesOp.listSkus(
                         this.ctx.regionId,
-                        this.currentPublisher.getName(),
-                        this.currentOffer.getName()).getBody();
+                        this.currentPublisher.name(),
+                        this.currentOffer.name());
 
                 this.skusIt = skus.iterator();
 
                 this.ctx.service.logFine(
-                        () -> "skus (per " + this.currentPublisher.getName() + "/"
-                                + this.currentOffer.getName()
+                        () -> "skus (per " + this.currentPublisher.name() + "/"
+                                + this.currentOffer.name()
                                 + ") = " + skus.size());
             } else {
                 // Filter sku
                 this.skusIt = singletonList(skuFilter).iterator();
 
                 this.ctx.service.logFine(
-                        () -> "sku-filter (per " + this.currentPublisher.getName()
-                                + "/" + this.currentOffer.getName() + ") = "
-                                + skuFilter.getName());
+                        () -> "sku-filter (per " + this.currentPublisher.name()
+                                + "/" + this.currentOffer.name() + ") = "
+                                + skuFilter.name());
             }
         }
 
         private void loadVersions() throws CloudException, IOException {
 
-            VirtualMachineImageResource versionFilter = this.ctx.imageFilter[3];
+            VirtualMachineImageResourceInner versionFilter = this.ctx.imageFilter[3];
 
-            if (versionFilter.getName().isEmpty()) {
+            if (versionFilter.name().isEmpty()) {
                 // Get ALL versions
-                List<VirtualMachineImageResource> versions = this.imagesOp.list(
+                List<VirtualMachineImageResourceInner> versions = this.imagesOp.list(
                         this.ctx.regionId,
-                        this.currentPublisher.getName(),
-                        this.currentOffer.getName(),
-                        this.currentSku.getName(),
-                        null, null, null).getBody();
+                        this.currentPublisher.name(),
+                        this.currentOffer.name(),
+                        this.currentSku.name(),
+                        null, null, null);
 
                 this.versionsIt = versions.iterator();
 
                 this.ctx.service.logFine(() -> "versions (per "
-                        + this.currentPublisher.getName() + "/"
-                        + this.currentOffer.getName() + "/"
-                        + this.currentSku.getName()
+                        + this.currentPublisher.name() + "/"
+                        + this.currentOffer.name() + "/"
+                        + this.currentSku.name()
                         + ") = " + versions.size());
             } else {
                 // Filter versions
@@ -983,31 +977,31 @@ public class AzureImageEnumerationAdapterService extends StatelessService {
 
                 this.ctx.service.logFine(
                         () -> "version-filter (per "
-                                + this.currentPublisher.getName() + "/"
-                                + this.currentOffer.getName() + "/"
-                                + this.currentSku.getName()
-                                + ") = " + versionFilter.getName());
+                                + this.currentPublisher.name() + "/"
+                                + this.currentOffer.name() + "/"
+                                + this.currentSku.name()
+                                + ") = " + versionFilter.name());
             }
         }
 
-        private VirtualMachineImage loadImage() throws CloudException, IOException {
+        private VirtualMachineImageInner loadImage() throws CloudException, IOException {
 
-            VirtualMachineImage image = this.imagesOp.get(
+            VirtualMachineImageInner image = this.imagesOp.get(
                     this.ctx.regionId,
-                    this.currentPublisher.getName(),
-                    this.currentOffer.getName(),
-                    this.currentSku.getName(),
-                    this.currentVersion.getName()).getBody();
+                    this.currentPublisher.name(),
+                    this.currentOffer.name(),
+                    this.currentSku.name(),
+                    this.currentVersion.name());
 
-            if (image.getPlan() == null) {
+            if (image.plan() == null) {
                 // For some reason some images does not have Plan
                 // so we create one
                 PurchasePlan plan = new PurchasePlan();
-                plan.setPublisher(this.currentPublisher.getName());
-                plan.setProduct(this.currentOffer.getName());
-                plan.setName(this.currentSku.getName());
+                plan.withPublisher(this.currentPublisher.name());
+                plan.withProduct(this.currentOffer.name());
+                plan.withName(this.currentSku.name());
 
-                image.setPlan(plan);
+                image.withPlan(plan);
             }
 
             return image;
