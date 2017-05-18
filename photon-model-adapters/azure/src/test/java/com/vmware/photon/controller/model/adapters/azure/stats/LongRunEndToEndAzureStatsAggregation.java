@@ -87,7 +87,7 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
     private static final String STAT_NAME_MEMORY_AVAILABLE_IN_MB = "Memory available in MB";
     private static final double BYTES_TO_MB = 1024 * 1024;
     private static final int DEFAULT_RETENTION_LIMIT_DAYS = 56;
-    private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 1;
+    private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 2;
 
 
     private Level loggingLevelMemory;
@@ -194,6 +194,7 @@ public class LongRunEndToEndAzureStatsAggregation extends BasicReusableHostTestC
 
         this.host.waitFor("Timeout while waiting for test run duration", () -> {
             TimeUnit.MINUTES.sleep(this.testRunDurationInMinutes);
+            this.host.getScheduledExecutor().shutdown();
             this.host.getScheduledExecutor().awaitTermination(EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES,
                     TimeUnit.MINUTES);
             return true;

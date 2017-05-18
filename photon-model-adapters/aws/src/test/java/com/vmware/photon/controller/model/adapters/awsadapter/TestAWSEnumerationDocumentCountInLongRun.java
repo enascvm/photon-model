@@ -92,7 +92,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     private static final String STAT_NAME_MEMORY_AVAILABLE_IN_PERCENT = "MemoryAvailablePercent";
     private static final int MEMORY_THRESHOLD_SEVERE = 60;
     private static final int MEMORY_THRESHOLD_WARNING = 40;
-    private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 1;
+    private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 2;
     private static final double BYTES_TO_MB = 1024 * 1024;
 
     // Sets for storing document links and ids
@@ -116,11 +116,11 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
     private List<String> instanceIds;
     private String nicToCleanUp = null;
     private URI nodeStatsUri = null;
-    public String awsMockEndpointReference = null;
     private AmazonEC2AsyncClient client;
-    public boolean isAwsClientMock = false;
     private boolean postDeletion = false;
 
+    public boolean isAwsClientMock = false;
+    public String awsMockEndpointReference = null;
     public boolean useAllRegions = false;
     public boolean isMock = true;
     public String accessKey = "accessKey";
@@ -238,6 +238,7 @@ public class TestAWSEnumerationDocumentCountInLongRun extends BasicTestCase {
         // Keep the host running for some time, specified by testRunDurationInMinutes parameter.
         this.host.waitFor("Timeout while waiting for test run duration", () -> {
             TimeUnit.MINUTES.sleep(this.testRunDurationInMinutes);
+            this.host.getScheduledExecutor().shutdown();
             this.host.getScheduledExecutor().awaitTermination(EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES,
                     TimeUnit.MINUTES);
             return true;

@@ -85,7 +85,7 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
     private static final String STAT_NAME_CPU_USAGE_PERCENT = "CPU Usage Percent";
     private static final String STAT_NAME_MEMORY_AVAILABLE_PERCENT = "Memory available Percent";
     private static final String STAT_NAME_MEMORY_ON_HOST_IN_MB = "Memory on host in MB";
-    private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 1;
+    private static final int EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES = 2;
     private static final double BYTES_TO_MB = 1024 * 1024;
 
     // Time in minutes for stats availability for a EC2 instance when newly created.
@@ -258,6 +258,7 @@ public class LongRunEndToEndStatsCollectionTest extends BasicTestCase {
         // Keep the host running for some time, specified by testRunDurationInMinutes parameter.
         this.host.waitFor("Timeout while waiting for second test run duration", () -> {
             TimeUnit.MINUTES.sleep(this.testRunDurationInMinutes);
+            this.host.getScheduledExecutor().shutdown();
             this.host.getScheduledExecutor().awaitTermination(EXECUTOR_TERMINATION_WAIT_DURATION_MINUTES,
                     TimeUnit.MINUTES);
             return true;
