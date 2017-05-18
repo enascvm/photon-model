@@ -71,7 +71,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
     public String secretKey = "secretKey";
     public boolean isMock = true;
 
-    public boolean enableLongRunning = false;
+    public boolean enableLongRunning = true;
     // }}
 
     private static final String AMAZON_PRIVATE_IMAGE_FILTER = null;
@@ -326,7 +326,7 @@ public class TestAWSImageEnumerationTask extends BaseModelTest {
         Assume.assumeFalse(this.isMock);
         Assume.assumeTrue(this.enableLongRunning);
 
-        getHost().setTimeoutSeconds((int) TimeUnit.MINUTES.toSeconds(5));
+        getHost().setTimeoutSeconds((int) TimeUnit.MINUTES.toSeconds(20));
 
         // Important: MUST share same Endpoint between the two enum runs.
         final EndpointState endpointState = createEndpointState();

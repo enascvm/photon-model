@@ -15,6 +15,9 @@ package com.vmware.photon.controller.model.adapters.awsadapter;
 
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_DEFAULT_SUBNET_CIDR;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
+
 import java.util.List;
 
 import com.amazonaws.AmazonServiceException;
@@ -52,9 +55,6 @@ public class TestAWSNetworkService {
     */
     public String privateKey;
     public String privateKeyId;
-    public String region;
-    public String subnet;
-
 
     VerificationHost host;
 
@@ -68,7 +68,7 @@ public class TestAWSNetworkService {
         CommandLineArgumentParser.parseFromProperties(this);
 
         // ignore if any of the required properties are missing
-        org.junit.Assume.assumeTrue(TestUtils.isNull(this.privateKey, this.privateKeyId, this.region, this.subnet));
+        org.junit.Assume.assumeTrue(TestUtils.isNull(this.privateKey, this.privateKeyId));
 
         this.host = VerificationHost.create(0);
         try {
@@ -84,7 +84,7 @@ public class TestAWSNetworkService {
                     netSvc);
 
             this.netClient = new AWSNetworkClient(
-                    TestUtils.getClient(this.privateKeyId, this.privateKey, this.region, false));
+                    TestUtils.getClient(this.privateKeyId, this.privateKey, regionId, false));
         } catch (Throwable e) {
             throw new Exception(e);
         }
@@ -113,10 +113,10 @@ public class TestAWSNetworkService {
      */
     @Test
     public void testVPCAndSubnet() throws Throwable {
-        String vpcID = this.netClient.createVPC(this.subnet);
+        String vpcID = this.netClient.createVPC(AWS_DEFAULT_SUBNET_CIDR);
         assertTrue(vpcID != null);
 
-        String subnetID = this.netClient.createSubnet(this.subnet, vpcID).getSubnetId();
+        String subnetID = this.netClient.createSubnet(AWS_DEFAULT_SUBNET_CIDR, vpcID).getSubnetId();
         assertTrue(subnetID != null);
 
         // ensure getters works..
@@ -174,9 +174,9 @@ public class TestAWSNetworkService {
 
         String gatewayID = this.netClient.createInternetGateway();
         assertTrue(gatewayID != null);
-        String vpcID = this.netClient.createVPC(this.subnet);
+        String vpcID = this.netClient.createVPC(AWS_DEFAULT_SUBNET_CIDR);
         assertTrue(vpcID != null);
-        String subnetID = this.netClient.createSubnet(this.subnet, vpcID).getSubnetId();
+        String subnetID = this.netClient.createSubnet(AWS_DEFAULT_SUBNET_CIDR, vpcID).getSubnetId();
 
         this.netClient.attachInternetGateway(vpcID, gatewayID);
         InternetGateway gw = this.netClient.getInternetGateway(gatewayID);

@@ -76,8 +76,8 @@ import com.vmware.xenon.services.common.AuthCredentialsService.AuthCredentialsSe
 public class AWSSubnetTaskServiceTest extends BaseModelTest {
     private static final int DEFAULT_TIMOUT_SECONDS = 200;
 
-    public String secretKey = "test123";
-    public String accessKey = "blas123";
+    public String secretKey = "secretKey";
+    public String accessKey = "accessKey";
     private String regionId = TestAWSSetupUtils.regionId;
     private int timeoutSeconds = DEFAULT_TIMOUT_SECONDS;
     public boolean isMock = true;
@@ -160,7 +160,7 @@ public class AWSSubnetTaskServiceTest extends BaseModelTest {
                 this.client.describeSubnets(describeRequest).getSubnets();
                 fail("Subnet should not exists in AWS.");
             } catch (AmazonEC2Exception ex) {
-                assertEquals(HttpResponseStatus.NOT_FOUND.code(), ex.getStatusCode());
+                assertEquals(HttpResponseStatus.BAD_REQUEST.code(), ex.getStatusCode());
             }
         }
     }

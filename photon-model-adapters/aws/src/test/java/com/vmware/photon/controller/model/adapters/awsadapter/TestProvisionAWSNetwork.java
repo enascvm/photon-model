@@ -20,6 +20,7 @@ import static org.junit.Assert.assertTrue;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GATEWAY_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ROUTE_TABLE_ID;
+import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.regionId;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestUtils.getExecutor;
 
 import java.net.URI;
@@ -66,8 +67,6 @@ public class TestProvisionAWSNetwork {
     */
     public String privateKey;
     public String privateKeyId;
-    public String region;
-    public String subnet;
 
     private VerificationHost host;
     private URI provisionNetworkFactory;
@@ -77,7 +76,7 @@ public class TestProvisionAWSNetwork {
         CommandLineArgumentParser.parseFromProperties(this);
 
         // ignore if any of the required properties are missing
-        org.junit.Assume.assumeTrue(TestUtils.isNull(this.privateKey, this.privateKeyId, this.region, this.subnet));
+        org.junit.Assume.assumeTrue(TestUtils.isNull(this.privateKey, this.privateKeyId));
 
         this.host = VerificationHost.create(0);
         try {
@@ -122,7 +121,7 @@ public class TestProvisionAWSNetwork {
         NetworkState initialState = TestUtils.buildNetworkState(this.host);
         initialState.authCredentialsLink = creds.documentSelfLink;
         initialState.resourcePoolLink = pool.documentSelfLink;
-        initialState.regionId = this.region;
+        initialState.regionId = regionId;
         initialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
                 AWSUriPaths.AWS_NETWORK_ADAPTER,
@@ -173,7 +172,7 @@ public class TestProvisionAWSNetwork {
         NetworkState initialState = TestUtils.buildNetworkState(this.host);
         initialState.authCredentialsLink = creds.documentSelfLink;
         initialState.resourcePoolLink = pool.documentSelfLink;
-        initialState.regionId = this.region;
+        initialState.regionId = regionId;
         initialState.instanceAdapterReference = UriUtils.buildUri(ServiceHost.LOCAL_HOST,
                 this.host.getPort(),
                 AWSUriPaths.AWS_NETWORK_ADAPTER,
@@ -198,7 +197,7 @@ public class TestProvisionAWSNetwork {
 
         NetworkState net = getNetworkState(networkDescriptionLink);
 
-        AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(creds, this.region, getExecutor());
+        AmazonEC2AsyncClient client = AWSUtils.getAsyncClient(creds, regionId, getExecutor());
         AWSNetworkClient netSVC = new AWSNetworkClient(client);
         // if any artifact is not present then an error will be thrown
         assertNotNull(netSVC.getVPC(net.customProperties.get(AWS_VPC_ID)));

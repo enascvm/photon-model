@@ -148,7 +148,8 @@ public class TestAWSClientManagement extends BasicReusableHostTestCase {
 
     }
 
-    @Test public void testAwsS3ClientManagement() throws Throwable {
+    @Test
+    public void testAwsS3ClientManagement() throws Throwable {
 
         // Ensure that we start with a clean state.
         AWSClientManagerFactory.cleanUp(AwsClientType.S3);
