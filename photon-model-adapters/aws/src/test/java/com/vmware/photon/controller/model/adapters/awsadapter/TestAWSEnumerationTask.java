@@ -97,6 +97,7 @@ import com.vmware.photon.controller.model.resources.ComputeService;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
 import com.vmware.photon.controller.model.resources.DiskService;
+import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.EndpointService.EndpointState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
@@ -714,13 +715,12 @@ public class TestAWSEnumerationTask extends BasicTestCase {
             assertEquals("Wrong number of subnet tag links found.", 1, defaultSubnetState.tagLinks.size());
 
             // validate disk tags
-            // commented until https://jira-hzn.eng.vmware.com/browse/VSYM-6337 is fixed
-            //Map<String, DiskState> allDiskStatesMap =
-            //        ProvisioningUtils.<DiskState> getResourceStates(this.host,
-            //                DiskService.FACTORY_LINK, DiskState.class);
-            //DiskState defaultDiskState = allDiskStatesMap.get(this.diskId);
+            Map<String, DiskState> allDiskStatesMap =
+                    ProvisioningUtils.<DiskState> getResourceStates(this.host,
+                            DiskService.FACTORY_LINK, DiskState.class);
+            DiskState defaultDiskState = allDiskStatesMap.get(this.diskId);
             // ensure one link is deleted and one new is added to the disk state
-            //assertEquals("Wrong number of disk tag links found.", 1, defaultDiskState.tagLinks.size());
+            assertEquals("Wrong number of disk tag links found.", 1, defaultDiskState.tagLinks.size());
 
             // validate vm tags
             Map<Tag, String> vmTagLinks = new HashMap<>();

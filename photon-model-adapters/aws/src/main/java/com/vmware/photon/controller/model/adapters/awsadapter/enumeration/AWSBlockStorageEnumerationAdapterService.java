@@ -24,7 +24,6 @@ import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstant
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.getQueryResultLimit;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPatchOperation;
 import static com.vmware.photon.controller.model.adapters.util.AdapterUtils.createPostOperation;
-import static com.vmware.photon.controller.model.adapters.util.TagsUtil.newExternalTagState;
 import static com.vmware.photon.controller.model.constants.PhotonModelConstants.SOURCE_TASK_LINK;
 
 import java.util.ArrayList;
@@ -51,7 +50,6 @@ import com.vmware.photon.controller.model.adapters.awsadapter.AWSUriPaths;
 import com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManager;
 import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSClientManagerFactory;
-import com.vmware.photon.controller.model.adapters.awsadapter.util.AWSEnumerationUtils;
 import com.vmware.photon.controller.model.adapters.util.ComputeEnumerateAdapterRequest;
 import com.vmware.photon.controller.model.adapters.util.TagsUtil;
 import com.vmware.photon.controller.model.query.QueryUtils;
@@ -62,7 +60,6 @@ import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.DiskService.DiskStatus;
 import com.vmware.photon.controller.model.resources.DiskService.DiskType;
 import com.vmware.photon.controller.model.resources.ResourceState;
-import com.vmware.photon.controller.model.resources.TagFactoryService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.ResourceEnumerationTaskService;
 import com.vmware.xenon.common.DeferredResult;
@@ -608,6 +605,9 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 List<DeferredResult<Set<String>>> updateCSTagLinksOps = new ArrayList<>();
 
                 for (String volumeId : this.context.volumesToBeUpdated.keySet()) {
+                    if (!this.context.diskStatesToBeUpdated.containsKey(volumeId)) {
+                        continue; // this is not a disk to update
+                    }
                     Volume volume = this.context.volumesToBeUpdated.get(volumeId);
                     DiskState existingDiskState = this.context.diskStatesToBeUpdated
                             .get(volumeId);
@@ -644,9 +644,7 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                 String authCredentialsLink, String endpointLink, String regionId, List<String> tenantLinks) {
             DiskState diskState = new DiskState();
             diskState.id = volume.getVolumeId();
-            // TODO Get the disk name from the tag if present. Else default to the volumeID.
-            // https://jira-hzn.eng.vmware.com/browse/VSYM-2361
-            diskState.name = volume.getVolumeId();
+
             // AWS returns the disk size in GBs
             diskState.capacityMBytes = volume.getSize() * GB_TO_MB_MULTIPLIER;
             diskState.regionId = regionId;
@@ -661,18 +659,14 @@ public class AWSBlockStorageEnumerationAdapterService extends StatelessService {
                         .toMicros(volume.getCreateTime().getTime());
             }
 
-            if (!volume.getTags().isEmpty()) {
-                diskState.tagLinks = volume.getTags().stream()
-                        .filter(t -> !AWSConstants.AWS_TAG_NAME.equals(t.getKey()))
-                        .map(t -> newExternalTagState(t.getKey(), t.getValue(), tenantLinks))
-                        .map(TagFactoryService::generateSelfLink)
-                        .collect(Collectors.toSet());
-
-                // The name of the compute state is the value of the AWS_TAG_NAME tag
-                String nameTag = AWSEnumerationUtils.getTagValue(volume.getTags(), AWS_TAG_NAME);
-                if (nameTag != null && !nameTag.equals("")) {
-                    diskState.name = nameTag;
-                }
+            // calculate disk name, default to volume-id if 'Name' tag is not present
+            if (volume.getTags() == null) {
+                diskState.name = volume.getVolumeId();
+            } else {
+                diskState.name = volume.getTags().stream()
+                        .filter(tag -> tag.getKey().equals(AWS_TAG_NAME))
+                        .map(tag -> tag.getValue()).findFirst()
+                        .orElse(volume.getVolumeId());
             }
 
             mapAttachmentState(diskState, volume);

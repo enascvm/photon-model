@@ -204,9 +204,6 @@ public class TestAWSSetupUtils {
     public static final String NIC_SPECS_KEY = "nicSpecs";
     public static final String SECURITY_GROUP_KEY = "security-group";
 
-    public static final String AWS_DEFAULT_SNAPSHOT_ID = "snap-12a3456b";
-    public static final String AWS_DEFAULT_DISK_ID = "vol-ce01b5e4";
-
     public static final String SNAPSHOT_KEY = "snapshot-id";
     public static final String DISK_KEY = "disk-id";
 
@@ -330,19 +327,12 @@ public class TestAWSSetupUtils {
     }
 
     public static void setUpTestVolume(VerificationHost host, AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock) {
-        awsTestContext.put(SNAPSHOT_KEY, AWS_DEFAULT_SNAPSHOT_ID);
-        awsTestContext.put(DISK_KEY, AWS_DEFAULT_DISK_ID);
-        String volumeId = awsTestContext.get(DISK_KEY).toString();
-        if (!isMock && !volumeIdExists(client, AWS_DEFAULT_DISK_ID)) {
-            volumeId = createVolume(host, client);
+        if (!isMock) {
+            String volumeId = createVolume(host, client);
             awsTestContext.put(DISK_KEY, volumeId);
-        }
-
-        if (!isMock && !snapshotIdExists(client, AWS_DEFAULT_SNAPSHOT_ID)) {
             String snapshotId = createSnapshot(host, client, volumeId);
             awsTestContext.put(SNAPSHOT_KEY, snapshotId);
         }
-
     }
 
     public static void setUpTestVpc(AmazonEC2AsyncClient client, Map<String, Object> awsTestContext, boolean isMock) {
@@ -400,13 +390,19 @@ public class TestAWSSetupUtils {
     public static void tearDownTestDisk(
             AmazonEC2AsyncClient client, VerificationHost host,
             Map<String, Object> awsTestContext, boolean isMock) {
-        if (!isMock && !volumeIdExists(client, AWS_DEFAULT_DISK_ID)) {
-            final String diskId = (String) awsTestContext.get(DISK_KEY);
-            deleteVolume(client, diskId);
+        if (awsTestContext.containsKey(DISK_KEY)) {
+            String volumeId = awsTestContext.get(DISK_KEY).toString();
+            if (!isMock) {
+                deleteVolume(client, volumeId);
+            }
+            awsTestContext.remove(DISK_KEY);
         }
-        if (!isMock && !snapshotIdExists(client, AWS_DEFAULT_SNAPSHOT_ID)) {
-            final String snapshotId = (String) awsTestContext.get(SNAPSHOT_KEY);
-            deleteSnapshot(client, snapshotId);
+        if (awsTestContext.containsKey(SNAPSHOT_KEY)) {
+            String snapshotId = awsTestContext.get(SNAPSHOT_KEY).toString();
+            if (!isMock) {
+                deleteSnapshot(client, snapshotId);
+            }
+            awsTestContext.remove(SNAPSHOT_KEY);
         }
     }
 

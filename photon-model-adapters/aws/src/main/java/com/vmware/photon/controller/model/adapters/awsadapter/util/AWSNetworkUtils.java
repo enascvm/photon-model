@@ -73,7 +73,7 @@ public class AWSNetworkUtils {
             networkState.name = vpc.getVpcId();
         } else {
             networkState.name = vpc.getTags().stream()
-                    .filter(tag -> !tag.getKey().equals(AWS_TAG_NAME))
+                    .filter(tag -> tag.getKey().equals(AWS_TAG_NAME))
                     .map(tag -> tag.getValue()).findFirst()
                     .orElse(vpc.getVpcId());
         }
