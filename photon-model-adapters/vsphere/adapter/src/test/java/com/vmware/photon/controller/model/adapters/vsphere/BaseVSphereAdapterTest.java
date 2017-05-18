@@ -124,7 +124,6 @@ public class BaseVSphereAdapterTest {
 
     public String vcFolder = System.getProperty(TestProperties.VC_FOLDER);
 
-    protected static final String DATASTORE = "datastore";
     protected static final String PROVISION_TYPE = "provisioningType";
     protected static final String SHARES_LEVEL = "sharesLevel";
     protected static final String SHARES = "shares";

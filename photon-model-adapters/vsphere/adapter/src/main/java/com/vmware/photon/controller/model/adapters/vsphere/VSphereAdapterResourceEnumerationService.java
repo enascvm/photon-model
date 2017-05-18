@@ -928,8 +928,12 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         logFine(() -> String.format("Syncing Storage %s", ds.getName()));
         Operation.createPatch(UriUtils.buildUri(getHost(), desc.documentSelfLink))
                 .setBody(desc)
-                .setCompletion(trackDatastore(enumerationContext, ds))
-                .sendWith(this);
+                .setCompletion((o, e) -> {
+                    trackDatastore(enumerationContext, ds).handle(o, e);
+                    if (e == null) {
+                        updateLocalTags(enumerationContext, ds, o.getBody(ResourceState.class));
+                    }
+                }).sendWith(this);
     }
 
     private void createNewStorageDescription(EnumerationContext enumerationContext,
@@ -939,6 +943,7 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
         StorageDescription desc = makeStorageFromResults(request, ds, regionId);
         desc.tenantLinks = enumerationContext.getTenantLinks();
         logFine(() -> String.format("Found new Datastore %s", ds.getName()));
+        populateTags(enumerationContext, ds, desc);
 
         Operation.createPost(this, StorageDescriptionService.FACTORY_LINK)
                 .setBody(desc)
@@ -1006,7 +1011,8 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .addFieldClause(StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
                         ctx.getRequest().adapterManagementReference.toString())
                 .addFieldClause(StorageDescription.FIELD_NAME_REGION_ID, ctx.getRegionId())
-                .addFieldClause(StorageDescription.FIELD_NAME_NAME, name);
+                .addCaseInsensitiveFieldClause(StorageDescription.FIELD_NAME_NAME, name,
+                        MatchType.TERM, Occurance.MUST_OCCUR);
         QueryUtils.addEndpointLink(builder, StorageDescription.class,
                 ctx.getRequest().endpointLink);
         QueryUtils.addTenantLinks(builder, ctx.getTenantLinks());
@@ -1322,9 +1328,10 @@ public class VSphereAdapterResourceEnumerationService extends StatelessService {
                 .sendWith(this);
     }
 
-    private void populateTags(EnumerationContext enumerationContext, AbstractOverlay obj, ComputeState state) {
-        state.tagLinks = retrieveTagLinksAndCreateTagsAsync(enumerationContext.getEndpoint(), obj.getId(),
-                enumerationContext.getTenantLinks());
+    private void populateTags(EnumerationContext enumerationContext, AbstractOverlay obj,
+            ResourceState state) {
+        state.tagLinks = retrieveTagLinksAndCreateTagsAsync(enumerationContext.getEndpoint(),
+                obj.getId(), enumerationContext.getTenantLinks());
     }
 
     private ComputeDescription makeDescriptionForHost(EnumerationContext enumerationContext,

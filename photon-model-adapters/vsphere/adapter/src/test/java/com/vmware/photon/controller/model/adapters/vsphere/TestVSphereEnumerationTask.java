@@ -15,14 +15,19 @@ package com.vmware.photon.controller.model.adapters.vsphere;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 import org.junit.Test;
 
 import com.vmware.photon.controller.model.adapters.vsphere.util.VimNames;
+import com.vmware.photon.controller.model.query.QueryUtils;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService;
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription;
 import com.vmware.photon.controller.model.resources.ComputeService;
@@ -36,6 +41,7 @@ import com.vmware.photon.controller.model.resources.SubnetService;
 import com.vmware.photon.controller.model.resources.TagService;
 import com.vmware.photon.controller.model.tasks.TestUtils;
 import com.vmware.xenon.common.Operation;
+import com.vmware.xenon.common.ServiceDocumentQueryResult;
 import com.vmware.xenon.common.UriUtils;
 import com.vmware.xenon.common.Utils;
 import com.vmware.xenon.services.common.QueryTask;
@@ -48,6 +54,7 @@ import com.vmware.xenon.services.common.ServiceUriPaths;
  */
 public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
+    private static final long QUERY_TASK_EXPIRY_MICROS = TimeUnit.MINUTES.toMicros(2);
     private ComputeDescription computeHostDescription;
 
     private ComputeState computeHost;
@@ -95,6 +102,32 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
             Operation op = Operation.createGet(this.host, aComputeLink);
             op = this.host.waitForResponse(op);
             assertEquals(Operation.STATUS_CODE_NOT_FOUND, op.getStatusCode());
+        }
+    }
+
+    @Test
+    public void testDatastoreTagCollection() throws Throwable {
+        this.resourcePool = createResourcePool();
+
+        this.auth = createAuth();
+
+        this.computeHostDescription = createComputeDescription();
+        this.computeHost = createComputeHost(this.computeHostDescription);
+
+        doRefresh();
+
+        if (!isMock()) {
+            // Query for storage description
+            withTaskResults(queryForStorage(), result -> {
+                if (result.documentLinks.isEmpty()) {
+                    assertTrue(!result.documentLinks.isEmpty());
+                } else {
+                    StorageDescriptionService.StorageDescription sd = Utils
+                            .fromJson(result.documents.get(result.documentLinks.get(0)),
+                                    StorageDescriptionService.StorageDescription.class);
+                    assertNotNull(sd.tagLinks);
+                }
+            });
         }
     }
 
@@ -153,5 +186,40 @@ public class TestVSphereEnumerationTask extends BaseVSphereAdapterTest {
 
     private void doRefresh() throws Throwable {
         enumerateComputes(this.computeHost);
+    }
+
+    private QueryTask queryForStorage() {
+        Query.Builder builder = Query.Builder.create()
+                .addFieldClause(StorageDescriptionService.StorageDescription.FIELD_NAME_ADAPTER_REFERENCE,
+                        getAdapterManagementReference())
+                .addFieldClause(StorageDescriptionService.StorageDescription
+                        .FIELD_NAME_REGION_ID, this.datacenterId)
+                .addCaseInsensitiveFieldClause(StorageDescriptionService.StorageDescription.FIELD_NAME_NAME, getDataStoreName(),
+                        QueryTask.QueryTerm.MatchType.TERM, Query.Occurance.MUST_OCCUR);
+        QueryUtils.addEndpointLink(builder, StorageDescriptionService.StorageDescription.class,
+                this.computeHost.endpointLink);
+        QueryUtils.addTenantLinks(builder, this.computeHost.tenantLinks);
+
+        return QueryTask.Builder.createDirectTask()
+                .setQuery(builder.build())
+                .build();
+    }
+
+    private void withTaskResults(QueryTask task, Consumer<ServiceDocumentQueryResult> handler) {
+        task.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT);
+        task.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(QUERY_TASK_EXPIRY_MICROS);
+        Operation op = Operation.createPost(UriUtils.buildUri(this.host, ServiceUriPaths.CORE_LOCAL_QUERY_TASKS))
+                .setBody(task);
+
+        QueryTask result = this.host.waitForResponse(op).getBody(QueryTask.class);
+        handler.accept(result.results);
+    }
+
+    private String getDataStoreName() {
+        if (this.dataStoreId != null) {
+            return this.dataStoreId
+                    .substring(this.dataStoreId.lastIndexOf("/") + 1, this.dataStoreId.length());
+        }
+        return "";
     }
 }
