@@ -129,6 +129,7 @@ import com.vmware.photon.controller.model.resources.ComputeDescriptionService.Co
 import com.vmware.photon.controller.model.resources.ComputeDescriptionService.ComputeDescription.ComputeType;
 import com.vmware.photon.controller.model.resources.ComputeService.ComputeState;
 import com.vmware.photon.controller.model.resources.ComputeService.LifecycleState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.DiskService.DiskState;
 import com.vmware.photon.controller.model.resources.NetworkInterfaceService.NetworkInterfaceState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService;
@@ -617,12 +618,13 @@ public class AzureInstanceService extends StatelessService {
      */
     private DeferredResult<AzureInstanceContext> createStorageAccountRG(AzureInstanceContext ctx) {
 
-        if (ctx.bootDisk.customProperties == null) {
-            return DeferredResult.failed(
-                    new IllegalArgumentException("Custom properties for boot disk is required"));
+        //null check in-case storage description is not set
+        if (ctx.bootDisk.storageDescription != null) {
+            ctx.storageAccountName = ctx.bootDisk.storageDescription.name;
+        } else {
+            ctx.storageAccountName = ctx.bootDisk.customProperties.get(AZURE_STORAGE_ACCOUNT_NAME);
         }
 
-        ctx.storageAccountName = ctx.bootDisk.customProperties.get(AZURE_STORAGE_ACCOUNT_NAME);
         ctx.storageAccountRGName = ctx.bootDisk.customProperties
                 .getOrDefault(AZURE_STORAGE_ACCOUNT_RG_NAME, AZURE_STORAGE_ACCOUNT_DEFAULT_RG_NAME);
 
@@ -924,7 +926,8 @@ public class AzureInstanceService extends StatelessService {
         PublicIPAddressInner publicIPAddress = new PublicIPAddressInner();
         publicIPAddress.withLocation(ctx.resourceGroup.location());
         publicIPAddress
-                .withPublicIPAllocationMethod(new IPAllocationMethod(nicCtx.nicStateWithDesc.description.assignment.name()));
+                .withPublicIPAllocationMethod(new IPAllocationMethod(
+                        nicCtx.nicStateWithDesc.description.assignment.name()));
 
         return publicIPAddress;
     }
@@ -1196,7 +1199,14 @@ public class AzureInstanceService extends StatelessService {
         OSDisk osDisk = new OSDisk();
         osDisk.withName(vmName);
         osDisk.withVhd(vhd);
-        osDisk.withCaching(CachingTypes.fromString(bootDisk.customProperties.get(AZURE_OSDISK_CACHING)));
+
+        if (bootDisk.customProperties != null && bootDisk.customProperties.get(AZURE_OSDISK_CACHING) != null) {
+            osDisk.withCaching(CachingTypes.fromString(bootDisk.customProperties.get(AZURE_OSDISK_CACHING)));
+        } else {
+            //Recommended default caching for OS disk
+            osDisk.withCaching(CachingTypes.READ_WRITE);
+        }
+
         // We don't support Attach option which allows to use a specialized disk to create the
         // virtual machine.
         osDisk.withCreateOption(DiskCreateOptionTypes.FROM_IMAGE);
@@ -1623,7 +1633,8 @@ public class AzureInstanceService extends StatelessService {
         Collection<Operation> operations = new ArrayList<>();
         // iterate thru disks and create operations
         operations.addAll(ctx.child.diskLinks.stream()
-                .map(disk -> Operation.createGet(UriUtils.buildUri(this.getHost(), disk)))
+                .map(disk -> Operation.createGet(UriUtils.buildExpandLinksQueryUri(
+                        UriUtils.buildUri(this.getHost(), disk))))
                 .collect(Collectors.toList()));
 
         OperationJoin operationJoin = OperationJoin.create(operations)
@@ -1637,7 +1648,8 @@ public class AzureInstanceService extends StatelessService {
 
                             ctx.childDisks = new ArrayList<>();
                             for (Operation op : ops.values()) {
-                                DiskState disk = op.getBody(DiskState.class);
+                                DiskService.DiskStateExpanded disk = op.getBody(DiskService.DiskStateExpanded
+                                        .class);
 
                                 // We treat the first disk in the boot order as the boot disk.
                                 if (disk.bootOrder == 1) {

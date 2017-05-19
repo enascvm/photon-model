@@ -38,7 +38,7 @@ import com.microsoft.rest.RestClient;
 import com.vmware.photon.controller.model.adapterapi.ComputeInstanceRequest;
 import com.vmware.photon.controller.model.adapters.azure.utils.AzureDeferredResultServiceCallback;
 import com.vmware.photon.controller.model.adapters.util.instance.BaseComputeInstanceContext;
-import com.vmware.photon.controller.model.resources.DiskService.DiskState;
+import com.vmware.photon.controller.model.resources.DiskService;
 import com.vmware.photon.controller.model.resources.ResourceGroupService.ResourceGroupState;
 import com.vmware.photon.controller.model.resources.SecurityGroupService.SecurityGroupState;
 import com.vmware.photon.controller.model.resources.StorageDescriptionService.StorageDescription;
@@ -110,8 +110,8 @@ public class AzureInstanceContext extends
     public AuthCredentialsServiceState childAuth;
 
     public StorageDescription storageDescription;
-    public DiskState bootDisk;
-    public List<DiskState> childDisks;
+    public DiskService.DiskStateExpanded bootDisk;
+    public List<DiskService.DiskStateExpanded> childDisks;
     public String vmName;
     public String vmId;
 
