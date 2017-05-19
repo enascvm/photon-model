@@ -169,7 +169,7 @@ public class QueryUtils {
 
         protected URI referer;
 
-        protected Level level = Level.INFO;
+        protected Level level = Level.FINE;
         protected String msg;
 
         /**
