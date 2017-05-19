@@ -17,6 +17,7 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 
 import static com.vmware.photon.controller.model.ComputeProperties.CREATE_CONTEXT_PROP_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ADDITIONAL_DISK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_GROUP_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_SUBNET_ID_FILTER;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
@@ -102,6 +103,8 @@ public class AWSInstanceContext
     public AmazonEC2AsyncClient amazonEC2Client;
 
     public Map<DiskType, DiskState> childDisks = new HashMap<>();
+
+    public List<DiskState> additionalDisks = new ArrayList<>();
 
     public String bootDiskImageNativeId;
 
@@ -681,7 +684,16 @@ public class AWSInstanceContext
 
         return DeferredResult.allOf(getStatesDR)
                 .thenAccept(diskStates -> diskStates.forEach(
-                        diskState -> context.childDisks.put(diskState.type, diskState)))
+                        diskState -> {
+                            if (diskState.customProperties != null &&
+                                    diskState.customProperties.containsKey(ADDITIONAL_DISK) &&
+                                    Boolean.valueOf(
+                                            diskState.customProperties.get(ADDITIONAL_DISK))) {
+                                context.additionalDisks.add(diskState);
+                            } else {
+                                context.childDisks.put(diskState.type, diskState);
+                            }
+                        }))
                 .handle((all, exc) -> {
                     if (exc != null) {
                         String msg = String.format(

@@ -17,7 +17,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ADDITIONAL_DISK;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.AWS_VPC_ID_FILTER;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.createSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getAWSNonTerminatedInstancesFilter;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getRegionId;
@@ -175,6 +177,7 @@ public class TestAWSSetupUtils {
     public static final String userData = null;
 
     public static final long BOOT_DISK_SIZE_IN_MEBI_BYTES = 16 * 1024L;
+    public static final long ADDITIONAL_DISK_SIZE_IN_MEBI_BYTES = 16 * 1024L;
     private static final String DEVICE_TYPE = "deviceType";
     private static final String VOLUME_TYPE = "volumeType";
     private static final String IOPS = "iops";
@@ -852,6 +855,10 @@ public class TestAWSSetupUtils {
                 UriUtils.buildUri(host, DiskService.FACTORY_LINK));
 
         vmDisks.add(rootDisk.documentSelfLink);
+        List<DiskState> additionalDisks = getAdditionalDiskConfiguration(host, endpointState);
+        for (DiskState additionalDisk : additionalDisks) {
+            vmDisks.add(additionalDisk.documentSelfLink);
+        }
 
         // Create NIC States
         List<String> nicLinks = createAWSNicStates(
@@ -882,6 +889,43 @@ public class TestAWSSetupUtils {
         return TestUtils.doPost(host, resource,
                 ComputeService.ComputeState.class,
                 UriUtils.buildUri(host, ComputeService.FACTORY_LINK));
+    }
+
+    private static List<DiskState> getAdditionalDiskConfiguration(VerificationHost host,
+            EndpointState endpointState) throws Throwable {
+        List<String[]> additionalDiskConfigs = new ArrayList<>();
+        String[] disk1properties = { "ebs", "gp2", "true" };
+        String[] disk2properties = { "ebs", "io1", "true", "600" };
+        additionalDiskConfigs.add(disk1properties);
+        additionalDiskConfigs.add(disk2properties);
+
+        List<DiskState> disks = new ArrayList<>();
+        for (int i = 0; i < additionalDiskConfigs.size(); i++) {
+            DiskState disk = new DiskState();
+            disk.id = UUID.randomUUID().toString();
+            disk.documentSelfLink = disk.id;
+            disk.name = "Test Volume" + i;
+            disk.type = DiskType.HDD;
+            disk.sourceImageReference = URI.create(imageId);
+            disk.capacityMBytes = ADDITIONAL_DISK_SIZE_IN_MEBI_BYTES;
+
+            //add custom properties to root disk from profile
+            disk.customProperties = new HashMap<>();
+            disk.customProperties.put(DEVICE_TYPE, additionalDiskConfigs.get(i)[0]);
+            disk.customProperties.put(VOLUME_TYPE, additionalDiskConfigs.get(i)[1]);
+            disk.customProperties.put(ADDITIONAL_DISK, additionalDiskConfigs.get(i)[2]);
+            if (additionalDiskConfigs.get(i).length > 3) {
+                disk.customProperties.put(DISK_IOPS, additionalDiskConfigs.get(i)[3]);
+            }
+
+            disk.tenantLinks = endpointState.tenantLinks;
+            disk.endpointLink = endpointState.documentSelfLink;
+
+            disk = TestUtils.doPost(host, disk, DiskService.DiskState.class,
+                    UriUtils.buildUri(host, DiskService.FACTORY_LINK));
+            disks.add(disk);
+        }
+        return disks;
     }
 
     /*

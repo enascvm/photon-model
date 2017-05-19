@@ -13,6 +13,8 @@
 
 package com.vmware.photon.controller.model.adapters.awsadapter;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import com.vmware.photon.controller.model.UriPaths;
@@ -120,6 +122,8 @@ public class AWSConstants {
 
     //All properties related to the aws storage
     public static final String DEVICE_TYPE = "deviceType";
+    public static final String DEVICE_NAME = "deviceName";
+    public static final String  ADDITIONAL_DISK = "additionalDisk";
 
     // AWS Metric Unit related constants
     public static final String UNIT_COUNT = "Count";
@@ -201,5 +205,30 @@ public class AWSConstants {
     public static int getThreadPoolCacheInitialSize() {
         return THREAD_POOL_CACHE_INITIAL_SIZE;
     }
+
+    public static List<String> AWS_DEVICE_NAMES = Arrays.asList(
+            "xvdb",
+            "xvdc",
+            "xvdd",
+            "xvde",
+            "xvdf",
+            "xvdg",
+            "xvdh",
+            "xvdi",
+            "xvdj",
+            "xvdk",
+            "xvdl",
+            "/dev/sdb",
+            "/dev/sdc",
+            "/dev/sdd",
+            "/dev/sde",
+            "/dev/sdf",
+            "/dev/sdg",
+            "/dev/sdh",
+            "/dev/sdi",
+            "/dev/sdj",
+            "/dev/sdk",
+            "/dev/sdl"
+    );
 
 }

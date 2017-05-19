@@ -17,6 +17,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.ADDITIONAL_DISK;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DEVICE_NAME;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.DISK_IOPS;
+import static com.vmware.photon.controller.model.adapters.awsadapter.AWSConstants.VOLUME_TYPE;
 import static com.vmware.photon.controller.model.adapters.awsadapter.AWSUtils.getSecurityGroup;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.AWS_VM_REQUEST_TIMEOUT_MINUTES;
 import static com.vmware.photon.controller.model.adapters.awsadapter.TestAWSSetupUtils.createAWSAuthentication;
@@ -261,7 +265,7 @@ public class TestAWSProvisionTask {
 
             assertVmNetworksConfiguration(instance);
 
-            assertBootDiskConfiguration(this.client, instance);
+            assertStorageConfiguration(this.client, instance);
         }
 
         this.host.setTimeoutSeconds(600);
@@ -326,7 +330,7 @@ public class TestAWSProvisionTask {
 
             assertVmNetworksConfiguration(instances.get(0));
 
-            assertBootDiskConfiguration(this.client, instances.get(0));
+            assertStorageConfiguration(this.client, instances.get(0));
 
             // reach out to AWS and get the current state
             TestAWSSetupUtils
@@ -599,7 +603,7 @@ public class TestAWSProvisionTask {
         }
     }
 
-    private void assertBootDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance)
+    private void assertStorageConfiguration(AmazonEC2AsyncClient client, Instance awsInstance)
             throws Throwable {
         // This assert is only suitable for real (non-mock) environment.
         if (this.isMock) {
@@ -612,30 +616,26 @@ public class TestAWSProvisionTask {
         ComputeState vm = this.host.getServiceState(null,
                 ComputeState.class, UriUtils.buildUri(this.host, this.vmState.documentSelfLink));
 
-        //For now there is only one boot disk attached to the compute
-        String diskLink = vm.diskLinks.get(0);
+        //For now there is a boot disk and one additional disk attached to the compute
+        assertBootDiskConfiguration(client, awsInstance, vm.diskLinks.get(0));
+
+        List<String> additionalDiskLinks = new ArrayList<>();
+        for (int i = 1; i < vm.diskLinks.size(); i++) {
+            additionalDiskLinks.add(vm.diskLinks.get(i));
+        }
+
+        assertAdditionalDiskConfiguration(client, awsInstance, additionalDiskLinks);
+    }
+
+    private void assertBootDiskConfiguration(AmazonEC2AsyncClient client, Instance awsInstance,
+            String diskLink) {
         DiskState diskState = this.host.getServiceState(null, DiskState.class,
                 UriUtils.buildUri(this.host, diskLink));
 
-        InstanceBlockDeviceMapping bootDiskMapping = awsInstance.getBlockDeviceMappings().stream()
-                .filter(blockDeviceMapping ->
-                        blockDeviceMapping.getDeviceName().equals(awsInstance.getRootDeviceName()))
-                .findAny()
-                .orElse(null);
-
-        //The ami used in this test is an ebs-backed AMI
-        assertNotNull("Boot device type should be ebs type", bootDiskMapping.getEbs());
-
-        String bootVolumeId = bootDiskMapping.getEbs().getVolumeId();
-        DescribeVolumesRequest describeVolumesRequest = new DescribeVolumesRequest()
-                .withVolumeIds(bootVolumeId);
-        DescribeVolumesResult describeVolumesResult = client
-                .describeVolumes(describeVolumesRequest);
-
-        Volume bootVolume = describeVolumesResult.getVolumes().get(0);
+        Volume bootVolume = getVolume(client, awsInstance, awsInstance.getRootDeviceName());
 
         assertEquals("Boot Disk capacity in diskstate is not matching the boot disk size of the "
-                        + "vm launched in aws", diskState.capacityMBytes, bootVolume.getSize() * 1024);
+                + "vm launched in aws", diskState.capacityMBytes, bootVolume.getSize() * 1024);
 
         assertEquals(
                 "Boot disk type in diskstate is not same as the type of the volume attached to the VM",
@@ -645,5 +645,58 @@ public class TestAWSProvisionTask {
                 "Boot disk iops in diskstate is the same as the iops of the volume attached to the VM",
                 Integer.parseInt(diskState.customProperties.get("iops")),
                 bootVolume.getIops().intValue());
+    }
+
+    private void assertAdditionalDiskConfiguration(AmazonEC2AsyncClient client,
+            Instance awsInstance, List<String> diskLinks) {
+        for (String diskLink : diskLinks) {
+            DiskState diskState = this.host.getServiceState(null, DiskState.class,
+                    UriUtils.buildUri(this.host, diskLink));
+
+            assertNotNull("Additional Disk should contain atleast one custom property",
+                    diskState.customProperties);
+
+            assertTrue("'additional=true' custom property is not added for the additional disk",
+                    diskState.customProperties.containsKey(ADDITIONAL_DISK));
+
+            assertTrue("deviceName is missing from the custom properties", diskState
+                    .customProperties.containsKey(DEVICE_NAME));
+
+            Volume volume = getVolume(client, awsInstance, diskState
+                    .customProperties.get(DEVICE_NAME));
+
+            assertEquals(
+                    "Additional disk capacity in diskstate is not matching the volume size in aws",
+                    diskState.capacityMBytes, volume.getSize() * 1024);
+
+            assertEquals(
+                    "Additional disk type in diskstate is not same as the type of the volume in aws",
+                    diskState.customProperties.get(VOLUME_TYPE), volume.getVolumeType());
+
+            if (diskState.customProperties.containsKey(DISK_IOPS)) {
+                assertEquals("Additional disk speed in diskstate is not same as the speed of the"
+                                + " volume in aws",
+                        Integer.parseInt(diskState.customProperties.get(DISK_IOPS)),
+                        volume.getIops().intValue());
+            }
+        }
+    }
+
+    private Volume getVolume(AmazonEC2AsyncClient client, Instance awsInstance, String deviceName) {
+        InstanceBlockDeviceMapping bootDiskMapping = awsInstance.getBlockDeviceMappings().stream()
+                .filter(blockDeviceMapping -> blockDeviceMapping.getDeviceName().equals(deviceName))
+                .findAny()
+                .orElse(null);
+
+        //The ami used in this test is an ebs-backed AMI
+        assertNotNull("Device type should be ebs type", bootDiskMapping.getEbs());
+
+        String bootVolumeId = bootDiskMapping.getEbs().getVolumeId();
+        DescribeVolumesRequest describeVolumesRequest = new DescribeVolumesRequest()
+                .withVolumeIds(bootVolumeId);
+        DescribeVolumesResult describeVolumesResult = client
+                .describeVolumes(describeVolumesRequest);
+
+        return describeVolumesResult.getVolumes().get(0);
     }
 }
