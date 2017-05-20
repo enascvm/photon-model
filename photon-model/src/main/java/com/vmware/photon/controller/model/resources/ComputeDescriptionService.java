@@ -66,18 +66,6 @@ public class ComputeDescriptionService extends StatefulService {
         public static final String ENVIRONMENT_NAME_AZURE = "Microsoft Azure";
 
         /**
-         * Types of Compute hosts.
-         */
-        public enum ComputeType {
-            VM_HOST,
-            VM_GUEST,
-            DOCKER_CONTAINER,
-            PHYSICAL,
-            OS_ON_PHYSICAL,
-            ZONE
-        }
-
-        /**
          * Identifier of the zone associated with this compute host.
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
@@ -226,6 +214,18 @@ public class ComputeDescriptionService extends StatefulService {
          */
         @UsageOption(option = PropertyUsageOption.AUTO_MERGE_IF_NOT_NULL)
         public String dataStoreId;
+
+        /**
+         * Types of Compute hosts.
+         */
+        public enum ComputeType {
+            VM_HOST,
+            VM_GUEST,
+            DOCKER_CONTAINER,
+            PHYSICAL,
+            OS_ON_PHYSICAL,
+            ZONE
+        }
     }
 
     public ComputeDescriptionService() {
@@ -234,58 +234,6 @@ public class ComputeDescriptionService extends StatefulService {
         super.toggleOption(ServiceOption.REPLICATION, true);
         super.toggleOption(ServiceOption.OWNER_SELECTION, true);
         super.toggleOption(ServiceOption.IDEMPOTENT_POST, true);
-    }
-
-    @Override
-    public void handleDelete(Operation delete) {
-        logInfo("Deleting ComputeDescription, Path: %s, Operation ID: %d, Referrer: %s",
-                delete.getUri().getPath(), delete.getId(),
-                delete.getRefererAsString());
-        super.handleDelete(delete);
-    }
-
-    @Override
-    public void handleStart(Operation start) {
-        try {
-            processInput(start);
-            start.complete();
-        } catch (Throwable t) {
-            start.fail(t);
-        }
-    }
-
-    @Override
-    public void handlePut(Operation put) {
-        try {
-            ComputeDescription returnState = processInput(put);
-            setState(put, returnState);
-            put.complete();
-        } catch (Throwable t) {
-            put.fail(t);
-        }
-    }
-
-    private ComputeDescription processInput(Operation op) {
-        if (!op.hasBody()) {
-            throw (new IllegalArgumentException("body is required"));
-        }
-        ComputeDescription state = op.getBody(ComputeDescription.class);
-        validateState(state);
-        return state;
-    }
-
-    public void validateState(ComputeDescription state) {
-        Utils.validateState(getStateDescription(), state);
-
-        if (state.environmentName == null) {
-            state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
-        }
-        if (state.powerState == null) {
-            state.powerState = PowerState.UNKNOWN;
-        }
-
-        validateBootAdapterReference(state);
-        validateInstanceAdapterReference(state);
     }
 
     private static void validateBootAdapterReference(ComputeDescription state) {
@@ -352,6 +300,58 @@ public class ComputeDescriptionService extends StatefulService {
     }
 
     @Override
+    public void handleDelete(Operation delete) {
+        logInfo("Deleting ComputeDescription, Path: %s, Operation ID: %d, Referrer: %s",
+                delete.getUri().getPath(), delete.getId(),
+                delete.getRefererAsString());
+        super.handleDelete(delete);
+    }
+
+    @Override
+    public void handleStart(Operation start) {
+        try {
+            processInput(start);
+            start.complete();
+        } catch (Throwable t) {
+            start.fail(t);
+        }
+    }
+
+    @Override
+    public void handlePut(Operation put) {
+        try {
+            ComputeDescription returnState = processInput(put);
+            setState(put, returnState);
+            put.complete();
+        } catch (Throwable t) {
+            put.fail(t);
+        }
+    }
+
+    private ComputeDescription processInput(Operation op) {
+        if (!op.hasBody()) {
+            throw (new IllegalArgumentException("body is required"));
+        }
+        ComputeDescription state = op.getBody(ComputeDescription.class);
+        validateState(state);
+        return state;
+    }
+
+    public void validateState(ComputeDescription state) {
+        Utils.validateState(getStateDescription(), state);
+
+        if (state.environmentName == null) {
+            state.environmentName = ComputeDescription.ENVIRONMENT_NAME_ON_PREMISE;
+        }
+        if (state.powerState == null) {
+            state.powerState = PowerState.UNKNOWN;
+        }
+
+        validateBootAdapterReference(state);
+        validateInstanceAdapterReference(state);
+    }
+
+    @Override
     public void handlePatch(Operation patch) {
         ComputeDescription currentState = getState(patch);
         ResourceUtils.handlePatch(patch, currentState, getStateDescription(),
@@ -374,6 +374,11 @@ public class ComputeDescriptionService extends StatefulService {
                     if (patchBody.totalMemoryBytes != 0) {
                         hasChanged |= currentState.totalMemoryBytes != patchBody.totalMemoryBytes;
                         currentState.totalMemoryBytes = patchBody.totalMemoryBytes;
+                    }
+
+                    if (patchBody.regionId != null && currentState.regionId == null) {
+                        hasChanged = true;
+                        currentState.regionId = patchBody.regionId;
                     }
 
                     return Boolean.valueOf(hasChanged);

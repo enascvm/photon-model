@@ -46,49 +46,6 @@ public class ComputeService extends StatefulService {
     public static final String FACTORY_LINK = UriPaths.RESOURCES + "/compute";
 
     /**
-     * Power State.
-     */
-    public enum PowerState {
-        ON,
-        OFF,
-        UNKNOWN,
-        SUSPEND
-    }
-
-    /**
-     * Resource lifecycle status.
-     * <p>
-     * This class is kept to keep the backward compatibility. Use
-     * {@link com.vmware.photon.controller.model.support.LifecycleState} when introducing lifecycle
-     * semantic to other resources.
-     * </p>
-     */
-    public enum LifecycleState {
-        PROVISIONING,
-        READY,
-        SUSPEND,
-        STOPPED,
-        RETIRED
-    }
-
-    /**
-     * Power Transition.
-     */
-    public enum PowerTransition {
-        SOFT,
-        HARD
-    }
-
-    /**
-     * Boot Device.
-     */
-    public enum BootDevice {
-        CDROM,
-        DISK,
-        NETWORK
-    }
-
-    /**
      * Compute State document.
      */
     public static class ComputeState extends ResourceState {
@@ -334,6 +291,49 @@ public class ComputeService extends StatefulService {
         }
     }
 
+    /**
+     * Power State.
+     */
+    public enum PowerState {
+        ON,
+        OFF,
+        UNKNOWN,
+        SUSPEND
+    }
+
+    /**
+     * Resource lifecycle status.
+     * <p>
+     * This class is kept to keep the backward compatibility. Use
+     * {@link com.vmware.photon.controller.model.support.LifecycleState} when introducing lifecycle
+     * semantic to other resources.
+     * </p>
+     */
+    public enum LifecycleState {
+        PROVISIONING,
+        READY,
+        SUSPEND,
+        STOPPED,
+        RETIRED
+    }
+
+    /**
+     * Power Transition.
+     */
+    public enum PowerTransition {
+        SOFT,
+        HARD
+    }
+
+    /**
+     * Boot Device.
+     */
+    public enum BootDevice {
+        CDROM,
+        DISK,
+        NETWORK
+    }
+
     public ComputeService() {
         super(ComputeState.class);
         super.toggleOption(ServiceOption.PERSISTENCE, true);
@@ -508,6 +508,11 @@ public class ComputeService extends StatefulService {
                         }
                     }
                 }
+            }
+
+            if (patchBody.regionId != null && currentState.regionId == null) {
+                hasStateChanged = true;
+                currentState.regionId = patchBody.regionId;
             }
             return hasStateChanged;
         };

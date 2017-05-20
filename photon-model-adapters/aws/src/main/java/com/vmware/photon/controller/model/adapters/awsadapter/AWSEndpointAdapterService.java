@@ -182,6 +182,7 @@ public class AWSEndpointAdapterService extends StatelessService {
             b.append(".amazonaws.com");
 
             c.type = ComputeType.VM_HOST;
+            c.regionId = r.get(REGION_KEY).orElse(null);
             c.environmentName = ComputeDescription.ENVIRONMENT_NAME_AWS;
             c.adapterManagementReference = UriUtils.buildUri(b.toString());
             String billsBucketName = r.get(AWSConstants.AWS_BILLS_S3_BUCKET_NAME_KEY).orElse(null);
@@ -238,16 +239,16 @@ public class AWSEndpointAdapterService extends StatelessService {
     private String getAccountId(String privateKeyId, String privateKey) {
         AWSCredentials awsCredentials = new BasicAWSCredentials(privateKeyId, privateKey);
 
-        AWSStaticCredentialsProvider awsStaticCredentialsProvider =
-                new AWSStaticCredentialsProvider(awsCredentials);
+        AWSStaticCredentialsProvider awsStaticCredentialsProvider = new AWSStaticCredentialsProvider(
+                awsCredentials);
 
-        AmazonIdentityManagementClientBuilder amazonIdentityManagementClientBuilder =
-                AmazonIdentityManagementClientBuilder.standard()
-                        .withCredentials(awsStaticCredentialsProvider)
-                        .withRegion(Regions.DEFAULT_REGION);
+        AmazonIdentityManagementClientBuilder amazonIdentityManagementClientBuilder = AmazonIdentityManagementClientBuilder
+                .standard()
+                .withCredentials(awsStaticCredentialsProvider)
+                .withRegion(Regions.DEFAULT_REGION);
 
-        AmazonIdentityManagementClient iamClient = (AmazonIdentityManagementClient)
-                amazonIdentityManagementClientBuilder.build();
+        AmazonIdentityManagementClient iamClient = (AmazonIdentityManagementClient) amazonIdentityManagementClientBuilder
+                .build();
 
         String userId = null;
         try {
