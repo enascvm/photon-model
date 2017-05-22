@@ -117,6 +117,38 @@ public class TestVSphereLibraryProvisionTask extends BaseVSphereAdapterTest {
         deleteVmAndWait(vm);
     }
 
+    @Test
+    public void deployFromLibraryWithShutdown() throws Throwable {
+        ComputeState vm = provisionVMAndGetState();
+        if (vm == null) {
+            return;
+        }
+        // test shutdown Guest OS resource operation
+        shutdownGuestOS(vm);
+        // Verify that the disk is resized and is reflected even for a POWERED_OFF vm
+        BasicConnection connection = createConnection();
+        GetMoRef get = new GetMoRef(connection);
+        verifyDiskSize(vm, get, HDD_DISK_SIZE);
+
+        deleteVmAndWait(vm);
+    }
+
+    @Test
+    public void deployFromLibraryAndResetVM() throws Throwable {
+        ComputeState vm = provisionVMAndGetState();
+        if (vm == null) {
+            return;
+        }
+        // test reset VM operation
+        resetVSphereVM(vm);
+
+        BasicConnection connection = createConnection();
+        GetMoRef get = new GetMoRef(connection);
+        verifyDiskSize(vm, get, HDD_DISK_SIZE);
+
+        deleteVmAndWait(vm);
+    }
+
     private void verifyDiskProperties(ComputeState vm, GetMoRef get)
             throws InvalidPropertyFaultMsg, RuntimeFaultFaultMsg {
         VirtualDisk vd = fetchVirtualDisk(vm, get);

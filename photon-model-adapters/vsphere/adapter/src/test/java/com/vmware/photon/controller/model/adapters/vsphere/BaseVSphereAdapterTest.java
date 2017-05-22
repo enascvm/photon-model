@@ -446,6 +446,102 @@ public class BaseVSphereAdapterTest {
         assertEquals(ComputeService.PowerState.SUSPEND, cstate[0].powerState);
     }
 
+    protected void shutdownGuestOS(ComputeState computeState) {
+        String taskLink = UUID.randomUUID().toString();
+
+        ResourceOperationRequest shutdownGuestRequest = getResourceOperationRequest("Shutdown",
+                computeState.documentSelfLink, taskLink);
+
+        TestContext ctx = this.host.testCreate(1);
+        createTaskResultListener(this.host, taskLink, (u) -> {
+            if (u.getAction() != Service.Action.PATCH) {
+                return false;
+            }
+            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
+            if (TaskState.isFailed(response.taskInfo)) {
+                ctx.failIteration(
+                        new IllegalStateException(response.taskInfo.failure.message));
+            } else {
+                ctx.completeIteration();
+            }
+            return true;
+        });
+        TestContext ctx2 = this.host.testCreate(1);
+        Operation shutdownOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+                .setBody(shutdownGuestRequest)
+                .setReferer(this.host.getReferer())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        ctx2.failIteration(e);
+                        return;
+                    }
+                    ctx2.completeIteration();
+                });
+        this.host.send(shutdownOp);
+        ctx2.await();
+
+        ComputeState[] cState = new ComputeState[1];
+        this.host.waitFor("Guest shutdown request failed", () -> {
+            cState[0] = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, computeState.documentSelfLink));
+
+            if (cState[0].powerState.equals(ComputeService.PowerState.OFF)) {
+                return true;
+            } else {
+                return false;
+            }
+        });
+        assertEquals(ComputeService.PowerState.OFF, cState[0].powerState);
+    }
+
+    protected void resetVSphereVM(ComputeState computeState) {
+        String taskLink = UUID.randomUUID().toString();
+
+        ResourceOperationRequest resetVMRequest = getResourceOperationRequest("Reset",
+                computeState.documentSelfLink, taskLink);
+
+        TestContext ctx = this.host.testCreate(1);
+        createTaskResultListener(this.host, taskLink, (u) -> {
+            if (u.getAction() != Service.Action.PATCH) {
+                return false;
+            }
+            ResourceOperationResponse response = u.getBody(ResourceOperationResponse.class);
+            if (TaskState.isFailed(response.taskInfo)) {
+                ctx.failIteration(
+                        new IllegalStateException(response.taskInfo.failure.message));
+            } else {
+                ctx.completeIteration();
+            }
+            return true;
+        });
+        TestContext ctx2 = this.host.testCreate(1);
+        Operation resetOp = Operation.createPatch(UriUtils.buildUri(this.host, VSphereAdapterD2PowerOpsService.SELF_LINK))
+                .setBody(resetVMRequest)
+                .setReferer(this.host.getReferer())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        ctx2.failIteration(e);
+                        return;
+                    }
+                    ctx2.completeIteration();
+                });
+        this.host.send(resetOp);
+        ctx2.await();
+
+        ComputeState[] cState = new ComputeState[1];
+        this.host.waitFor("Reset VM request failed", () -> {
+            cState[0] = this.host.getServiceState(null, ComputeState.class,
+                    UriUtils.buildUri(this.host, computeState.documentSelfLink));
+
+            if (ComputeService.PowerState.ON.equals(cState[0].powerState)) {
+                return true;
+            } else {
+                return false;
+            }
+        });
+        assertEquals(ComputeService.PowerState.ON, cState[0].powerState);
+    }
+
     private ResourceOperationRequest getResourceOperationRequest(String operation, String documentSelfLink, String taskLink) {
         ResourceOperationRequest resourceOperationRequest = new ResourceOperationRequest();
         resourceOperationRequest.operation = operation;

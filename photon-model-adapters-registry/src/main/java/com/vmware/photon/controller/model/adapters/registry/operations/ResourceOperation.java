@@ -23,7 +23,11 @@ public enum ResourceOperation {
 
     REBOOT("Reboot", "Reboot", "Reboot Compute Resource"),
 
-    SUSPEND("Suspend", "Suspend", "Suspend Compute Resource");
+    SUSPEND("Suspend", "Suspend", "Suspend Compute Resource"),
+
+    SHUTDOWN("Shutdown", "Shutdown", "Shutdown guest OS of Compute Resource"),
+
+    RESET("Reset", "Reset", "Suspend Compute Resource");
 
     public final String operation;
 

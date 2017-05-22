@@ -32,13 +32,16 @@ import com.vmware.xenon.common.StatelessService;
 
 /**
  * Day2 power operations service for vSphere provider
- * Currently only "Reboot" (restart guest OS) and "Suspend" are implemented here, new operations to be added
+ * "Reboot" (restart guest OS), "Suspend" , "Shutdown" (guest OS), "Reset" operations
  */
 public class VSphereAdapterD2PowerOpsService extends StatelessService {
 
     public static final String SELF_LINK = ResourceOperationSpecService.buildDefaultAdapterLink(
             PhotonModelConstants.EndpointType.vsphere.name(), ResourceOperationSpecService.ResourceType.COMPUTE,
             "d2PowerOps");
+
+    private static final long SHUTDOWN_GUEST_OS_TIMEOUT = Long.parseLong(System.getProperty("vsphere.shutdown.guest.timeout",
+            "180000")); // 180000L microseconds = 180 seconds (3 minutes)
 
     @Override
     public void handleStart(Operation startPost) {
@@ -81,10 +84,14 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
 
     private void patchComputeAndCompleteRequest(VSphereVMContext ctx, final String operation) {
         // update the power state
-        if (operation.equalsIgnoreCase(ResourceOperation.REBOOT.operation)) {
+        if (ResourceOperation.REBOOT.operation.equalsIgnoreCase(operation)) {
             ctx.child.powerState = ComputeService.PowerState.ON;
-        } else if (operation.equalsIgnoreCase(ResourceOperation.SUSPEND.operation)) {
+        } else if (ResourceOperation.SUSPEND.operation.equalsIgnoreCase(operation)) {
             ctx.child.powerState = ComputeService.PowerState.SUSPEND;
+        } else if (ResourceOperation.SHUTDOWN.operation.equalsIgnoreCase(operation)) {
+            ctx.child.powerState = ComputeService.PowerState.OFF;
+        } else if (ResourceOperation.RESET.operation.equalsIgnoreCase(operation)) {
+            ctx.child.powerState = ComputeService.PowerState.ON;
         } else {
             final String warnStr = String.format("Operation %s not supported by this service %s",
                     operation, VSphereAdapterD2PowerOpsService.class.getSimpleName());
@@ -139,10 +146,14 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
                         ctx.failWithMessage(String.format("Current power state of vmMoRef is %s, and not ON, " +
                                 "operation cannot be performed", vmPowerState.name()));
                     } else {
-                        if (operation.equalsIgnoreCase(ResourceOperation.REBOOT.name())) {
+                        if (ResourceOperation.REBOOT.operation.equalsIgnoreCase(operation)) {
                             rebootVMOperation(client, vmMoRef, ctx, operation);
-                        } else if (operation.equalsIgnoreCase(ResourceOperation.SUSPEND.name())) {
+                        } else if (ResourceOperation.SUSPEND.operation.equalsIgnoreCase(operation)) {
                             suspendVMOperation(client, vmMoRef, ctx, operation);
+                        } else if (ResourceOperation.SHUTDOWN.operation.equalsIgnoreCase(operation)) {
+                            shutdownGuestOSOperation(client, vmMoRef, ctx, operation);
+                        } else if (ResourceOperation.RESET.operation.equalsIgnoreCase(operation)) {
+                            resetVMOperation(client, vmMoRef, ctx, operation);
                         }
                     }
                 });
@@ -162,11 +173,33 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
     private void suspendVMOperation(PowerStateClient client, ManagedObjectReference vmMoRef,
                                     VSphereVMContext ctx, String operation) {
         try {
-            client.suspendVM(vmMoRef, 180000L); // 180000L microseconds = 180 seconds (3 minutes)
+            client.suspendVM(vmMoRef, SHUTDOWN_GUEST_OS_TIMEOUT);
             // complete the request
             patchComputeAndCompleteRequest(ctx, operation);
         } catch (Exception ex) {
             ctx.failWithMessage("Cannot suspend vm with vmMoRef " + VimUtils
+                    .convertMoRefToString(vmMoRef), ex);
+        }
+    }
+
+    private void shutdownGuestOSOperation(PowerStateClient client, ManagedObjectReference vmMoRef,
+                                          VSphereVMContext ctx, String operation) {
+        try {
+            client.shutdownGuest(vmMoRef, SHUTDOWN_GUEST_OS_TIMEOUT);
+            patchComputeAndCompleteRequest(ctx, operation);
+        } catch (Exception ex) {
+            ctx.failWithMessage("Cannot shutdown guest OS on vm with vmMoRef " + VimUtils
+                    .convertMoRefToString(vmMoRef), ex);
+        }
+    }
+
+    private void resetVMOperation(PowerStateClient client, ManagedObjectReference vmMoRef,
+                                  VSphereVMContext ctx, String operation) {
+        try {
+            client.resetVM(vmMoRef);
+            patchComputeAndCompleteRequest(ctx, operation);
+        } catch (Exception ex) {
+            ctx.failWithMessage("Cannot reset VM with vmMoRef " + VimUtils
                     .convertMoRefToString(vmMoRef), ex);
         }
     }
@@ -176,7 +209,11 @@ public class VSphereAdapterD2PowerOpsService extends StatelessService {
                 TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
         ResourceOperationSpecService.ResourceOperationSpec operationSpec2 = getResourceOperationSpec(ResourceOperation.SUSPEND,
                 TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
-        return Arrays.asList(operationSpec1, operationSpec2);
+        ResourceOperationSpecService.ResourceOperationSpec operationSpec3 = getResourceOperationSpec(ResourceOperation.SHUTDOWN,
+                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
+        ResourceOperationSpecService.ResourceOperationSpec operationSpec4 = getResourceOperationSpec(ResourceOperation.RESET,
+                TargetCriteria.RESOURCE_POWER_STATE_ON.getCriteria());
+        return Arrays.asList(operationSpec1, operationSpec2, operationSpec3, operationSpec4);
     }
 
     private ResourceOperationSpecService.ResourceOperationSpec getResourceOperationSpec(ResourceOperation operationType,

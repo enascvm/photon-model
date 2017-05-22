@@ -102,10 +102,33 @@ public class PowerStateClient extends BaseHelper {
 
     /**
      * @param vm
+     * @param politenessDeadlineMicros
+     *
      * @throws Exception
      */
     public void suspendVM(ManagedObjectReference vm, long politenessDeadlineMicros) throws Exception {
         changePowerState(vm, PowerState.SUSPEND, null, politenessDeadlineMicros);
+    }
+
+    /**
+     * @param vm
+     * @param politenessDeadlineMicros
+     *
+     * @throws Exception
+     */
+    public void shutdownGuest(ManagedObjectReference vm, long politenessDeadlineMicros) throws Exception {
+        changePowerState(vm, PowerState.OFF, PowerTransition.SOFT, politenessDeadlineMicros);
+    }
+
+    /**
+     * @param vm
+     *
+     * @throws Exception
+     */
+    public void resetVM(ManagedObjectReference vm) throws Exception {
+        ManagedObjectReference task = getVimPort().resetVMTask(vm);
+        awaitTaskEnd(task);
+        return;
     }
 
     private void hardPowerOff(ManagedObjectReference vm) throws Exception {
